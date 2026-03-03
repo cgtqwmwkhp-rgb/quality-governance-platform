@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && cp staticwebapp.config.json dist/",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src/ --ext .ts,.tsx --max-warnings 50",
+    "size-check": "npx size-limit"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",
@@ -15,6 +17,8 @@
     "@radix-ui/react-switch": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.0",
     "axios": "^1.7.9",
+    "i18next": "^23.0.0",
+    "i18next-browser-languagedetector": "^8.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "date-fns": "^2.30.0",
@@ -23,6 +27,7 @@
     "lucide-react": "^0.400.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^14.0.0",
     "react-router-dom": "^6.20.0",
     "tailwind-merge": "^2.2.0",
     "web-vitals": "^3.5.2",
@@ -40,6 +45,14 @@
     "vite": "^5.0.0",
     "vitest": "^2.1.0",
     "@vitest/coverage-v8": "^2.1.0",
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "^1.49.0",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "size-limit": "^11.0.0",
+    "@size-limit/file": "^11.0.0"
   }
 }

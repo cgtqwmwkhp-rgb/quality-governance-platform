@@ -1,7 +1,5 @@
 """Input sanitization utilities for user-generated content."""
 
-from __future__ import annotations
-
 import nh3
 
 

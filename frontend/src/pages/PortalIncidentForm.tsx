@@ -708,7 +708,6 @@ export default function PortalIncidentForm() {
               <label className="block text-sm font-medium text-foreground mb-2">Description *</label>
               <div className="relative">
                 <Textarea
-                  data-testid="incident-description"
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                   placeholder="What happened? Be specific..."
@@ -928,7 +927,6 @@ export default function PortalIncidentForm() {
             </Button>
           ) : (
             <Button
-              data-testid="submit-report-btn"
               onClick={handleSubmit}
               disabled={isSubmitting}
               className="flex-1 bg-success hover:bg-success/90"

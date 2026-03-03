@@ -118,7 +118,7 @@ class TestCORSOnSuccessResponses:
             "/api/v1/uvdb/sections",
             headers={"Origin": PROD_ORIGIN},
         )
-        # May be 200 or 401 depending on auth, but should have CORS
+        assert response.status_code == 200
         assert response.headers.get("access-control-allow-origin") == PROD_ORIGIN
 
     def test_get_planetmark_dashboard_has_cors(self, client):

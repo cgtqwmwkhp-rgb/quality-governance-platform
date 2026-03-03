@@ -71,49 +71,47 @@ portal_actions:
     disabled_reason: null
     description: "Select RTA report type"
 
-  # Form Submissions (P1 — buttons only visible on final step of multi-step wizards;
-  # full submit flow is covered by WORKFLOW_REGISTRY P0 tests)
+  # Form Submissions
   - pageId: portal-report-incident
     actionId: submit-incident-form
     selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P1
+    criticality: P0
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Hidden until final step of multi-step form"
+    disabled_reason: "Form validation incomplete"
     description: "Submit incident report"
 
   - pageId: portal-report-near-miss
     actionId: submit-near-miss-form
     selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P1
+    criticality: P0
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Hidden until final step of multi-step form"
+    disabled_reason: "Form validation incomplete"
     description: "Submit near-miss report"
 
   - pageId: portal-report-rta
     actionId: submit-rta-form
-    selector: "[data-testid='submit-report-btn']"
+    selector: "[data-testid='submit-rta-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P1
+    criticality: P0
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Hidden until final step of multi-step form"
+    disabled_reason: "Form validation incomplete"
     description: "Submit RTA report"
 
 # ==============================================================================
 # ADMIN DASHBOARD ACTIONS (P0/P1 Critical)
 # ==============================================================================
 admin_actions:
-  # Login (P1: empty-form click shows validation error, not a network call;
-  # full login flow is tested by admin-login P0 workflow)
+  # Login
   - pageId: login
     actionId: submit-login
     selector: "[data-testid='login-submit-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Login')"
-    criticality: P1
+    criticality: P0
     expected_outcome: network_call
     expected_api: POST /api/v1/auth/login
     disabled_reason: "Credentials incomplete"
@@ -151,23 +149,22 @@ admin_actions:
     disabled_reason: null
     description: "Open create incident form"
 
-  # P1: requires incident data to exist; covered by admin-view-incident workflow
   - pageId: incidents-list
     actionId: view-incident-detail
     selector: "[data-testid='incident-row-link']"
     fallback_selector: "tr[data-testid*='incident'] a, table tbody tr:first-child a"
-    criticality: P1
+    criticality: P0
     expected_outcome: navigation
     expected_route: /incidents/:id
-    disabled_reason: "Requires existing incident data"
+    disabled_reason: null
     description: "View incident details"
 
-  # P1: button may not exist on all environments; RTA creation covered by portal workflow
+  # RTA List Actions  
   - pageId: rtas-list
     actionId: create-new-rta
     selector: "[data-testid='create-rta-btn']"
     fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
-    criticality: P1
+    criticality: P0
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
     disabled_reason: null
@@ -294,6 +291,6 @@ draft_recovery_actions:
 # ==============================================================================
 summary:
   total_actions: 27
-  p0_actions: 8
-  p1_actions: 15
+  p0_actions: 14
+  p1_actions: 9
   p2_actions: 4

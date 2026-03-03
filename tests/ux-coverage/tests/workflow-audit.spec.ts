@@ -114,24 +114,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        const demoUser = {
-          id: 'ux-test-user-001',
-          email: 'ux-test@plantexpand.com',
-          name: 'UX Test User',
-          firstName: 'UX',
-          lastName: 'Test',
-          jobTitle: 'Test Engineer',
-          department: 'QA',
-          isDemoUser: true,
-        };
-        localStorage.setItem('portal_user', JSON.stringify(demoUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-        sessionStorage.setItem('platform_access_token', token);
+        localStorage.setItem('portal_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
-      // Reload so the React PortalAuthProvider picks up the stored session
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
-      await page.waitForTimeout(3000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -144,9 +128,6 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
-      await page.waitForTimeout(3000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -154,6 +135,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
     }
   }
   
+  // For testing without real auth, we can skip auth-required workflows
   return false;
 }
 
@@ -161,7 +143,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
 const workflows = loadWorkflows();
 
 test.describe('Workflow Audit (P0 Critical Paths)', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial' }); // Serial - workflows have state
   
   for (const workflow of workflows) {
     test(`[${workflow.criticality}] ${workflow.workflowId}: ${workflow.name}`, async ({ page }) => {
@@ -188,8 +170,8 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
           if (!authReady) {
             result.result = 'SKIP';
             result.error_message = `Auth type ${workflow.auth_type} not configured`;
-            result.total_duration_ms = Date.now() - workflowStartTime;
             workflowAuditResults.push(result);
+            test.skip(true, result.error_message);
             return;
           }
         }
@@ -217,11 +199,10 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Navigate if route specified
             if (step.route) {
               await page.goto(step.route, { 
-                waitUntil: 'domcontentloaded', 
+                waitUntil: 'networkidle', 
                 timeout: workflow.max_duration_seconds * 1000 
               });
               await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
-              await page.waitForTimeout(2000);
             }
             
             // Fill form fields if specified
@@ -241,27 +222,17 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
-              let found = false;
+              let visible = await element.isVisible().catch(() => false);
               
-              try {
-                await element.waitFor({ state: 'visible', timeout: 5000 });
-                found = true;
-              } catch {
-                // Try fallback
-                if (step.fallback_selector) {
-                  element = page.locator(step.fallback_selector).first();
-                  try {
-                    await element.waitFor({ state: 'visible', timeout: 3000 });
-                    found = true;
-                  } catch {
-                    // fallback also not found
-                  }
-                }
+              // Try fallback
+              if (!visible && step.fallback_selector) {
+                element = page.locator(step.fallback_selector).first();
+                visible = await element.isVisible().catch(() => false);
               }
               
-              if (found) {
+              if (visible) {
                 await element.click({ timeout: 5000 });
-                await page.waitForTimeout(500);
+                await page.waitForTimeout(500); // Brief pause for UI update
               } else {
                 throw new Error(`Element not found: ${step.selector}`);
               }
@@ -278,8 +249,8 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               ).catch(() => null);
             }
             
-            // Brief pause for UI to settle after navigation/click
-            await page.waitForTimeout(1500);
+            // Wait for any navigation or network activity to settle
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
             
             stepResult.result = 'PASS';
             result.completed_steps++;
@@ -334,6 +305,9 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
       
       result.total_duration_ms = Date.now() - workflowStartTime;
       workflowAuditResults.push(result);
+      
+      // Assert for test framework
+      expect(result.result).toBe('PASS');
     });
   }
 });

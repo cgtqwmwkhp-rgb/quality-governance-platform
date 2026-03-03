@@ -71,7 +71,6 @@ function loadPageRoute(pageId: string): string | null {
   const allPages = [
     ...(registry.public_routes || []),
     ...(registry.portal_routes || []),
-    ...(registry.workforce_routes || []),
     ...(registry.admin_routes || []),
   ];
   
@@ -92,7 +91,6 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
   const allPages = [
     ...(registry.public_routes || []),
     ...(registry.portal_routes || []),
-    ...(registry.workforce_routes || []),
     ...(registry.admin_routes || []),
   ];
   
@@ -127,23 +125,8 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        const demoUser = {
-          id: 'ux-test-user-001',
-          email: 'ux-test@plantexpand.com',
-          name: 'UX Test User',
-          firstName: 'UX',
-          lastName: 'Test',
-          jobTitle: 'Test Engineer',
-          department: 'QA',
-          isDemoUser: true,
-        };
-        localStorage.setItem('portal_user', JSON.stringify(demoUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-        sessionStorage.setItem('platform_access_token', token);
+        localStorage.setItem('portal_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
-      // Reload so the React PortalAuthProvider picks up the stored session
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -156,8 +139,6 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -172,7 +153,7 @@ async function setupAuth(page: Page, pageId: string): Promise<boolean> {
 const buttons = loadButtons();
 
 test.describe('Button Wiring Audit', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'serial' }); // Serial to avoid state conflicts
   
   for (const buttonEntry of buttons) {
     test(`[${buttonEntry.criticality}] ${buttonEntry.pageId}::${buttonEntry.actionId}`, async ({ page }) => {
@@ -194,6 +175,7 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Page route not found';
           buttonAuditResults.push(result);
+          test.skip(true, result.error_message);
           return;
         }
         
@@ -202,6 +184,7 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Parameterized route - requires test data';
           buttonAuditResults.push(result);
+          test.skip(true, result.error_message);
           return;
         }
         
@@ -211,13 +194,13 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Auth not configured';
           buttonAuditResults.push(result);
+          test.skip(true, result.error_message);
           return;
         }
         
-        // Navigate to page (domcontentloaded avoids hanging on slow API calls)
-        await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        // Navigate to page
+        await page.goto(route, { waitUntil: 'networkidle', timeout: 30000 });
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
-        await page.waitForTimeout(2000);
         
         // Try to find button with primary selector
         let button = page.locator(buttonEntry.selector).first();
@@ -235,9 +218,11 @@ test.describe('Button Wiring Audit', () => {
           result.found = false;
           result.error_message = 'Button not visible on page';
           
+          // For non-critical buttons, this is acceptable
           if (buttonEntry.criticality === 'P1') {
             result.result = 'SKIP';
             buttonAuditResults.push(result);
+            test.skip(true, 'P1 button not visible - may be conditional');
             return;
           }
           
@@ -329,6 +314,9 @@ test.describe('Button Wiring Audit', () => {
       }
       
       buttonAuditResults.push(result);
+      
+      // Assert for test framework
+      expect(result.result).toBe('PASS');
     });
   }
 });

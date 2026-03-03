@@ -9,8 +9,6 @@ Features:
 - Different limits for authenticated vs anonymous users
 """
 
-from __future__ import annotations
-
 import asyncio
 import hashlib
 import time
@@ -159,27 +157,25 @@ def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
 
 
 def get_client_identifier(request: Request) -> str:
-    """Get unique identifier for rate limiting.
-
-    Uses verified JWT sub claim when possible; falls back to IP address.
-    Never trusts unverified tokens to prevent bucket-forging bypass.
-    """
+    """Get unique identifier for rate limiting."""
+    # Try to get user ID from auth token
     user_id = None
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         try:
-            from src.core.security import decode_token
+            import jwt
 
             token = auth_header[7:]
-            payload = decode_token(token)
-            if payload:
-                user_id = payload.get("sub")
+            # Decode without verification just to get sub claim
+            payload = jwt.decode(token, options={"verify_signature": False})
+            user_id = payload.get("sub")
         except Exception:
             pass
 
     if user_id:
         return f"user:{user_id}"
 
+    # Fall back to IP address
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         ip = forwarded.split(",")[0].strip()
@@ -201,10 +197,9 @@ def get_endpoint_key(request: Request) -> str:
 # Rate limit configurations by endpoint pattern
 ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     # Authentication - strict limits
-    "/api/v1/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
-    "/api/v1/auth/token-exchange": RateLimitConfig(requests_per_minute=10, burst_limit=5),
-    "/api/v1/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
-    "/api/v1/auth/password-reset": RateLimitConfig(requests_per_minute=3, burst_limit=2),
+    "/api/auth/login": RateLimitConfig(requests_per_minute=10, burst_limit=5),
+    "/api/auth/register": RateLimitConfig(requests_per_minute=5, burst_limit=2),
+    "/api/auth/forgot-password": RateLimitConfig(requests_per_minute=3, burst_limit=2),
     # Security-sensitive list endpoints with email filters - stricter limits
     # These endpoints accept email filters which could be abused for enumeration
     "/api/v1/incidents": RateLimitConfig(requests_per_minute=30, burst_limit=10),
@@ -243,7 +238,7 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     - X-RateLimit-Reset: Unix timestamp when limit resets
     """
     # Skip rate limiting for health checks
-    if request.url.path in ["/health", "/healthz", "/readyz", "/api/health", "/ready"]:
+    if request.url.path in ["/health", "/api/health", "/ready"]:
         return await call_next(request)
 
     # Skip rate limiting for CORS preflight requests (OPTIONS)

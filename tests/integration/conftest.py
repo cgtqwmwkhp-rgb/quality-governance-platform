@@ -525,6 +525,35 @@ def database_url() -> str:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def near_miss_factory(admin_client):
+    """Factory fixture that creates a NearMiss via the API and returns it.
+
+    Used by investigation/source-record integration tests.
+    """
+    from tests.factories import NearMissFactory
+
+    _counter = 0
+
+    async def _create(**overrides):
+        nonlocal _counter
+        _counter += 1
+        nm = NearMissFactory.build(**overrides)
+        payload = {
+            "reporter_name": nm.reporter_name,
+            "contract": nm.contract,
+            "location": nm.location,
+            "event_date": nm.event_date.isoformat(),
+            "description": nm.description,
+        }
+        payload.update(overrides)
+        response = await admin_client.post("/api/v1/near-misses/", json=payload)
+        assert response.status_code in (200, 201), response.text
+        return response.json()
+
+    return _create
+
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(

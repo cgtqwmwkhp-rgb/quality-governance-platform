@@ -91,22 +91,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        const demoUser = {
-          id: 'ux-test-user-001',
-          email: 'ux-test@plantexpand.com',
-          name: 'UX Test User',
-          firstName: 'UX',
-          lastName: 'Test',
-          jobTitle: 'Test Engineer',
-          department: 'QA',
-          isDemoUser: true,
-        };
-        localStorage.setItem('portal_user', JSON.stringify(demoUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-        sessionStorage.setItem('platform_access_token', token);
+        localStorage.setItem('portal_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -119,8 +105,6 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -140,22 +124,16 @@ function isInternalLink(href: string, baseUrl: string): boolean {
   return false;
 }
 
-// Known valid routes from registry (load ALL routes, not just P0/P1)
+// Known valid routes from registry
 const validRoutePatterns = new Set<string>();
 function loadValidRoutes(): void {
-  const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
-  const content = fs.readFileSync(registryPath, 'utf-8');
-  const registry = yaml.load(content) as any;
-
-  const allPages: PageEntry[] = [
-    ...(registry.public_routes || []),
-    ...(registry.portal_routes || []),
-    ...(registry.admin_routes || []),
-  ];
-
-  allPages.forEach(p => {
+  const pages = loadPages();
+  pages.forEach(p => {
+    // Add exact routes
     validRoutePatterns.add(p.route);
+    // Add pattern for parameterized routes
     if (p.route.includes(':')) {
+      // Convert /incidents/:id to regex-like pattern
       const pattern = p.route.replace(/:[^/]+/g, '[^/]+');
       validRoutePatterns.add(pattern);
     }
@@ -188,13 +166,6 @@ function isKnownRoute(href: string): boolean {
     /^\/audit-templates\/[a-f0-9-]+\/edit$/,
     /^\/audits\/[a-f0-9-]+\/execute$/,
     /^\/admin\/forms\/[a-f0-9-]+$/,
-    /^\/forgot-password$/,
-    /^\/reset-password$/,
-    /^\/investigations\/\d+$/,
-    /^\/near-misses\/\d+$/,
-    /^\/workforce\/.+$/,
-    /^\/settings\/.+$/,
-    /^\/profile$/,
   ];
   
   return allowedPatterns.some(p => p.test(path));
@@ -204,7 +175,7 @@ function isKnownRoute(href: string): boolean {
 const pages = loadPages();
 
 test.describe('Link Audit', () => {
-  test.describe.configure({ mode: 'serial' });
+  test.describe.configure({ mode: 'parallel' });
   
   for (const pageEntry of pages) {
     test(`Links on ${pageEntry.pageId}: ${pageEntry.route}`, async ({ page, baseURL }) => {
@@ -222,19 +193,18 @@ test.describe('Link Audit', () => {
         // Setup auth
         const authReady = await setupAuth(page, pageEntry.auth);
         if (!authReady && pageEntry.auth !== 'anon') {
+          test.skip(true, `Auth type ${pageEntry.auth} not configured`);
           return;
         }
         
-        // Navigate to page (domcontentloaded avoids hanging on slow API calls)
+        // Navigate to page
         await page.goto(pageEntry.route, {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
+          waitUntil: 'networkidle',
+          timeout: 30000,
         });
         
         // Wait for app to render
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
-        // Let React render the route component
-        await page.waitForTimeout(2000);
         
         // Extract all anchor tags
         const links = await page.locator('a[href]').all();
@@ -287,6 +257,13 @@ test.describe('Link Audit', () => {
       }
       
       linkAuditResults.push(result);
+      
+      // Fail if there are dead links (excluding parameterized routes that may not resolve)
+      const criticalDeadLinks = result.links.filter(
+        l => l.status === 'dead' && !l.href.includes(':')
+      );
+      
+      expect(criticalDeadLinks.length).toBe(0);
     });
   }
 });

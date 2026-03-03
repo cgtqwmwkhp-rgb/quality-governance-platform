@@ -142,7 +142,6 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
           </label>
           <div className="relative">
             <Input
-              data-testid={`field-${field.name}`}
               type={field.field_type === 'phone' ? 'tel' : field.field_type}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value)}
@@ -187,7 +186,6 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
           </label>
           <div className="relative">
             <Textarea
-              data-testid={`field-${field.name}`}
               value={(value as string) || ''}
               onChange={(e) => onChange(e.target.value)}
               placeholder={field.placeholder}
@@ -863,7 +861,7 @@ export default function DynamicFormRenderer({
           )}
 
           {isLastStep ? (
-            <Button data-testid="submit-report-btn" onClick={handleSubmit} disabled={isSubmitting}>
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

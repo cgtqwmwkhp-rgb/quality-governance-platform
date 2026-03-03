@@ -4,8 +4,6 @@ Extracts business logic from user routes into a testable service class.
 Raises domain exceptions instead of HTTPException.
 """
 
-from __future__ import annotations
-
 from typing import Optional, Sequence
 
 from pydantic import BaseModel

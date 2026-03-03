@@ -1,7 +1,5 @@
 """Shared entity lookup utilities for API routes."""
 
-from __future__ import annotations
-
 from typing import Any, Type, TypeVar
 
 from fastapi import HTTPException, status

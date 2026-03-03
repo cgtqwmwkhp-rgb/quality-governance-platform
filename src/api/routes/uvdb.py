@@ -12,11 +12,10 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -25,6 +24,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -508,8 +508,7 @@ async def get_protocol_structure() -> dict[str, Any]:
 
 @router.get("/sections", response_model=dict)
 async def list_sections(
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List all UVDB B2 sections"""
     # Return from static data or database
@@ -534,8 +533,7 @@ async def list_sections(
 @router.get("/sections/{section_number}/questions", response_model=dict)
 async def get_section_questions(
     section_number: str,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get questions for a specific UVDB section"""
     section_data = None
@@ -561,26 +559,22 @@ async def get_section_questions(
 
 @router.get("/audits", response_model=dict)
 async def list_audits(
-    current_user: CurrentUser,
-    db: DbSession,
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """List UVDB audits"""
-    stmt = select(UVDBAudit)
+    query = db.query(UVDBAudit)
 
     if status:
-        stmt = stmt.where(UVDBAudit.status == status)
+        query = query.filter(UVDBAudit.status == status)
     if company_name:
-        stmt = stmt.where(UVDBAudit.company_name.ilike(f"%{company_name}%"))
+        query = query.filter(UVDBAudit.company_name.ilike(f"%{company_name}%"))
 
-    total_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
-    total = total_result.scalar() or 0
-    stmt = stmt.order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit)
-    result = await db.execute(stmt)
-    audits = list(result.scalars().all())
+    total = query.count()
+    audits = query.order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit).all()
 
     return {
         "total": total,
@@ -603,12 +597,10 @@ async def list_audits(
 @router.post("/audits", response_model=dict, status_code=201)
 async def create_audit(
     audit_data: AuditCreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
-    count_result = await db.execute(select(func.count()).select_from(UVDBAudit))
-    count = count_result.scalar() or 0
+    count = db.query(UVDBAudit).count()
     audit_reference = f"UVDB-{datetime.utcnow().year}-{(count + 1):04d}"
 
     audit = UVDBAudit(
@@ -617,8 +609,8 @@ async def create_audit(
         **audit_data.model_dump(),
     )
     db.add(audit)
-    await db.commit()
-    await db.refresh(audit)
+    db.commit()
+    db.refresh(audit)
 
     return {
         "id": audit.id,
@@ -630,12 +622,10 @@ async def create_audit(
 @router.get("/audits/{audit_id}", response_model=dict)
 async def get_audit(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get audit details"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
@@ -674,12 +664,10 @@ async def get_audit(
 async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Update audit"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
@@ -688,7 +676,7 @@ async def update_audit(
         setattr(audit, key, value)
 
     audit.updated_at = datetime.utcnow()
-    await db.commit()
+    db.commit()
 
     return {"message": "Audit updated", "id": audit.id}
 
@@ -700,12 +688,10 @@ async def update_audit(
 async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Record an audit response"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
@@ -714,8 +700,8 @@ async def create_response(
         **response_data.model_dump(),
     )
     db.add(response)
-    await db.commit()
-    await db.refresh(response)
+    db.commit()
+    db.refresh(response)
 
     return {"id": response.id, "message": "Response recorded"}
 
@@ -723,17 +709,14 @@ async def create_response(
 @router.get("/audits/{audit_id}/responses", response_model=dict)
 async def get_audit_responses(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    resp_result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
-    responses = list(resp_result.scalars().all())
+    responses = db.query(UVDBAuditResponse).filter(UVDBAuditResponse.audit_id == audit_id).all()
 
     return {
         "audit_id": audit_id,
@@ -759,12 +742,10 @@ async def get_audit_responses(
 async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
-    result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
-    audit = result.scalar_one_or_none()
+    audit = db.query(UVDBAudit).filter(UVDBAudit.id == audit_id).first()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
@@ -780,8 +761,8 @@ async def add_kpi_record(
         **kpi_data.model_dump(),
     )
     db.add(kpi)
-    await db.commit()
-    await db.refresh(kpi)
+    db.commit()
+    db.refresh(kpi)
 
     return {"id": kpi.id, "message": "KPI record added", "ltifr": ltifr}
 
@@ -789,14 +770,10 @@ async def add_kpi_record(
 @router.get("/audits/{audit_id}/kpis", response_model=dict)
 async def get_audit_kpis(
     audit_id: int,
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
-    result = await db.execute(
-        select(UVDBKPIRecord).where(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc())
-    )
-    kpis = list(result.scalars().all())
+    kpis = db.query(UVDBKPIRecord).filter(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc()).all()
 
     return {
         "audit_id": audit_id,
@@ -864,33 +841,17 @@ async def get_iso_cross_mapping() -> dict[str, Any]:
 
 @router.get("/dashboard", response_model=dict)
 async def get_uvdb_dashboard(
-    current_user: CurrentUser,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
-    total_result = await db.execute(select(func.count()).select_from(UVDBAudit))
-    total_audits = total_result.scalar() or 0
-
-    active_result = await db.execute(
-        select(func.count()).select_from(
-            select(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"])).subquery()
-        )
-    )
-    active_audits = active_result.scalar() or 0
-
-    completed_result = await db.execute(
-        select(func.count()).select_from(select(UVDBAudit).where(UVDBAudit.status == "completed").subquery())
-    )
-    completed_audits = completed_result.scalar() or 0
+    total_audits = db.query(UVDBAudit).count()
+    active_audits = db.query(UVDBAudit).filter(UVDBAudit.status.in_(["scheduled", "in_progress"])).count()
+    completed_audits = db.query(UVDBAudit).filter(UVDBAudit.status == "completed").count()
 
     # Average score
-    completed_q = await db.execute(
-        select(UVDBAudit).where(
-            UVDBAudit.status == "completed",
-            UVDBAudit.percentage_score.isnot(None),
-        )
+    completed = (
+        db.query(UVDBAudit).filter(UVDBAudit.status == "completed", UVDBAudit.percentage_score.isnot(None)).all()
     )
-    completed = list(completed_q.scalars().all())
 
     avg_score = 0
     if completed:

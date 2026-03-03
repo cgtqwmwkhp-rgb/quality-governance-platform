@@ -1,5 +1,5 @@
-# Build stage
-FROM python:3.11-slim-bookworm as builder
+# Build stage — base image pinned by digest for reproducibility
+FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd973bb82eb71b7512c15a4da AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.11-slim-bookworm as production
+FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd973bb82eb71b7512c15a4da AS production
 
 WORKDIR /app
 

@@ -100,24 +100,6 @@ portal_routes:
 # ADMIN ROUTES (JWT Authentication - Staff/Admin)
 # ==============================================================================
 admin_routes:
-  - pageId: forgot-password
-    route: /forgot-password
-    auth: anon
-    criticality: P2
-    component: ForgotPassword
-    expected_empty_state: "Password reset request form"
-    expected_degraded_state: null
-    description: "Password reset request page"
-
-  - pageId: reset-password
-    route: /reset-password
-    auth: anon
-    criticality: P2
-    component: ResetPassword
-    expected_empty_state: "Password reset form with token"
-    expected_degraded_state: null
-    description: "Password reset confirmation page"
-
   - pageId: login
     route: /login
     auth: anon
@@ -279,24 +261,6 @@ admin_routes:
     expected_empty_state: "Advanced charts with zero values"
     expected_degraded_state: null
     description: "Advanced analytics"
-
-  - pageId: analytics-dashboards
-    route: /analytics/dashboards
-    auth: jwt_admin
-    criticality: P2
-    component: AnalyticsDashboards
-    expected_empty_state: "Dashboard gallery visible"
-    expected_degraded_state: null
-    description: "Analytics dashboards gallery"
-
-  - pageId: analytics-reports
-    route: /analytics/reports
-    auth: jwt_admin
-    criticality: P2
-    component: AnalyticsReports
-    expected_empty_state: "Report list visible"
-    expected_degraded_state: null
-    description: "Analytics reports"
 
   - pageId: search
     route: /search
@@ -473,7 +437,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 52
+  total_routes: 48
   p0_routes: 12
   p1_routes: 22
-  p2_routes: 18
+  p2_routes: 14

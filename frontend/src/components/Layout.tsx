@@ -35,6 +35,7 @@ import {
   Bot,
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
 import AICopilot from './copilot/AICopilot'
 import OfflineIndicator from './OfflineIndicator'
@@ -124,6 +125,7 @@ const navSections = [
 ]
 
 export default function Layout({ onLogout }: LayoutProps) {
+  const { t } = useTranslation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
@@ -168,7 +170,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           )}
         >
           <Search className="w-4 h-4" />
-          <span className="text-sm">Search...</span>
+          <span className="text-sm">{t('search')}...</span>
           <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
             <Command className="w-3 h-3" />
             <span>K</span>
@@ -248,7 +250,7 @@ export default function Layout({ onLogout }: LayoutProps) {
                     PRO
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">Quality Governance Platform</p>
+                <p className="text-xs text-muted-foreground">{t('login.title')}</p>
               </div>
             </div>
           </div>
@@ -303,7 +305,7 @@ export default function Layout({ onLogout }: LayoutProps) {
               )}
             >
               <LogOut size={20} />
-              Sign Out
+              {t('logout')}
             </button>
           </div>
         </div>

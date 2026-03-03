@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -10,6 +11,7 @@ import {
   User,
 } from 'lucide-react';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer';
 import { Card } from '../components/ui/Card';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { cn } from '../helpers/utils';
@@ -17,6 +19,11 @@ import { cn } from '../helpers/utils';
 export default function Portal() {
   const navigate = useNavigate();
   const { user, logout } = usePortalAuth();
+  const { announce } = useLiveAnnouncer();
+
+  useEffect(() => {
+    announce('Employee portal loaded');
+  }, [announce]);
 
   const handleLogout = () => {
     logout();
@@ -24,7 +31,7 @@ export default function Portal() {
   };
 
   return (
-    <div className="min-h-screen bg-surface" data-testid="portal-home">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4">
@@ -81,7 +88,6 @@ export default function Portal() {
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
-            data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",
@@ -104,7 +110,6 @@ export default function Portal() {
           <Card
             hoverable
             className="p-4 cursor-pointer group"
-            data-testid="portal-track-btn"
             onClick={() => navigate('/portal/track')}
           >
             <div className="flex items-center gap-4">

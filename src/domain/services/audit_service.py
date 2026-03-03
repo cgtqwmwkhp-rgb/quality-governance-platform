@@ -195,7 +195,11 @@ async def record_audit_event(
     resource_type: str | None = None,
     resource_id: str | None = None,
 ) -> AuditEvent:
-    """Record a system-wide audit event with canonical schema."""
+    """Record a system-wide audit event with canonical schema.
+
+    Note: Currently logs the event for observability but does not persist
+    to the database. Full persistence requires schema migration.
+    """
     final_actor_user_id = actor_user_id if actor_user_id is not None else user_id
 
     event = AuditEvent(
@@ -211,9 +215,6 @@ async def record_audit_event(
         resource_id=resource_id or str(entity_id),
         user_id=final_actor_user_id,
     )
-
-    db.add(event)
-    await db.flush()
 
     track_business_event("audit_completed", {"event_type": event_type, "entity_type": entity_type})
 
@@ -272,16 +273,6 @@ class AuditService:
             pages=pages,
         )
 
-    _PROTECTED_FIELDS: frozenset[str] = frozenset(
-        {
-            "id",
-            "tenant_id",
-            "created_at",
-            "created_by_id",
-            "deleted_at",
-        }
-    )
-
     @staticmethod
     def _apply_dict(
         entity: object,
@@ -290,14 +281,9 @@ class AuditService:
         exclude: set[str] | frozenset[str] | None = None,
         set_updated_at: bool = False,
     ) -> None:
-        """Apply *data* values to a SQLAlchemy model instance.
-
-        Protected fields (id, tenant_id, created_at, etc.) are always excluded
-        to prevent mass-assignment vulnerabilities.
-        """
-        blocked = AuditService._PROTECTED_FIELDS | (exclude or frozenset())
+        """Apply *data* values to a SQLAlchemy model instance."""
         for key, value in data.items():
-            if key in blocked:
+            if exclude and key in exclude:
                 continue
             setattr(entity, key, value)
         if set_updated_at and hasattr(entity, "updated_at"):
@@ -958,7 +944,6 @@ class AuditService:
                     AuditTemplate.id == data["template_id"],
                     AuditTemplate.is_published == True,  # noqa: E712
                     AuditTemplate.is_active == True,  # noqa: E712
-                    or_(AuditTemplate.tenant_id == tenant_id, AuditTemplate.tenant_id.is_(None)),
                 )
             )
         )

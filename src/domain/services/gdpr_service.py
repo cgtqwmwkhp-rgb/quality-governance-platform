@@ -7,12 +7,16 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.services.pseudonymization_service import PseudonymizationService
+
 logger = logging.getLogger(__name__)
 
 
 class GDPRService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, dry_run: bool = False):
         self.db = db
+        self.dry_run = dry_run
+        self._pseudo = PseudonymizationService(db, dry_run=dry_run)
 
     async def export_user_data(self, user_id: int, tenant_id: int) -> dict[str, Any]:
         """Export all user data (Right of Access, GDPR Art. 15)."""
@@ -147,7 +151,11 @@ class GDPRService:
             return []
 
     async def request_erasure(self, user_id: int, tenant_id: int, reason: str = "") -> dict:
-        """Initiate data erasure request (Right to Erasure, GDPR Art. 17)."""
+        """Initiate data erasure request (Right to Erasure, GDPR Art. 17).
+
+        When ``self.dry_run`` is True the response describes what *would*
+        be erased without touching the database.
+        """
         from src.domain.models.user import User
 
         result = await self.db.execute(select(User).where(User.id == user_id))
@@ -157,20 +165,28 @@ class GDPRService:
 
             raise NotFoundError("User not found")
 
-        # Anonymize PII
-        user.email = f"deleted-{user.id}@anonymized.local"
-        user.first_name = "REDACTED"
-        user.last_name = "REDACTED"
-        user.phone = None
+        pseudo_result = await self._pseudo.pseudonymize_user(user_id)
+
+        if self.dry_run:
+            return {
+                "status": "dry_run",
+                "user_id": user_id,
+                "would_affect": pseudo_result.fields_affected,
+                "reason": reason,
+            }
+
+        # Clear non-PII personal metadata that pseudonymization doesn't cover
         user.job_title = None
         user.department = None
-        user.is_active = False
 
         await self.db.commit()
+
+        logger.info("GDPR erasure completed for user %d (tenant %d)", user_id, tenant_id)
 
         return {
             "status": "completed",
             "user_id": user_id,
             "anonymized_at": datetime.now(timezone.utc).isoformat(),
+            "fields_affected": list(pseudo_result.fields_affected.keys()),
             "reason": reason,
         }

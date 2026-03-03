@@ -10,12 +10,9 @@ last_updated: "2026-01-26"
 # ==============================================================================
 p0_workflows:
   # Portal Incident Reporting (Primary Employee Journey)
-  # Note: Full form submission requires multi-step wizard navigation.
-  # This P0 test verifies the critical path: auth → navigation → form load.
-  # Full E2E submission is covered by dedicated integration tests.
   - workflowId: portal-incident-report
     name: "Employee Incident Report Submission"
-    description: "Employee navigates to incident form via portal"
+    description: "Employee submits incident report through portal"
     criticality: P0
     auth_type: portal_sso
     steps:
@@ -23,32 +20,45 @@ p0_workflows:
         action: "Navigate to portal home"
         route: /portal
         exit_criteria: "Portal home page loads with navigation tiles"
-
+        selector: "[data-testid='portal-home']"
+        
       - stepId: 2
         action: "Click Report button"
         selector: "[data-testid='portal-report-btn']"
         exit_criteria: "Report type selection page loads"
-
+        
       - stepId: 3
         action: "Select Incident type"
         selector: "[data-testid='report-incident-card']"
-        exit_criteria: "Incident form wizard loads on step 1"
-
+        exit_criteria: "Incident form loads with required fields"
+        
       - stepId: 4
-        action: "Verify form wizard loaded"
-        selector: "text=Contract Details"
-        fallback_selector: "text=Step 1, .progress, [role='progressbar']"
-        exit_criteria: "Multi-step form wizard visible with Contract Details step active"
-
-    success_terminal_state: "Incident form wizard loaded and ready for input"
+        action: "Fill required fields"
+        form_fields:
+          - selector: "[data-testid='incident-title']"
+            value: "Test Incident - E2E"
+          - selector: "[data-testid='incident-description']"
+            value: "E2E test incident description"
+          - selector: "[data-testid='incident-severity']"
+            value: "low"
+        exit_criteria: "All required fields populated, submit enabled"
+        
+      - stepId: 5
+        action: "Submit form"
+        selector: "[data-testid='submit-report-btn']"
+        exit_criteria: "Success message with reference number"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed, confirmation message visible"
     recovery_path: "Error banner with retry option"
-    expected_apis: []
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
     max_duration_seconds: 30
 
   # Portal Near-Miss Reporting
   - workflowId: portal-near-miss-report
     name: "Employee Near-Miss Report Submission"
-    description: "Employee navigates to near-miss form via portal"
+    description: "Employee submits near-miss report through portal"
     criticality: P0
     auth_type: portal_sso
     steps:
@@ -56,45 +66,58 @@ p0_workflows:
         action: "Navigate to portal report"
         route: /portal/report
         exit_criteria: "Report type selection visible"
-
+        
       - stepId: 2
         action: "Select Near-Miss type"
         selector: "[data-testid='report-near-miss-card']"
-        exit_criteria: "Near-miss form wizard loads on step 1"
-
+        exit_criteria: "Near-miss form loads"
+        
       - stepId: 3
-        action: "Verify form wizard loaded"
-        selector: "text=Contract Details"
-        fallback_selector: "text=Step 1, .progress, [role='progressbar']"
-        exit_criteria: "Multi-step form wizard visible with Contract Details step active"
-
-    success_terminal_state: "Near-miss form wizard loaded and ready for input"
+        action: "Fill and submit form"
+        form_fields:
+          - selector: "[data-testid='near-miss-description']"
+            value: "E2E test near-miss"
+        exit_criteria: "Form submitted successfully"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed"
     recovery_path: "Error banner with retry option"
-    expected_apis: []
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
     max_duration_seconds: 30
 
   # Portal RTA Reporting
   - workflowId: portal-rta-report
     name: "Employee RTA Report Submission"
-    description: "Employee navigates to RTA form via portal"
+    description: "Employee submits RTA report through portal"
     criticality: P0
     auth_type: portal_sso
     steps:
       - stepId: 1
         action: "Navigate to RTA form"
         route: /portal/report/rta
-        exit_criteria: "RTA form loads with step 1"
-
+        exit_criteria: "RTA form loads with vehicle section"
+        
       - stepId: 2
-        action: "Verify RTA form loaded"
-        selector: "text=Your Details"
-        fallback_selector: "text=Step 1, .progress, text=Road Traffic"
-        exit_criteria: "RTA multi-step form visible with Your Details step active"
-
-    success_terminal_state: "RTA form loaded and ready for input"
+        action: "Fill vehicle details"
+        form_fields:
+          - selector: "[data-testid='vehicle-registration']"
+            value: "AB12CDE"
+          - selector: "[data-testid='incident-location']"
+            value: "Test Location"
+        exit_criteria: "Vehicle details populated"
+        
+      - stepId: 3
+        action: "Submit form"
+        selector: "[data-testid='submit-rta-btn']"
+        exit_criteria: "Success confirmation"
+        expected_api: POST /api/v1/employee-portal/reports
+        
+    success_terminal_state: "Reference number displayed"
     recovery_path: "Error banner with retry option"
-    expected_apis: []
-    max_duration_seconds: 30
+    expected_apis:
+      - POST /api/v1/employee-portal/reports
+    max_duration_seconds: 45
 
   # Admin Login Flow (LOGIN_UX_CONTRACT.md compliant)
   - workflowId: admin-login
@@ -167,22 +190,31 @@ p0_workflows:
 
   # Admin Incident View
   - workflowId: admin-view-incident
-    name: "Admin Views Incident List"
-    description: "Admin navigates to incidents list and verifies it loads"
+    name: "Admin Views Incident Details"
+    description: "Admin navigates to and views incident details"
     criticality: P0
     auth_type: jwt_admin
     steps:
       - stepId: 1
         action: "Navigate to incidents list"
         route: /incidents
-        exit_criteria: "Incidents page loads with table or empty state"
-        selector: "h1, h2, [data-testid='page-title'], :text('Incidents')"
-        fallback_selector: "table, main, [role='main']"
-
-    success_terminal_state: "Incidents page loaded with table or empty state"
-    recovery_path: "Error message or loading state"
+        exit_criteria: "Incidents table visible"
+        
+      - stepId: 2
+        action: "Click on first incident"
+        selector: "[data-testid='incident-row-link']:first-of-type"
+        fallback_selector: "table tbody tr:first-child a"
+        exit_criteria: "Incident detail page loads"
+        
+      - stepId: 3
+        action: "Verify detail content"
+        exit_criteria: "Incident ID, status, and description visible"
+        
+    success_terminal_state: "Incident details fully loaded"
+    recovery_path: "Empty state if no incidents, or 404 error"
     expected_apis:
       - GET /api/v1/incidents
+      - GET /api/v1/incidents/:id
     max_duration_seconds: 20
 
 # ==============================================================================

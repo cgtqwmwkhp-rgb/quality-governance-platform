@@ -10,11 +10,57 @@ For headless mode:
 """
 
 import json
+import logging
 import random
 import string
+import sys
 from datetime import datetime, timedelta
 
-from locust import HttpUser, between, task
+from locust import HttpUser, between, events, task
+
+logger = logging.getLogger(__name__)
+
+PERF_THRESHOLDS = {
+    "p95_response_ms": 500,
+    "error_rate_pct": 1.0,
+}
+
+
+@events.quitting.add_listener
+def check_thresholds(environment, **kwargs):
+    """Enforce pass/fail thresholds at test completion."""
+    stats = environment.runner.stats.total
+    if stats.num_requests == 0:
+        logger.warning("No requests recorded — skipping threshold check")
+        return
+
+    p95 = stats.get_response_time_percentile(0.95) or 0
+    error_rate = (stats.num_failures / stats.num_requests) * 100
+
+    failed = False
+
+    if p95 > PERF_THRESHOLDS["p95_response_ms"]:
+        logger.error(
+            "THRESHOLD BREACH: p95 response time %.0fms > %dms limit",
+            p95,
+            PERF_THRESHOLDS["p95_response_ms"],
+        )
+        failed = True
+    else:
+        logger.info("p95 response time OK: %.0fms <= %dms", p95, PERF_THRESHOLDS["p95_response_ms"])
+
+    if error_rate > PERF_THRESHOLDS["error_rate_pct"]:
+        logger.error(
+            "THRESHOLD BREACH: error rate %.2f%% > %.1f%% limit",
+            error_rate,
+            PERF_THRESHOLDS["error_rate_pct"],
+        )
+        failed = True
+    else:
+        logger.info("Error rate OK: %.2f%% <= %.1f%%", error_rate, PERF_THRESHOLDS["error_rate_pct"])
+
+    if failed:
+        environment.process_exit_code = 1
 
 
 def random_string(length: int = 10) -> str:

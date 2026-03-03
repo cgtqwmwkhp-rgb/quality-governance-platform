@@ -29,13 +29,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "0"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none'"
 
         # Cache control for security
         if "/api/" in request.url.path:
@@ -132,9 +131,9 @@ def create_application() -> FastAPI:
         title=settings.app_name,
         description="Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management",
         version="1.0.0",
-        docs_url="/docs" if settings.app_env != "production" else None,
-        redoc_url="/redoc" if settings.app_env != "production" else None,
-        openapi_url="/openapi.json" if settings.app_env != "production" else None,
+        docs_url="/docs",  # Always enable API docs
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
         redirect_slashes=False,  # Disabled to prevent HTTP redirects behind HTTPS proxy
         lifespan=lifespan,
         openapi_tags=[
@@ -238,7 +237,7 @@ def create_application() -> FastAPI:
     # Regex pattern for staging/preview Azure SWA deployments
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.effective_cors_origins,
+        allow_origins=settings.cors_origins,
         allow_origin_regex=r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -476,7 +475,7 @@ async def readiness_check(request: Request):
             content={
                 "status": "not_ready",
                 "database": "disconnected",
-                "error": "database unavailable",
+                "error": str(e),
                 "request_id": request_id,
             },
         )

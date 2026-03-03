@@ -4,8 +4,6 @@ Extracts business logic from evidence_assets routes into a testable service clas
 Covers upload, listing, linking, metadata updates, soft-delete, and signed-URL generation.
 """
 
-from __future__ import annotations
-
 import hashlib
 import logging
 import uuid

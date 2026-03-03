@@ -18,7 +18,6 @@ const Policies = lazy(() => import('./pages/Policies'))
 const Risks = lazy(() => import('./pages/Risks'))
 const Audits = lazy(() => import('./pages/Audits'))
 const Investigations = lazy(() => import('./pages/Investigations'))
-const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
 const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const Documents = lazy(() => import('./pages/Documents'))
@@ -201,7 +200,6 @@ function App() {
               <Route path="audits/:auditId/execute" element={<AuditExecution />} />
               <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
               <Route path="investigations" element={<Investigations />} />
-              <Route path="investigations/:id" element={<InvestigationDetail />} />
               <Route path="standards" element={<Standards />} />
               <Route path="actions" element={<Actions />} />
               <Route path="documents" element={<Documents />} />

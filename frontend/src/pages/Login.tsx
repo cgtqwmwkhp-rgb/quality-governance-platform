@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2, RefreshCw, Trash2, Clock } from 'lucide-react'
+import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import { 
   authApi, 
   classifyLoginError, 
@@ -83,6 +85,8 @@ export default function Login({ onLogin }: LoginProps) {
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null)
   const [ssoLoading, setSsoLoading] = useState(false)
   const [ssoError, setSsoError] = useState<string | null>(null)
+  const { t } = useTranslation()
+  const { announce } = useLiveAnnouncer()
   
   // Refs for timing
   const requestStartRef = useRef<number>(0)
@@ -285,10 +289,10 @@ export default function Login({ onLogin }: LoginProps) {
       emitLoginTelemetry('success', durationMs)
       
       setLoginState('success')
+      announce('Signed in successfully')
       onLogin(response.data.access_token)
       
     } catch (err: unknown) {
-      // Classify error into bounded code
       const code = classifyLoginError(err)
       const durationMs = Date.now() - requestStartRef.current
       
@@ -296,6 +300,7 @@ export default function Login({ onLogin }: LoginProps) {
       
       setErrorCode(code)
       setLoginState(`error_${code.toLowerCase()}` as LoginState)
+      announce(LOGIN_ERROR_MESSAGES[code] || 'Login failed', 'assertive')
       
     } finally {
       // CRITICAL: Always clear timers to prevent state leaks
@@ -339,8 +344,8 @@ export default function Login({ onLogin }: LoginProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand mb-4 shadow-glow">
             <Shield className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Quality Governance Platform</h1>
-          <p className="text-muted-foreground">Sign in to manage your governance</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('login.title')}</h1>
+          <p className="text-muted-foreground">{t('login.subtitle')}</p>
         </div>
 
         {/* Login form */}
@@ -399,7 +404,7 @@ export default function Login({ onLogin }: LoginProps) {
 
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Email</label>
+                <label className="block text-sm font-medium text-foreground mb-2">{t('login.email')}</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -445,7 +450,7 @@ export default function Login({ onLogin }: LoginProps) {
                 <Loader2 className="w-5 h-5 animate-spin" data-testid="spinner" />
               ) : (
                 <>
-                  Sign In
+                  {t('login.submit')}
                   <ArrowRight size={18} />
                 </>
               )}
@@ -458,7 +463,7 @@ export default function Login({ onLogin }: LoginProps) {
                 className="text-sm text-primary hover:underline"
                 data-testid="forgot-password-link"
               >
-                Forgot password?
+                {t('login.forgot_password')}
               </a>
             </div>
 

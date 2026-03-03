@@ -4,8 +4,6 @@ Extracts business logic from complaint routes into a testable service class.
 Raises domain exceptions instead of HTTPException.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Optional
 
