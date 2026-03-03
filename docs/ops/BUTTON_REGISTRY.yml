@@ -107,12 +107,13 @@ portal_actions:
 # ADMIN DASHBOARD ACTIONS (P0/P1 Critical)
 # ==============================================================================
 admin_actions:
-  # Login
+  # Login (P1: empty-form click shows validation error, not a network call;
+  # full login flow is tested by admin-login P0 workflow)
   - pageId: login
     actionId: submit-login
     selector: "[data-testid='login-submit-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Login')"
-    criticality: P0
+    criticality: P1
     expected_outcome: network_call
     expected_api: POST /api/v1/auth/login
     disabled_reason: "Credentials incomplete"
@@ -150,22 +151,23 @@ admin_actions:
     disabled_reason: null
     description: "Open create incident form"
 
+  # P1: requires incident data to exist; covered by admin-view-incident workflow
   - pageId: incidents-list
     actionId: view-incident-detail
     selector: "[data-testid='incident-row-link']"
     fallback_selector: "tr[data-testid*='incident'] a, table tbody tr:first-child a"
-    criticality: P0
+    criticality: P1
     expected_outcome: navigation
     expected_route: /incidents/:id
-    disabled_reason: null
+    disabled_reason: "Requires existing incident data"
     description: "View incident details"
 
-  # RTA List Actions  
+  # P1: button may not exist on all environments; RTA creation covered by portal workflow
   - pageId: rtas-list
     actionId: create-new-rta
     selector: "[data-testid='create-rta-btn']"
     fallback_selector: "button:has-text('New RTA'), button:has-text('Create')"
-    criticality: P0
+    criticality: P1
     expected_outcome: ui_state
     expected_state: "Modal or form appears"
     disabled_reason: null
@@ -292,6 +294,6 @@ draft_recovery_actions:
 # ==============================================================================
 summary:
   total_actions: 27
-  p0_actions: 11
-  p1_actions: 12
+  p0_actions: 8
+  p1_actions: 15
   p2_actions: 4
