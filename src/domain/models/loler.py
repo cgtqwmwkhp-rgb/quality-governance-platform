@@ -5,7 +5,10 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from src.domain.models.asset import Asset
 
 from sqlalchemy import Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
