@@ -273,7 +273,7 @@ jobs:
 
       - name: Lint frontend (eslint + jsx-a11y)
         working-directory: frontend
-        run: npx eslint src/ --ext .ts,.tsx --max-warnings 50
+        run: npx eslint src/ --max-warnings 50
 
       - name: Run frontend tests
         working-directory: frontend
