@@ -105,7 +105,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
         localStorage.setItem('portal_session_time', Date.now().toString());
         sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -118,7 +119,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -218,14 +220,16 @@ test.describe('Link Audit', () => {
           return;
         }
         
-        // Navigate to page
+        // Navigate to page (domcontentloaded avoids hanging on slow API calls)
         await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
-          timeout: 30000,
+          waitUntil: 'domcontentloaded',
+          timeout: 15000,
         });
         
         // Wait for app to render
         await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
+        // Let React render the route component
+        await page.waitForTimeout(2000);
         
         // Extract all anchor tags
         const links = await page.locator('a[href]').all();

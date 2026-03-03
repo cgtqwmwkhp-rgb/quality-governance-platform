@@ -129,7 +129,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
         sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
       // Reload so the React PortalAuthProvider picks up the stored session
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -142,7 +143,8 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
       await page.evaluate((token) => {
         localStorage.setItem('access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
-      await page.reload({ waitUntil: 'networkidle' });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(1000);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -213,7 +215,7 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Navigate if route specified
             if (step.route) {
               await page.goto(step.route, { 
-                waitUntil: 'networkidle', 
+                waitUntil: 'domcontentloaded', 
                 timeout: workflow.max_duration_seconds * 1000 
               });
               await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
@@ -263,8 +265,8 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               ).catch(() => null);
             }
             
-            // Wait for any navigation or network activity to settle
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            // Brief pause for UI to settle after navigation/click
+            await page.waitForTimeout(1500);
             
             stepResult.result = 'PASS';
             result.completed_steps++;

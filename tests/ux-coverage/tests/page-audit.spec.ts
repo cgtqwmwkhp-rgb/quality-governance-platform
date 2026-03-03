@@ -198,8 +198,8 @@ test.describe('Page Load Audit', () => {
         // Navigate and measure
         const startTime = Date.now();
         const response = await page.goto(pageEntry.route, {
-          waitUntil: 'networkidle',
-          timeout: 30000,
+          waitUntil: 'domcontentloaded',
+          timeout: 15000,
         });
         const loadTime = Date.now() - startTime;
         
