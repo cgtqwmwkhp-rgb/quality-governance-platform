@@ -7,8 +7,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +35,8 @@ from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecor
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

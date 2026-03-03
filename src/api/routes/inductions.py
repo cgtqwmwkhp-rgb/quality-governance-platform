@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
-
-logger = logging.getLogger(__name__)
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -35,6 +33,8 @@ from src.domain.models.induction import (
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
