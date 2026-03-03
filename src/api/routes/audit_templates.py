@@ -14,6 +14,7 @@ from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.audit import (
+    ArchiveTemplateResponse,
     AuditQuestionCreate,
     AuditQuestionResponse,
     AuditQuestionUpdate,
@@ -25,7 +26,6 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
-    ArchiveTemplateResponse,
 )
 from src.domain.models.audit import AuditTemplate
 from src.domain.services.audit_service import AuditService
@@ -99,9 +99,7 @@ async def list_templates(
     )
 
 
-@router.post(
-    "/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,

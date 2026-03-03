@@ -7,10 +7,9 @@ compatible with AuditService.create_template(), create_section(), and create_que
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
-
-import xml.etree.ElementTree as ET
 
 import defusedxml.ElementTree as SafeET
 
@@ -187,16 +186,29 @@ def _category_from_filename(source_filename: str | None) -> str | None:
 
     # --- Trailers & Attachments (before Vehicles so vehicle_mount matches here) ---
     _trailer_kw = (
-        "trailer", "cable_drum", "cable_recovery", "ukpn", "hiab",
-        "tail_lift", "tipper", "van_mate", "vehicle_mount", "pto",
+        "trailer",
+        "cable_drum",
+        "cable_recovery",
+        "ukpn",
+        "hiab",
+        "tail_lift",
+        "tipper",
+        "van_mate",
+        "vehicle_mount",
+        "pto",
     )
     if any(kw in stem for kw in _trailer_kw):
         return "Trailers & Attachments"
 
     # --- Vehicles ---
     _vehicle_kw = (
-        "vehicle", "lcv", "sprinter", "pool_car", "cadent_vehicle",
-        "iveco", "ford",
+        "vehicle",
+        "lcv",
+        "sprinter",
+        "pool_car",
+        "cadent_vehicle",
+        "iveco",
+        "ford",
     )
     if any(kw in stem for kw in _vehicle_kw):
         return "Vehicles"
@@ -208,8 +220,13 @@ def _category_from_filename(source_filename: str | None) -> str | None:
 
     # --- Plant & Machinery (gen_* patterns that aren't trailers/generators) ---
     _plant_kw = (
-        "excavator", "dumper", "forklift", "loading_shovel",
-        "gen_plant", "telescopic", "skid_steer",
+        "excavator",
+        "dumper",
+        "forklift",
+        "loading_shovel",
+        "gen_plant",
+        "telescopic",
+        "skid_steer",
     )
     if any(kw in stem for kw in _plant_kw):
         return "Plant & Machinery"
@@ -307,11 +324,7 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                         if "#DFDFDF" in (bg or "") and not seen_header_row:
                             seen_header_row = True
                             continue  # Header row
-                        if (
-                            question_text is None
-                            and not has_radio_group
-                            and not has_spinner
-                        ):
+                        if question_text is None and not has_radio_group and not has_spinner:
                             question_text = text.strip()
 
             # Check for nested TableLayout with EditText (comment field)
@@ -334,11 +347,7 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                 guidance = None
 
                 if has_radio_group:
-                    q_type = (
-                        "pass_fail"
-                        if "Ok" in str(radio_options) and "Fail" in str(radio_options)
-                        else "radio"
-                    )
+                    q_type = "pass_fail" if "Ok" in str(radio_options) and "Fail" in str(radio_options) else "radio"
                     options = [{"value": o.lower(), "label": o} for o in radio_options]
                 elif has_spinner:
                     q_type = "dropdown"
@@ -390,11 +399,7 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                                 # Look for sibling EditText
                                 for sib in child:
                                     if _local_tag(sib.tag) == "EditText":
-                                        if (
-                                            current_section is None
-                                            or current_section.get("name")
-                                            != section_title
-                                        ):
+                                        if current_section is None or current_section.get("name") != section_title:
                                             maybe_start_section(section_title)
                                         current_section["questions"].append(
                                             {
@@ -425,14 +430,9 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
         if section_title:
             for tbl in ll.iter():
                 if _local_tag(tbl.tag) == "TableLayout":
-                    if (
-                        current_section is None
-                        or current_section.get("name") != section_title
-                    ):
+                    if current_section is None or current_section.get("name") != section_title:
                         maybe_start_section(section_title)
-                    question_order = _parse_table_questions(
-                        tbl, current_section, question_order
-                    )
+                    question_order = _parse_table_questions(tbl, current_section, question_order)
                     break
 
     if current_section and current_section.get("questions"):
@@ -450,16 +450,10 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
             seen.add(key)
             unique_sections.append(s)
 
-    return (
-        unique_sections
-        if unique_sections
-        else [{"name": "General", "order": 0, "questions": []}]
-    )
+    return unique_sections if unique_sections else [{"name": "General", "order": 0, "questions": []}]
 
 
-def _parse_table_questions(
-    tbl: ET.Element, section: dict[str, Any], start_order: int
-) -> int:
+def _parse_table_questions(tbl: ET.Element, section: dict[str, Any], start_order: int) -> int:
     """Parse questions from a TableLayout within a section."""
     order = start_order
     for row in tbl:
@@ -493,9 +487,7 @@ def _parse_table_questions(
     return order
 
 
-def _parse_question_element(
-    el: ET.Element, tag: str, idx: int
-) -> dict[str, Any] | None:
+def _parse_question_element(el: ET.Element, tag: str, idx: int) -> dict[str, Any] | None:
     """Parse a single question element (EditText, CheckBox, etc.)."""
     if tag == "EditText":
         hint = _attr(el, "hint")

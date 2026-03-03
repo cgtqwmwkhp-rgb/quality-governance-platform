@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, status, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -29,9 +29,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-ALLOWED_IMPORT_DIR = os.environ.get(
-    "XML_IMPORT_DIR", os.path.join(tempfile.gettempdir(), "xml-imports")
-)
+ALLOWED_IMPORT_DIR = os.environ.get("XML_IMPORT_DIR", os.path.join(tempfile.gettempdir(), "xml-imports"))
 
 
 # ---------------------------------------------------------------------------
@@ -84,9 +82,7 @@ async def parse_xml_file(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post(
-    "/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def import_xml_file(
     file: UploadFile = File(...),
     db: DbSession = None,
@@ -215,9 +211,7 @@ async def batch_import(
     for xml_file in sorted(xml_dir.glob("*.xml")):
         try:
             content = xml_file.read_text(encoding="utf-8", errors="replace")
-            template_data = parse_xml_to_template(
-                content, source_filename=xml_file.name
-            )
+            template_data = parse_xml_to_template(content, source_filename=xml_file.name)
         except Exception as exc:
             errors.append(f"{xml_file.name}: parse error – {exc}")
             continue
@@ -261,9 +255,7 @@ async def batch_import(
                     )
 
             existing_names.add(template_data["name"])
-            imported_templates.append(
-                AuditTemplateResponse.model_validate(template)
-            )
+            imported_templates.append(AuditTemplateResponse.model_validate(template))
         except Exception as exc:
             logger.exception("Failed to import %s", xml_file.name)
             errors.append(f"{xml_file.name}: import error – {exc}")
