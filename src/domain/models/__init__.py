@@ -78,9 +78,6 @@ from src.domain.models.engineer import (
     OnboardingChecklist,
     OnboardingStatus,
 )
-
-# Evidence Assets (Shared Attachments Module)
-from src.domain.models.feature_flag import FeatureFlag
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -88,6 +85,9 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+
+# Evidence Assets (Shared Attachments Module)
+from src.domain.models.feature_flag import FeatureFlag
 
 # Form Configuration (Admin Form Builder)
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
