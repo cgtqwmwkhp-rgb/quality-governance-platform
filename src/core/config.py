@@ -3,7 +3,6 @@
 from functools import lru_cache
 from typing import List
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -43,6 +42,21 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "SECURITY ERROR: JWT_SECRET_KEY contains a placeholder value in production! "
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            if self.pseudonymization_pepper in placeholder_keys:
+                raise ValueError(
+                    "SECURITY ERROR: PSEUDONYMIZATION_PEPPER contains a placeholder value in production! "
+                    "GDPR pseudonymization requires a unique, secret pepper. "
+                    "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            if self.uat_mode.upper() != "READ_ONLY":
+                import warnings
+                warnings.warn(
+                    "SECURITY WARNING: UAT_MODE is not READ_ONLY in production! "
+                    "Set UAT_MODE=READ_ONLY to prevent unintended writes.",
+                    stacklevel=2,
                 )
 
             # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
@@ -111,14 +125,6 @@ class Settings(BaseSettings):
 
     # GDPR / Pseudonymization
     pseudonymization_pepper: str = "change-me-in-production"
-
-    @field_validator("pseudonymization_pepper")
-    @classmethod
-    def validate_pepper_length(cls, v: str) -> str:
-        """Pepper must be at least 16 characters for security."""
-        if v and len(v) < 16:
-            raise ValueError("PSEUDONYMIZATION_PEPPER must be at least 16 characters")
-        return v
 
     # Logging
     log_level: str = "INFO"

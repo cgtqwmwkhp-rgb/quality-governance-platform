@@ -453,7 +453,11 @@ async def send_notification(
     current_user: CurrentUser = Depends(),
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
-    # TODO: Add admin role check
+    if not current_user.is_superuser and not current_user.has_permission("notifications:send"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required to send notifications",
+        )
 
     service = PushNotificationService(db)
 
