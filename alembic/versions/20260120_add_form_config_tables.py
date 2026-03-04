@@ -186,7 +186,7 @@ def upgrade() -> None:
         INSERT INTO system_settings (key, value, category, description, value_type, is_public) VALUES
         ('company_name', 'Plantexpand Ltd', 'branding', 'Company name displayed in the system', 'string', true),
         ('support_email', 'support@plantexpand.com', 'contact', 'Support email address', 'string', true),
-        ('support_phone', '+44 1onal 234 567', 'contact', 'Support phone number', 'string', true),
+        ('support_phone', '', 'contact', 'Support phone number', 'string', true),
         ('incident_notification_emails', 'safety@plantexpand.com', 'notifications', 'Emails notified on incident submission', 'string', false),
         ('auto_assign_incidents', 'true', 'workflow', 'Auto-assign incidents to safety team', 'boolean', false)
     """)

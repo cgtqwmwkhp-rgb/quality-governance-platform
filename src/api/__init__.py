@@ -25,10 +25,8 @@ from src.api.routes import (
     engineers,
     evidence_assets,
     executive_dashboard,
-    feature_flags,
     form_config,
     governance,
-    health,
     incidents,
     inductions,
     investigation_templates,
@@ -61,8 +59,6 @@ from src.api.routes import (
 router = APIRouter()
 
 # Include all route modules
-# Health endpoints (public, no auth)
-router.include_router(health.router, tags=["Health"])
 router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(standards.router, prefix="/standards", tags=["Standards Library"])
@@ -145,11 +141,11 @@ router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Work
 router.include_router(governance.router, prefix="/governance", tags=["Governance Framework"])
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
-# CI Testing Endpoints (Staging Only)
-router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
+# CI Testing Endpoints (Staging Only) — gated by env to avoid exposure in production
+import os as _os
+if _os.getenv("APP_ENV", "production") != "production":
+    router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
 router.include_router(telemetry.router, tags=["Telemetry"])
-# Feature Flags
-router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feature Flags"])
 
 __all__ = ["router"]

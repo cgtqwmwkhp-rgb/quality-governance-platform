@@ -304,9 +304,11 @@ jobs:
       - name: Create database backup
         run: |
           echo "Creating pre-deployment database backup..."
-          # Note: Implement backup strategy based on Azure SQL/PostgreSQL setup
-          # az postgres flexible-server backup create ...
-          echo "Backup completed (placeholder)"
+          az postgres flexible-server backup create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AZURE_DB_SERVER_NAME || 'qgp-prod-db' }} \
+            --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
+            2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
