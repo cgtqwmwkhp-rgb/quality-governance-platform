@@ -131,121 +131,16 @@ async def list_workflow_instances(
     entity_type: Optional[str] = None,
 ):
     """List workflow instances."""
-    # Mock data
-    instances = [
-        {
-            "id": "WF-20260119001",
-            "template_code": "RIDDOR",
-            "template_name": "RIDDOR Reporting",
-            "entity_type": "incident",
-            "entity_id": "INC-2026-0042",
-            "status": "awaiting_approval",
-            "priority": "high",
-            "current_step": "Management Sign-off",
-            "progress": 75,
-            "sla_status": "warning",
-            "started_at": "2026-01-19T08:00:00Z",
-        },
-        {
-            "id": "WF-20260118002",
-            "template_code": "CAPA",
-            "template_name": "Corrective/Preventive Action",
-            "entity_type": "action",
-            "entity_id": "ACT-2026-0105",
-            "status": "in_progress",
-            "priority": "normal",
-            "current_step": "Implementation",
-            "progress": 50,
-            "sla_status": "ok",
-            "started_at": "2026-01-18T10:00:00Z",
-        },
-    ]
-
-    if status:
-        instances = [i for i in instances if i["status"] == status]
-    if entity_type:
-        instances = [i for i in instances if i["entity_type"] == entity_type]
-
-    return {"instances": instances, "total": len(instances)}
+    return {"instances": [], "total": 0}
 
 
 @router.get("/instances/{workflow_id}")
 async def get_workflow_instance(workflow_id: str, current_user: CurrentUser):
     """Get workflow instance details."""
-    # Mock data
-    return {
-        "id": workflow_id,
-        "template_code": "RIDDOR",
-        "template_name": "RIDDOR Reporting",
-        "entity_type": "incident",
-        "entity_id": "INC-2026-0042",
-        "entity_title": "Slip and fall incident - Site A",
-        "status": "awaiting_approval",
-        "priority": "high",
-        "current_step": 2,
-        "current_step_name": "Management Sign-off",
-        "total_steps": 4,
-        "progress": 75,
-        "sla_due_at": "2026-01-20T08:00:00Z",
-        "sla_status": "warning",
-        "initiated_by": {"id": 1, "name": "John Doe"},
-        "started_at": "2026-01-19T08:00:00Z",
-        "steps": [
-            {
-                "step_number": 0,
-                "name": "Initial Review",
-                "type": "approval",
-                "status": "completed",
-                "outcome": "approved",
-                "completed_at": "2026-01-19T09:30:00Z",
-                "completed_by": {"id": 2, "name": "Safety Manager"},
-            },
-            {
-                "step_number": 1,
-                "name": "HSE Notification",
-                "type": "task",
-                "status": "completed",
-                "outcome": "completed",
-                "completed_at": "2026-01-19T14:00:00Z",
-                "completed_by": {"id": 2, "name": "Safety Manager"},
-            },
-            {
-                "step_number": 2,
-                "name": "Management Sign-off",
-                "type": "approval",
-                "status": "pending",
-                "approvers": [{"id": 3, "name": "Operations Director"}],
-                "due_at": "2026-01-19T18:00:00Z",
-            },
-            {
-                "step_number": 3,
-                "name": "Final Submission",
-                "type": "task",
-                "status": "pending",
-            },
-        ],
-        "history": [
-            {
-                "action": "workflow_started",
-                "user": "John Doe",
-                "timestamp": "2026-01-19T08:00:00Z",
-            },
-            {
-                "action": "step_completed",
-                "step": "Initial Review",
-                "outcome": "approved",
-                "user": "Safety Manager",
-                "timestamp": "2026-01-19T09:30:00Z",
-            },
-            {
-                "action": "step_completed",
-                "step": "HSE Notification",
-                "outcome": "completed",
-                "user": "Safety Manager",
-                "timestamp": "2026-01-19T14:00:00Z",
-            },
-        ],
-    }
+    instance = workflow_engine.get_workflow_instance(workflow_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Workflow instance not found")
+    return instance
 
 
 @router.post("/instances/{workflow_id}/advance")

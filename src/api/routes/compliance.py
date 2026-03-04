@@ -199,15 +199,7 @@ async def get_compliance_coverage(standard: Optional[str] = Query(None, descript
     """
     # In production, this would fetch evidence links from database
     # For demo, using mock data
-    mock_links = [
-        EvidenceLink("l1", "policy", "1", "9001-5.2", "manual"),
-        EvidenceLink("l2", "document", "2", "9001-7.5", "manual"),
-        EvidenceLink("l3", "document", "3", "9001-7.5", "auto", 0.85),
-        EvidenceLink("l4", "audit", "4", "9001-9.2", "auto", 0.92),
-        EvidenceLink("l5", "incident", "5", "45001-10.2", "auto", 0.88),
-        EvidenceLink("l6", "training", "6", "45001-7.2", "auto", 0.95),
-        EvidenceLink("l7", "document", "7", "14001-8.2", "manual"),
-    ]
+    mock_links = []
 
     std_enum = None
     if standard:
@@ -226,10 +218,7 @@ async def get_compliance_gaps(standard: Optional[str] = Query(None, description=
     These represent compliance gaps that need attention.
     """
     # In production, fetch from database
-    mock_links = [
-        EvidenceLink("l1", "policy", "1", "9001-5.2", "manual"),
-        EvidenceLink("l2", "document", "2", "9001-7.5", "manual"),
-    ]
+    mock_links = []
 
     std_enum = None
     if standard:
@@ -254,15 +243,7 @@ async def generate_compliance_report(
     Shows all clauses with their linked evidence and coverage status.
     """
     # In production, fetch from database
-    mock_links = [
-        EvidenceLink("l1", "policy", "1", "9001-5.2", "manual"),
-        EvidenceLink("l2", "document", "2", "9001-7.5", "manual"),
-        EvidenceLink("l3", "document", "3", "9001-7.5", "auto", 0.85),
-        EvidenceLink("l4", "audit", "4", "9001-9.2", "auto", 0.92),
-        EvidenceLink("l5", "incident", "5", "45001-10.2", "auto", 0.88),
-        EvidenceLink("l6", "training", "6", "45001-7.2", "auto", 0.95),
-        EvidenceLink("l7", "document", "7", "14001-8.2", "manual"),
-    ]
+    mock_links = []
 
     std_enum = None
     if standard:

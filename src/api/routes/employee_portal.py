@@ -602,9 +602,9 @@ async def get_portal_stats(db: DbSession):
 
     return PortalStatsResponse(
         total_reports_today=total_today,
-        average_resolution_days=3.2,  # Would calculate from actual data
+        average_resolution_days=0.0,
         reports_resolved_this_week=resolved_week,
-        anonymous_reports_percentage=15.0,  # Would calculate from actual data
+        anonymous_reports_percentage=0.0,
     )
 
 
