@@ -3,6 +3,7 @@ Integration tests for Investigation system governance.
 Tests RBAC, canonical error envelopes, determinism, and entity linkage.
 """
 
+import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -20,7 +21,7 @@ async def test_incident(test_session: AsyncSession):
         description="Test incident",
         incident_date=datetime.now(timezone.utc),
         reported_date=datetime.now(timezone.utc),
-        reference_number="INC-TEST-9999",
+        reference_number=f"INC-TEST-{uuid.uuid4().hex[:8]}",
     )
     test_session.add(incident)
     await test_session.commit()

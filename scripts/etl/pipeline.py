@@ -451,10 +451,19 @@ def main():
     import os
 
     parser = argparse.ArgumentParser(description="Quality Governance Platform ETL")
-    parser.add_argument("--environment", choices=["development", "staging", "production"], default="staging")
+    parser.add_argument(
+        "--environment",
+        choices=["development", "staging", "production"],
+        default="staging",
+    )
     parser.add_argument("--validate-only", action="store_true", help="Only validate, no transforms")
     parser.add_argument("--dry-run", action="store_true", help="Validate and transform, no API calls")
-    parser.add_argument("--import", dest="do_import", action="store_true", help="Full import with API calls")
+    parser.add_argument(
+        "--import",
+        dest="do_import",
+        action="store_true",
+        help="Full import with API calls",
+    )
     parser.add_argument("--probe-contracts", action="store_true", help="Only probe API contracts")
     parser.add_argument("--source", type=str, help="Source CSV file")
     parser.add_argument("--entity-type", choices=["incident", "complaint", "rta"], help="Entity type")

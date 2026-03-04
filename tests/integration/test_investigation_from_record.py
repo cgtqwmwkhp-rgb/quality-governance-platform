@@ -55,7 +55,7 @@ class TestFromRecordEndpoint:
         # Should get 422 for invalid enum value
         assert response.status_code == 422
         data = response.json()
-        assert "details" in data or "detail" in data
+        assert "detail" in data
 
     async def test_from_record_validates_source_id_positive(self, client: AsyncClient, auth_headers: dict):
         """Test from-record requires source_id > 0."""
@@ -101,9 +101,10 @@ class TestFromRecordErrorResponses:
         )
         assert response.status_code == 404
         data = response.json()
-        assert data["detail"]["error_code"] == "SOURCE_NOT_FOUND"
-        assert "message" in data["detail"]
-        assert "request_id" in data["detail"]
+        error = data.get("error", data.get("detail", data))
+        assert error.get("code", error.get("error_code")) == "SOURCE_NOT_FOUND"
+        assert "message" in error
+        assert "request_id" in error or "request_id" in data
 
     async def test_duplicate_returns_409_with_existing_id(
         self,
@@ -125,9 +126,11 @@ class TestFromRecordErrorResponses:
         )
         assert response.status_code == 409
         data = response.json()
-        assert data["detail"]["error_code"] == "INV_ALREADY_EXISTS"
-        assert data["detail"]["details"]["existing_investigation_id"] == investigation.id
-        assert "existing_reference_number" in data["detail"]["details"]
+        error = data.get("error", data.get("detail", data))
+        assert error.get("code", error.get("error_code")) == "INV_ALREADY_EXISTS"
+        details = error.get("details", error)
+        assert details.get("existing_investigation_id") == investigation.id
+        assert "existing_reference_number" in details
 
 
 @pytest.mark.asyncio
@@ -260,7 +263,8 @@ class TestDuplicatePrevention:
         )
         assert response2.status_code == 409
         data = response2.json()
-        assert data["detail"]["error_code"] == "INV_ALREADY_EXISTS"
+        error = data.get("error", data.get("detail", data))
+        assert error.get("code", error.get("error_code")) == "INV_ALREADY_EXISTS"
 
 
 @pytest.mark.asyncio

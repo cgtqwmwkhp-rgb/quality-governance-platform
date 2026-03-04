@@ -2,18 +2,9 @@
 UAT Test Configuration
 
 Shared fixtures and configuration for User Acceptance Tests.
-
-IMPORTANT: These tests require proper async isolation to prevent
-the "attached to a different loop" error when database operations
-are involved. Each test gets a fresh async context.
-
-Note: Some UAT tests involving database operations may fail due to
-event loop contamination from asyncpg connection pools. These failures
-identify real integration issues between the app's DB layer and the
-test infrastructure.
+Uses per-test transaction rollback for complete isolation.
 """
 
-import asyncio
 from typing import AsyncGenerator
 
 import pytest
@@ -21,15 +12,6 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 from src.main import app
-
-# Configure pytest-asyncio to use strict mode with function scope
-# pytest_plugins moved to root conftest per pytest deprecation rules
-
-
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    """Use default event loop policy."""
-    return asyncio.DefaultEventLoopPolicy()
 
 
 def pytest_configure(config):
@@ -48,49 +30,71 @@ def pytest_configure(config):
     )
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def _seed_default_data():
+    """Seed default tenant and user for UAT tests."""
+    from sqlalchemy import select
+
+    from src.core.security import get_password_hash
+    from src.domain.models.tenant import Tenant
+    from src.domain.models.user import User
+    from src.infrastructure.database import async_session_maker
+
+    try:
+        async with async_session_maker() as session:
+            result = await session.execute(select(Tenant).where(Tenant.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    Tenant(
+                        id=1,
+                        name="UAT Test Tenant",
+                        slug="uat-test",
+                        admin_email="uat@example.com",
+                    )
+                )
+                await session.flush()
+
+            result = await session.execute(select(User).where(User.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    User(
+                        id=1,
+                        email="test@example.com",
+                        hashed_password=get_password_hash("testpassword123"),
+                        first_name="Test",
+                        last_name="User",
+                        is_active=True,
+                        is_superuser=False,
+                        tenant_id=1,
+                    )
+                )
+            await session.commit()
+
+        from sqlalchemy import text
+
+        from src.infrastructure.database import engine
+
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
+    except Exception:
+        pass
+
+
 @pytest_asyncio.fixture(scope="function")
 async def client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    Async HTTP client for UAT tests with proper lifecycle management.
-
-    This fixture ensures:
-    1. Each test gets a fresh AsyncClient
-    2. The app's lifespan events are properly triggered
-    3. Database connections are disposed after each test
-
-    IMPORTANT: Database engine is disposed after each test to prevent
-    event loop contamination from asyncpg connection pool futures.
-    """
-    from src.infrastructure.database import engine
-
+    """Async HTTP client for UAT tests."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    # Dispose engine to prevent event loop contamination
-    # This ensures each test gets fresh connections
-    await engine.dispose()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def fresh_client() -> AsyncGenerator[AsyncClient, None]:
-    """
-    Fresh async client with guaranteed clean database state.
-
-    Use this for tests that absolutely require DB isolation.
-    The engine is disposed both before and after the test.
-    """
-    from src.infrastructure.database import engine
-
-    # Dispose any stale connections before test
-    await engine.dispose()
-
+    """Fresh async client (alias for client with transaction rollback)."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-    # Dispose after test
-    await engine.dispose()
 
 
 @pytest.fixture(scope="session")

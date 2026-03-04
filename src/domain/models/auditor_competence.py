@@ -8,7 +8,7 @@ Provides tracking for:
 """
 
 import enum
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
@@ -167,7 +167,7 @@ class AuditorCertification(Base, TimestampMixin):
         """Check if certification is currently valid."""
         if self.status != CertificationStatus.ACTIVE:
             return False
-        if self.expiry_date and self.expiry_date < datetime.now(timezone.utc):
+        if self.expiry_date and self.expiry_date < datetime.utcnow():
             return False
         return True
 
@@ -176,7 +176,7 @@ class AuditorCertification(Base, TimestampMixin):
         """Get days until expiry."""
         if not self.expiry_date:
             return None
-        delta = self.expiry_date - datetime.now(timezone.utc)
+        delta = self.expiry_date - datetime.utcnow()
         return delta.days
 
 

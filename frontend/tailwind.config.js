@@ -113,14 +113,6 @@ export default {
           from: { opacity: "0", transform: "translateX(16px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
-        "toast-in": {
-          from: { opacity: "0", transform: "translateX(24px) scale(0.96)" },
-          to: { opacity: "1", transform: "translateX(0) scale(1)" },
-        },
-        "toast-out": {
-          from: { opacity: "1", transform: "translateX(0) scale(1)" },
-          to: { opacity: "0", transform: "translateX(24px) scale(0.96)" },
-        },
         "scale-in": {
           from: { opacity: "0", transform: "scale(0.95)" },
           to: { opacity: "1", transform: "scale(1)" },
@@ -144,8 +136,6 @@ export default {
         "slide-up": "slide-up 0.4s ease forwards",
         "slide-down": "slide-down 0.4s ease forwards",
         "slide-in-right": "slide-in-right 0.3s ease forwards",
-        "toast-in": "toast-in 0.32s cubic-bezier(0.16,1,0.3,1) forwards",
-        "toast-out": "toast-out 0.26s cubic-bezier(0.4,0,1,1) forwards",
         "scale-in": "scale-in 0.2s ease forwards",
         shimmer: "shimmer 2s linear infinite",
         "accordion-down": "accordion-down 0.2s ease-out",

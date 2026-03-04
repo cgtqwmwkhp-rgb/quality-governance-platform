@@ -53,6 +53,10 @@ celery_app.conf.beat_schedule = {
         "task": "src.infrastructure.tasks.cleanup_tasks.check_expired_signatures",
         "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM
     },
+    "check-competency-expiry": {
+        "task": "src.infrastructure.tasks.competency_tasks.check_competency_expiry",
+        "schedule": crontab(hour=7, minute=0),
+    },
     "recalculate-compliance-scores": {
         "task": "src.infrastructure.tasks.report_tasks.recalculate_compliance_scores",
         "schedule": crontab(hour=3, minute=0),  # Daily at 3 AM

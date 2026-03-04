@@ -1,39 +1,31 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ThemeProvider } from "./contexts/ThemeContext";
-import { TooltipProvider } from "./components/ui/Tooltip";
-import { initWebVitals } from "./utils/web-vitals";
-import { errorReporting } from "./services/errorReporting";
-import "./index.css";
-
-if (import.meta.env.DEV) {
-  import("@axe-core/react").then((axe) => {
-    axe.default(React, ReactDOM, 1000);
-  });
-}
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import './i18n/i18n'
+import App from './App'
+import { ThemeProvider } from './contexts/ThemeContext'
+import { LiveAnnouncerProvider } from './components/ui/LiveAnnouncer'
+import { TooltipProvider } from './components/ui/Tooltip'
+import './index.css'
 
 // Build version stamp for deployment verification
-const BUILD_SHA = import.meta.env["VITE_BUILD_SHA"] || "dev";
-const BUILD_TIME =
-  import.meta.env["VITE_BUILD_TIME"] || new Date().toISOString();
+const BUILD_SHA = import.meta.env.VITE_BUILD_SHA || 'dev'
+const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || new Date().toISOString()
 
 // Expose for debugging (no secrets)
-(window as unknown as Record<string, string>)["__BUILD_SHA__"] = BUILD_SHA;
-(window as unknown as Record<string, string>)["__BUILD_TIME__"] = BUILD_TIME;
+;(window as any).__BUILD_SHA__ = BUILD_SHA
+;(window as any).__BUILD_TIME__ = BUILD_TIME
 
 // Log once on startup for deployment verification
-console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`);
+console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`)
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <TooltipProvider>
-        <App />
-      </TooltipProvider>
+      <LiveAnnouncerProvider>
+        <TooltipProvider>
+          <App />
+        </TooltipProvider>
+      </LiveAnnouncerProvider>
     </ThemeProvider>
   </React.StrictMode>,
-);
-
-initWebVitals();
-errorReporting.init();
+)

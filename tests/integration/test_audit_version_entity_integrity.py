@@ -104,7 +104,13 @@ async def test_run_captures_template_version_snapshot(
     )
 
     # Add one section/question so template can be published.
-    section = AuditSection(template_id=template.id, title="Section A", description="Checks", sort_order=0, weight=1.0)
+    section = AuditSection(
+        template_id=template.id,
+        title="Section A",
+        description="Checks",
+        sort_order=0,
+        weight=1.0,
+    )
     isolated_db_session.add(section)
     await isolated_db_session.flush()
     isolated_db_session.add(

@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       - name: Install Dependencies
@@ -117,7 +117,7 @@ jobs:
           submodules: true
           lfs: false
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       
@@ -196,7 +196,7 @@ jobs:
       - uses: actions/checkout@v3
       
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
       
@@ -281,22 +281,27 @@ jobs:
           CI: true
         run: |
           echo "[TEST] Running Playwright E2E tests against staging..."
+          mkdir -p playwright-report
           
           # Validation mode handling
           SIMULATE_NO_TESTS="${{ github.event.inputs.simulate_no_tests }}"
           
-          # Run tests and capture exit code explicitly
+          # Run tests with explicit reporters to ensure output files are created
+          export PLAYWRIGHT_JSON_OUTPUT_NAME=playwright-report/results.json
+          export PLAYWRIGHT_JUNIT_OUTPUT_NAME=playwright-report/junit.xml
           set +e
           if [ "$SIMULATE_NO_TESTS" = "true" ]; then
             echo "[WARN] VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
-            npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" 2>&1
+            npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" --reporter=list,json,junit 2>&1
           else
-            npx playwright test 2>&1
+            npx playwright test tests/e2e/staging-verification.spec.ts --reporter=list,json,junit 2>&1
           fi
           EXIT_CODE=$?
           set -e
           echo "playwright_exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           echo "Playwright exit code: $EXIT_CODE"
+          echo "[DEBUG] Contents of playwright-report/:"
+          ls -la playwright-report/ 2>/dev/null || echo "  (directory not found)"
       
       # ========================================================================
       # VALIDATION MODE: Inject deterministic conditions for classification testing

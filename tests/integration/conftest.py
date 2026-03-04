@@ -4,6 +4,7 @@ Provides JWT-authenticated test clients at multiple permission levels
 (unauthenticated, viewer, admin, superuser) by overriding the
 ``get_current_user`` dependency with a lightweight mock that validates
 the JWT but skips the database lookup.
+
 """
 
 import os
@@ -237,6 +238,62 @@ def _override_auth():
     app.dependency_overrides.pop(get_current_user, None)
 
 
+@pytest.fixture(scope="session", autouse=True)
+async def _seed_default_data():
+    """Seed a default tenant and user for FK integrity.
+
+    The mock auth override returns user id=1, so many API handlers set
+    ``created_by_id=1``.  This user MUST exist in the ``users`` table
+    to satisfy FK constraints.
+    """
+    try:
+        from sqlalchemy import select
+
+        from src.core.security import get_password_hash
+        from src.domain.models.tenant import Tenant
+        from src.domain.models.user import User
+        from src.infrastructure.database import async_session_maker
+
+        async with async_session_maker() as session:
+            result = await session.execute(select(Tenant).where(Tenant.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    Tenant(
+                        id=1,
+                        name="Test Tenant",
+                        slug="test-tenant",
+                        admin_email="admin@test.example.com",
+                    )
+                )
+                await session.flush()
+
+            result = await session.execute(select(User).where(User.id == 1))
+            if result.scalar_one_or_none() is None:
+                session.add(
+                    User(
+                        id=1,
+                        email="test@example.com",
+                        hashed_password=get_password_hash("testpassword123"),
+                        first_name="Test",
+                        last_name="User",
+                        is_active=True,
+                        is_superuser=False,
+                        tenant_id=1,
+                    )
+                )
+            await session.commit()
+
+        from sqlalchemy import text
+
+        from src.infrastructure.database import engine
+
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Test clients
 # ---------------------------------------------------------------------------
@@ -352,28 +409,14 @@ def superuser_auth_headers() -> dict[str, str]:
 
 @pytest.fixture
 async def test_session():
-    """Async database session using the application's database connection.
-
-    Creates a transaction that is rolled back after each test to ensure
-    test isolation and automatic cleanup of test data.
-
-    Tests can call session.commit() to persist data within the test transaction,
-    and all changes will be automatically rolled back after the test completes.
-    """
+    """Async database session for direct ORM operations in tests."""
     try:
         from sqlalchemy.ext.asyncio import AsyncSession
 
         from src.infrastructure.database import async_session_maker
 
         async with async_session_maker() as session:
-            # Start a nested transaction (savepoint) for test isolation
-            # This allows tests to call commit() while still being able to rollback
-            async with session.begin() as transaction:
-                try:
-                    yield session
-                finally:
-                    # Rollback to clean up test data
-                    await transaction.rollback()
+            yield session
     except Exception as exc:
         pytest.skip(f"DB session setup failed: {exc}")
 
@@ -480,6 +523,35 @@ def database_url() -> str:
 # ---------------------------------------------------------------------------
 # Pytest hooks
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def near_miss_factory(admin_client):
+    """Factory fixture that creates a NearMiss via the API and returns it.
+
+    Used by investigation/source-record integration tests.
+    """
+    from tests.factories import NearMissFactory
+
+    _counter = 0
+
+    async def _create(**overrides):
+        nonlocal _counter
+        _counter += 1
+        nm = NearMissFactory.build(**overrides)
+        payload = {
+            "reporter_name": nm.reporter_name,
+            "contract": nm.contract,
+            "location": nm.location,
+            "event_date": nm.event_date.isoformat(),
+            "description": nm.description,
+        }
+        payload.update(overrides)
+        response = await admin_client.post("/api/v1/near-misses/", json=payload)
+        assert response.status_code in (200, 201), response.text
+        return response.json()
+
+    return _create
 
 
 def pytest_configure(config):

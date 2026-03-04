@@ -30,7 +30,7 @@ class TestRisksAPI:
         }
 
         response = await client.post(
-            "/api/v1/risks/",
+            "/api/v1/risks",
             json=payload,
             headers=auth_headers,
         )
@@ -63,7 +63,7 @@ class TestRisksAPI:
                 risk_score=6,
                 risk_level="medium",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", i),
             )
             for i in range(1, 6)
         ]
@@ -99,7 +99,7 @@ class TestRisksAPI:
             risk_score=16,
             risk_level="high",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK"),
+            reference_number=generate_test_reference("RSK", 1),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -133,7 +133,7 @@ class TestRisksAPI:
             risk_score=4,
             risk_level="low",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK"),
+            reference_number=generate_test_reference("RSK", 1),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -176,7 +176,7 @@ class TestRisksAPI:
             risk_score=12,
             risk_level="high",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK"),
+            reference_number=generate_test_reference("RSK", 1),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -219,7 +219,7 @@ class TestRisksAPI:
             risk_score=9,
             risk_level="medium",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK"),
+            reference_number=generate_test_reference("RSK", 1),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -267,7 +267,7 @@ class TestRisksAPI:
                 risk_score=25,
                 risk_level="critical",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 1),
             ),
             Risk(
                 title="Risk 2",
@@ -278,7 +278,7 @@ class TestRisksAPI:
                 risk_score=16,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 2),
             ),
             Risk(
                 title="Risk 3",
@@ -289,7 +289,7 @@ class TestRisksAPI:
                 risk_score=4,
                 risk_level="low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 3),
             ),
         ]
         for risk in risks:
@@ -326,7 +326,7 @@ class TestRisksAPI:
                 risk_score=1,
                 risk_level="very_low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 1),
             ),
             Risk(
                 title="R2",
@@ -337,7 +337,7 @@ class TestRisksAPI:
                 risk_score=9,
                 risk_level="medium",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 2),
             ),
             Risk(
                 title="R3",
@@ -348,7 +348,7 @@ class TestRisksAPI:
                 risk_score=25,
                 risk_level="critical",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 3),
             ),
         ]
         for risk in risks:
@@ -384,7 +384,7 @@ class TestRisksAPI:
                 risk_score=16,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 1),
             ),
             Risk(
                 title="High Risk 2",
@@ -395,7 +395,7 @@ class TestRisksAPI:
                 risk_score=20,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 2),
             ),
             Risk(
                 title="Low Risk",
@@ -406,7 +406,7 @@ class TestRisksAPI:
                 risk_score=2,
                 risk_level="low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK"),
+                reference_number=generate_test_reference("RSK", 3),
             ),
         ]
         for risk in risks:

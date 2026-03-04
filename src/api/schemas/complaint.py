@@ -1,11 +1,10 @@
 """Pydantic schemas for Complaint API."""
 
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from src.api.schemas.validators import sanitize_field
 from src.domain.models.complaint import ComplaintPriority, ComplaintStatus, ComplaintType
 
 
@@ -22,18 +21,6 @@ class ComplaintBase(BaseModel):
     complainant_phone: Optional[str] = Field(None, max_length=30)
     complainant_company: Optional[str] = Field(None, max_length=200)
     related_reference: Optional[str] = Field(None, max_length=100)
-
-    @field_validator(
-        "title",
-        "description",
-        "complainant_name",
-        "complainant_company",
-        "related_reference",
-        mode="before",
-    )
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("title", "complainant_name")
     @classmethod
@@ -78,18 +65,6 @@ class ComplaintUpdate(BaseModel):
     resolution_summary: Optional[str] = None
     customer_satisfied: Optional[bool] = None
 
-    @field_validator(
-        "title",
-        "description",
-        "investigation_notes",
-        "root_cause",
-        "resolution_summary",
-        mode="before",
-    )
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
     @field_validator("title")
     @classmethod
     def strip_whitespace(cls, v: Optional[str]) -> Optional[str]:
@@ -120,13 +95,3 @@ class ComplaintListResponse(BaseModel):
     page: int
     page_size: int
     pages: int = Field(..., description="Total number of pages")
-
-
-class ComplaintInvestigationsResponse(BaseModel):
-    """Paginated investigations linked to a complaint."""
-
-    items: List[Any]
-    total: int
-    page: int
-    page_size: int
-    pages: int

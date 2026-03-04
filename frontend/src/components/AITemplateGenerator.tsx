@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from 'react';
 import {
   Sparkles,
   Wand2,
@@ -13,8 +13,9 @@ import {
   ClipboardCheck,
   AlertTriangle,
   X,
-} from "lucide-react";
-import { aiApi } from "../api/client";
+  GraduationCap,
+  UserCheck,
+} from 'lucide-react';
 
 // ============================================================================
 // TYPES
@@ -42,7 +43,6 @@ interface GeneratedSection {
 interface AITemplateGeneratorProps {
   onApply: (sections: GeneratedSection[]) => void;
   onClose: () => void;
-  applying?: boolean;
 }
 
 // ============================================================================
@@ -51,526 +51,304 @@ interface AITemplateGeneratorProps {
 
 const PRESET_PROMPTS = [
   {
-    id: "iso9001",
-    label: "ISO 9001 Quality",
+    id: 'iso9001',
+    label: 'ISO 9001 Quality',
     icon: Award,
-    description: "Generate ISO 9001:2015 compliance questions",
-    prompt:
-      "Generate a comprehensive ISO 9001:2015 Quality Management System audit checklist covering context, leadership, planning, support, operation, performance evaluation, and improvement clauses.",
+    description: 'Generate ISO 9001:2015 compliance questions',
+    prompt: 'Generate a comprehensive ISO 9001:2015 Quality Management System audit checklist covering context, leadership, planning, support, operation, performance evaluation, and improvement clauses.',
   },
   {
-    id: "iso14001",
-    label: "ISO 14001 Environmental",
+    id: 'iso14001',
+    label: 'ISO 14001 Environmental',
     icon: Leaf,
-    description: "Environmental management audit",
-    prompt:
-      "Generate an ISO 14001:2015 Environmental Management System audit checklist covering environmental aspects, legal requirements, objectives, operational controls, emergency preparedness, and performance monitoring.",
+    description: 'Environmental management audit',
+    prompt: 'Generate an ISO 14001:2015 Environmental Management System audit checklist covering environmental aspects, legal requirements, objectives, operational controls, emergency preparedness, and performance monitoring.',
   },
   {
-    id: "iso45001",
-    label: "ISO 45001 H&S",
+    id: 'iso45001',
+    label: 'ISO 45001 H&S',
     icon: HardHat,
-    description: "Health & safety management audit",
-    prompt:
-      "Generate an ISO 45001:2018 Occupational Health and Safety audit checklist covering hazard identification, risk assessment, legal compliance, worker participation, competence, emergency response, and incident investigation.",
+    description: 'Health & safety management audit',
+    prompt: 'Generate an ISO 45001:2018 Occupational Health and Safety audit checklist covering hazard identification, risk assessment, legal compliance, worker participation, competence, emergency response, and incident investigation.',
   },
   {
-    id: "vehicle",
-    label: "Vehicle Inspection",
+    id: 'vehicle',
+    label: 'Vehicle Inspection',
     icon: Truck,
-    description: "Pre-departure vehicle check",
-    prompt:
-      "Generate a comprehensive vehicle pre-departure safety inspection checklist covering exterior, interior, mechanical, safety equipment, and documentation checks.",
+    description: 'Pre-departure vehicle check',
+    prompt: 'Generate a comprehensive vehicle pre-departure safety inspection checklist covering exterior, interior, mechanical, safety equipment, and documentation checks.',
   },
   {
-    id: "5s",
-    label: "5S Workplace",
+    id: '5s',
+    label: '5S Workplace',
     icon: ClipboardCheck,
-    description: "Sort, Set, Shine, Standardize, Sustain",
-    prompt:
-      "Generate a 5S workplace organization audit checklist with sections for Sort (Seiri), Set in Order (Seiton), Shine (Seiso), Standardize (Seiketsu), and Sustain (Shitsuke).",
+    description: 'Sort, Set, Shine, Standardize, Sustain',
+    prompt: 'Generate a 5S workplace organization audit checklist with sections for Sort (Seiri), Set in Order (Seiton), Shine (Seiso), Standardize (Seiketsu), and Sustain (Shitsuke).',
   },
   {
-    id: "supplier",
-    label: "Supplier Assessment",
+    id: 'supplier',
+    label: 'Supplier Assessment',
     icon: Building2,
-    description: "Vendor qualification audit",
-    prompt:
-      "Generate a supplier qualification assessment checklist covering quality systems, capacity, financial stability, delivery performance, sustainability practices, and compliance certifications.",
+    description: 'Vendor qualification audit',
+    prompt: 'Generate a supplier qualification assessment checklist covering quality systems, capacity, financial stability, delivery performance, sustainability practices, and compliance certifications.',
+  },
+  {
+    id: 'staff-induction',
+    label: 'Staff Induction',
+    icon: GraduationCap,
+    description: 'New starter onboarding checklist',
+    prompt: 'Generate a comprehensive staff induction checklist for new starters covering company policies, health and safety essentials, site orientation, emergency procedures, PPE requirements, reporting lines, and role-specific training sign-off.',
+  },
+  {
+    id: 'supervisor-assessment',
+    label: 'Technical Assessment',
+    icon: UserCheck,
+    description: 'Supervisor competency evaluation',
+    prompt: 'Generate a supervisor technical competency assessment template covering technical knowledge, risk assessment and method statements, safe systems of work, team supervision, equipment operation and safety, regulatory compliance awareness, problem solving, and incident reporting procedures.',
   },
 ];
 
 // ============================================================================
-// AI GENERATION (tries backend API, falls back to built-in templates)
+// MOCK AI GENERATION (In production, call Claude/GPT API)
 // ============================================================================
 
-const STANDARD_MAP: Record<string, string> = {
-  "iso 9001": "ISO 9001",
-  "iso 14001": "ISO 14001",
-  "iso 45001": "ISO 45001",
-  quality: "ISO 9001",
-  environmental: "ISO 14001",
-  health: "ISO 45001",
-  safety: "ISO 45001",
-};
+const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[]> => {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
 
-function detectStandard(prompt: string): string | null {
-  const lower = prompt.toLowerCase();
-  for (const [key, standard] of Object.entries(STANDARD_MAP)) {
-    if (lower.includes(key)) return standard;
-  }
-  return null;
-}
-
-const generateTemplateWithAI = async (
-  prompt: string,
-): Promise<GeneratedSection[]> => {
-  const standard = detectStandard(prompt);
-  if (standard) {
-    try {
-      const res = await aiApi.generateAuditChecklist(standard);
-      const data = res.data as Array<Record<string, unknown>>;
-      if (Array.isArray(data) && data.length > 0) {
-        return data.map((section, sIdx: number) => ({
-          id: String(section["id"] || `sec-${sIdx}`),
-          title: String(
-            section["title"] || section["clause"] || `Section ${sIdx + 1}`,
-          ),
-          description: String(section["description"] || ""),
-          questions: (Array.isArray(section["questions"])
-            ? (section["questions"] as Array<Record<string, unknown>>)
-            : []
-          ).map((q, qIdx: number) => ({
-            id: String(q["id"] || `q-${sIdx}-${qIdx}`),
-            text: String(q["text"] || q["question_text"] || ""),
-            type: String(q["type"] || q["question_type"] || "yes_no"),
-            required: q["required"] !== false,
-            weight: Number(q["weight"] ?? 1),
-            riskLevel: String(q["risk_level"] || q["riskLevel"] || "medium"),
-            evidenceRequired: Boolean(
-              q["evidence_required"] || q["evidenceRequired"],
-            ),
-            isoClause: q["iso_clause"]
-              ? String(q["iso_clause"])
-              : q["isoClause"]
-                ? String(q["isoClause"])
-                : undefined,
-            guidance: q["guidance"] ? String(q["guidance"]) : undefined,
-          })),
-        }));
-      }
-    } catch {
-      // fall through to built-in templates
-    }
-  }
-
+  // Check which preset matches
   const lowerPrompt = prompt.toLowerCase();
-
-  if (
-    lowerPrompt.includes("vehicle") ||
-    lowerPrompt.includes("car") ||
-    lowerPrompt.includes("fleet")
-  ) {
+  
+  if (lowerPrompt.includes('vehicle') || lowerPrompt.includes('car') || lowerPrompt.includes('fleet')) {
     return [
       {
-        id: "sec-ext",
-        title: "Exterior Inspection",
-        description: "Visual inspection of vehicle exterior components",
+        id: 'sec-ext',
+        title: 'Exterior Inspection',
+        description: 'Visual inspection of vehicle exterior components',
         questions: [
-          {
-            id: "q-1",
-            text: "Are all external lights functioning correctly? (headlights, brake lights, indicators, hazards)",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: true,
-            guidance:
-              "Test all lights with engine running. Check for dim or flickering bulbs.",
-          },
-          {
-            id: "q-2",
-            text: "Are all tyres in good condition with minimum 1.6mm tread depth?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: true,
-            guidance:
-              "Use tread depth gauge. Check for bulges, cuts, or embedded objects.",
-          },
-          {
-            id: "q-3",
-            text: "Is the windscreen free from chips or cracks in the driver vision area?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "high",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-4",
-            text: "Are all mirrors present, clean, and correctly adjusted?",
-            type: "yes_no",
-            required: true,
-            weight: 2,
-            riskLevel: "high",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-5",
-            text: "Is the vehicle bodywork free from significant damage?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-6",
-            text: "Are number plates clean, visible, and correctly displayed?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
+          { id: 'q-1', text: 'Are all external lights functioning correctly? (headlights, brake lights, indicators, hazards)', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Test all lights with engine running. Check for dim or flickering bulbs.' },
+          { id: 'q-2', text: 'Are all tyres in good condition with minimum 1.6mm tread depth?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Use tread depth gauge. Check for bulges, cuts, or embedded objects.' },
+          { id: 'q-3', text: 'Is the windscreen free from chips or cracks in the driver vision area?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+          { id: 'q-4', text: 'Are all mirrors present, clean, and correctly adjusted?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-5', text: 'Is the vehicle bodywork free from significant damage?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-6', text: 'Are number plates clean, visible, and correctly displayed?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-int",
-        title: "Interior & Safety Equipment",
-        description: "Interior condition and safety equipment checks",
+        id: 'sec-int',
+        title: 'Interior & Safety Equipment',
+        description: 'Interior condition and safety equipment checks',
         questions: [
-          {
-            id: "q-7",
-            text: "Is the first aid kit present, sealed, and within expiry date?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "high",
-            evidenceRequired: true,
-            guidance: "Verify seal is intact. Check expiry sticker.",
-          },
-          {
-            id: "q-8",
-            text: "Is the fire extinguisher present, in date, and gauge in green zone?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "critical",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-9",
-            text: "Is the high-visibility vest present and in good condition?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-10",
-            text: "Is the warning triangle present?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-11",
-            text: "Are all seatbelts functioning correctly?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: false,
-            guidance: "Test each seatbelt locks and retracts properly.",
-          },
-          {
-            id: "q-12",
-            text: "Is the vehicle interior clean and free from loose items?",
-            type: "yes_no",
-            required: false,
-            weight: 0.5,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
+          { id: 'q-7', text: 'Is the first aid kit present, sealed, and within expiry date?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true, guidance: 'Verify seal is intact. Check expiry sticker.' },
+          { id: 'q-8', text: 'Is the fire extinguisher present, in date, and gauge in green zone?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-9', text: 'Is the high-visibility vest present and in good condition?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-10', text: 'Is the warning triangle present?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-11', text: 'Are all seatbelts functioning correctly?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Test each seatbelt locks and retracts properly.' },
+          { id: 'q-12', text: 'Is the vehicle interior clean and free from loose items?', type: 'yes_no', required: false, weight: 0.5, riskLevel: 'low', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-mech",
-        title: "Mechanical Checks",
-        description: "Engine, fluids, and mechanical systems",
+        id: 'sec-mech',
+        title: 'Mechanical Checks',
+        description: 'Engine, fluids, and mechanical systems',
         questions: [
-          {
-            id: "q-13",
-            text: "Is the engine oil level within acceptable range?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "high",
-            evidenceRequired: true,
-            guidance: "Check with engine cold. Oil between min and max marks.",
-          },
-          {
-            id: "q-14",
-            text: "Is the coolant level adequate?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "high",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-15",
-            text: "Is the brake fluid level adequate?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "critical",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-16",
-            text: "Is the screenwash fluid topped up?",
-            type: "yes_no",
-            required: true,
-            weight: 0.5,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-17",
-            text: "Are there any dashboard warning lights illuminated?",
-            type: "yes_no",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: true,
-            guidance:
-              "If any warning lights are on, photograph and report immediately.",
-          },
-          {
-            id: "q-18",
-            text: "Current odometer reading (miles)",
-            type: "number",
-            required: true,
-            weight: 0,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
+          { id: 'q-13', text: 'Is the engine oil level within acceptable range?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true, guidance: 'Check with engine cold. Oil between min and max marks.' },
+          { id: 'q-14', text: 'Is the coolant level adequate?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-15', text: 'Is the brake fluid level adequate?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-16', text: 'Is the screenwash fluid topped up?', type: 'yes_no', required: true, weight: 0.5, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-17', text: 'Are there any dashboard warning lights illuminated?', type: 'yes_no_na', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'If any warning lights are on, photograph and report immediately.' },
+          { id: 'q-18', text: 'Current odometer reading (miles)', type: 'numeric', required: true, weight: 0, riskLevel: 'low', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-doc",
-        title: "Documentation",
-        description: "Required vehicle documents",
+        id: 'sec-doc',
+        title: 'Documentation',
+        description: 'Required vehicle documents',
         questions: [
-          {
-            id: "q-19",
-            text: "Is the MOT valid and certificate available?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-20",
-            text: "Is the vehicle insurance valid and certificate available?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-21",
-            text: "Is the vehicle tax valid?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-22",
-            text: "Is the driver licence checked and valid for this vehicle category?",
-            type: "pass_fail",
-            required: true,
-            weight: 3,
-            riskLevel: "critical",
-            evidenceRequired: false,
-          },
+          { id: 'q-19', text: 'Is the MOT valid and certificate available?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-20', text: 'Is the vehicle insurance valid and certificate available?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-21', text: 'Is the vehicle tax valid?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-22', text: 'Is the driver licence checked and valid for this vehicle category?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+        ],
+      },
+    ];
+  }
+  
+  if (lowerPrompt.includes('5s') || lowerPrompt.includes('workplace')) {
+    return [
+      {
+        id: 'sec-sort',
+        title: 'Sort (Seiri)',
+        description: 'Remove unnecessary items from the workplace',
+        questions: [
+          { id: 'q-1', text: 'Are all items in the work area necessary for current operations?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: true },
+          { id: 'q-2', text: 'Is there a clear system for disposing of unnecessary items?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-3', text: 'Are red tag procedures being followed for unneeded items?', type: 'yes_no', required: false, weight: 1, riskLevel: 'low', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-set',
+        title: 'Set in Order (Seiton)',
+        description: 'Organize items for easy access',
+        questions: [
+          { id: 'q-4', text: 'Do all items have a designated storage location?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: true },
+          { id: 'q-5', text: 'Are storage locations clearly labeled?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: true },
+          { id: 'q-6', text: 'Are frequently used items stored at point of use?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-shine',
+        title: 'Shine (Seiso)',
+        description: 'Clean the workplace and equipment',
+        questions: [
+          { id: 'q-7', text: 'Is the work area clean and free from debris?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: true },
+          { id: 'q-8', text: 'Is equipment cleaned regularly and properly maintained?', type: 'yes_no', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-9', text: 'Are cleaning schedules posted and followed?', type: 'yes_no', required: false, weight: 1, riskLevel: 'low', evidenceRequired: true },
+        ],
+      },
+      {
+        id: 'sec-std',
+        title: 'Standardize (Seiketsu)',
+        description: 'Create consistent procedures',
+        questions: [
+          { id: 'q-10', text: 'Are standard work procedures documented and visible?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: true },
+          { id: 'q-11', text: 'Do visual controls indicate correct vs. incorrect states?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: true },
+        ],
+      },
+      {
+        id: 'sec-sus',
+        title: 'Sustain (Shitsuke)',
+        description: 'Maintain and improve standards',
+        questions: [
+          { id: 'q-12', text: 'Are 5S audits conducted regularly?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-13', text: 'Is there evidence of continuous improvement activities?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-14', text: 'Overall 5S score for this area', type: 'scale_1_5', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
         ],
       },
     ];
   }
 
-  if (lowerPrompt.includes("5s") || lowerPrompt.includes("workplace")) {
+  if (lowerPrompt.includes('induction') || lowerPrompt.includes('onboarding') || lowerPrompt.includes('new starter')) {
     return [
       {
-        id: "sec-sort",
-        title: "Sort (Seiri)",
-        description: "Remove unnecessary items from the workplace",
+        id: 'sec-policies',
+        title: 'Company Policies & Overview',
+        description: 'Essential company information and policy acknowledgment',
         questions: [
-          {
-            id: "q-1",
-            text: "Are all items in the work area necessary for current operations?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-2",
-            text: "Is there a clear system for disposing of unnecessary items?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-3",
-            text: "Are red tag procedures being followed for unneeded items?",
-            type: "yes_no",
-            required: false,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
+          { id: 'q-1', text: 'Has the employee been briefed on the company structure, values, and mission?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false, guidance: 'Cover organisational chart, reporting lines, and company objectives.' },
+          { id: 'q-2', text: 'Has the employee received and acknowledged the Employee Handbook?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true, guidance: 'Obtain signed acknowledgment form.' },
+          { id: 'q-3', text: 'Has the employee been briefed on the Equality, Diversity & Inclusion policy?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-4', text: 'Has the employee been briefed on disciplinary and grievance procedures?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+          { id: 'q-5', text: 'Has the employee been briefed on data protection and GDPR responsibilities?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
         ],
       },
       {
-        id: "sec-set",
-        title: "Set in Order (Seiton)",
-        description: "Organize items for easy access",
+        id: 'sec-hs',
+        title: 'Health & Safety Essentials',
+        description: 'Core H&S obligations and hazard awareness',
         questions: [
-          {
-            id: "q-4",
-            text: "Do all items have a designated storage location?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-5",
-            text: "Are storage locations clearly labeled?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-6",
-            text: "Are frequently used items stored at point of use?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
+          { id: 'q-6', text: 'Has the employee been briefed on the company Health & Safety Policy?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Ensure employee understands their duty of care and right to refuse unsafe work.' },
+          { id: 'q-7', text: 'Has the employee been shown how to report hazards, near misses, and unsafe conditions?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-8', text: 'Has the employee been briefed on manual handling procedures and risk reduction?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-9', text: 'Has the employee been briefed on COSHH substances relevant to their role?', type: 'yes_no_na', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Mark N/A if role has no COSHH exposure.' },
+          { id: 'q-10', text: 'Has the employee been briefed on working at height procedures (if applicable)?', type: 'yes_no_na', required: false, weight: 2, riskLevel: 'critical', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-shine",
-        title: "Shine (Seiso)",
-        description: "Clean the workplace and equipment",
+        id: 'sec-site',
+        title: 'Site Orientation & Emergency Procedures',
+        description: 'Familiarisation with site layout and emergency response',
         questions: [
-          {
-            id: "q-7",
-            text: "Is the work area clean and free from debris?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-8",
-            text: "Is equipment cleaned regularly and properly maintained?",
-            type: "yes_no",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-9",
-            text: "Are cleaning schedules posted and followed?",
-            type: "yes_no",
-            required: false,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: true,
-          },
+          { id: 'q-11', text: 'Has the employee been shown all emergency exits and assembly points?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Walk the employee through all relevant exit routes from their work area.' },
+          { id: 'q-12', text: 'Has the employee been shown the location of fire extinguishers and first aid kits?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-13', text: 'Does the employee know who the designated first aiders and fire wardens are?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-14', text: 'Has the employee been shown welfare facilities (toilets, canteen, rest areas)?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-15', text: 'Has the employee been briefed on the site sign-in/sign-out procedure?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-std",
-        title: "Standardize (Seiketsu)",
-        description: "Create consistent procedures",
+        id: 'sec-ppe',
+        title: 'PPE & Equipment',
+        description: 'Personal protective equipment issue and training',
         questions: [
-          {
-            id: "q-10",
-            text: "Are standard work procedures documented and visible?",
-            type: "pass_fail",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: true,
-          },
-          {
-            id: "q-11",
-            text: "Do visual controls indicate correct vs. incorrect states?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: true,
-          },
+          { id: 'q-16', text: 'Has the employee been issued with all required PPE for their role?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Record items issued: hard hat, hi-vis, boots, gloves, eye protection, etc.' },
+          { id: 'q-17', text: 'Has the employee been trained on correct PPE use, care, and storage?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-18', text: 'Does the employee understand when and where PPE must be worn?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-19', text: 'Has the employee been shown how to request replacement PPE?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
         ],
       },
       {
-        id: "sec-sus",
-        title: "Sustain (Shitsuke)",
-        description: "Maintain and improve standards",
+        id: 'sec-role',
+        title: 'Role-Specific Training & Sign-Off',
+        description: 'Job-specific competence and supervisor confirmation',
         questions: [
-          {
-            id: "q-12",
-            text: "Are 5S audits conducted regularly?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-13",
-            text: "Is there evidence of continuous improvement activities?",
-            type: "yes_no",
-            required: true,
-            weight: 1,
-            riskLevel: "low",
-            evidenceRequired: false,
-          },
-          {
-            id: "q-14",
-            text: "Overall 5S score for this area",
-            type: "score",
-            required: true,
-            weight: 2,
-            riskLevel: "medium",
-            evidenceRequired: false,
-          },
+          { id: 'q-20', text: 'Has the employee been briefed on their specific role, responsibilities, and expectations?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-21', text: 'Has the employee been introduced to their line manager and team?', type: 'yes_no', required: true, weight: 1, riskLevel: 'low', evidenceRequired: false },
+          { id: 'q-22', text: 'Has the employee been shown relevant risk assessments and method statements for their tasks?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-23', text: 'Are there any additional training needs identified for this employee?', type: 'text', required: false, weight: 1, riskLevel: 'medium', evidenceRequired: false, guidance: 'Record any specific training courses, tickets, or certifications required.' },
+          { id: 'q-24', text: 'Supervisor confirms this induction has been completed satisfactorily', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Both supervisor and employee should sign off on completion.' },
+        ],
+      },
+    ];
+  }
+
+  if (lowerPrompt.includes('supervisor') || lowerPrompt.includes('technical competency') || lowerPrompt.includes('competency assessment')) {
+    return [
+      {
+        id: 'sec-tech',
+        title: 'Technical Knowledge & Competency',
+        description: 'Core technical understanding relevant to the role',
+        questions: [
+          { id: 'q-1', text: 'Can the individual explain the technical processes and procedures relevant to their area of responsibility?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'high', evidenceRequired: true, guidance: 'Ask the individual to describe key processes. Assess depth and accuracy of understanding.' },
+          { id: 'q-2', text: 'Does the individual demonstrate understanding of equipment operation, capabilities, and limitations?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-3', text: 'Can the individual identify common faults, defects, or failure modes for equipment in their area?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-4', text: 'Does the individual understand relevant technical specifications, tolerances, and quality standards?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-risk',
+        title: 'Risk Assessment & Safe Systems of Work',
+        description: 'Ability to identify hazards and apply safe working practices',
+        questions: [
+          { id: 'q-5', text: 'Can the individual identify the key hazards associated with tasks in their area?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Present a scenario and ask the individual to identify hazards and controls.' },
+          { id: 'q-6', text: 'Can the individual explain the hierarchy of controls and how it applies to their work?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-7', text: 'Does the individual understand and correctly apply relevant method statements and RAMS?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true },
+          { id: 'q-8', text: 'Can the individual conduct a dynamic risk assessment before starting a non-routine task?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Ask for a worked example of a point-of-work risk assessment.' },
+          { id: 'q-9', text: 'Does the individual understand permit-to-work procedures (if applicable)?', type: 'yes_no_na', required: true, weight: 2, riskLevel: 'critical', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-supervision',
+        title: 'Team Supervision & Communication',
+        description: 'Leadership, delegation, and communication skills',
+        questions: [
+          { id: 'q-10', text: 'Does the individual demonstrate the ability to brief a team clearly before starting work?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Observe or role-play a pre-task briefing. Assess clarity, completeness, and engagement.' },
+          { id: 'q-11', text: 'Can the individual allocate tasks appropriately based on competence and experience?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-12', text: 'Does the individual challenge unsafe behaviour constructively and effectively?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Present a scenario where a team member takes a shortcut. Assess the response.' },
+          { id: 'q-13', text: 'Can the individual communicate effectively with clients, subcontractors, and other trades?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
+        ],
+      },
+      {
+        id: 'sec-compliance',
+        title: 'Regulatory Compliance & Documentation',
+        description: 'Understanding of legal obligations and record-keeping',
+        questions: [
+          { id: 'q-14', text: 'Does the individual understand relevant regulatory requirements (e.g., CDM, LOLER, PUWER, COSHH)?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Assess knowledge of regulations applicable to their specific work activities.' },
+          { id: 'q-15', text: 'Can the individual correctly complete required inspection records, checklists, and reports?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+          { id: 'q-16', text: 'Does the individual understand their responsibilities under RIDDOR for incident reporting?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-17', text: 'Can the individual demonstrate they check and verify certifications, tickets, and training records for their team?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        ],
+      },
+      {
+        id: 'sec-incident',
+        title: 'Incident Response & Problem Solving',
+        description: 'Ability to respond to incidents and resolve issues',
+        questions: [
+          { id: 'q-18', text: 'Does the individual know the correct procedure for reporting and escalating incidents?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false, guidance: 'Walk through a scenario: someone is injured on site. Assess the response steps.' },
+          { id: 'q-19', text: 'Can the individual demonstrate basic first aid awareness appropriate to their role?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+          { id: 'q-20', text: 'Can the individual identify when to stop work due to unsafe conditions and who to notify?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: false },
+          { id: 'q-21', text: 'Does the individual demonstrate logical problem-solving when faced with unexpected technical issues?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false, guidance: 'Present a realistic problem scenario and assess the approach taken.' },
+          { id: 'q-22', text: 'Overall competency verdict: is this individual competent to carry out their supervisory role unsupervised?', type: 'pass_fail', required: true, weight: 3, riskLevel: 'critical', evidenceRequired: true, guidance: 'Provide clear justification for the verdict and document any development actions required.' },
         ],
       },
     ];
@@ -579,148 +357,44 @@ const generateTemplateWithAI = async (
   // Default generic audit template
   return [
     {
-      id: "sec-1",
-      title: "Management & Leadership",
-      description: "Leadership commitment and management system",
+      id: 'sec-1',
+      title: 'Management & Leadership',
+      description: 'Leadership commitment and management system',
       questions: [
-        {
-          id: "q-1",
-          text: "Is there documented evidence of top management commitment?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-2",
-          text: "Are roles, responsibilities, and authorities defined and communicated?",
-          type: "yes_no",
-          required: true,
-          weight: 2,
-          riskLevel: "medium",
-          evidenceRequired: false,
-        },
-        {
-          id: "q-3",
-          text: "Are objectives established at relevant functions and levels?",
-          type: "yes_no",
-          required: true,
-          weight: 1,
-          riskLevel: "medium",
-          evidenceRequired: false,
-        },
+        { id: 'q-1', text: 'Is there documented evidence of top management commitment?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        { id: 'q-2', text: 'Are roles, responsibilities, and authorities defined and communicated?', type: 'yes_no', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
+        { id: 'q-3', text: 'Are objectives established at relevant functions and levels?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
       ],
     },
     {
-      id: "sec-2",
-      title: "Resources & Competence",
-      description: "Human resources and competence requirements",
+      id: 'sec-2',
+      title: 'Resources & Competence',
+      description: 'Human resources and competence requirements',
       questions: [
-        {
-          id: "q-4",
-          text: "Are resources adequate for maintaining the management system?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "medium",
-          evidenceRequired: false,
-        },
-        {
-          id: "q-5",
-          text: "Is there evidence of competence assessment for personnel?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-6",
-          text: "Are training records maintained and up to date?",
-          type: "yes_no",
-          required: true,
-          weight: 1,
-          riskLevel: "medium",
-          evidenceRequired: true,
-        },
+        { id: 'q-4', text: 'Are resources adequate for maintaining the management system?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: false },
+        { id: 'q-5', text: 'Is there evidence of competence assessment for personnel?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        { id: 'q-6', text: 'Are training records maintained and up to date?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: true },
       ],
     },
     {
-      id: "sec-3",
-      title: "Operations & Processes",
-      description: "Operational controls and processes",
+      id: 'sec-3',
+      title: 'Operations & Processes',
+      description: 'Operational controls and processes',
       questions: [
-        {
-          id: "q-7",
-          text: "Are operational processes defined and controlled?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: false,
-        },
-        {
-          id: "q-8",
-          text: "Are process outputs meeting specified requirements?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-9",
-          text: "Are changes to processes managed effectively?",
-          type: "yes_no",
-          required: true,
-          weight: 1,
-          riskLevel: "medium",
-          evidenceRequired: false,
-        },
+        { id: 'q-7', text: 'Are operational processes defined and controlled?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: false },
+        { id: 'q-8', text: 'Are process outputs meeting specified requirements?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        { id: 'q-9', text: 'Are changes to processes managed effectively?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
       ],
     },
     {
-      id: "sec-4",
-      title: "Performance & Improvement",
-      description: "Monitoring, measurement, and improvement",
+      id: 'sec-4',
+      title: 'Performance & Improvement',
+      description: 'Monitoring, measurement, and improvement',
       questions: [
-        {
-          id: "q-10",
-          text: "Are key performance indicators defined and monitored?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "medium",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-11",
-          text: "Are internal audits conducted as planned?",
-          type: "yes_no",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-12",
-          text: "Is there evidence of corrective actions for nonconformities?",
-          type: "pass_fail",
-          required: true,
-          weight: 2,
-          riskLevel: "high",
-          evidenceRequired: true,
-        },
-        {
-          id: "q-13",
-          text: "Is there evidence of continual improvement?",
-          type: "yes_no",
-          required: true,
-          weight: 1,
-          riskLevel: "medium",
-          evidenceRequired: false,
-        },
+        { id: 'q-10', text: 'Are key performance indicators defined and monitored?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'medium', evidenceRequired: true },
+        { id: 'q-11', text: 'Are internal audits conducted as planned?', type: 'yes_no', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        { id: 'q-12', text: 'Is there evidence of corrective actions for nonconformities?', type: 'pass_fail', required: true, weight: 2, riskLevel: 'high', evidenceRequired: true },
+        { id: 'q-13', text: 'Is there evidence of continual improvement?', type: 'yes_no', required: true, weight: 1, riskLevel: 'medium', evidenceRequired: false },
       ],
     },
   ];
@@ -730,25 +404,17 @@ const generateTemplateWithAI = async (
 // MAIN COMPONENT
 // ============================================================================
 
-export default function AITemplateGenerator({
-  onApply,
-  onClose,
-  applying,
-}: AITemplateGeneratorProps) {
-  const [prompt, setPrompt] = useState("");
+export default function AITemplateGenerator({ onApply, onClose }: AITemplateGeneratorProps) {
+  const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedSections, setGeneratedSections] = useState<
-    GeneratedSection[] | null
-  >(null);
-  const [selectedSections, setSelectedSections] = useState<Set<string>>(
-    new Set(),
-  );
+  const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null);
+  const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async (customPrompt?: string) => {
     const promptToUse = customPrompt || prompt;
     if (!promptToUse.trim()) {
-      setError("Please enter a description or select a preset");
+      setError('Please enter a description or select a preset');
       return;
     }
 
@@ -759,10 +425,10 @@ export default function AITemplateGenerator({
     try {
       const sections = await generateTemplateWithAI(promptToUse);
       setGeneratedSections(sections);
-      setSelectedSections(new Set(sections.map((s) => s.id)));
+      setSelectedSections(new Set(sections.map(s => s.id)));
     } catch (err) {
-      setError("Failed to generate template. Please try again.");
-      console.error("Generation error:", err);
+      setError('Failed to generate template. Please try again.');
+      console.error('Generation error:', err);
     } finally {
       setIsGenerating(false);
     }
@@ -770,10 +436,8 @@ export default function AITemplateGenerator({
 
   const handleApply = () => {
     if (!generatedSections) return;
-
-    const sectionsToApply = generatedSections.filter((s) =>
-      selectedSections.has(s.id),
-    );
+    
+    const sectionsToApply = generatedSections.filter(s => selectedSections.has(s.id));
     onApply(sectionsToApply);
   };
 
@@ -787,62 +451,29 @@ export default function AITemplateGenerator({
     setSelectedSections(newSelected);
   };
 
-  const totalQuestions =
-    generatedSections
-      ?.filter((s) => selectedSections.has(s.id))
-      .reduce((sum, s) => sum + s.questions.length, 0) || 0;
-
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-    dialogRef.current?.focus();
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [onClose]);
+  const totalQuestions = generatedSections
+    ?.filter(s => selectedSections.has(s.id))
+    .reduce((sum, s) => sum + s.questions.length, 0) || 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="ai-generator-title"
-        tabIndex={-1}
-        className="relative w-full max-w-2xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-      >
-        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative w-full max-w-2xl max-h-[90vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-              <Wand2 className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+              <Wand2 className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h2
-                id="ai-generator-title"
-                className="text-lg font-semibold text-white"
-              >
-                AI Template Generator
-              </h2>
-              <p className="text-sm text-slate-400">
-                Generate audit questions from standards or descriptions
-              </p>
+              <h2 className="text-lg font-semibold text-foreground">AI Template Generator</h2>
+              <p className="text-sm text-muted-foreground">Generate audit questions from standards or descriptions</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close AI Template Generator"
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -854,9 +485,7 @@ export default function AITemplateGenerator({
             <>
               {/* Preset Templates */}
               <div>
-                <h3 className="text-sm font-medium text-white mb-3">
-                  Quick Start Templates
-                </h3>
+                <h3 className="text-sm font-medium text-foreground mb-3">Quick Start Templates</h3>
                 <div className="grid grid-cols-2 gap-3">
                   {PRESET_PROMPTS.map((preset) => (
                     <button
@@ -866,18 +495,14 @@ export default function AITemplateGenerator({
                         handleGenerate(preset.prompt);
                       }}
                       disabled={isGenerating}
-                      className="flex items-start gap-3 p-3 bg-slate-800 border border-slate-700 rounded-xl text-left hover:border-purple-500/50 hover:bg-slate-800/80 transition-colors disabled:opacity-50"
+                      className="flex items-start gap-3 p-3 bg-secondary border border-border rounded-xl text-left hover:border-primary/50 hover:bg-secondary/80 transition-colors disabled:opacity-50"
                     >
-                      <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <preset.icon className="w-5 h-5 text-purple-400" />
+                      <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <preset.icon className="w-5 h-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">
-                          {preset.label}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {preset.description}
-                        </p>
+                        <p className="text-sm font-medium text-foreground">{preset.label}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{preset.description}</p>
                       </div>
                     </button>
                   ))}
@@ -886,20 +511,18 @@ export default function AITemplateGenerator({
 
               {/* Custom Prompt */}
               <div>
-                <h3 className="text-sm font-medium text-white mb-3">
-                  Or Describe Your Audit
-                </h3>
+                <h3 className="text-sm font-medium text-foreground mb-3">Or Describe Your Audit</h3>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder="e.g., 'Create a food safety inspection checklist for a commercial kitchen covering hygiene, temperature controls, pest management, and staff training'"
                   rows={4}
                   disabled={isGenerating}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 resize-none"
+                  className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
                 />
-
+                
                 {error && (
-                  <div className="flex items-center gap-2 mt-2 text-red-400 text-sm">
+                  <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
                     <AlertTriangle className="w-4 h-4" />
                     {error}
                   </div>
@@ -908,7 +531,7 @@ export default function AITemplateGenerator({
                 <button
                   onClick={() => handleGenerate()}
                   disabled={isGenerating || !prompt.trim()}
-                  className="w-full mt-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-medium rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full mt-4 py-3 bg-primary text-primary-foreground font-medium rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isGenerating ? (
                     <>
@@ -931,17 +554,15 @@ export default function AITemplateGenerator({
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-green-400" />
-                  <span className="text-white font-medium">
-                    Generated {generatedSections.length} sections
-                  </span>
+                  <CheckCircle2 className="w-5 h-5 text-success" />
+                  <span className="text-foreground font-medium">Generated {generatedSections.length} sections</span>
                 </div>
                 <button
                   onClick={() => {
                     setGeneratedSections(null);
-                    setPrompt("");
+                    setPrompt('');
                   }}
-                  className="text-sm text-purple-400 hover:text-purple-300"
+                  className="text-sm text-primary hover:text-primary"
                 >
                   Generate New
                 </button>
@@ -953,48 +574,39 @@ export default function AITemplateGenerator({
                     key={section.id}
                     className={`border rounded-xl overflow-hidden transition-colors ${
                       selectedSections.has(section.id)
-                        ? "border-purple-500/50 bg-purple-500/5"
-                        : "border-slate-700 bg-slate-800/50"
+                        ? 'border-primary/50 bg-primary/5'
+                        : 'border-border bg-secondary/50'
                     }`}
                   >
                     <button
                       onClick={() => toggleSection(section.id)}
                       className="w-full flex items-center gap-3 p-4 text-left"
                     >
-                      <div
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          selectedSections.has(section.id)
-                            ? "bg-purple-500 border-purple-500"
-                            : "border-slate-600"
-                        }`}
-                      >
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        selectedSections.has(section.id)
+                          ? 'bg-primary border-primary'
+                          : 'border-input'
+                      }`}>
                         {selectedSections.has(section.id) && (
-                          <CheckCircle2 className="w-3 h-3 text-white" />
+                          <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className="font-medium text-white">
-                          {section.title}
-                        </p>
-                        <p className="text-sm text-slate-400">
-                          {section.questions.length} questions
-                        </p>
+                        <p className="font-medium text-foreground">{section.title}</p>
+                        <p className="text-sm text-muted-foreground">{section.questions.length} questions</p>
                       </div>
                     </button>
-
+                    
                     {selectedSections.has(section.id) && (
-                      <div className="px-4 pb-4 space-y-2 border-t border-slate-700/50 pt-3">
+                      <div className="px-4 pb-4 space-y-2 border-t border-border/50 pt-3">
                         {section.questions.slice(0, 3).map((q) => (
-                          <div
-                            key={q.id}
-                            className="flex items-start gap-2 text-sm"
-                          >
-                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5" />
-                            <span className="text-slate-300">{q.text}</span>
+                          <div key={q.id} className="flex items-start gap-2 text-sm">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
+                            <span className="text-foreground">{q.text}</span>
                           </div>
                         ))}
                         {section.questions.length > 3 && (
-                          <p className="text-xs text-slate-500 pl-3.5">
+                          <p className="text-xs text-muted-foreground pl-3.5">
                             +{section.questions.length - 3} more questions
                           </p>
                         )}
@@ -1009,34 +621,24 @@ export default function AITemplateGenerator({
 
         {/* Footer */}
         {generatedSections && (
-          <div className="border-t border-slate-800 p-4 flex items-center justify-between bg-slate-900">
-            <div className="text-sm text-slate-400">
-              {selectedSections.size} sections, {totalQuestions} questions
-              selected
+          <div className="border-t border-border p-4 flex items-center justify-between bg-card">
+            <div className="text-sm text-muted-foreground">
+              {selectedSections.size} sections, {totalQuestions} questions selected
             </div>
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700"
+                className="px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted"
               >
                 Cancel
               </button>
               <button
                 onClick={handleApply}
-                disabled={selectedSections.size === 0 || applying}
-                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
+                disabled={selectedSections.size === 0}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
               >
-                {applying ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Adding sections...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4" />
-                    Add to Template
-                  </>
-                )}
+                <Plus className="w-4 h-4" />
+                Add to Template
               </button>
             </div>
           </div>

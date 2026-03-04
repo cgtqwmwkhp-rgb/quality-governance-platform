@@ -1,6 +1,6 @@
 /**
  * PortalDynamicForm - Dynamic form page that renders forms from configuration
- *
+ * 
  * This page:
  * 1. Loads form template from API or uses fallback config
  * 2. Loads contracts and lookup options from API
@@ -8,28 +8,26 @@
  * 4. Handles submission to the portal API
  */
 
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, AlertCircle, RefreshCw } from "lucide-react";
-import { CardSkeleton } from "../components/ui/SkeletonLoader";
-import { DynamicFormRenderer } from "../components/DynamicForm";
-import { Card } from "../components/ui/Card";
-import { Button } from "../components/ui/Button";
-import { usePortalAuth } from "../contexts/PortalAuthContext";
-import { cn } from "../helpers/utils";
-import { API_BASE_URL } from "../config/apiBase";
-import { formTemplatesApi, contractsApi, lookupsApi } from "../api/client";
-import type { FormTemplate, Contract, LookupOption } from "../api/client";
-import type { DynamicFormData } from "../components/DynamicForm";
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { DynamicFormRenderer } from '../components/DynamicForm';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { cn } from '../helpers/utils';
+import { API_BASE_URL } from '../config/apiBase';
+import type { FormTemplate, Contract, LookupOption } from '../services/api';
+import type { DynamicFormData } from '../components/DynamicForm';
 
 // Props for explicit form type (preferred over URL parsing)
 interface PortalDynamicFormProps {
-  formType?: "incident" | "near-miss" | "complaint" | "rta";
+  formType?: 'incident' | 'near-miss' | 'complaint' | 'rta';
 }
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: "incident" | "complaint" | "rta" | "near_miss";
+  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
   title: string;
   description: string;
   location?: string;
@@ -49,22 +47,18 @@ interface PortalReportResponse {
   estimated_response: string;
 }
 
-async function submitPortalReport(
-  payload: PortalReportPayload,
-): Promise<PortalReportResponse> {
+async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
   const response = await fetch(`${API_BASE_URL}/api/v1/portal/reports/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-
+  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.message || `Submission failed: ${response.status}`,
-    );
+    throw new Error(errorData.message || `Submission failed: ${response.status}`);
   }
-
+  
   return response.json();
 }
 
@@ -72,481 +66,180 @@ async function submitPortalReport(
 const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
   incident: {
     id: 1,
-    name: "Incident Report",
-    slug: "incident",
-    description: "Report workplace incidents and injuries",
-    form_type: "incident",
+    name: 'Incident Report',
+    slug: 'incident',
+    description: 'Report workplace incidents and injuries',
+    form_type: 'incident',
     version: 1,
     is_active: true,
     is_published: true,
-    icon: "AlertTriangle",
-    color: "#ef4444",
+    icon: 'AlertTriangle',
+    color: '#ef4444',
     allow_drafts: true,
     allow_attachments: true,
     require_signature: false,
     auto_assign_reference: true,
-    reference_prefix: "INC",
+    reference_prefix: 'INC',
     notify_on_submit: true,
     steps: [
       {
         id: 1,
-        name: "Contract Details",
-        description: "Which contract does this relate to?",
+        name: 'Contract Details',
+        description: 'Which contract does this relate to?',
         order: 0,
         fields: [
-          {
-            id: 1,
-            name: "contract",
-            label: "Select Contract",
-            field_type: "select",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
+          { id: 1, name: 'contract', label: 'Select Contract', field_type: 'select', order: 0, is_required: true, width: 'full' },
         ],
       },
       {
         id: 2,
-        name: "People & Location",
-        description: "Who was involved and where did it happen?",
+        name: 'People & Location',
+        description: 'Who was involved and where did it happen?',
         order: 1,
         fields: [
-          {
-            id: 2,
-            name: "was_involved",
-            label: "Were you directly involved?",
-            field_type: "toggle",
-            order: 0,
-            is_required: true,
-            width: "full",
-            options: [
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ],
-          },
-          {
-            id: 3,
-            name: "person_name",
-            label: "Full Name",
-            field_type: "text",
-            order: 1,
-            is_required: true,
-            width: "half",
-            placeholder: "Enter full name",
-          },
-          {
-            id: 4,
-            name: "person_role",
-            label: "Role",
-            field_type: "select",
-            order: 2,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 5,
-            name: "person_contact",
-            label: "Contact Number",
-            field_type: "phone",
-            order: 3,
-            is_required: false,
-            width: "full",
-            placeholder: "+44...",
-          },
-          {
-            id: 6,
-            name: "location",
-            label: "Location",
-            field_type: "location",
-            order: 4,
-            is_required: true,
-            width: "full",
-            placeholder: "Where did this occur?",
-          },
-          {
-            id: 7,
-            name: "incident_date",
-            label: "Date",
-            field_type: "date",
-            order: 5,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 8,
-            name: "incident_time",
-            label: "Time",
-            field_type: "time",
-            order: 6,
-            is_required: true,
-            width: "half",
-          },
+          { id: 2, name: 'was_involved', label: 'Were you directly involved?', field_type: 'toggle', order: 0, is_required: true, width: 'full', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          { id: 3, name: 'person_name', label: 'Full Name', field_type: 'text', order: 1, is_required: true, width: 'half', placeholder: 'Enter full name' },
+          { id: 4, name: 'person_role', label: 'Role', field_type: 'select', order: 2, is_required: true, width: 'half' },
+          { id: 5, name: 'person_contact', label: 'Contact Number', field_type: 'phone', order: 3, is_required: false, width: 'full', placeholder: '+44...' },
+          { id: 6, name: 'location', label: 'Location', field_type: 'location', order: 4, is_required: true, width: 'full', placeholder: 'Where did this occur?' },
+          { id: 7, name: 'incident_date', label: 'Date', field_type: 'date', order: 5, is_required: true, width: 'half' },
+          { id: 8, name: 'incident_time', label: 'Time', field_type: 'time', order: 6, is_required: true, width: 'half' },
         ],
       },
       {
         id: 3,
-        name: "What Happened",
-        description: "Describe the incident in detail",
+        name: 'What Happened',
+        description: 'Describe the incident in detail',
         order: 2,
         fields: [
-          {
-            id: 9,
-            name: "description",
-            label: "Description",
-            field_type: "textarea",
-            order: 0,
-            is_required: true,
-            width: "full",
-            placeholder: "What happened? Be as detailed as possible...",
-            help_text: "Tip: Use voice input to dictate your description",
-          },
-          {
-            id: 10,
-            name: "asset_number",
-            label: "Asset / Vehicle Registration",
-            field_type: "text",
-            order: 1,
-            is_required: false,
-            width: "full",
-            placeholder: "e.g. PN22P102",
-          },
-          {
-            id: 11,
-            name: "has_witnesses",
-            label: "Were there any witnesses?",
-            field_type: "toggle",
-            order: 2,
-            is_required: true,
-            width: "full",
-            options: [
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ],
-          },
-          {
-            id: 12,
-            name: "witness_names",
-            label: "Witness Names",
-            field_type: "textarea",
-            order: 3,
-            is_required: false,
-            width: "full",
-            placeholder: "Enter witness names and contact details",
-          },
+          { id: 9, name: 'description', label: 'Description', field_type: 'textarea', order: 0, is_required: true, width: 'full', placeholder: 'What happened? Be as detailed as possible...', help_text: 'Tip: Use voice input to dictate your description' },
+          { id: 10, name: 'asset_number', label: 'Asset / Vehicle Registration', field_type: 'text', order: 1, is_required: false, width: 'full', placeholder: 'e.g. PN22P102' },
+          { id: 11, name: 'has_witnesses', label: 'Were there any witnesses?', field_type: 'toggle', order: 2, is_required: true, width: 'full', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          { id: 12, name: 'witness_names', label: 'Witness Names', field_type: 'textarea', order: 3, is_required: false, width: 'full', placeholder: 'Enter witness names and contact details' },
         ],
       },
       {
         id: 4,
-        name: "Injuries & Evidence",
-        description: "Document any injuries and upload evidence",
+        name: 'Injuries & Evidence',
+        description: 'Document any injuries and upload evidence',
         order: 3,
         fields: [
-          {
-            id: 13,
-            name: "has_injuries",
-            label: "Any injuries sustained?",
-            field_type: "toggle",
-            order: 0,
-            is_required: true,
-            width: "full",
-            options: [
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ],
-          },
-          {
-            id: 14,
-            name: "injuries",
-            label: "Injury Details",
-            field_type: "body_map",
-            order: 1,
-            is_required: false,
-            width: "full",
-          },
-          {
-            id: 15,
-            name: "medical_assistance",
-            label: "Medical Assistance",
-            field_type: "select",
-            order: 2,
-            is_required: false,
-            width: "full",
-            options: [
-              { value: "none", label: "No assistance needed" },
-              { value: "self", label: "Self application" },
-              { value: "first-aider", label: "First aider on site" },
-              { value: "ambulance", label: "Ambulance / A&E" },
-              { value: "gp", label: "GP / Hospital" },
-            ],
-          },
-          {
-            id: 16,
-            name: "photos",
-            label: "Upload Photos",
-            field_type: "image",
-            order: 3,
-            is_required: false,
-            width: "full",
-            help_text: "Upload photos of the scene, injuries, or damage",
-          },
+          { id: 13, name: 'has_injuries', label: 'Any injuries sustained?', field_type: 'toggle', order: 0, is_required: true, width: 'full', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          { id: 14, name: 'injuries', label: 'Injury Details', field_type: 'body_map', order: 1, is_required: false, width: 'full' },
+          { id: 15, name: 'medical_assistance', label: 'Medical Assistance', field_type: 'select', order: 2, is_required: false, width: 'full', options: [
+            { value: 'none', label: 'No assistance needed' },
+            { value: 'self', label: 'Self application' },
+            { value: 'first-aider', label: 'First aider on site' },
+            { value: 'ambulance', label: 'Ambulance / A&E' },
+            { value: 'gp', label: 'GP / Hospital' },
+          ]},
+          { id: 16, name: 'photos', label: 'Upload Photos', field_type: 'image', order: 3, is_required: false, width: 'full', help_text: 'Upload photos of the scene, injuries, or damage' },
         ],
       },
     ],
   },
-  "near-miss": {
+  'near-miss': {
     id: 2,
-    name: "Near Miss Report",
-    slug: "near-miss",
-    description: "Report close calls and near misses",
-    form_type: "near_miss",
+    name: 'Near Miss Report',
+    slug: 'near-miss',
+    description: 'Report close calls and near misses',
+    form_type: 'near_miss',
     version: 1,
     is_active: true,
     is_published: true,
-    icon: "AlertCircle",
-    color: "#f59e0b",
+    icon: 'AlertCircle',
+    color: '#f59e0b',
     allow_drafts: true,
     allow_attachments: true,
     require_signature: false,
     auto_assign_reference: true,
-    reference_prefix: "NM",
+    reference_prefix: 'NM',
     notify_on_submit: true,
     steps: [
       {
         id: 1,
-        name: "Contract Details",
-        description: "Which contract does this relate to?",
+        name: 'Contract Details',
+        description: 'Which contract does this relate to?',
         order: 0,
         fields: [
-          {
-            id: 1,
-            name: "contract",
-            label: "Select Contract",
-            field_type: "select",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
+          { id: 1, name: 'contract', label: 'Select Contract', field_type: 'select', order: 0, is_required: true, width: 'full' },
         ],
       },
       {
         id: 2,
-        name: "Location & Time",
-        description: "Where and when did this occur?",
+        name: 'Location & Time',
+        description: 'Where and when did this occur?',
         order: 1,
         fields: [
-          {
-            id: 2,
-            name: "location",
-            label: "Location",
-            field_type: "location",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
-          {
-            id: 3,
-            name: "incident_date",
-            label: "Date",
-            field_type: "date",
-            order: 1,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 4,
-            name: "incident_time",
-            label: "Time",
-            field_type: "time",
-            order: 2,
-            is_required: true,
-            width: "half",
-          },
+          { id: 2, name: 'location', label: 'Location', field_type: 'location', order: 0, is_required: true, width: 'full' },
+          { id: 3, name: 'incident_date', label: 'Date', field_type: 'date', order: 1, is_required: true, width: 'half' },
+          { id: 4, name: 'incident_time', label: 'Time', field_type: 'time', order: 2, is_required: true, width: 'half' },
         ],
       },
       {
         id: 3,
-        name: "What Happened",
-        description: "Describe the near miss",
+        name: 'What Happened',
+        description: 'Describe the near miss',
         order: 2,
         fields: [
-          {
-            id: 5,
-            name: "description",
-            label: "Description",
-            field_type: "textarea",
-            order: 0,
-            is_required: true,
-            width: "full",
-            placeholder:
-              "Describe what happened and what could have happened...",
-          },
-          {
-            id: 6,
-            name: "potential_consequences",
-            label: "Potential Consequences",
-            field_type: "textarea",
-            order: 1,
-            is_required: true,
-            width: "full",
-            placeholder: "What could have happened if this wasn't avoided?",
-          },
-          {
-            id: 7,
-            name: "preventive_action",
-            label: "Suggested Preventive Action",
-            field_type: "textarea",
-            order: 2,
-            is_required: false,
-            width: "full",
-            placeholder: "How can this be prevented in the future?",
-          },
-          {
-            id: 8,
-            name: "photos",
-            label: "Upload Photos",
-            field_type: "image",
-            order: 3,
-            is_required: false,
-            width: "full",
-          },
+          { id: 5, name: 'description', label: 'Description', field_type: 'textarea', order: 0, is_required: true, width: 'full', placeholder: 'Describe what happened and what could have happened...' },
+          { id: 6, name: 'potential_consequences', label: 'Potential Consequences', field_type: 'textarea', order: 1, is_required: true, width: 'full', placeholder: 'What could have happened if this wasn\'t avoided?' },
+          { id: 7, name: 'preventive_action', label: 'Suggested Preventive Action', field_type: 'textarea', order: 2, is_required: false, width: 'full', placeholder: 'How can this be prevented in the future?' },
+          { id: 8, name: 'photos', label: 'Upload Photos', field_type: 'image', order: 3, is_required: false, width: 'full' },
         ],
       },
     ],
   },
   complaint: {
     id: 3,
-    name: "Customer Complaint",
-    slug: "complaint",
-    description: "Submit customer complaints",
-    form_type: "complaint",
+    name: 'Customer Complaint',
+    slug: 'complaint',
+    description: 'Submit customer complaints',
+    form_type: 'complaint',
     version: 1,
     is_active: true,
     is_published: true,
-    icon: "MessageSquare",
-    color: "#3b82f6",
+    icon: 'MessageSquare',
+    color: '#3b82f6',
     allow_drafts: true,
     allow_attachments: true,
     require_signature: false,
     auto_assign_reference: true,
-    reference_prefix: "CMP",
+    reference_prefix: 'CMP',
     notify_on_submit: true,
     steps: [
       {
         id: 1,
-        name: "Contract Details",
-        description: "Which contract does this relate to?",
+        name: 'Contract Details',
+        description: 'Which contract does this relate to?',
         order: 0,
         fields: [
-          {
-            id: 1,
-            name: "contract",
-            label: "Select Contract",
-            field_type: "select",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
+          { id: 1, name: 'contract', label: 'Select Contract', field_type: 'select', order: 0, is_required: true, width: 'full' },
         ],
       },
       {
         id: 2,
-        name: "Complainant Details",
-        description: "Who raised this complaint?",
+        name: 'Complainant Details',
+        description: 'Who raised this complaint?',
         order: 1,
         fields: [
-          {
-            id: 2,
-            name: "complainant_name",
-            label: "Complainant Name",
-            field_type: "text",
-            order: 0,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 3,
-            name: "complainant_role",
-            label: "Role / Title",
-            field_type: "text",
-            order: 1,
-            is_required: false,
-            width: "half",
-          },
-          {
-            id: 4,
-            name: "complainant_contact",
-            label: "Contact Details",
-            field_type: "text",
-            order: 2,
-            is_required: true,
-            width: "full",
-            placeholder: "Phone or email",
-          },
-          {
-            id: 5,
-            name: "complaint_date",
-            label: "Date of Complaint",
-            field_type: "date",
-            order: 3,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 6,
-            name: "location",
-            label: "Location / Site",
-            field_type: "text",
-            order: 4,
-            is_required: false,
-            width: "half",
-          },
+          { id: 2, name: 'complainant_name', label: 'Complainant Name', field_type: 'text', order: 0, is_required: true, width: 'half' },
+          { id: 3, name: 'complainant_role', label: 'Role / Title', field_type: 'text', order: 1, is_required: false, width: 'half' },
+          { id: 4, name: 'complainant_contact', label: 'Contact Details', field_type: 'text', order: 2, is_required: true, width: 'full', placeholder: 'Phone or email' },
+          { id: 5, name: 'complaint_date', label: 'Date of Complaint', field_type: 'date', order: 3, is_required: true, width: 'half' },
+          { id: 6, name: 'location', label: 'Location / Site', field_type: 'text', order: 4, is_required: false, width: 'half' },
         ],
       },
       {
         id: 3,
-        name: "Complaint Details",
-        description: "Describe the complaint",
+        name: 'Complaint Details',
+        description: 'Describe the complaint',
         order: 2,
         fields: [
-          {
-            id: 7,
-            name: "description",
-            label: "Complaint Description",
-            field_type: "textarea",
-            order: 0,
-            is_required: true,
-            width: "full",
-            placeholder: "Describe the complaint in detail...",
-          },
-          {
-            id: 8,
-            name: "impact",
-            label: "Impact / Consequences",
-            field_type: "textarea",
-            order: 1,
-            is_required: false,
-            width: "full",
-            placeholder: "What impact has this had?",
-          },
-          {
-            id: 9,
-            name: "resolution_requested",
-            label: "Resolution Requested",
-            field_type: "textarea",
-            order: 2,
-            is_required: false,
-            width: "full",
-            placeholder: "What resolution is the complainant seeking?",
-          },
-          {
-            id: 10,
-            name: "photos",
-            label: "Supporting Evidence",
-            field_type: "file",
-            order: 3,
-            is_required: false,
-            width: "full",
-          },
+          { id: 7, name: 'description', label: 'Complaint Description', field_type: 'textarea', order: 0, is_required: true, width: 'full', placeholder: 'Describe the complaint in detail...' },
+          { id: 8, name: 'impact', label: 'Impact / Consequences', field_type: 'textarea', order: 1, is_required: false, width: 'full', placeholder: 'What impact has this had?' },
+          { id: 9, name: 'resolution_requested', label: 'Resolution Requested', field_type: 'textarea', order: 2, is_required: false, width: 'full', placeholder: 'What resolution is the complainant seeking?' },
+          { id: 10, name: 'photos', label: 'Supporting Evidence', field_type: 'file', order: 3, is_required: false, width: 'full' },
         ],
       },
     ],
@@ -555,122 +248,52 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
   // a safety net if PortalDynamicForm is somehow rendered for an RTA route
   rta: {
     id: 4,
-    name: "Road Traffic Collision",
-    slug: "rta",
-    description: "Report a road traffic collision",
-    form_type: "rta",
+    name: 'Road Traffic Collision',
+    slug: 'rta',
+    description: 'Report a road traffic collision',
+    form_type: 'rta',
     version: 1,
     is_active: true,
     is_published: true,
-    icon: "Car",
-    color: "#9333ea",
+    icon: 'Car',
+    color: '#9333ea',
     allow_drafts: true,
     allow_attachments: true,
     require_signature: false,
     auto_assign_reference: true,
-    reference_prefix: "RTA",
+    reference_prefix: 'RTA',
     notify_on_submit: true,
     steps: [
       {
         id: 1,
-        name: "Contract Details",
-        description: "Which contract does this relate to?",
+        name: 'Contract Details',
+        description: 'Which contract does this relate to?',
         order: 0,
         fields: [
-          {
-            id: 1,
-            name: "contract",
-            label: "Select Contract",
-            field_type: "select",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
+          { id: 1, name: 'contract', label: 'Select Contract', field_type: 'select', order: 0, is_required: true, width: 'full' },
         ],
       },
       {
         id: 2,
-        name: "Collision Details",
-        description: "Where and when did the collision occur?",
+        name: 'Collision Details',
+        description: 'Where and when did the collision occur?',
         order: 1,
         fields: [
-          {
-            id: 2,
-            name: "location",
-            label: "Location",
-            field_type: "location",
-            order: 0,
-            is_required: true,
-            width: "full",
-          },
-          {
-            id: 3,
-            name: "incident_date",
-            label: "Date",
-            field_type: "date",
-            order: 1,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 4,
-            name: "incident_time",
-            label: "Time",
-            field_type: "time",
-            order: 2,
-            is_required: true,
-            width: "half",
-          },
-          {
-            id: 5,
-            name: "vehicle_reg",
-            label: "Vehicle Registration",
-            field_type: "text",
-            order: 3,
-            is_required: true,
-            width: "full",
-            placeholder: "e.g. AB12 CDE",
-          },
+          { id: 2, name: 'location', label: 'Location', field_type: 'location', order: 0, is_required: true, width: 'full' },
+          { id: 3, name: 'incident_date', label: 'Date', field_type: 'date', order: 1, is_required: true, width: 'half' },
+          { id: 4, name: 'incident_time', label: 'Time', field_type: 'time', order: 2, is_required: true, width: 'half' },
+          { id: 5, name: 'vehicle_reg', label: 'Vehicle Registration', field_type: 'text', order: 3, is_required: true, width: 'full', placeholder: 'e.g. AB12 CDE' },
         ],
       },
       {
         id: 3,
-        name: "What Happened",
-        description: "Describe the collision",
+        name: 'What Happened',
+        description: 'Describe the collision',
         order: 2,
         fields: [
-          {
-            id: 6,
-            name: "description",
-            label: "Description",
-            field_type: "textarea",
-            order: 0,
-            is_required: true,
-            width: "full",
-            placeholder: "Describe what happened...",
-          },
-          {
-            id: 7,
-            name: "third_party_involved",
-            label: "Third Party Involved?",
-            field_type: "toggle",
-            order: 1,
-            is_required: true,
-            width: "full",
-            options: [
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ],
-          },
-          {
-            id: 8,
-            name: "photos",
-            label: "Upload Photos",
-            field_type: "image",
-            order: 2,
-            is_required: false,
-            width: "full",
-          },
+          { id: 6, name: 'description', label: 'Description', field_type: 'textarea', order: 0, is_required: true, width: 'full', placeholder: 'Describe what happened...' },
+          { id: 7, name: 'third_party_involved', label: 'Third Party Involved?', field_type: 'toggle', order: 1, is_required: true, width: 'full', options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }] },
+          { id: 8, name: 'photos', label: 'Upload Photos', field_type: 'image', order: 2, is_required: false, width: 'full' },
         ],
       },
     ],
@@ -678,212 +301,86 @@ const FALLBACK_TEMPLATES: Record<string, FormTemplate> = {
 };
 
 const FALLBACK_CONTRACTS: Contract[] = [
-  {
-    id: 1,
-    name: "UKPN",
-    code: "ukpn",
-    client_name: "UK Power Networks",
-    is_active: true,
-    display_order: 1,
-  },
-  {
-    id: 2,
-    name: "Openreach",
-    code: "openreach",
-    client_name: "BT Group",
-    is_active: true,
-    display_order: 2,
-  },
-  {
-    id: 3,
-    name: "Thames Water",
-    code: "thames-water",
-    client_name: "Thames Water Utilities",
-    is_active: true,
-    display_order: 3,
-  },
-  {
-    id: 4,
-    name: "Plantexpand Ltd",
-    code: "plantexpand",
-    client_name: "Internal",
-    is_active: true,
-    display_order: 4,
-  },
-  {
-    id: 5,
-    name: "Cadent",
-    code: "cadent",
-    client_name: "Cadent Gas",
-    is_active: true,
-    display_order: 5,
-  },
-  {
-    id: 6,
-    name: "SGN",
-    code: "sgn",
-    client_name: "Southern Gas Networks",
-    is_active: true,
-    display_order: 6,
-  },
-  {
-    id: 7,
-    name: "Southern Water",
-    code: "southern-water",
-    client_name: "Southern Water Services",
-    is_active: true,
-    display_order: 7,
-  },
-  {
-    id: 8,
-    name: "Zenith",
-    code: "zenith",
-    client_name: "Zenith Vehicle Solutions",
-    is_active: true,
-    display_order: 8,
-  },
-  {
-    id: 9,
-    name: "Novuna",
-    code: "novuna",
-    client_name: "Scottish Power",
-    is_active: true,
-    display_order: 9,
-  },
-  {
-    id: 10,
-    name: "Enterprise",
-    code: "enterprise",
-    client_name: "Enterprise Fleet Management",
-    is_active: true,
-    display_order: 10,
-  },
+  { id: 1, name: 'UKPN', code: 'ukpn', client_name: 'UK Power Networks', is_active: true, display_order: 1 },
+  { id: 2, name: 'Openreach', code: 'openreach', client_name: 'BT Group', is_active: true, display_order: 2 },
+  { id: 3, name: 'Thames Water', code: 'thames-water', client_name: 'Thames Water Utilities', is_active: true, display_order: 3 },
+  { id: 4, name: 'Plantexpand Ltd', code: 'plantexpand', client_name: 'Internal', is_active: true, display_order: 4 },
+  { id: 5, name: 'Cadent', code: 'cadent', client_name: 'Cadent Gas', is_active: true, display_order: 5 },
+  { id: 6, name: 'SGN', code: 'sgn', client_name: 'Southern Gas Networks', is_active: true, display_order: 6 },
+  { id: 7, name: 'Southern Water', code: 'southern-water', client_name: 'Southern Water Services', is_active: true, display_order: 7 },
+  { id: 8, name: 'Zenith', code: 'zenith', client_name: 'Zenith Vehicle Solutions', is_active: true, display_order: 8 },
+  { id: 9, name: 'Novuna', code: 'novuna', client_name: 'Scottish Power', is_active: true, display_order: 9 },
+  { id: 10, name: 'Enterprise', code: 'enterprise', client_name: 'Enterprise Fleet Management', is_active: true, display_order: 10 },
 ];
 
 const FALLBACK_ROLES: LookupOption[] = [
-  {
-    id: 1,
-    category: "roles",
-    code: "mobile-engineer",
-    label: "Mobile Engineer",
-    is_active: true,
-    display_order: 1,
-  },
-  {
-    id: 2,
-    category: "roles",
-    code: "workshop-pehq",
-    label: "Workshop (PE HQ)",
-    is_active: true,
-    display_order: 2,
-  },
-  {
-    id: 3,
-    category: "roles",
-    code: "workshop-fixed",
-    label: "Vehicle Workshop (Fixed Customer Site)",
-    is_active: true,
-    display_order: 3,
-  },
-  {
-    id: 4,
-    category: "roles",
-    code: "office",
-    label: "Office Based Employee",
-    is_active: true,
-    display_order: 4,
-  },
-  {
-    id: 5,
-    category: "roles",
-    code: "trainee",
-    label: "Trainee/Apprentice",
-    is_active: true,
-    display_order: 5,
-  },
-  {
-    id: 6,
-    category: "roles",
-    code: "non-pe",
-    label: "Non-Plantexpand Employee",
-    is_active: true,
-    display_order: 6,
-  },
-  {
-    id: 7,
-    category: "roles",
-    code: "other",
-    label: "Other",
-    is_active: true,
-    display_order: 7,
-  },
+  { id: 1, category: 'roles', code: 'mobile-engineer', label: 'Mobile Engineer', is_active: true, display_order: 1 },
+  { id: 2, category: 'roles', code: 'workshop-pehq', label: 'Workshop (PE HQ)', is_active: true, display_order: 2 },
+  { id: 3, category: 'roles', code: 'workshop-fixed', label: 'Vehicle Workshop (Fixed Customer Site)', is_active: true, display_order: 3 },
+  { id: 4, category: 'roles', code: 'office', label: 'Office Based Employee', is_active: true, display_order: 4 },
+  { id: 5, category: 'roles', code: 'trainee', label: 'Trainee/Apprentice', is_active: true, display_order: 5 },
+  { id: 6, category: 'roles', code: 'non-pe', label: 'Non-Plantexpand Employee', is_active: true, display_order: 6 },
+  { id: 7, category: 'roles', code: 'other', label: 'Other', is_active: true, display_order: 7 },
 ];
 
 // Determine form type from URL
 function getFormTypeFromPath(pathname: string): string {
-  if (pathname.includes("near-miss")) return "near-miss";
-  if (pathname.includes("complaint")) return "complaint";
-  if (pathname.includes("rta")) return "rta";
-  return "incident";
+  if (pathname.includes('near-miss')) return 'near-miss';
+  if (pathname.includes('complaint')) return 'complaint';
+  if (pathname.includes('rta')) return 'rta';
+  return 'incident';
 }
 
 // Form type display config
-const FORM_TYPE_CONFIG: Record<
-  string,
-  { title: string; icon: string; color: string; gradient: string }
-> = {
+const FORM_TYPE_CONFIG: Record<string, { title: string; icon: string; color: string; gradient: string }> = {
   incident: {
-    title: "Incident Report",
-    icon: "AlertTriangle",
-    color: "text-destructive",
-    gradient: "from-destructive to-orange-500",
+    title: 'Incident Report',
+    icon: 'AlertTriangle',
+    color: 'text-destructive',
+    gradient: 'from-destructive to-orange-500',
   },
-  "near-miss": {
-    title: "Near Miss Report",
-    icon: "AlertCircle",
-    color: "text-warning",
-    gradient: "from-warning to-amber-500",
+  'near-miss': {
+    title: 'Near Miss Report',
+    icon: 'AlertCircle',
+    color: 'text-warning',
+    gradient: 'from-warning to-amber-500',
   },
   complaint: {
-    title: "Customer Complaint",
-    icon: "MessageSquare",
-    color: "text-info",
-    gradient: "from-info to-cyan-500",
+    title: 'Customer Complaint',
+    icon: 'MessageSquare',
+    color: 'text-info',
+    gradient: 'from-info to-cyan-500',
   },
   rta: {
-    title: "Road Traffic Collision",
-    icon: "Car",
-    color: "text-purple-600",
-    gradient: "from-purple-600 to-purple-400",
+    title: 'Road Traffic Collision',
+    icon: 'Car',
+    color: 'text-purple-600',
+    gradient: 'from-purple-600 to-purple-400',
   },
 };
 
-export default function PortalDynamicForm({
-  formType: propFormType,
-}: PortalDynamicFormProps) {
+export default function PortalDynamicForm({ formType: propFormType }: PortalDynamicFormProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = usePortalAuth();
-
+  
   // Use prop formType if provided (preferred), otherwise fall back to URL parsing
   const derivedFormType = getFormTypeFromPath(location.pathname);
   const formType = propFormType || derivedFormType;
-  const config = FORM_TYPE_CONFIG[formType] ?? FORM_TYPE_CONFIG["incident"]!;
+  const config = FORM_TYPE_CONFIG[formType] || FORM_TYPE_CONFIG.incident;
 
   // Debug logging for form type resolution
-  console.log("[PortalDynamicForm] Route debug:", {
+  console.log('[PortalDynamicForm] Route debug:', {
     propFormType,
     derivedFormType,
     finalFormType: formType,
     pathname: location.pathname,
-    configTitle: config.title,
+    configTitle: config.title
   });
 
   // Warn if RTA is detected (should use PortalRTAForm instead)
-  if (formType === "rta") {
-    console.warn(
-      '[PortalDynamicForm] Unexpected formType "rta" detected. RTA should use PortalRTAForm.',
-    );
+  if (formType === 'rta') {
+    console.warn('[PortalDynamicForm] Unexpected formType "rta" detected. RTA should use PortalRTAForm.');
   }
 
   const [template, setTemplate] = useState<FormTemplate | null>(null);
@@ -899,38 +396,24 @@ export default function PortalDynamicForm({
       setError(null);
 
       try {
-        const [templateRes, contractsRes, rolesRes] = await Promise.allSettled([
-          formTemplatesApi.getBySlug(formType),
-          contractsApi.list(true),
-          lookupsApi.list("roles", true),
-        ]);
+        // Try to load from API first
+        // In production, this would be:
+        // const [templateRes, contractsRes, rolesRes] = await Promise.all([
+        //   formTemplatesApi.getBySlug(formType),
+        //   contractsApi.list(true),
+        //   lookupsApi.list('roles', true),
+        // ]);
 
-        const loadedTemplate =
-          templateRes.status === "fulfilled" && templateRes.value
-            ? templateRes.value
-            : (FALLBACK_TEMPLATES[formType] ?? FALLBACK_TEMPLATES["incident"]!);
+        // For now, use fallbacks with simulated delay
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-        const loadedContracts =
-          contractsRes.status === "fulfilled" &&
-          contractsRes.value?.items?.length
-            ? contractsRes.value.items
-            : FALLBACK_CONTRACTS;
-
-        const loadedRoles =
-          rolesRes.status === "fulfilled" && rolesRes.value?.items?.length
-            ? rolesRes.value.items
-            : FALLBACK_ROLES;
-
-        setTemplate(loadedTemplate ?? null);
-        setContracts(loadedContracts);
-        setRoles(loadedRoles);
+        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident);
+        setContracts(FALLBACK_CONTRACTS);
+        setRoles(FALLBACK_ROLES);
       } catch (err) {
-        console.error("Failed to load form configuration:", err);
-        setTemplate(
-          FALLBACK_TEMPLATES[formType] ??
-            FALLBACK_TEMPLATES["incident"]! ??
-            null,
-        );
+        console.error('Failed to load form configuration:', err);
+        // Fall back to local config
+        setTemplate(FALLBACK_TEMPLATES[formType] || FALLBACK_TEMPLATES.incident);
         setContracts(FALLBACK_CONTRACTS);
         setRoles(FALLBACK_ROLES);
       } finally {
@@ -942,109 +425,84 @@ export default function PortalDynamicForm({
   }, [formType]);
 
   // Pre-fill user data
-  const initialData: DynamicFormData = user
-    ? {
-        person_name: user.name,
-        person_contact: user.email,
-        incident_date: new Date().toISOString().split("T")[0],
-        incident_time: new Date().toTimeString().slice(0, 5),
-        complaint_date: new Date().toISOString().split("T")[0],
-      }
-    : {
-        incident_date: new Date().toISOString().split("T")[0],
-        incident_time: new Date().toTimeString().slice(0, 5),
-        complaint_date: new Date().toISOString().split("T")[0],
-      };
+  const initialData: DynamicFormData = user ? {
+    person_name: user.name,
+    person_contact: user.email,
+    incident_date: new Date().toISOString().split('T')[0],
+    incident_time: new Date().toTimeString().slice(0, 5),
+    complaint_date: new Date().toISOString().split('T')[0],
+  } : {
+    incident_date: new Date().toISOString().split('T')[0],
+    incident_time: new Date().toTimeString().slice(0, 5),
+    complaint_date: new Date().toISOString().split('T')[0],
+  };
 
-  const handleSubmit = async (
-    formData: DynamicFormData,
-  ): Promise<{ reference_number: string }> => {
+  const handleSubmit = async (formData: DynamicFormData): Promise<{ reference_number: string }> => {
     // Debug: log what we received
-    console.log("[PortalDynamicForm] Form data received:", formData);
-
+    console.log('[PortalDynamicForm] Form data received:', formData);
+    
     // Build the portal report payload from dynamic form data
     // Map form type to correct report type for proper routing
-    const reportTypeMap: Record<
-      string,
-      "incident" | "complaint" | "rta" | "near_miss"
-    > = {
-      incident: "incident",
-      complaint: "complaint",
-      rta: "rta",
-      "near-miss": "near_miss",
-      near_miss: "near_miss",
+    const reportTypeMap: Record<string, 'incident' | 'complaint' | 'rta' | 'near_miss'> = {
+      'incident': 'incident',
+      'complaint': 'complaint',
+      'rta': 'rta',
+      'near-miss': 'near_miss',
+      'near_miss': 'near_miss',
     };
-    const reportType = reportTypeMap[formType] || "incident";
-
+    const reportType = reportTypeMap[formType] || 'incident';
+    
     // Extract description - try multiple possible field names
-    const descriptionRaw =
-      formData["description"] ||
-      formData["complaint_description"] ||
-      formData["full_description"] ||
-      formData["what_happened"] ||
-      "";
+    const descriptionRaw = formData.description || 
+                          formData.complaint_description || 
+                          formData.full_description ||
+                          formData.what_happened ||
+                          '';
     // Ensure minimum length for API validation (10 chars required)
-    const description =
-      String(descriptionRaw).trim().length >= 10
-        ? String(descriptionRaw).trim()
-        : `${template?.name || "Report"} submitted via portal. ${String(descriptionRaw || "No additional details provided.")}`;
-
+    const description = String(descriptionRaw).trim().length >= 10 
+      ? String(descriptionRaw).trim()
+      : `${template?.name || 'Report'} submitted via portal. ${String(descriptionRaw || 'No additional details provided.')}`;
+    
     // Build a descriptive title (minimum 5 chars required)
-    const contractName = formData["contract"]
-      ? String(formData["contract"])
-      : "";
-    const locationName = formData["location"]
-      ? String(formData["location"])
-      : "";
-    const titleSuffix = contractName || locationName || "Report";
-    const title =
-      `${template?.name || "Incident Report"} - ${titleSuffix}`.substring(
-        0,
-        200,
-      );
-
+    const contractName = formData.contract ? String(formData.contract) : '';
+    const locationName = formData.location ? String(formData.location) : '';
+    const titleSuffix = contractName || locationName || 'Report';
+    const title = `${template?.name || 'Incident Report'} - ${titleSuffix}`.substring(0, 200);
+    
     const payload: PortalReportPayload = {
       report_type: reportType,
-      title:
-        title.length >= 5 ? title : `${template?.name || "Report"} - Submitted`,
+      title: title.length >= 5 ? title : `${template?.name || 'Report'} - Submitted`,
       description: description,
-      location: formData["location"] ? String(formData["location"]) : undefined,
-      severity: formData["severity"] ? String(formData["severity"]) : "medium",
-      reporter_name: formData["person_name"]
-        ? String(formData["person_name"])
-        : formData["complainant_name"]
-          ? String(formData["complainant_name"])
-          : user?.name,
+      location: formData.location ? String(formData.location) : undefined,
+      severity: formData.severity ? String(formData.severity) : 'medium',
+      reporter_name: formData.person_name ? String(formData.person_name) : 
+                     formData.complainant_name ? String(formData.complainant_name) : 
+                     user?.name,
+      // CRITICAL: reporter_email MUST match authenticated user's email for My Reports linkage
+      // Always use the authenticated user's email, not form input (which may be a phone number)
       reporter_email: user?.email || undefined,
-      reporter_phone: formData["complainant_contact"]
-        ? String(formData["complainant_contact"])
-        : undefined,
-      department: formData["contract"]
-        ? String(formData["contract"])
-        : undefined,
+      reporter_phone: formData.complainant_contact ? String(formData.complainant_contact) : undefined,
+      department: formData.contract ? String(formData.contract) : undefined,
       is_anonymous: false,
     };
-
-    console.log("[PortalDynamicForm] Submitting payload:", payload);
-
+    
+    console.log('[PortalDynamicForm] Submitting payload:', payload);
+    
     // Call the real API
     const result = await submitPortalReport(payload);
-
-    console.log("[PortalDynamicForm] API response:", result);
-
+    
+    console.log('[PortalDynamicForm] API response:', result);
+    
     // Store tracking code for later access
     if (result.tracking_code) {
-      sessionStorage.setItem(
-        `tracking_${result.reference_number}`,
-        result.tracking_code,
-      );
+      sessionStorage.setItem(`tracking_${result.reference_number}`, result.tracking_code);
     }
-
+    
     return { reference_number: result.reference_number };
   };
 
   const handleCancel = () => {
-    navigate("/portal/report");
+    navigate('/portal/report');
   };
 
   const handleRetry = () => {
@@ -1054,11 +512,13 @@ export default function PortalDynamicForm({
     window.location.reload();
   };
 
+  // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-surface">
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-          <CardSkeleton count={1} />
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading form...</p>
         </div>
       </div>
     );
@@ -1070,12 +530,9 @@ export default function PortalDynamicForm({
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <Card className="max-w-md w-full p-8 text-center">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-foreground mb-2">
-            Unable to Load Form
-          </h2>
+          <h2 className="text-xl font-bold text-foreground mb-2">Unable to Load Form</h2>
           <p className="text-muted-foreground mb-6">
-            {error ||
-              "Form configuration could not be loaded. Please try again."}
+            {error || 'Form configuration could not be loaded. Please try again.'}
           </p>
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={handleCancel}>
@@ -1091,13 +548,13 @@ export default function PortalDynamicForm({
     );
   }
 
-  const contractOptions = contracts.map((c) => ({
+  const contractOptions = contracts.map(c => ({
     value: c.code,
     label: c.name,
     sublabel: c.client_name,
   }));
 
-  const roleOptions = roles.map((r) => ({
+  const roleOptions = roles.map(r => ({
     value: r.code,
     label: r.label,
   }));
@@ -1115,9 +572,7 @@ export default function PortalDynamicForm({
           </button>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className={cn("font-semibold text-foreground")}>
-                {config.title}
-              </span>
+              <span className={cn('font-semibold text-foreground')}>{config.title}</span>
             </div>
             <div className="text-xs text-muted-foreground">
               v{template.version} • {template.steps.length} steps

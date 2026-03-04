@@ -51,7 +51,7 @@ def action_to_dict(
         "owner_id": getattr(action, "owner_id", None),
         "owner_email": owner_email,
         "assigned_to_email": owner_email,
-        "created_at": action.created_at.isoformat() if getattr(action, "created_at", None) else "",
+        "created_at": (action.created_at.isoformat() if getattr(action, "created_at", None) else ""),
     }
 
 

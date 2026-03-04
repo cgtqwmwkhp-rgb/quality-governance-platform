@@ -47,6 +47,8 @@ class TestEvidenceAssetEnums:
             "investigation",
             "audit",
             "action",
+            "assessment",
+            "induction",
         }
         actual = {e.value for e in EvidenceSourceModule}
         assert expected == actual

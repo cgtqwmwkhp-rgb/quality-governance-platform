@@ -34,7 +34,7 @@ class TestFiveWhysAnalysis:
         assert analysis.problem_statement == "Equipment failure during production"
         assert analysis.entity_type == "incident"
         assert analysis.whys == []
-        assert not analysis.completed
+        assert analysis.completed is False
 
     def test_add_why_iteration(self):
         """Test adding why iterations."""
@@ -373,7 +373,7 @@ class TestAuditorTraining:
         )
 
         assert training.training_name == "ISO 14001 Internal Auditor"
-        assert not training.completed
+        assert training.completed is False
 
     def test_training_completion(self):
         """Test training completion."""

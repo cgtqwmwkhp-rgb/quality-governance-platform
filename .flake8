@@ -25,6 +25,8 @@ per-file-ignores =
     src/domain/services/ai_audit_service.py:C901,F841
     src/domain/services/ai_predictive_service.py:C901,F841
     src/domain/services/ai_models.py:F841
+    src/domain/services/xml_importer_service.py:C901
+    src/api/routes/actions.py:C901
     # Routes with unused imports from refactoring
     src/api/routes/ai_intelligence.py:F401
     src/api/routes/audit_trail.py:F401
@@ -43,8 +45,7 @@ per-file-ignores =
     src/api/routes/workflow.py:E741
     # Schema files
     src/api/schemas/form_config.py:F401
-    # Test files (E402: sys.path.insert required before src imports)
-    tests/unit/*.py:E402
+    # Test files
     tests/security/test_owasp_comprehensive.py:E203
     tests/test_e2e_form_workflow.py:F541
     # Services

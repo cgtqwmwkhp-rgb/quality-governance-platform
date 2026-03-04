@@ -111,20 +111,11 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
     return false;
   }
   
-  if (authType === 'portal_sso') {
+  if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
-      await page.evaluate(() => {
-        const demoUser = {
-          id: 'ux-test-001',
-          email: 'ux-test@plantexpand.com',
-          name: 'UX Test User',
-          firstName: 'UX',
-          lastName: 'Test',
-          isDemoUser: true,
-        };
-        localStorage.setItem('portal_user', JSON.stringify(demoUser));
-        localStorage.setItem('portal_session_time', Date.now().toString());
-      });
+      await page.evaluate((token) => {
+        localStorage.setItem('portal_token', token);
+      }, process.env.PORTAL_TEST_TOKEN);
       return true;
     } catch (storageError: any) {
       console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
@@ -208,10 +199,10 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Navigate if route specified
             if (step.route) {
               await page.goto(step.route, { 
-                waitUntil: 'load', 
+                waitUntil: 'networkidle', 
                 timeout: workflow.max_duration_seconds * 1000 
               });
-              await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 10000 });
+              await page.waitForSelector('#root, #app, [data-testid="app-root"]', { timeout: 5000 });
             }
             
             // Fill form fields if specified
@@ -231,54 +222,18 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
-              let visible = false;
-
-              try {
-                await element.waitFor({ state: 'visible', timeout: 10000 });
-                visible = true;
-              } catch {
-                visible = false;
-              }
+              let visible = await element.isVisible().catch(() => false);
               
               // Try fallback
               if (!visible && step.fallback_selector) {
                 element = page.locator(step.fallback_selector).first();
-                try {
-                  await element.waitFor({ state: 'visible', timeout: 5000 });
-                  visible = true;
-                } catch {
-                  visible = false;
-                }
+                visible = await element.isVisible().catch(() => false);
               }
               
               if (visible) {
-                try {
-                  await element.click({ timeout: 5000 });
-                } catch {
-                  // Element found but click timed out (likely disabled).
-                  // Finding the element visible is sufficient for verification steps.
-                }
-                await page.waitForTimeout(500);
+                await element.click({ timeout: 5000 });
+                await page.waitForTimeout(500); // Brief pause for UI update
               } else {
-                // Check if page is in a valid empty state before failing
-                const emptyState = await page.locator(
-                  ':text("No incidents"), :text("No records"), :text("No data"), :text("no results"), :text("empty")'
-                ).first().isVisible().catch(() => false);
-                
-                if (emptyState) {
-                  // Empty state is a valid terminal state for data-dependent steps
-                  result.terminal_state_reached = true;
-                  stepResult.result = 'PASS';
-                  result.completed_steps++;
-                  stepResult.duration_ms = Date.now() - stepStartTime;
-                  result.step_results.push(stepResult);
-                  result.result = 'PASS';
-                  result.error_message = 'Empty state detected - valid terminal state';
-                  result.total_duration_ms = Date.now() - workflowStartTime;
-                  workflowAuditResults.push(result);
-                  return;
-                }
-                
                 throw new Error(`Element not found: ${step.selector}`);
               }
             }
@@ -294,8 +249,8 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
               ).catch(() => null);
             }
             
-            // Wait for DOM to settle after action
-            await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
+            // Wait for any navigation or network activity to settle
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
             
             stepResult.result = 'PASS';
             result.completed_steps++;

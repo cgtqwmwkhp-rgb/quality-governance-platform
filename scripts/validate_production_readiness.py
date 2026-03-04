@@ -117,7 +117,11 @@ class ProductionValidator:
         exit_code, stdout, stderr = run_command(f"cd {self.project_root} && python3 -c 'from src.main import app' 2>&1")
 
         if exit_code == 0:
-            self.add_result("Import Check", CheckStatus.PASS, "Main application imports successfully")
+            self.add_result(
+                "Import Check",
+                CheckStatus.PASS,
+                "Main application imports successfully",
+            )
         else:
             self.add_result("Import Check", CheckStatus.FAIL, "Import errors found", stderr)
 
@@ -126,7 +130,8 @@ class ProductionValidator:
         print("\n🔥 Running Smoke Tests...")
 
         exit_code, stdout, stderr = run_command(
-            f"cd {self.project_root} && python3 -m pytest tests/smoke/ -v --tb=short -x 2>&1", timeout=300
+            f"cd {self.project_root} && python3 -m pytest tests/smoke/ -v --tb=short -x 2>&1",
+            timeout=300,
         )
 
         if exit_code == 0:
@@ -149,7 +154,8 @@ class ProductionValidator:
         print("\n🔄 Running E2E Tests...")
 
         exit_code, stdout, stderr = run_command(
-            f"cd {self.project_root} && python3 -m pytest tests/e2e/ -v --tb=short 2>&1", timeout=600
+            f"cd {self.project_root} && python3 -m pytest tests/e2e/ -v --tb=short 2>&1",
+            timeout=600,
         )
 
         passed = stdout.count(" PASSED")
@@ -172,7 +178,8 @@ class ProductionValidator:
         print("\n🔒 Running Security Tests...")
 
         exit_code, stdout, stderr = run_command(
-            f"cd {self.project_root} && python3 -m pytest tests/security/ -v --tb=short 2>&1", timeout=300
+            f"cd {self.project_root} && python3 -m pytest tests/security/ -v --tb=short 2>&1",
+            timeout=300,
         )
 
         if exit_code == 0:
@@ -201,9 +208,17 @@ class ProductionValidator:
         else:
             error_count = len([l for l in stdout.split("\n") if l.strip() and ":" in l])
             if error_count > 50:
-                self.add_result("Code Quality (flake8)", CheckStatus.FAIL, f"{error_count} issues found")
+                self.add_result(
+                    "Code Quality (flake8)",
+                    CheckStatus.FAIL,
+                    f"{error_count} issues found",
+                )
             else:
-                self.add_result("Code Quality (flake8)", CheckStatus.WARN, f"{error_count} issues found")
+                self.add_result(
+                    "Code Quality (flake8)",
+                    CheckStatus.WARN,
+                    f"{error_count} issues found",
+                )
 
     def check_type_hints(self):
         """Check type hints with mypy."""
@@ -234,7 +249,11 @@ class ProductionValidator:
             try:
                 vulns = json.loads(stdout)
                 vuln_count = len(vulns) if isinstance(vulns, list) else 0
-                self.add_result("Dependencies", CheckStatus.WARN, f"{vuln_count} vulnerabilities found")
+                self.add_result(
+                    "Dependencies",
+                    CheckStatus.WARN,
+                    f"{vuln_count} vulnerabilities found",
+                )
             except:
                 self.add_result("Dependencies", CheckStatus.WARN, "Could not check vulnerabilities")
 
@@ -258,12 +277,20 @@ class ProductionValidator:
         missing_optional = [v for v in optional_env_vars if not os.getenv(v)]
 
         if missing_required:
-            self.add_result("Required Config", CheckStatus.WARN, f"Missing: {', '.join(missing_required)}")
+            self.add_result(
+                "Required Config",
+                CheckStatus.WARN,
+                f"Missing: {', '.join(missing_required)}",
+            )
         else:
             self.add_result("Required Config", CheckStatus.PASS, "All required config present")
 
         if missing_optional:
-            self.add_result("Optional Config", CheckStatus.WARN, f"Missing: {', '.join(missing_optional)}")
+            self.add_result(
+                "Optional Config",
+                CheckStatus.WARN,
+                f"Missing: {', '.join(missing_optional)}",
+            )
 
     def check_documentation(self):
         """Check documentation exists."""

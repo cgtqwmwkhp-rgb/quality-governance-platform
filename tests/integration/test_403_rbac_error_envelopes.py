@@ -1,5 +1,6 @@
 """Integration tests for 403 RBAC error envelope consistency."""
 
+import uuid
 from datetime import datetime
 
 import pytest
@@ -57,7 +58,7 @@ class Test403RBACErrorEnvelopes:
                 "status": "reported",
                 "incident_date": datetime.now().isoformat(),
                 "reported_date": datetime.now().isoformat(),
-                "reference_number": "INC-2026-TEST",
+                "reference_number": f"INC-403-{uuid.uuid4().hex[:8]}",
             },
             headers=auth_headers,
         )

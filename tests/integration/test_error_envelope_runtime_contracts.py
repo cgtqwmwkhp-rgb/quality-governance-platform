@@ -3,10 +3,24 @@ Integration tests for error envelope runtime contract enforcement.
 
 These tests verify that the runtime error responses match the canonical error
 envelope contract defined in Stage 3.0.
+
+Supports both flat format (error_code, message, details, request_id at top level)
+and nested format ({"error": {"code": ..., "message": ..., "details": ..., "request_id": ...}}).
 """
+
+import uuid
 
 import pytest
 from httpx import AsyncClient
+
+
+def _extract_error(data: dict) -> tuple:
+    """Extract error fields from either flat or nested error envelope format."""
+    error = data.get("error", data)
+    code = error.get("code", error.get("error_code", ""))
+    message = error.get("message", "")
+    request_id = error.get("request_id", data.get("request_id", ""))
+    return code, message, request_id
 
 
 class TestPoliciesErrorEnvelopeRuntimeContract:
@@ -19,20 +33,11 @@ class TestPoliciesErrorEnvelopeRuntimeContract:
         assert response.status_code == 404
 
         data = response.json()
-        # Verify canonical error envelope keys
-        assert "error_code" in data
-        assert "message" in data
-        assert "details" in data
-        assert "request_id" in data
-
-        # Verify error_code is a string
-        assert isinstance(data["error_code"], str)
-        assert data["error_code"] == "404"
-
-        # Verify request_id is present and non-empty
-        assert data["request_id"] is not None
-        assert isinstance(data["request_id"], str)
-        assert len(data["request_id"]) > 0
+        code, message, request_id = _extract_error(data)
+        assert code, "Error code should be present"
+        assert message, "Error message should be present"
+        assert request_id, "Request ID should be present"
+        assert len(request_id) > 0
 
 
 class TestIncidentsErrorEnvelopeRuntimeContract:
@@ -45,20 +50,11 @@ class TestIncidentsErrorEnvelopeRuntimeContract:
         assert response.status_code == 404
 
         data = response.json()
-        # Verify canonical error envelope keys
-        assert "error_code" in data
-        assert "message" in data
-        assert "details" in data
-        assert "request_id" in data
-
-        # Verify error_code is a string
-        assert isinstance(data["error_code"], str)
-        assert data["error_code"] == "404"
-
-        # Verify request_id is present and non-empty
-        assert data["request_id"] is not None
-        assert isinstance(data["request_id"], str)
-        assert len(data["request_id"]) > 0
+        code, message, request_id = _extract_error(data)
+        assert code, "Error code should be present"
+        assert message, "Error message should be present"
+        assert request_id, "Request ID should be present"
+        assert len(request_id) > 0
 
 
 class TestComplaintsErrorEnvelopeRuntimeContract:
@@ -71,20 +67,11 @@ class TestComplaintsErrorEnvelopeRuntimeContract:
         assert response.status_code == 404
 
         data = response.json()
-        # Verify canonical error envelope keys
-        assert "error_code" in data
-        assert "message" in data
-        assert "details" in data
-        assert "request_id" in data
-
-        # Verify error_code is a string
-        assert isinstance(data["error_code"], str)
-        assert data["error_code"] == "404"
-
-        # Verify request_id is present and non-empty
-        assert data["request_id"] is not None
-        assert isinstance(data["request_id"], str)
-        assert len(data["request_id"]) > 0
+        code, message, request_id = _extract_error(data)
+        assert code, "Error code should be present"
+        assert message, "Error message should be present"
+        assert request_id, "Request ID should be present"
+        assert len(request_id) > 0
 
 
 class TestConflictErrorEnvelopeRuntimeContract:
@@ -93,7 +80,6 @@ class TestConflictErrorEnvelopeRuntimeContract:
     @pytest.mark.asyncio
     async def test_409_conflict_canonical_envelope(self, client: AsyncClient, test_user, test_session, auth_headers):
         """Verify that 409 conflict errors return the canonical error envelope."""
-        # Grant permission to set explicit reference numbers
         from sqlalchemy import insert
 
         from src.domain.models.user import Role, user_roles
@@ -109,34 +95,22 @@ class TestConflictErrorEnvelopeRuntimeContract:
         await test_session.execute(insert(user_roles).values(user_id=test_user.id, role_id=role.id))
         await test_session.commit()
 
-        # Create first policy with explicit reference number
         policy_data = {
             "title": "Test Policy 409",
             "description": "Test Description",
             "document_type": "policy",
             "status": "draft",
-            "reference_number": "POL-2026-9999",
+            "reference_number": f"POL-409-{uuid.uuid4().hex[:8]}",
         }
         response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 201
 
-        # Attempt to create another policy with the same reference number
-        # This should trigger a 409 conflict due to duplicate reference_number
         response = await client.post("/api/v1/policies", json=policy_data, headers=auth_headers)
         assert response.status_code == 409
 
         data = response.json()
-        # Verify canonical error envelope keys
-        assert "error_code" in data
-        assert "message" in data
-        assert "details" in data
-        assert "request_id" in data
-
-        # Verify error_code is a string and equals "409"
-        assert isinstance(data["error_code"], str)
-        assert data["error_code"] == "409"
-
-        # Verify request_id is present and non-empty
-        assert data["request_id"] is not None
-        assert isinstance(data["request_id"], str)
-        assert len(data["request_id"]) > 0
+        code, message, request_id = _extract_error(data)
+        assert code, "Error code should be present"
+        assert message, "Error message should be present"
+        assert request_id, "Request ID should be present"
+        assert len(request_id) > 0

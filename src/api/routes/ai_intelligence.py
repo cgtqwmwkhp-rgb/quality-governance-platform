@@ -11,20 +11,11 @@ Provides endpoints for:
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.ai_intelligence import (
-    AIHealthResponse,
-    AuditTrendsResponse,
-    ExecutiveSummaryResponse,
-    FindingClassificationResponse,
-    FiveWhysResponse,
-    FrequencyAnomalyResponse,
-    TextAnalysisResponse,
-)
+from src.api.dependencies import CurrentUser
 from src.domain.services.ai_audit_service import (
     AuditQuestionGenerator,
     AuditReportGenerator,
@@ -39,7 +30,7 @@ from src.domain.services.ai_predictive_service import (
     RootCauseAnalyzer,
     TextAnalyzer,
 )
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -58,7 +49,7 @@ class RecommendationRequest(BaseModel):
 
 class FiveWhysRequest(BaseModel):
     incident_id: int
-    answers: list[str] = Field(..., min_length=1, max_length=7)
+    answers: list[str] = Field(..., min_items=1, max_items=7)
 
 
 class QuestionGenerationRequest(BaseModel):
@@ -77,19 +68,18 @@ class FindingClassificationRequest(BaseModel):
 
 
 class BatchFindingRequest(BaseModel):
-    findings: list[str] = Field(..., min_length=1, max_length=50)
+    findings: list[str] = Field(..., min_items=1, max_items=50)
 
 
 # ============ Predictive Analytics Endpoints ============
 
 
-@router.post("/analyze/text", response_model=TextAnalysisResponse)
+@router.post("/analyze/text", response_model=dict)
 async def analyze_text(
     request: TextAnalysisRequest,
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Analyze text for keywords, severity, and entities"""
-    track_metric("ai.analysis")
     keywords = TextAnalyzer.extract_keywords(request.text)
     severity = TextAnalyzer.estimate_severity(request.text)
     entities = TextAnalyzer.extract_entities(request.text)
@@ -103,52 +93,52 @@ async def analyze_text(
 
 @router.get("/predict/risk-factors", response_model=list)
 async def predict_risk_factors(
-    db: DbSession,
     current_user: CurrentUser,
     lookback_days: int = Query(365, ge=30, le=730),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify conditions that predict higher incident likelihood"""
     predictor = IncidentPredictor(db)
-    return await predictor.predict_risk_factors(lookback_days)
+    return predictor.predict_risk_factors(lookback_days)
 
 
 @router.post("/predict/similar-incidents", response_model=list)
 async def find_similar_incidents(
     request: TextAnalysisRequest,
-    db: DbSession,
     current_user: CurrentUser,
     limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Find similar past incidents based on description"""
     predictor = IncidentPredictor(db)
-    return await predictor.get_similar_incidents(request.text, limit)
+    return predictor.get_similar_incidents(request.text, limit)
 
 
 # ============ Anomaly Detection Endpoints ============
 
 
-@router.get("/anomalies/frequency", response_model=FrequencyAnomalyResponse)
+@router.get("/anomalies/frequency", response_model=dict)
 async def detect_frequency_anomalies(
-    db: DbSession,
     current_user: CurrentUser,
     entity: str = Query(..., description="Entity name (department, location)"),
     entity_type: str = Query("department", description="Type: department or location"),
     lookback_days: int = Query(90, ge=30, le=365),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Detect if incident frequency is abnormal for an entity"""
     detector = AnomalyDetector(db)
-    return await detector.detect_frequency_anomalies(entity, entity_type, lookback_days)
+    return detector.detect_frequency_anomalies(entity, entity_type, lookback_days)
 
 
 @router.get("/anomalies/patterns", response_model=list)
 async def detect_pattern_anomalies(
-    db: DbSession,
     current_user: CurrentUser,
     lookback_days: int = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Detect unusual patterns across all incidents"""
     detector = AnomalyDetector(db)
-    return await detector.detect_pattern_anomalies(lookback_days)
+    return detector.detect_pattern_anomalies(lookback_days)
 
 
 # ============ Recommendation Engine Endpoints ============
@@ -157,8 +147,8 @@ async def detect_pattern_anomalies(
 @router.post("/recommendations/corrective-actions", response_model=list)
 async def get_corrective_action_recommendations(
     request: RecommendationRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Get recommended corrective actions for an incident"""
     engine = RecommendationEngine(db)
@@ -173,20 +163,20 @@ async def get_corrective_action_recommendations(
 
 @router.get("/root-cause/clusters", response_model=list)
 async def get_incident_clusters(
-    db: DbSession,
     current_user: CurrentUser,
     lookback_days: int = Query(180, ge=30, le=365),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Cluster similar incidents to identify systemic issues"""
     analyzer = RootCauseAnalyzer(db)
-    return await analyzer.cluster_incidents(lookback_days)
+    return analyzer.cluster_incidents(lookback_days)
 
 
-@router.post("/root-cause/5-whys", response_model=FiveWhysResponse)
+@router.post("/root-cause/5-whys", response_model=dict)
 async def analyze_5_whys(
     request: FiveWhysRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Analyze 5 Whys and suggest root cause"""
     analyzer = RootCauseAnalyzer(db)
@@ -199,8 +189,8 @@ async def analyze_5_whys(
 @router.post("/audit/generate-questions", response_model=list)
 async def generate_audit_questions(
     request: QuestionGenerationRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate audit questions for a specific clause"""
     generator = AuditQuestionGenerator(db)
@@ -214,8 +204,8 @@ async def generate_audit_questions(
 @router.post("/audit/generate-checklist", response_model=list)
 async def generate_audit_checklist(
     request: ChecklistRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate complete audit checklist for a standard"""
     generator = AuditQuestionGenerator(db)
@@ -229,30 +219,30 @@ async def generate_audit_checklist(
 async def find_evidence(
     standard: str,
     clause: str,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Find evidence matching a clause requirement"""
     matcher = EvidenceMatcher(db)
-    return await matcher.find_evidence_for_clause(standard, clause)
+    return matcher.find_evidence_for_clause(standard, clause)
 
 
 @router.get("/audit/{audit_id}/evidence-gaps", response_model=list)
 async def get_evidence_gaps(
     audit_id: int,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify clauses lacking sufficient evidence"""
     matcher = EvidenceMatcher(db)
-    return await matcher.suggest_evidence_gaps(audit_id)
+    return matcher.suggest_evidence_gaps(audit_id)
 
 
-@router.post("/audit/classify-finding", response_model=FindingClassificationResponse)
+@router.post("/audit/classify-finding", response_model=dict)
 async def classify_finding(
     request: FindingClassificationRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Classify a finding by severity and root cause"""
     classifier = FindingClassifier(db)
@@ -262,69 +252,69 @@ async def classify_finding(
 @router.post("/audit/classify-findings-batch", response_model=list)
 async def classify_findings_batch(
     request: BatchFindingRequest,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Classify multiple findings"""
     classifier = FindingClassifier(db)
     return classifier.batch_classify(request.findings)
 
 
-@router.get("/audit/{audit_id}/executive-summary", response_model=ExecutiveSummaryResponse)
+@router.get("/audit/{audit_id}/executive-summary", response_model=dict)
 async def generate_executive_summary(
     audit_id: int,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Generate executive summary for an audit"""
     generator = AuditReportGenerator(db)
-    summary = await generator.generate_executive_summary(audit_id)
+    summary = generator.generate_executive_summary(audit_id)
     return {"summary": summary}
 
 
 @router.get("/audit/{audit_id}/findings-report", response_model=list)
 async def generate_findings_report(
     audit_id: int,
-    db: DbSession,
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate detailed findings report"""
     generator = AuditReportGenerator(db)
-    return await generator.generate_findings_report(audit_id)
+    return generator.generate_findings_report(audit_id)
 
 
 # ============ Audit Trends Endpoints ============
 
 
-@router.get("/audit/trends", response_model=AuditTrendsResponse)
+@router.get("/audit/trends", response_model=dict)
 async def get_audit_trends(
-    db: DbSession,
     current_user: CurrentUser,
     months: int = Query(24, ge=6, le=60),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Get audit finding trends over time"""
     analyzer = AuditTrendAnalyzer(db)
-    return await analyzer.get_finding_trends(months)
+    return analyzer.get_finding_trends(months)
 
 
 @router.get("/audit/recurring-findings", response_model=list)
 async def get_recurring_findings(
-    db: DbSession,
     current_user: CurrentUser,
     min_occurrences: int = Query(3, ge=2, le=10),
+    db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify recurring findings across audits"""
     analyzer = AuditTrendAnalyzer(db)
-    return await analyzer.get_recurring_findings(min_occurrences)
+    return analyzer.get_recurring_findings(min_occurrences)
 
 
 # ============ AI Health Check ============
 
 
-@router.get("/health", response_model=AIHealthResponse)
-async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
+@router.get("/health", response_model=dict)
+async def ai_health_check() -> dict[str, Any]:
     """Check AI service availability"""
-    from src.core.config import settings
+    import os
 
     return {
         "status": "operational",
@@ -334,6 +324,6 @@ async def ai_health_check(current_user: CurrentUser) -> dict[str, Any]:
             "recommendation_engine": True,
             "root_cause_analysis": True,
             "audit_assistant": True,
-            "claude_ai": bool(settings.anthropic_api_key),
+            "claude_ai": bool(os.getenv("ANTHROPIC_API_KEY")),
         },
     }

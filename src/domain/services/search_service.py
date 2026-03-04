@@ -20,7 +20,17 @@ _SHORT_QUERY_THRESHOLD = 3
 class SearchResultItem:
     """Lightweight container for a search result."""
 
-    __slots__ = ("id", "type", "title", "description", "module", "status", "date", "relevance", "highlights")
+    __slots__ = (
+        "id",
+        "type",
+        "title",
+        "description",
+        "module",
+        "status",
+        "date",
+        "relevance",
+        "highlights",
+    )
 
     def __init__(
         self,

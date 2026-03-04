@@ -58,7 +58,14 @@ class SmokeTestRunner:
         prefix = {"info": "   ", "pass": " ✅ ", "fail": " ❌ ", "warn": " ⚠️ "}
         print(f"[{timestamp}]{prefix.get(level, '   ')} {message}")
 
-    async def test(self, name: str, url: str, expected_status: int = 200, method: str = "GET", **kwargs):
+    async def test(
+        self,
+        name: str,
+        url: str,
+        expected_status: int = 200,
+        method: str = "GET",
+        **kwargs,
+    ):
         """Run a single test."""
         try:
             if method == "GET":
@@ -77,7 +84,10 @@ class SmokeTestRunner:
                 return True
             else:
                 self.failed += 1
-                self.log(f"{name}: Expected {expected_status}, got {response.status_code}", "fail")
+                self.log(
+                    f"{name}: Expected {expected_status}, got {response.status_code}",
+                    "fail",
+                )
                 self.results.append(
                     {
                         "name": name,
@@ -151,13 +161,31 @@ class SmokeTestRunner:
         base = f"{self.urls['backend']}/api/v1"
 
         # Auth endpoints (expect 401/422 without valid credentials)
-        await self.test("Login (no creds)", f"{base}/auth/login", expected_status=422, method="POST", json={})
+        await self.test(
+            "Login (no creds)",
+            f"{base}/auth/login",
+            expected_status=422,
+            method="POST",
+            json={},
+        )
 
         # Protected endpoints (expect 401 without auth)
         await self.test("List Users (protected)", f"{base}/users", expected_status=401)
-        await self.test("List Templates (protected)", f"{base}/admin/config/templates", expected_status=401)
-        await self.test("List Settings (protected)", f"{base}/admin/config/settings", expected_status=401)
-        await self.test("List Contracts (protected)", f"{base}/admin/config/contracts", expected_status=401)
+        await self.test(
+            "List Templates (protected)",
+            f"{base}/admin/config/templates",
+            expected_status=401,
+        )
+        await self.test(
+            "List Settings (protected)",
+            f"{base}/admin/config/settings",
+            expected_status=401,
+        )
+        await self.test(
+            "List Contracts (protected)",
+            f"{base}/admin/config/contracts",
+            expected_status=401,
+        )
 
         # Core workflow endpoints (expect 401 without auth - validates routes exist)
         await self.test("List Incidents (protected)", f"{base}/incidents/", expected_status=401)

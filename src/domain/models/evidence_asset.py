@@ -48,6 +48,8 @@ class EvidenceSourceModule(str, enum.Enum):
     INVESTIGATION = "investigation"
     AUDIT = "audit"
     ACTION = "action"
+    ASSESSMENT = "assessment"
+    INDUCTION = "induction"
 
 
 class EvidenceVisibility(str, enum.Enum):
@@ -80,6 +82,9 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Storage reference
     storage_key: Mapped[str] = mapped_column(
         String(500), nullable=False, unique=True, index=True
@@ -96,16 +101,13 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
         default=EvidenceAssetType.OTHER,
     )
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Source linkage (polymorphic association)
     source_module: Mapped[EvidenceSourceModule] = mapped_column(
         SQLEnum(EvidenceSourceModule, native_enum=False),
         nullable=False,
         index=True,
     )
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    source_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Optional secondary linkage (e.g., evidence from NearMiss also linked to Investigation)
     linked_investigation_id: Mapped[Optional[int]] = mapped_column(

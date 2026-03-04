@@ -9,6 +9,8 @@ These tests verify:
 Test ID: ACTIONS-API-001
 """
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 
@@ -330,7 +332,7 @@ class TestActionsAPIAuthenticatedNegative:
             description="Testing date parsing",
             incident_date=datetime.now(),
             reported_date=datetime.now(),
-            reference_number="INC-DATE-TEST-001",
+            reference_number=f"INC-DATE-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(incident)
         await test_session.commit()
@@ -378,7 +380,7 @@ class TestActionsAPIAuthenticatedNegative:
             description="Testing reference number generation",
             incident_date=datetime.now(),
             reported_date=datetime.now(),
-            reference_number="INC-REFNUM-TEST-001",
+            reference_number=f"INC-REFNUM-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(incident)
         await test_session.commit()
@@ -500,7 +502,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=1,
             title="Lifecycle Test Investigation",
-            reference_number="INV-LIFECYCLE-001",
+            reference_number=f"INV-LIFECYCLE-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -549,7 +551,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=2,
             title="Status Update Test Investigation",
-            reference_number="INV-STATUS-001",
+            reference_number=f"INV-STATUS-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -600,7 +602,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=3,
             title="Complete Action Test Investigation",
-            reference_number="INV-COMPLETE-001",
+            reference_number=f"INV-COMPLETE-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -665,7 +667,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=4,
             title="Status Clear Test Investigation",
-            reference_number="INV-CLEAR-001",
+            reference_number=f"INV-CLEAR-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -719,7 +721,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
             assigned_entity_id=5,
             title="List Status Test Investigation",
-            reference_number="INV-LIST-001",
+            reference_number=f"INV-LIST-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(investigation)
         await test_session.commit()

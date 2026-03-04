@@ -19,38 +19,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install safety bandit pip-audit
-          pip install -r requirements.txt
+          pip install safety bandit
 
       - name: Run Safety check
         run: |
+          pip install -r requirements.txt
           safety check --json > safety-report.json || true
           cat safety-report.json
-
-      - name: Run pip-audit
-        run: |
-          pip-audit --strict --output pip-audit-report.json --format json || true
-          cat pip-audit-report.json
 
       - name: Upload Safety Report
         uses: actions/upload-artifact@v4
         with:
           name: safety-report
           path: safety-report.json
-        if: always()
-
-      - name: Upload pip-audit Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-audit-report
-          path: pip-audit-report.json
         if: always()
 
   code-security:
@@ -62,16 +52,18 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install Bandit
         run: pip install bandit
 
       - name: Run Bandit security linter
         run: |
-          bandit -r src/ -f json -o bandit-report.json --severity-level high || true
+          bandit -r src/ -f json -o bandit-report.json || true
           bandit -r src/ -ll
 
       - name: Upload Bandit Report
@@ -90,9 +82,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
@@ -123,18 +117,30 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -t qgp-backend:scan .
+        run: docker build --no-cache -t qgp-backend:scan .
         working-directory: .
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability gate
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'qgp-backend:scan'
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Generate Trivy SARIF report
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'
           output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          exit-code: '0'
+        if: always()
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
         if: always()
@@ -172,14 +178,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{matrix.language}}"

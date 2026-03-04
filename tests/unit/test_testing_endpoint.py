@@ -107,7 +107,7 @@ class TestEndpointSecurity:
 
         # Must have staging check
         assert "is_staging_env()" in content
-        assert "AuthorizationError" in content or "HTTP_403_FORBIDDEN" in content
+        assert "HTTP_403_FORBIDDEN" in content
 
     def test_endpoint_has_secret_check(self):
         """Verify endpoint requires CI_TEST_SECRET."""
@@ -116,7 +116,7 @@ class TestEndpointSecurity:
         # Must require CI_TEST_SECRET
         assert "CI_TEST_SECRET" in content
         assert "X-CI-Secret" in content
-        assert "AuthenticationError" in content or "HTTP_401_UNAUTHORIZED" in content
+        assert "HTTP_401_UNAUTHORIZED" in content
 
 
 class TestIdempotencyPattern:

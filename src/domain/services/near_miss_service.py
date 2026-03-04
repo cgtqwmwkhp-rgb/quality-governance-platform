@@ -162,7 +162,11 @@ class NearMissService:
             entity_id=str(near_miss.id),
             action="update",
             description=f"Near Miss {near_miss.reference_number} updated",
-            payload={"updates": update_data, "old_status": old_status, "new_status": near_miss.status},
+            payload={
+                "updates": update_data,
+                "old_status": old_status,
+                "new_status": near_miss.status,
+            },
             user_id=user_id,
             request_id=request_id,
         )

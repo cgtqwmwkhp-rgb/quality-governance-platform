@@ -10,17 +10,13 @@ Features:
 """
 
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from src.core.config import settings
-from src.infrastructure.resilience import CircuitBreaker, CircuitBreakerOpenError
-
 logger = logging.getLogger(__name__)
-
-_sms_circuit = CircuitBreaker("sms", failure_threshold=5, recovery_timeout=60.0)
 
 
 class SMSStatus(str, Enum):
@@ -61,16 +57,16 @@ class SMSService:
     """
 
     def __init__(self):
-        self.account_sid = settings.twilio_account_sid or None
-        self.auth_token = settings.twilio_auth_token or None
-        self.from_number = settings.twilio_from_number or None
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        self.from_number = os.getenv("TWILIO_FROM_NUMBER")
 
         self.client = None
         self.enabled = bool(self.account_sid and self.auth_token)
 
         if self.enabled:
             try:
-                from twilio.rest import Client  # type: ignore[import-not-found]  # TYPE-IGNORE: MYPY-OVERRIDE
+                from twilio.rest import Client
 
                 self.client = Client(self.account_sid, self.auth_token)
                 logger.info("Twilio SMS service initialized")
@@ -117,12 +113,7 @@ class SMSService:
             message = message[:1597] + "..."
 
         try:
-            sms = await _sms_circuit.call(
-                self.client.messages.create,
-                body=message,
-                from_=from_number or self.from_number,
-                to=normalized,
-            )
+            sms = self.client.messages.create(body=message, from_=from_number or self.from_number, to=normalized)
 
             logger.info(f"SMS sent to {normalized}: SID={sms.sid}")
 
@@ -130,14 +121,6 @@ class SMSService:
                 success=True,
                 message_sid=sms.sid,
                 status=(SMSStatus(sms.status) if sms.status in SMSStatus.__members__ else SMSStatus.QUEUED),
-            )
-
-        except CircuitBreakerOpenError:
-            logger.warning(f"SMS circuit breaker OPEN – skipping send to {to}")
-            return SMSResult(
-                success=False,
-                status=SMSStatus.FAILED,
-                error_message="SMS circuit breaker is open",
             )
 
         except Exception as e:

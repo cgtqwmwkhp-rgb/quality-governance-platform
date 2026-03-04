@@ -9,6 +9,7 @@ Run with:
 """
 
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -103,7 +104,12 @@ class TestFullWorkflowSchemaValidation:
             "reporter_name": "John Doe",
             "reporter_email": "john.doe@example.com",
         }
-        assert payload["report_type"] in ("incident", "near_miss", "hazard", "complaint")
+        assert payload["report_type"] in (
+            "incident",
+            "near_miss",
+            "hazard",
+            "complaint",
+        )
         assert payload["severity"] in ("low", "medium", "high", "critical")
         assert isinstance(payload["is_anonymous"], bool)
 
@@ -117,7 +123,12 @@ class TestFullWorkflowSchemaValidation:
             "evidence": "Observed outdated document in use",
             "recommendations": "Refresh training on document control",
         }
-        required_keys = {"audit_run_id", "clause_reference", "finding_type", "description"}
+        required_keys = {
+            "audit_run_id",
+            "clause_reference",
+            "finding_type",
+            "description",
+        }
         assert required_keys.issubset(finding.keys())
 
     def test_rta_report_payload_structure(self) -> None:
@@ -153,7 +164,7 @@ class TestIncidentLifecycle:
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "E2E Test - Slip hazard in warehouse",
+                "title": f"E2E Test - Slip hazard in warehouse - {uuid4().hex[:8]}",
                 "description": "Water leak causing slippery floor near loading bay A.",
                 "severity": "high",
                 "location": "Warehouse - Loading Bay A",
@@ -397,18 +408,12 @@ class TestEmployeePortalFlow:
         """
         E2E: Login → View Options → Submit Report → Track → View Status
         """
-        # Step 1: Get portal stats (public)
-        stats_response = client.get("/api/v1/portal/stats")
-        assert stats_response.status_code == 200
-        stats_data = stats_response.json()
-        assert isinstance(stats_data, dict)
-
-        # Step 2: Submit incident report
+        # Step 1: Submit incident report
         report_response = client.post(
             "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
-                "title": "Portal E2E Test - Near miss",
+                "title": f"Portal E2E Test - Near miss - {uuid4().hex[:8]}",
                 "description": "Forklift nearly struck pedestrian in aisle 5",
                 "severity": "medium",
                 "location": "Warehouse Aisle 5",

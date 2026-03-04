@@ -16,25 +16,30 @@ from src.domain.models.analytics import (
     ROIInvestment,
     SavedReport,
 )
-from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditTemplate
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
-
-# CAPA (Corrective and Preventive Action)
-from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
-from src.domain.models.complaint import Complaint, ComplaintAction
-
-# Compliance Automation
-from src.domain.models.compliance_automation import (
-    Certificate,
-    ComplianceScore,
-    GapAnalysis,
-    RegulatoryUpdate,
-    RIDDORSubmission,
-    ScheduledAudit,
+from src.domain.models.assessment import (
+    AssessmentOutcome,
+    AssessmentResponse,
+    AssessmentRun,
+    AssessmentStatus,
+    CompetencyVerdict,
 )
-
-# Compliance Evidence Links
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
+from src.domain.models.asset import Asset, AssetCategory, AssetStatus, AssetType, TemplateAssetType
+from src.domain.models.audit import (
+    AuditFinding,
+    AuditQuestion,
+    AuditResponse,
+    AuditRun,
+    AuditSection,
+    AuditStatus,
+    AuditTemplate,
+    FindingSeverity,
+    FindingStatus,
+    QuestionCriticality,
+    TemplateLifecycleStatus,
+    TemplateVersion,
+)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
+from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (
@@ -65,6 +70,14 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.engineer import (
+    CompetencyLifecycleState,
+    CompetencyRecord,
+    CompetencyRequirement,
+    Engineer,
+    OnboardingChecklist,
+    OnboardingStatus,
+)
 
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.evidence_asset import (
@@ -91,6 +104,13 @@ from src.domain.models.ims_unification import (
     UnifiedAuditPlan,
 )
 from src.domain.models.incident import Incident, IncidentAction
+from src.domain.models.induction import (
+    InductionResponse,
+    InductionRun,
+    InductionStage,
+    InductionStatus,
+    UnderstandingVerdict,
+)
 
 # Investigations (Stage 2)
 from src.domain.models.investigation import (
@@ -117,6 +137,7 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+from src.domain.models.loler import LOLERDefect, LOLERDefectCategory, LOLERExamination, LOLERExaminationType
 
 # Planet Mark Carbon Management
 from src.domain.models.planet_mark import (
@@ -146,7 +167,6 @@ from src.domain.models.risk_register import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
-from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -157,17 +177,6 @@ from src.domain.models.uvdb_achilles import (
     UVDBKPIRecord,
     UVDBQuestion,
     UVDBSection,
-)
-
-# Workflow Persistence Models
-from src.domain.models.workflow import ApprovalRequest as WorkflowApprovalRequest
-from src.domain.models.workflow import (
-    EscalationLog,
-    EscalationRule,
-    UserDelegation,
-    WorkflowInstance,
-    WorkflowStep,
-    WorkflowTemplate,
 )
 
 __all__ = [
@@ -185,10 +194,23 @@ __all__ = [
     "Clause",
     "Control",
     # Audit models
+    "Asset",
+    "AssetCategory",
+    "AssetStatus",
+    "AssetType",
+    "TemplateAssetType",
     "AuditTemplate",
     "AuditQuestion",
     "AuditRun",
+    "AuditSection",
+    "AuditResponse",
+    "AuditStatus",
     "AuditFinding",
+    "FindingStatus",
+    "FindingSeverity",
+    "TemplateVersion",
+    "TemplateLifecycleStatus",
+    "QuestionCriticality",
     # Risk models
     "Risk",
     "OperationalRiskControl",
@@ -310,30 +332,25 @@ __all__ = [
     "InvestigationComment",
     "InvestigationRevisionEvent",
     "InvestigationCustomerPack",
-    # Compliance Evidence Links
-    "ComplianceEvidenceLink",
-    "EvidenceLinkMethod",
-    # Compliance Automation
-    "RegulatoryUpdate",
-    "GapAnalysis",
-    "Certificate",
-    "ScheduledAudit",
-    "ComplianceScore",
-    "RIDDORSubmission",
-    # Workflow Persistence Models
-    "WorkflowTemplate",
-    "WorkflowInstance",
-    "WorkflowStep",
-    "WorkflowApprovalRequest",
-    "EscalationRule",
-    "EscalationLog",
-    "UserDelegation",
-    # Token Blacklist (JWT Revocation)
-    "TokenBlacklist",
-    # CAPA (Corrective and Preventive Action)
-    "CAPAAction",
-    "CAPAStatus",
-    "CAPAType",
-    "CAPAPriority",
-    "CAPASource",
+    # Workforce Development (Assessment & Induction)
+    "Engineer",
+    "CompetencyRecord",
+    "CompetencyRequirement",
+    "CompetencyLifecycleState",
+    "OnboardingChecklist",
+    "OnboardingStatus",
+    "LOLERExamination",
+    "LOLERDefect",
+    "LOLERDefectCategory",
+    "LOLERExaminationType",
+    "AssessmentRun",
+    "AssessmentResponse",
+    "AssessmentStatus",
+    "CompetencyVerdict",
+    "AssessmentOutcome",
+    "InductionRun",
+    "InductionResponse",
+    "InductionStatus",
+    "InductionStage",
+    "UnderstandingVerdict",
 ]

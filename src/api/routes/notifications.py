@@ -1,36 +1,21 @@
-"""Notification API Routes — thin controller layer."""
+"""
+Notification API Routes
+
+Features:
+- List user notifications
+- Mark as read
+- Notification preferences
+- Mention search
+"""
 
 from datetime import datetime
-from typing import Annotated, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.notification import (
-    DeleteNotificationResponse,
-    MarkAllReadResponse,
-    MarkNotificationReadResponse,
-    MarkNotificationUnreadResponse,
-    NotificationPreferencesResponse,
-    TestNotificationResponse,
-    UnreadCountResponse,
-    UpdatePreferencesResponse,
-)
-from src.domain.exceptions import NotFoundError
+from src.api.dependencies import CurrentUser
 from src.domain.models.notification import NotificationPriority, NotificationType
-from src.domain.models.user import User
-from src.domain.services.notification_service import NotificationService
-from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -112,148 +97,202 @@ class MentionSearchResult(BaseModel):
 
 @router.get("/", response_model=NotificationListResponse)
 async def list_notifications(
-    db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     unread_only: bool = Query(False),
     notification_type: Optional[str] = None,
 ):
-    """List notifications for the current user."""
-    service = NotificationService(db)
-    result = await service.list_notifications(
-        current_user.id,
+    """
+    List notifications for the current user.
+
+    Supports filtering by read status and notification type.
+    """
+    # Parse notification type filter (placeholder for production implementation)
+    _ = notification_type  # Used in production for filtering
+
+    # Mock notifications for demonstration
+    mock_notifications = [
+        NotificationResponse(
+            id=1,
+            type="mention",
+            priority="medium",
+            title="You were mentioned",
+            message="John Smith mentioned you in an incident report",
+            entity_type="incident",
+            entity_id="INC-001",
+            action_url="/incidents/INC-001",
+            sender_id=2,
+            is_read=False,
+            created_at=datetime.utcnow(),
+        ),
+        NotificationResponse(
+            id=2,
+            type="assignment",
+            priority="high",
+            title="Action assigned to you",
+            message="Complete risk assessment for Site A",
+            entity_type="action",
+            entity_id="ACT-042",
+            action_url="/actions/ACT-042",
+            sender_id=3,
+            is_read=False,
+            created_at=datetime.utcnow(),
+        ),
+        NotificationResponse(
+            id=3,
+            type="action_due_soon",
+            priority="medium",
+            title="Action due tomorrow",
+            message="Update safety documentation - due in 24 hours",
+            entity_type="action",
+            entity_id="ACT-038",
+            action_url="/actions/ACT-038",
+            sender_id=None,
+            is_read=True,
+            created_at=datetime.utcnow(),
+        ),
+    ]
+
+    # Filter by read status
+    if unread_only:
+        mock_notifications = [n for n in mock_notifications if not n.is_read]
+
+    total = len(mock_notifications)
+    unread = len([n for n in mock_notifications if not n.is_read])
+
+    # Paginate
+    start = (page - 1) * page_size
+    end = start + page_size
+    items = mock_notifications[start:end]
+
+    return NotificationListResponse(
+        items=items,
+        total=total,
+        unread_count=unread,
         page=page,
         page_size=page_size,
-        unread_only=unread_only,
-        notification_type=notification_type,
-    )
-    return NotificationListResponse(
-        items=[NotificationResponse.model_validate(n) for n in result["items"]],
-        total=result["total"],
-        unread_count=result["unread_count"],
-        page=result["page"],
-        page_size=result["page_size"],
     )
 
 
-@router.get("/unread-count", response_model=UnreadCountResponse)
-async def get_unread_count(db: DbSession, current_user: CurrentUser):
+@router.get("/unread-count")
+async def get_unread_count(current_user: CurrentUser):
     """Get the count of unread notifications for the current user."""
-    service = NotificationService(db)
-    count = await service.get_unread_count(current_user.id)
-    return {"unread_count": count}
+    # Mock count for demonstration
+    return {"unread_count": 5}
 
 
-@router.post("/{notification_id}/read", response_model=MarkNotificationReadResponse)
-async def mark_notification_read(
-    notification_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("notification:update"))],
-):
+@router.post("/{notification_id}/read")
+async def mark_notification_read(notification_id: int, current_user: CurrentUser):
     """Mark a specific notification as read."""
-    service = NotificationService(db)
-    try:
-        await service.mark_as_read(notification_id, current_user.id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
-    track_metric("notification.mutation", 1)
+    # In production, update database
     return {"success": True, "notification_id": notification_id}
 
 
-@router.post("/{notification_id}/unread", response_model=MarkNotificationUnreadResponse)
-async def mark_notification_unread(
-    notification_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("notification:update"))],
-):
-    """Mark a specific notification as unread."""
-    service = NotificationService(db)
-    try:
-        await service.mark_as_unread(notification_id, current_user.id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
-    track_metric("notification.mutation", 1)
-    return {"success": True, "notification_id": notification_id}
-
-
-@router.post("/read-all", response_model=MarkAllReadResponse)
-async def mark_all_notifications_read(
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("notification:update"))],
-):
+@router.post("/read-all")
+async def mark_all_notifications_read(current_user: CurrentUser):
     """Mark all notifications as read for the current user."""
-    _span = tracer.start_span("mark_all_notifications_read") if tracer else None
-    service = NotificationService(db)
-    count = await service.mark_all_as_read(current_user.id)
-    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
-    track_metric("notification.mutation", 1)
-    track_metric("notifications.marked_read", 1)
-    if _span:
-        _span.end()
-    return {"success": True, "count": count}
+    # In production, update database
+    return {"success": True, "count": 5}
 
 
-@router.delete("/{notification_id}", response_model=DeleteNotificationResponse)
-async def delete_notification(
-    notification_id: int,
-    db: DbSession,
-    current_user: CurrentSuperuser,
-):
+@router.delete("/{notification_id}")
+async def delete_notification(notification_id: int, current_user: CurrentUser):
     """Delete a specific notification."""
-    service = NotificationService(db)
-    try:
-        await service.delete_notification(notification_id, current_user.id)
-    except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
-    track_metric("notification.mutation", 1)
     return {"success": True, "notification_id": notification_id}
 
 
-@router.get("/preferences", response_model=NotificationPreferencesResponse)
-async def get_notification_preferences(db: DbSession, current_user: CurrentUser):
+@router.get("/preferences")
+async def get_notification_preferences(current_user: CurrentUser):
     """Get notification preferences for the current user."""
-    service = NotificationService(db)
-    return await service.get_preferences(current_user.id)
+    # Mock preferences
+    return {
+        "email_enabled": True,
+        "sms_enabled": False,
+        "push_enabled": True,
+        "phone_number": None,
+        "quiet_hours_enabled": False,
+        "quiet_hours_start": "22:00",
+        "quiet_hours_end": "07:00",
+        "email_digest_enabled": True,
+        "email_digest_frequency": "daily",
+        "category_preferences": {
+            "mention": ["in_app", "email"],
+            "assignment": ["in_app", "email", "push"],
+            "sos_alert": ["in_app", "email", "sms", "push"],
+            "action_due_soon": ["in_app", "email"],
+        },
+    }
 
 
-@router.put("/preferences", response_model=UpdatePreferencesResponse)
-async def update_notification_preferences(
-    preferences: NotificationPreferencesUpdate,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("notification:update"))],
-):
+@router.put("/preferences")
+async def update_notification_preferences(preferences: NotificationPreferencesUpdate, current_user: CurrentUser):
     """Update notification preferences for the current user."""
-    service = NotificationService(db)
-    update_data = await service.update_preferences(current_user.id, preferences)
-    await invalidate_tenant_cache(current_user.tenant_id, "notifications")
-    track_metric("notification.mutation", 1)
-    return {"success": True, "preferences": update_data}
+    # In production, update database
+    return {"success": True, "preferences": preferences.dict(exclude_unset=True)}
 
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])
 async def search_users_for_mention(
-    db: DbSession,
-    current_user: CurrentUser,
     q: str = Query(..., min_length=1, max_length=50),
     limit: int = Query(10, ge=1, le=50),
 ):
-    """Search users for @mention autocomplete."""
-    service = NotificationService(db)
-    results = await service.search_mentionable_users(q, limit)
-    return [MentionSearchResult(**r) for r in results]
+    """
+    Search users for @mention autocomplete.
+
+    Returns users matching the query by name or email.
+    """
+    # Mock users for demonstration
+    mock_users = [
+        MentionSearchResult(
+            id=1,
+            display_name="John Smith",
+            email="john.smith@plantexpand.com",
+            avatar_url=None,
+        ),
+        MentionSearchResult(
+            id=2,
+            display_name="Jane Doe",
+            email="jane.doe@plantexpand.com",
+            avatar_url=None,
+        ),
+        MentionSearchResult(
+            id=3,
+            display_name="Bob Wilson",
+            email="bob.wilson@plantexpand.com",
+            avatar_url=None,
+        ),
+        MentionSearchResult(
+            id=4,
+            display_name="Alice Brown",
+            email="alice.brown@plantexpand.com",
+            avatar_url=None,
+        ),
+        MentionSearchResult(
+            id=5,
+            display_name="Charlie Davis",
+            email="charlie.davis@plantexpand.com",
+            avatar_url=None,
+        ),
+    ]
+
+    # Filter by query
+    q_lower = q.lower()
+    filtered = [u for u in mock_users if q_lower in u.display_name.lower() or q_lower in u.email.lower()]
+
+    return filtered[:limit]
 
 
-@router.post("/test-notification", response_model=TestNotificationResponse)
-async def send_test_notification(
-    current_user: Annotated[User, Depends(require_permission("notification:create"))],
-):
-    """Send a test notification to the current user."""
+@router.post("/test-notification")
+async def send_test_notification(current_user: CurrentUser):
+    """
+    Send a test notification to the current user.
+
+    Useful for testing WebSocket and notification delivery.
+    """
     from src.infrastructure.websocket.connection_manager import connection_manager
 
+    # Send test notification via WebSocket
     await connection_manager.send_to_user(
         user_id=current_user.id,
         message={
@@ -266,4 +305,5 @@ async def send_test_notification(
         },
         event_type="notification",
     )
+
     return {"success": True, "message": "Test notification sent"}

@@ -1,13 +1,13 @@
 /**
  * CollaboratorCursors - Shows remote collaborator cursors
- *
+ * 
  * Features:
  * - Colored cursor indicators per collaborator
  * - Name labels on hover
  * - Animated transitions
  */
 
-import React from "react";
+import React from 'react';
 
 interface Collaborator {
   id: string;
@@ -52,7 +52,9 @@ const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
           {/* Name tooltip */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             {collaborator.name}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
+            <div
+              className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"
+            />
           </div>
         </div>
       ))}

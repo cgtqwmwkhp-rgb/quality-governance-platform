@@ -15,7 +15,7 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -60,9 +60,16 @@ TEMPLATE_UPDATE_ALLOWED_FIELDS = {
     "require_signature",
     "require_approval",
     "auto_create_findings",
+    "subcategory",
+    "tags",
+    "estimated_duration",
+    "pass_threshold",
+    "template_status",
 }
 
-_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset({"standard_ids", "is_active", "is_published", "standard_ids_json"})
+_TEMPLATE_EXCLUDED_UPDATE_FIELDS = frozenset(
+    {"standard_ids", "is_active", "is_published", "standard_ids_json", "external_id"}
+)
 
 _QUESTION_JSON_REMAPS: dict[str, str] = {
     "options": "options_json",
@@ -70,10 +77,16 @@ _QUESTION_JSON_REMAPS: dict[str, str] = {
     "conditional_logic": "conditional_logic_json",
     "clause_ids": "clause_ids_json",
     "control_ids": "control_ids_json",
+    "assessor_guidance": "assessor_guidance_json",
+    "training_materials": "training_materials_json",
+}
+
+_TEMPLATE_JSON_REMAPS: dict[str, str] = {
+    "tags": "tags_json",
 }
 
 _FINDING_JSON_REMAPS: dict[str, str] = {
-    "clause_ids": "clause_ids_json",
+    "clause_ids": "clause_ids_json_legacy",
     "control_ids": "control_ids_json",
     "risk_ids": "risk_ids_json",
 }
@@ -101,6 +114,14 @@ _QUESTION_CLONE_FIELDS = (
     "risk_category",
     "risk_weight",
     "sort_order",
+    "guidance",
+    "criticality",
+    "regulatory_reference",
+    "guidance_notes",
+    "sign_off_required",
+    "assessor_guidance_json",
+    "training_materials_json",
+    "failure_triggers_action",
 )
 
 _SECTION_CLONE_FIELDS = (
@@ -126,6 +147,10 @@ _TEMPLATE_CLONE_FIELDS = (
     "require_approval",
     "auto_create_findings",
     "standard_ids_json",
+    "subcategory",
+    "tags_json",
+    "estimated_duration",
+    "pass_threshold",
 )
 
 # ---------------------------------------------------------------------------
@@ -222,7 +247,12 @@ class AuditService:
         model_any: Any = model
         stmt = select(model).where(model_any.id == entity_id)
         if tenant_id is not None:
-            stmt = stmt.where(model_any.tenant_id == tenant_id)
+            stmt = stmt.where(
+                or_(
+                    model_any.tenant_id == tenant_id,
+                    model_any.tenant_id.is_(None),
+                )
+            )
         result = await self.db.execute(stmt)
         entity = result.scalar_one_or_none()
         if entity is None:
@@ -298,10 +328,17 @@ class AuditService:
         audit_type: str | None = None,
         is_published: bool | None = None,
     ) -> PaginatedResult:
-        query = select(AuditTemplate).where(
-            AuditTemplate.is_active == True,  # noqa: E712
-            AuditTemplate.archived_at.is_(None),
-            AuditTemplate.tenant_id == tenant_id,
+        query = (
+            select(AuditTemplate)
+            .options(selectinload(AuditTemplate.sections).selectinload(AuditSection.questions))
+            .where(
+                AuditTemplate.is_active == True,  # noqa: E712
+                AuditTemplate.archived_at.is_(None),
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
+            )
         )
         if search:
             pattern = f"%{search}%"
@@ -361,7 +398,10 @@ class AuditService:
             select(AuditTemplate)
             .where(
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
             .order_by(AuditTemplate.archived_at.desc())
         )
@@ -377,7 +417,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.archived_at.isnot(None),
                 AuditTemplate.archived_at < cutoff,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         expired = result.scalars().all()
@@ -415,7 +458,10 @@ class AuditService:
             )
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -440,6 +486,11 @@ class AuditService:
         if template.is_published:
             template.version += 1
             template.is_published = False
+
+        # Remap JSON shorthand names to actual column names
+        for short, col in _TEMPLATE_JSON_REMAPS.items():
+            if short in update_data:
+                update_data[col] = update_data.pop(short)
 
         # Determine trackable changes (only fields in the allow-list)
         trackable = {k: v for k, v in update_data.items() if k in TEMPLATE_UPDATE_ALLOWED_FIELDS}
@@ -487,7 +538,10 @@ class AuditService:
             .options(selectinload(AuditTemplate.questions))
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -528,7 +582,10 @@ class AuditService:
             )
             .where(
                 AuditTemplate.id == template_id,
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         original = result.scalar_one_or_none()
@@ -599,7 +656,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.is_(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -634,7 +694,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -669,7 +732,10 @@ class AuditService:
             select(AuditTemplate).where(
                 AuditTemplate.id == template_id,
                 AuditTemplate.archived_at.isnot(None),
-                AuditTemplate.tenant_id == tenant_id,
+                or_(
+                    AuditTemplate.tenant_id == tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
         template = result.scalar_one_or_none()
@@ -847,7 +913,11 @@ class AuditService:
         template_id: int | None = None,
         assigned_to_id: int | None = None,
     ) -> PaginatedResult:
-        query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == tenant_id)
+        query = (
+            select(AuditRun)
+            .options(selectinload(AuditRun.template))
+            .where(or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)))
+        )
         if status_filter:
             query = query.where(AuditRun.status == status_filter)
         if template_id:
@@ -915,7 +985,10 @@ class AuditService:
                 selectinload(AuditRun.findings),
                 selectinload(AuditRun.template),
             )
-            .where(AuditRun.id == run_id, AuditRun.tenant_id == tenant_id)
+            .where(
+                AuditRun.id == run_id,
+                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+            )
         )
         run = result.scalar_one_or_none()
         if not run:
@@ -1006,7 +1079,10 @@ class AuditService:
         result = await self.db.execute(
             select(AuditRun)
             .options(selectinload(AuditRun.responses))
-            .where(AuditRun.id == run_id, AuditRun.tenant_id == tenant_id)
+            .where(
+                AuditRun.id == run_id,
+                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+            )
         )
         run = result.scalar_one_or_none()
         if not run:
@@ -1119,7 +1195,10 @@ class AuditService:
         run_id: int | None = None,
     ) -> PaginatedResult:
         query = select(AuditFinding).where(
-            AuditFinding.tenant_id == tenant_id,
+            or_(
+                AuditFinding.tenant_id == tenant_id,
+                AuditFinding.tenant_id.is_(None),
+            ),
         )
         if status_filter:
             query = query.where(AuditFinding.status == status_filter)

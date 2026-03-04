@@ -11,34 +11,9 @@ from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-# Production SWA origins (must match src/core/config.py)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:8080",
-    "http://localhost:5173",
-    # Production Azure Static Web App (custom domain style)
-    "https://app-qgp-prod.azurestaticapps.net",
-    # Production Azure Static Web App (auto-generated style)
-    "https://purple-water-03205fa03.6.azurestaticapps.net",
-]
+from src.core.config import settings
 
-# Regex for staging/preview SWA origins
-CORS_ORIGIN_REGEX = re.compile(r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$")
-
-
-_STATUS_PHRASE: dict[int, str] = {
-    400: "Bad Request",
-    401: "Unauthorized",
-    403: "Forbidden",
-    404: "Not Found",
-    409: "Conflict",
-    413: "Payload Too Large",
-    422: "Unprocessable Entity",
-    429: "Too Many Requests",
-    500: "Internal Server Error",
-    502: "Bad Gateway",
-    503: "Service Unavailable",
-}
+_CORS_ORIGIN_REGEX = re.compile(r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$")
 
 
 def _get_cors_origin(request: Request) -> Optional[str]:
@@ -46,9 +21,9 @@ def _get_cors_origin(request: Request) -> Optional[str]:
     origin = request.headers.get("origin")
     if not origin:
         return None
-    if origin in CORS_ALLOWED_ORIGINS:
+    if origin in settings.cors_origins:
         return origin
-    if CORS_ORIGIN_REGEX.match(origin):
+    if _CORS_ORIGIN_REGEX.match(origin):
         return origin
     return None
 
@@ -76,19 +51,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     """
     request_id = getattr(request.state, "request_id", "unknown")
 
-    code = exc.detail if isinstance(exc.detail, str) else str(exc.status_code)
-    message = _STATUS_PHRASE.get(exc.status_code, f"HTTP {exc.status_code}")
-    details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
-
     response = JSONResponse(
         status_code=exc.status_code,
         content={
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-                "request_id": request_id,
-            }
+            "error_code": str(exc.status_code),
+            "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+            "details": exc.detail if isinstance(exc.detail, dict) else {},
+            "request_id": request_id,
         },
     )
 
@@ -129,12 +98,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     response = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
-            "error": {
-                "code": "VALIDATION_ERROR",
-                "message": "Request validation failed",
-                "details": {"errors": errors},
-                "request_id": request_id,
-            }
+            "error_code": "422",
+            "message": "Validation error",
+            "details": {"errors": errors},
+            "request_id": request_id,
         },
     )
 
@@ -161,32 +128,28 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
         JSONResponse with canonical error envelope and CORS headers
     """
     import logging
-    import traceback
 
     logger = logging.getLogger(__name__)
     request_id = getattr(request.state, "request_id", "unknown")
 
+    # Log the actual error for debugging (no PII)
     logger.error(
-        "Unhandled exception [request_id=%s]: %s\n%s",
-        request_id,
-        type(exc).__name__,
-        traceback.format_exc(),
+        f"Unhandled exception: {type(exc).__name__}",
         extra={
             "request_id": request_id,
             "exception_type": type(exc).__name__,
             "path": str(request.url.path),
         },
+        exc_info=True,
     )
 
     response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "error": {
-                "code": "INTERNAL_ERROR",
-                "message": "Internal server error",
-                "details": {},
-                "request_id": request_id,
-            }
+            "error_code": "500",
+            "message": "Internal server error",
+            "details": {},
+            "request_id": request_id,
         },
     )
 

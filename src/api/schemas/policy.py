@@ -5,7 +5,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.api.schemas.validators import sanitize_field
 from src.domain.models.policy import DocumentStatus, DocumentType
 
 
@@ -17,11 +16,6 @@ class PolicyBase(BaseModel):
     document_type: DocumentType = Field(default=DocumentType.POLICY, description="Type of document")
     status: DocumentStatus = Field(default=DocumentStatus.DRAFT, description="Document status")
 
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
-
 
 class PolicyCreate(PolicyBase):
     """Schema for creating a new policy."""
@@ -30,11 +24,6 @@ class PolicyCreate(PolicyBase):
         None,
         description="Optional explicit reference number (for testing/admin use)",
     )
-
-    @field_validator("reference_number", mode="before")
-    @classmethod
-    def _sanitize_create(cls, v):
-        return sanitize_field(v)
 
     @field_validator("title")
     @classmethod
@@ -52,11 +41,6 @@ class PolicyUpdate(BaseModel):
     description: Optional[str] = None
     document_type: Optional[DocumentType] = None
     status: Optional[DocumentStatus] = None
-
-    @field_validator("title", "description", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("title")
     @classmethod
@@ -76,7 +60,6 @@ class PolicyResponse(PolicyBase):
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-    links: Optional[dict] = None
 
     class Config:
         """Pydantic config."""
@@ -92,4 +75,3 @@ class PolicyListResponse(BaseModel):
     page: int = 1
     page_size: int = 50
     pages: int = Field(..., description="Total number of pages")
-    links: Optional[dict] = None

@@ -17,6 +17,7 @@ Supports multiple backends:
 
 import asyncio
 import json
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,12 +25,6 @@ from enum import Enum
 from typing import Any, Optional
 
 import httpx
-
-from src.core.config import settings
-from src.infrastructure.resilience import CircuitBreaker, CircuitBreakerOpenError
-
-_ai_models_circuit = CircuitBreaker("ai_models", failure_threshold=3, recovery_timeout=120.0)
-_ai_models_semaphore = asyncio.Semaphore(3)
 
 # ============================================================================
 # Configuration
@@ -62,21 +57,21 @@ class AIConfig:
 
     @classmethod
     def from_env(cls) -> "AIConfig":
-        """Load configuration from validated settings."""
-        provider_str: str = getattr(settings, "ai_provider", "openai")
+        """Load configuration from environment variables."""
+        provider_str = os.getenv("AI_PROVIDER", "openai")
         provider = AIProvider(provider_str) if provider_str in [p.value for p in AIProvider] else AIProvider.OPENAI
 
         return cls(
             provider=provider,
-            openai_api_key=getattr(settings, "openai_api_key", ""),
-            openai_model=getattr(settings, "openai_model", "gpt-4-turbo-preview"),
-            azure_openai_endpoint=getattr(settings, "azure_openai_endpoint", ""),
-            azure_openai_key=getattr(settings, "azure_openai_key", ""),
-            azure_openai_deployment=getattr(settings, "azure_openai_deployment", ""),
-            anthropic_api_key=getattr(settings, "anthropic_api_key", ""),
-            anthropic_model=getattr(settings, "anthropic_model", "claude-3-opus-20240229"),
-            local_model_path=getattr(settings, "local_model_path", ""),
-            embedding_model=getattr(settings, "embedding_model", "text-embedding-3-small"),
+            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+            openai_model=os.getenv("OPENAI_MODEL", "gpt-4-turbo-preview"),
+            azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+            azure_openai_key=os.getenv("AZURE_OPENAI_KEY", ""),
+            azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+            anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229"),
+            local_model_path=os.getenv("LOCAL_MODEL_PATH", ""),
+            embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         )
 
 
@@ -136,16 +131,6 @@ class OpenAIClient(AIClient):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        async with _ai_models_semaphore:
-            result: str = await _ai_models_circuit.call(self._openai_complete, messages, temperature, max_tokens)
-            return result
-
-    async def _openai_complete(
-        self,
-        messages: list[dict],
-        temperature: float,
-        max_tokens: int,
-    ) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
@@ -167,11 +152,6 @@ class OpenAIClient(AIClient):
 
     async def embed(self, text: str) -> list[float]:
         """Generate embedding using OpenAI."""
-        async with _ai_models_semaphore:
-            result: list[float] = await _ai_models_circuit.call(self._openai_embed, text)
-            return result
-
-    async def _openai_embed(self, text: str) -> list[float]:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.openai.com/v1/embeddings",
@@ -239,16 +219,6 @@ class AnthropicClient(AIClient):
         max_tokens: int = 2000,
     ) -> str:
         """Generate completion using Claude."""
-        async with _ai_models_semaphore:
-            result: str = await _ai_models_circuit.call(self._anthropic_complete, prompt, system_prompt, max_tokens)
-            return result
-
-    async def _anthropic_complete(
-        self,
-        prompt: str,
-        system_prompt: Optional[str],
-        max_tokens: int,
-    ) -> str:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",

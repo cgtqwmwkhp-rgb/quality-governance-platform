@@ -368,7 +368,7 @@ export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   page: number;
-  size: number;
+  page_size: number;
   pages: number;
 }
 
@@ -582,10 +582,10 @@ export interface AuditRun {
   due_date?: string
   started_at?: string
   completed_at?: string
-  score?: number
-  max_score?: number
-  score_percentage?: number
-  passed?: boolean
+  score?: number | null
+  max_score?: number | null
+  score_percentage?: number | null
+  passed?: boolean | null
   created_at: string
 }
 
@@ -619,6 +619,41 @@ export interface AuditTemplate {
   is_active: boolean
   is_published: boolean
   created_at: string
+  updated_at?: string
+  archived_at?: string | null
+  scoring_method?: string
+  question_count?: number
+  section_count?: number
+}
+
+export interface CategoryCount {
+  category: string
+  count: number
+}
+
+export interface BatchImportResult {
+  imported: number
+  skipped: number
+  errors: string[]
+  templates: AuditTemplate[]
+}
+
+export interface AuditTemplateCreate {
+  name: string
+  description?: string
+  category?: string
+  audit_type?: string
+  scoring_method?: string
+  passing_score?: number
+}
+
+export interface AuditTemplateUpdate {
+  name?: string
+  description?: string
+  category?: string
+  audit_type?: string
+  scoring_method?: string
+  passing_score?: number
 }
 
 export interface AuditRunCreate {
@@ -766,6 +801,7 @@ export interface AuditQuestion {
   sort_order: number;
   risk_category?: string;
   risk_weight?: number;
+  criticality?: string;
   created_at: string;
   updated_at: string;
 }
@@ -817,6 +853,83 @@ export interface AuditFindingUpdate {
   verified_by_id?: number;
   verified_at?: string;
   due_date?: string;
+}
+
+// ============ Workforce Development Types ============
+
+export interface AssetType {
+  id: number
+  category: string
+  name: string
+  description?: string
+  is_active: boolean
+}
+
+export interface Asset {
+  id: number
+  external_id: string
+  asset_type_id: number
+  asset_number: string
+  name: string
+  make?: string
+  model?: string
+  serial_number?: string
+  status: string
+  site?: string
+}
+
+export interface AssessmentRun {
+  id: string
+  reference_number: string
+  template_id: number
+  engineer_id: number
+  supervisor_id: number
+  asset_type_id?: number
+  title?: string
+  location?: string
+  status: string
+  outcome?: string
+  scheduled_date?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+}
+
+export interface InductionRun {
+  id: string
+  reference_number: string
+  template_id: number
+  engineer_id: number
+  supervisor_id: number
+  asset_type_id?: number
+  title?: string
+  stage: string
+  status: string
+  scheduled_date?: string
+  created_at: string
+}
+
+export interface EngineerProfile {
+  id: number
+  external_id: string
+  user_id: number
+  employee_number?: string
+  job_title?: string
+  department?: string
+  site?: string
+  is_active: boolean
+}
+
+export interface CompetencyRecord {
+  id: number
+  engineer_id: number
+  asset_type_id: number
+  template_id: number
+  source_type: string
+  state: string
+  outcome?: string
+  assessed_at?: string
+  expires_at?: string
 }
 
 // ============ Investigation Types ============
@@ -992,71 +1105,87 @@ export const authApi = {
     api.post<LoginResponse>("/api/v1/auth/login", data),
 };
 
-// NOTE: All list endpoints use trailing slash (e.g., /incidents/) because
-// FastAPI routes are defined with trailing slashes and redirect_slashes is disabled
+// NOTE: FastAPI has redirect_slashes=False. Trailing slashes MUST match
+// the backend route definition exactly: routes with "/" need a trailing
+// slash; routes like "/templates" must NOT have one.
 
 export const incidentsApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Incident>>(
-      `/api/v1/incidents/?page=${page}&size=${size}`,
+      `/api/v1/incidents/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: IncidentCreate) =>
-    api.post<Incident>("/api/v1/incidents", data),
+    api.post<Incident>("/api/v1/incidents/", data),
   get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
   update: (id: number, data: IncidentUpdate) =>
     api.patch<Incident>(`/api/v1/incidents/${id}`, data),
 };
 
 export const rtasApi = {
-  list: (page = 1, size = 10) =>
-    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&size=${size}`),
-  create: (data: RTACreate) => api.post<RTA>("/api/v1/rtas", data),
+  list: (page = 1, pageSize = 10) =>
+    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&page_size=${pageSize}`),
+  create: (data: RTACreate) => api.post<RTA>("/api/v1/rtas/", data),
   get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) =>
     api.patch<RTA>(`/api/v1/rtas/${id}`, data),
 };
 
 export const complaintsApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Complaint>>(
-      `/api/v1/complaints/?page=${page}&size=${size}`,
+      `/api/v1/complaints/?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: ComplaintCreate) =>
-    api.post<Complaint>("/api/v1/complaints", data),
+    api.post<Complaint>("/api/v1/complaints/", data),
   get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
   update: (id: number, data: ComplaintUpdate) =>
     api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
 };
 
 export const policiesApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Policy>>(
-      `/api/v1/policies/?page=${page}&size=${size}`,
+      `/api/v1/policies?page=${page}&page_size=${pageSize}`,
     ),
   create: (data: PolicyCreate) => api.post<Policy>("/api/v1/policies", data),
   get: (id: number) => api.get<Policy>(`/api/v1/policies/${id}`),
 };
 
 export const risksApi = {
-  list: (page = 1, size = 10) =>
+  list: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Risk>>(
-      `/api/v1/risks/?page=${page}&size=${size}`,
+      `/api/v1/risks/?page=${page}&page_size=${pageSize}`,
     ),
-  create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks", data),
+  create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks/", data),
   get: (id: number) => api.get<Risk>(`/api/v1/risks/${id}`),
 };
 
 export const auditsApi = {
+  // Category summary
+  listCategories: () =>
+    api.get<CategoryCount[]>('/api/v1/audit-templates/categories'),
+  // Batch import
+  batchImportTemplates: (directoryPath: string) =>
+    api.post<BatchImportResult>('/api/v1/xml-import/batch-import', { directory_path: directoryPath }),
   // Templates
-  listTemplates: (page = 1, size = 10, filters?: { is_published?: boolean }) => {
+  listTemplates: (page = 1, pageSize = 10, filters?: { is_published?: boolean; search?: string; category?: string; audit_type?: string }) => {
     const params = new URLSearchParams({
       page: String(page),
-      size: String(size),
+      page_size: String(pageSize),
     })
     if (filters?.is_published !== undefined) {
       params.set('is_published', String(filters.is_published))
     }
-    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates/?${params.toString()}`)
+    if (filters?.search) {
+      params.set('search', filters.search)
+    }
+    if (filters?.category) {
+      params.set('category', filters.category)
+    }
+    if (filters?.audit_type) {
+      params.set('audit_type', filters.audit_type)
+    }
+    return api.get<PaginatedResponse<AuditTemplate>>(`/api/v1/audits/templates?${params.toString()}`)
   },
   getTemplate: (id: number) =>
     api.get<AuditTemplateDetail>(`/api/v1/audits/templates/${id}`),
@@ -1099,9 +1228,9 @@ export const auditsApi = {
     api.delete(`/api/v1/audits/questions/${questionId}`),
 
   // Runs
-  listRuns: (page = 1, size = 10) =>
+  listRuns: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<AuditRun>>(
-      `/api/v1/audits/runs?page=${page}&size=${size}`,
+      `/api/v1/audits/runs?page=${page}&page_size=${pageSize}`,
     ),
   createRun: (data: AuditRunCreate) =>
     api.post<AuditRun>("/api/v1/audits/runs", data),
@@ -1120,14 +1249,110 @@ export const auditsApi = {
     api.patch<AuditResponse>(`/api/v1/audits/responses/${responseId}`, data),
 
   // Findings
-  listFindings: (page = 1, size = 10, runId?: number) =>
+  listFindings: (page = 1, pageSize = 10, runId?: number) =>
     api.get<PaginatedResponse<AuditFinding>>(
-      `/api/v1/audits/findings/?page=${page}&size=${size}${runId ? `&run_id=${runId}` : ""}`,
+      `/api/v1/audits/findings?page=${page}&page_size=${pageSize}${runId ? `&run_id=${runId}` : ""}`,
     ),
   createFinding: (runId: number, data: AuditFindingCreate) =>
     api.post<AuditFinding>(`/api/v1/audits/runs/${runId}/findings`, data),
   updateFinding: (findingId: number, data: AuditFindingUpdate) =>
     api.patch<AuditFinding>(`/api/v1/audits/findings/${findingId}`, data),
+};
+
+export interface AssessmentResponseCreate {
+  question_id: number
+  verdict?: 'competent' | 'not_competent' | 'na'
+  feedback?: string
+  supervisor_notes?: string
+}
+
+export interface AssessmentResponseUpdate {
+  verdict?: 'competent' | 'not_competent' | 'na'
+  feedback?: string
+  supervisor_notes?: string
+  engineer_signature?: string
+}
+
+export interface InductionResponseCreate {
+  question_id: number
+  shown_explained?: boolean
+  understanding?: 'competent' | 'not_yet_competent' | 'na'
+  supervisor_notes?: string
+}
+
+export interface InductionResponseUpdate {
+  shown_explained?: boolean
+  understanding?: 'competent' | 'not_yet_competent' | 'na'
+  supervisor_notes?: string
+  engineer_signature?: string
+}
+
+export const workforceApi = {
+  // Assessments
+  listAssessments: (params?: Record<string, unknown>) =>
+    api.get<{items: AssessmentRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/assessments/', { params }),
+  getAssessment: (id: string) => api.get<AssessmentRun>(`/api/v1/assessments/${id}`),
+  createAssessment: (data: unknown) => api.post<AssessmentRun>('/api/v1/assessments/', data),
+  startAssessment: (id: string) => api.post<AssessmentRun>(`/api/v1/assessments/${id}/start`),
+  completeAssessment: (id: string) => api.post<AssessmentRun>(`/api/v1/assessments/${id}/complete`),
+  updateAssessment: (id: string, data: Record<string, unknown>) =>
+    api.patch<AssessmentRun>(`/api/v1/assessments/${id}`, data),
+  createAssessmentResponse: (runId: string, data: AssessmentResponseCreate) =>
+    api.post<unknown>(`/api/v1/assessments/${runId}/responses`, data),
+  updateAssessmentResponse: (responseId: string, data: AssessmentResponseUpdate) =>
+    api.patch<unknown>(`/api/v1/assessments/responses/${responseId}`, data),
+
+  // Inductions
+  listInductions: (params?: Record<string, unknown>) =>
+    api.get<{items: InductionRun[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/inductions/', { params }),
+  getInduction: (id: string) => api.get<InductionRun>(`/api/v1/inductions/${id}`),
+  createInduction: (data: unknown) => api.post<InductionRun>('/api/v1/inductions/', data),
+  startInduction: (id: string) => api.post<InductionRun>(`/api/v1/inductions/${id}/start`),
+  completeInduction: (id: string) => api.post<InductionRun>(`/api/v1/inductions/${id}/complete`),
+  updateInduction: (id: string, data: Record<string, unknown>) =>
+    api.patch<InductionRun>(`/api/v1/inductions/${id}`, data),
+  createInductionResponse: (runId: string, data: InductionResponseCreate) =>
+    api.post<unknown>(`/api/v1/inductions/${runId}/responses`, data),
+  updateInductionResponse: (responseId: string, data: InductionResponseUpdate) =>
+    api.patch<unknown>(`/api/v1/inductions/responses/${responseId}`, data),
+
+  // Engineers
+  listEngineers: (params?: Record<string, unknown>) =>
+    api.get<{items: EngineerProfile[]; total: number; page: number; page_size: number; pages: number}>('/api/v1/engineers/', { params }),
+  getEngineer: (id: number) => api.get<EngineerProfile>(`/api/v1/engineers/${id}`),
+  getCompetencies: (engineerId: number) =>
+    api.get<CompetencyRecord[]>(`/api/v1/engineers/${engineerId}/competencies`),
+
+  // Assets
+  listAssetTypes: () => api.get<{items: AssetType[]}>('/api/v1/assets/asset-types'),
+  listAssets: (params?: Record<string, unknown>) =>
+    api.get<{items: Asset[]; total: number}>('/api/v1/assets/', { params }),
+
+  // WDP Analytics
+  getWdpSummary: () =>
+    api.get<{
+      engineers: { total: number };
+      competencies: Record<string, number>;
+      assessments: { total: number; completed: number };
+      inductions: { total: number; completed: number };
+    }>('/api/v1/wdp-analytics/summary'),
+
+  getWdpEngineerMatrix: () =>
+    api.get<{
+      asset_types: { id: number; name: string; category: string }[];
+      engineers: {
+        engineer_id: number;
+        user_id: number;
+        employee_number: string | null;
+        competencies: Record<number, string>;
+      }[];
+    }>('/api/v1/wdp-analytics/engineer-matrix'),
+
+  getWdpTrends: () =>
+    api.get<{
+      assessments_by_month: { month: string | null; total: number; passed: number; failed: number }[];
+      inductions_by_month: { month: string | null; total: number; completed: number }[];
+    }>('/api/v1/wdp-analytics/trends'),
 };
 
 /**
@@ -1212,18 +1437,18 @@ export interface ClosureValidation {
 }
 
 export const investigationsApi = {
-  list: (page = 1, size = 10, status?: string) => {
+  list: (page = 1, pageSize = 10, status?: string) => {
     const params = new URLSearchParams({
       page: String(page),
-      size: String(size),
+      page_size: String(pageSize),
     });
     if (status) params.set("status", status);
     return api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/investigations?${params}`,
+      `/api/v1/investigations/?${params}`,
     );
   },
   create: (data: InvestigationCreate) =>
-    api.post<Investigation>("/api/v1/investigations", data),
+    api.post<Investigation>("/api/v1/investigations/", data),
   get: (id: number) => api.get<Investigation>(`/api/v1/investigations/${id}`),
   /**
    * Update investigation with partial data.
@@ -1343,7 +1568,7 @@ export const standardsApi = {
   get: (id: number) =>
     api.get<Standard & { clauses: Clause[] }>(`/api/v1/standards/${id}`),
   getClauses: (standardId: number) =>
-    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses/`),
+    api.get<Clause[]>(`/api/v1/standards/${standardId}/clauses`),
   getControls: (standardId: number) =>
     api.get<ControlListItem[]>(`/api/v1/standards/${standardId}/controls`),
   getComplianceScore: (standardId: number) =>
@@ -1373,18 +1598,18 @@ export const actionsApi = {
    */
   list: (
     page = 1,
-    size = 10,
+    pageSize = 10,
     status?: string,
     source_type?: string,
     source_id?: number,
   ) =>
     api.get<PaginatedResponse<Action>>(
-      `/api/v1/actions/?page=${page}&size=${size}${status ? `&status=${status}` : ""}${source_type ? `&source_type=${source_type}` : ""}${source_id ? `&source_id=${source_id}` : ""}`,
+      `/api/v1/actions/?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}${source_type ? `&source_type=${source_type}` : ""}${source_id ? `&source_id=${source_id}` : ""}`,
     ),
   /**
    * Create a new action linked to a source entity.
    */
-  create: (data: ActionCreate) => api.post<Action>("/api/v1/actions", data),
+  create: (data: ActionCreate) => api.post<Action>("/api/v1/actions/", data),
   /**
    * Get a single action by ID. Requires source_type.
    */
@@ -1624,9 +1849,9 @@ export const uvdbApi = {
   /**
    * List UVDB audits.
    */
-  listAudits: (page = 1, size = 10) =>
+  listAudits: (page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<UVDBAudit>>(
-      `/api/v1/uvdb/audits?page=${page}&size=${size}`,
+      `/api/v1/uvdb/audits?page=${page}&page_size=${pageSize}`,
     ),
 
   /**
@@ -1752,11 +1977,11 @@ export const usersApi = {
     if (params?.department) sp.set("department", params.department);
     if (params?.is_active !== undefined)
       sp.set("is_active", String(params.is_active));
-    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users?${sp}`);
+    return api.get<PaginatedResponse<UserDetail>>(`/api/v1/users/?${sp}`);
   },
   get: (id: number) => api.get<UserDetail>(`/api/v1/users/${id}`),
   create: (data: UserCreatePayload) =>
-    api.post<UserDetail>("/api/v1/users", data),
+    api.post<UserDetail>("/api/v1/users/", data),
   update: (id: number, data: UserUpdatePayload) =>
     api.patch<UserDetail>(`/api/v1/users/${id}`, data),
   delete: (id: number) => api.delete<void>(`/api/v1/users/${id}`),
@@ -1823,7 +2048,7 @@ export const auditTrailApi = {
       total: number;
       page: number;
       per_page: number;
-    }>(`/api/v1/audit-trail?${sp}`);
+    }>(`/api/v1/audit-trail/?${sp}`);
   },
   getEntry: (id: number) => api.get<AuditLogEntry>(`/api/v1/audit-trail/${id}`),
   getByEntity: (entityType: string, entityId: string) =>
@@ -1910,10 +2135,10 @@ export const riskRegisterApi = {
     if (params?.status) sp.set("status", params.status);
     if (params?.category) sp.set("category", params.category);
     if (params?.search) sp.set("search", params.search);
-    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register?${sp}`);
+    return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register/?${sp}`);
   },
   create: (data: Partial<RiskEntry>) =>
-    api.post<RiskEntry>("/api/v1/risk-register", data),
+    api.post<RiskEntry>("/api/v1/risk-register/", data),
   get: (id: number) => api.get<RiskEntry>(`/api/v1/risk-register/${id}`),
   update: (id: number, data: Partial<RiskEntry>) =>
     api.put<RiskEntry>(`/api/v1/risk-register/${id}`, data),
@@ -2194,7 +2419,7 @@ export const notificationsApi = {
       items: NotificationEntry[];
       total: number;
       unread_count: number;
-    }>(`/api/v1/notifications?${sp}`);
+    }>(`/api/v1/notifications/?${sp}`);
   },
   getUnreadCount: () =>
     api.get<{ unread_count: number }>("/api/v1/notifications/unread-count"),
@@ -2646,7 +2871,7 @@ export const evidenceAssetsApi = {
         String(options.linked_investigation_id),
       );
     return api.get<EvidenceAssetListResponse>(
-      `/api/v1/evidence-assets?${params}`,
+      `/api/v1/evidence-assets/?${params}`,
     );
   },
 

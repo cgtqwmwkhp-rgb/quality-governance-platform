@@ -9,6 +9,14 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: qgp-postgres-sandbox
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
+        reservations:
+          cpus: '0.25'
+          memory: 512m
     environment:
       POSTGRES_USER: qgp_user
       POSTGRES_PASSWORD: qgp_sandbox_password
@@ -31,6 +39,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: qgp-migrate-sandbox
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256m
     environment:
       DATABASE_URL: postgresql+asyncpg://qgp_user:qgp_sandbox_password@postgres:5432/quality_governance_sandbox
       APP_ENV: development
@@ -47,6 +63,14 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: qgp-app-sandbox
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256m
     environment:
       DATABASE_URL: postgresql+asyncpg://qgp_user:qgp_sandbox_password@postgres:5432/quality_governance_sandbox
       APP_ENV: development

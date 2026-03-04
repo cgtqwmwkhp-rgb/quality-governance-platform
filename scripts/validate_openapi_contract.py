@@ -62,7 +62,12 @@ def validate_error_responses(schema: dict) -> list[str]:
                         # Check if schema has required error envelope fields
                         properties = response_schema.get("properties", {})
 
-                        required_fields = ["error_code", "message", "details", "request_id"]
+                        required_fields = [
+                            "error_code",
+                            "message",
+                            "details",
+                            "request_id",
+                        ]
                         for field in required_fields:
                             if field not in properties:
                                 errors.append(

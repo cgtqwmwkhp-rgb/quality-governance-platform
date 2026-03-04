@@ -157,7 +157,6 @@ class TestAuthSmoke:
             401,
             404,
             422,
-            429,
         ], f"Login endpoint error: {response.status_code}"
 
     def test_valid_credentials_work(self, auth_token):

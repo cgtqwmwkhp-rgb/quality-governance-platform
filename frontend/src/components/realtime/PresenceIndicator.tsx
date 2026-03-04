@@ -1,54 +1,54 @@
 /**
  * PresenceIndicator - Shows online/offline status for users
- *
+ * 
  * Features:
  * - Color-coded status indicator
  * - Tooltip with last seen time
  * - Animated pulse for online users
  */
 
-import React from "react";
+import React from 'react';
 
-type PresenceStatus = "online" | "away" | "busy" | "offline";
+type PresenceStatus = 'online' | 'away' | 'busy' | 'offline';
 
 interface PresenceIndicatorProps {
   status: PresenceStatus;
-  size?: "sm" | "md" | "lg";
+  size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   className?: string;
 }
 
 const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
   status,
-  size = "md",
+  size = 'md',
   showLabel = false,
-  className = "",
+  className = '',
 }) => {
   const sizeClasses = {
-    sm: "w-2 h-2",
-    md: "w-3 h-3",
-    lg: "w-4 h-4",
+    sm: 'w-2 h-2',
+    md: 'w-3 h-3',
+    lg: 'w-4 h-4',
   };
 
   const statusConfig = {
     online: {
-      color: "bg-emerald-500",
-      label: "Online",
+      color: 'bg-emerald-500',
+      label: 'Online',
       pulse: true,
     },
     away: {
-      color: "bg-yellow-500",
-      label: "Away",
+      color: 'bg-yellow-500',
+      label: 'Away',
       pulse: false,
     },
     busy: {
-      color: "bg-red-500",
-      label: "Busy",
+      color: 'bg-red-500',
+      label: 'Busy',
       pulse: false,
     },
     offline: {
-      color: "bg-gray-500",
-      label: "Offline",
+      color: 'bg-gray-500',
+      label: 'Offline',
       pulse: false,
     },
   };
