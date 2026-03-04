@@ -156,7 +156,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   }, [navigate])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background safe-area-top">
       {/* Top Bar */}
       <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
         {/* Search Bar */}

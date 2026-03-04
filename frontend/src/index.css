@@ -403,3 +403,38 @@
     @apply min-h-[44px];
   }
 }
+
+/* Mobile-first responsive utilities */
+@media (max-width: 768px) {
+  /* Ensure minimum touch target size (44x44px per WCAG 2.5.5) */
+  button, [role="button"], a, input, select, textarea {
+    min-height: 44px;
+  }
+  
+  /* Stack horizontal layouts on mobile */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  /* Full-width inputs on mobile */
+  .mobile-full {
+    width: 100% !important;
+  }
+  
+  /* Hide non-essential columns in tables */
+  .mobile-hide {
+    display: none !important;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-area-top { padding-top: env(safe-area-inset-top); }
+  .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Prevent text size adjustment on orientation change */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}

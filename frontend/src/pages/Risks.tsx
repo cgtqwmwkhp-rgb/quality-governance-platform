@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Shield, Search, Loader2 } from 'lucide-react'
 import { risksApi, Risk, RiskCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -23,6 +24,7 @@ import {
 import { cn } from "../helpers/utils"
 
 export default function Risks() {
+  const { t } = useTranslation()
   const [risks, setRisks] = useState<Risk[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -49,7 +51,7 @@ export default function Risks() {
       setRisks(response.data.items ?? [])
     } catch (err) {
       console.error('Failed to load risks:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('risks.error.load_failed'))
     } finally {
       setLoading(false)
     }
@@ -136,7 +138,7 @@ export default function Risks() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadRisks(); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('risks.error.try_again')}
           </button>
         </div>
       )}
@@ -144,12 +146,12 @@ export default function Risks() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Risk Register</h1>
-          <p className="text-muted-foreground mt-1">Identify, assess, and manage organizational risks</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('risks.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('risks.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          New Risk
+          {t('risks.new')}
         </Button>
       </div>
 
@@ -158,7 +160,7 @@ export default function Risks() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search risks..."
+          placeholder={t('risks.search_placeholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -168,10 +170,10 @@ export default function Risks() {
       {/* Risk Heat Map Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Critical', count: riskStats.critical, variant: 'destructive' as const },
-          { label: 'High', count: riskStats.high, variant: 'warning' as const },
-          { label: 'Medium', count: riskStats.medium, variant: 'warning' as const },
-          { label: 'Low', count: riskStats.low, variant: 'success' as const },
+          { label: t('risks.stats.critical_risks'), count: riskStats.critical, variant: 'destructive' as const },
+          { label: t('risks.stats.high_risks'), count: riskStats.high, variant: 'warning' as const },
+          { label: t('risks.stats.medium_risks'), count: riskStats.medium, variant: 'warning' as const },
+          { label: t('risks.stats.low_risks'), count: riskStats.low, variant: 'success' as const },
         ].map((stat) => (
           <Card key={stat.label} className="p-4">
             <div className={cn(
@@ -182,7 +184,7 @@ export default function Risks() {
             )}>
               <span className="font-bold">{stat.count}</span>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">{stat.label} Risks</p>
+            <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
           </Card>
         ))}
       </div>
@@ -193,12 +195,12 @@ export default function Risks() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Risk</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Treatment</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.reference')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.risk')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.category')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.score')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.status')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.treatment')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -206,8 +208,8 @@ export default function Risks() {
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                     <Shield className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                    <p>No risks found</p>
-                    <p className="text-sm mt-1">Add a risk to your register to get started</p>
+                    <p>{t('risks.empty.title')}</p>
+                    <p className="text-sm mt-1">{t('risks.empty.subtitle')}</p>
                   </td>
                 </tr>
               ) : (
@@ -260,68 +262,68 @@ export default function Risks() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Risk</DialogTitle>
+            <DialogTitle>{t('risks.dialog.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.title')}</label>
               <Input id="risks-field-0"
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Brief risk title..."
+                placeholder={t('risks.form.title_placeholder')}
               />
             </div>
 
             <div>
-              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.description')}</label>
               <Textarea id="risks-field-1"
                 required
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Detailed description of the risk..."
+                placeholder={t('risks.form.description_placeholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="risks-field-2" className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <label htmlFor="risks-field-2" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.category')}</label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => setFormData({ ...formData, category: value })}
                 >
                   <SelectTrigger id="risks-field-2">
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder={t('risks.form.select_category')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="strategic">Strategic</SelectItem>
-                    <SelectItem value="operational">Operational</SelectItem>
-                    <SelectItem value="financial">Financial</SelectItem>
-                    <SelectItem value="compliance">Compliance</SelectItem>
-                    <SelectItem value="reputational">Reputational</SelectItem>
-                    <SelectItem value="technology">Technology</SelectItem>
-                    <SelectItem value="environmental">Environmental</SelectItem>
-                    <SelectItem value="health_safety">Health & Safety</SelectItem>
+                    <SelectItem value="strategic">{t('risks.category.strategic')}</SelectItem>
+                    <SelectItem value="operational">{t('risks.category.operational')}</SelectItem>
+                    <SelectItem value="financial">{t('risks.category.financial')}</SelectItem>
+                    <SelectItem value="compliance">{t('risks.category.compliance')}</SelectItem>
+                    <SelectItem value="reputational">{t('risks.category.reputational')}</SelectItem>
+                    <SelectItem value="technology">{t('risks.category.technology')}</SelectItem>
+                    <SelectItem value="environmental">{t('risks.category.environmental')}</SelectItem>
+                    <SelectItem value="health_safety">{t('risks.category.health_safety')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label htmlFor="risks-field-3" className="block text-sm font-medium text-foreground mb-2">Treatment</label>
+                <label htmlFor="risks-field-3" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.treatment')}</label>
                 <Select
                   value={formData.treatment_strategy}
                   onValueChange={(value) => setFormData({ ...formData, treatment_strategy: value })}
                 >
                   <SelectTrigger id="risks-field-3">
-                    <SelectValue placeholder="Select treatment" />
+                    <SelectValue placeholder={t('risks.form.select_treatment')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="accept">Accept</SelectItem>
-                    <SelectItem value="mitigate">Mitigate</SelectItem>
-                    <SelectItem value="transfer">Transfer</SelectItem>
-                    <SelectItem value="avoid">Avoid</SelectItem>
+                    <SelectItem value="accept">{t('risks.treatment.accept')}</SelectItem>
+                    <SelectItem value="mitigate">{t('risks.treatment.mitigate')}</SelectItem>
+                    <SelectItem value="transfer">{t('risks.treatment.transfer')}</SelectItem>
+                    <SelectItem value="avoid">{t('risks.treatment.avoid')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -330,7 +332,7 @@ export default function Risks() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="risks-field-4" className="block text-sm font-medium text-foreground mb-2">
-                  Likelihood (1-5)
+                  {t('risks.form.likelihood')}
                 </label>
                 <input id="risks-field-4"
                   type="range"
@@ -342,15 +344,15 @@ export default function Risks() {
                   aria-label="Likelihood"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Rare</span>
+                  <span>{t('risks.form.likelihood_rare')}</span>
                   <span className="text-primary font-medium">{formData.likelihood}</span>
-                  <span>Almost Certain</span>
+                  <span>{t('risks.form.likelihood_certain')}</span>
                 </div>
               </div>
 
               <div>
                 <label htmlFor="risks-field-5" className="block text-sm font-medium text-foreground mb-2">
-                  Impact (1-5)
+                  {t('risks.form.impact')}
                 </label>
                 <input id="risks-field-5"
                   type="range"
@@ -362,16 +364,16 @@ export default function Risks() {
                   aria-label="Impact"
                 />
                 <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>Negligible</span>
+                  <span>{t('risks.form.impact_negligible')}</span>
                   <span className="text-primary font-medium">{formData.impact}</span>
-                  <span>Catastrophic</span>
+                  <span>{t('risks.form.impact_catastrophic')}</span>
                 </div>
               </div>
             </div>
 
             <Card className="p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Calculated Risk Score:</span>
+                <span className="text-sm text-muted-foreground">{t('risks.form.calculated_score')}</span>
                 <Badge variant={getRiskLevelVariant('', formData.likelihood * formData.impact) as any} className="text-lg px-4 py-2">
                   {formData.likelihood * formData.impact}
                 </Badge>
@@ -380,16 +382,16 @@ export default function Risks() {
 
             <DialogFooter className="gap-3 pt-4">
               <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating...
+                    {t('risks.creating')}
                   </>
                 ) : (
-                  'Create Risk'
+                  t('risks.create')
                 )}
               </Button>
             </DialogFooter>

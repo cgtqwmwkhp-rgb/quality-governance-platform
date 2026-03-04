@@ -70,6 +70,7 @@ pywebpush==1.14.0
 
 # Monitoring (Azure)
 opencensus==0.11.0
+psutil==5.9.8
 opencensus-ext-azure==1.1.0
 opencensus-ext-requests==0.8.0
 

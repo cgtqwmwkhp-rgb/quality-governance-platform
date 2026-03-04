@@ -80,6 +80,7 @@ from src.domain.models.engineer import (
 )
 
 # Evidence Assets (Shared Attachments Module)
+from src.domain.models.feature_flag import FeatureFlag
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -316,6 +317,8 @@ __all__ = [
     "Contract",
     "SystemSetting",
     "LookupOption",
+    # Feature Flags
+    "FeatureFlag",
     # Evidence Assets (Shared Attachments Module)
     "EvidenceAsset",
     "EvidenceAssetType",

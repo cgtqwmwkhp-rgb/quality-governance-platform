@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -24,6 +25,7 @@ import {
 
 export default function Complaints() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [complaints, setComplaints] = useState<Complaint[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -59,7 +61,7 @@ export default function Complaints() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.title.trim() || !formData.description.trim()) {
-      setFormError('Title and description are required.')
+      setFormError(t('complaints.form.required_error'))
       return
     }
     setFormError(null)
@@ -144,12 +146,12 @@ export default function Complaints() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Complaints</h1>
-          <p className="text-muted-foreground mt-1">Manage customer complaints and feedback</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('complaints.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          New Complaint
+          {t('complaints.new')}
         </Button>
       </div>
 
@@ -159,7 +161,7 @@ export default function Complaints() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search complaints..."
+            placeholder={t('complaints.search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -174,13 +176,13 @@ export default function Complaints() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Complainant</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Priority</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Received</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.reference')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.title')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.type')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.complainant')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.priority')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.status')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.received')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -188,8 +190,8 @@ export default function Complaints() {
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
                       <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>No complaints found</p>
-                      <p className="text-sm mt-1">Record a complaint to get started</p>
+                      <p>{t('complaints.empty.title')}</p>
+                      <p className="text-sm mt-1">{t('complaints.empty.subtitle')}</p>
                     </td>
                   </tr>
                 ) : (
@@ -244,108 +246,108 @@ export default function Complaints() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>New Complaint</DialogTitle>
+            <DialogTitle>{t('complaints.dialog.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.title')}</label>
               <Input id="complaints-field-0"
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Brief summary of the complaint..."
+                placeholder={t('complaints.form.title_placeholder')}
               />
             </div>
 
             <div>
-              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.description')}</label>
               <Textarea id="complaints-field-1"
                 required
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Full details of the complaint..."
+                placeholder={t('complaints.form.description_placeholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="complaints-field-2" className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <label htmlFor="complaints-field-2" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.type')}</label>
                 <Select
                   value={formData.complaint_type}
                   onValueChange={(value) => setFormData({ ...formData, complaint_type: value })}
                 >
                   <SelectTrigger id="complaints-field-2">
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder={t('complaints.form.select_type')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="product">Product</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                    <SelectItem value="delivery">Delivery</SelectItem>
-                    <SelectItem value="communication">Communication</SelectItem>
-                    <SelectItem value="billing">Billing</SelectItem>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="environmental">Environmental</SelectItem>
-                    <SelectItem value="safety">Safety</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
+                    <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
+                    <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
+                    <SelectItem value="communication">{t('complaints.type.communication')}</SelectItem>
+                    <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
+                    <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
+                    <SelectItem value="environmental">{t('complaints.type.environmental')}</SelectItem>
+                    <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
+                    <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label htmlFor="complaints-field-3" className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                <label htmlFor="complaints-field-3" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.priority')}</label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => setFormData({ ...formData, priority: value })}
                 >
                   <SelectTrigger id="complaints-field-3">
-                    <SelectValue placeholder="Select priority" />
+                    <SelectValue placeholder={t('complaints.form.select_priority')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="critical">{t('priority.critical')}</SelectItem>
+                    <SelectItem value="high">{t('priority.high')}</SelectItem>
+                    <SelectItem value="medium">{t('priority.medium')}</SelectItem>
+                    <SelectItem value="low">{t('priority.low')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div>
-              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">Complainant Name</label>
+              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.complainant_name')}</label>
               <Input id="complaints-field-4"
                 type="text"
                 required
                 value={formData.complainant_name}
                 onChange={(e) => setFormData({ ...formData, complainant_name: e.target.value })}
-                placeholder="Name of the person making the complaint..."
+                placeholder={t('complaints.form.name_placeholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="complaints-field-5" className="block text-sm font-medium text-foreground mb-2">Email</label>
+                <label htmlFor="complaints-field-5" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.email')}</label>
                 <Input id="complaints-field-5"
                   type="email"
                   value={formData.complainant_email || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
-                  placeholder="email@example.com"
+                  placeholder={t('complaints.form.email_placeholder')}
                 />
               </div>
               <div>
-                <label htmlFor="complaints-field-6" className="block text-sm font-medium text-foreground mb-2">Phone</label>
+                <label htmlFor="complaints-field-6" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.phone')}</label>
                 <Input id="complaints-field-6"
                   type="tel"
                   value={formData.complainant_phone || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
-                  placeholder="+44 123 456 7890"
+                  placeholder={t('complaints.form.phone_placeholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">Received Date</label>
+              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.received_date')}</label>
               <Input id="complaints-field-7"
                 type="datetime-local"
                 required
@@ -361,7 +363,7 @@ export default function Complaints() {
                 variant="outline"
                 onClick={() => setShowModal(false)}
               >
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 type="submit"
@@ -370,10 +372,10 @@ export default function Complaints() {
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating...
+                    {t('complaints.creating')}
                   </>
                 ) : (
-                  'Create Complaint'
+                  t('complaints.create')
                 )}
               </Button>
             </DialogFooter>

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Search,
@@ -18,11 +19,12 @@ import { cn } from '../helpers/utils';
 
 export default function Portal() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { user, logout } = usePortalAuth();
   const { announce } = useLiveAnnouncer();
 
   useEffect(() => {
-    announce('Employee portal loaded');
+    announce(t('portal.loaded'));
   }, [announce]);
 
   const handleLogout = () => {
@@ -41,8 +43,8 @@ export default function Portal() {
                 <Shield className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-foreground font-semibold">Plantexpand</h1>
-                <p className="text-muted-foreground text-xs">Employee Portal</p>
+                <h1 className="text-foreground font-semibold">{t('portal.company_name')}</h1>
+                <p className="text-muted-foreground text-xs">{t('portal.employee_portal')}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -50,7 +52,7 @@ export default function Portal() {
               <button
                 onClick={handleLogout}
                 className="p-2 hover:bg-surface rounded-lg transition-colors"
-                title="Sign out"
+                title={t('portal.sign_out')}
               >
                 <LogOut className="w-5 h-5 text-muted-foreground hover:text-foreground" />
               </button>
@@ -71,7 +73,7 @@ export default function Portal() {
               <p className="text-muted-foreground text-sm">{user?.email}</p>
               {user?.isDemoUser && (
                 <span className="inline-block mt-1 px-2 py-0.5 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/20">
-                  Demo Mode
+                  {t('portal.demo_mode')}
                 </span>
               )}
             </div>
@@ -80,8 +82,8 @@ export default function Portal() {
 
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">What would you like to do?</h2>
-          <p className="text-muted-foreground">Select an option below</p>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">{t('portal.welcome_question')}</h2>
+          <p className="text-muted-foreground">{t('portal.select_option')}</p>
         </div>
 
         {/* Main Actions */}
@@ -100,9 +102,9 @@ export default function Portal() {
             </div>
             <div className="flex-1 text-left">
               <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                Submit a Report
+                {t('portal.submit_report_title')}
               </h3>
-              <p className="text-sm text-muted-foreground">Incident, Near Miss, Complaint, or RTA</p>
+              <p className="text-sm text-muted-foreground">{t('portal.submit_report_desc')}</p>
             </div>
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
@@ -119,9 +121,9 @@ export default function Portal() {
               </div>
               <div className="flex-1 text-left">
                 <h3 className="font-semibold text-foreground group-hover:text-info transition-colors">
-                  Track My Report
+                  {t('portal.track_report_title')}
                 </h3>
-                <p className="text-sm text-muted-foreground">Check status with reference number</p>
+                <p className="text-sm text-muted-foreground">{t('portal.track_report_desc')}</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -139,9 +141,9 @@ export default function Portal() {
               </div>
               <div className="flex-1 text-left">
                 <h3 className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
-                  Help & Support
+                  {t('portal.help_title')}
                 </h3>
-                <p className="text-sm text-muted-foreground">FAQs and contact information</p>
+                <p className="text-sm text-muted-foreground">{t('portal.help_desc')}</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -151,7 +153,7 @@ export default function Portal() {
         {/* Mobile Optimized Badge */}
         <div className="mt-10 flex items-center justify-center gap-2 text-muted-foreground text-sm">
           <Smartphone className="w-4 h-4" />
-          <span>Optimized for mobile devices</span>
+          <span>{t('portal.mobile_optimized')}</span>
         </div>
       </main>
 
@@ -161,7 +163,7 @@ export default function Portal() {
           onClick={() => navigate('/login')}
           className="text-muted-foreground hover:text-primary text-sm transition-colors"
         >
-          Admin Login →
+          {t('portal.admin_login')}
         </button>
       </footer>
     </div>

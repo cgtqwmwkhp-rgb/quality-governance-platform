@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -24,6 +25,7 @@ import {
 
 export default function Incidents() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -129,12 +131,12 @@ export default function Incidents() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Incidents</h1>
-          <p className="text-muted-foreground mt-1">Manage and track incidents</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('incidents.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          New Incident
+          {t('incidents.new')}
         </Button>
       </div>
 
@@ -144,7 +146,7 @@ export default function Incidents() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search incidents..."
+            placeholder={t('incidents.search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -159,12 +161,12 @@ export default function Incidents() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Severity</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.reference')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.title')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.type')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.severity')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.status')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.date')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -172,8 +174,8 @@ export default function Incidents() {
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                       <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>No incidents found</p>
-                      <p className="text-sm mt-1">Create your first incident to get started</p>
+                      <p>{t('incidents.empty.title')}</p>
+                      <p className="text-sm mt-1">{t('incidents.empty.subtitle')}</p>
                     </td>
                   </tr>
                 ) : (
@@ -225,76 +227,76 @@ export default function Incidents() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New Incident</DialogTitle>
+            <DialogTitle>{t('incidents.dialog.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.title')}</label>
               <Input id="incidents-field-0"
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Describe the incident..."
+                placeholder={t('incidents.form.title_placeholder')}
               />
             </div>
 
             <div>
-              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.description')}</label>
               <Textarea id="incidents-field-1"
                 required
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Provide details about what happened..."
+                placeholder={t('incidents.form.description_placeholder')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="incidents-field-2" className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <label htmlFor="incidents-field-2" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.type')}</label>
                 <Select
                   value={formData.incident_type}
                   onValueChange={(value) => setFormData({ ...formData, incident_type: value })}
                 >
                   <SelectTrigger id="incidents-field-2">
-                    <SelectValue placeholder="Select type" />
+                    <SelectValue placeholder={t('incidents.form.select_type')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="injury">Injury</SelectItem>
-                    <SelectItem value="near_miss">Near Miss</SelectItem>
-                    <SelectItem value="hazard">Hazard</SelectItem>
-                    <SelectItem value="property_damage">Property Damage</SelectItem>
-                    <SelectItem value="environmental">Environmental</SelectItem>
-                    <SelectItem value="security">Security</SelectItem>
-                    <SelectItem value="quality">Quality</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    <SelectItem value="injury">{t('incidents.type.injury')}</SelectItem>
+                    <SelectItem value="near_miss">{t('incidents.type.near_miss')}</SelectItem>
+                    <SelectItem value="hazard">{t('incidents.type.hazard')}</SelectItem>
+                    <SelectItem value="property_damage">{t('incidents.type.property_damage')}</SelectItem>
+                    <SelectItem value="environmental">{t('incidents.type.environmental')}</SelectItem>
+                    <SelectItem value="security">{t('incidents.type.security')}</SelectItem>
+                    <SelectItem value="quality">{t('incidents.type.quality')}</SelectItem>
+                    <SelectItem value="other">{t('incidents.type.other')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label htmlFor="incidents-field-3" className="block text-sm font-medium text-foreground mb-2">Severity</label>
+                <label htmlFor="incidents-field-3" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.severity')}</label>
                 <Select
                   value={formData.severity}
                   onValueChange={(value) => setFormData({ ...formData, severity: value })}
                 >
                   <SelectTrigger id="incidents-field-3">
-                    <SelectValue placeholder="Select severity" />
+                    <SelectValue placeholder={t('incidents.form.select_severity')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="negligible">Negligible</SelectItem>
+                    <SelectItem value="critical">{t('severity.critical')}</SelectItem>
+                    <SelectItem value="high">{t('severity.high')}</SelectItem>
+                    <SelectItem value="medium">{t('severity.medium')}</SelectItem>
+                    <SelectItem value="low">{t('severity.low')}</SelectItem>
+                    <SelectItem value="negligible">{t('severity.negligible')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div>
-              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">Incident Date</label>
+              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.incident_date')}</label>
               <Input id="incidents-field-4"
                 type="datetime-local"
                 required
@@ -309,7 +311,7 @@ export default function Incidents() {
                 variant="outline"
                 onClick={() => setShowModal(false)}
               >
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 type="submit"
@@ -318,10 +320,10 @@ export default function Incidents() {
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating...
+                    {t('incidents.creating')}
                   </>
                 ) : (
-                  'Create Incident'
+                  t('incidents.create')
                 )}
               </Button>
             </DialogFooter>
