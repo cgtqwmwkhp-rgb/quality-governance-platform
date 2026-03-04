@@ -377,6 +377,7 @@ jobs:
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
           STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           # Validate secrets - FAIL if missing (no silent skip)
           if [ -z "$DB_URL" ]; then
@@ -407,6 +408,7 @@ jobs:
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
             --memory 1; then
@@ -475,6 +477,7 @@ jobs:
               DATABASE_URL="$DB_URL" \
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
+              PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
             --command-line "alembic current" \
             --cpu 1 \
             --memory 1
