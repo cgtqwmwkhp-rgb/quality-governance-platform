@@ -14,9 +14,7 @@ class RateLimiter:
 
     def __init__(self, requests_per_minute: int = 60):
         self.rpm = requests_per_minute
-        self.buckets: Dict[str, Tuple[float, int]] = defaultdict(
-            lambda: (time.time(), requests_per_minute)
-        )
+        self.buckets: Dict[str, Tuple[float, int]] = defaultdict(lambda: (time.time(), requests_per_minute))
 
     def is_allowed(self, key: str) -> bool:
         now = time.time()
@@ -35,9 +33,7 @@ _limiter = RateLimiter()
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path.startswith("/healthz") or request.url.path.startswith(
-            "/readyz"
-        ):
+        if request.url.path.startswith("/healthz") or request.url.path.startswith("/readyz"):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"

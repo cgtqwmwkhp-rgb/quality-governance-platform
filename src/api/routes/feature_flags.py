@@ -136,7 +136,5 @@ async def evaluate_feature_flag(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Feature flag '{key}' not found",
         )
-    enabled = await service.is_enabled(
-        key, tenant_id=data.tenant_id, user_id=data.user_id
-    )
+    enabled = await service.is_enabled(key, tenant_id=data.tenant_id, user_id=data.user_id)
     return FeatureFlagEvaluateResponse(key=key, enabled=enabled)

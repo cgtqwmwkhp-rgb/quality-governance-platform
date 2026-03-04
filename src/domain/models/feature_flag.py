@@ -20,9 +20,7 @@ class FeatureFlag(Base):
     rollout_percentage = Column(Integer, default=0)
     tenant_overrides = Column(JSON, default=dict)
     metadata_ = Column("metadata", JSON, default=dict)
-    created_at = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

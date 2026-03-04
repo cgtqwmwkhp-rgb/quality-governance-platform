@@ -37,7 +37,8 @@ class FeatureFlagService:
         bucket = (
             int(
                 hashlib.md5(
-                    f"{key}:{user_id or tenant_id or 'default'}".encode()
+                    f"{key}:{user_id or tenant_id or 'default'}".encode(),
+                    usedforsecurity=False,
                 ).hexdigest(),
                 16,
             )
@@ -48,18 +49,14 @@ class FeatureFlagService:
     async def _get_flag(self, key: str) -> Optional[FeatureFlag]:
         if key in _flag_cache:
             return _flag_cache[key]
-        result = await self.db.execute(
-            select(FeatureFlag).where(FeatureFlag.key == key)
-        )
+        result = await self.db.execute(select(FeatureFlag).where(FeatureFlag.key == key))
         flag = result.scalar_one_or_none()
         if flag:
             _flag_cache[key] = flag
         return flag
 
     async def list_flags(self) -> List[FeatureFlag]:
-        result = await self.db.execute(
-            select(FeatureFlag).order_by(FeatureFlag.key)
-        )
+        result = await self.db.execute(select(FeatureFlag).order_by(FeatureFlag.key))
         return list(result.scalars().all())
 
     async def create_flag(

@@ -1,7 +1,9 @@
 """Tests for configuration validation and environment sync."""
+
 import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 def _project_root() -> Path:
@@ -36,9 +38,7 @@ class TestConfigValidation:
             pytest.skip("config.py not found")
         source = config_path.read_text()
         assert "validate_pepper_length" in source, "Pepper length validator missing"
-        assert "len(v) < 16" in source or "16 characters" in source, (
-            "Minimum pepper length (16) not enforced"
-        )
+        assert "len(v) < 16" in source or "16 characters" in source, "Minimum pepper length (16) not enforced"
 
     def test_database_url_not_hardcoded(self):
         """Database URL should come from env, not be hardcoded."""
@@ -46,9 +46,7 @@ class TestConfigValidation:
         if not config_path.exists():
             pytest.skip("config.py not found")
         source = config_path.read_text()
-        assert (
-            "postgresql://user:password@" not in source
-        ), "Hardcoded DB credentials found"
+        assert "postgresql://user:password@" not in source, "Hardcoded DB credentials found"
 
     def test_secret_key_not_default_in_env(self):
         """SECRET_KEY should not use a default value in production."""
