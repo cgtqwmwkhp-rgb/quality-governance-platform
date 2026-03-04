@@ -10,15 +10,15 @@ from datetime import datetime, timezone
 
 import factory
 
-from src.domain.models.tenant import Tenant
-from src.domain.models.user import User
-from src.domain.models.incident import Incident
-from src.domain.models.complaint import Complaint
-from src.domain.models.near_miss import NearMiss
 from src.domain.models.audit import AuditTemplate
 from src.domain.models.capa import CAPAAction
-from src.domain.models.risk import Risk
+from src.domain.models.complaint import Complaint
+from src.domain.models.incident import Incident
+from src.domain.models.near_miss import NearMiss
 from src.domain.models.policy import Policy
+from src.domain.models.risk import Risk
+from src.domain.models.tenant import Tenant
+from src.domain.models.user import User
 
 
 def _utcnow():
