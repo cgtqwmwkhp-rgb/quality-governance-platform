@@ -94,7 +94,7 @@ describe('Login', () => {
 
   it('calls authApi.login and invokes onLogin on success', async () => {
     const { authApi } = await import('../../api/client');
-    vi.mocked(authApi.login).mockResolvedValueOnce({ access_token: 'real-jwt-token' });
+    vi.mocked(authApi.login).mockResolvedValueOnce({ data: { access_token: 'real-jwt-token' } });
 
     const user = userEvent.setup();
     render(<Login onLogin={onLogin} />, { wrapper: Wrapper });
