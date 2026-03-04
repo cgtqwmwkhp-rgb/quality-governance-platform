@@ -820,15 +820,16 @@ export default function DynamicFormRenderer({
               {currentStepData.fields
                 .sort((a, b) => a.order - b.order)
                 .map((field) => (
-                  <FieldRenderer
-                    key={field.id}
-                    field={field}
-                    value={formData[field.name]}
-                    onChange={(value) => updateField(field.name, value)}
-                    error={errors[field.name]}
-                    contractOptions={contractOptions}
-                    roleOptions={roleOptions}
-                  />
+                  <div key={field.id} data-testid={`field-${field.name}`}>
+                    <FieldRenderer
+                      field={field}
+                      value={formData[field.name]}
+                      onChange={(value) => updateField(field.name, value)}
+                      error={errors[field.name]}
+                      contractOptions={contractOptions}
+                      roleOptions={roleOptions}
+                    />
+                  </div>
                 ))}
             </div>
 
@@ -861,7 +862,7 @@ export default function DynamicFormRenderer({
           )}
 
           {isLastStep ? (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
+            <Button data-testid="submit-report-btn" onClick={handleSubmit} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
