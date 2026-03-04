@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   ChevronLeft,
@@ -35,92 +34,13 @@ interface CalendarEvent {
 }
 
 export default function CalendarView() {
-  const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19));
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
   const [, setSelectedDate] = useState<Date | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
-  const events: CalendarEvent[] = [
-    {
-      id: 'EVT001',
-      title: 'ISO 9001:2015 Internal Audit',
-      type: 'audit',
-      date: '2024-01-22',
-      time: '09:00',
-      endTime: '17:00',
-      location: 'Main Office - Conference Room A',
-      attendees: ['John Smith', 'Sarah Johnson', 'External Auditor'],
-      description: 'Annual internal audit for quality management system',
-      status: 'upcoming',
-      priority: 'high',
-      relatedModule: 'Audits',
-      relatedId: 'AUD-2024-0156'
-    },
-    {
-      id: 'EVT002',
-      title: 'Risk Register Review',
-      type: 'review',
-      date: '2024-01-19',
-      time: '14:00',
-      endTime: '15:30',
-      location: 'Virtual - Teams Meeting',
-      attendees: ['Sarah Johnson', 'Mike Chen'],
-      description: 'Quarterly review of risk register',
-      status: 'today',
-      priority: 'medium',
-      relatedModule: 'Risks'
-    },
-    {
-      id: 'EVT003',
-      title: 'Action Item Deadline - Update Emergency Procedures',
-      type: 'deadline',
-      date: '2024-01-15',
-      description: 'Deadline for completing emergency procedure updates',
-      status: 'overdue',
-      priority: 'high',
-      relatedModule: 'Actions',
-      relatedId: 'ACT-2024-0523'
-    },
-    {
-      id: 'EVT004',
-      title: 'Health & Safety Training',
-      type: 'training',
-      date: '2024-01-25',
-      time: '10:00',
-      endTime: '12:00',
-      location: 'Training Room B',
-      attendees: ['All Staff'],
-      description: 'Mandatory annual health and safety training',
-      status: 'upcoming',
-      priority: 'medium'
-    },
-    {
-      id: 'EVT005',
-      title: 'Management Review Meeting',
-      type: 'meeting',
-      date: '2024-01-26',
-      time: '09:00',
-      endTime: '11:00',
-      location: 'Board Room',
-      attendees: ['Executive Team', 'Department Heads'],
-      description: 'Monthly management review of IMS performance',
-      status: 'upcoming',
-      priority: 'high'
-    },
-    {
-      id: 'EVT006',
-      title: 'Complaint Resolution Deadline',
-      type: 'deadline',
-      date: '2024-01-20',
-      description: 'SLA deadline for CMP-2024-0456',
-      status: 'upcoming',
-      priority: 'high',
-      relatedModule: 'Complaints',
-      relatedId: 'CMP-2024-0456'
-    }
-  ];
+  const events: CalendarEvent[] = [];
 
   const eventTypeStyles: Record<string, { variant: string }> = {
     audit: { variant: 'info' },
@@ -190,9 +110,9 @@ export default function CalendarView() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <Calendar className="w-8 h-8 text-primary" />
             </div>
-            {t('calendar.title')}
+            Calendar
           </h1>
-          <p className="text-muted-foreground mt-1">{t('calendar.subtitle')}</p>
+          <p className="text-muted-foreground mt-1">Audits, reviews, deadlines and events</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -203,7 +123,7 @@ export default function CalendarView() {
                 "p-2 rounded-md transition-all",
                 viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
-              title={t('calendar.month_view')}
+              title="Month View"
             >
               <Grid3X3 className="w-5 h-5" />
             </button>
@@ -213,7 +133,7 @@ export default function CalendarView() {
                 "p-2 rounded-md transition-all",
                 viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
-              title={t('calendar.list_view')}
+              title="List View"
             >
               <List className="w-5 h-5" />
             </button>
@@ -229,7 +149,7 @@ export default function CalendarView() {
           
           <Button>
             <Plus className="w-5 h-5" />
-            {t('calendar.add_event')}
+            Add Event
           </Button>
         </div>
       </div>
@@ -291,43 +211,42 @@ export default function CalendarView() {
                   const dayEvents = day ? getEventsForDate(day) : [];
                   const today = isToday(day || 0);
                   
-                  if (!day) {
-                    return <div key={index} className="min-h-[100px] p-2 rounded-lg transition-all" />;
-                  }
                   return (
                     <div
                       key={index}
                       className={cn(
-                        "min-h-[100px] p-2 rounded-lg transition-all bg-surface hover:bg-surface-hover cursor-pointer",
+                        "min-h-[100px] p-2 rounded-lg transition-all",
+                        day && "bg-surface hover:bg-surface-hover cursor-pointer",
                         today && "ring-2 ring-primary"
                       )}
-                      onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day)); } }}
-                      role="button"
-                      tabIndex={0}
+                      onClick={() => day && setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
                     >
-                      <span className={cn(
-                        "text-sm font-medium",
-                        today ? 'text-primary' : 'text-muted-foreground'
-                      )}>
-                        {day}
-                      </span>
-                      <div className="mt-1 space-y-1">
-                        {dayEvents.slice(0, 3).map((event) => (
-                          <Badge
-                            key={event.id}
-                            variant={eventTypeStyles[event.type].variant as any}
-                            className="text-[10px] truncate w-full justify-start"
-                          >
-                            {event.title}
-                          </Badge>
-                        ))}
-                        {dayEvents.length > 3 && (
-                          <span className="text-xs text-muted-foreground pl-1">
-                            {t('calendar.more', { count: dayEvents.length - 3 })}
+                      {day && (
+                        <>
+                          <span className={cn(
+                            "text-sm font-medium",
+                            today ? 'text-primary' : 'text-muted-foreground'
+                          )}>
+                            {day}
                           </span>
-                        )}
-                      </div>
+                          <div className="mt-1 space-y-1">
+                            {dayEvents.slice(0, 3).map((event) => (
+                              <Badge
+                                key={event.id}
+                                variant={eventTypeStyles[event.type].variant as any}
+                                className="text-[10px] truncate w-full justify-start"
+                              >
+                                {event.title}
+                              </Badge>
+                            ))}
+                            {dayEvents.length > 3 && (
+                              <span className="text-xs text-muted-foreground pl-1">
+                                +{dayEvents.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -399,7 +318,7 @@ export default function CalendarView() {
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
-            {t('calendar.upcoming')}
+            Upcoming
           </h3>
           
           <div className="space-y-4">
@@ -438,7 +357,7 @@ export default function CalendarView() {
 
           {/* Legend */}
           <div className="mt-6 pt-4 border-t border-border">
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">{t('calendar.event_types')}</h4>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">Event Types</h4>
             <div className="space-y-2">
               {Object.entries(eventTypeStyles).map(([type, styles]) => (
                 <div key={type} className="flex items-center gap-2 text-sm">

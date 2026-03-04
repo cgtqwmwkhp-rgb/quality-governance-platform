@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import {
   Search,
   ArrowLeft,
@@ -225,7 +224,6 @@ const ReportListItem = ({
 };
 
 export default function PortalTrack() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const { referenceNumber: urlRef } = useParams();
   const { user, isAuthenticated, platformToken } = usePortalAuth();
@@ -243,7 +241,6 @@ export default function PortalTrack() {
     if (isAuthenticated && user && platformToken) {
       loadMyReports();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user, platformToken]);
 
   // Load specific report from URL
@@ -344,32 +341,7 @@ export default function PortalTrack() {
         setError('Unable to fetch report. Please try again.');
       }
     } catch {
-      // Demo data for testing
-      const reportType = ref.startsWith('INC-') ? 'incident' 
-        : ref.startsWith('NM-') ? 'near_miss'
-        : ref.startsWith('COMP-') ? 'complaint'
-        : ref.startsWith('RTA-') ? 'rta'
-        : 'incident';
-      
-      const config = REPORT_TYPE_CONFIG[reportType];
-      
-      setSelectedReport({
-        reference_number: ref,
-        report_type: reportType,
-        title: `${config.label} Report`,
-        status: 'UNDER_INVESTIGATION',
-        status_label: '🔍 Under Investigation',
-        submitted_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-        priority: '🟡 Medium',
-        timeline: [
-          { date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), event: 'Report Submitted', icon: '📋' },
-          { date: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), event: 'Assigned to Safety Team', icon: '👤' },
-          { date: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), event: 'Investigation Started', icon: '🔍' },
-        ],
-        next_steps: 'A safety officer is reviewing the report. You will be notified when there is an update.',
-        assigned_to: 'Safety Team',
-      });
+      setError('Unable to connect to the server. Please try again later.');
     } finally {
       setIsSearching(false);
     }
@@ -449,22 +421,22 @@ export default function PortalTrack() {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-3 bg-surface rounded-xl">
                 <Calendar className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">{t('portal.submitted_label')}</p>
+                <p className="text-xs text-muted-foreground">Submitted</p>
                 <p className="text-sm text-foreground font-medium">
                   {new Date(selectedReport.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <Clock className="w-5 h-5 text-info mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">{t('portal.last_update')}</p>
+                <p className="text-xs text-muted-foreground">Last Update</p>
                 <p className="text-sm text-foreground font-medium">
                   {new Date(selectedReport.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <User className="w-5 h-5 text-success mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">{t('portal.assigned_to_label')}</p>
-                <p className="text-sm text-foreground font-medium">{selectedReport.assigned_to || t('portal.pending_label')}</p>
+                <p className="text-xs text-muted-foreground">Assigned To</p>
+                <p className="text-sm text-foreground font-medium">{selectedReport.assigned_to || 'Pending'}</p>
               </div>
             </div>
           </Card>
@@ -477,7 +449,7 @@ export default function PortalTrack() {
                   <Sparkles className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">{t('portal.whats_next')}</h3>
+                  <h3 className="font-semibold text-foreground mb-1">What's Next?</h3>
                   <p className="text-muted-foreground text-sm">{selectedReport.next_steps}</p>
                 </div>
               </div>
@@ -488,7 +460,7 @@ export default function PortalTrack() {
           <Card className="p-6">
             <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Clock className="w-5 h-5 text-info" />
-              {t('portal.activity_timeline')}
+              Activity Timeline
             </h3>
             <div className="pl-2">
               {selectedReport.timeline.map((event, index) => (
@@ -518,7 +490,7 @@ export default function PortalTrack() {
               className="flex-1"
             >
               <RefreshCw className="w-4 h-4" />
-              {t('portal.refresh_status')}
+              Refresh Status
             </Button>
             <Button
               variant="outline"
@@ -526,7 +498,7 @@ export default function PortalTrack() {
               className="flex-1"
             >
               <Share2 className="w-4 h-4" />
-              {t('portal.share_link')}
+              Share Link
             </Button>
           </div>
         </main>
@@ -548,7 +520,7 @@ export default function PortalTrack() {
           </button>
           <div className="flex items-center gap-2">
             <Search className="w-5 h-5 text-info" />
-            <span className="font-semibold text-foreground">{t('portal.track_reports')}</span>
+            <span className="font-semibold text-foreground">Track Reports</span>
           </div>
         </div>
       </header>
@@ -560,11 +532,11 @@ export default function PortalTrack() {
           <div className="inline-flex w-16 h-16 rounded-2xl gradient-brand items-center justify-center mb-4 shadow-glow">
             <FileText className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.your_reports')}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">Your Reports</h1>
           <p className="text-muted-foreground">
             {isAuthenticated 
-              ? t('portal.viewing_reports', { name: user?.name || user?.email })
-              : t('portal.sign_in_to_see')
+              ? `Viewing reports for ${user?.name || user?.email}`
+              : 'Sign in to see your submitted reports'
             }
           </p>
         </div>
@@ -575,22 +547,22 @@ export default function PortalTrack() {
             {isLoadingMyReports ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-                <p className="text-muted-foreground">{t('portal.loading_reports')}</p>
+                <p className="text-muted-foreground">Loading your reports...</p>
               </div>
             ) : error && myReports.length === 0 ? (
               <Card className="p-8 text-center border-destructive/20">
                 <div className="w-16 h-16 bg-destructive/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <XCircle className="w-8 h-8 text-destructive" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.unable_load_reports')}</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Unable to Load Reports</h3>
                 <p className="text-muted-foreground mb-4">{error}</p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button onClick={loadMyReports} variant="outline">
                     <RefreshCw className="w-4 h-4 mr-2" />
-                    {t('portal.try_again')}
+                    Try Again
                   </Button>
                   <Button onClick={() => navigate('/portal/login')}>
-                    {t('portal.sign_in_again')}
+                    Sign In Again
                   </Button>
                 </div>
               </Card>
@@ -610,16 +582,16 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <RefreshCw className="w-8 h-8 text-warning" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.session_refresh')}</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">Session Refresh Required</h3>
                 <p className="text-muted-foreground mb-4">
-                  {t('portal.session_refresh_message')}
+                  To view your reports, please sign out and sign back in.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button onClick={() => navigate('/portal/login')} variant="outline">
-                    {t('portal.sign_in_again')}
+                    Sign In Again
                   </Button>
                   <Button onClick={() => navigate('/portal/report')}>
-                    {t('portal.submit_report_btn')}
+                    Submit a Report
                   </Button>
                 </div>
               </Card>
@@ -628,12 +600,12 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.no_reports_yet')}</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">No Reports Yet</h3>
                 <p className="text-muted-foreground mb-4">
-                  {t('portal.no_reports_message')}
+                  You haven't submitted any reports yet.
                 </p>
                 <Button onClick={() => navigate('/portal/report')}>
-                  {t('portal.submit_report_btn')}
+                  Submit a Report
                 </Button>
               </Card>
             )}
@@ -646,7 +618,7 @@ export default function PortalTrack() {
             {isAuthenticated && (
               <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wide">{t('portal.or_search_ref')}</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">or search by reference</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
             )}
@@ -656,7 +628,7 @@ export default function PortalTrack() {
                 <div className="flex-1">
                   <Input
                     type="text"
-                    placeholder={t('portal.enter_reference')}
+                    placeholder="Enter reference number (e.g., INC-2026-0001)"
                     value={searchRef}
                     onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
                     className="font-mono text-base"
@@ -678,7 +650,7 @@ export default function PortalTrack() {
             {error && (
               <Card className="p-6 text-center border-destructive/20">
                 <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-foreground mb-2">{t('portal.not_found')}</h3>
+                <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
                 <p className="text-muted-foreground">{error}</p>
               </Card>
             )}
@@ -692,7 +664,7 @@ export default function PortalTrack() {
             className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2"
           >
             <Search className="w-4 h-4" />
-            {t('portal.search_another')}
+            Search for another report by reference number
           </button>
         )}
 
@@ -702,12 +674,12 @@ export default function PortalTrack() {
             <Card className="p-6 border-primary/20 bg-primary/5">
               <div className="text-center">
                 <User className="w-10 h-10 text-primary mx-auto mb-3" />
-                <h3 className="font-semibold text-foreground mb-2">{t('portal.sign_in_easier')}</h3>
+                <h3 className="font-semibold text-foreground mb-2">Sign in for easier access</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {t('portal.sign_in_microsoft_desc')}
+                  Sign in with Microsoft to automatically see all your submitted reports without entering reference numbers.
                 </p>
                 <Button onClick={() => navigate('/portal/login')}>
-                  {t('portal.sign_in_btn')}
+                  Sign In
                 </Button>
               </div>
             </Card>
@@ -718,7 +690,7 @@ export default function PortalTrack() {
         {!isAuthenticated && !error && !isSearching && (
           <div className="mt-8">
             <Card className="p-4 max-w-sm mx-auto">
-              <p className="text-xs text-muted-foreground mb-2 text-center">{t('portal.example_formats')}</p>
+              <p className="text-xs text-muted-foreground mb-2 text-center">Example formats:</p>
               <div className="flex flex-wrap gap-2 justify-center">
                 <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">INC-2026-0001</span>
                 <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">COMP-2026-0001</span>

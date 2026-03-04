@@ -9,7 +9,6 @@
  */
 
 import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   FileSignature,
   Plus,
@@ -84,102 +83,10 @@ const DigitalSignatures: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { t } = useTranslation();
 
-  // Mock data
-  const signatureRequests: SignatureRequest[] = [
-    {
-      id: 1,
-      referenceNumber: 'SIG-20260120-A1B2',
-      title: 'Safety Policy Acknowledgment',
-      description: 'Annual safety policy review and acknowledgment',
-      documentType: 'policy',
-      status: 'pending',
-      workflowType: 'sequential',
-      createdAt: new Date('2026-01-20'),
-      expiresAt: new Date('2026-02-19'),
-      signers: [
-        { id: 1, name: 'John Smith', email: 'john@example.com', role: 'Employee', order: 1, status: 'signed', signedAt: new Date() },
-        { id: 2, name: 'Sarah Johnson', email: 'sarah@example.com', role: 'Manager', order: 2, status: 'pending' },
-        { id: 3, name: 'Mike Wilson', email: 'mike@example.com', role: 'Director', order: 3, status: 'pending' },
-      ],
-    },
-    {
-      id: 2,
-      referenceNumber: 'SIG-20260119-C3D4',
-      title: 'Incident Investigation Report',
-      description: 'Final sign-off for incident INC-2026-045',
-      documentType: 'report',
-      status: 'completed',
-      workflowType: 'parallel',
-      createdAt: new Date('2026-01-19'),
-      expiresAt: new Date('2026-02-18'),
-      completedAt: new Date('2026-01-20'),
-      signers: [
-        { id: 4, name: 'Emily Brown', email: 'emily@example.com', role: 'Investigator', order: 1, status: 'signed', signedAt: new Date() },
-        { id: 5, name: 'David Lee', email: 'david@example.com', role: 'Safety Manager', order: 1, status: 'signed', signedAt: new Date() },
-      ],
-    },
-    {
-      id: 3,
-      referenceNumber: 'SIG-20260118-E5F6',
-      title: 'CAPA Closure Approval',
-      description: 'Approval to close corrective action CAPA-2025-122',
-      documentType: 'capa',
-      status: 'declined',
-      workflowType: 'sequential',
-      createdAt: new Date('2026-01-18'),
-      expiresAt: new Date('2026-02-17'),
-      signers: [
-        { id: 6, name: 'Alex Turner', email: 'alex@example.com', role: 'Quality Manager', order: 1, status: 'declined', declinedAt: new Date() },
-      ],
-    },
-  ];
-
-  const templates: SignatureTemplate[] = [
-    {
-      id: 1,
-      name: 'Policy Acknowledgment',
-      description: 'Standard template for policy sign-off',
-      signerRoles: [
-        { role: 'Employee', order: 1 },
-        { role: 'Manager', order: 2 },
-      ],
-      workflowType: 'sequential',
-      expiryDays: 30,
-    },
-    {
-      id: 2,
-      name: 'Audit Report Sign-off',
-      description: 'Audit report approval workflow',
-      signerRoles: [
-        { role: 'Auditor', order: 1 },
-        { role: 'Audit Manager', order: 2 },
-        { role: 'Director', order: 3 },
-      ],
-      workflowType: 'sequential',
-      expiryDays: 14,
-    },
-    {
-      id: 3,
-      name: 'Incident Closure',
-      description: 'Incident investigation closure approval',
-      signerRoles: [
-        { role: 'Investigator', order: 1 },
-        { role: 'Safety Manager', order: 1 },
-      ],
-      workflowType: 'parallel',
-      expiryDays: 7,
-    },
-  ];
-
-  const auditLog = [
-    { id: 1, action: 'created', actor: 'Admin User', time: new Date('2026-01-20T10:00:00'), details: 'Request created' },
-    { id: 2, action: 'sent', actor: 'System', time: new Date('2026-01-20T10:01:00'), details: 'Sent to signers' },
-    { id: 3, action: 'viewed', actor: 'John Smith', time: new Date('2026-01-20T10:15:00'), details: 'Document viewed', ip: '192.168.1.100' },
-    { id: 4, action: 'signed', actor: 'John Smith', time: new Date('2026-01-20T10:20:00'), details: 'Document signed', ip: '192.168.1.100' },
-    { id: 5, action: 'reminded', actor: 'System', time: new Date('2026-01-20T11:00:00'), details: 'Reminder sent to Sarah Johnson' },
-  ];
+  const signatureRequests: SignatureRequest[] = [];
+  const templates: SignatureTemplate[] = [];
+  const auditLog: { id: number; action: string; actor: string; time: Date; details: string; ip?: string }[] = [];
 
   const statusVariants: Record<string, 'default' | 'submitted' | 'in-progress' | 'resolved' | 'destructive'> = {
     draft: 'default',
@@ -224,15 +131,15 @@ const DigitalSignatures: React.FC = () => {
             <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
               <FileSignature className="w-8 h-8 text-primary-foreground" />
             </div>
-            {t('signatures.title')}
+            Digital Signatures
           </h1>
           <p className="text-muted-foreground mt-1">
-            {t('signatures.subtitle')}
+            Secure electronic signatures with legal compliance
           </p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="w-5 h-5" />
-          {t('signatures.new_request')}
+          New Request
         </Button>
       </div>
 
@@ -245,8 +152,8 @@ const DigitalSignatures: React.FC = () => {
                 <Clock className="w-6 h-6 text-warning" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t('signatures.pending')}</p>
-                <p className="text-2xl font-bold text-foreground">5</p>
+                <p className="text-sm text-muted-foreground">Pending</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'pending').length}</p>
               </div>
             </div>
           </CardContent>
@@ -258,8 +165,8 @@ const DigitalSignatures: React.FC = () => {
                 <Send className="w-6 h-6 text-info" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t('signatures.in_progress')}</p>
-                <p className="text-2xl font-bold text-foreground">3</p>
+                <p className="text-sm text-muted-foreground">In Progress</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'in_progress').length}</p>
               </div>
             </div>
           </CardContent>
@@ -271,8 +178,8 @@ const DigitalSignatures: React.FC = () => {
                 <CheckCircle className="w-6 h-6 text-success" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t('signatures.completed')}</p>
-                <p className="text-2xl font-bold text-foreground">47</p>
+                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'completed').length}</p>
               </div>
             </div>
           </CardContent>
@@ -284,8 +191,8 @@ const DigitalSignatures: React.FC = () => {
                 <FileText className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">{t('signatures.total_signatures')}</p>
-                <p className="text-2xl font-bold text-foreground">156</p>
+                <p className="text-sm text-muted-foreground">Total Signatures</p>
+                <p className="text-2xl font-bold text-foreground">{signatureRequests.reduce((sum, r) => sum + r.signers.length, 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -295,10 +202,10 @@ const DigitalSignatures: React.FC = () => {
       {/* Tabs */}
       <div className="flex gap-2 border-b border-border pb-2">
         {[
-          { id: 'requests', label: t('signatures.tab.requests'), icon: FileText },
-          { id: 'pending', label: t('signatures.tab.awaiting'), icon: PenTool },
-          { id: 'templates', label: t('signatures.tab.templates'), icon: FileSignature },
-          { id: 'audit', label: t('signatures.tab.audit_trail'), icon: History },
+          { id: 'requests', label: 'Requests', icon: FileText },
+          { id: 'pending', label: 'Awaiting My Signature', icon: PenTool },
+          { id: 'templates', label: 'Templates', icon: FileSignature },
+          { id: 'audit', label: 'Audit Trail', icon: History },
         ].map(tab => (
           <button
             key={tab.id}
@@ -325,7 +232,7 @@ const DigitalSignatures: React.FC = () => {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder={t('signatures.search_placeholder')}
+                placeholder="Search requests..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -333,16 +240,16 @@ const DigitalSignatures: React.FC = () => {
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-40">
-                <SelectValue placeholder={t('signatures.all_status')} />
+                <SelectValue placeholder="All Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('signatures.all_status')}</SelectItem>
-                <SelectItem value="draft">{t('common.draft')}</SelectItem>
-                <SelectItem value="pending">{t('common.pending')}</SelectItem>
-                <SelectItem value="in_progress">{t('common.in_progress')}</SelectItem>
-                <SelectItem value="completed">{t('common.completed')}</SelectItem>
-                <SelectItem value="declined">{t('signatures.declined')}</SelectItem>
-                <SelectItem value="expired">{t('signatures.expired')}</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="declined">Declined</SelectItem>
+                <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="secondary" size="sm">
@@ -352,6 +259,13 @@ const DigitalSignatures: React.FC = () => {
 
           {/* Requests List */}
           <div className="space-y-4">
+            {filteredRequests.length === 0 && (
+              <div className="text-center py-12">
+                <FileSignature className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No signature requests</h3>
+                <p className="text-muted-foreground">Create a new request to get started.</p>
+              </div>
+            )}
             {filteredRequests.map(request => (
               <Card key={request.id} className="hover:border-primary/50 transition-colors">
                 <CardContent className="p-5">
@@ -364,7 +278,7 @@ const DigitalSignatures: React.FC = () => {
                         <span className="text-sm text-muted-foreground">{request.referenceNumber}</span>
                         <span className="text-sm text-muted-foreground">•</span>
                         <span className="text-sm text-muted-foreground">
-                          {request.workflowType === 'sequential' ? t('signatures.sequential_signing') : t('signatures.parallel_signing')}
+                          {request.workflowType === 'sequential' ? 'Sequential' : 'Parallel'} signing
                         </span>
                       </div>
                       <h3 className="text-lg font-medium text-foreground mb-1">{request.title}</h3>
@@ -458,7 +372,7 @@ const DigitalSignatures: React.FC = () => {
                 <PenTool className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground">{t('signatures.documents_awaiting')}</h2>
+                <h2 className="text-xl font-semibold text-foreground">{signatureRequests.filter(r => r.status === 'pending' || r.status === 'in_progress').length} Documents Awaiting Your Signature</h2>
                 <p className="text-muted-foreground">Review and sign these documents to complete the approval process.</p>
               </div>
             </div>
@@ -496,11 +410,11 @@ const DigitalSignatures: React.FC = () => {
                       }}
                     >
                       <PenTool className="w-4 h-4" />
-                      {t('signatures.review_sign')}
+                      Review & Sign
                     </Button>
                     <Button variant="secondary">
                       <Eye className="w-4 h-4" />
-                      {t('signatures.view_document')}
+                      View Document
                     </Button>
                   </div>
                 </CardContent>
@@ -530,7 +444,7 @@ const DigitalSignatures: React.FC = () => {
                 )}
 
                 <div className="space-y-2 mb-4">
-                  <p className="text-xs text-muted-foreground uppercase">{t('signatures.signing_order')}</p>
+                  <p className="text-xs text-muted-foreground uppercase">Signing Order</p>
                   {template.signerRoles.map((role, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground">
@@ -546,7 +460,7 @@ const DigitalSignatures: React.FC = () => {
                     Expires in {template.expiryDays} days
                   </span>
                   <button className="flex items-center gap-1 text-primary hover:text-primary-hover text-sm transition-colors">
-                    {t('signatures.use_template')}
+                    Use Template
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -559,7 +473,7 @@ const DigitalSignatures: React.FC = () => {
             <div className="p-4 bg-muted rounded-full mb-4">
               <Plus className="w-8 h-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground">{t('signatures.create_template')}</p>
+            <p className="text-muted-foreground">Create New Template</p>
           </button>
         </div>
       )}
@@ -568,9 +482,16 @@ const DigitalSignatures: React.FC = () => {
       {activeTab === 'audit' && (
         <Card>
           <CardHeader>
-            <h3 className="text-lg font-medium text-foreground">{t('signatures.recent_activity')}</h3>
+            <h3 className="text-lg font-medium text-foreground">Recent Activity</h3>
           </CardHeader>
           <div className="divide-y divide-border">
+            {auditLog.length === 0 && (
+              <div className="text-center py-12">
+                <History className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">No audit activity</h3>
+                <p className="text-muted-foreground">Activity will appear here as signatures are processed.</p>
+              </div>
+            )}
             {auditLog.map(log => (
               <div key={log.id} className="p-4 hover:bg-muted/30 transition-colors">
                 <div className="flex items-start gap-4">
@@ -613,19 +534,19 @@ const DigitalSignatures: React.FC = () => {
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('signatures.create_request')}</DialogTitle>
+            <DialogTitle>Create Signature Request</DialogTitle>
           </DialogHeader>
-          <p className="text-muted-foreground mb-4">{t('signatures.create_description')}</p>
+          <p className="text-muted-foreground mb-4">Create a new document for signature collection.</p>
           <div className="text-center py-8">
             <FileSignature className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-muted-foreground">{t('signatures.coming_soon')}</p>
+            <p className="text-muted-foreground">Coming soon: Full document upload and signer configuration</p>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
-              {t('common.cancel')}
+              Cancel
             </Button>
             <Button onClick={() => setShowCreateModal(false)}>
-              {t('signatures.create')}
+              Create
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -655,7 +576,6 @@ const SigningModal: React.FC<{
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const { t } = useTranslation();
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -711,7 +631,7 @@ const SigningModal: React.FC<{
         <div className="p-6 border-b border-border">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-foreground">{t('signatures.sign_document')}</h2>
+              <h2 className="text-xl font-semibold text-foreground">Sign Document</h2>
               <p className="text-sm text-muted-foreground">{request.title}</p>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose}>
@@ -740,12 +660,12 @@ const SigningModal: React.FC<{
 
           {/* Signature Type Selection */}
           <div className="mb-6">
-            <p className="text-sm text-muted-foreground mb-3">{t('signatures.choose_how')}</p>
+            <p className="text-sm text-muted-foreground mb-3">Choose how to sign:</p>
             <div className="flex gap-3">
               {[
-                { id: 'draw', label: t('signatures.draw'), icon: PenTool },
-                { id: 'type', label: t('signatures.type_label'), icon: FileText },
-                { id: 'upload', label: t('signatures.upload'), icon: FileSignature },
+                { id: 'draw', label: 'Draw', icon: PenTool },
+                { id: 'type', label: 'Type', icon: FileText },
+                { id: 'upload', label: 'Upload', icon: FileSignature },
               ].map(option => (
                 <button
                   key={option.id}
@@ -769,9 +689,9 @@ const SigningModal: React.FC<{
             {signatureType === 'draw' && (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-muted-foreground">{t('signatures.draw_below')}</p>
+                  <p className="text-sm text-muted-foreground">Draw your signature below:</p>
                   <button onClick={clearCanvas} className="text-sm text-primary hover:text-primary-hover">
-                    {t('signatures.clear')}
+                    Clear
                   </button>
                 </div>
                 <canvas
@@ -789,12 +709,12 @@ const SigningModal: React.FC<{
             
             {signatureType === 'type' && (
               <div>
-                <p className="text-sm text-muted-foreground mb-2">{t('signatures.type_name')}</p>
+                <p className="text-sm text-muted-foreground mb-2">Type your name:</p>
                 <Input
                   type="text"
                   value={typedName}
                   onChange={(e) => setTypedName(e.target.value)}
-                  placeholder={t('signatures.type_placeholder')}
+                  placeholder="Enter your full name"
                 />
                 {typedName && (
                   <div className="mt-4 p-4 bg-white dark:bg-background rounded-lg">
@@ -807,10 +727,10 @@ const SigningModal: React.FC<{
             {signatureType === 'upload' && (
               <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                 <FileSignature className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-2">{t('signatures.drag_drop')}</p>
-                <p className="text-sm text-muted-foreground">{t('signatures.or')}</p>
+                <p className="text-muted-foreground mb-2">Drag and drop your signature image</p>
+                <p className="text-sm text-muted-foreground">or</p>
                 <Button variant="secondary" className="mt-2">
-                  {t('signatures.browse_files')}
+                  Browse Files
                 </Button>
               </div>
             )}
@@ -827,7 +747,9 @@ const SigningModal: React.FC<{
                 className="mt-1"
               />
               <label htmlFor="agree" className="text-sm text-foreground">
-                {t('signatures.legal_agreement')}
+                By signing this document electronically, I agree that my electronic signature is the legal 
+                equivalent of my manual signature. I consent to the use of electronic signatures, and I 
+                understand that I am legally bound by this agreement.
               </label>
             </div>
           </div>
@@ -836,26 +758,26 @@ const SigningModal: React.FC<{
           <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-success" />
-              <span>{t('signatures.encryption')}</span>
+              <span>256-bit encryption</span>
             </div>
             <div className="flex items-center gap-2">
               <MapPin className="w-4 h-4" />
-              <span>{t('signatures.location_recorded')}</span>
+              <span>Location recorded</span>
             </div>
             <div className="flex items-center gap-2">
               <Smartphone className="w-4 h-4" />
-              <span>{t('signatures.device_verified')}</span>
+              <span>Device verified</span>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex gap-3">
             <Button variant="secondary" onClick={onClose} className="flex-1">
-              {t('common.cancel')}
+              Cancel
             </Button>
             <Button onClick={handleSign} disabled={!agreedToTerms} className="flex-1">
               <CheckCircle className="w-5 h-5" />
-              {t('signatures.sign_document')}
+              Sign Document
             </Button>
           </div>
         </div>

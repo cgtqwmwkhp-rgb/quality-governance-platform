@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Shield,
@@ -21,6 +20,7 @@ import {
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { riskRegisterApi } from '../api/client'
 
 interface Risk {
   id: number
@@ -64,6 +64,15 @@ interface HeatMapData {
   impact_labels: Record<number, string>
 }
 
+const CATEGORIES = [
+  { id: 'strategic', label: 'Strategic', color: 'bg-primary' },
+  { id: 'operational', label: 'Operational', color: 'bg-info' },
+  { id: 'financial', label: 'Financial', color: 'bg-success' },
+  { id: 'compliance', label: 'Compliance', color: 'bg-warning' },
+  { id: 'reputational', label: 'Reputational', color: 'bg-destructive' },
+  { id: 'health_safety', label: 'Health & Safety', color: 'bg-destructive' },
+  { id: 'environmental', label: 'Environmental', color: 'bg-success' },
+]
 
 const TREATMENT_STRATEGIES = [
   { id: 'treat', label: 'Treat', icon: '🛠️' },
@@ -73,7 +82,6 @@ const TREATMENT_STRATEGIES = [
 ]
 
 export default function RiskRegister() {
-  const { t } = useTranslation()
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
@@ -89,166 +97,108 @@ export default function RiskRegister() {
   })
 
   useEffect(() => {
-    setTimeout(() => {
-      const mockRisks: Risk[] = [
-        {
-          id: 1,
-          reference: 'RISK-0001',
-          title: 'Supply chain disruption affecting critical components',
-          category: 'operational',
-          department: 'Operations',
-          inherent_score: 20,
-          residual_score: 12,
-          risk_level: 'high',
-          risk_color: 'hsl(var(--warning))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'John Smith',
-          next_review_date: '2026-03-15',
-        },
-        {
-          id: 2,
-          reference: 'RISK-0002',
-          title: 'Regulatory compliance failure - Environmental permits',
-          category: 'compliance',
-          department: 'QHSE',
-          inherent_score: 25,
-          residual_score: 15,
-          risk_level: 'high',
-          risk_color: 'hsl(var(--warning))',
-          treatment_strategy: 'treat',
-          status: 'treating',
-          is_within_appetite: false,
-          risk_owner_name: 'Sarah Johnson',
-          next_review_date: '2026-02-28',
-        },
-        {
-          id: 3,
-          reference: 'RISK-0003',
-          title: 'Key personnel departure without succession plan',
-          category: 'strategic',
-          department: 'HR',
-          inherent_score: 16,
-          residual_score: 8,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Mike Davis',
-          next_review_date: '2026-04-01',
-        },
-        {
-          id: 4,
-          reference: 'RISK-0004',
-          title: 'Cybersecurity breach leading to data loss',
-          category: 'technological',
-          department: 'IT',
-          inherent_score: 25,
-          residual_score: 9,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Alex Chen',
-          next_review_date: '2026-02-15',
-        },
-        {
-          id: 5,
-          reference: 'RISK-0005',
-          title: 'Workplace accident resulting in serious injury',
-          category: 'health_safety',
-          department: 'Operations',
-          inherent_score: 20,
-          residual_score: 6,
-          risk_level: 'medium',
-          risk_color: 'hsl(var(--info))',
-          treatment_strategy: 'treat',
-          status: 'monitoring',
-          is_within_appetite: true,
-          risk_owner_name: 'Emma Wilson',
-          next_review_date: '2026-03-01',
-        },
-      ]
+    loadRisks()
+  }, [])
 
-      setRisks(mockRisks)
+  const loadRisks = async () => {
+    setLoading(true)
+    try {
+      const [risksResponse, summaryResponse, heatmapResponse] = await Promise.all([
+        riskRegisterApi.list({ limit: 100 }),
+        riskRegisterApi.getSummary(),
+        riskRegisterApi.getHeatmap(),
+      ])
+
+      const apiRisks = risksResponse.data?.items ?? []
+      const mappedRisks: Risk[] = apiRisks.map((r) => {
+        const residual = r.residual_score ?? r.risk_score ?? 0
+        const inherent = r.inherent_score ?? r.risk_score ?? 0
+        let riskLevel = 'low'
+        let riskColor = 'hsl(var(--success))'
+        if (residual > 16) { riskLevel = 'critical'; riskColor = 'hsl(var(--destructive))' }
+        else if (residual > 9) { riskLevel = 'high'; riskColor = 'hsl(var(--warning))' }
+        else if (residual > 4) { riskLevel = 'medium'; riskColor = 'hsl(var(--info))' }
+
+        return {
+          id: r.id,
+          reference: r.title ? `RISK-${String(r.id).padStart(4, '0')}` : `RISK-${r.id}`,
+          title: r.title,
+          category: r.category ?? 'operational',
+          department: r.department ?? '',
+          inherent_score: inherent,
+          residual_score: residual,
+          risk_level: riskLevel,
+          risk_color: riskColor,
+          treatment_strategy: r.treatment_strategy ?? 'treat',
+          status: r.status ?? 'monitoring',
+          is_within_appetite: true,
+          risk_owner_name: r.risk_owner_name ?? r.risk_owner ?? '',
+          next_review_date: r.review_date ?? null,
+        }
+      })
+      setRisks(mappedRisks)
+
+      const s = summaryResponse.data
       setSummary({
-        total_risks: 5,
-        by_level: { critical: 0, high: 2, medium: 3, low: 0 },
-        outside_appetite: 1,
+        total_risks: s?.total_risks ?? mappedRisks.length,
+        by_level: {
+          critical: s?.critical ?? 0,
+          high: s?.high ?? 0,
+          medium: s?.medium ?? 0,
+          low: s?.low ?? 0,
+        },
+        outside_appetite: 0,
         overdue_review: 0,
         escalated: 0,
       })
 
-      const mockHeatMap: HeatMapData = {
+      const heatmap = heatmapResponse.data
+      const builtHeatMap: HeatMapData = {
         matrix: [],
         summary: {
-          total_risks: 5,
-          critical_risks: 0,
-          high_risks: 2,
-          outside_appetite: 1,
-          average_inherent_score: 21.2,
-          average_residual_score: 10.0,
+          total_risks: mappedRisks.length,
+          critical_risks: s?.critical ?? 0,
+          high_risks: s?.high ?? 0,
+          outside_appetite: 0,
+          average_inherent_score: mappedRisks.length > 0 ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length : 0,
+          average_residual_score: mappedRisks.length > 0 ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length : 0,
         },
-        likelihood_labels: {
-          1: 'Rare',
-          2: 'Unlikely',
-          3: 'Possible',
-          4: 'Likely',
-          5: 'Almost Certain',
-        },
-        impact_labels: {
-          1: 'Insignificant',
-          2: 'Minor',
-          3: 'Moderate',
-          4: 'Major',
-          5: 'Catastrophic',
-        },
+        likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
+        impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
       }
 
+      const heatmapCells = heatmap?.cells ?? []
       for (let likelihood = 5; likelihood >= 1; likelihood--) {
         const row: MatrixCell[] = []
         for (let impact = 1; impact <= 5; impact++) {
           const score = likelihood * impact
           let level = 'low'
           let color = 'hsl(var(--success))'
-          if (score > 16) {
-            level = 'critical'
-            color = 'hsl(var(--destructive))'
-          } else if (score > 9) {
-            level = 'high'
-            color = 'hsl(var(--warning))'
-          } else if (score > 4) {
-            level = 'medium'
-            color = 'hsl(var(--info))'
-          }
+          if (score > 16) { level = 'critical'; color = 'hsl(var(--destructive))' }
+          else if (score > 9) { level = 'high'; color = 'hsl(var(--warning))' }
+          else if (score > 4) { level = 'medium'; color = 'hsl(var(--info))' }
 
-          const cellRisks = mockRisks.filter(
-            (r) =>
-              Math.ceil(r.residual_score / 5) === likelihood &&
-              ((r.residual_score - 1) % 5) + 1 === impact
-          )
-
+          const apiCell = heatmapCells.find((c: any) => c.likelihood === likelihood && c.impact === impact)
           row.push({
             likelihood,
             impact,
             score,
             level,
             color,
-            risk_count: cellRisks.length,
-            risk_ids: cellRisks.map((r) => r.id),
-            risk_titles: cellRisks.map((r) => r.title.substring(0, 30)),
+            risk_count: apiCell?.count ?? 0,
+            risk_ids: apiCell?.risks?.map((r: any) => r.id) ?? [],
+            risk_titles: apiCell?.risks?.map((r: any) => (r.title ?? '').substring(0, 30)) ?? [],
           })
         }
-        mockHeatMap.matrix.push(row)
+        builtHeatMap.matrix.push(row)
       }
-
-      setHeatMapData(mockHeatMap)
+      setHeatMapData(builtHeatMap)
+    } catch (err) {
+      console.error('Failed to load risk register data:', err)
+    } finally {
       setLoading(false)
-    }, 500)
-  }, [])
+    }
+  }
 
   const getRiskLevelBadge = (level: string) => {
     const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {
@@ -259,7 +209,7 @@ export default function RiskRegister() {
     }
     return (
       <Badge variant={variants[level] || 'default'} className="uppercase">
-        {t(`risk_register.level_${level}`)}
+        {level}
       </Badge>
     )
   }
@@ -268,7 +218,7 @@ export default function RiskRegister() {
     const s = TREATMENT_STRATEGIES.find((t) => t.id === strategy)
     return (
       <span className="px-2 py-1 bg-muted rounded-full text-xs">
-        {s?.icon} {s ? t(`risk_register.treatment.${s.id}`) : ''}
+        {s?.icon} {s?.label}
       </span>
     )
   }
@@ -286,21 +236,21 @@ export default function RiskRegister() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">{t('risk_register.title')}</h1>
-          <p className="text-muted-foreground">{t('risk_register.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
+          <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
             <Filter className="w-4 h-4" />
-            {t('risk_register.filters')}
+            Filters
           </Button>
           <Button variant="secondary">
             <Download className="w-4 h-4" />
-            {t('export')}
+            Export
           </Button>
           <Button>
             <Plus className="w-4 h-4" />
-            {t('risk_register.add_risk')}
+            Add Risk
           </Button>
         </div>
       </div>
@@ -315,7 +265,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-foreground">{summary.total_risks}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risk_register.total_risks')}</p>
+            <p className="text-sm text-muted-foreground">Total Risks</p>
           </CardContent>
         </Card>
 
@@ -327,7 +277,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-destructive">{summary.by_level.critical}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risks.stats.critical_risks')}</p>
+            <p className="text-sm text-muted-foreground">Critical</p>
           </CardContent>
         </Card>
 
@@ -339,7 +289,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-warning">{summary.by_level.high}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risks.stats.high_risks')}</p>
+            <p className="text-sm text-muted-foreground">High</p>
           </CardContent>
         </Card>
 
@@ -351,7 +301,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-info">{summary.by_level.medium}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risks.stats.medium_risks')}</p>
+            <p className="text-sm text-muted-foreground">Medium</p>
           </CardContent>
         </Card>
 
@@ -363,7 +313,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-primary">{summary.outside_appetite}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risk_register.outside_appetite')}</p>
+            <p className="text-sm text-muted-foreground">Outside Appetite</p>
           </CardContent>
         </Card>
 
@@ -375,7 +325,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-foreground">{summary.overdue_review}</span>
             </div>
-            <p className="text-sm text-muted-foreground">{t('risk_register.overdue_review')}</p>
+            <p className="text-sm text-muted-foreground">Overdue Review</p>
           </CardContent>
         </Card>
       </div>
@@ -387,21 +337,21 @@ export default function RiskRegister() {
           onClick={() => setView('register')}
         >
           <Layers className="w-4 h-4" />
-          {t('risks.title')}
+          Risk Register
         </Button>
         <Button
           variant={view === 'heatmap' ? 'default' : 'secondary'}
           onClick={() => setView('heatmap')}
         >
           <BarChart3 className="w-4 h-4" />
-          {t('risk_register.heatmap')}
+          Heat Map
         </Button>
         <Button
           variant={view === 'bowtie' ? 'default' : 'secondary'}
           onClick={() => setView('bowtie')}
         >
           <GitBranch className="w-4 h-4" />
-          {t('risk_register.bowtie')}
+          Bow-Tie Analysis
         </Button>
       </div>
 
@@ -413,35 +363,42 @@ export default function RiskRegister() {
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risks.table.reference')}
+                    Reference
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risks.table.risk')}
+                    Risk Title
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risks.table.category')}
+                    Category
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risk_register.table.inherent')}
+                    Inherent
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risk_register.table.residual')}
+                    Residual
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risk_register.table.level')}
+                    Level
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risks.table.treatment')}
+                    Treatment
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risk_register.table.owner')}
+                    Owner
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    {t('risk_register.table.actions')}
+                    Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
+                {risks.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-12 text-muted-foreground">
+                      No risks found in the register
+                    </td>
+                  </tr>
+                )}
                 {risks.map((risk) => (
                   <tr
                     key={risk.id}
@@ -454,14 +411,14 @@ export default function RiskRegister() {
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {!risk.is_within_appetite && (
-                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title={t('risk_register.outside_risk_appetite')}></span>
+                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title="Outside Risk Appetite"></span>
                         )}
                         <span className="text-foreground">{risk.title}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <Badge variant="default">
-                        {t(`risk_register.category.${risk.category}`)}
+                        {CATEGORIES.find((c) => c.id === risk.category)?.label || risk.category}
                       </Badge>
                     </td>
                     <td className="px-4 py-4 text-center">
@@ -504,7 +461,7 @@ export default function RiskRegister() {
       {view === 'heatmap' && heatMapData && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">{t('risk_register.heatmap_title')}</h2>
+            <h2 className="text-xl font-bold mb-6 text-foreground">5×5 Risk Heat Map (Residual Risk)</h2>
 
             <div className="flex gap-8">
               {/* Matrix */}
@@ -516,7 +473,7 @@ export default function RiskRegister() {
                       className="text-muted-foreground text-sm font-medium"
                       style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                     >
-                      {t('risk_register.likelihood')}
+                      LIKELIHOOD →
                     </span>
                   </div>
 
@@ -552,7 +509,7 @@ export default function RiskRegister() {
                             <span className="text-white font-bold text-lg">{cell.score}</span>
                             {cell.risk_count > 0 && (
                               <span className="text-white/80 text-xs">
-                                ({t('risk_register.n_risks', { count: cell.risk_count })})
+                                ({cell.risk_count} risk{cell.risk_count > 1 ? 's' : ''})
                               </span>
                             )}
                           </div>
@@ -562,7 +519,7 @@ export default function RiskRegister() {
 
                     {/* X-axis label */}
                     <div className="text-center mt-4 text-muted-foreground text-sm font-medium">
-                      {t('risk_register.impact')}
+                      IMPACT →
                     </div>
                   </div>
                 </div>
@@ -572,23 +529,23 @@ export default function RiskRegister() {
               <div className="w-64 space-y-4">
                 <Card>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">{t('risk_register.risk_levels')}</h3>
+                    <h3 className="font-semibold text-foreground mb-3">Risk Levels</h3>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-destructive"></div>
-                        <span className="text-sm text-foreground">{t('risk_register.level_critical')}</span>
+                        <span className="text-sm text-foreground">Critical (17-25)</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-warning"></div>
-                        <span className="text-sm text-foreground">{t('risk_register.level_high')}</span>
+                        <span className="text-sm text-foreground">High (10-16)</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-info"></div>
-                        <span className="text-sm text-foreground">{t('risk_register.level_medium')}</span>
+                        <span className="text-sm text-foreground">Medium (5-9)</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-success"></div>
-                        <span className="text-sm text-foreground">{t('risk_register.level_low')}</span>
+                        <span className="text-sm text-foreground">Low (1-4)</span>
                       </div>
                     </div>
                   </CardContent>
@@ -596,26 +553,26 @@ export default function RiskRegister() {
 
                 <Card>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">{t('risk_register.summary')}</h3>
+                    <h3 className="font-semibold text-foreground mb-3">Summary</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">{t('risk_register.total_risks')}</span>
+                        <span className="text-muted-foreground">Total Risks</span>
                         <span className="font-bold text-foreground">{heatMapData.summary.total_risks}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">{t('risk_register.avg_inherent')}</span>
+                        <span className="text-muted-foreground">Avg Inherent</span>
                         <span className="font-bold text-muted-foreground">
                           {(heatMapData.summary?.average_inherent_score ?? 0).toFixed(1)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">{t('risk_register.avg_residual')}</span>
+                        <span className="text-muted-foreground">Avg Residual</span>
                         <span className="font-bold text-success">
                           {(heatMapData.summary?.average_residual_score ?? 0).toFixed(1)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">{t('risk_register.risk_reduction')}</span>
+                        <span className="text-muted-foreground">Risk Reduction</span>
                         <span className="font-bold text-success">
                           {(
                             heatMapData.summary?.average_inherent_score
@@ -641,7 +598,7 @@ export default function RiskRegister() {
       {view === 'bowtie' && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">{t('risk_register.bowtie')}</h2>
+            <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>
 
             {selectedRisk ? (
               <div className="relative">
@@ -649,9 +606,9 @@ export default function RiskRegister() {
                 <div className="flex items-center justify-center gap-4">
                   {/* Causes (Left Side) */}
                   <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-destructive mb-4">{t('risk_register.causes')}</h3>
+                    <h3 className="text-center font-semibold text-destructive mb-4">CAUSES</h3>
                     <div className="space-y-2">
-                      {[t('risk_register.bowtie.equipment_failure'), t('risk_register.bowtie.human_error'), t('risk_register.bowtie.process_breakdown')].map((cause, i) => (
+                      {['Equipment failure', 'Human error', 'Process breakdown'].map((cause, i) => (
                         <div
                           key={i}
                           className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center text-sm text-destructive"
@@ -666,7 +623,7 @@ export default function RiskRegister() {
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-destructive to-warning"></div>
                     <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
-                      {t('risk_register.prevention')}
+                      Prevention
                     </div>
                   </div>
 
@@ -677,7 +634,7 @@ export default function RiskRegister() {
                       <span className="font-bold text-foreground text-sm">{selectedRisk.title.substring(0, 50)}...</span>
                       <div className="mt-2">
                         <Badge variant="warning">
-                          {t('risk_register.score')}: {selectedRisk.residual_score}
+                          Score: {selectedRisk.residual_score}
                         </Badge>
                       </div>
                     </div>
@@ -687,15 +644,15 @@ export default function RiskRegister() {
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-warning to-info"></div>
                     <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
-                      {t('risk_register.mitigation')}
+                      Mitigation
                     </div>
                   </div>
 
                   {/* Consequences (Right Side) */}
                   <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-info mb-4">{t('risk_register.consequences')}</h3>
+                    <h3 className="text-center font-semibold text-info mb-4">CONSEQUENCES</h3>
                     <div className="space-y-2">
-                      {[t('risk_register.bowtie.financial_loss'), t('risk_register.bowtie.reputational_damage'), t('risk_register.bowtie.regulatory_penalty')].map((consequence, i) => (
+                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map((consequence, i) => (
                         <div
                           key={i}
                           className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
@@ -713,20 +670,20 @@ export default function RiskRegister() {
                     <CardContent className="p-4">
                       <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
                         <Shield className="w-4 h-4" />
-                        {t('risk_register.prevention_controls')}
+                        Prevention Controls
                       </h4>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.preventive_maintenance')}</span>
+                          <span className="text-sm text-foreground">Preventive maintenance program</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.training_competency')}</span>
+                          <span className="text-sm text-foreground">Training and competency assessments</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.procedure_documentation')}</span>
+                          <span className="text-sm text-foreground">Procedure documentation</span>
                         </div>
                       </div>
                     </CardContent>
@@ -736,20 +693,20 @@ export default function RiskRegister() {
                     <CardContent className="p-4">
                       <h4 className="font-semibold text-info mb-3 flex items-center gap-2">
                         <Zap className="w-4 h-4" />
-                        {t('risk_register.mitigation_controls')}
+                        Mitigation Controls
                       </h4>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.emergency_response')}</span>
+                          <span className="text-sm text-foreground">Emergency response plan</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.insurance_coverage')}</span>
+                          <span className="text-sm text-foreground">Insurance coverage</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">{t('risk_register.bowtie.communication_protocols')}</span>
+                          <span className="text-sm text-foreground">Communication protocols</span>
                         </div>
                       </div>
                     </CardContent>
@@ -759,9 +716,9 @@ export default function RiskRegister() {
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>{t('risk_register.bowtie_empty')}</p>
+                <p>Select a risk from the register to view its Bow-Tie analysis</p>
                 <Button onClick={() => setView('register')} className="mt-4">
-                  {t('risk_register.go_to_register')}
+                  Go to Risk Register
                 </Button>
               </div>
             )}

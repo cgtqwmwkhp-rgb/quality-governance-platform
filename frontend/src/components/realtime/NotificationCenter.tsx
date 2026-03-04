@@ -53,75 +53,21 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Mock notifications for demonstration
+  // Fetch notifications from API
   useEffect(() => {
-    const mockNotifications: Notification[] = [
-      {
-        id: 1,
-        type: 'sos_alert',
-        priority: 'critical',
-        title: '🚨 EMERGENCY SOS ALERT',
-        message: 'John Smith triggered SOS at Site A - Warehouse 3',
-        entity_type: 'sos',
-        entity_id: 'SOS-001',
-        action_url: '/incidents/SOS-001',
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 2).toISOString(), // 2 min ago
-      },
-      {
-        id: 2,
-        type: 'mention',
-        priority: 'medium',
-        title: 'You were mentioned',
-        message: '@You Can you review the risk assessment for this incident?',
-        entity_type: 'incident',
-        entity_id: 'INC-042',
-        action_url: '/incidents/INC-042',
-        sender_name: 'Jane Doe',
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 min ago
-      },
-      {
-        id: 3,
-        type: 'assignment',
-        priority: 'high',
-        title: 'New action assigned',
-        message: 'Complete safety training documentation by Friday',
-        entity_type: 'action',
-        entity_id: 'ACT-128',
-        action_url: '/actions/ACT-128',
-        sender_name: 'Bob Wilson',
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(), // 1 hour ago
-      },
-      {
-        id: 4,
-        type: 'action_due_soon',
-        priority: 'medium',
-        title: 'Action due tomorrow',
-        message: 'Update fire extinguisher inspection records',
-        entity_type: 'action',
-        entity_id: 'ACT-115',
-        action_url: '/actions/ACT-115',
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), // 3 hours ago
-      },
-      {
-        id: 5,
-        type: 'audit_completed',
-        priority: 'low',
-        title: 'Audit completed',
-        message: 'ISO 9001 Q4 Audit has been completed. Score: 94%',
-        entity_type: 'audit',
-        entity_id: 'AUD-089',
-        action_url: '/audits/AUD-089',
-        is_read: true,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-      },
-    ];
-
-    setNotifications(mockNotifications);
-    setUnreadCount(mockNotifications.filter(n => !n.is_read).length);
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch('/api/v1/notifications/');
+        if (response.ok) {
+          const data: Notification[] = await response.json();
+          setNotifications(data);
+          setUnreadCount(data.filter(n => !n.is_read).length);
+        }
+      } catch (err) {
+        console.error('Failed to fetch notifications:', err);
+      }
+    };
+    fetchNotifications();
   }, []);
 
   // Close dropdown when clicking outside
@@ -139,7 +85,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
   // WebSocket connection for real-time updates
   useEffect(() => {
     // TODO: Connect to WebSocket for real-time notifications
-    // const ws = new WebSocket(`ws://localhost:8000/api/v1/realtime/ws/${userId}`);
+    // const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/v1/realtime/ws/${userId}`);
     // ws.onmessage = (event) => {
     //   const data = JSON.parse(event.data);
     //   if (data.type === 'notification') {
@@ -147,6 +94,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     //     setUnreadCount(prev => prev + 1);
     //   }
     // };
+    // return () => ws.close();
   }, []);
 
   const getNotificationIcon = (type: string, priority: string) => {
@@ -293,9 +241,6 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                   <div
                     key={notification.id}
                     onClick={() => handleNotificationClick(notification)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNotificationClick(notification); } }}
-                    role="button"
-                    tabIndex={0}
                     className={`
                       p-4 cursor-pointer transition-all duration-200 
                       hover:bg-slate-700/50 group

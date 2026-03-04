@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Save,
   Settings,
@@ -75,20 +74,20 @@ const SETTING_CATEGORIES: SettingCategory[] = [
 
 const INITIAL_SETTINGS: Setting[] = [
   // Branding
-  { key: 'company_name', value: 'Plantexpand Ltd', category: 'branding', description: 'Company name displayed throughout the system', value_type: 'string', is_editable: true },
+  { key: 'company_name', value: '', category: 'branding', description: 'Company name displayed throughout the system', value_type: 'string', is_editable: true },
   { key: 'company_logo_url', value: '', category: 'branding', description: 'URL to company logo image', value_type: 'string', is_editable: true },
-  { key: 'primary_color', value: '#9BB82D', category: 'branding', description: 'Primary brand color (Electric Lime)', value_type: 'color', is_editable: true },
-  { key: 'accent_color', value: '#7A9424', category: 'branding', description: 'Accent/hover color', value_type: 'color', is_editable: true },
+  { key: 'primary_color', value: '#000000', category: 'branding', description: 'Primary brand color', value_type: 'color', is_editable: true },
+  { key: 'accent_color', value: '#000000', category: 'branding', description: 'Accent/hover color', value_type: 'color', is_editable: true },
   
   // Contact
-  { key: 'support_email', value: 'support@plantexpand.com', category: 'contact', description: 'Support email address', value_type: 'email', is_editable: true },
-  { key: 'support_phone', value: '+44 1onal 234 567', category: 'contact', description: 'Support phone number', value_type: 'string', is_editable: true },
-  { key: 'emergency_phone', value: '+44 999', category: 'contact', description: 'Emergency contact number', value_type: 'string', is_editable: true },
+  { key: 'support_email', value: '', category: 'contact', description: 'Support email address', value_type: 'email', is_editable: true },
+  { key: 'support_phone', value: '', category: 'contact', description: 'Support phone number', value_type: 'string', is_editable: true },
+  { key: 'emergency_phone', value: '', category: 'contact', description: 'Emergency contact number', value_type: 'string', is_editable: true },
   
   // Notifications
-  { key: 'incident_notification_emails', value: 'safety@plantexpand.com', category: 'notifications', description: 'Emails notified on incident submission', value_type: 'string', is_editable: true },
-  { key: 'complaint_notification_emails', value: 'quality@plantexpand.com', category: 'notifications', description: 'Emails notified on complaint submission', value_type: 'string', is_editable: true },
-  { key: 'rta_notification_emails', value: 'fleet@plantexpand.com, safety@plantexpand.com', category: 'notifications', description: 'Emails notified on RTA submission', value_type: 'string', is_editable: true },
+  { key: 'incident_notification_emails', value: '', category: 'notifications', description: 'Emails notified on incident submission', value_type: 'string', is_editable: true },
+  { key: 'complaint_notification_emails', value: '', category: 'notifications', description: 'Emails notified on complaint submission', value_type: 'string', is_editable: true },
+  { key: 'rta_notification_emails', value: '', category: 'notifications', description: 'Emails notified on RTA submission', value_type: 'string', is_editable: true },
   { key: 'enable_email_notifications', value: 'true', category: 'notifications', description: 'Enable email notifications', value_type: 'boolean', is_editable: true },
   { key: 'enable_push_notifications', value: 'true', category: 'notifications', description: 'Enable push notifications', value_type: 'boolean', is_editable: true },
   
@@ -110,7 +109,6 @@ const INITIAL_SETTINGS: Setting[] = [
 ];
 
 export default function SystemSettings() {
-  const { t } = useTranslation();
   const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS);
   const [activeCategory, setActiveCategory] = useState('branding');
   const [isSaving, setIsSaving] = useState(false);
@@ -138,7 +136,7 @@ export default function SystemSettings() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
       console.error('Failed to save settings');
-      setSaveError(t('admin.settings.save_error'));
+      setSaveError('Failed to save settings. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -250,9 +248,9 @@ export default function SystemSettings() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">{t('admin.settings.title')}</h1>
+              <h1 className="text-2xl font-bold text-foreground">System Settings</h1>
               <p className="text-muted-foreground mt-1">
-                {t('admin.settings.subtitle')}
+                Configure system-wide settings and preferences
               </p>
             </div>
             <div className="flex flex-col items-end">
@@ -264,10 +262,10 @@ export default function SystemSettings() {
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                {saveSuccess ? t('admin.settings.saved') : t('admin.settings.save_changes')}
+                {saveSuccess ? 'Saved!' : 'Save Changes'}
               </Button>
               {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
-              {saveSuccess && <p className="text-sm text-green-600 mt-2">{t('admin.settings.save_success')}</p>}
+              {saveSuccess && <p className="text-sm text-green-600 mt-2">Settings saved successfully</p>}
             </div>
           </div>
         </div>
@@ -355,7 +353,7 @@ export default function SystemSettings() {
                 {categorySettings.length === 0 && (
                   <div className="text-center py-12 text-muted-foreground">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>{t('admin.settings.no_settings')}</p>
+                    <p>No settings in this category</p>
                   </div>
                 )}
               </div>

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Search,
   X,
@@ -45,7 +44,6 @@ interface SearchFilter {
 }
 
 export default function GlobalSearch() {
-  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -55,83 +53,10 @@ export default function GlobalSearch() {
     status: [],
     dateRange: 'all'
   });
-  const [searchHistory, setSearchHistory] = useState<string[]>([
-    'safety incident report',
-    'overdue actions',
-    'ISO 9001 audit',
-    'vehicle collision',
-    'customer complaint'
-  ]);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const mockResults: SearchResult[] = [
-    {
-      id: 'INC-2024-0847',
-      type: 'incident',
-      title: 'Workplace Safety Incident - Warehouse Zone B',
-      description: 'Employee reported slip hazard near loading dock area. Immediate action required.',
-      module: 'Incidents',
-      status: 'Open',
-      date: '2024-01-15',
-      relevance: 98,
-      highlights: ['safety', 'incident', 'warehouse']
-    },
-    {
-      id: 'RTA-2024-0234',
-      type: 'rta',
-      title: 'Vehicle Collision - Fleet Vehicle PLT-001',
-      description: 'Minor collision reported at customer site. No injuries. Vehicle damage assessment pending.',
-      module: 'RTAs',
-      status: 'Under Investigation',
-      date: '2024-01-14',
-      relevance: 92,
-      highlights: ['vehicle', 'collision', 'fleet']
-    },
-    {
-      id: 'CMP-2024-0456',
-      type: 'complaint',
-      title: 'Customer Service Response Time',
-      description: 'Customer complained about delayed response to service request. SLA breach identified.',
-      module: 'Complaints',
-      status: 'In Progress',
-      date: '2024-01-13',
-      relevance: 85,
-      highlights: ['customer', 'service', 'response']
-    },
-    {
-      id: 'RSK-2024-0089',
-      type: 'risk',
-      title: 'Supply Chain Disruption Risk',
-      description: 'High risk identified for Q2 supply chain delays. Mitigation measures being implemented.',
-      module: 'Risks',
-      status: 'Monitoring',
-      date: '2024-01-12',
-      relevance: 78,
-      highlights: ['supply', 'chain', 'risk']
-    },
-    {
-      id: 'AUD-2024-0156',
-      type: 'audit',
-      title: 'ISO 9001:2015 Internal Audit',
-      description: 'Scheduled internal audit for quality management system compliance verification.',
-      module: 'Audits',
-      status: 'Scheduled',
-      date: '2024-01-20',
-      relevance: 72,
-      highlights: ['ISO', 'audit', 'quality']
-    },
-    {
-      id: 'ACT-2024-0523',
-      type: 'action',
-      title: 'Update Emergency Procedures',
-      description: 'Action item to update emergency evacuation procedures following safety review.',
-      module: 'Actions',
-      status: 'Overdue',
-      date: '2024-01-10',
-      relevance: 65,
-      highlights: ['emergency', 'procedures', 'safety']
-    }
-  ];
+  const mockResults: SearchResult[] = [];
 
   const moduleIcons: Record<string, React.ReactNode> = {
     'Incidents': <AlertTriangle className="w-5 h-5" />,
@@ -217,9 +142,9 @@ export default function GlobalSearch() {
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-foreground mb-3 flex items-center justify-center gap-3">
           <Search className="w-10 h-10 text-primary" />
-          {t('global_search.title')}
+          Global Search
         </h1>
-        <p className="text-muted-foreground text-lg">{t('global_search.subtitle')}</p>
+        <p className="text-muted-foreground text-lg">Search across all modules instantly</p>
         <p className="text-sm text-muted-foreground mt-2 flex items-center justify-center gap-2">
           <Command className="w-4 h-4" /> + K to open from anywhere
         </p>
@@ -242,7 +167,7 @@ export default function GlobalSearch() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={t('global_search.placeholder')}
+            placeholder="Search incidents, RTAs, complaints, risks, audits, actions, documents..."
             className="w-full pl-14 pr-32 py-5 text-lg rounded-2xl"
           />
           
@@ -262,7 +187,7 @@ export default function GlobalSearch() {
             </Button>
             
             <Button onClick={handleSearch}>
-              {t('global_search.search')}
+              Search
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
@@ -355,31 +280,35 @@ export default function GlobalSearch() {
       {/* Search History / Suggestions */}
       {!results.length && !query && (
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-center gap-2 text-muted-foreground mb-4">
-            <History className="w-5 h-5" />
-            <span className="font-medium">{t('global_search.recent_searches')}</span>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {searchHistory.map((term, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setQuery(term);
-                  handleSearch();
-                }}
-                className="px-4 py-2 bg-card border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-all flex items-center gap-2"
-              >
-                <Clock className="w-4 h-4 text-muted-foreground" />
-                {term}
-              </button>
-            ))}
-          </div>
+          {searchHistory.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                <History className="w-5 h-5" />
+                <span className="font-medium">Recent Searches</span>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {searchHistory.map((term, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setQuery(term);
+                      handleSearch();
+                    }}
+                    className="px-4 py-2 bg-card border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-all flex items-center gap-2"
+                  >
+                    <Clock className="w-4 h-4 text-muted-foreground" />
+                    {term}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           
           {/* AI Suggestions */}
           <div className="mt-8 p-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
               <Sparkles className="w-6 h-6 text-primary" />
-              <span className="font-semibold text-foreground">{t('global_search.ai_suggestions')}</span>
+              <span className="font-semibold text-foreground">AI-Powered Suggestions</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
@@ -476,7 +405,7 @@ export default function GlobalSearch() {
           <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-xl font-semibold text-foreground mb-2">{t('global_search.no_results')}</h3>
+          <h3 className="text-xl font-semibold text-foreground mb-2">No results found</h3>
           <p className="text-muted-foreground">
             Try different keywords or adjust your filters
           </p>

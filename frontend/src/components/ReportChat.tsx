@@ -248,7 +248,6 @@ export default function ReportChat({
   // Load messages
   useEffect(() => {
     loadMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceNumber]);
 
   // Scroll to bottom on new messages
@@ -259,67 +258,16 @@ export default function ReportChat({
   const loadMessages = async () => {
     setIsLoading(true);
     try {
-      // In production, this would call the API
-      // const response = await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`);
-      
-      // Demo data
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const demoMessages: Message[] = [
-        {
-          id: '1',
-          content: 'Thank you for submitting this report. I\'ve been assigned to investigate. Could you please provide more details about the exact location where this occurred?',
-          sender: 'officer',
-          senderName: officerName,
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          attachments: [],
-          isRead: true,
-          isDelivered: true,
-        },
-        {
-          id: '2',
-          content: 'It happened near the main warehouse entrance, by the loading bay 3. I can send you a photo of the exact spot.',
-          sender: 'reporter',
-          senderName: reporterName,
-          timestamp: new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString(),
-          attachments: [],
-          isRead: true,
-          isDelivered: true,
-        },
-        {
-          id: '3',
-          content: 'Here\'s a photo of the area.',
-          sender: 'reporter',
-          senderName: reporterName,
-          timestamp: new Date(Date.now() - 22.5 * 60 * 60 * 1000).toISOString(),
-          attachments: [
-            {
-              id: 'att1',
-              name: 'location-photo.jpg',
-              type: 'image',
-              url: 'https://placehold.co/400x300/e2e8f0/64748b?text=Location+Photo',
-              size: 245000,
-              mimeType: 'image/jpeg',
-            },
-          ],
-          isRead: true,
-          isDelivered: true,
-        },
-        {
-          id: '4',
-          content: 'Thank you, that\'s very helpful. I\'ll be conducting a site visit tomorrow morning. Were there any witnesses present at the time?',
-          sender: 'officer',
-          senderName: officerName,
-          timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-          attachments: [],
-          isRead: true,
-          isDelivered: true,
-        },
-      ];
-      
-      setMessages(demoMessages);
+      const response = await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`);
+      if (response.ok) {
+        const data: Message[] = await response.json();
+        setMessages(data);
+      } else {
+        setMessages([]);
+      }
     } catch (err) {
       console.error('Failed to load messages:', err);
+      setMessages([]);
     } finally {
       setIsLoading(false);
     }

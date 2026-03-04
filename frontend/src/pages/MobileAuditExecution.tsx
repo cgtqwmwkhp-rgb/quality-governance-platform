@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   ArrowRight,
@@ -31,6 +30,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Send,
+  ClipboardCheck,
 } from 'lucide-react';
 
 // ============================================================================
@@ -82,154 +82,17 @@ interface AuditSection {
   questions: AuditQuestion[];
 }
 
-// Mock audit data
-const MOCK_AUDIT = {
-  id: 'audit-001',
-  templateName: 'Vehicle Pre-Departure Inspection',
-  location: 'Depot A - Main Yard',
-  asset: 'LD24VLP',
-  sections: [
-    {
-      id: 'sec-1',
-      title: 'Exterior Checks',
-      description: 'Visual inspection of vehicle exterior',
-      color: 'from-blue-500 to-cyan-500',
-      questions: [
-        {
-          id: 'q-1-1',
-          text: 'Are all lights working correctly?',
-          description: 'Headlights, indicators, brake lights, hazards',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Turn on ignition and test each light function.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-2',
-          text: 'Are tyres in good condition with adequate tread depth?',
-          description: 'Minimum 1.6mm tread depth required',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'Use tread depth gauge. Check for damage.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-1-3',
-          text: 'Is the windscreen free from cracks?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: false,
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-1-4',
-          text: 'Are mirrors clean and correctly adjusted?',
-          type: 'yes_no',
-          required: true,
-          weight: 1,
-          evidenceRequired: false,
-          riskLevel: 'medium',
-        },
-        {
-          id: 'q-1-5',
-          text: 'Rate exterior cleanliness',
-          type: 'scale_1_5',
-          required: false,
-          weight: 0.5,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-    {
-      id: 'sec-2',
-      title: 'Interior & Safety',
-      description: 'Safety equipment and interior condition',
-      color: 'from-purple-500 to-pink-500',
-      questions: [
-        {
-          id: 'q-2-1',
-          text: 'Is the first aid kit present and stocked?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check expiry dates on all items.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-2-2',
-          text: 'Is the fire extinguisher present and in date?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-2-3',
-          text: 'Are seatbelts functioning correctly?',
-          type: 'pass_fail',
-          required: true,
-          weight: 3,
-          evidenceRequired: false,
-          riskLevel: 'critical',
-        },
-      ],
-    },
-    {
-      id: 'sec-3',
-      title: 'Mechanical',
-      description: 'Engine and fluid levels',
-      color: 'from-orange-500 to-amber-500',
-      questions: [
-        {
-          id: 'q-3-1',
-          text: 'Is the engine oil level acceptable?',
-          type: 'pass_fail',
-          required: true,
-          weight: 2,
-          evidenceRequired: true,
-          guidance: 'Check with engine cold.',
-          riskLevel: 'high',
-        },
-        {
-          id: 'q-3-2',
-          text: 'Are there any dashboard warning lights?',
-          type: 'yes_no_na',
-          required: true,
-          weight: 3,
-          evidenceRequired: true,
-          guidance: 'If yes, photograph and do not use vehicle.',
-          riskLevel: 'critical',
-        },
-        {
-          id: 'q-3-3',
-          text: 'Current odometer reading',
-          type: 'numeric',
-          required: true,
-          weight: 0,
-          evidenceRequired: false,
-          riskLevel: 'low',
-        },
-      ],
-    },
-  ] as AuditSection[],
-};
+interface AuditData {
+  id: string;
+  templateName: string;
+  location: string;
+  asset: string;
+  sections: AuditSection[];
+}
 
-// AI Suggestions based on question context
-const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }> = {
-  'q-1-1': { suggestion: 'Based on vehicle age (2 years), lights should be in good condition. Check LED indicators specifically.', confidence: 0.85 },
-  'q-1-2': { suggestion: 'Last inspection showed 3.2mm tread. Should still be compliant but verify front tyres.', confidence: 0.92 },
-  'q-2-1': { suggestion: 'First aid kit was restocked 3 months ago. Check bandage expiry dates.', confidence: 0.88 },
-  'q-2-2': { suggestion: 'Fire extinguisher service due in 45 days. Verify gauge is in green zone.', confidence: 0.95 },
-  'q-3-2': { suggestion: 'No warning lights reported in last 5 inspections. If any appear, likely new issue.', confidence: 0.78 },
-};
+const MOCK_AUDIT: AuditData | null = null;
+
+const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }> = {};
 
 // ============================================================================
 // COMPONENTS
@@ -252,25 +115,22 @@ const StatusBar = ({
   isOnline: boolean; 
   isSynced: boolean; 
   batteryLevel: number;
-}) => {
-  const { t } = useTranslation();
-  return (
+}) => (
   <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/80 text-xs">
     <div className={`flex items-center gap-1 ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
       {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-      <span>{isOnline ? t('mobile_audit.online') : t('mobile_audit.offline')}</span>
+      <span>{isOnline ? 'Online' : 'Offline'}</span>
     </div>
     <div className={`flex items-center gap-1 ${isSynced ? 'text-green-400' : 'text-amber-400'}`}>
       {isSynced ? <Cloud className="w-3 h-3" /> : <CloudOff className="w-3 h-3" />}
-      <span>{isSynced ? t('mobile_audit.synced') : t('mobile_audit.pending')}</span>
+      <span>{isSynced ? 'Synced' : 'Pending'}</span>
     </div>
     <div className="flex items-center gap-1 text-slate-400 ml-auto">
       <Battery className="w-3 h-3" />
       <span>{batteryLevel}%</span>
     </div>
   </div>
-  );
-};
+);
 
 // AI Suggestion Component
 const AISuggestion = ({
@@ -286,12 +146,11 @@ const AISuggestion = ({
   onDismiss: () => void;
   isLoading: boolean;
 }) => {
-  const { t } = useTranslation();
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl animate-pulse">
         <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-        <span className="text-sm text-purple-300">{t('mobile_audit.ai_analyzing')}</span>
+        <span className="text-sm text-purple-300">AI analyzing...</span>
       </div>
     );
   }
@@ -304,8 +163,8 @@ const AISuggestion = ({
         <Sparkles className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-medium text-purple-400">{t('mobile_audit.ai_insight')}</span>
-            <span className="text-xs text-purple-400/60">{Math.round((confidence || 0) * 100)}% {t('mobile_audit.confidence')}</span>
+            <span className="text-xs font-medium text-purple-400">AI Insight</span>
+            <span className="text-xs text-purple-400/60">{Math.round((confidence || 0) * 100)}% confidence</span>
           </div>
           <p className="text-sm text-purple-200">{suggestion}</p>
         </div>
@@ -315,13 +174,13 @@ const AISuggestion = ({
           onClick={() => { onAccept(); triggerHaptic('light'); }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-500/30"
         >
-          <ThumbsUp className="w-3 h-3" /> {t('mobile_audit.helpful')}
+          <ThumbsUp className="w-3 h-3" /> Helpful
         </button>
         <button
           onClick={() => { onDismiss(); triggerHaptic('light'); }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-slate-700/50 text-slate-400 rounded-lg text-xs font-medium hover:bg-slate-700"
         >
-          <ThumbsDown className="w-3 h-3" /> {t('mobile_audit.dismiss')}
+          <ThumbsDown className="w-3 h-3" /> Dismiss
         </button>
       </div>
     </div>
@@ -465,7 +324,6 @@ const VoiceRecorder = ({
     }
   };
 
-  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -479,12 +337,12 @@ const VoiceRecorder = ({
       {isRecording ? (
         <>
           <MicOff className="w-5 h-5" />
-          <span>{t('mobile_audit.stop_recording', { time: recordingTime })}</span>
+          <span>Stop Recording ({recordingTime}s)</span>
         </>
       ) : (
         <>
           <Mic className="w-5 h-5" />
-          <span>{t('mobile_audit.record_voice')}</span>
+          <span>Record Voice Note</span>
         </>
       )}
     </button>
@@ -515,7 +373,6 @@ const PhotoCapture = ({
     }
   };
 
-  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <input
@@ -533,7 +390,7 @@ const PhotoCapture = ({
         className="w-full py-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 font-medium flex items-center justify-center gap-2 active:scale-98"
       >
         <Camera className="w-5 h-5" />
-        {photos.length > 0 ? `${t('mobile_audit.add_photo')} (${photos.length})` : t('mobile_audit.take_photo')}
+        {photos.length > 0 ? `Add Photo (${photos.length})` : 'Take Photo'}
       </button>
 
       {photos.length > 0 && (
@@ -542,7 +399,7 @@ const PhotoCapture = ({
             <div key={idx} className="relative aspect-square">
               <img
                 src={photo}
-                alt={t('mobile_audit.evidence') + ` ${idx + 1}`}
+                alt={`Evidence ${idx + 1}`}
                 className="w-full h-full object-cover rounded-lg"
               />
               <button
@@ -551,7 +408,7 @@ const PhotoCapture = ({
                   onRemove(idx);
                   triggerHaptic('light');
                 }}
-                aria-label={t('mobile_audit.remove_photo')}
+                aria-label="Remove photo"
                 className="absolute top-1 right-1 p-1.5 bg-red-500 rounded-full text-white"
               >
                 <X className="w-3 h-3" />
@@ -599,7 +456,6 @@ const LocationCapture = ({
     );
   };
 
-  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -614,17 +470,17 @@ const LocationCapture = ({
       {isCapturing ? (
         <>
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span>{t('mobile_audit.getting_location')}</span>
+          <span>Getting location...</span>
         </>
       ) : location ? (
         <>
           <Navigation className="w-4 h-4" />
-          <span>{t('mobile_audit.location_captured')}</span>
+          <span>Location captured</span>
         </>
       ) : (
         <>
           <MapPin className="w-4 h-4" />
-          <span>{t('mobile_audit.capture_location')}</span>
+          <span>Capture Location</span>
         </>
       )}
     </button>
@@ -636,10 +492,9 @@ const LocationCapture = ({
 // ============================================================================
 
 export default function MobileAuditExecution() {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   
-  const [audit] = useState(MOCK_AUDIT);
+  const [audit] = useState<AuditData | null>(MOCK_AUDIT);
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
@@ -669,17 +524,18 @@ export default function MobileAuditExecution() {
 
   // Timer
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || !audit) return;
     
     const timer = setInterval(() => {
       setElapsedTime(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isPaused]);
+  }, [isPaused, audit]);
 
   // Simulate AI loading when question changes
   useEffect(() => {
+    if (!audit) return;
     const question = audit.sections[currentSectionIndex]?.questions[currentQuestionIndex];
     if (question && AI_SUGGESTIONS[question.id]) {
       setAiLoading(true);
@@ -696,6 +552,28 @@ export default function MobileAuditExecution() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (!audit) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="max-w-sm w-full text-center">
+          <div className="w-20 h-20 mx-auto rounded-full bg-slate-800 flex items-center justify-center mb-6">
+            <ClipboardCheck className="w-10 h-10 text-slate-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">No Audit Loaded</h2>
+          <p className="text-slate-400 mb-6">
+            Select an audit from the audit list to begin.
+          </p>
+          <button
+            onClick={() => navigate('/audits')}
+            className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
+          >
+            Go to Audits
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Current section and question
   const currentSection = audit.sections[currentSectionIndex];
@@ -794,7 +672,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              {t('mobile_audit.pass')}
+              PASS
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'fail'}
@@ -802,7 +680,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              {t('mobile_audit.fail')}
+              FAIL
             </TouchResponseButton>
           </div>
         );
@@ -816,7 +694,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              {t('mobile_audit.yes')}
+              YES
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
@@ -824,7 +702,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              {t('mobile_audit.no')}
+              NO
             </TouchResponseButton>
           </div>
         );
@@ -838,7 +716,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              {t('mobile_audit.yes')}
+              YES
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
@@ -846,7 +724,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              {t('mobile_audit.no')}
+              NO
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'na'}
@@ -854,7 +732,7 @@ export default function MobileAuditExecution() {
               variant="neutral"
               icon={MinusCircle}
             >
-              {t('mobile_audit.na')}
+              N/A
             </TouchResponseButton>
           </div>
         );
@@ -875,7 +753,7 @@ export default function MobileAuditExecution() {
             inputMode="numeric"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
-            placeholder={t('mobile_audit.enter_number')}
+            placeholder="Enter number..."
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg text-center"
           />
         );
@@ -885,7 +763,7 @@ export default function MobileAuditExecution() {
           <textarea
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
-            placeholder={t('mobile_audit.enter_response')}
+            placeholder="Enter response..."
             rows={3}
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg"
           />
@@ -914,7 +792,7 @@ export default function MobileAuditExecution() {
             </div>
 
             <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-green-400' : 'text-red-400'}`}>
-              {passed ? t('mobile_audit.audit_passed') : t('mobile_audit.audit_failed')}
+              {passed ? 'AUDIT PASSED' : 'AUDIT FAILED'}
             </h2>
             <p className="text-slate-400 mb-6">
               {audit.templateName} - {audit.asset}
@@ -924,7 +802,7 @@ export default function MobileAuditExecution() {
             <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-4 mb-6 text-left">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-purple-400" />
-                <span className="font-semibold text-purple-300">{t('mobile_audit.ai_summary')}</span>
+                <span className="font-semibold text-purple-300">AI Summary</span>
               </div>
               <p className="text-sm text-purple-200">
                 {passed 
@@ -938,15 +816,15 @@ export default function MobileAuditExecution() {
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-white">{answeredQuestions}</p>
-                <p className="text-xs text-slate-400">{t('mobile_audit.answered')}</p>
+                <p className="text-xs text-slate-400">Answered</p>
               </div>
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-white">{formatTime(elapsedTime)}</p>
-                <p className="text-xs text-slate-400">{t('mobile_audit.duration')}</p>
+                <p className="text-xs text-slate-400">Duration</p>
               </div>
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-red-400">{failedItems.length}</p>
-                <p className="text-xs text-slate-400">{t('mobile_audit.failed_items')}</p>
+                <p className="text-xs text-slate-400">Failed</p>
               </div>
             </div>
 
@@ -961,13 +839,13 @@ export default function MobileAuditExecution() {
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl active:scale-98"
               >
                 <Send className="w-5 h-5 inline mr-2" />
-                {t('mobile_audit.submit_audit')}
+                Submit Audit
               </button>
               <button
                 onClick={() => navigate('/audits')}
                 className="w-full py-3 bg-slate-800 text-slate-300 rounded-xl"
               >
-                {t('mobile_audit.save_draft')}
+                Save as Draft
               </button>
             </div>
           </div>
@@ -995,7 +873,7 @@ export default function MobileAuditExecution() {
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate('/audits')}
-              aria-label={t('mobile_audit.go_back')}
+              aria-label="Go back"
               className="p-2 -ml-2"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
@@ -1009,7 +887,7 @@ export default function MobileAuditExecution() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPaused(!isPaused)}
-                aria-label={isPaused ? t('mobile_audit.resume') : t('mobile_audit.pause')}
+                aria-label={isPaused ? 'Resume' : 'Pause'}
                 className={`p-2 rounded-lg ${isPaused ? 'text-amber-400' : 'text-slate-400'}`}
               >
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
@@ -1030,7 +908,7 @@ export default function MobileAuditExecution() {
             </div>
             <div className="flex justify-between mt-1">
               <span className="text-xs text-slate-500">{currentSection.title}</span>
-              <span className="text-xs text-slate-500">{t('mobile_audit.step_of', { step: answeredQuestions, total: totalQuestions })}</span>
+              <span className="text-xs text-slate-500">{answeredQuestions}/{totalQuestions}</span>
             </div>
           </div>
         </div>
@@ -1092,12 +970,12 @@ export default function MobileAuditExecution() {
                 )}
                 {currentQuestion.required && (
                   <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs font-medium rounded">
-                    {t('mobile_audit.required')}
+                    Required
                   </span>
                 )}
                 {currentQuestion.evidenceRequired && (
                   <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-400 text-xs font-medium rounded flex items-center gap-1">
-                    <Camera className="w-3 h-3" /> {t('mobile_audit.evidence')}
+                    <Camera className="w-3 h-3" /> Evidence
                   </span>
                 )}
               </div>
@@ -1119,7 +997,7 @@ export default function MobileAuditExecution() {
                   className="flex items-center gap-2 text-sm text-purple-400"
                 >
                   <Lightbulb className="w-4 h-4" />
-                  <span>{t('mobile_audit.guidance')}</span>
+                  <span>Guidance</span>
                   {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               )}
@@ -1153,7 +1031,7 @@ export default function MobileAuditExecution() {
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
               <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-cyan-400" />
-                {t('mobile_audit.photo_evidence')}
+                Photo Evidence
               </h3>
               <PhotoCapture
                 photos={currentResponse?.photos || []}
@@ -1195,7 +1073,7 @@ export default function MobileAuditExecution() {
             <textarea
               value={currentResponse?.notes || ''}
               onChange={(e) => updateResponse({ notes: e.target.value })}
-              placeholder={t('mobile_audit.add_observations')}
+              placeholder="Add observations..."
               rows={2}
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-sm resize-none"
             />
@@ -1214,7 +1092,7 @@ export default function MobileAuditExecution() {
             }`}
           >
             <Flag className={`w-4 h-4 ${currentResponse?.flagged ? 'fill-current' : ''}`} />
-            {currentResponse?.flagged ? t('mobile_audit.issue_flagged') : t('mobile_audit.flag_followup')}
+            {currentResponse?.flagged ? 'Issue Flagged' : 'Flag for Follow-up'}
           </button>
         </div>
       </main>
@@ -1228,7 +1106,7 @@ export default function MobileAuditExecution() {
             className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50 active:scale-98"
           >
             <ArrowLeft className="w-5 h-5" />
-            {t('mobile_audit.prev')}
+            Prev
           </button>
 
           {/* Quick Jump Dots */}
@@ -1263,8 +1141,8 @@ export default function MobileAuditExecution() {
           >
             {currentSectionIndex === audit.sections.length - 1 && 
              currentQuestionIndex === currentSection.questions.length - 1
-              ? t('mobile_audit.finish')
-              : t('mobile_audit.next')
+              ? 'Finish'
+              : 'Next'
             }
             <ArrowRight className="w-5 h-5" />
           </button>

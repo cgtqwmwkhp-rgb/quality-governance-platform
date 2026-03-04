@@ -24,7 +24,6 @@ import {
   Tag,
 } from 'lucide-react';
 import { ISO_STANDARDS, ISOClause, getAllClauses, autoTagContent } from '../data/isoStandards';
-import { useTranslation } from 'react-i18next';
 
 // Evidence types that can be linked to ISO clauses
 type EvidenceType = 'policy' | 'document' | 'audit' | 'incident' | 'action' | 'risk' | 'training';
@@ -42,39 +41,7 @@ interface EvidenceItem {
   link: string;
 }
 
-// Mock evidence data - in production this would come from the API
-const mockEvidence: EvidenceItem[] = [
-  { id: 'e1', type: 'policy', title: 'Quality Policy Statement', description: 'Corporate quality policy aligned with ISO 9001', date: '2025-12-15', status: 'active', linkedClauses: ['9001-5.2', '9001-5.1.1'], autoTagged: false, link: '/documents/1' },
-  { id: 'e2', type: 'policy', title: 'Environmental Policy', description: 'Environmental commitment and objectives', date: '2025-11-20', status: 'active', linkedClauses: ['14001-5.2', '14001-6.2'], autoTagged: false, link: '/documents/2' },
-  { id: 'e3', type: 'policy', title: 'Health & Safety Policy', description: 'OH&S policy statement signed by CEO', date: '2025-10-05', status: 'active', linkedClauses: ['45001-5.2', '45001-5.1'], autoTagged: false, link: '/documents/3' },
-  { id: 'e4', type: 'document', title: 'Risk Assessment Procedure', description: 'Procedure for identifying and assessing risks', date: '2025-09-18', status: 'active', linkedClauses: ['9001-6.1', '45001-6.1.2', '14001-6.1'], autoTagged: true, confidence: 92, link: '/documents/4' },
-  { id: 'e5', type: 'document', title: 'Document Control Procedure', description: 'Procedure for controlling documented information', date: '2025-08-22', status: 'active', linkedClauses: ['9001-7.5', '14001-7.5', '45001-7.5'], autoTagged: false, link: '/documents/5' },
-  { id: 'e6', type: 'audit', title: 'Internal Audit Report Q4 2025', description: 'Internal audit of manufacturing processes', date: '2025-12-10', status: 'active', linkedClauses: ['9001-9.2', '9001-8.5'], autoTagged: true, confidence: 88, link: '/audits/1' },
-  { id: 'e7', type: 'audit', title: 'Environmental Compliance Audit', description: 'Annual environmental compliance evaluation', date: '2025-11-28', status: 'active', linkedClauses: ['14001-9.1.2', '14001-9.2'], autoTagged: true, confidence: 95, link: '/audits/2' },
-  { id: 'e8', type: 'incident', title: 'Near Miss - Forklift Operation', description: 'Near miss incident during warehouse operations', date: '2025-12-08', status: 'active', linkedClauses: ['45001-10.2', '45001-6.1.2'], autoTagged: true, confidence: 87, link: '/incidents/1' },
-  { id: 'e9', type: 'incident', title: 'Customer Complaint - Late Delivery', description: 'Complaint regarding delivery timeframes', date: '2025-12-05', status: 'active', linkedClauses: ['9001-9.1.2', '9001-8.2', '9001-10.2'], autoTagged: true, confidence: 78, link: '/incidents/2' },
-  { id: 'e10', type: 'action', title: 'CAPA-2025-042: Calibration Process', description: 'Corrective action for calibration gaps', date: '2025-11-15', status: 'active', linkedClauses: ['9001-10.2', '9001-7.1.5'], autoTagged: true, confidence: 91, link: '/actions/1' },
-  { id: 'e11', type: 'risk', title: 'Supply Chain Disruption Risk', description: 'Risk assessment for key supplier dependencies', date: '2025-10-30', status: 'active', linkedClauses: ['9001-8.4', '9001-6.1'], autoTagged: true, confidence: 85, link: '/risks/1' },
-  { id: 'e12', type: 'training', title: 'Safety Induction Training Records', description: 'New employee safety training completion records', date: '2025-12-12', status: 'active', linkedClauses: ['45001-7.2', '45001-7.3'], autoTagged: true, confidence: 94, link: '/training/1' },
-  { id: 'e13', type: 'document', title: 'Management Review Minutes - Dec 2025', description: 'Minutes from quarterly management review meeting', date: '2025-12-18', status: 'active', linkedClauses: ['9001-9.3', '14001-9.3', '45001-9.3'], autoTagged: false, link: '/documents/6' },
-  { id: 'e14', type: 'document', title: 'Emergency Response Plan', description: 'Procedures for emergency situations', date: '2025-07-14', status: 'active', linkedClauses: ['45001-8.2', '14001-8.2'], autoTagged: true, confidence: 96, link: '/documents/7' },
-  { id: 'e15', type: 'document', title: 'Supplier Evaluation Procedure', description: 'Process for evaluating and approving suppliers', date: '2025-06-20', status: 'active', linkedClauses: ['9001-8.4'], autoTagged: true, confidence: 89, link: '/documents/8' },
-  // ISO 27001 Evidence
-  { id: 'e16', type: 'policy', title: 'Information Security Policy', description: 'Corporate information security policy aligned with ISO 27001', date: '2025-11-01', status: 'active', linkedClauses: ['27001-5.2', '27001-A.5.1'], autoTagged: false, link: '/documents/9' },
-  { id: 'e17', type: 'document', title: 'Statement of Applicability', description: 'SoA documenting Annex A control selection and justification', date: '2025-10-15', status: 'active', linkedClauses: ['27001-6.1.3', '27001-A.5'], autoTagged: false, link: '/documents/10' },
-  { id: 'e18', type: 'audit', title: 'ISMS Internal Audit Report', description: 'Internal audit of information security controls', date: '2025-12-01', status: 'active', linkedClauses: ['27001-9.2', '27001-A.8.15'], autoTagged: true, confidence: 91, link: '/audits/3' },
-  { id: 'e19', type: 'training', title: 'Security Awareness Training Records', description: 'Phishing awareness and security training completion', date: '2025-12-10', status: 'active', linkedClauses: ['27001-7.3', '27001-A.6.3'], autoTagged: true, confidence: 94, link: '/training/2' },
-  { id: 'e20', type: 'incident', title: 'Security Incident Report - Phishing Attempt', description: 'Detected and blocked phishing attack on finance team', date: '2025-12-05', status: 'active', linkedClauses: ['27001-A.5.24', '27001-10.2'], autoTagged: true, confidence: 88, link: '/incidents/3' },
-  // Planet Mark Evidence
-  { id: 'e21', type: 'document', title: 'Carbon Footprint Report YE2024', description: 'Annual carbon footprint measurement per GHG Protocol', date: '2024-09-30', status: 'active', linkedClauses: ['pm-1', 'pm-1.1', 'pm-1.2', 'pm-1.3'], autoTagged: true, confidence: 96, link: '/planet-mark' },
-  { id: 'e22', type: 'document', title: 'Year 2 Improvement Plan', description: 'SMART actions for 5% emissions reduction target', date: '2025-07-01', status: 'active', linkedClauses: ['pm-3', 'pm-3.1', 'pm-3.2'], autoTagged: true, confidence: 92, link: '/planet-mark' },
-  { id: 'e23', type: 'document', title: 'Fleet Fuel Card Audit', description: '100% fleet transactions via fuel card for data quality', date: '2025-08-31', status: 'active', linkedClauses: ['pm-2.1', 'pm-1.1'], autoTagged: true, confidence: 89, link: '/planet-mark' },
-  { id: 'e24', type: 'document', title: 'Planet Mark Certificate YE2024', description: 'Planet Mark Business Certification - Year 1', date: '2024-10-15', status: 'active', linkedClauses: ['pm-4'], autoTagged: false, link: '/documents/11' },
-  // UVDB Achilles Evidence
-  { id: 'e25', type: 'audit', title: 'UVDB B2 Audit Report 2025', description: 'UVDB Achilles Verify B2 audit completed with 94% score', date: '2025-09-15', status: 'active', linkedClauses: ['uvdb-1', 'uvdb-2', 'uvdb-3', 'uvdb-4'], autoTagged: false, link: '/uvdb' },
-  { id: 'e26', type: 'document', title: 'Subcontractor Management Procedure', description: 'Process for selecting and managing subcontractors', date: '2025-05-20', status: 'active', linkedClauses: ['uvdb-12', '9001-8.4', '45001-8.1.4'], autoTagged: true, confidence: 87, link: '/documents/12' },
-  { id: 'e27', type: 'document', title: 'RIDDOR Statistics Report', description: 'Annual RIDDOR reportable incident statistics', date: '2025-12-01', status: 'active', linkedClauses: ['uvdb-15', '45001-9.1'], autoTagged: true, confidence: 91, link: '/analytics' },
-];
+const mockEvidence: EvidenceItem[] = [];
 
 const evidenceTypeConfig: Record<EvidenceType, { icon: React.ElementType; label: string; color: string }> = {
   policy: { icon: BookOpen, label: 'Policy', color: 'bg-purple-500' },
@@ -105,7 +72,6 @@ const standardColors: Record<string, string> = {
 };
 
 export default function ComplianceEvidence() {
-  const { t } = useTranslation();
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set());
@@ -268,10 +234,10 @@ export default function ComplianceEvidence() {
           <div>
             <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
               <Target className="w-8 h-8 text-primary" />
-              {t('compliance.evidence.title')}
+              ISO Compliance Evidence Center
             </h1>
             <p className="text-muted-foreground mt-1">
-              {t('compliance.evidence.subtitle')}
+              Central repository for all compliance evidence mapped to ISO standards
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -280,11 +246,11 @@ export default function ComplianceEvidence() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-hover transition-all"
             >
               <Sparkles className="w-4 h-4" />
-              {t('compliance.evidence.ai_tagger')}
+              AI Auto-Tagger
             </button>
             <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border rounded-lg text-secondary-foreground font-medium hover:bg-surface transition-all">
               <Download className="w-4 h-4" />
-              {t('compliance.evidence.export_report')}
+              Export Report
             </button>
           </div>
         </div>
@@ -344,9 +310,9 @@ export default function ComplianceEvidence() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex bg-secondary rounded-lg p-1">
             {[
-              { id: 'clauses', label: t('compliance.evidence.clause_view'), icon: BookOpen },
-              { id: 'evidence', label: t('compliance.evidence.evidence_list'), icon: FileText },
-              { id: 'gaps', label: t('compliance.evidence.gap_analysis'), icon: AlertTriangle },
+              { id: 'clauses', label: 'Clause View', icon: BookOpen },
+              { id: 'evidence', label: 'Evidence List', icon: FileText },
+              { id: 'gaps', label: 'Gap Analysis', icon: AlertTriangle },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -368,7 +334,7 @@ export default function ComplianceEvidence() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder={t('compliance.evidence.search_placeholder')}
+                placeholder="Search clauses or keywords..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-80 pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
@@ -397,7 +363,7 @@ export default function ComplianceEvidence() {
             <>
               <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-primary" />
-                {t('compliance.evidence.clause_structure')}
+                Clause Structure
               </h2>
               {selectedStandard === 'all' ? (
                 ISO_STANDARDS.map(standard => (
@@ -421,6 +387,13 @@ export default function ComplianceEvidence() {
                 <FileText className="w-5 h-5 text-emerald-400" />
                 All Evidence ({mockEvidence.length} items)
               </h2>
+              {mockEvidence.length === 0 && (
+                <div className="text-center py-12">
+                  <FileText className="w-12 h-12 mx-auto text-gray-500 mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-400 mb-2">No evidence items</h3>
+                  <p className="text-sm text-gray-500">Evidence items will appear here when linked to ISO clauses.</p>
+                </div>
+              )}
               <div className="space-y-3">
                 {mockEvidence.map(evidence => {
                   const config = evidenceTypeConfig[evidence.type];
@@ -549,7 +522,7 @@ export default function ComplianceEvidence() {
 
                 {/* Keywords */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">{t('compliance.evidence.keywords')}</h4>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Keywords</h4>
                   <div className="flex flex-wrap gap-2">
                     {selectedClause.keywords.map((keyword, i) => (
                       <span key={i} className="text-xs bg-slate-700 text-gray-300 px-2 py-1 rounded-full">
@@ -561,7 +534,7 @@ export default function ComplianceEvidence() {
 
                 {/* Coverage Status */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">{t('compliance.evidence.coverage_status')}</h4>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Coverage Status</h4>
                   {(() => {
                     const status = getCoverageStatus(selectedClause.id);
                     const evidence = getEvidenceForClause(selectedClause.id);
@@ -596,7 +569,7 @@ export default function ComplianceEvidence() {
                 {/* Linked Evidence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-400">{t('compliance.evidence.linked_evidence')}</h4>
+                    <h4 className="text-sm font-medium text-gray-400">Linked Evidence</h4>
                     <button className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Add Link
                     </button>
@@ -652,7 +625,7 @@ export default function ComplianceEvidence() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-400" />
-                {t('compliance.evidence.ai_tagger')}
+                AI Auto-Tagger
               </h2>
               <button 
                 onClick={() => { setShowAutoTagger(false); setAutoTagText(''); setAutoTagResults([]); }}
@@ -680,14 +653,14 @@ export default function ComplianceEvidence() {
               className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-bold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4"
             >
               <Sparkles className="w-5 h-5" />
-              {t('compliance.evidence.analyze_tags')}
+              Analyze & Auto-Tag
             </button>
 
             {autoTagResults.length > 0 && (
               <div>
                 <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
                   <Tag className="w-5 h-5 text-emerald-400" />
-                  {t('compliance.evidence.detected_clauses')} ({autoTagResults.length})
+                  Detected ISO Clauses ({autoTagResults.length})
                 </h3>
                 <div className="space-y-2">
                   {autoTagResults.map(clause => {
@@ -699,7 +672,7 @@ export default function ComplianceEvidence() {
                         <span className="font-medium text-white">{clause.clauseNumber}</span>
                         <span className="text-gray-300 flex-grow">{clause.title}</span>
                         <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-full">
-                          {t('compliance.evidence.apply_tag')}
+                          Apply Tag
                         </button>
                       </div>
                     );

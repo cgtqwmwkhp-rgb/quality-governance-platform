@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   BarChart3,
   TrendingUp,
@@ -42,7 +41,6 @@ interface ModuleStats {
 }
 
 export default function Analytics() {
-  const { t } = useTranslation();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -51,92 +49,73 @@ export default function Analytics() {
     {
       id: 'total-records',
       title: 'Total Records',
-      value: '2,847',
-      change: 12.5,
-      changeType: 'increase',
+      value: 0,
+      change: 0,
+      changeType: 'neutral',
       icon: <FileText className="w-6 h-6" />,
       variant: 'info',
-      sparkline: [20, 25, 30, 28, 35, 40, 38, 45, 50, 48, 55, 60]
     },
     {
       id: 'open-items',
       title: 'Open Items',
-      value: 156,
-      change: -8.3,
-      changeType: 'decrease',
+      value: 0,
+      change: 0,
+      changeType: 'neutral',
       icon: <Clock className="w-6 h-6" />,
       variant: 'warning',
-      sparkline: [45, 42, 40, 38, 35, 33, 30, 28, 26, 25, 23, 20]
     },
     {
       id: 'resolution-rate',
       title: 'Resolution Rate',
-      value: '94.5%',
-      change: 3.2,
-      changeType: 'increase',
+      value: '0%',
+      change: 0,
+      changeType: 'neutral',
       icon: <CheckCircle2 className="w-6 h-6" />,
       variant: 'success',
-      sparkline: [85, 87, 88, 89, 90, 91, 92, 93, 93, 94, 94, 95]
     },
     {
       id: 'avg-resolution',
       title: 'Avg Resolution Time',
-      value: '4.2 days',
-      change: -15.8,
-      changeType: 'decrease',
+      value: '0 days',
+      change: 0,
+      changeType: 'neutral',
       icon: <Activity className="w-6 h-6" />,
       variant: 'primary',
-      sparkline: [8, 7.5, 7, 6.5, 6, 5.5, 5, 4.8, 4.6, 4.4, 4.3, 4.2]
     },
     {
       id: 'compliance-score',
       title: 'Compliance Score',
-      value: '98.2%',
-      change: 1.5,
-      changeType: 'increase',
+      value: '0%',
+      change: 0,
+      changeType: 'neutral',
       icon: <Shield className="w-6 h-6" />,
       variant: 'info',
-      sparkline: [95, 95.5, 96, 96.5, 97, 97, 97.5, 97.8, 98, 98, 98.1, 98.2]
     },
     {
       id: 'high-priority',
       title: 'High Priority',
-      value: 23,
+      value: 0,
       change: 0,
       changeType: 'neutral',
       icon: <AlertTriangle className="w-6 h-6" />,
       variant: 'destructive',
-      sparkline: [25, 24, 23, 24, 23, 22, 23, 24, 23, 23, 23, 23]
     }
   ];
 
   const moduleStats: ModuleStats[] = [
-    { module: 'Incidents', total: 847, open: 45, closed: 802, avgResolutionDays: 3.2, trend: 5.2 },
-    { module: 'RTAs', total: 234, open: 12, closed: 222, avgResolutionDays: 8.5, trend: -12.3 },
-    { module: 'Complaints', total: 456, open: 34, closed: 422, avgResolutionDays: 5.1, trend: 2.1 },
-    { module: 'Risks', total: 189, open: 28, closed: 161, avgResolutionDays: 15.3, trend: -5.8 },
-    { module: 'Audits', total: 156, open: 18, closed: 138, avgResolutionDays: 21.2, trend: 0 },
-    { module: 'Actions', total: 523, open: 67, closed: 456, avgResolutionDays: 7.4, trend: 8.9 }
+    { module: 'Incidents', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+    { module: 'RTAs', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+    { module: 'Complaints', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+    { module: 'Risks', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+    { module: 'Audits', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+    { module: 'Actions', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 }
   ];
 
-  const monthlyTrends = [
-    { month: 'Jan', incidents: 65, rtas: 18, complaints: 42 },
-    { month: 'Feb', incidents: 72, rtas: 22, complaints: 38 },
-    { month: 'Mar', incidents: 58, rtas: 15, complaints: 45 },
-    { month: 'Apr', incidents: 81, rtas: 28, complaints: 52 },
-    { month: 'May', incidents: 69, rtas: 20, complaints: 48 },
-    { month: 'Jun', incidents: 75, rtas: 25, complaints: 41 },
-    { month: 'Jul', incidents: 88, rtas: 31, complaints: 55 },
-    { month: 'Aug', incidents: 92, rtas: 27, complaints: 49 },
-    { month: 'Sep', incidents: 78, rtas: 23, complaints: 44 },
-    { month: 'Oct', incidents: 85, rtas: 29, complaints: 51 },
-    { month: 'Nov', incidents: 71, rtas: 19, complaints: 46 },
-    { month: 'Dec', incidents: 67, rtas: 16, complaints: 39 }
-  ];
+  const monthlyTrends: { month: string; incidents: number; rtas: number; complaints: number }[] = [];
 
   const handleRefresh = () => {
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1500);
+    setIsLoading(false);
   };
 
   const TrendIndicator = ({ change, type }: { change: number; type: 'increase' | 'decrease' | 'neutral' }) => {
@@ -144,7 +123,7 @@ export default function Analytics() {
       return (
         <span className="flex items-center gap-1 text-muted-foreground text-sm">
           <Minus className="w-4 h-4" />
-          {t('analytics.no_change')}
+          No change
         </span>
       );
     }
@@ -197,9 +176,9 @@ export default function Analytics() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <BarChart3 className="w-8 h-8 text-primary" />
             </div>
-            {t('analytics.title')}
+            Analytics Dashboard
           </h1>
-          <p className="text-muted-foreground mt-1">{t('analytics.subtitle')}</p>
+          <p className="text-muted-foreground mt-1">Cross-module insights and performance metrics</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -272,44 +251,50 @@ export default function Analytics() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
-              {t('analytics.chart.monthly_trends')}
+              Monthly Trends
             </h2>
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-info" />
-                {t('analytics.chart.incidents')}
+                Incidents
               </span>
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-warning" />
-                {t('analytics.chart.rtas')}
+                RTAs
               </span>
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-primary" />
-                {t('analytics.chart.complaints')}
+                Complaints
               </span>
             </div>
           </div>
           
           <div className="h-64 flex items-end justify-between gap-2">
-            {monthlyTrends.map((month) => (
-              <div key={month.month} className="flex-1 flex flex-col items-center gap-1">
-                <div className="w-full flex flex-col items-center gap-0.5">
-                  <div
-                    className="w-full max-w-[20px] bg-info rounded-t"
-                    style={{ height: `${month.incidents * 2}px` }}
-                  />
-                  <div
-                    className="w-full max-w-[20px] bg-warning rounded-t"
-                    style={{ height: `${month.rtas * 3}px` }}
-                  />
-                  <div
-                    className="w-full max-w-[20px] bg-primary rounded-t"
-                    style={{ height: `${month.complaints * 2.5}px` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground mt-2">{month.month}</span>
+            {monthlyTrends.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                No trend data available
               </div>
-            ))}
+            ) : (
+              monthlyTrends.map((month) => (
+                <div key={month.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="w-full flex flex-col items-center gap-0.5">
+                    <div
+                      className="w-full max-w-[20px] bg-info rounded-t"
+                      style={{ height: `${month.incidents * 2}px` }}
+                    />
+                    <div
+                      className="w-full max-w-[20px] bg-warning rounded-t"
+                      style={{ height: `${month.rtas * 3}px` }}
+                    />
+                    <div
+                      className="w-full max-w-[20px] bg-primary rounded-t"
+                      style={{ height: `${month.complaints * 2.5}px` }}
+                    />
+                  </div>
+                  <span className="text-xs text-muted-foreground mt-2">{month.month}</span>
+                </div>
+              ))
+            )}
           </div>
         </Card>
 
@@ -317,7 +302,7 @@ export default function Analytics() {
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-6">
             <PieChart className="w-5 h-5 text-primary" />
-            {t('analytics.chart.module_distribution')}
+            Module Distribution
           </h2>
           
           <div className="space-y-4">
@@ -356,7 +341,7 @@ export default function Analytics() {
         <div className="p-6 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Activity className="w-5 h-5 text-primary" />
-            {t('analytics.chart.module_performance')}
+            Module Performance
           </h2>
         </div>
         
@@ -364,12 +349,12 @@ export default function Analytics() {
           <table className="w-full">
             <thead className="bg-surface">
               <tr>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.module')}</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.total')}</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.open')}</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.closed')}</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.avg_resolution')}</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.trend')}</th>
+                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Module</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Avg Resolution</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Trend</th>
               </tr>
             </thead>
             <tbody>
@@ -417,7 +402,7 @@ export default function Analytics() {
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">{t('analytics.ai_insights')}</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">AI-Powered Insights</h3>
             <div className="space-y-2 text-muted-foreground">
               <p>• <strong className="text-foreground">Incident resolution</strong> has improved by 15.8% this quarter, reducing average time from 5 days to 4.2 days.</p>
               <p>• <strong className="text-foreground">RTA frequency</strong> shows a downward trend (-12.3%), likely due to recent safety training initiatives.</p>
