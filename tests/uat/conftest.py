@@ -94,7 +94,7 @@ async def authenticated_client() -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client with a valid auth token for UAT tests."""
     from src.core.security import create_access_token
 
-    token = create_access_token(data={"sub": "1", "tenant_id": 1})
+    token = create_access_token(subject="1", additional_claims={"tenant_id": 1})
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
