@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
             if self.uat_mode.upper() != "READ_ONLY":
                 import warnings
+
                 warnings.warn(
                     "SECURITY WARNING: UAT_MODE is not READ_ONLY in production! "
                     "Set UAT_MODE=READ_ONLY to prevent unintended writes.",

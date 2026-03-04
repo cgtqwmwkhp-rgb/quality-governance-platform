@@ -279,7 +279,7 @@ export default function Dashboard() {
     carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
   })
   const [activities, setActivities] = useState<RecentActivity[]>([])
-  const [upcomingEvents, setUpcomingEvents] = useState<{id: number; title: string; date: string; type: string; days: number}[]>([])
+  const [upcomingEvents] = useState<{id: number; title: string; date: string; type: string; days: number}[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {

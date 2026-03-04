@@ -89,7 +89,7 @@ class SuggestedAction(BaseModel):
 async def create_session(
     data: SessionCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
@@ -111,7 +111,7 @@ async def create_session(
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
 async def get_active_session(
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
@@ -151,7 +151,7 @@ async def close_session(session_id: int, db: Session = Depends(get_db)):
 async def list_sessions(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
@@ -177,7 +177,7 @@ async def send_message(
     session_id: int,
     data: MessageCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -215,7 +215,7 @@ async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -361,7 +361,7 @@ async def search_knowledge(
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
@@ -394,7 +394,7 @@ async def add_knowledge(
     category: str,
     tags: Optional[list[str]] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(),
+    current_user: CurrentUser,
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
