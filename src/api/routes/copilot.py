@@ -88,8 +88,8 @@ class SuggestedAction(BaseModel):
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
-    db: Session = Depends(get_db),
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
@@ -110,8 +110,8 @@ async def create_session(
 
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
 async def get_active_session(
-    db: Session = Depends(get_db),
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
@@ -149,9 +149,9 @@ async def close_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
+    current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: CurrentUser,
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
@@ -176,8 +176,8 @@ async def list_sessions(
 async def send_message(
     session_id: int,
     data: MessageCreate,
-    db: Session = Depends(get_db),
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -214,8 +214,8 @@ async def get_messages(
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
-    db: Session = Depends(get_db),
     current_user: CurrentUser,
+    db: Session = Depends(get_db),
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -357,11 +357,11 @@ async def suggest_actions(
 
 @router.get("/knowledge/search")
 async def search_knowledge(
+    current_user: CurrentUser,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
     db: Session = Depends(get_db),
-    current_user: CurrentUser,
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
@@ -392,9 +392,9 @@ async def add_knowledge(
     title: str,
     content: str,
     category: str,
+    current_user: CurrentUser,
     tags: Optional[list[str]] = None,
     db: Session = Depends(get_db),
-    current_user: CurrentUser,
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService

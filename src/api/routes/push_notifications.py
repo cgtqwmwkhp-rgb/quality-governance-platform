@@ -353,8 +353,8 @@ class PushNotificationService:
 @router.post("/subscribe", response_model=dict, status_code=201)
 async def subscribe_to_push(
     subscription: PushSubscriptionCreate,
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Subscribe to push notifications."""
     service = PushNotificationService(db)
@@ -375,8 +375,8 @@ async def subscribe_to_push(
 @router.delete("/unsubscribe", response_model=dict)
 async def unsubscribe_from_push(
     endpoint: str,
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Unsubscribe from push notifications."""
     service = PushNotificationService(db)
@@ -390,8 +390,8 @@ async def unsubscribe_from_push(
 
 @router.get("/preferences", response_model=dict)
 async def get_notification_preferences(
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Get notification preferences for current user."""
     prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
@@ -428,8 +428,8 @@ async def get_notification_preferences(
 @router.put("/preferences", response_model=dict)
 async def update_notification_preferences(
     updates: NotificationPreferenceUpdate,
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Update notification preferences."""
     prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
@@ -449,8 +449,8 @@ async def update_notification_preferences(
 @router.post("/send", response_model=dict)
 async def send_notification(
     request: SendNotificationRequest,
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
     if not current_user.is_superuser and not current_user.has_permission("notifications:send"):
@@ -500,8 +500,8 @@ async def send_notification(
 
 @router.get("/test", response_model=dict)
 async def test_push_notification(
-    db: Session = Depends(DbSession),
     current_user: CurrentUser,
+    db: Session = Depends(DbSession),
 ) -> dict[str, Any]:
     """Send a test push notification to current user."""
     service = PushNotificationService(db)
