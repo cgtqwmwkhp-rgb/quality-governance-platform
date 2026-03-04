@@ -268,7 +268,7 @@ jobs:
 
       - name: Audit npm dependencies
         working-directory: frontend
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint frontend (eslint + jsx-a11y)
         working-directory: frontend

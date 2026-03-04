@@ -542,12 +542,3 @@ export default function AIIntelligence() {
     </div>
   )
 }
-div>
-  )
-}
-  )
-}
-)
-}
-  )
-}
