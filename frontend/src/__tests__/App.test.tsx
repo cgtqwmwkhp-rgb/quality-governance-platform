@@ -44,7 +44,7 @@ vi.mock('../components/ui/ThemeToggle', () => ({
 }));
 
 vi.mock('../pages/Login', () => ({
-  default: ({ onLogin }: { onLogin: (t: string) => void }) => (
+  default: ({ onLogin: _onLogin }: { onLogin: (t: string) => void }) => (
     <div data-testid="login-page">
       <h1>Sign In</h1>
       <input data-testid="email-input" type="email" />
