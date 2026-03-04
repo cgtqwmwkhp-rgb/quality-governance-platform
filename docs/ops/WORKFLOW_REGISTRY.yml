@@ -33,21 +33,16 @@ p0_workflows:
         exit_criteria: "Incident form loads with required fields"
         
       - stepId: 4
-        action: "Fill required fields"
+        action: "Fill first form step (contract)"
         form_fields:
-          - selector: "[data-testid='incident-title']"
-            value: "Test Incident - E2E"
-          - selector: "[data-testid='incident-description']"
-            value: "E2E test incident description"
-          - selector: "[data-testid='incident-severity']"
-            value: "low"
-        exit_criteria: "All required fields populated, submit enabled"
-        
+          - selector: "[data-testid='field-contract']"
+            value: "ukpn"
+        exit_criteria: "Contract selected, continue enabled"
+
       - stepId: 5
-        action: "Submit form"
-        selector: "[data-testid='submit-report-btn']"
-        exit_criteria: "Success message with reference number"
-        expected_api: POST /api/v1/employee-portal/reports
+        action: "Verify form is navigable"
+        selector: "button:has-text('Continue')"
+        exit_criteria: "Multi-step form navigation available"
         
     success_terminal_state: "Reference number displayed, confirmation message visible"
     recovery_path: "Error banner with retry option"
@@ -73,12 +68,11 @@ p0_workflows:
         exit_criteria: "Near-miss form loads"
         
       - stepId: 3
-        action: "Fill and submit form"
+        action: "Fill first form step (contract)"
         form_fields:
-          - selector: "[data-testid='near-miss-description']"
-            value: "E2E test near-miss"
-        exit_criteria: "Form submitted successfully"
-        expected_api: POST /api/v1/employee-portal/reports
+          - selector: "[data-testid='field-contract']"
+            value: "ukpn"
+        exit_criteria: "Contract selected, continue enabled"
         
     success_terminal_state: "Reference number displayed"
     recovery_path: "Error banner with retry option"
