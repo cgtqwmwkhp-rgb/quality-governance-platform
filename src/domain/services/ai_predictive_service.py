@@ -177,9 +177,7 @@ class AnomalyDetector:
         # Get incidents for this entity
         if entity_type == "department":
             result = await self.db.execute(
-                select(Incident).where(
-                    and_(Incident.department == entity, Incident.reported_date >= cutoff)
-                )
+                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))
             )
             recent_incidents = result.scalars().all()
         elif entity_type == "location":
@@ -239,9 +237,7 @@ class AnomalyDetector:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        result = await self.db.execute(
-            select(Incident).where(Incident.reported_date >= cutoff)
-        )
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
         recent = result.scalars().all()
 
         anomalies = []
@@ -304,9 +300,7 @@ class IncidentPredictor:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
-        result = await self.db.execute(
-            select(Incident).where(Incident.reported_date >= cutoff)
-        )
+        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
         incidents = result.scalars().all()
 
         if not incidents:
@@ -393,10 +387,7 @@ class IncidentPredictor:
 
         # Simple keyword-based similarity
         result = await self.db.execute(
-            select(Incident)
-            .where(Incident.description.isnot(None))
-            .order_by(desc(Incident.reported_date))
-            .limit(1000)
+            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)
         )
         all_incidents = result.scalars().all()
 
@@ -604,9 +595,7 @@ class RootCauseAnalyzer:
 
         cutoff = datetime.utcnow() - timedelta(days=lookback_days)
         result = await self.db.execute(
-            select(Incident).where(
-                and_(Incident.reported_date >= cutoff, Incident.description.isnot(None))
-            )
+            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
         )
         incidents = result.scalars().all()
 

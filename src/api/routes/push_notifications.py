@@ -190,9 +190,7 @@ class PushNotificationService:
 
     async def unsubscribe(self, endpoint: str) -> bool:
         """Unsubscribe from push notifications."""
-        result = await self.db.execute(
-            select(PushSubscription).where(PushSubscription.endpoint == endpoint)
-        )
+        result = await self.db.execute(select(PushSubscription).where(PushSubscription.endpoint == endpoint))
         subscription = result.scalar_one_or_none()
 
         if subscription:
@@ -403,9 +401,7 @@ async def get_notification_preferences(
     db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Get notification preferences for current user."""
-    result = await db.execute(
-        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:
@@ -444,9 +440,7 @@ async def update_notification_preferences(
     db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Update notification preferences."""
-    result = await db.execute(
-        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
-    )
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
 
     if not prefs:

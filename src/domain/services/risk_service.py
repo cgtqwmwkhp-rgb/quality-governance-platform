@@ -180,7 +180,9 @@ class RiskService:
 
         return risk
 
-    async def update_risk_assessment(self, risk_id: int, data: dict, assessed_by: Optional[int] = None) -> EnterpriseRisk:
+    async def update_risk_assessment(
+        self, risk_id: int, data: dict, assessed_by: Optional[int] = None
+    ) -> EnterpriseRisk:
         """Update risk assessment scores"""
         result = await self.db.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
         risk = result.scalar_one_or_none()
@@ -433,13 +435,11 @@ class KRIService:
 
     async def get_kri_dashboard(self, tenant_id: Optional[int] = None) -> dict[str, Any]:
         """Get KRI dashboard summary"""
-        stmt = select(EnterpriseKeyRiskIndicator).where(
-            EnterpriseKeyRiskIndicator.is_active == True  # noqa: E712
-        )
+        stmt = select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.is_active == True)  # noqa: E712
         if tenant_id is not None:
-            stmt = stmt.join(
-                EnterpriseRisk, EnterpriseRisk.id == EnterpriseKeyRiskIndicator.risk_id
-            ).where(EnterpriseRisk.tenant_id == tenant_id)
+            stmt = stmt.join(EnterpriseRisk, EnterpriseRisk.id == EnterpriseKeyRiskIndicator.risk_id).where(
+                EnterpriseRisk.tenant_id == tenant_id
+            )
 
         result = await self.db.execute(stmt)
         kris = result.scalars().all()
@@ -507,9 +507,7 @@ class BowTieService:
         mitigation_barriers = [e for e in elements if e.element_type == "mitigation"]
         escalation_factors = [e for e in elements if e.is_escalation_factor]
 
-        result = await self.db.execute(
-            select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id)
-        )
+        result = await self.db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
         control_mappings = result.scalars().all()
         control_ids = [m.control_id for m in control_mappings]
 

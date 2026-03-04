@@ -712,12 +712,14 @@ class EvidenceMatcher:
         # Search controlled documents
         clause_pattern = f"%{clause}%"
         result = await self.db.execute(
-            select(ControlledDocument).where(
+            select(ControlledDocument)
+            .where(
                 and_(
                     ControlledDocument.relevant_clauses.isnot(None),
                     ControlledDocument.status == "active",
                 )
-            ).limit(100)
+            )
+            .limit(100)
         )
         documents = result.scalars().all()
 
@@ -872,16 +874,12 @@ class AuditReportGenerator:
         """Generate executive summary for audit"""
         from src.domain.models.audit import Audit, AuditFinding
 
-        result = await self.db.execute(
-            select(Audit).where(Audit.id == audit_id)
-        )
+        result = await self.db.execute(select(Audit).where(Audit.id == audit_id))
         audit = result.scalar_one_or_none()
         if not audit:
             return "Audit not found"
 
-        result = await self.db.execute(
-            select(AuditFinding).where(AuditFinding.audit_id == audit_id)
-        )
+        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))
         findings = result.scalars().all()
 
         # Count findings by type
@@ -979,9 +977,7 @@ class AuditTrendAnalyzer:
 
         cutoff = datetime.utcnow() - timedelta(days=months * 30)
 
-        result = await self.db.execute(
-            select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date)
-        )
+        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
         audits = result.scalars().all()
 
         monthly_data: dict[str, dict] = defaultdict(
@@ -993,9 +989,7 @@ class AuditTrendAnalyzer:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            findings_result = await self.db.execute(
-                select(AuditFinding).where(AuditFinding.audit_id == audit.id)
-            )
+            findings_result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))
             findings = findings_result.scalars().all()
 
             for finding in findings:

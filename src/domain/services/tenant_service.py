@@ -193,7 +193,9 @@ class TenantService:
 
         if tenant_user.role == "owner":
             count_result = await self.db.execute(
-                select(func.count()).select_from(TenantUser).where(
+                select(func.count())
+                .select_from(TenantUser)
+                .where(
                     TenantUser.tenant_id == tenant_id,
                     TenantUser.role == "owner",
                     TenantUser.is_active == True,
@@ -278,9 +280,7 @@ class TenantService:
     async def accept_invitation(self, token: str, user_id: int) -> TenantUser:
         """Accept a tenant invitation."""
         result = await self.db.execute(
-            select(TenantInvitation).where(
-                TenantInvitation.token == token, TenantInvitation.status == "pending"
-            )
+            select(TenantInvitation).where(TenantInvitation.token == token, TenantInvitation.status == "pending")
         )
         invitation = result.scalar_one_or_none()
 
@@ -353,9 +353,9 @@ class TenantService:
             raise ValueError(f"Tenant {tenant_id} not found")
 
         count_result = await self.db.execute(
-            select(func.count()).select_from(TenantUser).where(
-                TenantUser.tenant_id == tenant_id, TenantUser.is_active == True
-            )
+            select(func.count())
+            .select_from(TenantUser)
+            .where(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
         )
         current_users = count_result.scalar()
 

@@ -83,9 +83,7 @@ class CollaborationService:
         yjs_state_vector: Optional[bytes] = None,
     ) -> CollaborativeDocument:
         """Update the Yjs state of a document."""
-        result = await self.db.execute(
-            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
-        )
+        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -102,9 +100,7 @@ class CollaborationService:
 
     async def create_snapshot(self, document_id: int) -> CollaborativeDocument:
         """Create a snapshot of the current document state."""
-        result = await self.db.execute(
-            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
-        )
+        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -124,9 +120,7 @@ class CollaborationService:
         reason: Optional[str] = None,
     ) -> CollaborativeDocument:
         """Lock a document for exclusive editing."""
-        result = await self.db.execute(
-            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
-        )
+        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -146,9 +140,7 @@ class CollaborationService:
 
     async def unlock_document(self, document_id: int, user_id: int) -> CollaborativeDocument:
         """Unlock a document."""
-        result = await self.db.execute(
-            select(CollaborativeDocument).where(CollaborativeDocument.id == document_id)
-        )
+        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
         doc = result.scalar_one_or_none()
         if not doc:
             raise ValueError(f"Document {document_id} not found")
@@ -329,9 +321,7 @@ class CollaborationService:
         if since_version is not None:
             stmt = stmt.where(CollaborativeChange.version > since_version)
 
-        result = await self.db.execute(
-            stmt.order_by(CollaborativeChange.version).limit(limit)
-        )
+        result = await self.db.execute(stmt.order_by(CollaborativeChange.version).limit(limit))
         return result.scalars().all()
 
     # =========================================================================
@@ -356,9 +346,7 @@ class CollaborationService:
         # Determine thread ID
         thread_id = None
         if parent_id:
-            result = await self.db.execute(
-                select(Comment).where(Comment.id == parent_id)
-            )
+            result = await self.db.execute(select(Comment).where(Comment.id == parent_id))
             parent = result.scalar_one_or_none()
             if parent:
                 thread_id = parent.thread_id or parent.id
@@ -416,9 +404,7 @@ class CollaborationService:
         resolved_by_id: int,
     ) -> Comment:
         """Resolve a comment."""
-        result = await self.db.execute(
-            select(Comment).where(Comment.id == comment_id)
-        )
+        result = await self.db.execute(select(Comment).where(Comment.id == comment_id))
         comment = result.scalar_one_or_none()
         if not comment:
             raise ValueError(f"Comment {comment_id} not found")
@@ -439,9 +425,7 @@ class CollaborationService:
         emoji: str,
     ) -> Comment:
         """Add a reaction to a comment."""
-        result = await self.db.execute(
-            select(Comment).where(Comment.id == comment_id)
-        )
+        result = await self.db.execute(select(Comment).where(Comment.id == comment_id))
         comment = result.scalar_one_or_none()
         if not comment:
             raise ValueError(f"Comment {comment_id} not found")
@@ -474,9 +458,7 @@ class CollaborationService:
         custom_status: Optional[str] = None,
     ) -> Presence:
         """Update user presence."""
-        result = await self.db.execute(
-            select(Presence).where(Presence.user_id == user_id)
-        )
+        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
         presence = result.scalar_one_or_none()
 
         if not presence:
@@ -539,9 +521,7 @@ class CollaborationService:
 
     async def set_offline(self, user_id: int) -> Optional[Presence]:
         """Set user as offline."""
-        result = await self.db.execute(
-            select(Presence).where(Presence.user_id == user_id)
-        )
+        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
         presence = result.scalar_one_or_none()
 
         if presence:

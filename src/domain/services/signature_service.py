@@ -129,9 +129,7 @@ class SignatureService:
 
     async def get_request_by_reference(self, reference: str) -> Optional[SignatureRequest]:
         """Get a signature request by reference number."""
-        result = await self.db.execute(
-            select(SignatureRequest).where(SignatureRequest.reference_number == reference)
-        )
+        result = await self.db.execute(select(SignatureRequest).where(SignatureRequest.reference_number == reference))
         return result.scalar_one_or_none()
 
     async def send_request(self, request_id: int) -> SignatureRequest:
@@ -208,9 +206,7 @@ class SignatureService:
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Record that a signer viewed the document."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -254,9 +250,7 @@ class SignatureService:
         geo_location: Optional[str] = None,
     ) -> Signature:
         """Apply a signature."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -274,7 +268,9 @@ class SignatureService:
         # Check sequential order
         if request.workflow_type == "sequential":
             count_result = await self.db.execute(
-                select(func.count()).select_from(SignatureRequestSigner).where(
+                select(func.count())
+                .select_from(SignatureRequestSigner)
+                .where(
                     SignatureRequestSigner.request_id == request.id,
                     SignatureRequestSigner.order < signer.order,
                     SignatureRequestSigner.status != "signed",
@@ -357,9 +353,7 @@ class SignatureService:
         user_agent: str,
     ) -> SignatureRequestSigner:
         """Decline to sign."""
-        result = await self.db.execute(
-            select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id)
-        )
+        result = await self.db.execute(select(SignatureRequestSigner).where(SignatureRequestSigner.id == signer_id))
         signer = result.scalar_one_or_none()
         if not signer:
             raise ValueError(f"Signer {signer_id} not found")
@@ -479,9 +473,7 @@ class SignatureService:
         metadata: Optional[dict] = None,
     ) -> SignatureRequest:
         """Create a signature request from a template."""
-        result = await self.db.execute(
-            select(SignatureTemplate).where(SignatureTemplate.id == template_id)
-        )
+        result = await self.db.execute(select(SignatureTemplate).where(SignatureTemplate.id == template_id))
         template = result.scalar_one_or_none()
         if not template:
             raise ValueError(f"Template {template_id} not found")

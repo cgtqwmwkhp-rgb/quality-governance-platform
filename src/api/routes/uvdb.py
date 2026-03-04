@@ -572,17 +572,11 @@ async def list_audits(
     if company_name:
         filters.append(UVDBAudit.company_name.ilike(f"%{company_name}%"))
 
-    count_result = await db.execute(
-        select(func.count()).select_from(UVDBAudit).where(*filters)
-    )
+    count_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*filters))
     total = count_result.scalar()
 
     rows_result = await db.execute(
-        select(UVDBAudit)
-        .where(*filters)
-        .order_by(UVDBAudit.audit_date.desc())
-        .offset(skip)
-        .limit(limit)
+        select(UVDBAudit).where(*filters).order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit)
     )
     audits = rows_result.scalars().all()
 
@@ -731,9 +725,7 @@ async def get_audit_responses(
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
 
-    resp_result = await db.execute(
-        select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id)
-    )
+    resp_result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = resp_result.scalars().all()
 
     return {
@@ -793,9 +785,7 @@ async def get_audit_kpis(
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
     kpi_result = await db.execute(
-        select(UVDBKPIRecord)
-        .where(UVDBKPIRecord.audit_id == audit_id)
-        .order_by(UVDBKPIRecord.year.desc())
+        select(UVDBKPIRecord).where(UVDBKPIRecord.audit_id == audit_id).order_by(UVDBKPIRecord.year.desc())
     )
     kpis = kpi_result.scalars().all()
 
@@ -872,9 +862,7 @@ async def get_uvdb_dashboard(
     total_audits = total_result.scalar()
 
     active_result = await db.execute(
-        select(func.count()).select_from(UVDBAudit).where(
-            UVDBAudit.status.in_(["scheduled", "in_progress"])
-        )
+        select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
     )
     active_audits = active_result.scalar()
 

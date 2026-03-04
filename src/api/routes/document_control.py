@@ -142,9 +142,7 @@ async def list_documents(
     count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = count_result.scalar()
 
-    result = await db.execute(
-        stmt.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit)
-    )
+    result = await db.execute(stmt.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit))
     documents = result.scalars().all()
 
     return {
@@ -222,9 +220,7 @@ async def get_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -238,9 +234,7 @@ async def get_document(
     versions = result.scalars().all()
 
     # Get distributions
-    result = await db.execute(
-        select(DocumentDistribution).where(DocumentDistribution.document_id == document_id)
-    )
+    result = await db.execute(select(DocumentDistribution).where(DocumentDistribution.document_id == document_id))
     distributions = result.scalars().all()
 
     # Log access
@@ -321,9 +315,7 @@ async def update_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update document metadata"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -350,9 +342,7 @@ async def create_new_version(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -452,9 +442,7 @@ async def list_workflows(
     db: DbSession = None,
 ) -> list[dict[str, Any]]:
     """List approval workflows"""
-    result = await db.execute(
-        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True)
-    )
+    result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True))
     workflows = result.scalars().all()
 
     return [
@@ -493,16 +481,12 @@ async def submit_for_approval(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    result = await db.execute(
-        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id)
-    )
+    result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id))
     workflow = result.scalar_one_or_none()
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -541,9 +525,7 @@ async def take_approval_action(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    result = await db.execute(
-        select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id)
-    )
+    result = await db.execute(select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id))
     instance = result.scalar_one_or_none()
     if not instance:
         raise HTTPException(status_code=404, detail="Approval instance not found")
@@ -567,9 +549,7 @@ async def take_approval_action(
     )
     workflow = result.scalar_one_or_none()
 
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == instance.document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == instance.document_id))
     document = result.scalar_one_or_none()
 
     if action_request.action == "approved":
@@ -618,9 +598,7 @@ async def distribute_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -680,9 +658,7 @@ async def mark_document_obsolete(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    result = await db.execute(
-        select(ControlledDocument).where(ControlledDocument.id == document_id)
-    )
+    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -752,9 +728,7 @@ async def get_document_summary(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
-    result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True)
-    )
+    result = await db.execute(select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True))
     total = result.scalar()
 
     result = await db.execute(
@@ -790,9 +764,7 @@ async def get_document_summary(
     )
     overdue_review = result.scalar()
 
-    result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(ControlledDocument.status == "obsolete")
-    )
+    result = await db.execute(select(func.count(ControlledDocument.id)).where(ControlledDocument.status == "obsolete"))
     obsolete = result.scalar()
 
     # Pending acknowledgments

@@ -303,9 +303,7 @@ class ABACService:
 
         # Add permissions
         if permission_codes:
-            result = await self.db.execute(
-                select(Permission).where(Permission.code.in_(permission_codes))
-            )
+            result = await self.db.execute(select(Permission).where(Permission.code.in_(permission_codes)))
             permissions = result.scalars().all()
             for perm in permissions:
                 role_perm = RolePermission(role_id=role.id, permission_id=perm.id)

@@ -782,9 +782,7 @@ async def get_fleet_summary(
     db: DbSession,
 ) -> dict[str, Any]:
     """Get fleet emissions summary with driver leaderboard"""
-    result = await db.execute(
-        select(FleetEmissionRecord).where(FleetEmissionRecord.reporting_year_id == year_id)
-    )
+    result = await db.execute(select(FleetEmissionRecord).where(FleetEmissionRecord.reporting_year_id == year_id))
     records = result.scalars().all()
 
     if not records:
@@ -960,9 +958,7 @@ async def get_carbon_dashboard(
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     try:
-        result = await db.execute(
-            select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3)
-        )
+        result = await db.execute(select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3))
         years = result.scalars().all()
     except (ProgrammingError, OperationalError) as e:
         logger.warning(
@@ -1000,9 +996,7 @@ async def get_carbon_dashboard(
 
     current_year = years[0]
 
-    result = await db.execute(
-        select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True)
-    )
+    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))
     baseline = result.scalar_one_or_none()
 
     # Calculate year-on-year change
@@ -1015,9 +1009,7 @@ async def get_carbon_dashboard(
             ) * 100
 
     # Action summary
-    result = await db.execute(
-        select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id)
-    )
+    result = await db.execute(select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id))
     actions = result.scalars().all()
 
     overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]

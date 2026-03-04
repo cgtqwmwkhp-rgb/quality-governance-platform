@@ -727,9 +727,7 @@ async def get_my_reports(
     all_reports: list[MyReportSummary] = []
 
     incidents_query = (
-        select(Incident)
-        .where(Incident.tenant_id == tid)
-        .where(func.lower(Incident.reporter_email) == user_email)
+        select(Incident).where(Incident.tenant_id == tid).where(func.lower(Incident.reporter_email) == user_email)
     )
     incidents_result = await db.execute(incidents_query)
     incidents = incidents_result.scalars().all()
@@ -748,9 +746,7 @@ async def get_my_reports(
         )
 
     complaints_query = (
-        select(Complaint)
-        .where(Complaint.tenant_id == tid)
-        .where(func.lower(Complaint.complainant_email) == user_email)
+        select(Complaint).where(Complaint.tenant_id == tid).where(func.lower(Complaint.complainant_email) == user_email)
     )
     complaints_result = await db.execute(complaints_query)
     complaints = complaints_result.scalars().all()
@@ -790,9 +786,7 @@ async def get_my_reports(
         )
 
     nm_query = (
-        select(NearMiss)
-        .where(NearMiss.tenant_id == tid)
-        .where(func.lower(NearMiss.reporter_email) == user_email)
+        select(NearMiss).where(NearMiss.tenant_id == tid).where(func.lower(NearMiss.reporter_email) == user_email)
     )
     nm_result = await db.execute(nm_query)
     near_misses = nm_result.scalars().all()

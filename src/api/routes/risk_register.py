@@ -149,9 +149,7 @@ async def list_risks(
     count_result = await db.execute(select(func.count()).select_from(base_stmt.subquery()))
     total = count_result.scalar_one()
 
-    data_result = await db.execute(
-        base_stmt.order_by(EnterpriseRisk.residual_score.desc()).offset(skip).limit(limit)
-    )
+    data_result = await db.execute(base_stmt.order_by(EnterpriseRisk.residual_score.desc()).offset(skip).limit(limit))
     risks = data_result.scalars().all()
 
     return {
@@ -214,23 +212,17 @@ async def get_risk(
     if not risk:
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
-    result = await db.execute(
-        select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id)
-    )
+    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()
     control_ids = [m.control_id for m in control_mappings]
 
     if control_ids:
-        result = await db.execute(
-            select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids))
-        )
+        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
         controls = result.scalars().all()
     else:
         controls = []
 
-    result = await db.execute(
-        select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id)
-    )
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
     kris = result.scalars().all()
 
     result = await db.execute(
@@ -579,9 +571,7 @@ async def update_kri_value(
     db: DbSession,
 ) -> dict[str, Any]:
     """Update KRI value"""
-    result = await db.execute(
-        select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
@@ -615,9 +605,7 @@ async def get_kri_history(
     db: DbSession,
 ) -> list[dict[str, Any]]:
     """Get KRI historical values"""
-    result = await db.execute(
-        select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id)
-    )
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
         raise HTTPException(status_code=404, detail="KRI not found")
@@ -705,9 +693,7 @@ async def link_control_to_risk(
     )
     risk = result.scalar_one_or_none()
 
-    result = await db.execute(
-        select(EnterpriseRiskControl).where(EnterpriseRiskControl.id == control_id)
-    )
+    result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id == control_id))
     control = result.scalar_one_or_none()
 
     if not risk:
@@ -780,9 +766,7 @@ async def get_risk_summary(
     tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
 
     total_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.status != "closed", tenant_filter
-        )
+        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.status != "closed", tenant_filter)
     )
     total_risks = total_result.scalar_one()
 

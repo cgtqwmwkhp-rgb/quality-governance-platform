@@ -4,9 +4,8 @@ import logging
 import os
 import sys
 import time
-from typing import Any, AsyncGenerator, Optional
+from typing import Any, AsyncGenerator
 
-from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
@@ -67,23 +66,10 @@ async_session_maker = async_sessionmaker(
 )
 
 
-async def get_db(request: Optional[Request] = None) -> AsyncGenerator[AsyncSession, None]:
-    """Dependency to get database session.
-
-    If a tenant_id is present on request.state (set by TenantContextMiddleware),
-    issues SET LOCAL on *this* connection so PostgreSQL RLS policies apply.
-    """
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency to get database session."""
     async with async_session_maker() as session:
         try:
-            if request is not None:
-                tid = getattr(request.state, "tenant_id", None)
-                if tid is not None:
-                    from sqlalchemy import text
-
-                    await session.execute(
-                        text("SET LOCAL app.current_tenant_id = :tid"),
-                        {"tid": str(tid)},
-                    )
             yield session
             await session.commit()
         except Exception:

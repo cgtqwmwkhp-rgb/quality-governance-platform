@@ -486,9 +486,7 @@ async def get_signature_stats(
     status_counts = result.all()
 
     # Total signatures
-    result = await db.execute(
-        select(func.count(Signature.id)).where(Signature.tenant_id == current_user.tenant_id)
-    )
+    result = await db.execute(select(func.count(Signature.id)).where(Signature.tenant_id == current_user.tenant_id))
     total_signatures = result.scalar()
 
     # This month
