@@ -14,7 +14,7 @@ export default defineConfig({
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/test/**', 'src/**/*.d.ts'],
       thresholds: {
-        statements: 1,
+        statements: 3,
       },
     },
   },

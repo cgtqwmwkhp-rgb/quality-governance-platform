@@ -202,6 +202,7 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           if [ -z "$DB_URL" ]; then
             echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
@@ -231,6 +232,8 @@ jobs:
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               CI_TEST_SECRET="${{ secrets.CI_TEST_SECRET }}" \
+              PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              UAT_MODE="READ_ONLY" \
             --output none
           
           echo "   ✅ Application settings configured"
