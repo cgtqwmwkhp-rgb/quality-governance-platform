@@ -184,7 +184,13 @@ def main():
         help="File patterns to scan (default: *.py, *.ts, *.js)",
     )
     parser.add_argument("--allowlist", "-a", type=str, default=None, help="Path to allowlist JSON file")
-    parser.add_argument("--output-json", "-o", type=str, default=None, help="Output violations to JSON file")
+    parser.add_argument(
+        "--output-json",
+        "-o",
+        type=str,
+        default=None,
+        help="Output violations to JSON file",
+    )
 
     args = parser.parse_args()
 

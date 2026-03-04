@@ -11,7 +11,7 @@ Features:
 
 import logging
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,6 @@ class AnalyticsService:
         self,
         time_range: str = "last_30_days",
         filters: Optional[Dict[str, Any]] = None,
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get summary KPIs across all modules.
@@ -94,7 +93,6 @@ class AnalyticsService:
         granularity: str = "daily",
         time_range: str = "last_30_days",
         group_by: Optional[str] = None,
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Get time series trend data for charting.
@@ -116,7 +114,7 @@ class AnalyticsService:
 
         base_value = 10
         for i in range(days):
-            date = datetime.now(timezone.utc) - timedelta(days=days - i - 1)
+            date = datetime.utcnow() - timedelta(days=days - i - 1)
             labels.append(date.strftime("%Y-%m-%d"))
             # Add some variance
             variance = math.sin(i / 5) * 3 + (i / days) * 2
@@ -217,7 +215,6 @@ class AnalyticsService:
         metric: str,
         industry: str = "utilities",
         region: str = "uk",
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Compare organization metrics against industry benchmarks.
@@ -281,11 +278,7 @@ class AnalyticsService:
             },
         )
 
-    def get_benchmark_summary(
-        self,
-        industry: str = "utilities",
-        tenant_id: int | None = None,
-    ) -> Dict[str, Any]:
+    def get_benchmark_summary(self, industry: str = "utilities") -> Dict[str, Any]:
         """Get summary of all benchmark comparisons."""
         metrics = [
             "incident_rate",
@@ -332,7 +325,6 @@ class AnalyticsService:
     def calculate_cost_of_non_compliance(
         self,
         time_range: str = "last_12_months",
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate total cost of non-compliance.
@@ -403,7 +395,6 @@ class AnalyticsService:
     def calculate_roi(
         self,
         investment_id: Optional[int] = None,
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Calculate ROI for safety investments.
@@ -501,7 +492,6 @@ class AnalyticsService:
     def generate_executive_summary(
         self,
         time_range: str = "last_month",
-        tenant_id: int | None = None,
     ) -> Dict[str, Any]:
         """
         Generate executive summary for automated reports.
@@ -514,7 +504,7 @@ class AnalyticsService:
         benchmarks = self.get_benchmark_summary()
 
         return {
-            "report_date": datetime.now(timezone.utc).isoformat(),
+            "report_date": datetime.utcnow().isoformat(),
             "time_range": time_range,
             "executive_summary": {
                 "headline": "Safety Performance Improved by 8.5%",

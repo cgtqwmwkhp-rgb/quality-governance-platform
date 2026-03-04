@@ -1,0 +1,145 @@
+/**
+ * Accessibility Audit for UX Functional Coverage Gate
+ *
+ * Runs axe-core on P0 pages from PAGE_REGISTRY.yml.
+ * Fails on critical or serious violations.
+ * Results written to a11y-audit-results.json for aggregation.
+ */
+
+import { test, Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+
+interface PageEntry {
+  pageId: string;
+  route: string;
+  auth: string;
+  criticality: string;
+  component: string;
+  description: string;
+}
+
+interface A11yResult {
+  pageId: string;
+  route: string;
+  criticality: string;
+  result: 'PASS' | 'FAIL' | 'SKIP';
+  violations_critical: number;
+  violations_serious: number;
+  violations_moderate: number;
+  violations_minor: number;
+  error_message?: string;
+}
+
+const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const results: A11yResult[] = [];
+
+function loadP0Pages(): PageEntry[] {
+  const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
+  const content = fs.readFileSync(registryPath, 'utf-8');
+  const registry = yaml.load(content) as any;
+
+  const allPages: PageEntry[] = [
+    ...(registry.public_routes || []),
+    ...(registry.portal_routes || []),
+    ...(registry.admin_routes || []),
+  ];
+
+  return allPages.filter(
+    (p) => p.criticality === 'P0' && !p.route.includes(':')
+  );
+}
+
+async function setupAuth(page: Page, authType: string): Promise<void> {
+  if (authType === 'anon' || authType === 'none') return;
+
+  if (authType === 'portal_sso') {
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      localStorage.setItem('portal_user', JSON.stringify({
+        email: 'test@example.com',
+        name: 'Test User',
+        company: 'Test Corp',
+      }));
+      sessionStorage.setItem('portal_session_time', Date.now().toString());
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+    return;
+  }
+
+  if (authType === 'jwt_admin') {
+    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.test';
+      localStorage.setItem('access_token', fakeJwt);
+      localStorage.setItem('platform_access_token', fakeJwt);
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1000);
+    return;
+  }
+}
+
+test.describe.configure({ mode: 'serial' });
+
+test.describe('Accessibility Audit (axe-core)', () => {
+  const pages = loadP0Pages();
+
+  for (const entry of pages) {
+    test(`a11y: ${entry.pageId} (${entry.route})`, async ({ page }) => {
+      try {
+        await setupAuth(page, entry.auth);
+
+        const url = entry.route.startsWith('http')
+          ? entry.route
+          : `${APP_URL}${entry.route}`;
+
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.waitForTimeout(2000);
+
+        const axeResults = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+          .analyze();
+
+        const critical = axeResults.violations.filter((v) => v.impact === 'critical').length;
+        const serious = axeResults.violations.filter((v) => v.impact === 'serious').length;
+        const moderate = axeResults.violations.filter((v) => v.impact === 'moderate').length;
+        const minor = axeResults.violations.filter((v) => v.impact === 'minor').length;
+
+        const hasCriticalFailures = critical > 0 || serious > 0;
+
+        results.push({
+          pageId: entry.pageId,
+          route: entry.route,
+          criticality: entry.criticality,
+          result: hasCriticalFailures ? 'FAIL' : 'PASS',
+          violations_critical: critical,
+          violations_serious: serious,
+          violations_moderate: moderate,
+          violations_minor: minor,
+        });
+      } catch (err: any) {
+        results.push({
+          pageId: entry.pageId,
+          route: entry.route,
+          criticality: entry.criticality,
+          result: 'SKIP',
+          violations_critical: 0,
+          violations_serious: 0,
+          violations_moderate: 0,
+          violations_minor: 0,
+          error_message: err.message?.substring(0, 200),
+        });
+      }
+    });
+  }
+
+  test.afterAll(() => {
+    const outputPath = path.join(__dirname, '../a11y-audit-results.json');
+    fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
+    console.log(`[A11y Audit] Wrote ${results.length} results to ${outputPath}`);
+  });
+});

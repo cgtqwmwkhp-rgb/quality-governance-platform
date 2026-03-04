@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Search,
@@ -15,13 +15,11 @@ import {
   Eye,
   Check,
   X,
-} from "lucide-react";
-import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { cn } from "../../helpers/utils";
-import { useToast, ToastContainer } from "../../components/ui/Toast";
-import { formTemplatesApi } from "../../api/client";
+} from 'lucide-react';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { cn } from '../../helpers/utils';
 
 interface FormTemplate {
   id: number;
@@ -42,76 +40,99 @@ const FORM_TYPE_CONFIG: Record<
   { label: string; icon: React.ReactNode; color: string }
 > = {
   incident: {
-    label: "Incident",
+    label: 'Incident',
     icon: <AlertTriangle className="w-4 h-4" />,
-    color: "text-destructive bg-destructive/10",
+    color: 'text-destructive bg-destructive/10',
   },
   near_miss: {
-    label: "Near Miss",
+    label: 'Near Miss',
     icon: <AlertTriangle className="w-4 h-4" />,
-    color: "text-warning bg-warning/10",
+    color: 'text-warning bg-warning/10',
   },
   complaint: {
-    label: "Complaint",
+    label: 'Complaint',
     icon: <MessageSquare className="w-4 h-4" />,
-    color: "text-info bg-info/10",
+    color: 'text-info bg-info/10',
   },
   rta: {
-    label: "RTA",
+    label: 'RTA',
     icon: <Car className="w-4 h-4" />,
-    color: "text-purple-600 bg-purple-100",
+    color: 'text-purple-600 bg-purple-100',
   },
   audit: {
-    label: "Audit",
+    label: 'Audit',
     icon: <ClipboardCheck className="w-4 h-4" />,
-    color: "text-primary bg-primary/10",
+    color: 'text-primary bg-primary/10',
   },
   custom: {
-    label: "Custom",
+    label: 'Custom',
     icon: <FileText className="w-4 h-4" />,
-    color: "text-muted-foreground bg-muted",
+    color: 'text-muted-foreground bg-muted',
   },
 };
 
+// Mock data for demonstration
+const MOCK_FORMS: FormTemplate[] = [
+  {
+    id: 1,
+    name: 'Incident Report Form',
+    slug: 'incident-report',
+    form_type: 'incident',
+    description: 'Standard incident reporting form for workplace injuries',
+    is_active: true,
+    is_published: true,
+    version: 3,
+    steps_count: 4,
+    fields_count: 18,
+    updated_at: '2026-01-19T14:30:00Z',
+  },
+  {
+    id: 2,
+    name: 'Near Miss Report',
+    slug: 'near-miss',
+    form_type: 'near_miss',
+    description: 'Report near miss incidents and close calls',
+    is_active: true,
+    is_published: true,
+    version: 2,
+    steps_count: 3,
+    fields_count: 12,
+    updated_at: '2026-01-18T10:15:00Z',
+  },
+  {
+    id: 3,
+    name: 'Customer Complaint',
+    slug: 'complaint',
+    form_type: 'complaint',
+    description: 'Customer complaint submission form',
+    is_active: true,
+    is_published: true,
+    version: 1,
+    steps_count: 3,
+    fields_count: 10,
+    updated_at: '2026-01-17T09:00:00Z',
+  },
+  {
+    id: 4,
+    name: 'Road Traffic Collision',
+    slug: 'rta',
+    form_type: 'rta',
+    description: 'Report road traffic incidents and collisions',
+    is_active: true,
+    is_published: true,
+    version: 2,
+    steps_count: 5,
+    fields_count: 24,
+    updated_at: '2026-01-16T16:45:00Z',
+  },
+];
+
 export default function FormsList() {
   const navigate = useNavigate();
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
-  const [forms, setForms] = useState<FormTemplate[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS);
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
-  const [, setLoading] = useState(true);
-
-  const loadForms = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await formTemplatesApi.list(filterType || undefined);
-      setForms(
-        (data.items || []).map((f) => ({
-          id: f.id,
-          name: f.name,
-          slug: f.slug,
-          form_type: f.form_type,
-          description: f.description,
-          is_active: f.is_active,
-          is_published: f.is_published,
-          version: f.version,
-          steps_count: f.steps_count ?? 0,
-          fields_count: f.fields_count ?? 0,
-          updated_at: f.updated_at ?? "",
-        })),
-      );
-    } catch {
-      console.error("Failed to load forms");
-      showToast("Failed to load forms", "error");
-    } finally {
-      setLoading(false);
-    }
-  }, [filterType]);
-
-  useEffect(() => {
-    loadForms();
-  }, [loadForms]);
 
   const filteredForms = forms.filter((form) => {
     const matchesSearch =
@@ -121,90 +142,48 @@ export default function FormsList() {
     return matchesSearch && matchesType;
   });
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this form?")) {
-      try {
-        await formTemplatesApi.delete(id);
-        setForms((prev) => prev.filter((f) => f.id !== id));
-      } catch {
-        console.error("Failed to delete form");
-        showToast("Failed to delete form", "error");
-      }
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to delete this form?')) {
+      setForms((prev) => prev.filter((f) => f.id !== id));
     }
     setActiveMenu(null);
   };
 
-  const handleDuplicate = async (form: FormTemplate) => {
-    try {
-      const created = await formTemplatesApi.create({
-        name: `${form.name} (Copy)`,
-        slug: `${form.slug}-copy-${Date.now()}`,
-        form_type: form.form_type,
-        description: form.description,
-      });
-      setForms((prev) => [
-        ...prev,
-        {
-          id: created.id,
-          name: created.name,
-          slug: created.slug,
-          form_type: created.form_type,
-          description: created.description,
-          is_active: created.is_active,
-          is_published: created.is_published,
-          version: created.version,
-          steps_count: created.steps_count ?? 0,
-          fields_count: created.fields_count ?? 0,
-          updated_at: created.updated_at ?? "",
-        },
-      ]);
-    } catch {
-      console.error("Failed to duplicate form");
-      showToast("Failed to duplicate form", "error");
-    }
+  const handleDuplicate = (form: FormTemplate) => {
+    const duplicate: FormTemplate = {
+      ...form,
+      id: Date.now(),
+      name: `${form.name} (Copy)`,
+      slug: `${form.slug}-copy`,
+      is_published: false,
+      version: 1,
+    };
+    setForms((prev) => [...prev, duplicate]);
     setActiveMenu(null);
   };
 
-  const togglePublish = async (id: number) => {
-    const form = forms.find((f) => f.id === id);
-    if (!form) return;
-    try {
-      if (!form.is_published) {
-        await formTemplatesApi.publish(id);
-      } else {
-        await formTemplatesApi.update(id, { is_published: false });
-      }
-      setForms((prev) =>
-        prev.map((f) =>
-          f.id === id ? { ...f, is_published: !f.is_published } : f,
-        ),
-      );
-    } catch {
-      console.error("Failed to toggle publish");
-      showToast("Failed to toggle publish status", "error");
-    }
+  const togglePublish = (id: number) => {
+    setForms((prev) =>
+      prev.map((f) =>
+        f.id === id ? { ...f, is_published: !f.is_published } : f
+      )
+    );
     setActiveMenu(null);
   };
 
   return (
-    <div className="min-h-screen bg-surface" data-testid="admin-forms-page">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
       <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Form Builder
-              </h1>
+              <h1 className="text-2xl font-bold text-foreground">Form Builder</h1>
               <p className="text-muted-foreground mt-1">
-                Create and manage customizable forms for incidents, complaints,
-                and more
+                Create and manage customizable forms for incidents, complaints, and more
               </p>
             </div>
-            <Button
-              onClick={() => navigate("/admin/forms/new")}
-              data-testid="create-form-btn"
-            >
+            <Button onClick={() => navigate('/admin/forms/new')}>
               <Plus className="w-4 h-4 mr-2" />
               Create New Form
             </Button>
@@ -226,10 +205,10 @@ export default function FormsList() {
               <button
                 onClick={() => setFilterType(null)}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   !filterType
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:text-foreground",
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
                 )}
               >
                 All
@@ -237,14 +216,12 @@ export default function FormsList() {
               {Object.entries(FORM_TYPE_CONFIG).map(([type, config]) => (
                 <button
                   key={type}
-                  onClick={() =>
-                    setFilterType(type === filterType ? null : type)
-                  }
+                  onClick={() => setFilterType(type === filterType ? null : type)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5",
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5',
                     filterType === type
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:text-foreground",
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
                   )}
                 >
                   {config.icon}
@@ -261,15 +238,13 @@ export default function FormsList() {
         {filteredForms.length === 0 ? (
           <Card className="p-12 text-center">
             <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              No forms found
-            </h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">No forms found</h3>
             <p className="text-muted-foreground mb-4">
               {searchQuery
-                ? "Try adjusting your search or filters"
-                : "Get started by creating your first form"}
+                ? 'Try adjusting your search or filters'
+                : 'Get started by creating your first form'}
             </p>
-            <Button onClick={() => navigate("/admin/forms/new")}>
+            <Button onClick={() => navigate('/admin/forms/new')}>
               <Plus className="w-4 h-4 mr-2" />
               Create New Form
             </Button>
@@ -277,8 +252,7 @@ export default function FormsList() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredForms.map((form) => {
-              const typeConfig =
-                FORM_TYPE_CONFIG[form.form_type] || FORM_TYPE_CONFIG["custom"];
+              const typeConfig = FORM_TYPE_CONFIG[form.form_type] || FORM_TYPE_CONFIG.custom;
 
               return (
                 <Card
@@ -290,12 +264,12 @@ export default function FormsList() {
                   <div className="flex items-center justify-between mb-3">
                     <span
                       className={cn(
-                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
-                        typeConfig!.color,
+                        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+                        typeConfig.color
                       )}
                     >
-                      {typeConfig!.icon}
-                      {typeConfig!.label}
+                      {typeConfig.icon}
+                      {typeConfig.label}
                     </span>
                     <div className="flex items-center gap-2">
                       {form.is_published ? (
@@ -316,7 +290,7 @@ export default function FormsList() {
                     {form.name}
                   </h3>
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                    {form.description || "No description"}
+                    {form.description || 'No description'}
                   </p>
 
                   {/* Stats */}
@@ -399,7 +373,6 @@ export default function FormsList() {
           </div>
         )}
       </main>
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -16,7 +16,11 @@ def main() -> int:
     parser.add_argument("--uat-report-path", required=True, help="Path to UAT report artifact")
     parser.add_argument("--rollback-report-path", required=True, help="Path to rollback drill artifact")
     parser.add_argument("--approved-at-utc", required=True, help="UTC approval timestamp")
-    parser.add_argument("--output", default="docs/evidence/release_signoff.json", help="Output file path")
+    parser.add_argument(
+        "--output",
+        default="docs/evidence/release_signoff.json",
+        help="Output file path",
+    )
     args = parser.parse_args()
 
     payload = {

@@ -99,7 +99,13 @@ class RiskStatisticsService:
         risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
 
         matrix: list[list[RiskMatrixCell]] = []
-        risks_by_level = {"very_low": 0, "low": 0, "medium": 0, "high": 0, "critical": 0}
+        risks_by_level = {
+            "very_low": 0,
+            "low": 0,
+            "medium": 0,
+            "high": 0,
+            "critical": 0,
+        }
         total_risks = 0
 
         for likelihood in range(5, 0, -1):

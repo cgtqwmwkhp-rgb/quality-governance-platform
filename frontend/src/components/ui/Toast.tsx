@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
+import { useLiveAnnouncer } from "./LiveAnnouncer";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -166,6 +167,7 @@ let toastCounter = 0;
 
 export function useToast() {
   const [toasts, setToasts] = useState<ToastData[]>([]);
+  const { announce } = useLiveAnnouncer();
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -175,8 +177,10 @@ export function useToast() {
     (message: string, variant: ToastVariant = "success") => {
       const id = `toast-${++toastCounter}-${Date.now()}`;
       setToasts((prev) => [...prev, { id, message, variant }]);
+      const isUrgent = variant === "error" || variant === "warning";
+      announce(message, isUrgent ? "assertive" : "polite");
     },
-    [],
+    [announce],
   );
 
   return { toasts, show, dismiss };

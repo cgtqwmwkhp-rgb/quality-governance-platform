@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText } from 'lucide-react'
+import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText, Play } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 };
 
 export default function Audits() {
+  const navigate = useNavigate()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
@@ -76,20 +78,27 @@ export default function Audits() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showVersionSelector, setShowVersionSelector] = useState(false)
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast()
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const { toasts, dismiss: dismissToast } = useToast()
 
   const loadData = async () => {
+    setLoadError(null)
     try {
-      const [auditsRes, findingsRes, templatesRes] = await Promise.all([
+      const [auditsRes, findingsRes, templatesRes] = await Promise.allSettled([
         auditsApi.listRuns(1, 100),
         auditsApi.listFindings(1, 100),
         auditsApi.listTemplates(1, 100, { is_published: true }),
       ])
-      setAudits(auditsRes.data.items || [])
-      setFindings(findingsRes.data.items || [])
-      setTemplates(templatesRes.data.items || [])
+      setAudits(auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : [])
+      setFindings(findingsRes.status === 'fulfilled' ? findingsRes.value.data.items || [] : [])
+      setTemplates(templatesRes.status === 'fulfilled' ? templatesRes.value.data.items || [] : [])
+      const failures = [auditsRes, findingsRes, templatesRes].filter(r => r.status === 'rejected')
+      if (failures.length > 0) {
+        setLoadError(`Failed to load some data. ${failures.length} of 3 requests failed.`)
+      }
     } catch (err) {
       console.error('Failed to load audits:', err)
+      setLoadError('Failed to load audit data. Please try again.')
       setAudits([])
       setFindings([])
       setTemplates([])
@@ -128,7 +137,7 @@ export default function Audits() {
   }, [templates])
 
   const latestPublishedTemplates = useMemo(
-    () => templateFamilies.map((family) => family.versions[0]).filter(Boolean),
+    () => templateFamilies.map((family) => family.versions[0]).filter((t): t is AuditTemplate => t != null),
     [templateFamilies]
   )
 
@@ -145,7 +154,7 @@ export default function Audits() {
     if (!latestPublishedTemplates.length) {
       return INITIAL_FORM_STATE
     }
-    const preferred = latestPublishedTemplates[0]
+    const preferred = latestPublishedTemplates[0]!
     return {
       ...INITIAL_FORM_STATE,
       template_id: preferred.id,
@@ -212,8 +221,19 @@ export default function Audits() {
     }
   };
 
+  const filteredAudits = useMemo(() => {
+    if (!searchTerm.trim()) return audits
+    const term = searchTerm.toLowerCase()
+    return audits.filter(
+      (a) =>
+        (a.title || '').toLowerCase().includes(term) ||
+        (a.reference_number || '').toLowerCase().includes(term) ||
+        (a.location || '').toLowerCase().includes(term)
+    )
+  }, [audits, searchTerm])
+
   const getAuditsByStatus = (status: string) => {
-    return audits.filter((a) => a.status === status);
+    return filteredAudits.filter((a) => a.status === status);
   };
 
   const getScoreColor = (percentage?: number) => {
@@ -258,11 +278,11 @@ export default function Audits() {
   };
 
   const stats = {
-    total: audits.length,
-    inProgress: audits.filter(a => a.status === 'in_progress').length,
-    completed: audits.filter(a => a.status === 'completed').length,
-    avgScore: audits.filter(a => a.score_percentage).reduce((acc, a) => acc + (a.score_percentage || 0), 0) / 
-              (audits.filter(a => a.score_percentage).length || 1),
+    total: filteredAudits.length,
+    inProgress: filteredAudits.filter(a => a.status === 'in_progress').length,
+    completed: filteredAudits.filter(a => a.status === 'completed').length,
+    avgScore: filteredAudits.filter(a => a.score_percentage != null).reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) / 
+              (filteredAudits.filter(a => a.score_percentage != null).length || 1),
     openFindings: findings.filter(f => f.status === 'open').length,
   }
   if (loading) {
@@ -276,6 +296,17 @@ export default function Audits() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {loadError && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-4 flex items-center justify-between">
+          <p className="text-sm text-destructive font-medium">{loadError}</p>
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 text-sm font-medium bg-destructive text-white rounded-lg hover:bg-destructive/90"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -338,7 +369,7 @@ export default function Audits() {
           },
           {
             label: "Avg Score",
-            value: `${stats.avgScore.toFixed(0)}%`,
+            value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
             icon: BarChart3,
             variant: "primary" as const,
           },
@@ -433,7 +464,7 @@ export default function Audits() {
                               v{audit.template_version}
                             </Badge>
                           </div>
-                          {audit.score_percentage !== undefined && (
+                          {audit.score_percentage != null && (
                             <span className={cn("text-sm font-bold", getScoreColor(audit.score_percentage))}>
                               {audit.score_percentage.toFixed(0)}%
                             </span>
@@ -506,18 +537,19 @@ export default function Audits() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {audits.length === 0 ? (
+                  {filteredAudits.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
                         <ClipboardCheck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
                         <p>No audits found</p>
                       </td>
                     </tr>
                   ) : (
-                    audits.map((audit) => (
+                    filteredAudits.map((audit) => (
                       <tr
                         key={audit.id}
                         className="hover:bg-surface transition-colors cursor-pointer"
@@ -548,7 +580,7 @@ export default function Audits() {
                             audit.status === 'pending_review' ? 'acknowledged' :
                             'submitted'
                           }>
-                            {audit.status.replace('_', ' ')}
+                            {(audit.status as string).replace(/_/g, ' ')}
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
@@ -784,9 +816,9 @@ export default function Audits() {
                         )}
                       </div>
                     )}
-                    {latestSelectedTemplate && (
+                    {latestSelectedTemplate && selectedTemplate?.id === latestSelectedTemplate.id && (
                       <p className="text-xs text-muted-foreground">
-                        Defaulting to latest published version: v{latestSelectedTemplate.version}
+                        Using latest published version: v{latestSelectedTemplate.version}
                       </p>
                     )}
                     {selectedTemplate && (

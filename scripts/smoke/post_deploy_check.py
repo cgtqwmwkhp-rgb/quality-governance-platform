@@ -179,9 +179,7 @@ def check_endpoint_health(
     for attempt in range(MAX_RETRIES):
         start = time.time()
         try:
-            resp = requests.get(
-                url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS
-            )
+            resp = requests.get(url, headers={"Origin": CORS_ORIGIN}, timeout=TIMEOUT_SECONDS)
             latency_ms = int((time.time() - start) * 1000)
 
             if resp.status_code in accepted:
@@ -315,9 +313,7 @@ def run_smoke_checks(base_url: str, expected_sha: str, email: str, password: str
     results.append(check_cors_preflight(base_url, "/api/v1/uvdb/sections"))
 
     # 3. Endpoint health checks
-    results.append(
-        check_endpoint_health(base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard")
-    )
+    results.append(check_endpoint_health(base_url, "/api/v1/planet-mark/dashboard", "planetmark_dashboard"))
     results.append(
         check_endpoint_health(
             base_url,

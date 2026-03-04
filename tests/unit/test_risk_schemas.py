@@ -214,12 +214,14 @@ class TestRiskMatrixCell:
         cell = RiskMatrixCell(
             likelihood=4,
             impact=5,
-            count=3,
+            score=20,
             level="critical",
+            color="#ef4444",
+            risk_count=3,
         )
-        assert cell.likelihood == 4
+        assert cell.score == 20
         assert cell.level == "critical"
-        assert cell.count == 3
+        assert cell.risk_count == 3
 
 
 class TestRiskScoreCalculation:

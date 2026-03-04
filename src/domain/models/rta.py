@@ -158,11 +158,10 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "rta_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    rta_id: Mapped[int] = mapped_column(ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False)
 
     # Multi-tenancy
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
-
-    rta_id: Mapped[int] = mapped_column(ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False)
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)

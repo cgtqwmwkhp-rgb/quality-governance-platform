@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -93,14 +93,18 @@ def _decode_option_list(options: Optional[list[Any]]) -> Optional[list[Any]]:
     return decoded_options
 
 
-def _decode_template_response_entities(response: AuditTemplateResponse) -> AuditTemplateResponse:
+def _decode_template_response_entities(
+    response: AuditTemplateResponse,
+) -> AuditTemplateResponse:
     response.name = _decode_html(response.name) or response.name
     response.description = _decode_html(response.description)
     response.category = _decode_html(response.category)
     return response
 
 
-def _decode_template_detail_response_entities(response: AuditTemplateDetailResponse) -> AuditTemplateDetailResponse:
+def _decode_template_detail_response_entities(
+    response: AuditTemplateDetailResponse,
+) -> AuditTemplateDetailResponse:
     response = _decode_template_response_entities(response)
     for section in response.sections:
         section.title = _decode_html(section.title) or section.title
@@ -144,7 +148,13 @@ async def list_templates(
 ) -> Any:
     """List all audit templates with pagination and filtering."""
     started = time.perf_counter()
-    query = select(AuditTemplate).where(AuditTemplate.is_active == True)
+    query = select(AuditTemplate).where(
+        AuditTemplate.is_active == True,
+        or_(
+            AuditTemplate.tenant_id == current_user.tenant_id,
+            AuditTemplate.tenant_id.is_(None),
+        ),
+    )
 
     if search:
         search_filter = f"%{search}%"
@@ -158,11 +168,9 @@ async def list_templates(
     if is_published is not None:
         query = query.where(AuditTemplate.is_published == is_published)
 
-    # Count total
     count_query = select(func.count()).select_from(query.subquery())
     total = await db.scalar(count_query) or 0
 
-    # Apply pagination
     page = params.page
     page_size = params.page_size
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -182,7 +190,11 @@ async def list_templates(
     return response
 
 
-@router.post("/templates", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/templates",
+    response_model=AuditTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
@@ -197,6 +209,7 @@ async def create_template(
     template = AuditTemplate(
         **template_data_dict,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Generate reference number
@@ -282,7 +295,15 @@ async def update_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Update an audit template."""
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -326,7 +347,9 @@ async def publish_template(
 
 
 @router.post(
-    "/templates/{template_id}/clone", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED
+    "/templates/{template_id}/clone",
+    response_model=AuditTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def clone_template(
     template_id: int,
@@ -343,7 +366,11 @@ async def clone_template(
     return AuditTemplateResponse.model_validate(cloned)
 
 
-@router.delete("/templates/{template_id}", status_code=status.HTTP_200_OK, response_model=ArchiveTemplateResponse)
+@router.delete(
+    "/templates/{template_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=ArchiveTemplateResponse,
+)
 async def archive_template(
     template_id: int,
     db: DbSession,
@@ -402,7 +429,9 @@ async def permanently_delete_template(
 
 
 @router.post(
-    "/templates/{template_id}/sections", response_model=AuditSectionResponse, status_code=status.HTTP_201_CREATED
+    "/templates/{template_id}/sections",
+    response_model=AuditSectionResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_section(
     template_id: int,
@@ -452,7 +481,9 @@ async def delete_section(
 
 
 @router.post(
-    "/templates/{template_id}/questions", response_model=AuditQuestionResponse, status_code=status.HTTP_201_CREATED
+    "/templates/{template_id}/questions",
+    response_model=AuditQuestionResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_question(
     template_id: int,
@@ -461,8 +492,15 @@ async def create_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Create a new question in an audit template."""
-    # Verify template exists
-    result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == template_id))
+    result = await db.execute(
+        select(AuditTemplate).where(
+            AuditTemplate.id == template_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
@@ -526,7 +564,17 @@ async def update_question(
     current_user: CurrentUser,
 ) -> AuditQuestionResponse:
     """Update an audit question."""
-    result = await db.execute(select(AuditQuestion).where(AuditQuestion.id == question_id))
+    result = await db.execute(
+        select(AuditQuestion)
+        .join(AuditTemplate, AuditQuestion.template_id == AuditTemplate.id)
+        .where(
+            AuditQuestion.id == question_id,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
+        )
+    )
     question = result.scalar_one_or_none()
 
     if not question:
@@ -625,6 +673,10 @@ async def create_run(
                 AuditTemplate.id == run_data.template_id,
                 AuditTemplate.is_published == True,
                 AuditTemplate.is_active == True,
+                or_(
+                    AuditTemplate.tenant_id == current_user.tenant_id,
+                    AuditTemplate.tenant_id.is_(None),
+                ),
             )
         )
     )
@@ -647,6 +699,7 @@ async def create_run(
         template_version=template.version,
         status=AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Generate reference number
@@ -715,7 +768,17 @@ async def complete_run(
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     started = time.perf_counter()
-    result = await db.execute(select(AuditRun).options(selectinload(AuditRun.responses)).where(AuditRun.id == run_id))
+    result = await db.execute(
+        select(AuditRun)
+        .options(selectinload(AuditRun.responses))
+        .where(
+            AuditRun.id == run_id,
+            or_(
+                AuditRun.tenant_id == current_user.tenant_id,
+                AuditRun.tenant_id.is_(None),
+            ),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -742,9 +805,9 @@ async def complete_run(
             detail="Audit run must be in progress to complete",
         )
 
-    # Calculate scores
-    total_score = sum(r.score or 0 for r in run.responses)
-    max_score = sum(r.max_score or 0 for r in run.responses)
+    scored_responses = [r for r in run.responses if not getattr(r, "is_na", False)]
+    total_score = sum(r.score or 0 for r in scored_responses)
+    max_score = sum(r.max_score or 0 for r in scored_responses)
 
     run.score = total_score
     run.max_score = max_score
@@ -764,14 +827,22 @@ async def complete_run(
     await db.refresh(run)
 
     response = AuditRunResponse.model_validate(run)
-    _record_audit_endpoint_event("POST /api/v1/audits/runs/{id}/complete", 200, (time.perf_counter() - started) * 1000)
+    _record_audit_endpoint_event(
+        "POST /api/v1/audits/runs/{id}/complete",
+        200,
+        (time.perf_counter() - started) * 1000,
+    )
     return response
 
 
 # ============== Response Endpoints ==============
 
 
-@router.post("/runs/{run_id}/responses", response_model=AuditResponseResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/runs/{run_id}/responses",
+    response_model=AuditResponseResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_response(
     run_id: int,
     response_data: AuditResponseCreate,
@@ -781,7 +852,15 @@ async def create_response(
     """Submit a response to an audit question."""
     started = time.perf_counter()
     # Verify run exists and is in progress
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    result = await db.execute(
+        select(AuditRun).where(
+            AuditRun.id == run_id,
+            or_(
+                AuditRun.tenant_id == current_user.tenant_id,
+                AuditRun.tenant_id.is_(None),
+            ),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -844,7 +923,11 @@ async def create_response(
     await db.refresh(response)
 
     response_payload = AuditResponseResponse.model_validate(response)
-    _record_audit_endpoint_event("POST /api/v1/audits/runs/{id}/responses", 201, (time.perf_counter() - started) * 1000)
+    _record_audit_endpoint_event(
+        "POST /api/v1/audits/runs/{id}/responses",
+        201,
+        (time.perf_counter() - started) * 1000,
+    )
     return response_payload
 
 
@@ -897,7 +980,11 @@ async def list_findings(
     }
 
 
-@router.post("/runs/{run_id}/findings", response_model=AuditFindingResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/runs/{run_id}/findings",
+    response_model=AuditFindingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
@@ -906,8 +993,16 @@ async def create_finding(
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     started = time.perf_counter()
-    # Verify run exists
-    result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+    # Verify run exists and belongs to user's tenant
+    result = await db.execute(
+        select(AuditRun).where(
+            AuditRun.id == run_id,
+            or_(
+                AuditRun.tenant_id == current_user.tenant_id,
+                AuditRun.tenant_id.is_(None),
+            ),
+        )
+    )
     run = result.scalar_one_or_none()
 
     if not run:
@@ -933,12 +1028,13 @@ async def create_finding(
         run_id=run_id,
         status=FindingStatus.OPEN,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         **finding_dict,
     )
 
     # Store list fields as JSON
     if clause_ids:
-        finding.clause_ids_json = clause_ids
+        finding.clause_ids_json_legacy = clause_ids
     if control_ids:
         finding.control_ids_json = control_ids
     if risk_ids:
@@ -952,7 +1048,11 @@ async def create_finding(
     await db.refresh(finding)
 
     response = AuditFindingResponse.model_validate(finding)
-    _record_audit_endpoint_event("POST /api/v1/audits/runs/{id}/findings", 201, (time.perf_counter() - started) * 1000)
+    _record_audit_endpoint_event(
+        "POST /api/v1/audits/runs/{id}/findings",
+        201,
+        (time.perf_counter() - started) * 1000,
+    )
     return response
 
 

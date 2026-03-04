@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface UseVoiceToTextOptions {
   onResult?: (transcript: string) => void;
@@ -52,15 +52,8 @@ interface SpeechRecognitionInstance extends EventTarget {
   lang: string;
   onstart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
   onend: ((this: SpeechRecognitionInstance, ev: Event) => void) | null;
-  onerror:
-    | ((
-        this: SpeechRecognitionInstance,
-        ev: SpeechRecognitionErrorEvent,
-      ) => void)
-    | null;
-  onresult:
-    | ((this: SpeechRecognitionInstance, ev: SpeechRecognitionEvent) => void)
-    | null;
+  onerror: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionErrorEvent) => void) | null;
+  onresult: ((this: SpeechRecognitionInstance, ev: SpeechRecognitionEvent) => void) | null;
   start(): void;
   stop(): void;
   abort(): void;
@@ -70,34 +63,31 @@ interface SpeechRecognitionConstructor {
   new (): SpeechRecognitionInstance;
 }
 
-export function useVoiceToText(
-  options: UseVoiceToTextOptions = {},
-): UseVoiceToTextReturn {
-  const { onResult, onError, continuous = false, language = "en-GB" } = options;
+export function useVoiceToText(options: UseVoiceToTextOptions = {}): UseVoiceToTextReturn {
+  const {
+    onResult,
+    onError,
+    continuous = false,
+    language = 'en-GB',
+  } = options;
 
   const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
-
+  
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   // Check for browser support
   useEffect(() => {
-    const SpeechRecognitionAPI =
-      (
-        window as Window & {
-          SpeechRecognition?: SpeechRecognitionConstructor;
-          webkitSpeechRecognition?: SpeechRecognitionConstructor;
-        }
-      ).SpeechRecognition ||
-      (
-        window as Window & {
-          SpeechRecognition?: SpeechRecognitionConstructor;
-          webkitSpeechRecognition?: SpeechRecognitionConstructor;
-        }
-      ).webkitSpeechRecognition;
-
+    const SpeechRecognitionAPI = (window as Window & { 
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    }).SpeechRecognition || (window as Window & { 
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    }).webkitSpeechRecognition;
+    
     setIsSupported(!!SpeechRecognitionAPI);
 
     if (SpeechRecognitionAPI) {
@@ -116,47 +106,46 @@ export function useVoiceToText(
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        let errorMessage = "Voice recognition error";
-
+        let errorMessage = 'Voice recognition error';
+        
         switch (event.error) {
-          case "not-allowed":
-            errorMessage =
-              "Microphone access denied. Please allow microphone permissions.";
+          case 'not-allowed':
+            errorMessage = 'Microphone access denied. Please allow microphone permissions.';
             break;
-          case "no-speech":
-            errorMessage = "No speech detected. Please try again.";
+          case 'no-speech':
+            errorMessage = 'No speech detected. Please try again.';
             break;
-          case "network":
-            errorMessage = "Network error. Please check your connection.";
+          case 'network':
+            errorMessage = 'Network error. Please check your connection.';
             break;
-          case "audio-capture":
-            errorMessage = "No microphone detected.";
+          case 'audio-capture':
+            errorMessage = 'No microphone detected.';
             break;
           default:
             errorMessage = `Voice recognition error: ${event.error}`;
         }
-
+        
         setError(errorMessage);
         setIsListening(false);
         onError?.(errorMessage);
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let finalTranscript = "";
-        let interimTranscript = "";
+        let finalTranscript = '';
+        let interimTranscript = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i]!;
+          const result = event.results[i];
           if (result.isFinal) {
-            finalTranscript += result[0]!.transcript;
+            finalTranscript += result[0].transcript;
           } else {
-            interimTranscript += result[0]!.transcript;
+            interimTranscript += result[0].transcript;
           }
         }
 
         const newTranscript = finalTranscript || interimTranscript;
         setTranscript(newTranscript);
-
+        
         if (finalTranscript) {
           onResult?.(finalTranscript);
         }
@@ -174,13 +163,13 @@ export function useVoiceToText(
 
   const startListening = useCallback(() => {
     if (recognitionRef.current && !isListening) {
-      setTranscript("");
+      setTranscript('');
       setError(null);
       try {
         recognitionRef.current.start();
       } catch {
         // Recognition might already be running
-        console.warn("Recognition already started");
+        console.warn('Recognition already started');
       }
     }
   }, [isListening]);

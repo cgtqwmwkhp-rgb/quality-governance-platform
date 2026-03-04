@@ -253,7 +253,7 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (dict(request.query_params) if request.query_params else None),
                     },
                     action_category="api_request",
                 )
@@ -277,7 +277,7 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (dict(request.query_params) if request.query_params else None),
                     },
                     action_category="api_request",
                 )
@@ -300,7 +300,7 @@ async def _log_audit_entry(
                         "endpoint": request.url.path,
                         "method": method,
                         "status_code": response.status_code,
-                        "query_params": dict(request.query_params) if request.query_params else None,
+                        "query_params": (dict(request.query_params) if request.query_params else None),
                     },
                     action_category="api_request",
                 )

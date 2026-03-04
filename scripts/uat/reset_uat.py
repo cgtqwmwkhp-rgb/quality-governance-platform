@@ -147,7 +147,12 @@ class UATResetManager:
         filepath = self.manifest_dir / filename
 
         with open(filepath, "w") as f:
-            json.dump(manifest if isinstance(manifest, dict) else manifest.__dict__, f, indent=2, default=str)
+            json.dump(
+                manifest if isinstance(manifest, dict) else manifest.__dict__,
+                f,
+                indent=2,
+                default=str,
+            )
 
         return filepath
 
@@ -226,9 +231,18 @@ class UATResetManager:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="Reset UAT environment to known state")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be done without making changes")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
     parser.add_argument("--force", action="store_true", help="Skip confirmation prompt")
-    parser.add_argument("--output-dir", type=str, default="docs/uat", help="Directory for manifest output")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="docs/uat",
+        help="Directory for manifest output",
+    )
 
     args = parser.parse_args()
 

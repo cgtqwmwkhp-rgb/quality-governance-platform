@@ -215,7 +215,10 @@ class IncidentService:
             entity_id=str(incident.id),
             action="delete",
             description=f"Incident {incident.reference_number} deleted",
-            payload={"incident_id": incident_id, "reference_number": incident.reference_number},
+            payload={
+                "incident_id": incident_id,
+                "reference_number": incident.reference_number,
+            },
             user_id=user_id,
             request_id=request_id,
         )

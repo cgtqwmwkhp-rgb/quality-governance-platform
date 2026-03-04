@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -13,17 +13,22 @@ import {
   Clock,
   CheckCircle2,
   Shield,
-  Leaf,
-  HardHat,
   Zap,
   FileText,
-  Award,
   Layers,
   Archive,
   RotateCcw,
   Loader2,
   Filter,
   AlertTriangle,
+  Car,
+  Cog,
+  Truck,
+  Wrench,
+  ChevronDown,
+  ChevronRight,
+  Hash,
+  Timer,
 } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -38,25 +43,26 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../components/ui/Dialog";
-import { auditsApi, AuditTemplate } from "../api/client";
+import { auditsApi, AuditTemplate, CategoryCount } from "../api/client";
 import { ToastContainer, useToast } from "../components/ui/Toast";
 
 // ============================================================================
-// CONSTANTS
+// HELPERS
 // ============================================================================
 
-const CATEGORIES = [
-  { id: "all", label: "All Categories", icon: Layers },
-  { id: "quality", label: "Quality", icon: Award },
-  { id: "safety", label: "Health & Safety", icon: HardHat },
-  { id: "environment", label: "Environmental", icon: Leaf },
-  { id: "security", label: "Security", icon: Shield },
-  { id: "compliance", label: "Compliance", icon: FileText },
-  { id: "operational", label: "Operational", icon: Zap },
-];
+const CATEGORY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Vehicles": Car,
+  "Plant & Machinery": Cog,
+  "Trailers & Attachments": Truck,
+  "Generators & Power": Zap,
+  "LOLER & Thorough Exam": Shield,
+  "Specialist Equipment": Wrench,
+};
 
-const getCategoryIcon = (categoryId: string) =>
-  CATEGORIES.find((c) => c.id === categoryId)?.icon || Layers;
+function getCategoryIcon(category: string | undefined) {
+  if (!category) return Layers;
+  return CATEGORY_ICON_MAP[category] || FileText;
+}
 
 function getDaysRemaining(archivedAt: string): number {
   const archived = new Date(archivedAt);
@@ -68,6 +74,28 @@ function getDaysRemaining(archivedAt: string): number {
   );
 }
 
+function highlightMatch(text: string, query: string): ReactNode {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escaped})`, "gi");
+  const parts = text.split(regex);
+  return parts.map((part, i) =>
+    regex.test(part) ? (
+      <mark key={i} className="bg-yellow-200 dark:bg-yellow-700/60 rounded px-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
+function estimateMinutes(questionCount: number | undefined): string {
+  const mins = (questionCount ?? 0) * 2;
+  if (mins === 0) return "-";
+  return `~${mins} min`;
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -75,9 +103,7 @@ function getDaysRemaining(archivedAt: string): number {
 export default function AuditTemplateLibrary() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<AuditTemplate[]>([]);
-  const [archivedTemplates, setArchivedTemplates] = useState<AuditTemplate[]>(
-    [],
-  );
+  const [archivedTemplates, setArchivedTemplates] = useState<AuditTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,41 +117,57 @@ export default function AuditTemplateLibrary() {
   const [showArchive, setShowArchive] = useState(false);
 
   // Two-stage delete state
-  const [archiveTarget, setArchiveTarget] = useState<AuditTemplate | null>(
-    null,
-  );
+  const [archiveTarget, setArchiveTarget] = useState<AuditTemplate | null>(null);
   const [archiveConfirmStep, setArchiveConfirmStep] = useState<1 | 2>(1);
   const [archiving, setArchiving] = useState(false);
 
-  // Restore state
+  // Restore / clone state
   const [restoring, setRestoring] = useState<number | null>(null);
+  const [cloning, setCloning] = useState<number | null>(null);
 
+  // Counts and categories
+  const [totalCount, setTotalCount] = useState(0);
+  const [archivedCount, setArchivedCount] = useState(0);
+  const [categories, setCategories] = useState<CategoryCount[]>([]);
+
+  // Collapsible category groups
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+  // Import dialog
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importPath, setImportPath] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+  } | null>(null);
+
+  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
+  const requestIdRef = useRef(0);
+
+  // Dismiss active menu on outside click
   useEffect(() => {
     if (!activeMenu) return;
     const dismiss = () => setActiveMenu(null);
     document.addEventListener("click", dismiss);
     return () => document.removeEventListener("click", dismiss);
   }, [activeMenu]);
-  const [cloning, setCloning] = useState<number | null>(null);
-  const [totalCount, setTotalCount] = useState(0);
-  const [archivedCount, setArchivedCount] = useState(0);
 
-  const { toasts, show: showToast, dismiss: dismissToast } = useToast();
-  const requestIdRef = useRef(0);
-
-  // Debounce search input by 300ms
+  // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  // ---- Data loading ----
   const loadTemplates = useCallback(async () => {
     const thisRequestId = ++requestIdRef.current;
     try {
       const params: { search?: string; category?: string } = {};
       if (debouncedSearch) params.search = debouncedSearch;
       if (selectedCategory !== "all") params.category = selectedCategory;
-      const response = await auditsApi.listTemplates(1, 100, params);
+      const response = await auditsApi.listTemplates(1, 200, params);
       if (thisRequestId !== requestIdRef.current) return;
       setTemplates(response.data.items);
       setTotalCount(response.data.total);
@@ -135,9 +177,7 @@ export default function AuditTemplateLibrary() {
       setError("Failed to load templates.");
       console.error(err);
     } finally {
-      if (thisRequestId === requestIdRef.current) {
-        setLoading(false);
-      }
+      if (thisRequestId === requestIdRef.current) setLoading(false);
     }
   }, [debouncedSearch, selectedCategory]);
 
@@ -154,12 +194,22 @@ export default function AuditTemplateLibrary() {
     }
   }, []);
 
+  const loadCategories = useCallback(async () => {
+    try {
+      const response = await auditsApi.listCategories();
+      setCategories(response.data);
+    } catch (err) {
+      console.error("Failed to load categories:", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadTemplates();
     loadArchivedTemplates();
-  }, [loadTemplates, loadArchivedTemplates]);
+    loadCategories();
+  }, [loadTemplates, loadArchivedTemplates, loadCategories]);
 
-  // Two-stage archive: Step 1 shows info, Step 2 requires confirmation
+  // ---- Actions ----
   const handleArchiveStep1 = useCallback((template: AuditTemplate) => {
     setArchiveTarget(template);
     setArchiveConfirmStep(1);
@@ -168,37 +218,26 @@ export default function AuditTemplateLibrary() {
 
   const handleArchiveConfirm = useCallback(async () => {
     if (!archiveTarget) return;
-
     if (archiveConfirmStep === 1) {
       setArchiveConfirmStep(2);
       return;
     }
-
-    // Step 2: actually archive
     try {
       setArchiving(true);
       await auditsApi.deleteTemplate(archiveTarget.id);
       setArchiveTarget(null);
       setArchiveConfirmStep(1);
-      showToast(
-        `"${archiveTarget.name}" moved to archive. Recoverable for 30 days.`,
-        "success",
-      );
+      showToast(`"${archiveTarget.name}" moved to archive. Recoverable for 30 days.`, "success");
       loadTemplates();
       loadArchivedTemplates();
+      loadCategories();
     } catch (err) {
       showToast("Failed to archive template.", "error");
       console.error(err);
     } finally {
       setArchiving(false);
     }
-  }, [
-    archiveTarget,
-    archiveConfirmStep,
-    loadTemplates,
-    loadArchivedTemplates,
-    showToast,
-  ]);
+  }, [archiveTarget, archiveConfirmStep, loadTemplates, loadArchivedTemplates, loadCategories, showToast]);
 
   const handleRestore = useCallback(
     async (template: AuditTemplate) => {
@@ -208,6 +247,7 @@ export default function AuditTemplateLibrary() {
         showToast(`"${template.name}" restored successfully.`, "success");
         loadTemplates();
         loadArchivedTemplates();
+        loadCategories();
       } catch (err) {
         showToast("Failed to restore template.", "error");
         console.error(err);
@@ -215,7 +255,7 @@ export default function AuditTemplateLibrary() {
         setRestoring(null);
       }
     },
-    [loadTemplates, loadArchivedTemplates, showToast],
+    [loadTemplates, loadArchivedTemplates, loadCategories, showToast],
   );
 
   const handleClone = useCallback(
@@ -226,6 +266,7 @@ export default function AuditTemplateLibrary() {
         await auditsApi.cloneTemplate(template.id);
         showToast(`Cloned "${template.name}"`, "success");
         loadTemplates();
+        loadCategories();
       } catch (err) {
         showToast("Failed to clone template.", "error");
         console.error(err);
@@ -233,14 +274,40 @@ export default function AuditTemplateLibrary() {
         setCloning(null);
       }
     },
-    [loadTemplates, showToast],
+    [loadTemplates, loadCategories, showToast],
   );
 
+  const handleImport = useCallback(async () => {
+    if (!importPath.trim()) return;
+    try {
+      setImporting(true);
+      setImportResult(null);
+      const response = await auditsApi.batchImportTemplates(importPath.trim());
+      setImportResult({
+        imported: response.data.imported,
+        skipped: response.data.skipped,
+        errors: response.data.errors,
+      });
+      if (response.data.imported > 0) {
+        showToast(`Imported ${response.data.imported} template(s) successfully.`, "success");
+        loadTemplates();
+        loadCategories();
+      }
+    } catch (err) {
+      showToast("Import failed. Check the directory path.", "error");
+      console.error(err);
+    } finally {
+      setImporting(false);
+    }
+  }, [importPath, loadTemplates, loadCategories, showToast]);
+
+  // ---- Computed values ----
   const sortedTemplates = useMemo(() => {
     return [...templates].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return (
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        new Date(b.updated_at ?? b.created_at).getTime() -
+        new Date(a.updated_at ?? a.created_at).getTime()
       );
     });
   }, [templates, sortBy]);
@@ -251,6 +318,205 @@ export default function AuditTemplateLibrary() {
     return { total: published + draft, published, draft };
   }, [templates]);
 
+  const recentTemplates = useMemo(() => {
+    return [...templates]
+      .sort(
+        (a, b) =>
+          new Date(b.updated_at ?? b.created_at).getTime() -
+          new Date(a.updated_at ?? a.created_at).getTime(),
+      )
+      .slice(0, 4);
+  }, [templates]);
+
+  const showFeatured =
+    selectedCategory === "all" && !debouncedSearch && recentTemplates.length > 4;
+
+  const categoryTotal = useMemo(
+    () => categories.reduce((acc, c) => acc + c.count, 0),
+    [categories],
+  );
+
+  const groupedTemplates = useMemo(() => {
+    if (selectedCategory !== "all" || debouncedSearch) return null;
+    const groups: Record<string, AuditTemplate[]> = {};
+    for (const t of sortedTemplates) {
+      const key = t.category || "Uncategorised";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    }
+    const order = [
+      "Vehicles",
+      "Plant & Machinery",
+      "Trailers & Attachments",
+      "Generators & Power",
+      "LOLER & Thorough Exam",
+      "Specialist Equipment",
+    ];
+    const sorted = order.filter((k) => groups[k]);
+    const rest = Object.keys(groups)
+      .filter((k) => !order.includes(k))
+      .sort();
+    return [...sorted, ...rest].map((key) => ({
+      category: key,
+      templates: groups[key],
+    }));
+  }, [sortedTemplates, selectedCategory, debouncedSearch]);
+
+  const toggleGroup = useCallback((category: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }, []);
+
+  // ---- Shared card render ----
+  const renderTemplateCard = useCallback(
+    (template: AuditTemplate, index: number) => {
+      const CatIcon = getCategoryIcon(template.category);
+      return (
+        <Card
+          key={template.id}
+          hoverable
+          className="group cursor-pointer animate-fade-in"
+          style={{ animationDelay: `${index * 30}ms` }}
+          onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate(`/audit-templates/${template.id}/edit`);
+            }
+          }}
+          tabIndex={0}
+          role="article"
+          aria-label={`Template: ${template.name}`}
+        >
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <CatIcon className="w-5 h-5 text-primary" />
+                </div>
+                <Badge variant={template.is_published ? "success" : "warning"}>
+                  {template.is_published ? "published" : "draft"}
+                </Badge>
+              </div>
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenu(
+                      activeMenu === String(template.id) ? null : String(template.id),
+                    );
+                  }}
+                  aria-label="Template actions"
+                  aria-expanded={activeMenu === String(template.id)}
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+                {activeMenu === String(template.id) && (
+                  <Card className="absolute right-0 mt-1 w-44 z-10">
+                    <CardContent className="p-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/audit-templates/${template.id}/edit`);
+                          setActiveMenu(null);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
+                      >
+                        <Edit className="w-4 h-4" /> Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClone(template);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
+                        disabled={cloning === template.id}
+                      >
+                        {cloning === template.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                        Duplicate
+                      </button>
+                      <div className="border-t border-border my-1" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArchiveStep1(template);
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                      >
+                        <Archive className="w-4 h-4" /> Archive
+                      </button>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+
+            <h3 className="text-lg font-semibold text-foreground mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+              {highlightMatch(template.name, debouncedSearch)}
+            </h3>
+            <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+              {highlightMatch(template.description || "No description", debouncedSearch)}
+            </p>
+
+            {/* Stats row */}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+              {(template.question_count ?? 0) > 0 && (
+                <span className="flex items-center gap-1">
+                  <Hash className="w-3 h-3" />
+                  {template.question_count} questions
+                </span>
+              )}
+              {(template.section_count ?? 0) > 0 && (
+                <span className="flex items-center gap-1">
+                  <Layers className="w-3 h-3" />
+                  {template.section_count} sections
+                </span>
+              )}
+              {(template.question_count ?? 0) > 0 && (
+                <span className="flex items-center gap-1">
+                  <Timer className="w-3 h-3" />
+                  {estimateMinutes(template.question_count)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap mb-4">
+              {template.category && (
+                <Badge variant="default">{template.category}</Badge>
+              )}
+              <Badge variant="secondary">v{template.version}</Badge>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-border">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="w-3 h-3" />
+                <span>
+                  Updated{" "}
+                  {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
+                </span>
+              </div>
+              <Badge variant="secondary">{template.scoring_method}</Badge>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    },
+    [activeMenu, cloning, debouncedSearch, handleArchiveStep1, handleClone, navigate],
+  );
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
   return (
     <div className="space-y-6 animate-fade-in">
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
@@ -279,7 +545,7 @@ export default function AuditTemplateLibrary() {
               </span>
             )}
           </Button>
-          <Button variant="outline" disabled>
+          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
             <Upload className="w-4 h-4" /> Import
           </Button>
           <Button onClick={() => navigate("/audit-templates/new")}>
@@ -342,9 +608,7 @@ export default function AuditTemplateLibrary() {
                           <p className="text-xs text-muted-foreground">
                             Archived{" "}
                             {template.archived_at
-                              ? new Date(
-                                  template.archived_at,
-                                ).toLocaleDateString()
+                              ? new Date(template.archived_at).toLocaleDateString()
                               : ""}
                           </p>
                         </div>
@@ -354,9 +618,7 @@ export default function AuditTemplateLibrary() {
                           variant={isExpiringSoon ? "destructive" : "warning"}
                           className="whitespace-nowrap"
                         >
-                          {isExpiringSoon && (
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                          )}
+                          {isExpiringSoon && <AlertTriangle className="w-3 h-3 mr-1" />}
                           {daysLeft} day{daysLeft !== 1 ? "s" : ""} left
                         </Badge>
                         <Button
@@ -426,7 +688,55 @@ export default function AuditTemplateLibrary() {
         ))}
       </div>
 
-      {/* Search, Filters & View Toggle */}
+      {/* Featured / Recently Updated */}
+      {showFeatured && (
+        <div>
+          <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-primary" />
+            Recently Updated
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {recentTemplates.map((template) => {
+              const CatIcon = getCategoryIcon(template.category);
+              return (
+                <Card
+                  key={template.id}
+                  hoverable
+                  className="cursor-pointer group"
+                  onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
+                  tabIndex={0}
+                  role="article"
+                  aria-label={`Recently updated: ${template.name}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <CatIcon className="w-4 h-4 text-primary" />
+                      </div>
+                      <Badge variant={template.is_published ? "success" : "warning"} className="text-[10px] px-1.5 py-0">
+                        {template.is_published ? "published" : "draft"}
+                      </Badge>
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+                      {template.name}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                      {(template.question_count ?? 0) > 0 && (
+                        <span>{template.question_count} questions</span>
+                      )}
+                      <span>
+                        {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Search, Category Pills & View Toggle */}
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="relative flex-1">
           <Search
@@ -451,23 +761,52 @@ export default function AuditTemplateLibrary() {
           role="tablist"
           aria-label="Filter by category"
         >
-          {CATEGORIES.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all min-h-[44px] ${
-                selectedCategory === category.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-secondary text-secondary-foreground hover:bg-surface border border-border"
-              }`}
-              role="tab"
-              aria-selected={selectedCategory === category.id}
-              aria-label={`Filter by ${category.label}`}
-            >
-              <category.icon className="w-4 h-4" />
-              <span className="text-sm font-medium">{category.label}</span>
-            </button>
-          ))}
+          {/* "All" pill */}
+          <button
+            onClick={() => setSelectedCategory("all")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all min-h-[44px] ${
+              selectedCategory === "all"
+                ? "bg-primary text-primary-foreground"
+                : "bg-secondary text-secondary-foreground hover:bg-surface border border-border"
+            }`}
+            role="tab"
+            aria-selected={selectedCategory === "all"}
+            aria-label="All Categories"
+          >
+            <Layers className="w-4 h-4" />
+            <span className="text-sm font-medium">All</span>
+            {categoryTotal > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-[10px] font-bold rounded-full bg-black/15 dark:bg-white/15 px-1">
+                {categoryTotal}
+              </span>
+            )}
+          </button>
+
+          {/* Dynamic category pills */}
+          {categories.map((cat) => {
+            const Icon = getCategoryIcon(cat.category);
+            const isActive = selectedCategory === cat.category;
+            return (
+              <button
+                key={cat.category}
+                onClick={() => setSelectedCategory(isActive ? "all" : cat.category)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all min-h-[44px] ${
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground hover:bg-surface border border-border"
+                }`}
+                role="tab"
+                aria-selected={isActive}
+                aria-label={`Filter by ${cat.category}`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-sm font-medium">{cat.category}</span>
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 text-[10px] font-bold rounded-full bg-black/15 dark:bg-white/15 px-1">
+                  {cat.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2">
@@ -509,9 +848,7 @@ export default function AuditTemplateLibrary() {
             {showFilters && (
               <Card className="absolute right-0 mt-2 w-48 z-10">
                 <CardContent className="p-2">
-                  <p className="text-xs text-muted-foreground px-2 mb-2">
-                    Sort by
-                  </p>
+                  <p className="text-xs text-muted-foreground px-2 mb-2">Sort by</p>
                   {[
                     { id: "updated" as const, label: "Last Updated" },
                     { id: "name" as const, label: "Name" },
@@ -562,131 +899,51 @@ export default function AuditTemplateLibrary() {
         </Card>
       )}
 
-      {/* Templates Grid */}
-      {!loading && !error && viewMode === "grid" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {sortedTemplates.map((template, index) => {
-            const CategoryIcon = getCategoryIcon(template.category || "");
+      {/* ---- Grid View with Collapsible Category Groups ---- */}
+      {!loading && !error && viewMode === "grid" && groupedTemplates && (
+        <div className="space-y-6">
+          {groupedTemplates.map((group) => {
+            const GroupIcon = getCategoryIcon(group.category);
+            const isCollapsed = collapsedGroups.has(group.category);
             return (
-              <Card
-                key={template.id}
-                hoverable
-                className="group cursor-pointer animate-fade-in"
-                style={{ animationDelay: `${index * 50}ms` }}
-                onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate(`/audit-templates/${template.id}/edit`);
-                  }
-                }}
-                tabIndex={0}
-                role="article"
-                aria-label={`Template: ${template.name}`}
-              >
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <CategoryIcon className="w-5 h-5 text-primary" />
-                      </div>
-                      <Badge
-                        variant={template.is_published ? "success" : "warning"}
-                      >
-                        {template.is_published ? "published" : "draft"}
-                      </Badge>
-                    </div>
-                    <div className="relative">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenu(
-                            activeMenu === String(template.id)
-                              ? null
-                              : String(template.id),
-                          );
-                        }}
-                        aria-label="Template actions"
-                        aria-expanded={activeMenu === String(template.id)}
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                      {activeMenu === String(template.id) && (
-                        <Card className="absolute right-0 mt-1 w-44 z-10">
-                          <CardContent className="p-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(
-                                  `/audit-templates/${template.id}/edit`,
-                                );
-                                setActiveMenu(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                            >
-                              <Edit className="w-4 h-4" /> Edit
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleClone(template);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
-                              disabled={cloning === template.id}
-                            >
-                              {cloning === template.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Copy className="w-4 h-4" />
-                              )}
-                              Duplicate
-                            </button>
-                            <div className="border-t border-border my-1" />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleArchiveStep1(template);
-                              }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg"
-                            >
-                              <Archive className="w-4 h-4" /> Archive
-                            </button>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary transition-colors">
-                    {template.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                    {template.description || "No description"}
-                  </p>
-
-                  <div className="flex items-center gap-2 flex-wrap mb-4">
-                    {template.category && (
-                      <Badge variant="default">{template.category}</Badge>
+              <div key={group.category}>
+                <button
+                  onClick={() => toggleGroup(group.category)}
+                  className="flex items-center gap-3 w-full text-left mb-3 group/header"
+                  aria-expanded={!isCollapsed}
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <GroupIcon className="w-5 h-5 text-primary" />
+                  <span className="text-base font-semibold text-foreground group-hover/header:text-primary transition-colors">
+                    {group.category}
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    {group.templates.length}
+                  </Badge>
+                </button>
+                {!isCollapsed && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {group.templates.map((template, index) =>
+                      renderTemplateCard(template, index),
                     )}
-                    <Badge variant="secondary">v{template.version}</Badge>
                   </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      <span>
-                        Updated{" "}
-                        {new Date(template.updated_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <Badge variant="secondary">{template.scoring_method}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
+                )}
+              </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ---- Flat Grid (filtered or searched) ---- */}
+      {!loading && !error && viewMode === "grid" && !groupedTemplates && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {sortedTemplates.map((template, index) =>
+            renderTemplateCard(template, index),
+          )}
         </div>
       )}
 
@@ -697,53 +954,36 @@ export default function AuditTemplateLibrary() {
             <table className="w-full" role="table">
               <thead>
                 <tr className="border-b border-border">
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Template
                   </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Category
                   </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Questions
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Status
                   </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
-                    Version
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Est. Time
                   </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Updated
                   </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-                  >
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {sortedTemplates.map((template) => {
-                  const CategoryIcon = getCategoryIcon(template.category || "");
+                  const CatIcon = getCategoryIcon(template.category);
                   return (
                     <tr
                       key={template.id}
-                      onClick={() =>
-                        navigate(`/audit-templates/${template.id}/edit`)
-                      }
+                      onClick={() => navigate(`/audit-templates/${template.id}/edit`)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
@@ -755,34 +995,33 @@ export default function AuditTemplateLibrary() {
                     >
                       <td className="px-6 py-4">
                         <p className="text-sm font-medium text-foreground">
-                          {template.name}
+                          {highlightMatch(template.name, debouncedSearch)}
                         </p>
                         <p className="text-xs text-muted-foreground truncate max-w-md">
-                          {template.description}
+                          {highlightMatch(template.description || "", debouncedSearch)}
                         </p>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <CategoryIcon className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-foreground capitalize">
+                          <CatIcon className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-foreground">
                             {template.category || "-"}
                           </span>
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-sm text-foreground">
+                        {template.question_count ?? "-"}
+                      </td>
                       <td className="px-6 py-4">
-                        <Badge
-                          variant={
-                            template.is_published ? "success" : "warning"
-                          }
-                        >
+                        <Badge variant={template.is_published ? "success" : "warning"}>
                           {template.is_published ? "published" : "draft"}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-sm text-foreground">
-                        v{template.version}
+                      <td className="px-6 py-4 text-sm text-muted-foreground">
+                        {estimateMinutes(template.question_count)}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {new Date(template.updated_at).toLocaleDateString()}
+                        {new Date(template.updated_at ?? template.created_at).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 relative">
                         <Button
@@ -807,9 +1046,7 @@ export default function AuditTemplateLibrary() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigate(
-                                    `/audit-templates/${template.id}/edit`,
-                                  );
+                                  navigate(`/audit-templates/${template.id}/edit`);
                                   setActiveMenu(null);
                                 }}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-surface rounded-lg"
@@ -915,23 +1152,21 @@ export default function AuditTemplateLibrary() {
             <DialogDescription>
               {archiveConfirmStep === 1 ? (
                 <>
-                  Are you sure you want to archive &quot;{archiveTarget?.name}
-                  &quot;?
+                  Are you sure you want to archive &quot;{archiveTarget?.name}&quot;?
                   <br />
                   <br />
                   The template will be moved to the archive where it can be
-                  <strong> recovered within 30 days</strong>. After 30 days it
-                  will be permanently deleted.
+                  <strong> recovered within 30 days</strong>. After 30 days it will be
+                  permanently deleted.
                 </>
               ) : (
                 <>
-                  Please confirm that you want to archive &quot;
-                  {archiveTarget?.name}&quot;.
+                  Please confirm that you want to archive &quot;{archiveTarget?.name}
+                  &quot;.
                   <br />
                   <br />
-                  This template will no longer appear in the active library. You
-                  can restore it from the Archive section at any time within 30
-                  days.
+                  This template will no longer appear in the active library. You can
+                  restore it from the Archive section at any time within 30 days.
                 </>
               )}
             </DialogDescription>
@@ -954,6 +1189,90 @@ export default function AuditTemplateLibrary() {
               {archiving && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
               {archiveConfirmStep === 1 ? "Continue" : "Archive Template"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog
+        open={showImportDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowImportDialog(false);
+            setImportResult(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5 text-primary" />
+              Batch Import Templates
+            </DialogTitle>
+            <DialogDescription>
+              Import XML job-sheet templates from a server directory. Templates
+              with duplicate names will be skipped automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label htmlFor="import-path" className="text-sm font-medium text-foreground block mb-1">
+                Server directory path
+              </label>
+              <Input
+                id="import-path"
+                value={importPath}
+                onChange={(e) => setImportPath(e.target.value)}
+                placeholder="/tmp/xml-imports"
+                disabled={importing}
+              />
+            </div>
+
+            {importResult && (
+              <Card className={importResult.errors.length > 0 ? "border-warning/30" : "border-success/30"}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center gap-4 text-sm">
+                    <span className="text-success font-medium">
+                      {importResult.imported} imported
+                    </span>
+                    <span className="text-muted-foreground">
+                      {importResult.skipped} skipped
+                    </span>
+                    {importResult.errors.length > 0 && (
+                      <span className="text-destructive">
+                        {importResult.errors.length} error(s)
+                      </span>
+                    )}
+                  </div>
+                  {importResult.errors.length > 0 && (
+                    <div className="text-xs text-destructive space-y-1 max-h-32 overflow-y-auto">
+                      {importResult.errors.map((err, i) => (
+                        <p key={i}>{err}</p>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportDialog(false);
+                setImportResult(null);
+              }}
+            >
+              {importResult ? "Close" : "Cancel"}
+            </Button>
+            {!importResult && (
+              <Button onClick={handleImport} disabled={importing || !importPath.trim()}>
+                {importing && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                Import Templates
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

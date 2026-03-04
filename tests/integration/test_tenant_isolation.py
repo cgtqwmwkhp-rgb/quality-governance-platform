@@ -133,7 +133,7 @@ async def test_user_cannot_see_other_tenant_data(
 
     # Query incidents as user A - should only see tenant A's incidents
     response = await client.get(
-        "/api/v1/incidents",
+        "/api/v1/incidents/",
         headers=headers_a,
     )
 

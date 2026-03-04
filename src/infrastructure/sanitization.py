@@ -16,7 +16,21 @@ def sanitize_rich_text(text: str | None) -> str | None:
         return None
     return nh3.clean(
         text,
-        tags={"b", "i", "em", "strong", "a", "ul", "ol", "li", "p", "br", "h1", "h2", "h3"},
+        tags={
+            "b",
+            "i",
+            "em",
+            "strong",
+            "a",
+            "ul",
+            "ol",
+            "li",
+            "p",
+            "br",
+            "h1",
+            "h2",
+            "h3",
+        },
         attributes={"a": {"href", "title"}},
         url_schemes={"http", "https", "mailto"},
     )

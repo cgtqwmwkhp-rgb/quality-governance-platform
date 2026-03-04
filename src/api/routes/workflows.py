@@ -1,54 +1,22 @@
 """
-Workflow API Routes — DB-backed persistence
+Workflow API Routes
 
 Features:
 - Workflow template management
-- Workflow instance lifecycle (start, advance, cancel)
-- Approval management (approve, reject, bulk)
-- Escalation
+- Workflow instance operations
+- Approval management
 - Delegation configuration
-- Live statistics
+- Bulk actions
 """
 
-from datetime import datetime, timezone
-from typing import Annotated, List, Optional
+from datetime import datetime
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
-from src.api.schemas.workflows import (
-    AdvanceWorkflowResponse,
-    ApproveStepResponse,
-    BulkApproveResponse,
-    CancelDelegationResponse,
-    CancelWorkflowResponse,
-    CreateDelegationResponse,
-    EscalateWorkflowResponse,
-    GetInstanceResponse,
-    GetTemplateResponse,
-    GetWorkflowStatsResponse,
-    ListDelegationsResponse,
-    ListInstancesResponse,
-    ListPendingApprovalsResponse,
-    ListPendingEscalationsResponse,
-    ListTemplatesResponse,
-    RejectStepResponse,
-    StartWorkflowResponse,
-)
-from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.models.user import User
-from src.domain.services import workflow_engine as engine
-from src.domain.services.workflow_calculation_service import WorkflowCalculationService
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.api.dependencies import CurrentUser
+from src.domain.services.workflow_engine import workflow_engine
 
 router = APIRouter()
 
@@ -59,6 +27,8 @@ router = APIRouter()
 
 
 class WorkflowStartRequest(BaseModel):
+    """Request to start a workflow"""
+
     template_code: str
     entity_type: str
     entity_id: str
@@ -67,21 +37,22 @@ class WorkflowStartRequest(BaseModel):
 
 
 class ApprovalResponse(BaseModel):
-    notes: Optional[str] = None
-    comments: Optional[str] = None
-    reason: Optional[str] = None
+    """Approval/Rejection response"""
 
-    @property
-    def effective_notes(self) -> Optional[str]:
-        return self.notes or self.comments
+    notes: Optional[str] = None
+    reason: Optional[str] = None
 
 
 class BulkApprovalRequest(BaseModel):
-    approval_ids: List[int]
+    """Bulk approval request"""
+
+    approval_ids: List[str]
     notes: Optional[str] = None
 
 
 class DelegationRequest(BaseModel):
+    """Set delegation request"""
+
     delegate_id: int
     start_date: datetime
     end_date: datetime
@@ -90,6 +61,8 @@ class DelegationRequest(BaseModel):
 
 
 class EscalationRequest(BaseModel):
+    """Escalation request"""
+
     escalate_to: int
     reason: str
     new_priority: Optional[str] = None
@@ -100,48 +73,32 @@ class EscalationRequest(BaseModel):
 # ============================================================================
 
 
-@router.get("/templates", response_model=ListTemplatesResponse)
-async def list_workflow_templates(db: DbSession, current_user: CurrentUser):
-    """List available workflow templates, seeding defaults if empty."""
-    await engine.seed_default_templates(db)
-    templates = await engine.list_templates(db)
-    return {
-        "templates": [
+@router.get("/templates")
+async def list_workflow_templates(current_user: CurrentUser):
+    """List available workflow templates."""
+    templates = []
+    for code, template in workflow_engine.templates.items():
+        templates.append(
             {
-                "code": t.code,
-                "name": t.name,
-                "description": t.description,
-                "category": t.category,
-                "trigger_entity_type": t.trigger_entity_type,
-                "sla_hours": t.sla_hours,
-                "steps_count": len(t.steps) if t.steps else 0,
+                "code": code,
+                "name": template["name"],
+                "description": template["description"],
+                "category": template["category"],
+                "trigger_entity_type": template["trigger_entity_type"],
+                "sla_hours": template.get("sla_hours"),
+                "steps_count": len(template["steps"]),
             }
-            for t in templates
-        ]
-    }
+        )
+    return {"templates": templates}
 
 
-@router.get("/templates/{template_code}", response_model=GetTemplateResponse)
-async def get_workflow_template(template_code: str, db: DbSession, current_user: CurrentUser):
+@router.get("/templates/{template_code}")
+async def get_workflow_template(template_code: str, current_user: CurrentUser):
     """Get workflow template details."""
-    t = await engine.get_template(db, template_code)
-    if t is None:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-    return {
-        "id": t.id,
-        "code": t.code,
-        "name": t.name,
-        "description": t.description,
-        "category": t.category,
-        "trigger_entity_type": t.trigger_entity_type,
-        "trigger_conditions": t.trigger_conditions,
-        "sla_hours": t.sla_hours,
-        "warning_hours": t.warning_hours,
-        "steps": t.steps,
-        "escalation_rules": t.escalation_rules,
-        "is_active": t.is_active,
-        "version": t.version,
-    }
+    template = workflow_engine.templates.get(template_code)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template
 
 
 # ============================================================================
@@ -149,183 +106,174 @@ async def get_workflow_template(template_code: str, db: DbSession, current_user:
 # ============================================================================
 
 
-@router.post("/start", response_model=StartWorkflowResponse)
-async def start_workflow(
-    request: WorkflowStartRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-):
+@router.post("/start")
+async def start_workflow(request: WorkflowStartRequest, current_user: CurrentUser):
     """Start a new workflow instance."""
-    _span = tracer.start_span("start_workflow") if tracer else None
-    if _span:
-        _span.set_attribute("template_code", request.template_code)
-    try:
-        instance = await engine.start_workflow(
-            db,
-            template_code=request.template_code,
-            entity_type=request.entity_type,
-            entity_id=request.entity_id,
-            initiated_by=current_user.id,
-            context=request.context,
-            priority=request.priority,
-        )
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-
-    track_metric("workflow.started", 1, {"template": request.template_code})
-    if _span:
-        _span.end()
-    steps = await engine.get_instance_steps(db, instance.id)
-    return {
-        "id": instance.id,
-        "template_id": instance.template_id,
-        "entity_type": instance.entity_type,
-        "entity_id": instance.entity_id,
-        "status": instance.status,
-        "priority": instance.priority,
-        "current_step": instance.current_step,
-        "current_step_name": instance.current_step_name,
-        "total_steps": len(steps),
-        "sla_due_at": instance.sla_due_at.isoformat() if instance.sla_due_at else None,
-        "started_at": instance.started_at.isoformat() if instance.started_at else None,
-    }
-
-
-@router.get("/instances", response_model=ListInstancesResponse)
-async def list_workflow_instances(
-    db: DbSession,
-    current_user: CurrentUser,
-    status: Optional[str] = Query(None),
-    entity_type: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
-):
-    """List workflow instances with filtering and pagination."""
-    instances, total = await engine.list_instances(
-        db,
-        status=status,
-        entity_type=entity_type,
-        page=page,
-        page_size=page_size,
+    result = workflow_engine.start_workflow(
+        template_code=request.template_code,
+        entity_type=request.entity_type,
+        entity_id=request.entity_id,
+        initiated_by=current_user.id,
+        context=request.context,
+        priority=request.priority,
     )
 
-    now = datetime.now(timezone.utc)
-    items = []
-    for inst in instances:
-        steps = await engine.get_instance_steps(db, inst.id)
-        progress = WorkflowCalculationService.calculate_progress(steps)
-        sla_status = WorkflowCalculationService.calculate_sla_status(inst, now)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
 
-        items.append(
-            {
-                "id": inst.id,
-                "template_id": inst.template_id,
-                "entity_type": inst.entity_type,
-                "entity_id": inst.entity_id,
-                "status": inst.status,
-                "priority": inst.priority,
-                "current_step": inst.current_step_name or "",
-                "progress": progress,
-                "sla_status": sla_status,
-                "started_at": inst.started_at.isoformat() if inst.started_at else None,
-            }
-        )
-
-    return {"items": items, "total": total}
-
-
-@router.get("/instances/{workflow_id}", response_model=GetInstanceResponse)
-async def get_workflow_instance(workflow_id: int, db: DbSession, current_user: CurrentUser):
-    """Get workflow instance details with all steps."""
-    inst = await engine.get_instance(db, workflow_id)
-    if inst is None:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
-
-    steps = await engine.get_instance_steps(db, workflow_id)
-    progress = WorkflowCalculationService.calculate_progress(steps)
-    sla_status = WorkflowCalculationService.calculate_sla_status(inst)
-
-    step_data = []
-    for s in steps:
-        step_data.append(
-            {
-                "id": s.id,
-                "step_number": s.step_number,
-                "name": s.step_name,
-                "type": s.step_type,
-                "status": s.status,
-                "approval_type": s.approval_type,
-                "required_approvers": s.required_approvers,
-                "outcome": s.outcome,
-                "outcome_reason": s.outcome_reason,
-                "outcome_by": s.outcome_by,
-                "due_at": s.due_at.isoformat() if s.due_at else None,
-                "started_at": s.started_at.isoformat() if s.started_at else None,
-                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
-            }
-        )
-
-    return {
-        "id": inst.id,
-        "template_id": inst.template_id,
-        "entity_type": inst.entity_type,
-        "entity_id": inst.entity_id,
-        "status": inst.status,
-        "priority": inst.priority,
-        "current_step": inst.current_step,
-        "current_step_name": inst.current_step_name,
-        "total_steps": len(steps),
-        "progress": progress,
-        "sla_due_at": inst.sla_due_at.isoformat() if inst.sla_due_at else None,
-        "sla_status": sla_status,
-        "initiated_by": inst.initiated_by,
-        "started_at": inst.started_at.isoformat() if inst.started_at else None,
-        "completed_at": inst.completed_at.isoformat() if inst.completed_at else None,
-        "context": inst.context,
-        "steps": step_data,
-    }
-
-
-@router.post("/instances/{workflow_id}/advance", response_model=AdvanceWorkflowResponse)
-async def advance_workflow(
-    workflow_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-    outcome: str = Query(...),
-    notes: Optional[str] = Query(None),
-):
-    """Advance workflow to next step."""
-    try:
-        result = await engine.advance_workflow(
-            db,
-            instance_id=workflow_id,
-            outcome=outcome,
-            outcome_by=current_user.id,
-            notes=notes,
-        )
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
     return result
 
 
-@router.post("/instances/{workflow_id}/cancel", response_model=CancelWorkflowResponse)
-async def cancel_workflow(
-    workflow_id: int,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-    reason: Optional[str] = Query(None),
+@router.get("/instances")
+async def list_workflow_instances(
+    current_user: CurrentUser,
+    status: Optional[str] = None,
+    entity_type: Optional[str] = None,
 ):
-    """Cancel a workflow instance."""
-    try:
-        inst = await engine.cancel_workflow(db, workflow_id, current_user.id, reason)
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    """List workflow instances."""
+    # Mock data
+    instances = [
+        {
+            "id": "WF-20260119001",
+            "template_code": "RIDDOR",
+            "template_name": "RIDDOR Reporting",
+            "entity_type": "incident",
+            "entity_id": "INC-2026-0042",
+            "status": "awaiting_approval",
+            "priority": "high",
+            "current_step": "Management Sign-off",
+            "progress": 75,
+            "sla_status": "warning",
+            "started_at": "2026-01-19T08:00:00Z",
+        },
+        {
+            "id": "WF-20260118002",
+            "template_code": "CAPA",
+            "template_name": "Corrective/Preventive Action",
+            "entity_type": "action",
+            "entity_id": "ACT-2026-0105",
+            "status": "in_progress",
+            "priority": "normal",
+            "current_step": "Implementation",
+            "progress": 50,
+            "sla_status": "ok",
+            "started_at": "2026-01-18T10:00:00Z",
+        },
+    ]
+
+    if status:
+        instances = [i for i in instances if i["status"] == status]
+    if entity_type:
+        instances = [i for i in instances if i["entity_type"] == entity_type]
+
+    return {"instances": instances, "total": len(instances)}
+
+
+@router.get("/instances/{workflow_id}")
+async def get_workflow_instance(workflow_id: str, current_user: CurrentUser):
+    """Get workflow instance details."""
+    # Mock data
     return {
-        "workflow_id": inst.id,
-        "status": inst.status,
+        "id": workflow_id,
+        "template_code": "RIDDOR",
+        "template_name": "RIDDOR Reporting",
+        "entity_type": "incident",
+        "entity_id": "INC-2026-0042",
+        "entity_title": "Slip and fall incident - Site A",
+        "status": "awaiting_approval",
+        "priority": "high",
+        "current_step": 2,
+        "current_step_name": "Management Sign-off",
+        "total_steps": 4,
+        "progress": 75,
+        "sla_due_at": "2026-01-20T08:00:00Z",
+        "sla_status": "warning",
+        "initiated_by": {"id": 1, "name": "John Doe"},
+        "started_at": "2026-01-19T08:00:00Z",
+        "steps": [
+            {
+                "step_number": 0,
+                "name": "Initial Review",
+                "type": "approval",
+                "status": "completed",
+                "outcome": "approved",
+                "completed_at": "2026-01-19T09:30:00Z",
+                "completed_by": {"id": 2, "name": "Safety Manager"},
+            },
+            {
+                "step_number": 1,
+                "name": "HSE Notification",
+                "type": "task",
+                "status": "completed",
+                "outcome": "completed",
+                "completed_at": "2026-01-19T14:00:00Z",
+                "completed_by": {"id": 2, "name": "Safety Manager"},
+            },
+            {
+                "step_number": 2,
+                "name": "Management Sign-off",
+                "type": "approval",
+                "status": "pending",
+                "approvers": [{"id": 3, "name": "Operations Director"}],
+                "due_at": "2026-01-19T18:00:00Z",
+            },
+            {
+                "step_number": 3,
+                "name": "Final Submission",
+                "type": "task",
+                "status": "pending",
+            },
+        ],
+        "history": [
+            {
+                "action": "workflow_started",
+                "user": "John Doe",
+                "timestamp": "2026-01-19T08:00:00Z",
+            },
+            {
+                "action": "step_completed",
+                "step": "Initial Review",
+                "outcome": "approved",
+                "user": "Safety Manager",
+                "timestamp": "2026-01-19T09:30:00Z",
+            },
+            {
+                "action": "step_completed",
+                "step": "HSE Notification",
+                "outcome": "completed",
+                "user": "Safety Manager",
+                "timestamp": "2026-01-19T14:00:00Z",
+            },
+        ],
+    }
+
+
+@router.post("/instances/{workflow_id}/advance")
+async def advance_workflow(
+    workflow_id: str,
+    outcome: str,
+    current_user: CurrentUser,
+    notes: Optional[str] = None,
+):
+    """Advance workflow to next step."""
+    result = workflow_engine.advance_workflow(
+        workflow_id=workflow_id,
+        outcome=outcome,
+        outcome_by=current_user.id,
+        notes=notes,
+    )
+    return result
+
+
+@router.post("/instances/{workflow_id}/cancel")
+async def cancel_workflow(workflow_id: str, current_user: CurrentUser, reason: Optional[str] = None):
+    """Cancel a workflow instance."""
+    return {
+        "workflow_id": workflow_id,
+        "status": "cancelled",
         "cancelled_by": current_user.id,
         "reason": reason,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
@@ -334,53 +282,46 @@ async def cancel_workflow(
 # ============================================================================
 
 
-@router.get("/approvals/pending", response_model=ListPendingApprovalsResponse)
-async def get_pending_approvals(db: DbSession, current_user: CurrentUser):
+@router.get("/approvals/pending")
+async def get_pending_approvals(current_user: CurrentUser):
     """Get pending approvals for current user."""
-    approvals = await engine.get_pending_approvals(db, current_user.id)
+    approvals = workflow_engine.get_pending_approvals(current_user.id)
     return {"approvals": approvals, "total": len(approvals)}
 
 
-@router.post("/approvals/{step_id}/approve", response_model=ApproveStepResponse)
-async def approve_request(
-    step_id: int,
-    response: ApprovalResponse,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-):
-    """Approve a workflow step."""
-    try:
-        result = await engine.approve_step(db, step_id, current_user.id, response.effective_notes)
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+@router.post("/approvals/{approval_id}/approve")
+async def approve_request(approval_id: str, current_user: CurrentUser, response: ApprovalResponse):
+    """Approve an approval request."""
+    result = workflow_engine.approve(
+        approval_id=approval_id,
+        user_id=current_user.id,
+        notes=response.notes,
+    )
     return result
 
 
-@router.post("/approvals/{step_id}/reject", response_model=RejectStepResponse)
-async def reject_request(
-    step_id: int,
-    response: ApprovalResponse,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-):
-    """Reject a workflow step."""
+@router.post("/approvals/{approval_id}/reject")
+async def reject_request(approval_id: str, current_user: CurrentUser, response: ApprovalResponse):
+    """Reject an approval request."""
     if not response.reason:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-    try:
-        result = await engine.reject_step(db, step_id, current_user.id, response.reason)
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail="Reason required for rejection")
+
+    result = workflow_engine.reject(
+        approval_id=approval_id,
+        user_id=current_user.id,
+        reason=response.reason,
+    )
     return result
 
 
-@router.post("/approvals/bulk-approve", response_model=BulkApproveResponse)
-async def bulk_approve_requests(
-    request: BulkApprovalRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-):
-    """Bulk approve multiple workflow steps."""
-    result = await engine.bulk_approve(db, request.approval_ids, current_user.id, request.notes)
+@router.post("/approvals/bulk-approve")
+async def bulk_approve_requests(request: BulkApprovalRequest, current_user: CurrentUser):
+    """Bulk approve multiple requests."""
+    result = workflow_engine.bulk_approve(
+        approval_ids=request.approval_ids,
+        user_id=current_user.id,
+        notes=request.notes,
+    )
     return result
 
 
@@ -389,31 +330,22 @@ async def bulk_approve_requests(
 # ============================================================================
 
 
-@router.get("/escalations/pending", response_model=ListPendingEscalationsResponse)
-async def get_pending_escalations(db: DbSession, current_user: CurrentUser):
+@router.get("/escalations/pending")
+async def get_pending_escalations(current_user: CurrentUser):
     """Get workflows pending escalation."""
-    escalations = await engine.check_escalations(db)
+    escalations = workflow_engine.check_escalations()
     return {"escalations": escalations, "total": len(escalations)}
 
 
-@router.post("/instances/{workflow_id}/escalate", response_model=EscalateWorkflowResponse)
-async def escalate_workflow(
-    workflow_id: int,
-    request: EscalationRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:execute"))],
-):
+@router.post("/instances/{workflow_id}/escalate")
+async def escalate_workflow(workflow_id: str, request: EscalationRequest, current_user: CurrentUser):
     """Escalate a workflow."""
-    try:
-        result = await engine.escalate_workflow(
-            db,
-            instance_id=workflow_id,
-            escalated_by=current_user.id,
-            reason=request.reason,
-            new_priority=request.new_priority,
-        )
-    except ValueError as exc:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    result = workflow_engine.escalate(
+        workflow_id=workflow_id,
+        escalate_to=request.escalate_to,
+        reason=request.reason,
+        new_priority=request.new_priority,
+    )
     return result
 
 
@@ -422,34 +354,17 @@ async def escalate_workflow(
 # ============================================================================
 
 
-@router.get("/delegations", response_model=ListDelegationsResponse)
-async def get_my_delegations(db: DbSession, current_user: CurrentUser):
+@router.get("/delegations")
+async def get_my_delegations(current_user: CurrentUser):
     """Get current user's delegations."""
-    delegations = await engine.get_active_delegations(db, current_user.id)
-    return {
-        "delegations": [
-            {
-                "id": d.id,
-                "delegate_id": d.delegate_id,
-                "start_date": d.start_date.isoformat() if d.start_date else None,
-                "end_date": d.end_date.isoformat() if d.end_date else None,
-                "reason": d.reason,
-                "is_active": d.is_active,
-            }
-            for d in delegations
-        ]
-    }
+    delegations = workflow_engine.get_active_delegations(current_user.id)
+    return {"delegations": delegations}
 
 
-@router.post("/delegations", response_model=CreateDelegationResponse)
-async def create_delegation(
-    request: DelegationRequest,
-    db: DbSession,
-    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
-):
+@router.post("/delegations")
+async def set_delegation(request: DelegationRequest, current_user: CurrentUser):
     """Set up out-of-office delegation."""
-    d = await engine.set_delegation(
-        db,
+    result = workflow_engine.set_delegation(
         user_id=current_user.id,
         delegate_id=request.delegate_id,
         start_date=request.start_date,
@@ -457,28 +372,45 @@ async def create_delegation(
         reason=request.reason,
         workflow_types=request.workflow_types,
     )
-    return {
-        "id": d.id,
-        "user_id": d.user_id,
-        "delegate_id": d.delegate_id,
-        "start_date": d.start_date.isoformat(),
-        "end_date": d.end_date.isoformat(),
-        "reason": d.reason,
-        "status": "active",
-    }
+    return result
 
 
-@router.delete("/delegations/{delegation_id}", response_model=CancelDelegationResponse)
-async def cancel_delegation(delegation_id: int, db: DbSession, current_user: CurrentSuperuser):
+@router.delete("/delegations/{delegation_id}")
+async def cancel_delegation(delegation_id: str, current_user: CurrentUser):
     """Cancel a delegation."""
-    success = await engine.cancel_delegation(db, delegation_id)
-    if not success:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",
-        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        "cancelled_at": datetime.utcnow().isoformat(),
     }
+
+
+# ============================================================================
+# ROUTING ENDPOINTS
+# ============================================================================
+
+
+@router.get("/routing-rules/{entity_type}")
+async def get_routing_rules(entity_type: str, current_user: CurrentUser):
+    """Get routing rules for an entity type."""
+    rules = workflow_engine.get_routing_rules(entity_type)
+    return {"entity_type": entity_type, "rules": rules}
+
+
+@router.post("/route")
+async def route_entity(
+    entity_type: str,
+    entity_id: str,
+    entity_data: dict,
+    current_user: CurrentUser,
+):
+    """Route an entity based on configured rules."""
+    result = workflow_engine.route_entity(
+        entity_type=entity_type,
+        entity_id=entity_id,
+        entity_data=entity_data,
+    )
+    return result
 
 
 # ============================================================================
@@ -486,7 +418,7 @@ async def cancel_delegation(delegation_id: int, db: DbSession, current_user: Cur
 # ============================================================================
 
 
-@router.get("/stats", response_model=GetWorkflowStatsResponse)
-async def get_workflow_stats(db: DbSession, current_user: CurrentUser):
-    """Get live workflow statistics from the database."""
-    return await engine.get_workflow_stats(db)
+@router.get("/stats")
+async def get_workflow_stats(current_user: CurrentUser):
+    """Get workflow statistics."""
+    return workflow_engine.get_workflow_stats()

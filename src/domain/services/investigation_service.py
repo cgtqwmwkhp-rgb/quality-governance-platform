@@ -133,7 +133,10 @@ def _resolve_entity_model(entity_type_value: str) -> Any:
         raise ValidationError(
             f"Invalid entity type: {entity_type_value}",
             code="INVALID_ENTITY_TYPE",
-            details={"entity_type": entity_type_value, "valid_types": list(ENTITY_MODEL_MAP.keys())},
+            details={
+                "entity_type": entity_type_value,
+                "valid_types": list(ENTITY_MODEL_MAP.keys()),
+            },
         )
     module_path, class_name = model_path.split(":")
     module = __import__(module_path, fromlist=[class_name])
@@ -768,7 +771,10 @@ class InvestigationService:
                 raise ValidationError(
                     f"Invalid entity type: {entity_type}",
                     code="INVALID_ENTITY_TYPE",
-                    details={"entity_type": entity_type, "valid_types": [e.value for e in AssignedEntityType]},
+                    details={
+                        "entity_type": entity_type,
+                        "valid_types": [e.value for e in AssignedEntityType],
+                    },
                 )
 
         if entity_id is not None:
@@ -782,7 +788,10 @@ class InvestigationService:
                 raise ValidationError(
                     f"Invalid status: {status_filter}",
                     code="INVALID_STATUS",
-                    details={"status": status_filter, "valid_statuses": [s.value for s in InvestigationStatus]},
+                    details={
+                        "status": status_filter,
+                        "valid_statuses": [s.value for s in InvestigationStatus],
+                    },
                 )
 
         query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -857,7 +866,7 @@ class InvestigationService:
                     status=record_status,
                     created_at=record.created_at,
                     investigation_id=int(existing_inv.id) if existing_inv else None,
-                    investigation_reference=str(existing_inv.reference_number) if existing_inv else None,
+                    investigation_reference=(str(existing_inv.reference_number) if existing_inv else None),
                 )
             )
 
@@ -924,7 +933,10 @@ class InvestigationService:
             raise ConflictError(
                 "Investigation was modified by another user",
                 code="VERSION_CONFLICT",
-                details={"expected_version": version, "current_version": investigation.version},
+                details={
+                    "expected_version": version,
+                    "current_version": investigation.version,
+                },
             )
 
         old_data = investigation.data
@@ -1026,7 +1038,10 @@ class InvestigationService:
         """
         investigation = await cls.get_investigation(db, investigation_id, tenant_id)
 
-        if investigation.status not in (InvestigationStatus.UNDER_REVIEW, InvestigationStatus.IN_PROGRESS):
+        if investigation.status not in (
+            InvestigationStatus.UNDER_REVIEW,
+            InvestigationStatus.IN_PROGRESS,
+        ):
             raise StateTransitionError(
                 f"Cannot approve investigation in status {investigation.status.value}",
             )

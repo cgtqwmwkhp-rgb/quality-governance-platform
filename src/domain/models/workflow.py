@@ -228,7 +228,7 @@ class ApprovalRequest(Base):
 class EscalationRule(Base):
     """Escalation rule configuration"""
 
-    __tablename__ = "escalation_rules_config"
+    __tablename__ = "escalation_rules"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

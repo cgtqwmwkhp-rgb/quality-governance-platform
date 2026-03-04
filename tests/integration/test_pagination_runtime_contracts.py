@@ -6,6 +6,7 @@ canonical pagination contract defined in Stage 3.0.
 """
 
 import math
+import uuid
 from datetime import datetime, timezone
 
 import pytest
@@ -29,7 +30,7 @@ class TestPoliciesPaginationRuntimeContract:
                 description=f"Description {i}",
                 document_type="policy",
                 status="draft",
-                reference_number=f"POL-2026-{i+1:04d}",
+                reference_number=f"POL-PH-{uuid.uuid4().hex[:6]}{i}",
                 created_by_id=1,
                 updated_by_id=1,
             )
@@ -56,7 +57,7 @@ class TestPoliciesPaginationRuntimeContract:
                 description=f"Description {i}",
                 document_type="policy",
                 status="draft",
-                reference_number=f"POL-2026-{i+1:04d}",
+                reference_number=f"POL-TP-{uuid.uuid4().hex[:6]}{i}",
                 created_by_id=1,
                 updated_by_id=1,
             )
@@ -82,7 +83,7 @@ class TestPoliciesPaginationRuntimeContract:
                 description=f"Description {i}",
                 document_type="policy",
                 status="draft",
-                reference_number=f"POL-2026-{i+1:04d}",
+                reference_number=f"POL-OD-{uuid.uuid4().hex[:6]}{i}",
                 created_by_id=1,
                 updated_by_id=1,
             )
@@ -128,7 +129,7 @@ class TestIncidentsPaginationRuntimeContract:
                 reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
-                reference_number=f"INC-2026-{i+1:04d}",
+                reference_number=f"INC-PH-{uuid.uuid4().hex[:6]}{i}",
                 reporter_id=1,
                 created_by_id=1,
                 updated_by_id=1,
@@ -137,7 +138,7 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request page 2 with page_size 5
-        response = await client.get("/api/v1/incidents?page=2&page_size=5", headers=auth_headers)
+        response = await client.get("/api/v1/incidents/?page=2&page_size=5", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -161,7 +162,7 @@ class TestIncidentsPaginationRuntimeContract:
                 reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
-                reference_number=f"INC-2026-{i+1:04d}",
+                reference_number=f"INC-TP-{uuid.uuid4().hex[:6]}{i}",
                 reporter_id=1,
                 created_by_id=1,
                 updated_by_id=1,
@@ -170,7 +171,7 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Request with page_size 8
-        response = await client.get("/api/v1/incidents?page=1&page_size=8", headers=auth_headers)
+        response = await client.get("/api/v1/incidents/?page=1&page_size=8", headers=auth_headers)
         assert response.status_code == 200
 
         data = response.json()
@@ -193,7 +194,7 @@ class TestIncidentsPaginationRuntimeContract:
                 reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
-                reference_number=f"INC-2026-{i+1:04d}",
+                reference_number=f"INC-OD-{uuid.uuid4().hex[:6]}{i}",
                 reporter_id=1,
                 created_by_id=1,
                 updated_by_id=1,
@@ -204,8 +205,8 @@ class TestIncidentsPaginationRuntimeContract:
         await test_session.commit()
 
         # Fetch all items across 2 pages
-        response1 = await client.get("/api/v1/incidents?page=1&page_size=4", headers=auth_headers)
-        response2 = await client.get("/api/v1/incidents?page=2&page_size=4", headers=auth_headers)
+        response1 = await client.get("/api/v1/incidents/?page=1&page_size=4", headers=auth_headers)
+        response2 = await client.get("/api/v1/incidents/?page=2&page_size=4", headers=auth_headers)
 
         assert response1.status_code == 200
         assert response2.status_code == 200
@@ -239,7 +240,7 @@ class TestComplaintsPaginationRuntimeContract:
                 status="received",
                 priority="medium",
                 complaint_type="service",
-                reference_number=f"COMP-2026-{i+1:04d}",
+                reference_number=f"COMP-PH-{uuid.uuid4().hex[:6]}{i}",
             )
             test_session.add(complaint)
         await test_session.commit()
@@ -268,7 +269,7 @@ class TestComplaintsPaginationRuntimeContract:
                 status="received",
                 priority="medium",
                 complaint_type="service",
-                reference_number=f"COMP-2026-{i+1:04d}",
+                reference_number=f"COMP-TP-{uuid.uuid4().hex[:6]}{i}",
             )
             test_session.add(complaint)
         await test_session.commit()
@@ -296,7 +297,7 @@ class TestComplaintsPaginationRuntimeContract:
                 status="received",
                 priority="medium",
                 complaint_type="service",
-                reference_number=f"COMP-2026-{i+1:04d}",
+                reference_number=f"COMP-OD-{uuid.uuid4().hex[:6]}{i}",
             )
             test_session.add(complaint)
             await test_session.flush()

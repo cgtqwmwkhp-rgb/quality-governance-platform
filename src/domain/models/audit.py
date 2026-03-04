@@ -1,6 +1,7 @@
 """Audit models for templates, runs, and findings."""
 
 import enum
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -44,6 +45,22 @@ class FindingSeverity(str, enum.Enum):
     OBSERVATION = "observation"
 
 
+class TemplateLifecycleStatus(str, enum.Enum):
+    """Lifecycle status for template approval workflow."""
+
+    DRAFT = "draft"
+    PENDING_APPROVAL = "pending_approval"
+    PUBLISHED = "published"
+    ARCHIVED = "archived"
+
+
+class QuestionCriticality(str, enum.Enum):
+    """Criticality level distinguishing mandatory-pass from scored items."""
+
+    ESSENTIAL = "essential"
+    GOOD_TO_HAVE = "good_to_have"
+
+
 class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Audit template model for defining audit structures."""
 
@@ -54,24 +71,37 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
+    # UUID for offline sync and cross-model references
+    external_id: Mapped[str] = mapped_column(
+        String(36),
+        default=lambda: str(uuid.uuid4()),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
     # Template type and configuration
     audit_type: Mapped[str] = mapped_column(String(50), default="inspection")
     frequency: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    subcategory: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    tags_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    estimated_duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Version control
     version: Mapped[int] = mapped_column(Integer, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    # Archive / soft-delete: two-stage (archive → purge after 30 days)
-    archived_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, default=None, index=True
+    # Template approval workflow lifecycle
+    template_status: Mapped[TemplateLifecycleStatus] = mapped_column(
+        SQLEnum(TemplateLifecycleStatus, native_enum=False),
+        default=TemplateLifecycleStatus.PUBLISHED,
     )
-    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Scoring configuration
     scoring_method: Mapped[str] = mapped_column(String(50), default="percentage")
     passing_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pass_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Mobile configuration
     allow_offline: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -85,15 +115,15 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     # Standard mapping (JSON array of standard IDs)
     standard_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-    @property
-    def is_archived(self) -> bool:
-        return self.archived_at is not None
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
+    # Archive support
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Relationships
     sections: Mapped[List["AuditSection"]] = relationship(
@@ -112,10 +142,12 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
         "AuditRun",
         back_populates="template",
     )
-
-    @property
-    def standard_ids(self) -> list | None:
-        return self.standard_ids_json
+    versions: Mapped[List["TemplateVersion"]] = relationship(
+        "TemplateVersion",
+        back_populates="template",
+        cascade="all, delete-orphan",
+        order_by="TemplateVersion.version_number.desc()",
+    )
 
     def __repr__(self) -> str:
         return f"<AuditTemplate(id={self.id}, name='{self.name}', v{self.version})>"
@@ -204,32 +236,24 @@ class AuditQuestion(Base, TimestampMixin):
     risk_category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     risk_weight: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # Workforce Development fields
+    guidance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    criticality: Mapped[Optional[QuestionCriticality]] = mapped_column(
+        SQLEnum(QuestionCriticality, native_enum=False), nullable=True
+    )
+    regulatory_reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    guidance_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sign_off_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    assessor_guidance_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    training_materials_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    failure_triggers_action: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Ordering
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
     # Relationships
     template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="questions")
     section: Mapped[Optional["AuditSection"]] = relationship("AuditSection", back_populates="questions")
-
-    @property
-    def options(self) -> list | None:
-        return self.options_json
-
-    @property
-    def evidence_requirements(self) -> dict | None:
-        return self.evidence_requirements_json
-
-    @property
-    def conditional_logic(self) -> list | None:
-        return self.conditional_logic_json
-
-    @property
-    def clause_ids(self) -> list | None:
-        return self.clause_ids_json
-
-    @property
-    def control_ids(self) -> list | None:
-        return self.control_ids_json
 
     def __repr__(self) -> str:
         return f"<AuditQuestion(id={self.id}, type='{self.question_type}')>"
@@ -261,12 +285,12 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Assignment
     assigned_to_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Scoring
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -342,7 +366,10 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN)
 
     # Standard mapping (JSON arrays)
-    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # clause_ids_json was renamed to clause_ids_json_legacy by the
+    # 20260220_normalize_json_to_junction_tables migration; control_ids_json
+    # and risk_ids_json were NOT renamed.
+    clause_ids_json_legacy: Mapped[Optional[list]] = mapped_column("clause_ids_json_legacy", JSON, nullable=True)
     control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Risk linkage (JSON array)
@@ -352,26 +379,37 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     corrective_action_required: Mapped[bool] = mapped_column(Boolean, default=True)
     corrective_action_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Relationships
     run: Mapped["AuditRun"] = relationship("AuditRun", back_populates="findings")
 
-    @property
-    def clause_ids(self) -> list | None:
-        return self.clause_ids_json
-
-    @property
-    def control_ids(self) -> list | None:
-        return self.control_ids_json
-
-    @property
-    def risk_ids(self) -> list | None:
-        return self.risk_ids_json
-
     def __repr__(self) -> str:
         return f"<AuditFinding(id={self.id}, ref='{self.reference_number}', severity='{self.severity}')>"
+
+
+class TemplateVersion(Base, TimestampMixin):
+    """Snapshot of a template at a specific version for audit trail and rollback."""
+
+    __tablename__ = "template_versions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    template_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    change_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    snapshot_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
+    # Relationships
+    template: Mapped["AuditTemplate"] = relationship("AuditTemplate", back_populates="versions")
+
+    def __repr__(self) -> str:
+        return f"<TemplateVersion(id={self.id}, template_id={self.template_id}, v{self.version_number})>"

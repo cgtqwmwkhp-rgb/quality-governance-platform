@@ -24,7 +24,7 @@ from src.domain.models.workflow_rules import (
     TriggerEvent,
     WorkflowRule,
 )
-from src.domain.services.workflow_engine import ActionExecutor, ConditionEvaluator, RuleEvaluator, SLAService
+from src.services.workflow_engine import ActionExecutor, ConditionEvaluator, SLAService, WorkflowEngine
 
 
 class TestConditionEvaluator:

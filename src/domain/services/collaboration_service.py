@@ -11,11 +11,11 @@ Provides live co-editing with:
 
 import asyncio
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Callable, Optional
 
-from sqlalchemy import and_, desc, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, or_
+from sqlalchemy.orm import Session
 
 from src.domain.models.collaboration import (
     CollaborativeChange,
@@ -37,7 +37,7 @@ class CollaborationService:
     # Presence timeout (consider user away after this)
     PRESENCE_AWAY_SECONDS = 300
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
         self._broadcast_handlers: dict[str, Callable] = {}
 
@@ -45,7 +45,7 @@ class CollaborationService:
     # Document Management
     # =========================================================================
 
-    async def get_or_create_document(
+    def get_or_create_document(
         self,
         tenant_id: int,
         entity_type: str,
@@ -53,15 +53,16 @@ class CollaborationService:
         field_name: str = "content",
     ) -> CollaborativeDocument:
         """Get or create a collaborative document for an entity."""
-        result = await self.db.execute(
-            select(CollaborativeDocument).where(
+        doc = (
+            self.db.query(CollaborativeDocument)
+            .filter(
                 CollaborativeDocument.tenant_id == tenant_id,
                 CollaborativeDocument.entity_type == entity_type,
                 CollaborativeDocument.entity_id == entity_id,
                 CollaborativeDocument.field_name == field_name,
             )
+            .first()
         )
-        doc = result.scalar_one_or_none()
 
         if not doc:
             doc = CollaborativeDocument(
@@ -71,20 +72,19 @@ class CollaborationService:
                 field_name=field_name,
             )
             self.db.add(doc)
-            await self.db.commit()
-            await self.db.refresh(doc)
+            self.db.commit()
+            self.db.refresh(doc)
 
         return doc
 
-    async def update_document_state(
+    def update_document_state(
         self,
         document_id: int,
         yjs_state: bytes,
         yjs_state_vector: Optional[bytes] = None,
     ) -> CollaborativeDocument:
         """Update the Yjs state of a document."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
-        doc = result.scalar_one_or_none()
+        doc = self.db.query(CollaborativeDocument).get(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
 
@@ -93,35 +93,33 @@ class CollaborationService:
             doc.yjs_state_vector = yjs_state_vector
         doc.version += 1
 
-        await self.db.commit()
-        await self.db.refresh(doc)
+        self.db.commit()
+        self.db.refresh(doc)
 
         return doc
 
-    async def create_snapshot(self, document_id: int) -> CollaborativeDocument:
+    def create_snapshot(self, document_id: int) -> CollaborativeDocument:
         """Create a snapshot of the current document state."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
-        doc = result.scalar_one_or_none()
+        doc = self.db.query(CollaborativeDocument).get(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
 
         doc.last_snapshot = doc.yjs_state
-        doc.last_snapshot_at = datetime.now(timezone.utc)
+        doc.last_snapshot_at = datetime.utcnow()
 
-        await self.db.commit()
-        await self.db.refresh(doc)
+        self.db.commit()
+        self.db.refresh(doc)
 
         return doc
 
-    async def lock_document(
+    def lock_document(
         self,
         document_id: int,
         user_id: int,
         reason: Optional[str] = None,
     ) -> CollaborativeDocument:
         """Lock a document for exclusive editing."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
-        doc = result.scalar_one_or_none()
+        doc = self.db.query(CollaborativeDocument).get(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
 
@@ -130,18 +128,17 @@ class CollaborationService:
 
         doc.is_locked = True
         doc.locked_by_id = user_id
-        doc.locked_at = datetime.now(timezone.utc)
+        doc.locked_at = datetime.utcnow()
         doc.lock_reason = reason
 
-        await self.db.commit()
-        await self.db.refresh(doc)
+        self.db.commit()
+        self.db.refresh(doc)
 
         return doc
 
-    async def unlock_document(self, document_id: int, user_id: int) -> CollaborativeDocument:
+    def unlock_document(self, document_id: int, user_id: int) -> CollaborativeDocument:
         """Unlock a document."""
-        result = await self.db.execute(select(CollaborativeDocument).where(CollaborativeDocument.id == document_id))
-        doc = result.scalar_one_or_none()
+        doc = self.db.query(CollaborativeDocument).get(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
 
@@ -153,8 +150,8 @@ class CollaborationService:
         doc.locked_at = None
         doc.lock_reason = None
 
-        await self.db.commit()
-        await self.db.refresh(doc)
+        self.db.commit()
+        self.db.refresh(doc)
 
         return doc
 
@@ -162,7 +159,7 @@ class CollaborationService:
     # Session Management
     # =========================================================================
 
-    async def join_session(
+    def join_session(
         self,
         document_id: int,
         user_id: int,
@@ -172,8 +169,10 @@ class CollaborationService:
         connection_id: Optional[str] = None,
     ) -> CollaborativeSession:
         """Join a collaborative editing session."""
+        # Generate unique session ID
         session_id = secrets.token_urlsafe(16)
 
+        # Generate unique color for user
         user_color = self._generate_user_color(user_id)
 
         session = CollaborativeSession(
@@ -189,27 +188,24 @@ class CollaborationService:
         )
 
         self.db.add(session)
-        await self.db.commit()
-        await self.db.refresh(session)
+        self.db.commit()
+        self.db.refresh(session)
 
         return session
 
-    async def leave_session(self, session_id: str) -> Optional[CollaborativeSession]:
+    def leave_session(self, session_id: str) -> Optional[CollaborativeSession]:
         """Leave a collaborative editing session."""
-        result = await self.db.execute(
-            select(CollaborativeSession).where(CollaborativeSession.session_id == session_id)
-        )
-        session = result.scalar_one_or_none()
+        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.session_id == session_id).first()
 
         if session:
             session.is_active = False
-            session.left_at = datetime.now(timezone.utc)
-            await self.db.commit()
-            await self.db.refresh(session)
+            session.left_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(session)
 
         return session
 
-    async def update_cursor(
+    def update_cursor(
         self,
         session_id: str,
         cursor_position: Optional[dict] = None,
@@ -219,10 +215,7 @@ class CollaborationService:
         is_typing: bool = False,
     ) -> CollaborativeSession:
         """Update cursor/selection position for a session."""
-        result = await self.db.execute(
-            select(CollaborativeSession).where(CollaborativeSession.session_id == session_id)
-        )
-        session = result.scalar_one_or_none()
+        session = self.db.query(CollaborativeSession).filter(CollaborativeSession.session_id == session_id).first()
 
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -232,43 +225,45 @@ class CollaborationService:
         session.current_field = current_field
         session.is_editing = is_editing
         session.is_typing = is_typing
-        session.last_seen_at = datetime.now(timezone.utc)
+        session.last_seen_at = datetime.utcnow()
 
-        await self.db.commit()
-        await self.db.refresh(session)
+        self.db.commit()
+        self.db.refresh(session)
 
         return session
 
-    async def get_active_sessions(self, document_id: int) -> list[CollaborativeSession]:
+    def get_active_sessions(self, document_id: int) -> list[CollaborativeSession]:
         """Get all active sessions for a document."""
-        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
-        result = await self.db.execute(
-            select(CollaborativeSession).where(
+        return (
+            self.db.query(CollaborativeSession)
+            .filter(
                 CollaborativeSession.document_id == document_id,
                 CollaborativeSession.is_active == True,
                 CollaborativeSession.last_seen_at >= timeout,
             )
+            .all()
         )
-        return list(result.scalars().all())
 
-    async def cleanup_stale_sessions(self) -> int:
+    def cleanup_stale_sessions(self) -> int:
         """Clean up stale sessions. Returns count of cleaned sessions."""
-        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
+        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS * 2)
 
-        result = await self.db.execute(
-            select(CollaborativeSession).where(
+        stale = (
+            self.db.query(CollaborativeSession)
+            .filter(
                 CollaborativeSession.is_active == True,
                 CollaborativeSession.last_seen_at < timeout,
             )
+            .all()
         )
-        stale = list(result.scalars().all())
 
         for session in stale:
             session.is_active = False
-            session.left_at = datetime.now(timezone.utc)
+            session.left_at = datetime.utcnow()
 
-        await self.db.commit()
+        self.db.commit()
 
         return len(stale)
 
@@ -276,7 +271,7 @@ class CollaborationService:
     # Change Tracking
     # =========================================================================
 
-    async def record_change(
+    def record_change(
         self,
         document_id: int,
         session_id: str,
@@ -302,33 +297,30 @@ class CollaborationService:
         )
 
         self.db.add(change)
-        await self.db.commit()
-        await self.db.refresh(change)
+        self.db.commit()
+        self.db.refresh(change)
 
         return change
 
-    async def get_changes(
+    def get_changes(
         self,
         document_id: int,
         since_version: Optional[int] = None,
         limit: int = 100,
     ) -> list[CollaborativeChange]:
         """Get changes for a document, optionally since a version."""
-        stmt = select(CollaborativeChange).where(CollaborativeChange.document_id == document_id)
+        query = self.db.query(CollaborativeChange).filter(CollaborativeChange.document_id == document_id)
 
         if since_version is not None:
-            stmt = stmt.where(CollaborativeChange.version > since_version)
+            query = query.filter(CollaborativeChange.version > since_version)
 
-        stmt = stmt.order_by(CollaborativeChange.version).limit(limit)
-
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
+        return query.order_by(CollaborativeChange.version).limit(limit).all()
 
     # =========================================================================
     # Comments
     # =========================================================================
 
-    async def add_comment(
+    def add_comment(
         self,
         tenant_id: int,
         entity_type: str,
@@ -343,10 +335,10 @@ class CollaborationService:
         mentions: Optional[list[int]] = None,
     ) -> Comment:
         """Add a comment to an entity."""
+        # Determine thread ID
         thread_id = None
         if parent_id:
-            result = await self.db.execute(select(Comment).where(Comment.id == parent_id))
-            parent = result.scalar_one_or_none()
+            parent = self.db.query(Comment).get(parent_id)
             if parent:
                 thread_id = parent.thread_id or parent.id
 
@@ -366,17 +358,17 @@ class CollaborationService:
         )
 
         self.db.add(comment)
-        await self.db.commit()
-        await self.db.refresh(comment)
+        self.db.commit()
+        self.db.refresh(comment)
 
         # Set thread_id if this is a new thread
         if not parent_id and not comment.thread_id:
             comment.thread_id = comment.id
-            await self.db.commit()
+            self.db.commit()
 
         return comment
 
-    async def get_comments(
+    def get_comments(
         self,
         tenant_id: int,
         entity_type: str,
@@ -384,7 +376,7 @@ class CollaborationService:
         include_resolved: bool = False,
     ) -> list[Comment]:
         """Get comments for an entity."""
-        stmt = select(Comment).where(
+        query = self.db.query(Comment).filter(
             Comment.tenant_id == tenant_id,
             Comment.entity_type == entity_type,
             Comment.entity_id == entity_id,
@@ -392,42 +384,37 @@ class CollaborationService:
         )
 
         if not include_resolved:
-            stmt = stmt.where(Comment.status != "resolved")
+            query = query.filter(Comment.status != "resolved")
 
-        stmt = stmt.order_by(Comment.created_at)
+        return query.order_by(Comment.created_at).all()
 
-        result = await self.db.execute(stmt)
-        return list(result.scalars().all())
-
-    async def resolve_comment(
+    def resolve_comment(
         self,
         comment_id: int,
         resolved_by_id: int,
     ) -> Comment:
         """Resolve a comment."""
-        result = await self.db.execute(select(Comment).where(Comment.id == comment_id))
-        comment = result.scalar_one_or_none()
+        comment = self.db.query(Comment).get(comment_id)
         if not comment:
             raise ValueError(f"Comment {comment_id} not found")
 
         comment.status = "resolved"
         comment.resolved_by_id = resolved_by_id
-        comment.resolved_at = datetime.now(timezone.utc)
+        comment.resolved_at = datetime.utcnow()
 
-        await self.db.commit()
-        await self.db.refresh(comment)
+        self.db.commit()
+        self.db.refresh(comment)
 
         return comment
 
-    async def add_reaction(
+    def add_reaction(
         self,
         comment_id: int,
         user_id: int,
         emoji: str,
     ) -> Comment:
         """Add a reaction to a comment."""
-        result = await self.db.execute(select(Comment).where(Comment.id == comment_id))
-        comment = result.scalar_one_or_none()
+        comment = self.db.query(Comment).get(comment_id)
         if not comment:
             raise ValueError(f"Comment {comment_id} not found")
 
@@ -438,8 +425,8 @@ class CollaborationService:
             reactions[emoji].append(user_id)
         comment.reactions = reactions
 
-        await self.db.commit()
-        await self.db.refresh(comment)
+        self.db.commit()
+        self.db.refresh(comment)
 
         return comment
 
@@ -447,7 +434,7 @@ class CollaborationService:
     # Presence
     # =========================================================================
 
-    async def update_presence(
+    def update_presence(
         self,
         tenant_id: int,
         user_id: int,
@@ -459,8 +446,7 @@ class CollaborationService:
         custom_status: Optional[str] = None,
     ) -> Presence:
         """Update user presence."""
-        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
-        presence = result.scalar_one_or_none()
+        presence = self.db.query(Presence).filter(Presence.user_id == user_id).first()
 
         if not presence:
             presence = Presence(
@@ -475,60 +461,61 @@ class CollaborationService:
         presence.current_entity_id = current_entity_id
         presence.device_type = device_type
         presence.custom_status = custom_status
-        presence.last_seen_at = datetime.now(timezone.utc)
+        presence.last_seen_at = datetime.utcnow()
 
         if status == "away":
-            presence.went_away_at = datetime.now(timezone.utc)
+            presence.went_away_at = datetime.utcnow()
         else:
             presence.went_away_at = None
 
-        await self.db.commit()
-        await self.db.refresh(presence)
+        self.db.commit()
+        self.db.refresh(presence)
 
         return presence
 
-    async def get_online_users(self, tenant_id: int) -> list[Presence]:
+    def get_online_users(self, tenant_id: int) -> list[Presence]:
         """Get all online users in a tenant."""
-        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
-        result = await self.db.execute(
-            select(Presence).where(
+        return (
+            self.db.query(Presence)
+            .filter(
                 Presence.tenant_id == tenant_id,
                 Presence.status != "offline",
                 Presence.last_seen_at >= timeout,
             )
+            .all()
         )
-        return list(result.scalars().all())
 
-    async def get_users_viewing_entity(
+    def get_users_viewing_entity(
         self,
         tenant_id: int,
         entity_type: str,
         entity_id: str,
     ) -> list[Presence]:
         """Get users currently viewing a specific entity."""
-        timeout = datetime.now(timezone.utc) - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
+        timeout = datetime.utcnow() - timedelta(seconds=self.SESSION_TIMEOUT_SECONDS)
 
-        result = await self.db.execute(
-            select(Presence).where(
+        return (
+            self.db.query(Presence)
+            .filter(
                 Presence.tenant_id == tenant_id,
                 Presence.current_entity_type == entity_type,
                 Presence.current_entity_id == entity_id,
                 Presence.status != "offline",
                 Presence.last_seen_at >= timeout,
             )
+            .all()
         )
-        return list(result.scalars().all())
 
-    async def set_offline(self, user_id: int) -> Optional[Presence]:
+    def set_offline(self, user_id: int) -> Optional[Presence]:
         """Set user as offline."""
-        result = await self.db.execute(select(Presence).where(Presence.user_id == user_id))
-        presence = result.scalar_one_or_none()
+        presence = self.db.query(Presence).filter(Presence.user_id == user_id).first()
 
         if presence:
             presence.status = "offline"
-            await self.db.commit()
-            await self.db.refresh(presence)
+            self.db.commit()
+            self.db.refresh(presence)
 
         return presence
 

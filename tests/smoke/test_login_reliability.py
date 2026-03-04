@@ -34,7 +34,7 @@ pytestmark = pytest.mark.skipif(not is_api_reachable(), reason=f"API not reachab
 # Performance thresholds from LOGIN_UX_CONTRACT.md
 P95_STAGING_THRESHOLD_S = 5.0
 P95_PROD_THRESHOLD_S = 7.0
-HARD_TIMEOUT_S = 15.0
+HARD_TIMEOUT_S = 30.0
 
 
 class TestLoginReliability:

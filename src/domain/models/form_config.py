@@ -58,6 +58,9 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Template identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
@@ -87,9 +90,6 @@ class FormTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     # Workflow settings
     workflow_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Relationships
     steps: Mapped[List["FormStep"]] = relationship(
@@ -187,6 +187,9 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Contract details
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
@@ -205,9 +208,6 @@ class Contract(Base, TimestampMixin, AuditTrailMixin):
     # Display order
     display_order: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     def __repr__(self) -> str:
         return f"<Contract(id={self.id}, name='{self.name}', code='{self.code}')>"
 
@@ -218,6 +218,9 @@ class SystemSetting(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "system_settings"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Setting identification
     key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
@@ -232,9 +235,6 @@ class SystemSetting(Base, TimestampMixin, AuditTrailMixin):
     is_public: Mapped[bool] = mapped_column(Boolean, default=False)  # Visible to non-admins
     is_editable: Mapped[bool] = mapped_column(Boolean, default=True)  # Can be edited via UI
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     def __repr__(self) -> str:
         return f"<SystemSetting(key='{self.key}', category='{self.category}')>"
 
@@ -246,6 +246,9 @@ class LookupOption(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+
     # Option identification
     category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)  # e.g., 'roles', 'departments'
     code: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -255,9 +258,6 @@ class LookupOption(Base, TimestampMixin):
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
-
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Parent for hierarchical options
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("lookup_options.id"), nullable=True)

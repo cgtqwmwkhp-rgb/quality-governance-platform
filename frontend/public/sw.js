@@ -5,8 +5,8 @@
  * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - CI injects git SHA + timestamp
-const CACHE_VERSION = 'qgp-v3.7.0-20260124-token-expiry-fix';
+// Cache version - CI replaces __SW_VERSION__ with git SHA + timestamp at build time
+const CACHE_VERSION = '__SW_VERSION__';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -120,13 +120,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // CRITICAL: Check if this is an API request that needs HTTPS enforcement
-  const isApiRequest = url.hostname.includes('azurewebsites.net') && 
+  const isApiRequest = url.hostname.includes('azurewebsites.net') &&
                        url.pathname.startsWith('/api/');
-  
+
   if (isApiRequest) {
     // Always enforce HTTPS for API requests
     const secureRequest = createSecureRequest(request);
-    event.respondWith(networkFirstApi(secureRequest));
+    // Workforce API GET routes: network-first with cache fallback for offline support
+    if (request.method === 'GET' && isWorkforceApiRoute(url.pathname)) {
+      event.respondWith(networkFirstApiWithCache(secureRequest));
+    } else {
+      event.respondWith(networkFirstApi(secureRequest));
+    }
     return;
   }
 
@@ -157,7 +162,11 @@ self.addEventListener('fetch', (event) => {
 async function networkFirstApi(request) {
   try {
     const response = await fetch(request);
-    // DO NOT cache API responses - always return fresh data
+    if (response.status === 401 || response.status === 403) {
+      // Auth failures: notify all clients to handle re-auth
+      const allClients = await self.clients.matchAll();
+      allClients.forEach(client => client.postMessage({ type: 'AUTH_REQUIRED', status: response.status }));
+    }
     return response;
   } catch (error) {
     console.log('[SW] API fetch failed - network unavailable');
@@ -167,6 +176,42 @@ async function networkFirstApi(request) {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+}
+
+/**
+ * Network-first with cache fallback for workforce API GET routes.
+ * Used for assessments, inductions, engineers, assets - enables offline read access.
+ */
+async function networkFirstApiWithCache(request) {
+  try {
+    const response = await fetch(request);
+    if (response.status === 401 || response.status === 403) {
+      const allClients = await self.clients.matchAll();
+      allClients.forEach(client => client.postMessage({ type: 'AUTH_REQUIRED', status: response.status }));
+    }
+    if (response.ok) {
+      const cache = await caches.open(API_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    console.log('[SW] Workforce API fetch failed - trying cache');
+    const cached = await caches.match(request);
+    if (cached) {
+      return cached;
+    }
+    return new Response(JSON.stringify({ error: 'Offline', message: 'Network unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+function isWorkforceApiRoute(pathname) {
+  return pathname.startsWith('/api/v1/assessments') ||
+         pathname.startsWith('/api/v1/inductions') ||
+         pathname.startsWith('/api/v1/engineers') ||
+         pathname.startsWith('/api/v1/assets');
 }
 
 async function cacheFirst(request) {
@@ -275,9 +320,31 @@ async function syncPendingReports() {
     
     for (const report of reports) {
       try {
-        const response = await fetch('/api/portal/report', {
+        // Retrieve auth token from IndexedDB for authenticated sync
+        let authHeaders = { 'Content-Type': 'application/json' };
+        try {
+          const tokenDb = await new Promise((res, rej) => {
+            const r = indexedDB.open('QGP_Auth', 1);
+            r.onerror = () => rej(r.error);
+            r.onsuccess = () => res(r.result);
+            r.onupgradeneeded = (e) => e.target.result.createObjectStore('tokens', { keyPath: 'key' });
+          });
+          const tx = tokenDb.transaction('tokens', 'readonly');
+          const tokenResult = await new Promise((res) => {
+            const req = tx.objectStore('tokens').get('access_token');
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => res(null);
+          });
+          if (tokenResult?.value) {
+            authHeaders['Authorization'] = `Bearer ${tokenResult.value}`;
+          }
+        } catch {
+          // No token available - submit without auth
+        }
+
+        const response = await fetch('/api/v1/portal/report', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify(report.data),
         });
         

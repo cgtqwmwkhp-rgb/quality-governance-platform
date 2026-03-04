@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/lib/
 lib64/
 parts/
 sdist/
@@ -88,6 +89,13 @@ alembic/versions/*.pyc
 tmp/
 temp/
 *.tmp
+
+# Business data / documents (root-level only)
+/*.csv
+/*.xlsx
+/*.pdf
+/*.docx
+/*.zip
 
 # Node modules
 node_modules/

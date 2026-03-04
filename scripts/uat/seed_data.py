@@ -540,10 +540,26 @@ class UATSeedGenerator:
     def get_user_credentials(self) -> Dict[str, Dict[str, str]]:
         """Get test user credentials (for test harness only)."""
         return {
-            "admin": {"username": "uat_admin", "password": "UatTestPass123!", "role": "admin"},  # Test password only
-            "user": {"username": "uat_user", "password": "UatTestPass123!", "role": "user"},
-            "auditor": {"username": "uat_auditor", "password": "UatTestPass123!", "role": "auditor"},
-            "readonly": {"username": "uat_readonly", "password": "UatTestPass123!", "role": "readonly"},
+            "admin": {
+                "username": "uat_admin",
+                "password": "UatTestPass123!",  # Test password only
+                "role": "admin",
+            },
+            "user": {
+                "username": "uat_user",
+                "password": "UatTestPass123!",
+                "role": "user",
+            },
+            "auditor": {
+                "username": "uat_auditor",
+                "password": "UatTestPass123!",
+                "role": "auditor",
+            },
+            "readonly": {
+                "username": "uat_readonly",
+                "password": "UatTestPass123!",
+                "role": "readonly",
+            },
         }
 
 
@@ -576,12 +592,22 @@ def main():
 
     parser = argparse.ArgumentParser(description="UAT Seed Data Generator")
     parser.add_argument(
-        "--output", "-o", type=str, default="uat_seed_manifest.json", help="Output file for seed manifest"
+        "--output",
+        "-o",
+        type=str,
+        default="uat_seed_manifest.json",
+        help="Output file for seed manifest",
     )
     parser.add_argument(
-        "--skip-safety-check", action="store_true", help="Skip environment safety check (for local dev only)"
+        "--skip-safety-check",
+        action="store_true",
+        help="Skip environment safety check (for local dev only)",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Generate manifest without applying to database")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate manifest without applying to database",
+    )
 
     args = parser.parse_args()
 

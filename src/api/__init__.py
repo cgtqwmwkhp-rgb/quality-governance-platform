@@ -5,7 +5,11 @@ from fastapi import APIRouter
 from src.api.routes import (
     actions,
     ai_intelligence,
+    ai_templates,
     analytics,
+    assessments,
+    assets,
+    audit_templates,
     audit_trail,
     auditor_competence,
     audits,
@@ -15,19 +19,16 @@ from src.api.routes import (
     compliance,
     compliance_automation,
     copilot,
-    cross_standard_mappings,
-    dlq_admin,
     document_control,
     documents,
     employee_portal,
+    engineers,
     evidence_assets,
     executive_dashboard,
     form_config,
-    gdpr,
-    global_search,
-    health,
-    ims_dashboard,
+    governance,
     incidents,
+    inductions,
     investigation_templates,
     investigations,
     iso27001,
@@ -43,15 +44,16 @@ from src.api.routes import (
     risks,
     rtas,
     signatures,
-    slo,
     standards,
     telemetry,
     tenants,
     testing,
     users,
     uvdb,
+    wdp_analytics,
     workflow,
     workflows,
+    xml_import,
 )
 
 router = APIRouter()
@@ -61,6 +63,8 @@ router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 router.include_router(users.router, prefix="/users", tags=["Users"])
 router.include_router(standards.router, prefix="/standards", tags=["Standards Library"])
 router.include_router(audits.router, prefix="/audits", tags=["Audits & Inspections"])
+router.include_router(audit_templates.router, prefix="/audit-templates", tags=["Audit Template Builder"])
+router.include_router(xml_import.router, prefix="/xml-import", tags=["XML Template Import"])
 router.include_router(risks.router, prefix="/risks", tags=["Risk Register"])
 router.include_router(incidents.router, prefix="/incidents", tags=["Incidents"])
 router.include_router(actions.router, prefix="/actions", tags=["Actions"])
@@ -71,7 +75,6 @@ router.include_router(
     tags=["Investigations"],
 )
 router.include_router(investigations.router, prefix="/investigations", tags=["Investigations"])
-router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
@@ -100,14 +103,6 @@ router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 # Planet Mark Carbon Management
 router.include_router(planet_mark.router, prefix="/planet-mark", tags=["Planet Mark Carbon"])
-# IMS (Integrated Management System) Dashboard
-router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
-# Cross-Standard ISO Mappings
-router.include_router(
-    cross_standard_mappings.router,
-    prefix="/cross-standard-mappings",
-    tags=["Cross-Standard Mappings"],
-)
 # AI Copilot (Tier 2)
 router.include_router(copilot.router, prefix="/copilot", tags=["AI Copilot"])
 # Digital Signatures (Tier 2)
@@ -116,8 +111,6 @@ router.include_router(signatures.router, prefix="/signatures", tags=["Digital Si
 router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
 # Immutable Audit Trail (Tier 1)
 router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
-# GDPR Compliance (Right of Access & Right to Erasure)
-router.include_router(gdpr.router, tags=["GDPR"])
 # Admin Form Builder & Configuration
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
 # Near Misses
@@ -134,19 +127,23 @@ router.include_router(policy_acknowledgment.router, tags=["Policy Acknowledgment
 router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
 # RCA Tools (5-Whys, Fishbone, CAPA)
 router.include_router(rca_tools.router, tags=["RCA Tools"])
+# CAPA (Corrective and Preventive Actions)
+router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
+# Asset Registry (Workforce Development Platform)
+router.include_router(assets.router, prefix="/assets", tags=["Asset Registry"])
+router.include_router(ai_templates.router, prefix="/ai-templates", tags=["AI Template Intelligence"])
+# Assessments, Inductions, Engineers (Workforce Development Platform)
+router.include_router(assessments.router, prefix="/assessments", tags=["Assessments"])
+router.include_router(inductions.router, prefix="/inductions", tags=["Inductions"])
+router.include_router(engineers.router, prefix="/engineers", tags=["Engineers"])
+router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Workforce Analytics"])
+# Governance Framework (Workforce Development Platform)
+router.include_router(governance.router, prefix="/governance", tags=["Governance Framework"])
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
-# Global Search
-router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 # CI Testing Endpoints (Staging Only)
 router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
 router.include_router(telemetry.router, tags=["Telemetry"])
-# SLO/SLI Observability
-router.include_router(slo.router, tags=["SLO Metrics"])
-# Health sub-routes (circuit breakers)
-router.include_router(health.router, tags=["Health"])
-# DLQ Admin
-router.include_router(dlq_admin.router, tags=["Admin"])
 
 __all__ = ["router"]

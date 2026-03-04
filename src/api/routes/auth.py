@@ -1,44 +1,34 @@
-"""Authentication API routes.
-
-Thin controller layer — all business logic lives in AuthService.
-"""
+"""Authentication API routes."""
 
 import logging
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.auth import (
-    ChangePasswordResponse,
-    ConfirmPasswordResetResponse,
     LoginRequest,
-    LogoutResponse,
-    MFADisableRequest,
-    MFADisableResponse,
-    MFASetupResponse,
-    MFAVerifyRequest,
-    MFAVerifyResponse,
     PasswordChangeRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
     RefreshTokenRequest,
-    RequestPasswordResetResponse,
     TokenResponse,
 )
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
-from src.domain.exceptions import AuthenticationError, AuthorizationError, ValidationError
-from src.domain.services.auth_service import AuthService
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
+from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
+from src.core.security import (
+    create_access_token,
+    create_password_reset_token,
+    create_refresh_token,
+    decode_token,
+    get_password_hash,
+    verify_password,
+    verify_password_reset_token,
+)
+from src.domain.models.user import User
+from src.domain.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -81,13 +71,66 @@ async def exchange_azure_token(
         - Creates or updates user in database
         - Issues platform JWT with user's database ID
     """
-    service = AuthService(db)
-    try:
-        user, access_token, refresh_token = await service.exchange_azure_token(request.id_token)
-    except ValueError as exc:
-        if "Invalid Azure AD token" in str(exc):
-            raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    # Validate the Azure AD token
+    payload = validate_azure_id_token(request.id_token)
+
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired Azure AD token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Extract user info
+    user_info = extract_user_info_from_azure_token(payload)
+
+    if not user_info.get("email"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token does not contain email claim",
+        )
+
+    email = user_info["email"].lower()
+    azure_oid = user_info.get("oid")
+
+    # Find or create user
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        # Create new user from Azure AD profile
+        name_parts = (user_info.get("name") or email.split("@")[0]).split(" ", 1)
+        first_name = name_parts[0] if name_parts else "User"
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            hashed_password="",  # No password - Azure AD auth only
+            is_active=True,
+            is_superuser=False,
+            azure_oid=azure_oid,
+            department=user_info.get("department"),
+            job_title=user_info.get("job_title"),
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"Created new user from Azure AD: {email}")
+    else:
+        # Update Azure OID if not set
+        if azure_oid and not user.azure_oid:
+            user.azure_oid = azure_oid
+            await db.commit()
+
+        # Update last login
+        user.last_login = datetime.now(timezone.utc).isoformat()
+        await db.commit()
+
+    # Generate platform tokens
+    access_token = create_access_token(subject=user.id)
+    refresh_token = create_refresh_token(subject=user.id)
 
     return AzureTokenExchangeResponse(
         access_token=access_token,
@@ -104,52 +147,74 @@ async def exchange_azure_token(
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     """Authenticate user and return access and refresh tokens."""
-    _span = tracer.start_span("login") if tracer else None
-    service = AuthService(db)
-    try:
-        _user, access_token, refresh_token = await service.authenticate(request.email, request.password)
-    except ValueError:
-        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
-    except PermissionError:
-        raise AuthorizationError(ErrorCode.PERMISSION_DENIED)
+    # Find user by email
+    result = await db.execute(select(User).where(User.email == request.email))
+    user = result.scalar_one_or_none()
 
-    track_metric("auth.login")
-    if _span:
-        _span.end()
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+    if user is None or not verify_password(request.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled",
+        )
+
+    # Update last login
+    user.last_login = datetime.now(timezone.utc).isoformat()
+    await db.commit()
+
+    # Generate tokens
+    access_token = create_access_token(subject=user.id)
+    refresh_token = create_refresh_token(subject=user.id)
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenResponse:
     """Refresh access token using refresh token."""
-    service = AuthService(db)
-    try:
-        access_token, new_refresh_token = await service.refresh_tokens(request.refresh_token)
-    except ValueError:
-        raise AuthenticationError(ErrorCode.TOKEN_EXPIRED)
+    payload = decode_token(request.refresh_token)
 
-    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
+    if payload is None or payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
+    user_id = payload.get("sub")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
 
-security_scheme = HTTPBearer()
+    # Verify user still exists and is active
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
 
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
 
-@router.post("/logout", response_model=LogoutResponse)
-async def logout(
-    db: DbSession,
-    credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
-) -> LogoutResponse:
-    """Revoke the current access token so it can no longer be used."""
-    service = AuthService(db)
-    try:
-        await service.logout(credentials.credentials)
-    except ValueError as exc:
-        if "missing jti" in str(exc):
-            raise ValidationError(ErrorCode.VALIDATION_ERROR)
-        raise AuthenticationError(ErrorCode.TOKEN_EXPIRED)
+    # Generate new tokens
+    access_token = create_access_token(subject=user.id)
+    new_refresh_token = create_refresh_token(subject=user.id)
 
-    track_metric("auth.logout")
-    return LogoutResponse(message="Successfully logged out")
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=new_refresh_token,
+    )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -183,6 +248,7 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
     If this returns 401, the issue is with token validation.
     If this returns 200, but /actions returns 401, check endpoint-specific auth.
     """
+    # Get user roles
     role_names = [role.name for role in current_user.roles] if current_user.roles else []
 
     return WhoAmIResponse(
@@ -196,20 +262,23 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
     )
 
 
-@router.post("/change-password", response_model=ChangePasswordResponse)
+@router.post("/change-password")
 async def change_password(
     request: PasswordChangeRequest,
     current_user: CurrentUser,
     db: DbSession,
-) -> ChangePasswordResponse:
+) -> dict:
     """Change current user's password."""
-    service = AuthService(db)
-    try:
-        await service.change_password(current_user, request.current_password, request.new_password)
-    except ValueError:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+    if not verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password",
+        )
 
-    return ChangePasswordResponse(message="Password changed successfully")
+    current_user.hashed_password = get_password_hash(request.new_password)
+    await db.commit()
+
+    return {"message": "Password changed successfully"}
 
 
 # =============================================================================
@@ -217,11 +286,11 @@ async def change_password(
 # =============================================================================
 
 
-@router.post("/password-reset/request", response_model=RequestPasswordResetResponse)
+@router.post("/password-reset/request")
 async def request_password_reset(
     request: PasswordResetRequest,
     db: DbSession,
-) -> RequestPasswordResetResponse:
+) -> dict:
     """
     Request a password reset email.
 
@@ -230,19 +299,44 @@ async def request_password_reset(
         - Token expires in 1 hour
         - Email is masked in logs
     """
-    service = AuthService(db)
-    await service.request_password_reset(request.email)
+    # Find user by email
+    result = await db.execute(select(User).where(User.email == request.email.lower()))
+    user = result.scalar_one_or_none()
 
-    return RequestPasswordResetResponse(
-        message="If an account with that email exists, a password reset link has been sent."
-    )
+    if user is not None and user.is_active:
+        # Generate password reset token
+        reset_token = create_password_reset_token(user.id)
+
+        # Build reset URL (frontend will handle this route)
+        # Use environment variable for frontend URL, fallback to common values
+        import os
+
+        frontend_url = os.getenv("FRONTEND_URL", "https://app-qgp-prod.azurestaticapps.net")
+        reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+
+        # Send password reset email
+        try:
+            await email_service.send_password_reset_email(
+                to=user.email,
+                reset_url=reset_url,
+                user_name=user.first_name or user.email.split("@")[0],
+            )
+            # Mask email for logging (show first 3 chars and domain)
+            masked_email = user.email[:3] + "***@" + user.email.split("@")[1]
+            logger.info(f"Password reset email sent to {masked_email}")
+        except Exception as e:
+            # Log error but don't reveal to user
+            logger.error(f"Failed to send password reset email: {e}")
+
+    # Always return success to prevent email enumeration
+    return {"message": "If an account with that email exists, a password reset link has been sent."}
 
 
-@router.post("/password-reset/confirm", response_model=ConfirmPasswordResetResponse)
+@router.post("/password-reset/confirm")
 async def confirm_password_reset(
     request: PasswordResetConfirm,
     db: DbSession,
-) -> ConfirmPasswordResetResponse:
+) -> dict:
     """
     Confirm password reset with token and set new password.
 
@@ -251,89 +345,29 @@ async def confirm_password_reset(
         - Token must be of type 'password_reset'
         - User must exist and be active
     """
-    service = AuthService(db)
-    try:
-        await service.confirm_password_reset(request.token, request.new_password)
-    except ValueError:
-        raise ValidationError(ErrorCode.TOKEN_EXPIRED)
+    # Verify the reset token
+    user_id = verify_password_reset_token(request.token)
 
-    return ConfirmPasswordResetResponse(message="Password has been reset successfully")
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
 
+    # Find user
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
 
-# =============================================================================
-# MFA / TOTP
-# =============================================================================
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired password reset token",
+        )
 
-
-@router.post("/mfa/setup", response_model=MFASetupResponse)
-async def mfa_setup(
-    current_user: CurrentUser,
-    db: DbSession,
-) -> MFASetupResponse:
-    """Generate a TOTP secret and return the provisioning URI.
-
-    The user must then verify the code via /mfa/verify to activate MFA.
-    """
-    try:
-        import pyotp
-    except ImportError:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-
-    if current_user.mfa_enabled:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-
-    secret = pyotp.random_base32()
-    current_user.totp_secret = secret
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
     await db.commit()
 
-    totp = pyotp.TOTP(secret)
-    provisioning_uri = totp.provisioning_uri(
-        name=current_user.email,
-        issuer_name="Quality Governance Platform",
-    )
+    logger.info(f"Password reset successful for user ID {user_id}")
 
-    return MFASetupResponse(secret=secret, provisioning_uri=provisioning_uri)
-
-
-@router.post("/mfa/verify", response_model=MFAVerifyResponse)
-async def mfa_verify(
-    request: MFAVerifyRequest,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> MFAVerifyResponse:
-    """Verify a TOTP code and enable MFA for the user."""
-    try:
-        import pyotp
-    except ImportError:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-
-    if not current_user.totp_secret:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
-
-    totp = pyotp.TOTP(current_user.totp_secret)
-    if not totp.verify(request.code):
-        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
-
-    current_user.mfa_enabled = True
-    await db.commit()
-
-    return MFAVerifyResponse(message="MFA enabled successfully", mfa_enabled=True)
-
-
-@router.post("/mfa/disable", response_model=MFADisableResponse)
-async def mfa_disable(
-    request: MFADisableRequest,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> MFADisableResponse:
-    """Disable MFA for the user (requires current password)."""
-    from src.core.security import verify_password
-
-    if not verify_password(request.password, current_user.hashed_password):
-        raise AuthenticationError(ErrorCode.AUTHENTICATION_REQUIRED)
-
-    current_user.mfa_enabled = False
-    current_user.totp_secret = None
-    await db.commit()
-
-    return MFADisableResponse(message="MFA disabled successfully", mfa_enabled=False)
+    return {"message": "Password has been reset successfully"}

@@ -11,47 +11,14 @@ Features:
 - ROI tracking
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser
-from src.api.schemas.analytics import (
-    BenchmarkComparisonResponse,
-    BenchmarkSummaryResponse,
-    CostBreakdownResponse,
-    CostNonComplianceResponse,
-    CostRecordResponse,
-    DashboardCreatedResponse,
-    DashboardDeletedResponse,
-    DashboardDetailResponse,
-    DashboardListResponse,
-    DashboardUpdatedResponse,
-    DrillDownResponse,
-    ExecutiveSummaryResponse,
-    ForecastResponse,
-    InvestmentActualsResponse,
-    InvestmentCreatedResponse,
-    InvestmentRoiResponse,
-    KpiSummaryResponse,
-    ReportGeneratedResponse,
-    ReportStatusResponse,
-    RoiSummaryResponse,
-    TrendDataResponse,
-    WidgetDataResponse,
-    WidgetPreviewResponse,
-)
+from src.api.dependencies import CurrentUser
 from src.domain.services.analytics_service import analytics_service
-from src.infrastructure.monitoring.azure_monitor import track_metric
-
-try:
-    from opentelemetry import trace
-
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None  # type: ignore[assignment]  # TYPE-IGNORE: optional-dependency
 
 router = APIRouter()
 
@@ -140,7 +107,7 @@ class ROIInvestmentCreate(BaseModel):
 # ============================================================================
 
 
-@router.get("/dashboards", response_model=DashboardListResponse)
+@router.get("/dashboards")
 async def list_dashboards(current_user: CurrentUser):
     """List all dashboards for the current user."""
     # Mock dashboards
@@ -154,7 +121,7 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#10B981",
                 "is_default": True,
                 "widget_count": 8,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
             },
             {
                 "id": 2,
@@ -164,7 +131,7 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#3B82F6",
                 "is_default": False,
                 "widget_count": 6,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
             },
             {
                 "id": 3,
@@ -174,31 +141,26 @@ async def list_dashboards(current_user: CurrentUser):
                 "color": "#8B5CF6",
                 "is_default": False,
                 "widget_count": 5,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
             },
         ]
     }
 
 
-@router.post("/dashboards", response_model=DashboardCreatedResponse)
+@router.post("/dashboards")
 async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser):
     """Create a new custom dashboard."""
-    _span = tracer.start_span("create_dashboard") if tracer else None
-    result = {
+    return {
         "id": 4,
         "name": dashboard.name,
         "description": dashboard.description,
         "icon": dashboard.icon or "LayoutDashboard",
         "color": dashboard.color or "#10B981",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.utcnow().isoformat(),
     }
-    track_metric("analytics.dashboards_created", 1)
-    if _span:
-        _span.end()
-    return result
 
 
-@router.get("/dashboards/{dashboard_id}", response_model=DashboardDetailResponse)
+@router.get("/dashboards/{dashboard_id}")
 async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     """Get dashboard with widgets."""
     return {
@@ -244,18 +206,18 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     }
 
 
-@router.put("/dashboards/{dashboard_id}", response_model=DashboardUpdatedResponse)
+@router.put("/dashboards/{dashboard_id}")
 async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
     """Update dashboard configuration."""
     return {
         "id": dashboard_id,
         "name": dashboard.name,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
     }
 
 
-@router.delete("/dashboards/{dashboard_id}", response_model=DashboardDeletedResponse)
-async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
+@router.delete("/dashboards/{dashboard_id}")
+async def delete_dashboard(dashboard_id: int, current_user: CurrentUser):
     """Delete a dashboard."""
     return {"success": True, "id": dashboard_id}
 
@@ -265,7 +227,7 @@ async def delete_dashboard(dashboard_id: int, current_user: CurrentSuperuser):
 # ============================================================================
 
 
-@router.get("/widgets/{widget_id}/data", response_model=WidgetDataResponse)
+@router.get("/widgets/{widget_id}/data")
 async def get_widget_data(
     widget_id: int,
     current_user: CurrentUser,
@@ -285,11 +247,11 @@ async def get_widget_data(
                 "values": [15, 12, 10, 10],
             },
         },
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
     }
 
 
-@router.post("/widgets/preview", response_model=WidgetPreviewResponse)
+@router.post("/widgets/preview")
 async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
     """Preview widget data without saving."""
     trend_data = analytics_service.get_trend_data(
@@ -297,7 +259,6 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
         metric=widget.metric,
         time_range="last_30_days",
         group_by=widget.group_by,
-        tenant_id=current_user.tenant_id,
     )
     return {
         "widget_type": widget.widget_type,
@@ -311,17 +272,16 @@ async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
 # ============================================================================
 
 
-@router.get("/kpis", response_model=KpiSummaryResponse)
+@router.get("/kpis")
 async def get_kpi_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_30_days"),
 ):
     """Get summary KPIs across all modules."""
-    track_metric("analytics.query", 1, {"time_range": time_range})
-    return analytics_service.get_kpi_summary(time_range, tenant_id=current_user.tenant_id)
+    return analytics_service.get_kpi_summary(time_range)
 
 
-@router.get("/trends/{data_source}", response_model=TrendDataResponse)
+@router.get("/trends/{data_source}")
 async def get_trend_data(
     data_source: str,
     current_user: CurrentUser,
@@ -337,11 +297,10 @@ async def get_trend_data(
         granularity=granularity,
         time_range=time_range,
         group_by=group_by,
-        tenant_id=current_user.tenant_id,
     )
 
 
-@router.get("/drill-down/{data_source}", response_model=DrillDownResponse)
+@router.get("/drill-down/{data_source}")
 async def get_drill_down_data(
     data_source: str,
     current_user: CurrentUser,
@@ -387,7 +346,7 @@ async def get_drill_down_data(
 # ============================================================================
 
 
-@router.post("/forecast", response_model=ForecastResponse)
+@router.post("/forecast")
 async def generate_forecast(request: ForecastRequest, current_user: CurrentUser):
     """Generate trend forecast with confidence intervals."""
     # Get historical data
@@ -395,7 +354,6 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
         data_source=request.data_source,
         metric=request.metric,
         time_range="last_90_days",
-        tenant_id=current_user.tenant_id,
     )
 
     historical = trend_data["datasets"][0]["data"] if trend_data["datasets"] else []
@@ -423,16 +381,16 @@ async def generate_forecast(request: ForecastRequest, current_user: CurrentUser)
 # ============================================================================
 
 
-@router.get("/benchmarks", response_model=BenchmarkSummaryResponse)
+@router.get("/benchmarks")
 async def get_benchmark_summary(
     current_user: CurrentUser,
     industry: str = Query("utilities"),
 ):
     """Get benchmark comparison summary."""
-    return analytics_service.get_benchmark_summary(industry, tenant_id=current_user.tenant_id)
+    return analytics_service.get_benchmark_summary(industry)
 
 
-@router.get("/benchmarks/{metric}", response_model=BenchmarkComparisonResponse)
+@router.get("/benchmarks/{metric}")
 async def get_benchmark_comparison(
     metric: str,
     current_user: CurrentUser,
@@ -440,7 +398,7 @@ async def get_benchmark_comparison(
     region: str = Query("uk"),
 ):
     """Get benchmark comparison for a specific metric."""
-    return analytics_service.get_benchmark_comparison(metric, industry, region, tenant_id=current_user.tenant_id)
+    return analytics_service.get_benchmark_comparison(metric, industry, region)
 
 
 # ============================================================================
@@ -448,16 +406,16 @@ async def get_benchmark_comparison(
 # ============================================================================
 
 
-@router.get("/costs/non-compliance", response_model=CostNonComplianceResponse)
+@router.get("/costs/non-compliance")
 async def get_cost_of_non_compliance(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
 ):
     """Calculate cost of non-compliance."""
-    return analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
+    return analytics_service.calculate_cost_of_non_compliance(time_range)
 
 
-@router.post("/costs/record", response_model=CostRecordResponse)
+@router.post("/costs/record")
 async def record_cost(cost: CostRecord, current_user: CurrentUser):
     """Record a cost entry."""
     return {
@@ -465,18 +423,18 @@ async def record_cost(cost: CostRecord, current_user: CurrentUser):
         "entity_type": cost.entity_type,
         "entity_id": cost.entity_id,
         "amount": cost.amount,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.utcnow().isoformat(),
     }
 
 
-@router.get("/costs/breakdown", response_model=CostBreakdownResponse)
+@router.get("/costs/breakdown")
 async def get_cost_breakdown(
     current_user: CurrentUser,
     time_range: str = Query("last_12_months"),
     group_by: str = Query("category"),
 ):
     """Get cost breakdown by category."""
-    costs = analytics_service.calculate_cost_of_non_compliance(time_range, tenant_id=current_user.tenant_id)
+    costs = analytics_service.calculate_cost_of_non_compliance(time_range)
     return costs.get("breakdown", {})
 
 
@@ -485,19 +443,19 @@ async def get_cost_breakdown(
 # ============================================================================
 
 
-@router.get("/roi", response_model=RoiSummaryResponse)
+@router.get("/roi")
 async def get_roi_summary(current_user: CurrentUser):
     """Get ROI summary for all investments."""
-    return analytics_service.calculate_roi(tenant_id=current_user.tenant_id)
+    return analytics_service.calculate_roi()
 
 
-@router.get("/roi/{investment_id}", response_model=InvestmentRoiResponse)
+@router.get("/roi/{investment_id}")
 async def get_investment_roi(investment_id: int, current_user: CurrentUser):
     """Get ROI for a specific investment."""
-    return analytics_service.calculate_roi(investment_id, tenant_id=current_user.tenant_id)
+    return analytics_service.calculate_roi(investment_id)
 
 
-@router.post("/roi/investment", response_model=InvestmentCreatedResponse)
+@router.post("/roi/investment")
 async def create_investment(investment: ROIInvestmentCreate, current_user: CurrentUser):
     """Create a new investment record."""
     return {
@@ -505,11 +463,11 @@ async def create_investment(investment: ROIInvestmentCreate, current_user: Curre
         "name": investment.name,
         "category": investment.category,
         "investment_amount": investment.investment_amount,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.utcnow().isoformat(),
     }
 
 
-@router.put("/roi/{investment_id}/actual", response_model=InvestmentActualsResponse)
+@router.put("/roi/{investment_id}/actual")
 async def update_investment_actuals(
     investment_id: int,
     actual_savings: float,
@@ -521,7 +479,7 @@ async def update_investment_actuals(
         "id": investment_id,
         "actual_savings": actual_savings,
         "incidents_prevented": incidents_prevented,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
     }
 
 
@@ -530,16 +488,16 @@ async def update_investment_actuals(
 # ============================================================================
 
 
-@router.get("/reports/executive-summary", response_model=ExecutiveSummaryResponse)
+@router.get("/reports/executive-summary")
 async def get_executive_summary(
     current_user: CurrentUser,
     time_range: str = Query("last_month"),
 ):
     """Generate executive summary data."""
-    return analytics_service.generate_executive_summary(time_range, tenant_id=current_user.tenant_id)
+    return analytics_service.generate_executive_summary(time_range)
 
 
-@router.post("/reports/generate", response_model=ReportGeneratedResponse)
+@router.post("/reports/generate")
 async def generate_report(
     report_type: str,
     current_user: CurrentUser,
@@ -552,17 +510,17 @@ async def generate_report(
         "report_type": report_type,
         "format": format,
         "status": "generating",
-        "estimated_completion": datetime.now(timezone.utc).isoformat(),
+        "estimated_completion": datetime.utcnow().isoformat(),
         "download_url": None,  # Will be available when complete
     }
 
 
-@router.get("/reports/{report_id}/status", response_model=ReportStatusResponse)
+@router.get("/reports/{report_id}/status")
 async def get_report_status(report_id: str, current_user: CurrentUser):
     """Check report generation status."""
     return {
         "report_id": report_id,
         "status": "complete",
         "download_url": f"/api/v1/analytics/reports/{report_id}/download",
-        "expires_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": datetime.utcnow().isoformat(),
     }

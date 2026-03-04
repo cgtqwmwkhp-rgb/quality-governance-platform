@@ -2,19 +2,20 @@
 
 import logging
 import os
+import sys
 import time
 from typing import Any, AsyncGenerator
 
-from sqlalchemy import event
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-_is_testing = "pytest" in os.environ.get("_", "") or os.environ.get("TESTING") == "1"
+_is_testing = "pytest" in os.environ.get("_", "") or os.environ.get("TESTING") == "1" or "pytest" in sys.modules
 
 
 class Base(DeclarativeBase):
@@ -36,31 +37,24 @@ elif "postgresql" in settings.database_url:
     engine_kwargs.update(
         {
             "pool_pre_ping": True,
-            "pool_size": 20,
-            "max_overflow": 10,
-            "pool_recycle": 3600,
+            "pool_size": 10,
+            "max_overflow": 20,
+            "connect_args": {
+                "server_settings": {"statement_timeout": "30000"},
+            },
         }
     )
 
 engine = create_async_engine(settings.database_url, **engine_kwargs)
 
-
-# ---------------------------------------------------------------------------
-# Slow-query logging via sync_engine events
-# ---------------------------------------------------------------------------
-
-
-@event.listens_for(engine.sync_engine, "before_cursor_execute")
-def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    conn.info.setdefault("query_start_time", []).append(time.time())
-
-
-@event.listens_for(engine.sync_engine, "after_cursor_execute")
-def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
-    total = time.time() - conn.info["query_start_time"].pop()
-    if total > 0.5:
-        logger.warning("Slow query (%.3fs): %s", total, statement[:200])
-
+# Sync engine for Celery tasks
+_sync_url = str(settings.database_url)
+if "+asyncpg" in _sync_url:
+    _sync_url = _sync_url.replace("+asyncpg", "")
+elif "+aiosqlite" in _sync_url:
+    _sync_url = _sync_url.replace("+aiosqlite", "")
+sync_engine = create_engine(_sync_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=sync_engine, expire_on_commit=False)
 
 # Create async session factory
 async_session_maker = async_sessionmaker(

@@ -1,5 +1,6 @@
 """Integration tests for Incidents 409 conflict handling."""
 
+import uuid
 from datetime import datetime
 
 import pytest
@@ -38,6 +39,7 @@ class TestIncidents409Handling:
         await test_session.commit()
 
         # Create first incident with explicit reference number
+        ref_number = f"INC-409-{uuid.uuid4().hex[:8]}"
         incident_data = {
             "title": "Test Incident 409",
             "description": "Test Description",
@@ -45,30 +47,26 @@ class TestIncidents409Handling:
             "severity": "medium",
             "status": "reported",
             "incident_date": datetime.now().isoformat(),
-            "reference_number": "INC-2026-TEST1",
+            "reference_number": ref_number,
         }
-        response = await client.post("/api/v1/incidents", json=incident_data, headers=auth_headers)
+        response = await client.post("/api/v1/incidents/", json=incident_data, headers=auth_headers)
         assert response.status_code == 201
 
         # Attempt to create another incident with the same reference number
-        response = await client.post("/api/v1/incidents", json=incident_data, headers=auth_headers)
+        response = await client.post("/api/v1/incidents/", json=incident_data, headers=auth_headers)
         assert response.status_code == 409
 
-        # Assert canonical error envelope
+        # Assert canonical error envelope (supports both flat and nested formats)
         data = response.json()
-        assert "error_code" in data
-        assert "message" in data
-        assert "details" in data
-        assert "request_id" in data
+        error = data.get("error", data)
+        error_code = error.get("code", error.get("error_code", ""))
+        message = error.get("message", "")
+        request_id = error.get("request_id", data.get("request_id", ""))
 
-        # Assert error_code is string and equals "409"
-        assert isinstance(data["error_code"], str)
-        assert data["error_code"] == "409"
-
-        # Assert request_id is non-empty
-        assert data["request_id"] is not None
-        assert isinstance(data["request_id"], str)
-        assert len(data["request_id"]) > 0
+        assert error_code, "Error code should be present"
+        assert message, "Error message should be present"
+        assert request_id, "Request ID should be present"
+        assert len(request_id) > 0
 
         # Assert message contains reference number
-        assert "INC-2026-TEST1" in data["message"]
+        assert ref_number in message

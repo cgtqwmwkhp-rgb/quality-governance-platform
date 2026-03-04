@@ -7,30 +7,12 @@ training, and competency assessments.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.auditor_competence import (
-    AuditorProfileCreateResponse,
-    AuditorProfileResponse,
-    AuditorProfileUpdateResponse,
-    CertificationCreateResponse,
-    CertificationListResponse,
-    CompetenceDashboardResponse,
-    CompetenceScoreResponse,
-    CompetencyAssessmentResponse,
-    CompetencyGapsResponse,
-    ExpiredCertificationsUpdateResponse,
-    ExpiringCertificationsResponse,
-    QualifiedAuditorsResponse,
-    TrainingCompleteResponse,
-    TrainingCreateResponse,
-)
-from src.api.schemas.error_codes import ErrorCode
-from src.domain.exceptions import NotFoundError, ValidationError
-from src.domain.services.auditor_competence import AuditorCompetenceService
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.api.deps import get_current_user, get_db
+from src.services.auditor_competence import AuditorCompetenceService
 
 router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
 
@@ -94,11 +76,11 @@ class AssessCompetencyRequest(BaseModel):
 # =============================================================================
 
 
-@router.post("/profiles", status_code=status.HTTP_201_CREATED, response_model=AuditorProfileCreateResponse)
+@router.post("/profiles", status_code=status.HTTP_201_CREATED)
 async def create_auditor_profile(
     request: CreateProfileRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Create an auditor profile for a user."""
     service = AuditorCompetenceService(db)
@@ -116,18 +98,18 @@ async def create_auditor_profile(
     }
 
 
-@router.get("/profiles/{user_id}", response_model=AuditorProfileResponse)
+@router.get("/profiles/{user_id}")
 async def get_auditor_profile(
     user_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get auditor profile by user ID."""
     service = AuditorCompetenceService(db)
     profile = await service.get_profile(user_id)
 
     if not profile:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -145,21 +127,21 @@ async def get_auditor_profile(
     }
 
 
-@router.patch("/profiles/{user_id}", response_model=AuditorProfileUpdateResponse)
+@router.patch("/profiles/{user_id}")
 async def update_auditor_profile(
     user_id: int,
     request: UpdateProfileRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Update auditor profile."""
     service = AuditorCompetenceService(db)
 
-    updates = request.model_dump(exclude_unset=True)
+    updates = request.dict(exclude_unset=True)
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -168,11 +150,11 @@ async def update_auditor_profile(
     }
 
 
-@router.post("/profiles/{user_id}/calculate-score", response_model=CompetenceScoreResponse)
+@router.post("/profiles/{user_id}/calculate-score")
 async def calculate_competence_score(
     user_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Calculate and update competence score for an auditor."""
     service = AuditorCompetenceService(db)
@@ -189,16 +171,12 @@ async def calculate_competence_score(
 # =============================================================================
 
 
-@router.post(
-    "/profiles/{user_id}/certifications",
-    status_code=status.HTTP_201_CREATED,
-    response_model=CertificationCreateResponse,
-)
+@router.post("/profiles/{user_id}/certifications", status_code=status.HTTP_201_CREATED)
 async def add_certification(
     user_id: int,
     request: AddCertificationRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Add a certification to an auditor."""
     service = AuditorCompetenceService(db)
@@ -215,7 +193,7 @@ async def add_certification(
             certification_level=request.certification_level,
         )
     except ValueError as e:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "id": cert.id,
@@ -225,11 +203,11 @@ async def add_certification(
     }
 
 
-@router.get("/profiles/{user_id}/certifications", response_model=CertificationListResponse)
+@router.get("/profiles/{user_id}/certifications")
 async def get_certifications(
     user_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get all certifications for an auditor."""
     service = AuditorCompetenceService(db)
@@ -254,11 +232,11 @@ async def get_certifications(
     }
 
 
-@router.get("/certifications/expiring", response_model=ExpiringCertificationsResponse)
+@router.get("/certifications/expiring")
 async def get_expiring_certifications(
-    db: DbSession,
-    current_user: CurrentUser,
     days_ahead: int = Query(90, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get certifications expiring within specified days."""
     service = AuditorCompetenceService(db)
@@ -271,10 +249,10 @@ async def get_expiring_certifications(
     }
 
 
-@router.post("/certifications/update-expired", response_model=ExpiredCertificationsUpdateResponse)
+@router.post("/certifications/update-expired")
 async def update_expired_certifications(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Update status of expired certifications."""
     service = AuditorCompetenceService(db)
@@ -291,12 +269,12 @@ async def update_expired_certifications(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED, response_model=TrainingCreateResponse)
+@router.post("/profiles/{user_id}/training", status_code=status.HTTP_201_CREATED)
 async def add_training(
     user_id: int,
     request: AddTrainingRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Add a training record for an auditor."""
     service = AuditorCompetenceService(db)
@@ -311,7 +289,7 @@ async def add_training(
             duration_hours=request.duration_hours,
         )
     except ValueError as e:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "id": training.id,
@@ -320,12 +298,12 @@ async def add_training(
     }
 
 
-@router.post("/training/{training_id}/complete", response_model=TrainingCompleteResponse)
+@router.post("/training/{training_id}/complete")
 async def complete_training(
     training_id: int,
     request: CompleteTrainingRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Mark a training as completed."""
     service = AuditorCompetenceService(db)
@@ -339,7 +317,7 @@ async def complete_training(
             cpd_hours_earned=request.cpd_hours_earned,
         )
     except ValueError as e:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise HTTPException(status_code=404, detail=str(e))
 
     return {
         "id": training.id,
@@ -354,15 +332,14 @@ async def complete_training(
 # =============================================================================
 
 
-@router.post("/profiles/{user_id}/assess", response_model=CompetencyAssessmentResponse)
+@router.post("/profiles/{user_id}/assess")
 async def assess_competency(
     user_id: int,
     request: AssessCompetencyRequest,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Record a competency assessment for an auditor."""
-    track_metric("auditor_competence.review")
     service = AuditorCompetenceService(db)
 
     try:
@@ -370,12 +347,12 @@ async def assess_competency(
             user_id=user_id,
             competency_area_id=request.competency_area_id,
             current_level=request.current_level,
-            assessor_id=getattr(current_user, "id", None),
+            assessor_id=current_user.get("id"),
             assessment_method=request.assessment_method,
             evidence_summary=request.evidence_summary,
         )
     except ValueError as e:
-        raise ValidationError(ErrorCode.VALIDATION_ERROR)
+        raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "id": competency.id,
@@ -385,11 +362,11 @@ async def assess_competency(
     }
 
 
-@router.get("/profiles/{user_id}/gaps", response_model=CompetencyGapsResponse)
+@router.get("/profiles/{user_id}/gaps")
 async def get_competency_gaps(
     user_id: int,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get competency gaps for an auditor."""
     service = AuditorCompetenceService(db)
@@ -407,11 +384,11 @@ async def get_competency_gaps(
 # =============================================================================
 
 
-@router.get("/find-auditors/{audit_type}", response_model=QualifiedAuditorsResponse)
+@router.get("/find-auditors/{audit_type}")
 async def find_qualified_auditors(
     audit_type: str,
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Find auditors qualified for a specific audit type."""
     service = AuditorCompetenceService(db)
@@ -434,10 +411,10 @@ async def find_qualified_auditors(
 # =============================================================================
 
 
-@router.get("/dashboard", response_model=CompetenceDashboardResponse)
+@router.get("/dashboard")
 async def get_competence_dashboard(
-    db: DbSession,
-    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get auditor competence dashboard summary."""
     service = AuditorCompetenceService(db)

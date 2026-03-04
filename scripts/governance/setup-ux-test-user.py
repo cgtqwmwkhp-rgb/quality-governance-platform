@@ -90,7 +90,10 @@ def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
         req = urllib.request.Request(
             login_url,
             data=data,
-            headers={"Content-Type": "application/json", "User-Agent": "ux-test-user-setup/1.0"},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "ux-test-user-setup/1.0",
+            },
             method="POST",
         )
 
@@ -104,7 +107,11 @@ def verify_user_via_api(base_url: str, email: str, password: str) -> bool:
                     token = result["access_token"]
                     whoami_url = f"{base_url}/api/v1/auth/whoami"
                     whoami_req = urllib.request.Request(
-                        whoami_url, headers={"Authorization": f"Bearer {token}", "User-Agent": "ux-test-user-setup/1.0"}
+                        whoami_url,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "User-Agent": "ux-test-user-setup/1.0",
+                        },
                     )
 
                     with urllib.request.urlopen(whoami_req, timeout=10) as whoami_resp:

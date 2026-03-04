@@ -5,7 +5,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.api.schemas.validators import sanitize_field
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 
 
@@ -20,11 +19,6 @@ class IncidentBase(BaseModel):
     incident_date: datetime = Field(..., description="When the incident occurred")
     location: Optional[str] = Field(None, max_length=300, description="Where the incident occurred")
     department: Optional[str] = Field(None, max_length=100, description="Department involved")
-
-    @field_validator("title", "description", "location", "department", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
 
 class IncidentCreate(IncidentBase):
@@ -46,11 +40,6 @@ class IncidentCreate(IncidentBase):
         description="Name of the person reporting (for portal submissions)",
     )
 
-    @field_validator("reporter_name", mode="before")
-    @classmethod
-    def _sanitize_create(cls, v):
-        return sanitize_field(v)
-
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
@@ -71,11 +60,6 @@ class IncidentUpdate(BaseModel):
     incident_date: Optional[datetime] = None
     location: Optional[str] = Field(None, max_length=300)
     department: Optional[str] = Field(None, max_length=100)
-
-    @field_validator("title", "description", "location", "department", mode="before")
-    @classmethod
-    def _sanitize(cls, v):
-        return sanitize_field(v)
 
     @field_validator("title")
     @classmethod
@@ -99,7 +83,6 @@ class IncidentResponse(IncidentBase):
     reporter_name: Optional[str] = None
     investigator_id: Optional[int] = None
     closed_at: Optional[datetime] = None
-    links: Optional[dict] = None
 
     class Config:
         """Pydantic config."""
@@ -115,4 +98,3 @@ class IncidentListResponse(BaseModel):
     page: int = 1
     page_size: int = 50
     pages: int = Field(..., description="Total number of pages")
-    links: Optional[dict] = None

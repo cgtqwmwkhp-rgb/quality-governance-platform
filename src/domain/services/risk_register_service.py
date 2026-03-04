@@ -270,7 +270,11 @@ class RiskRegisterService:
         overdue_review = await db.scalar(
             select(func.count())
             .select_from(EnterpriseRisk)
-            .where(tenant_filter, EnterpriseRisk.next_review_date < datetime.now(timezone.utc), not_closed)
+            .where(
+                tenant_filter,
+                EnterpriseRisk.next_review_date < datetime.now(timezone.utc),
+                not_closed,
+            )
         )
         escalated = await db.scalar(
             select(func.count())

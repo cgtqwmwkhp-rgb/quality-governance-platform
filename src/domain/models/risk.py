@@ -1,28 +1,16 @@
 """Risk models for risk register and controls."""
 
-from __future__ import annotations
-
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import (
-    AuditTrailMixin,
-    OptimisticLockMixin,
-    ReferenceNumberMixin,
-    SoftDeleteMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
-
-if TYPE_CHECKING:
-    from src.domain.models.user import User
 
 
 class RiskStatus(str, enum.Enum):
@@ -35,12 +23,15 @@ class RiskStatus(str, enum.Enum):
     CLOSED = "closed"
 
 
-class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, OptimisticLockMixin, SoftDeleteMixin):
+class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Risk model for the risk register."""
 
     __tablename__ = "risks"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+
+    # Multi-tenancy
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Risk identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
@@ -59,9 +50,6 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Optimist
     risk_score: Mapped[int] = mapped_column(Integer, default=9)  # likelihood * impact
     risk_level: Mapped[str] = mapped_column(String(50), default="medium")
 
-    # Tenant isolation
-    tenant_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tenants.id"), nullable=True, index=True)
-
     # Risk ownership
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
@@ -70,13 +58,18 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Optimist
     review_frequency_months: Mapped[int] = mapped_column(Integer, default=12)
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    # Standard mapping (JSON arrays)
-    clause_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    control_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Standard mapping (JSON arrays) — renamed to _legacy by
+    # 20260220_normalize_json_to_junction_tables migration.
+    clause_ids_json_legacy: Mapped[Optional[list]] = mapped_column("clause_ids_json_legacy", JSON, nullable=True)
+    control_ids_json_legacy: Mapped[Optional[list]] = mapped_column("control_ids_json_legacy", JSON, nullable=True)
 
-    # Linkages (JSON arrays)
-    linked_audit_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_incident_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Linkages (JSON arrays) — renamed to _legacy by same migration.
+    linked_audit_ids_json_legacy: Mapped[Optional[list]] = mapped_column(
+        "linked_audit_ids_json_legacy", JSON, nullable=True
+    )
+    linked_incident_ids_json_legacy: Mapped[Optional[list]] = mapped_column(
+        "linked_incident_ids_json_legacy", JSON, nullable=True
+    )
     linked_policy_ids_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Treatment
@@ -91,17 +84,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin, Optimist
     # Ownership
     created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-    # Full-text search (populated by DB trigger)
-    search_vector: Mapped[Optional[str]] = mapped_column(TSVECTOR, nullable=True)
-
-    __table_args__ = (Index("ix_risks_search_vector", "search_vector", postgresql_using="gin"),)
-
     # Relationships
-    owner: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[owner_id],
-        lazy="noload",
-    )
     controls: Mapped[List["OperationalRiskControl"]] = relationship(
         "OperationalRiskControl",
         back_populates="risk",

@@ -110,7 +110,11 @@ class PortalService:
             raise ValueError(f"Unsupported report type: {report_type}")
 
     async def _submit_incident(
-        self, data: dict, severity: IncidentSeverity, is_anonymous: bool, tracking_code: str
+        self,
+        data: dict,
+        severity: IncidentSeverity,
+        is_anonymous: bool,
+        tracking_code: str,
     ) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "incident", Incident)
         incident = Incident(
@@ -125,7 +129,7 @@ class PortalService:
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             source_form_id="portal_incident_v1",
             source_type="portal",
@@ -144,7 +148,11 @@ class PortalService:
         }
 
     async def _submit_complaint(
-        self, data: dict, priority: ComplaintPriority, is_anonymous: bool, tracking_code: str
+        self,
+        data: dict,
+        priority: ComplaintPriority,
+        is_anonymous: bool,
+        tracking_code: str,
     ) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "complaint", Complaint)
         complaint = Complaint(
@@ -156,7 +164,7 @@ class PortalService:
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
             tenant_id=1,
-            complainant_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            complainant_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             complainant_email=data.get("reporter_email") if not is_anonymous else None,
             complainant_phone=data.get("reporter_phone") if not is_anonymous else None,
             source_form_id="portal_complaint_v1",
@@ -195,7 +203,7 @@ class PortalService:
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
             tenant_id=1,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             driver_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
             source_form_id="portal_rta_v1",
@@ -215,12 +223,17 @@ class PortalService:
 
     async def _submit_near_miss(self, data: dict, is_anonymous: bool, tracking_code: str) -> dict[str, Any]:
         ref_number = await ReferenceNumberService.generate(self.db, "near_miss", NearMiss)
-        priority_map = {"low": "LOW", "medium": "MEDIUM", "high": "HIGH", "critical": "CRITICAL"}
+        priority_map = {
+            "low": "LOW",
+            "medium": "MEDIUM",
+            "high": "HIGH",
+            "critical": "CRITICAL",
+        }
         priority = priority_map.get(data.get("severity", "medium").lower(), "MEDIUM")
 
         near_miss = NearMiss(
             reference_number=ref_number,
-            reporter_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
+            reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             contract=data.get("department") or "Not specified",
             location=data.get("location") or "Not specified",
@@ -273,7 +286,13 @@ class PortalService:
         if not incident:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": incident.created_at.isoformat(), "event": "Report Submitted", "icon": "📋"}]
+        timeline = [
+            {
+                "date": incident.created_at.isoformat(),
+                "event": "Report Submitted",
+                "icon": "📋",
+            }
+        ]
         if incident.status != IncidentStatus.REPORTED:
             timeline.append(
                 {
@@ -302,7 +321,13 @@ class PortalService:
         if not complaint:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": complaint.created_at.isoformat(), "event": "Complaint Submitted", "icon": "📋"}]
+        timeline = [
+            {
+                "date": complaint.created_at.isoformat(),
+                "event": "Complaint Submitted",
+                "icon": "📋",
+            }
+        ]
         if complaint.status != ComplaintStatus.RECEIVED:
             timeline.append(
                 {
@@ -334,7 +359,13 @@ class PortalService:
         if not rta:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": rta.created_at.isoformat(), "event": "RTA Report Submitted", "icon": "🚗"}]
+        timeline = [
+            {
+                "date": rta.created_at.isoformat(),
+                "event": "RTA Report Submitted",
+                "icon": "🚗",
+            }
+        ]
         if rta.status != RTAStatus.REPORTED:
             timeline.append(
                 {
@@ -363,7 +394,13 @@ class PortalService:
         if not near_miss:
             raise LookupError(f"Report {reference_number} not found")
 
-        timeline = [{"date": near_miss.created_at.isoformat(), "event": "Near Miss Reported", "icon": "⚠️"}]
+        timeline = [
+            {
+                "date": near_miss.created_at.isoformat(),
+                "event": "Near Miss Reported",
+                "icon": "⚠️",
+            }
+        ]
         if near_miss.status != "REPORTED":
             timeline.append(
                 {
