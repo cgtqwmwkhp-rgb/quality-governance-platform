@@ -31,7 +31,7 @@ export default function Portal() {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-surface" data-testid="portal-home">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4">
@@ -88,6 +88,7 @@ export default function Portal() {
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
+            data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",

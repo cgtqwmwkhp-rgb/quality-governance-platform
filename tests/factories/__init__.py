@@ -8,15 +8,15 @@ Usage:
 """
 
 from tests.factories.core import (
-    TenantFactory,
-    UserFactory,
-    IncidentFactory,
-    ComplaintFactory,
-    NearMissFactory,
     AuditTemplateFactory,
     CAPAActionFactory,
-    RiskFactory,
+    ComplaintFactory,
+    IncidentFactory,
+    NearMissFactory,
     PolicyFactory,
+    RiskFactory,
+    TenantFactory,
+    UserFactory,
 )
 
 __all__ = [

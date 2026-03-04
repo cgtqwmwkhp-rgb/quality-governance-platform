@@ -106,6 +106,7 @@ class PseudonymizationService:
         user = row.scalar_one_or_none()
         if user is None:
             from src.domain.exceptions import NotFoundError
+
             raise NotFoundError(f"User {user_id} not found")
 
         result = PseudonymizationResult(
