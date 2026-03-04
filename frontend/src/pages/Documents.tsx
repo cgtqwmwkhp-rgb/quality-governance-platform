@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { 
   Plus, Search, Upload, FileText, FileSpreadsheet, Image, File, 
   Eye, Download, Tag, Calendar, Sparkles, 
@@ -97,6 +98,7 @@ const getStatusVariant = (status: string) => {
 }
 
 export default function Documents() {
+  const { t } = useTranslation()
   const [documents, setDocuments] = useState<Document[]>([])
   const [stats, setStats] = useState<DocumentStats | null>(null)
   const [loading, setLoading] = useState(true)
@@ -245,12 +247,12 @@ export default function Documents() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Document Library</h1>
-          <p className="text-muted-foreground mt-1">AI-powered document management with semantic search</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('documents.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('documents.subtitle')}</p>
         </div>
         <Button onClick={() => setShowUploadModal(true)}>
           <Upload size={20} />
-          Upload Document
+          {t('documents.upload')}
         </Button>
       </div>
 
@@ -258,10 +260,10 @@ export default function Documents() {
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total Documents', value: stats.total_documents, icon: FileText, variant: 'primary' as const },
-            { label: 'AI Indexed', value: stats.indexed_documents, icon: Brain, variant: 'info' as const },
-            { label: 'Semantic Chunks', value: stats.total_chunks.toLocaleString(), icon: Zap, variant: 'warning' as const },
-            { label: 'Processing', value: stats.by_status?.processing || 0, icon: Loader2, variant: 'success' as const },
+            { label: t('documents.stats.total'), value: stats.total_documents, icon: FileText, variant: 'primary' as const },
+            { label: t('documents.stats.indexed'), value: stats.indexed_documents, icon: Brain, variant: 'info' as const },
+            { label: t('documents.stats.chunks'), value: stats.total_chunks.toLocaleString(), icon: Zap, variant: 'warning' as const },
+            { label: t('documents.stats.processing'), value: stats.by_status?.processing || 0, icon: Loader2, variant: 'success' as const },
           ].map((stat) => (
             <Card key={stat.label} hoverable className="p-5">
               <div className={cn(
@@ -398,8 +400,8 @@ export default function Documents() {
             <div className="md:col-span-4">
               <Card className="p-12 text-center">
                 <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">No Documents Found</h3>
-                <p className="text-muted-foreground">Upload your first document to get started</p>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{t('documents.empty.title')}</h3>
+                <p className="text-muted-foreground">{t('documents.empty.subtitle')}</p>
               </Card>
             </div>
           ) : (
@@ -467,11 +469,11 @@ export default function Documents() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">Document</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">Type</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">Size</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">Views</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.document')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('common.type')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('common.status')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.size')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.views')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -520,14 +522,14 @@ export default function Documents() {
           onDrop={handleDrop}
         >
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
+            <DialogTitle>{t('documents.upload')}</DialogTitle>
           </DialogHeader>
           
           <div className="py-4">
             {uploading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
-                <p className="text-foreground mb-2">Processing with AI...</p>
+                <p className="text-foreground mb-2">{t('documents.processing')}</p>
                 <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-gradient-brand transition-all duration-300"
@@ -544,13 +546,13 @@ export default function Documents() {
                 )}
               >
                 <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-foreground mb-2">Drag & drop your document here</p>
+                <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
                 <p className="text-sm text-muted-foreground mb-4">PDF, Word, Excel, Markdown, or Text files</p>
                 <label>
                   <Button asChild>
                     <span className="cursor-pointer">
                       <Plus size={16} />
-                      Browse Files
+                      {t('documents.browse_files')}
                     </span>
                   </Button>
                   <input 
@@ -584,7 +586,7 @@ export default function Documents() {
                 <div className="flex items-center gap-2 mt-2">
                   <Button variant="outline" size="sm">
                     <Download size={16} />
-                    Download
+                    {t('common.download')}
                   </Button>
                   <Button variant="outline" size="sm">
                     <ExternalLink size={16} />

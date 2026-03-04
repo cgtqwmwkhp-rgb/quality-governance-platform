@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
+import { trackComponentError } from '../services/errorTracker'
 
 interface Props {
   children: ReactNode
@@ -22,6 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary] Uncaught error:', error.message, info.componentStack)
+    trackComponentError(error, info.componentStack)
   }
 
   handleReset = () => {

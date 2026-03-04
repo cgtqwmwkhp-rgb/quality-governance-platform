@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
@@ -303,7 +304,7 @@ export default function Audits() {
             onClick={loadData}
             className="px-3 py-1.5 text-sm font-medium bg-destructive text-white rounded-lg hover:bg-destructive/90"
           >
-            Try Again
+            {t('retry')}
           </button>
         </div>
       )}
@@ -341,40 +342,40 @@ export default function Audits() {
           </div>
           <Button onClick={handleOpenModal}>
             <Plus size={20} />
-            New Audit
+            {t('audits.new')}
           </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {[
+          {[
           {
-            label: "Total Audits",
+            label: t('audits.stats.total'),
             value: stats.total,
             icon: ClipboardCheck,
             variant: "info" as const,
           },
           {
-            label: "In Progress",
+            label: t('status.in_progress'),
             value: stats.inProgress,
             icon: Clock,
             variant: "warning" as const,
           },
           {
-            label: "Completed",
+            label: t('audits.stats.completed'),
             value: stats.completed,
             icon: CheckCircle2,
             variant: "success" as const,
           },
           {
-            label: "Avg Score",
+            label: t('audits.stats.avg_score'),
             value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
             icon: BarChart3,
             variant: "primary" as const,
           },
           {
-            label: "Open Findings",
+            label: t('audits.stats.open_findings'),
             value: stats.openFindings,
             icon: AlertCircle,
             variant: "destructive" as const,
@@ -405,7 +406,7 @@ export default function Audits() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search audits..."
+          placeholder={t('audits.search_placeholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -447,7 +448,7 @@ export default function Audits() {
                 <div className="space-y-3 min-h-[200px] bg-surface rounded-2xl p-3 border border-border">
                   {columnAudits.length === 0 ? (
                     <div className="flex items-center justify-center h-32 text-muted-foreground">
-                      <p className="text-sm">No audits</p>
+                      <p className="text-sm">{t('audits.empty.title')}</p>
                     </div>
                   ) : (
                     columnAudits.map((audit) => (
@@ -530,13 +531,13 @@ export default function Audits() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Template</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Score</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.reference')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.title')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.location')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.template')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.status')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.score')}</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.date')}</th>
                     <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
@@ -655,7 +656,7 @@ export default function Audits() {
           {findings.length === 0 ? (
             <Card className="p-12 text-center">
               <AlertCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className="text-muted-foreground">No findings recorded</p>
+              <p className="text-muted-foreground">{t('audits.no_findings')}</p>
             </Card>
           ) : (
             findings.map((finding) => (
@@ -743,7 +744,7 @@ export default function Audits() {
                 <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
               <p className="text-lg font-semibold text-foreground mb-2">
-                Audit Scheduled!
+                {t('audits.scheduled_success')}
               </p>
               <p className="text-muted-foreground">{successMessage}</p>
             </div>
@@ -922,7 +923,7 @@ export default function Audits() {
                   onClick={handleCloseModal}
                   disabled={isSubmitting}
                 >
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button
                   type="submit"
@@ -935,7 +936,7 @@ export default function Audits() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Scheduling...
+                      {t('audits.scheduling')}
                     </>
                   ) : (
                     <>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Download,
   FileText,
@@ -45,6 +46,7 @@ interface ExportTemplate {
 }
 
 export default function ExportCenter() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'new' | 'history' | 'templates'>('new');
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'excel' | 'csv' | 'json'>('excel');
@@ -172,9 +174,9 @@ export default function ExportCenter() {
             <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
               <Download className="w-8 h-8 text-primary-foreground" />
             </div>
-            Export Center
+            {t('exports.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Generate reports and export data</p>
+          <p className="text-muted-foreground mt-1">{t('exports.subtitle')}</p>
         </div>
       </div>
 
@@ -191,7 +193,7 @@ export default function ExportCenter() {
         >
           <span className="flex items-center gap-2">
             <Zap className="w-5 h-5" />
-            New Export
+            {t('exports.new_export')}
           </span>
         </button>
         <button
@@ -205,7 +207,7 @@ export default function ExportCenter() {
         >
           <span className="flex items-center gap-2">
             <History className="w-5 h-5" />
-            Export History
+            {t('exports.export_history')}
           </span>
         </button>
         <button
@@ -219,7 +221,7 @@ export default function ExportCenter() {
         >
           <span className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Templates
+            {t('exports.templates')}
           </span>
         </button>
       </div>
@@ -233,7 +235,7 @@ export default function ExportCenter() {
               <CardContent className="p-6">
                 <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Filter className="w-5 h-5 text-primary" />
-                  Select Modules
+                  {t('exports.select_modules')}
                 </h2>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -264,13 +266,13 @@ export default function ExportCenter() {
                     onClick={() => setSelectedModules(modules.map(m => m.id))}
                     className="text-sm text-primary hover:text-primary-hover"
                   >
-                    Select All
+                    {t('exports.select_all')}
                   </button>
                   <button
                     onClick={() => setSelectedModules([])}
                     className="text-sm text-muted-foreground hover:text-foreground"
                   >
-                    Clear Selection
+                    {t('exports.clear_selection')}
                   </button>
                 </div>
               </CardContent>
@@ -281,7 +283,7 @@ export default function ExportCenter() {
               <CardContent className="p-6">
                 <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-primary" />
-                  Date Range
+                  {t('exports.date_range')}
                 </h2>
                 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -316,7 +318,7 @@ export default function ExportCenter() {
             {/* Format Selection */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-foreground mb-4">Export Format</h2>
+                <h2 className="text-lg font-semibold text-foreground mb-4">{t('exports.export_format')}</h2>
                 
                 <div className="space-y-2">
                   {Object.entries(formatIcons).map(([format, { icon, color, bg }]) => (
@@ -351,7 +353,7 @@ export default function ExportCenter() {
             {/* Export Summary */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-foreground mb-4">Summary</h2>
+                <h2 className="text-lg font-semibold text-foreground mb-4">{t('exports.summary')}</h2>
                 
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
@@ -385,12 +387,12 @@ export default function ExportCenter() {
                   {isExporting ? (
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin" />
-                      Exporting...
+                      {t('exports.exporting')}
                     </>
                   ) : (
                     <>
                       <Download className="w-5 h-5" />
-                      Start Export
+                      {t('exports.start_export')}
                     </>
                   )}
                 </Button>
@@ -407,12 +409,12 @@ export default function ExportCenter() {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Export</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Format</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Modules</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Created</th>
-                  <th className="text-center p-4 text-sm font-medium text-muted-foreground">Actions</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_export')}</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_format')}</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_modules')}</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_status')}</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_created')}</th>
+                  <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('exports.col_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -544,7 +546,7 @@ export default function ExportCenter() {
                 
                 <Button variant="outline" className="w-full mt-4">
                   <Play className="w-4 h-4" />
-                  Run Now
+                  {t('exports.run_now')}
                 </Button>
               </CardContent>
             </Card>
@@ -555,7 +557,7 @@ export default function ExportCenter() {
             <div className="p-3 rounded-xl bg-muted">
               <Settings className="w-6 h-6 text-muted-foreground" />
             </div>
-            <span className="text-muted-foreground font-medium">Create Template</span>
+            <span className="text-muted-foreground font-medium">{t('exports.create_template')}</span>
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Shield,
@@ -81,6 +82,7 @@ const TREATMENT_STRATEGIES = [
 ]
 
 export default function RiskRegister() {
+  const { t } = useTranslation()
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
@@ -266,7 +268,7 @@ export default function RiskRegister() {
     }
     return (
       <Badge variant={variants[level] || 'default'} className="uppercase">
-        {level}
+        {t(`risk_register.level_${level}`)}
       </Badge>
     )
   }
@@ -275,7 +277,7 @@ export default function RiskRegister() {
     const s = TREATMENT_STRATEGIES.find((t) => t.id === strategy)
     return (
       <span className="px-2 py-1 bg-muted rounded-full text-xs">
-        {s?.icon} {s?.label}
+        {s?.icon} {s ? t(`risk_register.treatment.${s.id}`) : ''}
       </span>
     )
   }
@@ -293,21 +295,21 @@ export default function RiskRegister() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
-          <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">{t('risk_register.title')}</h1>
+          <p className="text-muted-foreground">{t('risk_register.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
             <Filter className="w-4 h-4" />
-            Filters
+            {t('risk_register.filters')}
           </Button>
           <Button variant="secondary">
             <Download className="w-4 h-4" />
-            Export
+            {t('export')}
           </Button>
           <Button>
             <Plus className="w-4 h-4" />
-            Add Risk
+            {t('risk_register.add_risk')}
           </Button>
         </div>
       </div>
@@ -322,7 +324,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-foreground">{summary.total_risks}</span>
             </div>
-            <p className="text-sm text-muted-foreground">Total Risks</p>
+            <p className="text-sm text-muted-foreground">{t('risk_register.total_risks')}</p>
           </CardContent>
         </Card>
 
@@ -334,7 +336,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-destructive">{summary.by_level.critical}</span>
             </div>
-            <p className="text-sm text-muted-foreground">Critical</p>
+            <p className="text-sm text-muted-foreground">{t('risks.stats.critical_risks')}</p>
           </CardContent>
         </Card>
 
@@ -346,7 +348,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-warning">{summary.by_level.high}</span>
             </div>
-            <p className="text-sm text-muted-foreground">High</p>
+            <p className="text-sm text-muted-foreground">{t('risks.stats.high_risks')}</p>
           </CardContent>
         </Card>
 
@@ -358,7 +360,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-info">{summary.by_level.medium}</span>
             </div>
-            <p className="text-sm text-muted-foreground">Medium</p>
+            <p className="text-sm text-muted-foreground">{t('risks.stats.medium_risks')}</p>
           </CardContent>
         </Card>
 
@@ -370,7 +372,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-primary">{summary.outside_appetite}</span>
             </div>
-            <p className="text-sm text-muted-foreground">Outside Appetite</p>
+            <p className="text-sm text-muted-foreground">{t('risk_register.outside_appetite')}</p>
           </CardContent>
         </Card>
 
@@ -382,7 +384,7 @@ export default function RiskRegister() {
               </div>
               <span className="text-2xl font-bold text-foreground">{summary.overdue_review}</span>
             </div>
-            <p className="text-sm text-muted-foreground">Overdue Review</p>
+            <p className="text-sm text-muted-foreground">{t('risk_register.overdue_review')}</p>
           </CardContent>
         </Card>
       </div>
@@ -394,21 +396,21 @@ export default function RiskRegister() {
           onClick={() => setView('register')}
         >
           <Layers className="w-4 h-4" />
-          Risk Register
+          {t('risks.title')}
         </Button>
         <Button
           variant={view === 'heatmap' ? 'default' : 'secondary'}
           onClick={() => setView('heatmap')}
         >
           <BarChart3 className="w-4 h-4" />
-          Heat Map
+          {t('risk_register.heatmap')}
         </Button>
         <Button
           variant={view === 'bowtie' ? 'default' : 'secondary'}
           onClick={() => setView('bowtie')}
         >
           <GitBranch className="w-4 h-4" />
-          Bow-Tie Analysis
+          {t('risk_register.bowtie')}
         </Button>
       </div>
 
@@ -420,31 +422,31 @@ export default function RiskRegister() {
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Reference
+                    {t('risks.table.reference')}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Risk Title
+                    {t('risks.table.risk')}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Category
+                    {t('risks.table.category')}
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Inherent
+                    {t('risk_register.table.inherent')}
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Residual
+                    {t('risk_register.table.residual')}
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Level
+                    {t('risk_register.table.level')}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Treatment
+                    {t('risks.table.treatment')}
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
-                    Owner
+                    {t('risk_register.table.owner')}
                   </th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
-                    Actions
+                    {t('risk_register.table.actions')}
                   </th>
                 </tr>
               </thead>
@@ -461,14 +463,14 @@ export default function RiskRegister() {
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {!risk.is_within_appetite && (
-                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title="Outside Risk Appetite"></span>
+                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title={t('risk_register.outside_risk_appetite')}></span>
                         )}
                         <span className="text-foreground">{risk.title}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4">
                       <Badge variant="default">
-                        {CATEGORIES.find((c) => c.id === risk.category)?.label || risk.category}
+                        {t(`risk_register.category.${risk.category}`)}
                       </Badge>
                     </td>
                     <td className="px-4 py-4 text-center">
@@ -511,7 +513,7 @@ export default function RiskRegister() {
       {view === 'heatmap' && heatMapData && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">5×5 Risk Heat Map (Residual Risk)</h2>
+            <h2 className="text-xl font-bold mb-6 text-foreground">{t('risk_register.heatmap_title')}</h2>
 
             <div className="flex gap-8">
               {/* Matrix */}
@@ -523,7 +525,7 @@ export default function RiskRegister() {
                       className="text-muted-foreground text-sm font-medium"
                       style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                     >
-                      LIKELIHOOD →
+                      {t('risk_register.likelihood')}
                     </span>
                   </div>
 
@@ -559,7 +561,7 @@ export default function RiskRegister() {
                             <span className="text-white font-bold text-lg">{cell.score}</span>
                             {cell.risk_count > 0 && (
                               <span className="text-white/80 text-xs">
-                                ({cell.risk_count} risk{cell.risk_count > 1 ? 's' : ''})
+                                ({t('risk_register.n_risks', { count: cell.risk_count })})
                               </span>
                             )}
                           </div>
@@ -569,7 +571,7 @@ export default function RiskRegister() {
 
                     {/* X-axis label */}
                     <div className="text-center mt-4 text-muted-foreground text-sm font-medium">
-                      IMPACT →
+                      {t('risk_register.impact')}
                     </div>
                   </div>
                 </div>
@@ -579,23 +581,23 @@ export default function RiskRegister() {
               <div className="w-64 space-y-4">
                 <Card>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">Risk Levels</h3>
+                    <h3 className="font-semibold text-foreground mb-3">{t('risk_register.risk_levels')}</h3>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-destructive"></div>
-                        <span className="text-sm text-foreground">Critical (17-25)</span>
+                        <span className="text-sm text-foreground">{t('risk_register.level_critical')}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-warning"></div>
-                        <span className="text-sm text-foreground">High (10-16)</span>
+                        <span className="text-sm text-foreground">{t('risk_register.level_high')}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-info"></div>
-                        <span className="text-sm text-foreground">Medium (5-9)</span>
+                        <span className="text-sm text-foreground">{t('risk_register.level_medium')}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded bg-success"></div>
-                        <span className="text-sm text-foreground">Low (1-4)</span>
+                        <span className="text-sm text-foreground">{t('risk_register.level_low')}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -603,26 +605,26 @@ export default function RiskRegister() {
 
                 <Card>
                   <CardContent className="p-4">
-                    <h3 className="font-semibold text-foreground mb-3">Summary</h3>
+                    <h3 className="font-semibold text-foreground mb-3">{t('risk_register.summary')}</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total Risks</span>
+                        <span className="text-muted-foreground">{t('risk_register.total_risks')}</span>
                         <span className="font-bold text-foreground">{heatMapData.summary.total_risks}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Avg Inherent</span>
+                        <span className="text-muted-foreground">{t('risk_register.avg_inherent')}</span>
                         <span className="font-bold text-muted-foreground">
                           {(heatMapData.summary?.average_inherent_score ?? 0).toFixed(1)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Avg Residual</span>
+                        <span className="text-muted-foreground">{t('risk_register.avg_residual')}</span>
                         <span className="font-bold text-success">
                           {(heatMapData.summary?.average_residual_score ?? 0).toFixed(1)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Risk Reduction</span>
+                        <span className="text-muted-foreground">{t('risk_register.risk_reduction')}</span>
                         <span className="font-bold text-success">
                           {(
                             heatMapData.summary?.average_inherent_score
@@ -648,7 +650,7 @@ export default function RiskRegister() {
       {view === 'bowtie' && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>
+            <h2 className="text-xl font-bold mb-6 text-foreground">{t('risk_register.bowtie')}</h2>
 
             {selectedRisk ? (
               <div className="relative">
@@ -656,9 +658,9 @@ export default function RiskRegister() {
                 <div className="flex items-center justify-center gap-4">
                   {/* Causes (Left Side) */}
                   <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-destructive mb-4">CAUSES</h3>
+                    <h3 className="text-center font-semibold text-destructive mb-4">{t('risk_register.causes')}</h3>
                     <div className="space-y-2">
-                      {['Equipment failure', 'Human error', 'Process breakdown'].map((cause, i) => (
+                      {[t('risk_register.bowtie.equipment_failure'), t('risk_register.bowtie.human_error'), t('risk_register.bowtie.process_breakdown')].map((cause, i) => (
                         <div
                           key={i}
                           className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center text-sm text-destructive"
@@ -673,7 +675,7 @@ export default function RiskRegister() {
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-destructive to-warning"></div>
                     <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
-                      Prevention
+                      {t('risk_register.prevention')}
                     </div>
                   </div>
 
@@ -684,7 +686,7 @@ export default function RiskRegister() {
                       <span className="font-bold text-foreground text-sm">{selectedRisk.title.substring(0, 50)}...</span>
                       <div className="mt-2">
                         <Badge variant="warning">
-                          Score: {selectedRisk.residual_score}
+                          {t('risk_register.score')}: {selectedRisk.residual_score}
                         </Badge>
                       </div>
                     </div>
@@ -694,15 +696,15 @@ export default function RiskRegister() {
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-warning to-info"></div>
                     <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
-                      Mitigation
+                      {t('risk_register.mitigation')}
                     </div>
                   </div>
 
                   {/* Consequences (Right Side) */}
                   <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-info mb-4">CONSEQUENCES</h3>
+                    <h3 className="text-center font-semibold text-info mb-4">{t('risk_register.consequences')}</h3>
                     <div className="space-y-2">
-                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map((consequence, i) => (
+                      {[t('risk_register.bowtie.financial_loss'), t('risk_register.bowtie.reputational_damage'), t('risk_register.bowtie.regulatory_penalty')].map((consequence, i) => (
                         <div
                           key={i}
                           className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
@@ -720,20 +722,20 @@ export default function RiskRegister() {
                     <CardContent className="p-4">
                       <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
                         <Shield className="w-4 h-4" />
-                        Prevention Controls
+                        {t('risk_register.prevention_controls')}
                       </h4>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Preventive maintenance program</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.preventive_maintenance')}</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Training and competency assessments</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.training_competency')}</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">Procedure documentation</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.procedure_documentation')}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -743,20 +745,20 @@ export default function RiskRegister() {
                     <CardContent className="p-4">
                       <h4 className="font-semibold text-info mb-3 flex items-center gap-2">
                         <Zap className="w-4 h-4" />
-                        Mitigation Controls
+                        {t('risk_register.mitigation_controls')}
                       </h4>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Emergency response plan</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.emergency_response')}</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Insurance coverage</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.insurance_coverage')}</span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">Communication protocols</span>
+                          <span className="text-sm text-foreground">{t('risk_register.bowtie.communication_protocols')}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -766,9 +768,9 @@ export default function RiskRegister() {
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>Select a risk from the register to view its Bow-Tie analysis</p>
+                <p>{t('risk_register.bowtie_empty')}</p>
                 <Button onClick={() => setView('register')} className="mt-4">
-                  Go to Risk Register
+                  {t('risk_register.go_to_register')}
                 </Button>
               </div>
             )}

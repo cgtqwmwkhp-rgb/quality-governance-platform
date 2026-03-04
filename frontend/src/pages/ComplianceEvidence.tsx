@@ -24,6 +24,7 @@ import {
   Tag,
 } from 'lucide-react';
 import { ISO_STANDARDS, ISOClause, getAllClauses, autoTagContent } from '../data/isoStandards';
+import { useTranslation } from 'react-i18next';
 
 // Evidence types that can be linked to ISO clauses
 type EvidenceType = 'policy' | 'document' | 'audit' | 'incident' | 'action' | 'risk' | 'training';
@@ -104,6 +105,7 @@ const standardColors: Record<string, string> = {
 };
 
 export default function ComplianceEvidence() {
+  const { t } = useTranslation();
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set());
@@ -266,10 +268,10 @@ export default function ComplianceEvidence() {
           <div>
             <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
               <Target className="w-8 h-8 text-primary" />
-              ISO Compliance Evidence Center
+              {t('compliance.evidence.title')}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Central repository for all compliance evidence mapped to ISO standards
+              {t('compliance.evidence.subtitle')}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -278,11 +280,11 @@ export default function ComplianceEvidence() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-hover transition-all"
             >
               <Sparkles className="w-4 h-4" />
-              AI Auto-Tagger
+              {t('compliance.evidence.ai_tagger')}
             </button>
             <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border rounded-lg text-secondary-foreground font-medium hover:bg-surface transition-all">
               <Download className="w-4 h-4" />
-              Export Report
+              {t('compliance.evidence.export_report')}
             </button>
           </div>
         </div>
@@ -342,9 +344,9 @@ export default function ComplianceEvidence() {
         <div className="flex items-center justify-between gap-4">
           <div className="flex bg-secondary rounded-lg p-1">
             {[
-              { id: 'clauses', label: 'Clause View', icon: BookOpen },
-              { id: 'evidence', label: 'Evidence List', icon: FileText },
-              { id: 'gaps', label: 'Gap Analysis', icon: AlertTriangle },
+              { id: 'clauses', label: t('compliance.evidence.clause_view'), icon: BookOpen },
+              { id: 'evidence', label: t('compliance.evidence.evidence_list'), icon: FileText },
+              { id: 'gaps', label: t('compliance.evidence.gap_analysis'), icon: AlertTriangle },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -366,7 +368,7 @@ export default function ComplianceEvidence() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search clauses or keywords..."
+                placeholder={t('compliance.evidence.search_placeholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-80 pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/50 focus:border-primary"
@@ -395,7 +397,7 @@ export default function ComplianceEvidence() {
             <>
               <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
                 <BookOpen className="w-5 h-5 text-primary" />
-                Clause Structure
+                {t('compliance.evidence.clause_structure')}
               </h2>
               {selectedStandard === 'all' ? (
                 ISO_STANDARDS.map(standard => (
@@ -547,7 +549,7 @@ export default function ComplianceEvidence() {
 
                 {/* Keywords */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Keywords</h4>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">{t('compliance.evidence.keywords')}</h4>
                   <div className="flex flex-wrap gap-2">
                     {selectedClause.keywords.map((keyword, i) => (
                       <span key={i} className="text-xs bg-slate-700 text-gray-300 px-2 py-1 rounded-full">
@@ -559,7 +561,7 @@ export default function ComplianceEvidence() {
 
                 {/* Coverage Status */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Coverage Status</h4>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">{t('compliance.evidence.coverage_status')}</h4>
                   {(() => {
                     const status = getCoverageStatus(selectedClause.id);
                     const evidence = getEvidenceForClause(selectedClause.id);
@@ -594,7 +596,7 @@ export default function ComplianceEvidence() {
                 {/* Linked Evidence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-400">Linked Evidence</h4>
+                    <h4 className="text-sm font-medium text-gray-400">{t('compliance.evidence.linked_evidence')}</h4>
                     <button className="text-xs text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
                       <Plus className="w-3 h-3" /> Add Link
                     </button>
@@ -650,7 +652,7 @@ export default function ComplianceEvidence() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-purple-400" />
-                AI Auto-Tagger
+                {t('compliance.evidence.ai_tagger')}
               </h2>
               <button 
                 onClick={() => { setShowAutoTagger(false); setAutoTagText(''); setAutoTagResults([]); }}
@@ -678,14 +680,14 @@ export default function ComplianceEvidence() {
               className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg text-white font-bold flex items-center justify-center gap-2 hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-4"
             >
               <Sparkles className="w-5 h-5" />
-              Analyze & Auto-Tag
+              {t('compliance.evidence.analyze_tags')}
             </button>
 
             {autoTagResults.length > 0 && (
               <div>
                 <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
                   <Tag className="w-5 h-5 text-emerald-400" />
-                  Detected ISO Clauses ({autoTagResults.length})
+                  {t('compliance.evidence.detected_clauses')} ({autoTagResults.length})
                 </h3>
                 <div className="space-y-2">
                   {autoTagResults.map(clause => {
@@ -697,7 +699,7 @@ export default function ComplianceEvidence() {
                         <span className="font-medium text-white">{clause.clauseNumber}</span>
                         <span className="text-gray-300 flex-grow">{clause.title}</span>
                         <button className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-full">
-                          Apply Tag
+                          {t('compliance.evidence.apply_tag')}
                         </button>
                       </div>
                     );

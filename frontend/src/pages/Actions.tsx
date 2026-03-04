@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -83,6 +84,7 @@ const INITIAL_FORM: CreateActionForm = {
 }
 
 export default function Actions() {
+  const { t } = useTranslation()
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
@@ -225,7 +227,7 @@ export default function Actions() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="ml-3 text-muted-foreground">Loading actions...</span>
+        <span className="ml-3 text-muted-foreground">{t('loading')}</span>
       </div>
     )
   }
@@ -252,23 +254,23 @@ export default function Actions() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Action Center</h1>
-          <p className="text-muted-foreground mt-1">Cross-module corrective & preventive actions</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('actions.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('actions.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          New Action
+          {t('actions.new')}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Total Actions', value: stats.total, icon: ListTodo, variant: 'primary' as const },
-          { label: 'Open', value: stats.open, icon: AlertCircle, variant: 'info' as const },
-          { label: 'In Progress', value: stats.inProgress, icon: Clock, variant: 'warning' as const },
-          { label: 'Overdue', value: stats.overdue, icon: Flag, variant: 'destructive' as const },
-          { label: 'Completed', value: stats.completed, icon: CheckCircle2, variant: 'success' as const },
+          { label: t('actions.total'), value: stats.total, icon: ListTodo, variant: 'primary' as const },
+          { label: t('status.open'), value: stats.open, icon: AlertCircle, variant: 'info' as const },
+          { label: t('status.in_progress'), value: stats.inProgress, icon: Clock, variant: 'warning' as const },
+          { label: t('common.overdue'), value: stats.overdue, icon: Flag, variant: 'destructive' as const },
+          { label: t('actions.completed'), value: stats.completed, icon: CheckCircle2, variant: 'success' as const },
         ].map((stat) => (
           <Card 
             key={stat.label}
@@ -303,7 +305,7 @@ export default function Actions() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search actions..."
+            placeholder={t('actions.search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -347,11 +349,11 @@ export default function Actions() {
         {filteredActions.length === 0 ? (
           <Card className="p-12 text-center">
             <ListTodo className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Actions Found</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t('actions.empty.title')}</h3>
             <p className="text-muted-foreground">
               {filterStatus !== 'all' || viewMode !== 'all' 
-                ? 'Try adjusting your filters' 
-                : 'Actions from incidents, audits, and investigations will appear here'}
+                ? t('actions.empty.filter_hint') 
+                : t('actions.empty.subtitle')}
             </p>
           </Card>
         ) : (
@@ -443,7 +445,7 @@ export default function Actions() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New Action</DialogTitle>
+            <DialogTitle>{t('actions.dialog.title')}</DialogTitle>
           </DialogHeader>
           
           {submitSuccess ? (
@@ -451,14 +453,14 @@ export default function Actions() {
               <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="w-8 h-8 text-success" />
               </div>
-              <p className="text-lg font-semibold text-foreground mb-2">Action Created!</p>
-              <p className="text-muted-foreground">The action has been added to the list.</p>
+              <p className="text-lg font-semibold text-foreground mb-2">{t('actions.created')}</p>
+              <p className="text-muted-foreground">{t('actions.created_message')}</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label htmlFor="actions-field-0" className="block text-sm font-medium text-foreground mb-2">
-                  Title <span className="text-destructive">*</span>
+                  {t('common.title')} <span className="text-destructive">*</span>
                 </label>
                 <Input id="actions-field-0" 
                   placeholder="Action title..." 
@@ -471,7 +473,7 @@ export default function Actions() {
 
               <div>
                 <label htmlFor="actions-field-1" className="block text-sm font-medium text-foreground mb-2">
-                  Description <span className="text-destructive">*</span>
+                  {t('common.description')} <span className="text-destructive">*</span>
                 </label>
                 <Textarea id="actions-field-1" 
                   rows={3} 
@@ -484,7 +486,7 @@ export default function Actions() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="actions-field-2" className="block text-sm font-medium text-foreground mb-2">Source Type</label>
+                  <label htmlFor="actions-field-2" className="block text-sm font-medium text-foreground mb-2">{t('actions.form.source_type')}</label>
                   <Select 
                     value={formData.source_type} 
                     onValueChange={(value) => setFormData(prev => ({ ...prev, source_type: value }))}
@@ -516,7 +518,7 @@ export default function Actions() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="actions-field-4" className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                  <label htmlFor="actions-field-4" className="block text-sm font-medium text-foreground mb-2">{t('common.priority')}</label>
                   <Select 
                     value={formData.priority}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
@@ -533,7 +535,7 @@ export default function Actions() {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="actions-field-5" className="block text-sm font-medium text-foreground mb-2">Due Date</label>
+                  <label htmlFor="actions-field-5" className="block text-sm font-medium text-foreground mb-2">{t('common.due_date')}</label>
                   <Input id="actions-field-5" 
                     type="date"
                     value={formData.due_date}
@@ -556,16 +558,16 @@ export default function Actions() {
 
               <DialogFooter className="gap-3 pt-4">
                 <Button type="button" variant="outline" onClick={() => setShowModal(false)} disabled={isSubmitting}>
-                  Cancel
+                  {t('cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Creating...
+                      {t('actions.creating')}
                     </>
                   ) : (
-                    'Create Action'
+                    t('actions.create')
                   )}
                 </Button>
               </DialogFooter>

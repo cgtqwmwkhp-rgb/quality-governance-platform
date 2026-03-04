@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Shield,
   Search,
@@ -87,6 +88,7 @@ const actionColors: Record<string, string> = {
 };
 
 export default function AuditTrailViewer() {
+  const { t } = useTranslation();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [verification, setVerification] = useState<Verification | null>(null);
@@ -228,8 +230,8 @@ export default function AuditTrailViewer() {
               <Shield className="h-8 w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Audit Trail</h1>
-              <p className="text-slate-400">Immutable blockchain-style change history</p>
+              <h1 className="text-2xl font-bold text-white">{t('audit_trail.title')}</h1>
+              <p className="text-slate-400">{t('audit_trail.subtitle')}</p>
             </div>
           </div>
           
@@ -244,7 +246,7 @@ export default function AuditTrailViewer() {
               ) : (
                 <Shield className="h-4 w-4" />
               )}
-              Verify Chain
+              {t('audit_trail.verify_chain')}
             </button>
             
             <div className="relative group">
@@ -257,13 +259,13 @@ export default function AuditTrailViewer() {
                   onClick={() => exportLogs('json')}
                   className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 first:rounded-t-lg"
                 >
-                  Export as JSON
+                  {t('audit_trail.export_json')}
                 </button>
                 <button
                   onClick={() => exportLogs('csv')}
                   className="w-full px-4 py-2 text-left text-sm text-slate-300 hover:bg-slate-700 last:rounded-b-lg"
                 >
-                  Export as CSV
+                  {t('audit_trail.export_csv')}
                 </button>
               </div>
             </div>
@@ -285,7 +287,7 @@ export default function AuditTrailViewer() {
               )}
               <div>
                 <p className={`font-medium ${verification.is_valid ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {verification.is_valid ? 'Chain Verified Successfully' : 'Chain Verification Failed'}
+                  {verification.is_valid ? t('audit_trail.chain_verified') : t('audit_trail.chain_failed')}
                 </p>
                 <p className="text-sm text-slate-400">
                   {verification.entries_verified} entries verified • Last check: {formatTimestamp(verification.verified_at)}
@@ -317,7 +319,7 @@ export default function AuditTrailViewer() {
               onChange={e => setFilters({ ...filters, entity_type: e.target.value })}
               className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Entity Types</option>
+              <option value="">{t('audit_trail.all_entity_types')}</option>
               <option value="incident">Incidents</option>
               <option value="audit">Audits</option>
               <option value="risk">Risks</option>
@@ -330,7 +332,7 @@ export default function AuditTrailViewer() {
               onChange={e => setFilters({ ...filters, action: e.target.value })}
               className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">All Actions</option>
+              <option value="">{t('audit_trail.all_actions')}</option>
               <option value="create">Create</option>
               <option value="update">Update</option>
               <option value="delete">Delete</option>
@@ -343,7 +345,7 @@ export default function AuditTrailViewer() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search user..."
+                placeholder={t('audit_trail.search_user')}
                 value={filters.user}
                 onChange={e => setFilters({ ...filters, user: e.target.value })}
                 aria-label="Search audit logs"
@@ -361,7 +363,7 @@ export default function AuditTrailViewer() {
             </div>
           ) : entries.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
-              No audit entries found
+              {t('audit_trail.no_entries')}
             </div>
           ) : (
             entries.map((entry, index) => {
@@ -439,10 +441,10 @@ export default function AuditTrailViewer() {
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         {/* Hash Details */}
                         <div className="p-3 rounded-lg bg-slate-900/50">
-                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">Hash Chain</h4>
+                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">{t('audit_trail.hash_chain')}</h4>
                           <div className="space-y-2">
                             <div>
-                              <span className="text-xs text-slate-500">Current Hash:</span>
+                              <span className="text-xs text-slate-500">{t('audit_trail.current_hash')}</span>
                               <p className="font-mono text-xs text-blue-400 break-all">{entry.entry_hash}</p>
                             </div>
                             <div className="flex items-center gap-1 text-slate-500">
@@ -450,7 +452,7 @@ export default function AuditTrailViewer() {
                               <span className="text-xs">Links to:</span>
                             </div>
                             <div>
-                              <span className="text-xs text-slate-500">Previous Hash:</span>
+                              <span className="text-xs text-slate-500">{t('audit_trail.previous_hash')}</span>
                               <p className="font-mono text-xs text-purple-400 break-all">{entry.previous_hash}</p>
                             </div>
                           </div>
@@ -458,7 +460,7 @@ export default function AuditTrailViewer() {
                         
                         {/* Change Details */}
                         <div className="p-3 rounded-lg bg-slate-900/50">
-                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">Change Details</h4>
+                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">{t('audit_trail.change_details')}</h4>
                           {entry.changed_fields && entry.changed_fields.length > 0 ? (
                             <div className="space-y-2">
                               <p className="text-xs text-slate-400">
@@ -466,7 +468,7 @@ export default function AuditTrailViewer() {
                               </p>
                               {entry.old_values && (
                                 <div>
-                                  <span className="text-xs text-red-400">Before:</span>
+                                  <span className="text-xs text-red-400">{t('audit_trail.before')}</span>
                                   <pre className="text-xs text-slate-300 mt-1 overflow-auto">
                                     {JSON.stringify(entry.old_values, null, 2)}
                                   </pre>
@@ -474,7 +476,7 @@ export default function AuditTrailViewer() {
                               )}
                               {entry.new_values && (
                                 <div>
-                                  <span className="text-xs text-emerald-400">After:</span>
+                                  <span className="text-xs text-emerald-400">{t('audit_trail.after')}</span>
                                   <pre className="text-xs text-slate-300 mt-1 overflow-auto">
                                     {JSON.stringify(entry.new_values, null, 2)}
                                   </pre>
@@ -483,13 +485,13 @@ export default function AuditTrailViewer() {
                             </div>
                           ) : entry.new_values ? (
                             <div>
-                              <span className="text-xs text-emerald-400">Created with:</span>
+                              <span className="text-xs text-emerald-400">{t('audit_trail.created_with')}</span>
                               <pre className="text-xs text-slate-300 mt-1 overflow-auto">
                                 {JSON.stringify(entry.new_values, null, 2)}
                               </pre>
                             </div>
                           ) : (
-                            <p className="text-xs text-slate-500">No change data recorded</p>
+                            <p className="text-xs text-slate-500">{t('audit_trail.no_change_data')}</p>
                           )}
                         </div>
                       </div>
@@ -518,25 +520,25 @@ export default function AuditTrailViewer() {
         <div className="grid grid-cols-4 gap-4">
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-white">{entries.length}</p>
-            <p className="text-sm text-slate-400">Total Entries</p>
+            <p className="text-sm text-slate-400">{t('audit_trail.total_entries')}</p>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-emerald-400">
               {entries.filter(e => e.action === 'create').length}
             </p>
-            <p className="text-sm text-slate-400">Created</p>
+            <p className="text-sm text-slate-400">{t('audit_trail.created')}</p>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-blue-400">
               {entries.filter(e => e.action === 'update').length}
             </p>
-            <p className="text-sm text-slate-400">Updated</p>
+            <p className="text-sm text-slate-400">{t('audit_trail.updated')}</p>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-purple-400">
               {new Set(entries.map(e => e.user_email)).size}
             </p>
-            <p className="text-sm text-slate-400">Active Users</p>
+            <p className="text-sm text-slate-400">{t('audit_trail.active_users')}</p>
           </div>
         </div>
       </div>

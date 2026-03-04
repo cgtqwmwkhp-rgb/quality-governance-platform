@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { API_BASE_URL } from '../config/apiBase';
 
@@ -168,6 +169,7 @@ interface FormData {
 type Step = 1 | 2 | 3 | 4 | 5;
 
 export default function PortalRTAForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = usePortalAuth();
   const [step, setStep] = useState<Step>(1);
@@ -347,8 +349,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">RTA Report Submitted</h1>
-          <p className="text-muted-foreground mb-6">Your reference number is:</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.rta_report_submitted')}</h1>
+          <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
             <span className="text-2xl font-mono font-bold text-orange-600 dark:text-orange-400">{submittedRef}</span>
           </div>
@@ -357,14 +359,14 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               onClick={() => navigate('/portal/track/' + submittedRef)}
               className="flex-1 bg-orange-600 hover:bg-orange-700"
             >
-              Track Status
+              {t('portal.track_status')}
             </Button>
             <Button
               variant="outline"
               onClick={() => navigate('/portal')}
               className="flex-1"
             >
-              Done
+              {t('portal.done')}
             </Button>
           </div>
         </Card>
@@ -386,9 +388,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <Car className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-              <span className="font-semibold text-foreground">RTA Report</span>
+              <span className="font-semibold text-foreground">{t('portal.rta_report')}</span>
             </div>
-            <div className="text-xs text-muted-foreground">Step {step} of {totalSteps}</div>
+            <div className="text-xs text-muted-foreground">{t('portal.step_of', { step, total: totalSteps })}</div>
           </div>
         </div>
         
@@ -405,29 +407,29 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Your Details</h1>
-              <p className="text-muted-foreground text-sm">Driver and vehicle information</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.your_details')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.driver_vehicle_info')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-0" className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
+              <label htmlFor="portalrtaform-field-0" className="block text-sm font-medium text-foreground mb-2">{t('portal.your_name_label')} *</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalrtaform-field-0"
                   value={formData.employeeName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, employeeName: e.target.value }))}
-                  placeholder="Full name..."
+                  placeholder={t('portal.full_name_placeholder')}
                   className="pl-10"
                 />
               </div>
             </div>
 
             <FuzzySearchDropdown
-              label="PE Vehicle Registration"
+              label={t('portal.pe_vehicle_reg')}
               options={PE_VEHICLES}
               value={formData.peVehicle}
               onChange={(val) => setFormData((prev) => ({ ...prev, peVehicle: val }))}
-              placeholder="Search vehicle..."
+              placeholder={t('portal.search_vehicle')}
               required
             />
 
@@ -435,13 +437,13 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               <Input
                 value={formData.peVehicleOther}
                 onChange={(e) => setFormData((prev) => ({ ...prev, peVehicleOther: e.target.value.toUpperCase() }))}
-                placeholder="Enter registration..."
+                placeholder={t('portal.enter_registration')}
                 className="uppercase"
               />
             )}
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Any passengers? *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_passengers')} *</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -463,11 +465,11 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {formData.hasPassengers && (
               <div>
-                <label htmlFor="portalrtaform-field-1" className="block text-sm font-medium text-foreground mb-2">Passenger Details</label>
+                <label htmlFor="portalrtaform-field-1" className="block text-sm font-medium text-foreground mb-2">{t('portal.passenger_details')}</label>
                 <Input id="portalrtaform-field-1"
                   value={formData.passengerDetails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))}
-                  placeholder="Name and reason in vehicle..."
+                  placeholder={t('portal.passenger_placeholder')}
                 />
               </div>
             )}
@@ -478,18 +480,18 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Accident Details</h1>
-              <p className="text-muted-foreground text-sm">When and where did it happen?</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.accident_details')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.when_where')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-2" className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalrtaform-field-2" className="block text-sm font-medium text-foreground mb-2">{t('portal.location_label')} *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalrtaform-field-2"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="Road name, junction..."
+                  placeholder={t('portal.road_placeholder')}
                   className="pl-10 pr-16"
                 />
                 <button
@@ -506,7 +508,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalrtaform-field-3" className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalrtaform-field-3" className="block text-sm font-medium text-foreground mb-2">{t('portal.date_label')}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalrtaform-field-3"
@@ -518,7 +520,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 </div>
               </div>
               <div>
-                <label htmlFor="portalrtaform-field-4" className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalrtaform-field-4" className="block text-sm font-medium text-foreground mb-2">{t('portal.time_label')}</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalrtaform-field-4"
@@ -532,7 +534,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Type of Accident *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.accident_type')} *</span>
               <div className="grid grid-cols-3 gap-2">
                 {ACCIDENT_TYPES.map((type) => (
                   <button
@@ -554,7 +556,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Other vehicles involved?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.other_vehicles')}</span>
               <Card className="p-4">
                 <div className="flex items-center justify-center gap-6">
                   <button
@@ -567,7 +569,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                   </button>
                   <div className="text-center">
                     <span className="text-3xl font-bold text-foreground">{formData.vehicleCount}</span>
-                    <p className="text-muted-foreground text-xs">vehicles</p>
+                    <p className="text-muted-foreground text-xs">{t('portal.vehicles')}</p>
                   </div>
                   <button
                     type="button"
@@ -588,10 +590,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
           <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-foreground mb-1">
-                {formData.vehicleCount === 0 ? 'Witnesses' : 'Third Party Details'}
+                {formData.vehicleCount === 0 ? t('portal.any_witnesses') : t('portal.third_party_details')}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {formData.vehicleCount === 0 ? 'Any witnesses to the accident?' : 'Details of other vehicles involved'}
+                {formData.vehicleCount === 0 ? t('portal.witnesses_to_accident') : t('portal.other_vehicles_details')}
               </p>
             </div>
 
@@ -599,19 +601,19 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               <Card key={index} className="p-4 space-y-3">
                 <h3 className="font-semibold text-foreground flex items-center gap-2">
                   <Car className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                  Vehicle {index + 1}
+                  {t('portal.vehicle_n', { n: index + 1 })}
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     value={party.registration}
                     onChange={(e) => updateThirdParty(index, 'registration', e.target.value.toUpperCase())}
-                    placeholder="Reg..."
+                    placeholder={t('portal.reg_placeholder')}
                     className="uppercase text-sm"
                   />
                   <Input
                     value={party.driverName}
                     onChange={(e) => updateThirdParty(index, 'driverName', e.target.value)}
-                    placeholder="Driver name..."
+                    placeholder={t('portal.driver_name_placeholder')}
                     className="text-sm"
                   />
                 </div>
@@ -619,20 +621,20 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                   type="tel"
                   value={party.driverPhone}
                   onChange={(e) => updateThirdParty(index, 'driverPhone', e.target.value)}
-                  placeholder="Driver phone..."
+                  placeholder={t('portal.driver_phone_placeholder')}
                   className="text-sm"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     value={party.insuranceCompany}
                     onChange={(e) => updateThirdParty(index, 'insuranceCompany', e.target.value)}
-                    placeholder="Insurance..."
+                    placeholder={t('portal.insurance_placeholder')}
                     className="text-sm"
                   />
                   <Input
                     value={party.policyNumber}
                     onChange={(e) => updateThirdParty(index, 'policyNumber', e.target.value)}
-                    placeholder="Policy #..."
+                    placeholder={t('portal.policy_placeholder')}
                     className="text-sm"
                   />
                 </div>
@@ -640,7 +642,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             ))}
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_witnesses')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -664,7 +666,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               <Input
                 value={formData.witnessDetails}
                 onChange={(e) => setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))}
-                placeholder="Witness name and contact..."
+                placeholder={t('portal.witness_contact_rta')}
               />
             )}
           </div>
@@ -674,12 +676,12 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 4 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Damage & Conditions</h1>
-              <p className="text-muted-foreground text-sm">Impact and road conditions</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.damage_conditions')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.impact_road')}</p>
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Point of Impact</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.point_of_impact')}</span>
               <div className="grid grid-cols-4 gap-2">
                 {IMPACT_POINTS.map((point) => (
                   <button
@@ -700,17 +702,17 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-5" className="block text-sm font-medium text-foreground mb-2">Damage Description *</label>
+              <label htmlFor="portalrtaform-field-5" className="block text-sm font-medium text-foreground mb-2">{t('portal.damage_description')} *</label>
               <Textarea id="portalrtaform-field-5"
                 value={formData.damageDescription}
                 onChange={(e) => setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))}
-                placeholder="Describe all damage..."
+                placeholder={t('portal.describe_damage')}
                 rows={3}
               />
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Vehicle drivable?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.vehicle_drivable')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -731,7 +733,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Weather</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.weather')}</span>
               <div className="grid grid-cols-6 gap-2">
                 {WEATHER_OPTIONS.map((w) => (
                   <button
@@ -752,7 +754,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Road Condition</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.road_condition')}</span>
               <div className="flex flex-wrap gap-2">
                 {ROAD_CONDITIONS.map((cond) => (
                   <button
@@ -774,7 +776,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {/* Photos */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Photos</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.photos')}</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -803,17 +805,17 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 5 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">What Happened?</h1>
-              <p className="text-muted-foreground text-sm">Describe the accident in full</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.what_happened')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.describe_accident')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-6" className="block text-sm font-medium text-foreground mb-2">Full Description *</label>
+              <label htmlFor="portalrtaform-field-6" className="block text-sm font-medium text-foreground mb-2">{t('portal.full_description')} *</label>
               <div className="relative">
                 <Textarea id="portalrtaform-field-6"
                   value={formData.fullDescription}
                   onChange={(e) => setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))}
-                  placeholder="Describe exactly what happened..."
+                  placeholder={t('portal.describe_exactly')}
                   rows={6}
                 />
                 <button
@@ -831,20 +833,20 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalrtaform-field-7" className="block text-sm font-medium text-foreground mb-2">Purpose of Journey</label>
+                <label htmlFor="portalrtaform-field-7" className="block text-sm font-medium text-foreground mb-2">{t('portal.purpose_journey')}</label>
                 <Input id="portalrtaform-field-7"
                   value={formData.purposeOfJourney}
                   onChange={(e) => setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))}
-                  placeholder="e.g. Work site visit"
+                  placeholder={t('portal.purpose_placeholder')}
                   className="text-sm"
                 />
               </div>
               <div>
-                <label htmlFor="portalrtaform-field-8" className="block text-sm font-medium text-foreground mb-2">Speed at Impact</label>
+                <label htmlFor="portalrtaform-field-8" className="block text-sm font-medium text-foreground mb-2">{t('portal.speed_at_impact')}</label>
                 <Input id="portalrtaform-field-8"
                   value={formData.speed}
                   onChange={(e) => setFormData((prev) => ({ ...prev, speed: e.target.value }))}
-                  placeholder="e.g. 20 mph"
+                  placeholder={t('portal.speed_placeholder')}
                   className="text-sm"
                 />
               </div>
@@ -860,7 +862,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 )}
               >
                 <Video className={cn('w-5 h-5', formData.hasDashcam ? 'text-success' : 'text-muted-foreground')} />
-                <span className="text-sm text-foreground">Dashcam</span>
+                <span className="text-sm text-foreground">{t('portal.dashcam')}</span>
               </button>
               <button
                 type="button"
@@ -871,18 +873,18 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 )}
               >
                 <Eye className={cn('w-5 h-5', formData.hasCCTV ? 'text-success' : 'text-muted-foreground')} />
-                <span className="text-sm text-foreground">CCTV Nearby</span>
+                <span className="text-sm text-foreground">{t('portal.cctv_nearby')}</span>
               </button>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-9" className="block text-sm font-medium text-foreground mb-2">Emergency Services?</label>
+              <label htmlFor="portalrtaform-field-9" className="block text-sm font-medium text-foreground mb-2">{t('portal.emergency_services')}</label>
               <div className="relative">
                 <Siren className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalrtaform-field-9"
                   value={formData.emergencyServices}
                   onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))}
-                  placeholder="No / Police / Ambulance..."
+                  placeholder={t('portal.emergency_placeholder')}
                   className="pl-10"
                 />
               </div>
@@ -899,7 +901,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm font-medium text-destructive">{t('portal.submission_failed')}</p>
                 <p className="text-sm text-destructive/80">{error}</p>
               </div>
               <button 
@@ -918,7 +920,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               onClick={() => setStep((s) => (s - 1) as Step)}
             >
               <ChevronLeft className="w-5 h-5" />
-              Back
+              {t('back')}
             </Button>
           )}
           
@@ -928,7 +930,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               disabled={!canProceed()}
               className="flex-1 bg-orange-600 hover:bg-orange-700"
             >
-              Continue
+              {t('portal.continue_btn')}
               <ChevronRight className="w-5 h-5" />
             </Button>
           ) : (
@@ -940,12 +942,12 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Submitting...
+                  {t('portal.submitting')}
                 </>
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Submit
+                  {t('submit')}
                 </>
               )}
             </Button>

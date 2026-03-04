@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -510,6 +511,7 @@ const SignaturePad = ({
 // ============================================================================
 
 export default function AuditExecution() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   
   const [audit] = useState(MOCK_AUDIT);
@@ -771,7 +773,7 @@ export default function AuditExecution() {
           </div>
 
           <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-success' : 'text-destructive'}`}>
-            {passed ? 'AUDIT PASSED' : 'AUDIT FAILED'}
+            {passed ? t('audit_execution.passed') : t('audit_execution.failed')}
           </h2>
           <p className="text-muted-foreground mb-8">
             {audit.templateName} - {audit.asset}
@@ -781,23 +783,23 @@ export default function AuditExecution() {
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-secondary rounded-xl p-4">
               <p className="text-2xl font-bold text-foreground">{answeredQuestions}</p>
-              <p className="text-xs text-muted-foreground">Questions Answered</p>
+              <p className="text-xs text-muted-foreground">{t('audit_execution.questions_answered')}</p>
             </div>
             <div className="bg-secondary rounded-xl p-4">
               <p className="text-2xl font-bold text-foreground">{formatTime(elapsedTime)}</p>
-              <p className="text-xs text-muted-foreground">Duration</p>
+              <p className="text-xs text-muted-foreground">{t('audit_execution.duration')}</p>
             </div>
             <div className="bg-secondary rounded-xl p-4">
               <p className="text-2xl font-bold text-foreground">
                 {Object.values(responses).filter(r => r.photos && r.photos.length > 0).length}
               </p>
-              <p className="text-xs text-muted-foreground">Photos</p>
+              <p className="text-xs text-muted-foreground">{t('audit_execution.photos')}</p>
             </div>
           </div>
 
           {/* Findings Summary */}
           <div className="text-left mb-8">
-            <h3 className="text-lg font-semibold text-foreground mb-3">Findings</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-3">{t('audit_execution.findings')}</h3>
             <div className="space-y-2">
               {Object.values(responses)
                 .filter(r => r.response === 'fail' || r.response === 'no')
@@ -813,7 +815,7 @@ export default function AuditExecution() {
                   );
                 })}
               {Object.values(responses).filter(r => r.response === 'fail' || r.response === 'no').length === 0 && (
-                <p className="text-sm text-muted-foreground">No failed items</p>
+                <p className="text-sm text-muted-foreground">{t('audit_execution.no_failed_items')}</p>
               )}
             </div>
           </div>
@@ -824,13 +826,13 @@ export default function AuditExecution() {
               onClick={() => navigate('/audits')}
               className="flex-1 py-3 bg-secondary text-foreground rounded-xl hover:bg-muted transition-colors"
             >
-              Back to Audits
+              {t('audit_execution.back_to_audits')}
             </button>
             <button
               onClick={() => {/* Submit audit */}}
               className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
             >
-              Submit Audit
+              {t('audit_execution.submit')}
             </button>
           </div>
         </div>
@@ -879,7 +881,7 @@ export default function AuditExecution() {
               {/* Save Draft */}
               <button className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted">
                 <Save className="w-4 h-4" />
-                Save
+                {t('save')}
               </button>
             </div>
           </div>
@@ -965,7 +967,7 @@ export default function AuditExecution() {
                     )}
                     {currentQuestion.required && (
                       <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded">
-                        Required
+                        {t('common.required')}
                       </span>
                     )}
                   </div>
@@ -993,7 +995,7 @@ export default function AuditExecution() {
                     className="flex items-center gap-2 text-sm text-primary hover:text-primary"
                   >
                     <Info className="w-4 h-4" />
-                    Auditor Guidance
+                    {t('audit_execution.auditor_guidance')}
                     {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
                   {showGuidance && (
@@ -1014,7 +1016,7 @@ export default function AuditExecution() {
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
                     <Camera className="w-4 h-4 text-info" />
-                    <span className="text-sm font-medium text-foreground">Photo Evidence Required</span>
+                    <span className="text-sm font-medium text-foreground">{t('audit_execution.photo_evidence_required')}</span>
                   </div>
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
@@ -1036,7 +1038,7 @@ export default function AuditExecution() {
               <div className="pt-4 border-t border-border">
                 <div className="flex items-center gap-2 mb-3">
                   <MessageSquare className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Additional Notes</span>
+                  <span className="text-sm font-medium text-foreground">{t('audit_execution.additional_notes')}</span>
                 </div>
                 <textarea
                   value={currentResponse?.notes || ''}
@@ -1057,7 +1059,7 @@ export default function AuditExecution() {
                 }`}
               >
                 <Flag className={`w-4 h-4 ${currentResponse?.flagged ? 'fill-current' : ''}`} />
-                {currentResponse?.flagged ? 'Issue Flagged' : 'Flag for Follow-up'}
+                {currentResponse?.flagged ? t('audit_execution.issue_flagged') : t('audit_execution.flag_followup')}
               </button>
             </div>
           </div>
@@ -1073,7 +1075,7 @@ export default function AuditExecution() {
             className="flex items-center gap-2 px-6 py-3 bg-secondary text-foreground rounded-xl hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
-            Previous
+            {t('previous')}
           </button>
 
           {/* Quick Jump */}
@@ -1099,8 +1101,8 @@ export default function AuditExecution() {
           >
             {currentSectionIndex === audit.sections.length - 1 && 
              currentQuestionIndex === currentSection.questions.length - 1
-              ? 'Finish'
-              : 'Next'
+              ? t('audit_execution.finish')
+              : t('next')
             }
             <ArrowRight className="w-5 h-5" />
           </button>

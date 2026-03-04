@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -180,6 +181,7 @@ interface FormData {
 }
 
 export default function PortalIncidentForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = usePortalAuth();
@@ -417,8 +419,8 @@ export default function PortalIncidentForm() {
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Report Submitted</h1>
-          <p className="text-muted-foreground mb-6">Your reference number is:</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.report_submitted_title')}</h1>
+          <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
             <span className="text-2xl font-mono font-bold text-primary">{submittedRef}</span>
           </div>
@@ -427,14 +429,14 @@ export default function PortalIncidentForm() {
               onClick={() => navigate('/portal/track/' + submittedRef)}
               className="flex-1"
             >
-              Track Status
+              {t('portal.track_status')}
             </Button>
             <Button
               variant="outline"
               onClick={() => navigate('/portal')}
               className="flex-1"
             >
-              Done
+              {t('portal.done')}
             </Button>
           </div>
         </Card>
@@ -472,12 +474,12 @@ export default function PortalIncidentForm() {
               <span className="font-semibold text-foreground">{config.title}</span>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Step {step} of {totalSteps}</span>
+              <span>{t('portal.step_of', { step, total: totalSteps })}</span>
               {/* Autosave indicator (EXP-001) */}
               {autosaveEnabled && lastSavedAt && (
                 <span className="flex items-center gap-1 text-success">
                   <Save className="w-3 h-3" />
-                  Saved
+                  {t('portal.saved')}
                 </span>
               )}
             </div>
@@ -498,16 +500,16 @@ export default function PortalIncidentForm() {
         {step === 1 && (
           <div className="space-y-6">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Contract Details</h1>
-              <p className="text-muted-foreground text-sm">Which contract does this relate to?</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.contract_details')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.contract_question')}</p>
             </div>
 
             <FuzzySearchDropdown
-              label="Select Contract"
+              label={t('portal.select_contract')}
               options={CONTRACT_OPTIONS}
               value={formData.contract}
               onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
-              placeholder="Search or select contract..."
+              placeholder={t('portal.search_contract')}
               required
             />
 
@@ -515,7 +517,7 @@ export default function PortalIncidentForm() {
               <Input
                 value={formData.contractOther}
                 onChange={(e) => setFormData((prev) => ({ ...prev, contractOther: e.target.value }))}
-                placeholder="Specify contract..."
+                placeholder={t('portal.specify_contract')}
               />
             )}
           </div>
@@ -526,10 +528,10 @@ export default function PortalIncidentForm() {
           <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-foreground mb-1">
-                {reportType === 'complaint' ? 'Complainant Details' : 'People & Location'}
+                {reportType === 'complaint' ? t('portal.complainant_details') : t('portal.people_location')}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {reportType === 'complaint' ? 'Who raised the complaint?' : 'Who was involved and where?'}
+                {reportType === 'complaint' ? t('portal.who_raised_complaint') : t('portal.who_involved_where')}
               </p>
             </div>
 
@@ -538,7 +540,7 @@ export default function PortalIncidentForm() {
                 {/* Were you involved? */}
                 <div>
                   <span className="block text-sm font-medium text-foreground mb-2">
-                    Were you directly involved?
+                    {t('portal.were_you_involved')}
                   </span>
                   <div className="grid grid-cols-2 gap-3">
                     {[true, false].map((val) => (
@@ -562,14 +564,14 @@ export default function PortalIncidentForm() {
                 {/* Person Name */}
                 <div>
                   <label htmlFor="portalincidentform-field-0" className="block text-sm font-medium text-foreground mb-2">
-                    {formData.wasInvolved ? 'Your Name' : 'Name of Person Involved'} *
+                    {formData.wasInvolved ? t('portal.your_name') : t('portal.person_involved_name')} *
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input id="portalincidentform-field-0"
                       value={formData.personName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, personName: e.target.value }))}
-                      placeholder="Full name..."
+                      placeholder={t('portal.full_name_placeholder')}
                       className="pl-10"
                     />
                   </div>
@@ -577,11 +579,11 @@ export default function PortalIncidentForm() {
 
                 {/* Role */}
                 <FuzzySearchDropdown
-                  label="Role"
+                  label={t('portal.role_label')}
                   options={ROLE_OPTIONS}
                   value={formData.personRole}
                   onChange={(val) => setFormData((prev) => ({ ...prev, personRole: val }))}
-                  placeholder="Select role..."
+                  placeholder={t('portal.select_role')}
                 />
               </>
             )}
@@ -590,13 +592,13 @@ export default function PortalIncidentForm() {
               <>
                 {/* Complainant Name */}
                 <div>
-                  <label htmlFor="portalincidentform-field-1" className="block text-sm font-medium text-foreground mb-2">Complainant Name *</label>
+                  <label htmlFor="portalincidentform-field-1" className="block text-sm font-medium text-foreground mb-2">{t('portal.complainant_name')} *</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input id="portalincidentform-field-1"
                       value={formData.complainantName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantName: e.target.value }))}
-                      placeholder="Full name..."
+                      placeholder={t('portal.full_name_placeholder')}
                       className="pl-10"
                     />
                   </div>
@@ -604,13 +606,13 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Role */}
                 <div>
-                  <label htmlFor="portalincidentform-field-2" className="block text-sm font-medium text-foreground mb-2">Their Role/Title</label>
+                  <label htmlFor="portalincidentform-field-2" className="block text-sm font-medium text-foreground mb-2">{t('portal.role_title_label')}</label>
                   <div className="relative">
                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input id="portalincidentform-field-2"
                       value={formData.complainantRole}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantRole: e.target.value }))}
-                      placeholder="e.g. Site Manager..."
+                      placeholder={t('portal.site_manager_placeholder')}
                       className="pl-10"
                     />
                   </div>
@@ -618,13 +620,13 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Contact */}
                 <div>
-                  <label htmlFor="portalincidentform-field-3" className="block text-sm font-medium text-foreground mb-2">Contact Details</label>
+                  <label htmlFor="portalincidentform-field-3" className="block text-sm font-medium text-foreground mb-2">{t('portal.contact_details')}</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input id="portalincidentform-field-3"
                       value={formData.complainantContact}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantContact: e.target.value }))}
-                      placeholder="Phone or email..."
+                      placeholder={t('portal.phone_email_placeholder')}
                       className="pl-10"
                     />
                   </div>
@@ -634,7 +636,7 @@ export default function PortalIncidentForm() {
 
             {/* Location */}
             <div>
-              <label htmlFor="portalincidentform-field-4" className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalincidentform-field-4" className="block text-sm font-medium text-foreground mb-2">{t('portal.location_label')} *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalincidentform-field-4"
@@ -643,7 +645,7 @@ export default function PortalIncidentForm() {
                     setFormData((prev) => ({ ...prev, location: e.target.value }));
                     setLocationError(null);
                   }}
-                  placeholder="Where did this occur?"
+                  placeholder={t('portal.where_did_occur')}
                   className="pl-10 pr-16"
                 />
                 <button
@@ -662,14 +664,14 @@ export default function PortalIncidentForm() {
                 </div>
               )}
               <p className="mt-1 text-xs text-muted-foreground">
-                Tap GPS to auto-detect, or type manually
+                {t('portal.gps_hint')}
               </p>
             </div>
 
             {/* Date & Time */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalincidentform-field-5" className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalincidentform-field-5" className="block text-sm font-medium text-foreground mb-2">{t('portal.date_label')}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalincidentform-field-5"
@@ -681,7 +683,7 @@ export default function PortalIncidentForm() {
                 </div>
               </div>
               <div>
-                <label htmlFor="portalincidentform-field-6" className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalincidentform-field-6" className="block text-sm font-medium text-foreground mb-2">{t('portal.time_label')}</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalincidentform-field-6"
@@ -700,18 +702,18 @@ export default function PortalIncidentForm() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">What Happened?</h1>
-              <p className="text-muted-foreground text-sm">Describe the {reportType === 'complaint' ? 'complaint' : 'incident'} in detail</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.what_happened')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.describe_type', { type: reportType === 'complaint' ? 'complaint' : 'incident' })}</p>
             </div>
 
             {/* Description */}
             <div>
-              <label htmlFor="portalincidentform-field-7" className="block text-sm font-medium text-foreground mb-2">Description *</label>
+              <label htmlFor="portalincidentform-field-7" className="block text-sm font-medium text-foreground mb-2">{t('portal.description_label')} *</label>
               <div className="relative">
                 <Textarea id="portalincidentform-field-7"
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="What happened? Be specific..."
+                  placeholder={t('portal.what_happened_placeholder')}
                   rows={5}
                 />
                 {voiceSupported && (
@@ -731,7 +733,7 @@ export default function PortalIncidentForm() {
               {isRecording && (
                 <div className="mt-2 flex items-center gap-2 text-sm text-primary animate-pulse">
                   <div className="w-2 h-2 bg-destructive rounded-full" />
-                  <span>Listening... speak now</span>
+                  <span>{t('portal.listening')}</span>
                 </div>
               )}
               {voiceError && (
@@ -741,19 +743,19 @@ export default function PortalIncidentForm() {
                 </div>
               )}
               <p className="mt-1 text-xs text-muted-foreground">
-                {voiceSupported ? 'Type or tap the microphone to dictate' : 'Type your description'}
+                {voiceSupported ? t('portal.voice_or_type') : t('portal.type_description')}
               </p>
             </div>
 
             {/* Asset Number */}
             <div>
-              <label htmlFor="portalincidentform-field-8" className="block text-sm font-medium text-foreground mb-2">Asset / Vehicle Registration</label>
+              <label htmlFor="portalincidentform-field-8" className="block text-sm font-medium text-foreground mb-2">{t('portal.asset_vehicle')}</label>
               <div className="relative">
                 <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalincidentform-field-8"
                   value={formData.assetNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value.toUpperCase() }))}
-                  placeholder="e.g. PN22P102..."
+                  placeholder={t('portal.asset_placeholder')}
                   className="pl-10 uppercase"
                 />
               </div>
@@ -761,7 +763,7 @@ export default function PortalIncidentForm() {
 
             {/* Witnesses */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_witnesses')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -783,13 +785,13 @@ export default function PortalIncidentForm() {
 
             {formData.hasWitnesses && (
               <div>
-                <label htmlFor="portalincidentform-field-9" className="block text-sm font-medium text-foreground mb-2">Witness Names</label>
+                <label htmlFor="portalincidentform-field-9" className="block text-sm font-medium text-foreground mb-2">{t('portal.witness_names')}</label>
                 <div className="relative">
                   <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input id="portalincidentform-field-9"
                     value={formData.witnessNames}
                     onChange={(e) => setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))}
-                    placeholder="Names of witnesses..."
+                    placeholder={t('portal.witness_placeholder')}
                     className="pl-10"
                   />
                 </div>
@@ -802,13 +804,13 @@ export default function PortalIncidentForm() {
         {step === 4 && reportType !== 'complaint' && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Injuries & Evidence</h1>
-              <p className="text-muted-foreground text-sm">Any injuries and supporting photos</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.injuries_evidence')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.injuries_subtitle')}</p>
             </div>
 
             {/* Injuries */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Any injuries sustained?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_injuries')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -838,7 +840,7 @@ export default function PortalIncidentForm() {
 
                 {/* Medical Assistance */}
                 <FuzzySearchDropdown
-                  label="Medical assistance required?"
+                  label={t('portal.medical_assistance')}
                   options={MEDICAL_OPTIONS}
                   value={formData.medicalAssistance}
                   onChange={(val) => setFormData((prev) => ({ ...prev, medicalAssistance: val }))}
@@ -849,7 +851,7 @@ export default function PortalIncidentForm() {
 
             {/* Photos */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Photos</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.photos')}</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -894,7 +896,7 @@ export default function PortalIncidentForm() {
             <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
               <AlertIcon className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm font-medium text-destructive">{t('portal.submission_failed')}</p>
                 <p className="text-sm text-destructive/80">{error}</p>
               </div>
               <button 
@@ -913,7 +915,7 @@ export default function PortalIncidentForm() {
               onClick={() => setStep((s) => (s - 1) as Step)}
             >
               <ChevronLeft className="w-5 h-5" />
-              Back
+              {t('back')}
             </Button>
           )}
           
@@ -923,7 +925,7 @@ export default function PortalIncidentForm() {
               disabled={!canProceed()}
               className="flex-1"
             >
-              Continue
+              {t('portal.continue_btn')}
               <ChevronRight className="w-5 h-5" />
             </Button>
           ) : (
@@ -935,12 +937,12 @@ export default function PortalIncidentForm() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Submitting...
+                  {t('portal.submitting')}
                 </>
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Submit
+                  {t('submit')}
                 </>
               )}
             </Button>

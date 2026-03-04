@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -507,6 +508,8 @@ const SectionEditor = ({
   onDeleteQuestion: (questionId: string) => void;
   onDuplicateQuestion: (questionId: string) => void;
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div className="bg-card/50 border border-border rounded-2xl overflow-hidden">
       {/* Section Header */}
@@ -589,7 +592,7 @@ const SectionEditor = ({
                 className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                Add First Question
+                {t('audit_builder.add_question')}
               </button>
             </div>
           ) : (
@@ -609,7 +612,7 @@ const SectionEditor = ({
                 className="w-full py-3 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Add Question
+                {t('audit_builder.add_question')}
               </button>
             </>
           )}
@@ -624,6 +627,7 @@ const SectionEditor = ({
 // ============================================================================
 
 export default function AuditTemplateBuilder() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { templateId } = useParams();
 
@@ -784,7 +788,7 @@ export default function AuditTemplateBuilder() {
                   type="text"
                   value={template.name}
                   onChange={(e) => setTemplate(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Untitled Template"
+                  placeholder={t('audit_builder.untitled_template')}
                   className="bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground focus:outline-none"
                 />
                 <div className="flex items-center gap-2 mt-1">
@@ -825,7 +829,7 @@ export default function AuditTemplateBuilder() {
                 className="flex items-center gap-2 px-3 py-2 bg-accent border border-primary/30 rounded-lg text-primary hover:bg-primary/30 transition-colors"
               >
                 <Sparkles className="w-4 h-4" />
-                AI Assist
+                {t('audit_builder.ai_assist')}
               </button>
 
               <div className="flex flex-col items-end">
@@ -839,7 +843,7 @@ export default function AuditTemplateBuilder() {
                   ) : (
                     <Save className="w-4 h-4" />
                   )}
-                  Save
+                  {t('audit_builder.save')}
                 </button>
                 {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
               </div>
@@ -856,30 +860,30 @@ export default function AuditTemplateBuilder() {
             <div className="lg:col-span-1 space-y-4">
               {/* Stats Card */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-4">Template Stats</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-4">{t('audit_builder.template_stats')}</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Sections</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.sections')}</span>
                     <span className="text-sm font-medium text-foreground">{template.sections.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Questions</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.questions')}</span>
                     <span className="text-sm font-medium text-foreground">{totalQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Required</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.required')}</span>
                     <span className="text-sm font-medium text-foreground">{requiredQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">With Evidence</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.with_evidence')}</span>
                     <span className="text-sm font-medium text-foreground">{evidenceQuestions}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Total Weight</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.total_weight')}</span>
                     <span className="text-sm font-medium text-foreground">{totalWeight}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">Pass Threshold</span>
+                    <span className="text-sm text-muted-foreground">{t('audit_builder.pass_threshold')}</span>
                     <span className="text-sm font-medium text-success">{template.passThreshold}%</span>
                   </div>
                 </div>
@@ -891,26 +895,26 @@ export default function AuditTemplateBuilder() {
                 <div className="space-y-2">
                   <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Upload className="w-4 h-4" />
-                    Import from Excel
+                    {t('audit_builder.import_excel')}
                   </button>
                   <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Download className="w-4 h-4" />
-                    Export Template
+                    {t('audit_builder.export_template')}
                   </button>
                   <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <Copy className="w-4 h-4" />
-                    Duplicate Template
+                    {t('audit_builder.duplicate_template')}
                   </button>
                   <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
                     <History className="w-4 h-4" />
-                    Version History
+                    {t('audit_builder.version_history')}
                   </button>
                 </div>
               </div>
 
               {/* ISO Standards */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-4">ISO Standards</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-4">{t('audit_builder.iso_standards')}</h3>
                 <div className="space-y-2">
                   {ISO_STANDARDS.map((standard) => (
                     <label
@@ -950,7 +954,7 @@ export default function AuditTemplateBuilder() {
               {/* Description */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
                 <label htmlFor="audittemplatebuilder-field-6" className="block text-sm font-medium text-foreground mb-2">
-                  Template Description
+                  {t('audit_builder.template_description')}
                 </label>
                 <textarea id="audittemplatebuilder-field-6"
                   value={template.description}
@@ -983,7 +987,7 @@ export default function AuditTemplateBuilder() {
                   className="w-full py-4 border-2 border-dashed border-border rounded-2xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
-                  Add Section
+                  {t('audit_builder.add_section')}
                 </button>
               </div>
             </div>
@@ -993,7 +997,7 @@ export default function AuditTemplateBuilder() {
         {activeTab === 'settings' && (
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="bg-card/50 border border-border rounded-2xl p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-6">Template Settings</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-6">{t('audit_builder.template_settings')}</h2>
               
               <div className="space-y-6">
                 {/* Category */}
@@ -1128,7 +1132,7 @@ export default function AuditTemplateBuilder() {
           <div className="max-w-2xl mx-auto">
             <div className="bg-card/50 border border-border rounded-2xl p-6">
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-foreground mb-2">{template.name || 'Untitled Template'}</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-2">{template.name || t('audit_builder.untitled_template')}</h2>
                 <p className="text-muted-foreground">{template.description}</p>
                 <div className="flex items-center justify-center gap-4 mt-4">
                   <span className="px-3 py-1 bg-primary/20 text-primary rounded-lg text-sm">

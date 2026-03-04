@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, type AssessmentRun, type AssetType } from '../../api/client'
@@ -24,6 +25,7 @@ const OUTCOME_VARIANTS: Record<string, 'success' | 'warning' | 'destructive'> = 
 }
 
 export default function Assessments() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [assessments, setAssessments] = useState<AssessmentRun[]>([])
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
@@ -91,14 +93,14 @@ export default function Assessments() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Assessments</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('workforce.assessments.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Manage competency assessments for engineers
+            {t('workforce.assessments.subtitle')}
           </p>
         </div>
         <Button onClick={() => navigate('/workforce/assessments/new')} className="gap-2">
           <Plus className="w-4 h-4" />
-          New Assessment
+          {t('workforce.assessments.new')}
         </Button>
       </div>
 
@@ -108,7 +110,7 @@ export default function Assessments() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by reference, engineer..."
+                placeholder={t('workforce.assessments.search_placeholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -120,26 +122,26 @@ export default function Assessments() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
               >
-                <option value="">All statuses</option>
-                <option value="draft">Draft</option>
-                <option value="in_progress">In Progress</option>
-                <option value="pending_debrief">Pending Debrief</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="">{t('workforce.common.all_statuses')}</option>
+                <option value="draft">{t('common.draft')}</option>
+                <option value="in_progress">{t('common.in_progress')}</option>
+                <option value="pending_debrief">{t('workforce.assessments.pending_debrief')}</option>
+                <option value="completed">{t('common.completed')}</option>
+                <option value="cancelled">{t('common.cancelled')}</option>
               </select>
               <select
                 value={assetTypeFilter}
                 onChange={(e) => setAssetTypeFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
               >
-                <option value="">All asset types</option>
+                <option value="">{t('workforce.common.all_asset_types')}</option>
                 {assetTypes.map((at) => (
                   <option key={at.id} value={String(at.id)}>{at.name}</option>
                 ))}
               </select>
               <Button variant="outline" size="sm" className="gap-2">
                 <Filter className="w-4 h-4" />
-                Filters
+                {t('workforce.common.filters')}
               </Button>
             </div>
           </div>
@@ -154,13 +156,13 @@ export default function Assessments() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Reference</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Engineer</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Template</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Asset Type</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Outcome</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.reference')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.engineer')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.template')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.status')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.date')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.assessments.outcome')}</th>
                     <th className="w-10" />
                   </tr>
                 </thead>
@@ -168,7 +170,7 @@ export default function Assessments() {
                   {assessments.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                        No assessments found. Create one to get started.
+                        {t('workforce.assessments.empty')}
                       </td>
                     </tr>
                   ) : (

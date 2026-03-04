@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Building,
@@ -120,6 +121,7 @@ const RECENT_ACTIVITY = [
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   return (
     <div className="min-h-screen bg-surface">
@@ -128,15 +130,15 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+              <h1 className="text-3xl font-bold text-foreground">{t('admin.dashboard.title')}</h1>
               <p className="text-muted-foreground mt-2">
-                Manage forms, contracts, settings, and system configuration
+                {t('admin.dashboard.subtitle')}
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
                 <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">System Healthy</span>
+                <span className="text-sm font-medium">{t('admin.dashboard.system_healthy')}</span>
               </div>
             </div>
           </div>
@@ -175,7 +177,7 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.quick_actions')}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {QUICK_ACTIONS.map((action) => (
               <Card
@@ -206,7 +208,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Activity */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.recent_activity')}</h2>
             <div className="space-y-4">
               {RECENT_ACTIVITY.map((activity, index) => (
                 <div
@@ -240,7 +242,7 @@ export default function AdminDashboard() {
 
           {/* System Status */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">System Status</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.system_status')}</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-3">

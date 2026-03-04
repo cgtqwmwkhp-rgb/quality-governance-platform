@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
@@ -437,6 +438,7 @@ function CreateInvestigationModal({
 }
 
 export default function Investigations() {
+  const { t } = useTranslation()
   const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -617,22 +619,22 @@ export default function Investigations() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Root Cause Investigations</h1>
-          <p className="text-muted-foreground mt-1">5-Whys analysis, RCA workflows & corrective actions</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('investigations.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('investigations.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          New Investigation
+          {t('investigations.new')}
         </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total', value: stats.total, variant: 'primary' as const },
-          { label: 'In Progress', value: stats.inProgress, variant: 'warning' as const },
-          { label: 'Under Review', value: stats.underReview, variant: 'info' as const },
-          { label: 'Completed', value: stats.completed, variant: 'success' as const },
+          { label: t('investigations.stats.total'), value: stats.total, variant: 'primary' as const },
+          { label: t('status.in_progress'), value: stats.inProgress, variant: 'warning' as const },
+          { label: t('status.under_review'), value: stats.underReview, variant: 'info' as const },
+          { label: t('investigations.stats.completed'), value: stats.completed, variant: 'success' as const },
         ].map((stat) => (
           <Card key={stat.label} className="p-5">
             <div className={cn(
@@ -662,7 +664,7 @@ export default function Investigations() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input
           type="text"
-          placeholder="Search investigations..."
+          placeholder={t('investigations.search_placeholder')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="pl-10"
@@ -674,7 +676,7 @@ export default function Investigations() {
         {filteredInvestigations.length === 0 ? (
           <Card className="p-12 text-center">
             <FlaskConical className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Investigations Found</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t('investigations.empty.title')}</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
               Start a root cause investigation to analyze incidents, RTAs, or complaints.
             </p>
@@ -796,7 +798,7 @@ export default function Investigations() {
                 <div>
                   <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                     <GitBranch className="w-5 h-5 text-primary" />
-                    5 Whys Analysis
+                    {t('investigations.five_whys')}
                   </h3>
                   <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((num) => (
@@ -820,7 +822,7 @@ export default function Investigations() {
 
                 {/* Root Cause */}
                 <Card className="p-6 border-primary/20 bg-primary/5">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">Root Cause Identified</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">{t('investigations.root_cause')}</h3>
                   <Textarea
                     rows={3}
                     placeholder="Document the root cause based on your 5 Whys analysis..."
@@ -829,7 +831,7 @@ export default function Investigations() {
 
                 {/* Corrective Actions */}
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-4">Corrective Actions</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">{t('investigations.corrective_actions')}</h3>
                   
                   {/* Existing Actions */}
                   {loadingActions ? (
@@ -895,7 +897,7 @@ export default function Investigations() {
                   
                   <Button variant="outline" className="w-full" onClick={() => setShowActionModal(true)}>
                     <Plus className="w-5 h-5" />
-                    Add Corrective Action
+                    {t('investigations.add_action')}
                   </Button>
                 </div>
               </div>
@@ -918,9 +920,9 @@ export default function Investigations() {
       <Dialog open={showActionModal} onOpenChange={setShowActionModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Corrective Action</DialogTitle>
+            <DialogTitle>{t('investigations.add_action')}</DialogTitle>
             <DialogDescription>
-              Create a corrective action for this investigation
+              {t('investigations.add_action_desc')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">

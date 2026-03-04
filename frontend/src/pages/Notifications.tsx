@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   BellOff,
@@ -44,6 +45,7 @@ interface NotificationPreference {
 }
 
 export default function Notifications() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications');
   const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all');
   const [notifications, setNotifications] = useState<Notification[]>([
@@ -111,12 +113,12 @@ export default function Notifications() {
   ]);
 
   const [preferences, setPreferences] = useState<NotificationPreference[]>([
-    { id: 'PREF001', label: 'High Priority Alerts', description: 'Critical incidents, severe risks, and urgent actions', email: true, push: true, inApp: true },
-    { id: 'PREF002', label: 'Action Reminders', description: 'Due dates and overdue action items', email: true, push: true, inApp: true },
-    { id: 'PREF003', label: 'Audit Notifications', description: 'Upcoming audits, findings, and results', email: true, push: false, inApp: true },
-    { id: 'PREF004', label: 'Document Updates', description: 'New documents, version changes, and reviews', email: false, push: false, inApp: true },
-    { id: 'PREF005', label: 'Weekly Summaries', description: 'Weekly digest of IMS activities', email: true, push: false, inApp: false },
-    { id: 'PREF006', label: 'Assignment Notifications', description: 'When tasks or items are assigned to you', email: true, push: true, inApp: true },
+    { id: 'PREF001', label: t('notifications.pref.high_priority_alerts'), description: t('notifications.pref.high_priority_alerts_desc'), email: true, push: true, inApp: true },
+    { id: 'PREF002', label: t('notifications.pref.action_reminders'), description: t('notifications.pref.action_reminders_desc'), email: true, push: true, inApp: true },
+    { id: 'PREF003', label: t('notifications.pref.audit_notifications'), description: t('notifications.pref.audit_notifications_desc'), email: true, push: false, inApp: true },
+    { id: 'PREF004', label: t('notifications.pref.document_updates'), description: t('notifications.pref.document_updates_desc'), email: false, push: false, inApp: true },
+    { id: 'PREF005', label: t('notifications.pref.weekly_summaries'), description: t('notifications.pref.weekly_summaries_desc'), email: true, push: false, inApp: false },
+    { id: 'PREF006', label: t('notifications.pref.assignment_notifications'), description: t('notifications.pref.assignment_notifications_desc'), email: true, push: true, inApp: true },
   ]);
 
   const typeStyles: Record<string, { icon: React.ReactNode; variant: string }> = {
@@ -169,9 +171,9 @@ export default function Notifications() {
                 </span>
               )}
             </div>
-            Notifications
+            {t('notifications.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Stay updated with important alerts and reminders</p>
+          <p className="text-muted-foreground mt-1">{t('notifications.subtitle')}</p>
         </div>
       </div>
 
@@ -188,7 +190,7 @@ export default function Notifications() {
         >
           <span className="flex items-center gap-2">
             <Bell className="w-5 h-5" />
-            Notifications
+            {t('notifications.title')}
             {unreadCount > 0 && (
               <Badge variant="destructive">{unreadCount}</Badge>
             )}
@@ -205,7 +207,7 @@ export default function Notifications() {
         >
           <span className="flex items-center gap-2">
             <Settings className="w-5 h-5" />
-            Preferences
+            {t('notifications.preferences')}
           </span>
         </button>
       </div>
@@ -223,7 +225,7 @@ export default function Notifications() {
                   size="sm"
                   onClick={() => setFilter(f as any)}
                 >
-                  {f === 'unread' ? `Unread (${unreadCount})` : f.charAt(0).toUpperCase() + f.slice(1)}
+                  {f === 'all' ? t('common.all') : f === 'unread' ? t('notifications.filter.unread', { count: unreadCount }) : t('notifications.filter.alerts')}
                 </Button>
               ))}
             </div>
@@ -231,11 +233,11 @@ export default function Notifications() {
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
                 <CheckCheck className="w-4 h-4" />
-                Mark All Read
+                {t('notifications.mark_all_read')}
               </Button>
               <Button variant="ghost" size="sm" onClick={clearAll} className="text-destructive hover:text-destructive">
                 <Trash2 className="w-4 h-4" />
-                Clear All
+                {t('notifications.clear_all')}
               </Button>
             </div>
           </div>
@@ -322,9 +324,9 @@ export default function Notifications() {
               <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
                 <BellOff className="w-10 h-10 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">No notifications</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">{t('notifications.empty')}</h3>
               <p className="text-muted-foreground">
-                {filter === 'unread' ? "You're all caught up!" : "Nothing to show here"}
+                {filter === 'unread' ? t('notifications.all_caught_up') : t('notifications.nothing_to_show')}
               </p>
             </div>
           )}
@@ -335,26 +337,26 @@ export default function Notifications() {
       {activeTab === 'settings' && (
         <Card className="overflow-hidden">
           <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold text-foreground">Notification Preferences</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('notifications.preferences_title')}</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Choose how and when you want to be notified
+              {t('notifications.preferences_description')}
             </p>
           </div>
           
           {/* Channel Headers */}
           <div className="grid grid-cols-[1fr,80px,80px,80px] gap-4 px-6 py-3 bg-surface border-b border-border">
-            <div className="text-sm font-medium text-muted-foreground">Notification Type</div>
+            <div className="text-sm font-medium text-muted-foreground">{t('notifications.settings.notification_type')}</div>
             <div className="text-sm font-medium text-muted-foreground text-center flex items-center justify-center gap-1">
               <Mail className="w-4 h-4" />
-              Email
+              {t('notifications.settings.email')}
             </div>
             <div className="text-sm font-medium text-muted-foreground text-center flex items-center justify-center gap-1">
               <Smartphone className="w-4 h-4" />
-              Push
+              {t('notifications.settings.push')}
             </div>
             <div className="text-sm font-medium text-muted-foreground text-center flex items-center justify-center gap-1">
               <MessageSquare className="w-4 h-4" />
-              In-App
+              {t('notifications.settings.in_app')}
             </div>
           </div>
           
@@ -385,14 +387,14 @@ export default function Notifications() {
           
           {/* Sound Settings */}
           <div className="p-6 border-t border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Sound & Alerts</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">{t('notifications.settings.sound_alerts')}</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Volume2 className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">Notification Sounds</p>
-                    <p className="text-sm text-muted-foreground">Play sound for in-app notifications</p>
+                    <p className="font-medium text-foreground">{t('notifications.settings.notification_sounds')}</p>
+                    <p className="text-sm text-muted-foreground">{t('notifications.settings.notification_sounds_description')}</p>
                   </div>
                 </div>
                 <Switch defaultChecked />
@@ -402,8 +404,8 @@ export default function Notifications() {
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">Desktop Notifications</p>
-                    <p className="text-sm text-muted-foreground">Show browser notifications</p>
+                    <p className="font-medium text-foreground">{t('notifications.settings.desktop_notifications')}</p>
+                    <p className="text-sm text-muted-foreground">{t('notifications.settings.desktop_notifications_description')}</p>
                   </div>
                 </div>
                 <Switch />

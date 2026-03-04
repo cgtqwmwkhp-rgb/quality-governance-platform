@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Brain,
   Zap,
@@ -49,6 +50,7 @@ interface Cluster {
 }
 
 export default function AIIntelligence() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'predictions' | 'anomalies' | 'audit' | 'recommendations'>('predictions')
   const [analyzing, setAnalyzing] = useState(false)
 
@@ -128,7 +130,7 @@ export default function AIIntelligence() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
             <Brain className="w-8 h-8 text-primary" />
-            AI Intelligence Hub
+            {t('ai.title')}
           </h1>
           <p className="text-muted-foreground">Predictive Analytics & Smart Recommendations</p>
         </div>
@@ -145,7 +147,7 @@ export default function AIIntelligence() {
             ) : (
               <>
                 <Sparkles className="w-4 h-4 mr-2" />
-                Run Analysis
+                {t('ai.run_analysis')}
               </>
             )}
           </Button>
@@ -161,7 +163,7 @@ export default function AIIntelligence() {
             </div>
             <span className="text-2xl font-bold text-foreground">5</span>
           </div>
-          <p className="text-sm text-muted-foreground">Risk Predictions</p>
+          <p className="text-sm text-muted-foreground">{t('ai.risk_predictions')}</p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
@@ -171,7 +173,7 @@ export default function AIIntelligence() {
             </div>
             <span className="text-2xl font-bold text-foreground">3</span>
           </div>
-          <p className="text-sm text-muted-foreground">Anomalies Detected</p>
+          <p className="text-sm text-muted-foreground">{t('ai.anomalies_detected')}</p>
         </div>
 
         <div className="bg-card border border-border rounded-xl p-4 hover:border-border-strong transition-colors">
@@ -198,10 +200,10 @@ export default function AIIntelligence() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
-          { id: 'predictions', label: 'Risk Predictions', icon: TrendingUp },
-          { id: 'anomalies', label: 'Anomaly Detection', icon: AlertTriangle },
-          { id: 'audit', label: 'AI Audit Assistant', icon: FileText },
-          { id: 'recommendations', label: 'Smart Recommendations', icon: Lightbulb },
+          { id: 'predictions', label: t('ai.tab.risk_predictions'), icon: TrendingUp },
+          { id: 'anomalies', label: t('ai.tab.anomaly_detection'), icon: AlertTriangle },
+          { id: 'audit', label: t('ai.tab.audit_assistant'), icon: FileText },
+          { id: 'recommendations', label: t('ai.tab.smart_recommendations'), icon: Lightbulb },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -230,7 +232,7 @@ export default function AIIntelligence() {
             <div className="p-4 border-b border-border">
               <h3 className="font-bold text-foreground flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-primary" />
-                Predictive Risk Factors
+                {t('ai.predictive_risk_factors')}
               </h3>
               <p className="text-sm text-muted-foreground">Based on 365 days of incident data</p>
             </div>
@@ -280,9 +282,9 @@ export default function AIIntelligence() {
             <div className="p-4 border-b border-slate-700">
               <h3 className="font-bold text-white flex items-center gap-2">
                 <GitBranch className="w-5 h-5 text-blue-400" />
-                Root Cause Clusters
+                {t('ai.root_cause_clusters')}
               </h3>
-              <p className="text-sm text-gray-400">Similar incidents grouped for systemic analysis</p>
+              <p className="text-sm text-gray-400">{t('ai.similar_incidents')}</p>
             </div>
             <div className="p-4 space-y-4">
               {clusters.map((cluster, i) => (
@@ -324,7 +326,7 @@ export default function AIIntelligence() {
           <div className="p-4 border-b border-slate-700">
             <h3 className="font-bold text-white flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-red-400" />
-              Detected Anomalies
+              {t('ai.detected_anomalies')}
             </h3>
             <p className="text-sm text-gray-400">Unusual patterns requiring attention</p>
           </div>
@@ -351,7 +353,7 @@ export default function AIIntelligence() {
                     <div className="flex gap-3">
                       <button className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1">
                         <Eye className="w-4 h-4" />
-                        View Details
+                        {t('ai.view_details')}
                       </button>
                       <button className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
                         <Target className="w-4 h-4" />
@@ -361,7 +363,7 @@ export default function AIIntelligence() {
                   </div>
                   <div className="text-right">
                     <div className="text-3xl font-bold text-red-400">{anomaly.percentage}%</div>
-                    <div className="text-xs text-gray-400">above normal</div>
+                    <div className="text-xs text-gray-400">{t('ai.above_normal')}</div>
                   </div>
                 </div>
               </div>
@@ -380,7 +382,7 @@ export default function AIIntelligence() {
                   <MessageSquare className="w-5 h-5 text-blue-400" />
                   AI-Generated Audit Questions
                 </h3>
-                <p className="text-sm text-gray-400">ISO 45001 Clause Coverage</p>
+                <p className="text-sm text-gray-400">{t('ai.iso_clause_coverage')}</p>
               </div>
               <button className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
                 Generate More
@@ -419,7 +421,7 @@ export default function AIIntelligence() {
               </h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Major NCs (Last 12 months)</span>
+                  <span className="text-gray-400">{t('ai.major_ncs')}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold text-white">0</span>
                     <span className="text-emerald-400 text-sm">↓ -2</span>
@@ -433,14 +435,14 @@ export default function AIIntelligence() {
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Recurring Findings</span>
+                  <span className="text-gray-400">{t('ai.recurring_findings')}</span>
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold text-yellow-400">2</span>
                     <span className="text-gray-400 text-sm">—</span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400">Trend Direction</span>
+                  <span className="text-gray-400">{t('ai.trend_direction')}</span>
                   <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm font-medium">
                     Improving
                   </span>
@@ -451,7 +453,7 @@ export default function AIIntelligence() {
             <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
               <h3 className="font-bold text-white mb-4 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-purple-400" />
-                Evidence Gap Analysis
+                {t('ai.evidence_gap_analysis')}
               </h3>
               <div className="space-y-3">
                 {[
@@ -503,7 +505,7 @@ export default function AIIntelligence() {
                           : 'bg-yellow-500/20 text-yellow-400'
                       }`}
                     >
-                      {rec.priority} priority
+                      {t('ai.priority', { level: rec.priority })}
                     </span>
                     <span className="text-xs text-gray-400">
                       <Clock className="w-3 h-3 inline-block mr-1" />
@@ -514,10 +516,10 @@ export default function AIIntelligence() {
                   <p className="text-gray-400 text-sm mb-3">{rec.description}</p>
                   <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-400">
-                      Assigned to: <span className="text-white">{rec.responsible}</span>
+                      {t('ai.assigned_to')}: <span className="text-white">{rec.responsible}</span>
                     </span>
                     <span className="text-sm text-gray-400">
-                      AI Confidence:{' '}
+                      {t('ai.ai_confidence')}:{' '}
                       <span className="text-purple-400 font-medium">{rec.confidence}%</span>
                     </span>
                   </div>
@@ -525,11 +527,11 @@ export default function AIIntelligence() {
                 <div className="flex flex-col gap-2">
                   <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" />
-                    Accept
+                    {t('ai.accept')}
                   </button>
                   <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <XCircle className="w-4 h-4" />
-                    Dismiss
+                    {t('ai.dismiss')}
                   </button>
                 </div>
               </div>
@@ -538,5 +540,14 @@ export default function AIIntelligence() {
         </div>
       )}
     </div>
+  )
+}
+div>
+  )
+}
+  )
+}
+)
+}
   )
 }

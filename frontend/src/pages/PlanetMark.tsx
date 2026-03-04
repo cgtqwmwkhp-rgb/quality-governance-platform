@@ -26,6 +26,7 @@ import {
   Globe,
   XCircle,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse } from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
@@ -68,6 +69,7 @@ interface Scope3Category {
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function PlanetMark() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'>('dashboard')
   const [years, setYears] = useState<ReportingYear[]>([])
   const [currentYear, setCurrentYear] = useState<ReportingYear | null>(null)
@@ -242,8 +244,8 @@ export default function PlanetMark() {
               <Leaf className="w-8 h-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Planet Mark Carbon</h1>
-              <p className="text-muted-foreground">Net-Zero Journey • GHG Protocol Aligned</p>
+              <h1 className="text-3xl font-bold text-foreground">{t('planet_mark.title')}</h1>
+              <p className="text-muted-foreground">{t('planet_mark.subtitle')}</p>
             </div>
           </div>
         </div>
@@ -276,11 +278,11 @@ export default function PlanetMark() {
         <div className="flex gap-3 mt-4 md:mt-0">
           <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
             <Download className="w-4 h-4" />
-            Export Report
+            {t('planet_mark.export_report')}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
-            Add Emission
+            {t('planet_mark.add_emission')}
           </button>
         </div>
       </div>
@@ -298,13 +300,13 @@ export default function PlanetMark() {
                 >
                   {years.map(y => (
                     <option key={y.id} value={y.id} className="bg-card text-foreground">
-                      {y.year_label} {y.is_baseline ? '(Baseline)' : ''}
+                      {y.year_label} {y.is_baseline ? `(${t('planet_mark.baseline')})` : ''}
                     </option>
                   ))}
                 </select>
                 {currentYear.certification_status === 'certified' && (
                   <span className="px-3 py-1 bg-primary-foreground/20 rounded-full text-sm font-medium flex items-center gap-1 text-primary-foreground">
-                    <Award className="w-4 h-4" /> Certified
+                    <Award className="w-4 h-4" /> {t('planet_mark.certified')}
                   </span>
                 )}
               </div>
@@ -316,21 +318,21 @@ export default function PlanetMark() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-primary-foreground">{(currentYear.total_emissions ?? 0).toFixed(1)}</div>
-                <div className="text-primary-foreground/80 text-sm">tCO₂e Total</div>
+                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.tco2e_total')}</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-primary-foreground">{(currentYear.emissions_per_fte ?? 0).toFixed(2)}</div>
-                <div className="text-primary-foreground/80 text-sm">tCO₂e/FTE</div>
+                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.tco2e_fte')}</div>
               </div>
               <div className="text-center">
                 <div className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-primary-foreground' : 'text-warning'}`}>
                   {yoyChange ? `${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%` : '—'}
                 </div>
-                <div className="text-primary-foreground/80 text-sm">vs Baseline</div>
+                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.vs_baseline')}</div>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-primary-foreground">{currentYear.data_quality}/16</div>
-                <div className="text-primary-foreground/80 text-sm">Data Quality</div>
+                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.data_quality')}</div>
               </div>
             </div>
           </div>
@@ -340,12 +342,12 @@ export default function PlanetMark() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
-          { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-          { id: 'emissions', label: 'Emissions', icon: Factory },
-          { id: 'scope3', label: 'Scope 3 Categories', icon: Globe },
-          { id: 'actions', label: 'Improvement Plan', icon: Target },
-          { id: 'quality', label: 'Data Quality', icon: Gauge },
-          { id: 'certification', label: 'Certification', icon: Award },
+          { id: 'dashboard', label: t('planet_mark.dashboard'), icon: BarChart3 },
+          { id: 'emissions', label: t('planet_mark.emissions'), icon: Factory },
+          { id: 'scope3', label: t('planet_mark.scope3_categories'), icon: Globe },
+          { id: 'actions', label: t('planet_mark.improvement_plan'), icon: Target },
+          { id: 'quality', label: t('planet_mark.data_quality'), icon: Gauge },
+          { id: 'certification', label: t('planet_mark.certification'), icon: Award },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -369,7 +371,7 @@ export default function PlanetMark() {
       {loadState === 'loading' && (
         <div className="flex flex-col items-center justify-center py-12">
           <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
-          <p className="text-muted-foreground">Loading carbon data...</p>
+          <p className="text-muted-foreground">{t('planet_mark.loading')}</p>
         </div>
       )}
 
@@ -377,20 +379,20 @@ export default function PlanetMark() {
       {loadState === 'error' && (
         <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
           <XCircle className="w-12 h-12 text-destructive mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Failed to Load Data</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">{t('planet_mark.failed_to_load')}</h3>
           <p className="text-muted-foreground mb-4">
-            {errorClass === ErrorClass.NETWORK_ERROR && 'Network connection failed. Please check your connection.'}
-            {errorClass === ErrorClass.SERVER_ERROR && 'Server error occurred. Please try again later.'}
-            {errorClass === ErrorClass.AUTH_ERROR && 'Authentication required. Please log in.'}
-            {errorClass === ErrorClass.NOT_FOUND && 'Carbon data not found.'}
-            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && 'An unexpected error occurred.'}
+            {errorClass === ErrorClass.NETWORK_ERROR && t('planet_mark.error_network')}
+            {errorClass === ErrorClass.SERVER_ERROR && t('planet_mark.error_server')}
+            {errorClass === ErrorClass.AUTH_ERROR && t('planet_mark.error_auth')}
+            {errorClass === ErrorClass.NOT_FOUND && t('planet_mark.error_not_found')}
+            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && t('planet_mark.error_unknown')}
           </p>
           <button
             onClick={() => { setRetryCount(0); loadData(); }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-            Try Again
+            {t('planet_mark.try_again')}
           </button>
         </div>
       )}
@@ -399,11 +401,11 @@ export default function PlanetMark() {
       {loadState === 'success' && years.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
           <Leaf className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">No Carbon Data Yet</h3>
-          <p className="text-muted-foreground mb-4">Start tracking your carbon emissions by adding your first reporting year.</p>
+          <h3 className="text-lg font-semibold text-foreground mb-2">{t('planet_mark.no_data')}</h3>
+          <p className="text-muted-foreground mb-4">{t('planet_mark.no_data_description')}</p>
           <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
-            Add Reporting Year
+            {t('planet_mark.add_reporting_year')}
           </button>
         </div>
       )}
@@ -416,22 +418,22 @@ export default function PlanetMark() {
               {/* Scope Breakdown */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                  { scope: 'Scope 1', value: currentYear.scope_1, color: 'bg-orange-500', icon: Fuel, label: 'Direct Emissions', detail: 'Fleet diesel, Natural gas' },
-                  { scope: 'Scope 2', value: currentYear.scope_2, color: 'bg-blue-500', icon: Zap, label: 'Indirect (Energy)', detail: 'Purchased electricity' },
-                  { scope: 'Scope 3', value: currentYear.scope_3, color: 'bg-purple-500', icon: Globe, label: 'Value Chain', detail: 'Travel, Waste, Suppliers' },
+                  { scopeKey: 'planet_mark.scope1', value: currentYear.scope_1, color: 'bg-orange-500', icon: Fuel, labelKey: 'planet_mark.scope1_label', detailKey: 'planet_mark.scope1_sources' },
+                  { scopeKey: 'planet_mark.scope2', value: currentYear.scope_2, color: 'bg-blue-500', icon: Zap, labelKey: 'planet_mark.scope2_label', detailKey: 'planet_mark.scope2_sources' },
+                  { scopeKey: 'planet_mark.scope3', value: currentYear.scope_3, color: 'bg-purple-500', icon: Globe, labelKey: 'planet_mark.scope3_label', detailKey: 'planet_mark.scope3_sources' },
                 ].map((scope) => {
                   const Icon = scope.icon
                   const pct = (currentYear.total_emissions ? (scope.value / currentYear.total_emissions) * 100 : 0).toFixed(1)
                   return (
-                    <div key={scope.scope} className="bg-card rounded-xl p-6 border border-border">
+                    <div key={scope.scopeKey} className="bg-card rounded-xl p-6 border border-border">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className={`p-3 ${scope.color} rounded-xl`}>
                             <Icon className="w-6 h-6 text-white" />
                           </div>
                           <div>
-                            <div className="font-bold text-foreground">{scope.scope}</div>
-                            <div className="text-xs text-muted-foreground">{scope.label}</div>
+                            <div className="font-bold text-foreground">{t(scope.scopeKey)}</div>
+                            <div className="text-xs text-muted-foreground">{t(scope.labelKey)}</div>
                           </div>
                         </div>
                         <div className="text-right">
@@ -446,7 +448,7 @@ export default function PlanetMark() {
                         ></div>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{scope.detail}</span>
+                        <span className="text-muted-foreground">{t(scope.detailKey)}</span>
                         <span className="text-foreground font-medium">{pct}%</span>
                       </div>
                     </div>
@@ -459,8 +461,8 @@ export default function PlanetMark() {
                 {/* Key Emission Sources */}
                 <div className="bg-card rounded-xl border border-border">
                   <div className="p-4 bg-surface border-b border-border">
-                    <h3 className="font-bold text-foreground">Key Emission Sources</h3>
-                    <p className="text-sm text-muted-foreground">Top contributors to carbon footprint</p>
+                    <h3 className="font-bold text-foreground">{t('planet_mark.key_emission_sources')}</h3>
+                    <p className="text-sm text-muted-foreground">{t('planet_mark.key_emission_sources_desc')}</p>
                   </div>
                   <div className="p-4 space-y-4">
                     {[
@@ -496,12 +498,12 @@ export default function PlanetMark() {
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
                     <div>
-                      <h3 className="font-bold text-white">Year 2 Improvement Plan</h3>
-                      <p className="text-sm text-gray-400">{completedActions}/{actions.length} actions completed</p>
+                      <h3 className="font-bold text-white">{t('planet_mark.improvement_plan')}</h3>
+                      <p className="text-sm text-gray-400">{t('planet_mark.actions_completed', { completed: completedActions, total: actions.length })}</p>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-green-400">{actions.length > 0 ? Math.round((completedActions / actions.length) * 100) : 0}%</div>
-                      <div className="text-xs text-gray-400">Complete</div>
+                      <div className="text-xs text-gray-400">{t('planet_mark.complete')}</div>
                     </div>
                   </div>
                   <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
@@ -530,7 +532,7 @@ export default function PlanetMark() {
               {/* Quarterly Milestones */}
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">Quarterly Milestones (FY 2025-26)</h3>
+                  <h3 className="font-bold text-white">{t('planet_mark.quarterly_milestones')}</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">
                   {[
@@ -547,7 +549,7 @@ export default function PlanetMark() {
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-bold text-white">{quarter.q}</span>
                         <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(quarter.status)}`}>
-                          {quarter.status === 'completed' ? '✓ Done' : quarter.status === 'in_progress' ? 'In Progress' : 'Upcoming'}
+                          {quarter.status === 'completed' ? t('planet_mark.done') : quarter.status === 'in_progress' ? t('planet_mark.in_progress') : t('planet_mark.upcoming')}
                         </span>
                       </div>
                       <div className="text-xs text-gray-400 mb-2">{quarter.period}</div>
@@ -574,21 +576,21 @@ export default function PlanetMark() {
             <div className="space-y-6">
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
-                  <h3 className="font-bold text-white">Emission Sources by Scope</h3>
+                  <h3 className="font-bold text-white">{t('planet_mark.emission_sources_by_scope')}</h3>
                   <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Source
+                    <Plus className="w-4 h-4" /> {t('planet_mark.add_source')}
                   </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-slate-700/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Source</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Scope</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">Activity</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.source')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.scope')}</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.activity')}</th>
                         <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">tCO₂e</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">% of Total</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Data Quality</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.pct_of_total')}</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.data_quality')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
@@ -623,7 +625,7 @@ export default function PlanetMark() {
                     </tbody>
                     <tfoot className="bg-slate-700/30">
                       <tr>
-                        <td colSpan={3} className="px-4 py-3 font-bold text-white">Total</td>
+                        <td colSpan={3} className="px-4 py-3 font-bold text-white">{t('planet_mark.total')}</td>
                         <td className="px-4 py-3 text-right font-bold text-green-400">{(currentYear.total_emissions ?? 0).toFixed(1)}</td>
                         <td className="px-4 py-3 text-center font-bold text-white">100%</td>
                         <td></td>
@@ -640,8 +642,8 @@ export default function PlanetMark() {
             <div className="space-y-6">
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">GHG Protocol Scope 3 Categories</h3>
-                  <p className="text-sm text-gray-400">All 15 categories - {scope3Categories.filter(c => c.is_measured).length} currently measured</p>
+                  <h3 className="font-bold text-white">{t('planet_mark.scope3_categories')}</h3>
+                  <p className="text-sm text-gray-400">{t('planet_mark.scope3_measured', { count: scope3Categories.filter(c => c.is_measured).length })}</p>
                 </div>
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {scope3Categories.map((cat) => {
@@ -678,7 +680,7 @@ export default function PlanetMark() {
                           <div className="text-lg font-bold text-green-400">{cat.total_co2e.toFixed(1)} tCO₂e</div>
                         )}
                         {!cat.is_measured && (
-                          <div className="text-sm text-gray-400">Not yet measured</div>
+                          <div className="text-sm text-gray-400">{t('planet_mark.not_measured')}</div>
                         )}
                       </div>
                     )
@@ -694,22 +696,22 @@ export default function PlanetMark() {
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
                   <div>
-                    <h3 className="font-bold text-white">SMART Improvement Actions</h3>
-                    <p className="text-sm text-gray-400">Monthly action schedule for Year 2</p>
+                    <h3 className="font-bold text-white">{t('planet_mark.improvement_actions')}</h3>
+                    <p className="text-sm text-gray-400">{t('planet_mark.improvement_plan_desc')}</p>
                   </div>
                   <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Action
+                    <Plus className="w-4 h-4" /> {t('planet_mark.add_action')}
                   </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-slate-700/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Month</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Action</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Owner</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Progress</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.month')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.action')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.owner')}</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.progress')}</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.status')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
@@ -751,12 +753,12 @@ export default function PlanetMark() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                  { scope: 'Scope 1 & 2', score: 9, target: 12, status: 'needs_improvement' },
-                  { scope: 'Scope 3', score: 8, target: 11, status: 'needs_improvement' },
-                  { scope: 'Overall', score: 11, target: 12, status: 'close' },
+                  { scopeKey: 'planet_mark.dq_scope_1_2', score: 9, target: 12, status: 'needs_improvement' },
+                  { scopeKey: 'planet_mark.dq_scope_3', score: 8, target: 11, status: 'needs_improvement' },
+                  { scopeKey: 'planet_mark.dq_scope_overall', score: 11, target: 12, status: 'close' },
                 ].map((dq) => (
-                  <div key={dq.scope} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                    <h3 className="font-bold text-white mb-4">{dq.scope}</h3>
+                  <div key={dq.scopeKey} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h3 className="font-bold text-white mb-4">{t(dq.scopeKey)}</h3>
                     <div className="relative w-32 h-32 mx-auto mb-4">
                       <svg className="w-full h-full transform -rotate-90">
                         <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700" />
@@ -777,11 +779,11 @@ export default function PlanetMark() {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-sm text-gray-400">Target: ≥{dq.target}/16</div>
+                      <div className="text-sm text-gray-400">{t('planet_mark.target_label', { target: dq.target })}</div>
                       <div className={`text-sm font-medium mt-1 ${
                         dq.score >= dq.target ? 'text-green-400' : 'text-yellow-400'
                       }`}>
-                        {dq.score >= dq.target ? '✓ Met' : `${dq.target - dq.score} points needed`}
+                        {dq.score >= dq.target ? t('planet_mark.met') : t('planet_mark.points_needed', { count: dq.target - dq.score })}
                       </div>
                     </div>
                   </div>
@@ -790,7 +792,7 @@ export default function PlanetMark() {
 
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">Data Quality Improvement Recommendations</h3>
+                  <h3 className="font-bold text-white">{t('planet_mark.data_quality_recommendations')}</h3>
                 </div>
                 <div className="p-4 space-y-4">
                   {[
@@ -829,28 +831,28 @@ export default function PlanetMark() {
                       <Award className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white">Planet Mark Business Certification</h3>
-                      <p className="text-gray-400">Year 2 Progress</p>
+                      <h3 className="text-xl font-bold text-white">{t('planet_mark.certification_title')}</h3>
+                      <p className="text-gray-400">{t('planet_mark.year_progress')}</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">Certification Status</span>
+                      <span className="text-gray-300">{t('planet_mark.certification_status')}</span>
                       <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor('in_progress')}`}>
-                        In Progress
+                        {t('planet_mark.in_progress')}
                       </span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">Reporting Period</span>
+                      <span className="text-gray-300">{t('planet_mark.reporting_period')}</span>
                       <span className="text-white font-medium">1 Jul 2025 - 30 Jun 2026</span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">Submission Deadline</span>
+                      <span className="text-gray-300">{t('planet_mark.submission_deadline')}</span>
                       <span className="text-white font-medium">30 Jun 2026</span>
                     </div>
                     <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">Reduction Target</span>
+                      <span className="text-gray-300">{t('planet_mark.reduction_target')}</span>
                       <span className="text-green-400 font-medium">≥5% per FTE</span>
                     </div>
                   </div>
@@ -858,8 +860,8 @@ export default function PlanetMark() {
 
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600">
-                    <h3 className="font-bold text-white">Evidence Checklist</h3>
-                    <p className="text-sm text-gray-400">Required documentation for certification</p>
+                    <h3 className="font-bold text-white">{t('planet_mark.evidence_checklist')}</h3>
+                    <p className="text-sm text-gray-400">{t('planet_mark.evidence_checklist_desc')}</p>
                   </div>
                   <div className="p-4 space-y-3">
                     {[
@@ -883,7 +885,7 @@ export default function PlanetMark() {
                           doc.verified ? 'text-green-400' :
                           doc.uploaded ? 'text-yellow-400' : 'text-red-400'
                         }`}>
-                          {doc.verified ? 'Verified' : doc.uploaded ? 'Pending Review' : 'Missing'}
+                          {doc.verified ? t('planet_mark.verified') : doc.uploaded ? t('planet_mark.pending_review') : t('planet_mark.missing')}
                         </span>
                       </div>
                     ))}

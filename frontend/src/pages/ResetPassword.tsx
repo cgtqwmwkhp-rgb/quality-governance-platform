@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Shield, Lock, ArrowLeft, AlertCircle, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -22,12 +23,13 @@ const calculatePasswordStrength = (password: string): { score: number; label: st
   if (/[0-9]/.test(password)) score += 1;
   if (/[^a-zA-Z0-9]/.test(password)) score += 1;
   
-  if (score <= 2) return { score, label: 'Weak', color: 'bg-destructive' };
-  if (score <= 4) return { score, label: 'Medium', color: 'bg-warning' };
-  return { score, label: 'Strong', color: 'bg-success' };
+  if (score <= 2) return { score, label: 'weak', color: 'bg-destructive' };
+  if (score <= 4) return { score, label: 'medium', color: 'bg-warning' };
+  return { score, label: 'strong', color: 'bg-success' };
 };
 
 export default function ResetPassword() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token')
@@ -43,7 +45,7 @@ export default function ResetPassword() {
   useEffect(() => {
     if (!token) {
       setFormState('invalid_token')
-      setErrorMessage('Invalid or missing reset token. Please request a new password reset.')
+      setErrorMessage(t('reset_password.invalid_token_message'))
     }
   }, [token])
 
@@ -86,7 +88,7 @@ export default function ResetPassword() {
       setErrorMessage(
         err instanceof Error 
           ? err.message 
-          : 'Failed to reset password. The link may have expired.'
+          : t('reset_password.error_fallback')
       )
     }
   }
@@ -110,9 +112,9 @@ export default function ResetPassword() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand mb-4 shadow-glow">
             <Shield className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Create New Password</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('reset_password.create_title')}</h1>
           <p className="text-muted-foreground">
-            Enter your new password below
+            {t('reset_password.create_subtitle')}
           </p>
         </div>
 
@@ -122,14 +124,14 @@ export default function ResetPassword() {
               <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-success" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">Password Reset Complete</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{t('reset_password.success_title')}</h2>
               <p className="text-muted-foreground mb-6">
-                Your password has been successfully reset. You'll be redirected to the login page shortly.
+                {t('reset_password.success_message')}
               </p>
               <Link to="/login">
                 <Button variant="outline" className="w-full">
                   <ArrowLeft size={18} />
-                  Go to Login
+                  {t('reset_password.go_to_login')}
                 </Button>
               </Link>
             </div>
@@ -138,19 +140,19 @@ export default function ResetPassword() {
               <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-8 h-8 text-destructive" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">Invalid Reset Link</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{t('reset_password.invalid_title')}</h2>
               <p className="text-muted-foreground mb-6">
                 {errorMessage}
               </p>
               <Link to="/forgot-password">
                 <Button className="w-full mb-3">
-                  Request New Reset Link
+                  {t('reset_password.request_new')}
                 </Button>
               </Link>
               <Link to="/login">
                 <Button variant="outline" className="w-full">
                   <ArrowLeft size={18} />
-                  Back to Login
+                  {t('reset_password.back_to_login')}
                 </Button>
               </Link>
             </div>
@@ -173,7 +175,7 @@ export default function ResetPassword() {
                 {/* New Password */}
                 <div>
                   <label htmlFor="resetpassword-field-0" className="block text-sm font-medium text-foreground mb-2">
-                    New Password
+                    {t('reset_password.new_password')}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -207,10 +209,10 @@ export default function ResetPassword() {
                             style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs text-muted-foreground">{passwordStrength.label}</span>
+                        <span className="text-xs text-muted-foreground">{t(`reset_password.strength_${passwordStrength.label}`)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Use at least 8 characters with uppercase, lowercase, numbers, and symbols
+                        {t('reset_password.strength_hint')}
                       </p>
                     </div>
                   )}
@@ -219,7 +221,7 @@ export default function ResetPassword() {
                 {/* Confirm Password */}
                 <div>
                   <label htmlFor="resetpassword-field-1" className="block text-sm font-medium text-foreground mb-2">
-                    Confirm Password
+                    {t('reset_password.confirm_password')}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -248,12 +250,12 @@ export default function ResetPassword() {
                       {passwordsMatch ? (
                         <>
                           <CheckCircle size={14} className="text-success" />
-                          <span className="text-xs text-success">Passwords match</span>
+                          <span className="text-xs text-success">{t('reset_password.passwords_match')}</span>
                         </>
                       ) : (
                         <>
                           <AlertCircle size={14} className="text-destructive" />
-                          <span className="text-xs text-destructive">Passwords do not match</span>
+                          <span className="text-xs text-destructive">{t('reset_password.passwords_no_match')}</span>
                         </>
                       )}
                     </div>
@@ -271,7 +273,7 @@ export default function ResetPassword() {
                 {formState === 'submitting' ? (
                   <Loader2 className="w-5 h-5 animate-spin" data-testid="spinner" />
                 ) : (
-                  'Reset Password'
+                  t('reset_password.submit')
                 )}
               </Button>
 
@@ -282,7 +284,7 @@ export default function ResetPassword() {
                   data-testid="back-to-login"
                 >
                   <ArrowLeft size={14} />
-                  Back to Login
+                  {t('reset_password.back_to_login')}
                 </Link>
               </div>
             </form>

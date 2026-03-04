@@ -54,6 +54,10 @@ Dockerfile
 # CI/CD
 .github/
 
+# Directories not needed in backend image
+frontend/
+tests/
+
 # Temporary files
 *.log
 *.tmp

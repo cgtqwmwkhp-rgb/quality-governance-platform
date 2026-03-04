@@ -5,6 +5,7 @@ import App from './App'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { LiveAnnouncerProvider } from './components/ui/LiveAnnouncer'
 import { TooltipProvider } from './components/ui/Tooltip'
+import { initErrorTracking } from './services/errorTracker'
 import './index.css'
 
 // Build version stamp for deployment verification
@@ -17,6 +18,8 @@ const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || new Date().toISOString()
 
 // Log once on startup for deployment verification
 console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`)
+
+initErrorTracking()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

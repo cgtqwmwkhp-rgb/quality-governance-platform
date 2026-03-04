@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { 
   AlertTriangle, 
@@ -257,6 +258,7 @@ function UpcomingEvents() {
 // ============================================================================
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<ModuleStats>({
@@ -329,7 +331,7 @@ export default function Dashboard() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadData(); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('retry')}
           </button>
         </div>
       )}
@@ -337,20 +339,20 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground">Quality Governance Platform Overview</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h1>
+          <p className="text-muted-foreground">{t('dashboard.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" asChild>
             <Link to="/notifications">
               <Bell className="w-4 h-4" />
-              <span className="hidden sm:inline">Notifications</span>
+              <span className="hidden sm:inline">{t('notifications')}</span>
               <Badge variant="destructive" className="ml-2">5</Badge>
             </Link>
           </Button>
           <Button onClick={loadData}>
             <RefreshCw className="w-4 h-4" />
-            Refresh
+            {t('refresh')}
           </Button>
         </div>
       </div>
@@ -358,7 +360,7 @@ export default function Dashboard() {
       {/* Primary Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard 
-          title="Open Incidents" 
+          title={t('dashboard.open_incidents')} 
           value={stats.incidents.open}
           icon={AlertTriangle} 
           variant="destructive"
@@ -367,7 +369,7 @@ export default function Dashboard() {
           subtitle={`${stats.incidents.critical} critical`}
         />
         <StatCard 
-          title="Open RTAs" 
+          title={t('dashboard.open_rtas')} 
           value={stats.rtas.open}
           icon={Car} 
           variant="warning"
@@ -375,7 +377,7 @@ export default function Dashboard() {
           link="/rtas"
         />
         <StatCard 
-          title="Open Complaints" 
+          title={t('dashboard.open_complaints')} 
           value={stats.complaints.open}
           icon={MessageSquare} 
           variant="primary"
@@ -384,7 +386,7 @@ export default function Dashboard() {
           subtitle={`${stats.complaints.overdue} overdue`}
         />
         <StatCard 
-          title="Overdue Actions" 
+          title={t('dashboard.overdue_actions')} 
           value={stats.actions.overdue}
           icon={Zap} 
           variant="warning"
@@ -397,7 +399,7 @@ export default function Dashboard() {
       {/* Secondary Row: Audits, Risks, Carbon */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard 
-          title="Audit Score (Avg)" 
+          title={t('dashboard.audit_score_avg')} 
           value={`${stats.audits.avgScore}%`}
           icon={ClipboardCheck} 
           variant="info"
@@ -406,7 +408,7 @@ export default function Dashboard() {
           subtitle={`${stats.audits.completed} completed this year`}
         />
         <StatCard 
-          title="High Risks" 
+          title={t('dashboard.high_risks')} 
           value={stats.risks.high}
           icon={Target} 
           variant="destructive"
@@ -414,7 +416,7 @@ export default function Dashboard() {
           subtitle={`${stats.risks.outsideAppetite} outside appetite`}
         />
         <StatCard 
-          title="Carbon (tCO₂e/FTE)" 
+          title={t('dashboard.carbon_per_fte')} 
           value={stats.carbon.perFTE.toFixed(2)}
           icon={Leaf} 
           variant="success"
@@ -429,10 +431,10 @@ export default function Dashboard() {
         {/* Compliance Overview */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>IMS Compliance</CardTitle>
+            <CardTitle>{t('dashboard.ims_compliance')}</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/ims">
-                View All <ArrowRight className="w-4 h-4 ml-1" />
+                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
@@ -447,10 +449,10 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent Activity</CardTitle>
+            <CardTitle>{t('dashboard.recent_activity')}</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/audit-trail">
-                View All <ArrowRight className="w-4 h-4 ml-1" />
+                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
@@ -462,10 +464,10 @@ export default function Dashboard() {
         {/* Upcoming Events */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Upcoming Events</CardTitle>
+            <CardTitle>{t('dashboard.upcoming_events')}</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/calendar">
-                View All <ArrowRight className="w-4 h-4 ml-1" />
+                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
@@ -478,30 +480,30 @@ export default function Dashboard() {
       {/* Recent Incidents Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent Incidents</CardTitle>
+            <CardTitle>{t('dashboard.recent_incidents')}</CardTitle>
           <Button variant="link" size="sm" asChild>
             <Link to="/incidents">
-              View All <ArrowRight className="w-4 h-4 ml-1" />
-            </Link>
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
+                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Reference</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Title</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Severity</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.reference')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.title')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.severity')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.status')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.date')}</th>
                 </tr>
               </thead>
               <tbody>
                 {incidents.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                      No incidents found
+                      {t('incidents.empty.title')}
                     </td>
                   </tr>
                 ) : (
@@ -546,7 +548,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-destructive/5 border-destructive/20">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-destructive" />
-              <span className="text-foreground font-medium">New Incident</span>
+              <span className="text-foreground font-medium">{t('incidents.new')}</span>
             </div>
           </Card>
         </Link>
@@ -554,7 +556,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-info/5 border-info/20">
             <div className="flex items-center gap-3">
               <ClipboardCheck className="w-5 h-5 text-info" />
-              <span className="text-foreground font-medium">Start Audit</span>
+              <span className="text-foreground font-medium">{t('dashboard.start_audit')}</span>
             </div>
           </Card>
         </Link>
@@ -570,7 +572,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-success/5 border-success/20">
             <div className="flex items-center gap-3">
               <Shield className="w-5 h-5 text-success" />
-              <span className="text-foreground font-medium">Compliance</span>
+              <span className="text-foreground font-medium">{t('dashboard.compliance')}</span>
             </div>
           </Card>
         </Link>

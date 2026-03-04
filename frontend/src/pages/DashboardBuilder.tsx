@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Save,
@@ -81,6 +82,7 @@ const metrics = {
 };
 
 export default function DashboardBuilder() {
+  const { t } = useTranslation();
   const [dashboard, setDashboard] = useState<Dashboard>({
     id: 1,
     name: 'My Custom Dashboard',
@@ -303,7 +305,7 @@ export default function DashboardBuilder() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Add Widget
+              {t('dashboard_builder.add_widget')}
             </button>
             <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
               <Save className="w-4 h-4" />
@@ -339,7 +341,7 @@ export default function DashboardBuilder() {
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowWidgetPicker(true); } }}
               >
                 <Plus className="w-12 h-12 text-gray-600 mb-3" />
-                <span className="text-gray-400">Click to add your first widget</span>
+                <span className="text-gray-400">{t('dashboard_builder.empty_hint')}</span>
               </div>
             )}
           </div>
@@ -350,7 +352,7 @@ export default function DashboardBuilder() {
       {showConfigPanel && selectedWidgetData && (
         <div className="w-80 bg-slate-800 border-l border-slate-700 overflow-y-auto">
           <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-            <h3 className="font-semibold text-white">Widget Configuration</h3>
+            <h3 className="font-semibold text-white">{t('dashboard_builder.widget_config')}</h3>
             <button 
               onClick={() => setShowConfigPanel(false)}
               className="text-gray-400 hover:text-white"
@@ -451,7 +453,7 @@ export default function DashboardBuilder() {
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete Widget
+                {t('dashboard_builder.delete_widget')}
               </button>
             </div>
           </div>
@@ -463,7 +465,7 @@ export default function DashboardBuilder() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl">
             <div className="flex items-center justify-between p-5 border-b border-slate-700">
-              <h3 className="text-lg font-semibold text-white">Add Widget</h3>
+              <h3 className="text-lg font-semibold text-white">{t('dashboard_builder.add_widget')}</h3>
               <button onClick={() => setShowWidgetPicker(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>

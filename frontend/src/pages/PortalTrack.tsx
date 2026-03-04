@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   ArrowLeft,
@@ -224,6 +225,7 @@ const ReportListItem = ({
 };
 
 export default function PortalTrack() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { referenceNumber: urlRef } = useParams();
   const { user, isAuthenticated, platformToken } = usePortalAuth();
@@ -447,22 +449,22 @@ export default function PortalTrack() {
             <div className="grid grid-cols-3 gap-3">
               <div className="text-center p-3 bg-surface rounded-xl">
                 <Calendar className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Submitted</p>
+                <p className="text-xs text-muted-foreground">{t('portal.submitted_label')}</p>
                 <p className="text-sm text-foreground font-medium">
                   {new Date(selectedReport.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <Clock className="w-5 h-5 text-info mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Last Update</p>
+                <p className="text-xs text-muted-foreground">{t('portal.last_update')}</p>
                 <p className="text-sm text-foreground font-medium">
                   {new Date(selectedReport.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <User className="w-5 h-5 text-success mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Assigned To</p>
-                <p className="text-sm text-foreground font-medium">{selectedReport.assigned_to || 'Pending'}</p>
+                <p className="text-xs text-muted-foreground">{t('portal.assigned_to_label')}</p>
+                <p className="text-sm text-foreground font-medium">{selectedReport.assigned_to || t('portal.pending_label')}</p>
               </div>
             </div>
           </Card>
@@ -475,7 +477,7 @@ export default function PortalTrack() {
                   <Sparkles className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-foreground mb-1">What's Next?</h3>
+                  <h3 className="font-semibold text-foreground mb-1">{t('portal.whats_next')}</h3>
                   <p className="text-muted-foreground text-sm">{selectedReport.next_steps}</p>
                 </div>
               </div>
@@ -486,7 +488,7 @@ export default function PortalTrack() {
           <Card className="p-6">
             <h3 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
               <Clock className="w-5 h-5 text-info" />
-              Activity Timeline
+              {t('portal.activity_timeline')}
             </h3>
             <div className="pl-2">
               {selectedReport.timeline.map((event, index) => (
@@ -516,7 +518,7 @@ export default function PortalTrack() {
               className="flex-1"
             >
               <RefreshCw className="w-4 h-4" />
-              Refresh Status
+              {t('portal.refresh_status')}
             </Button>
             <Button
               variant="outline"
@@ -524,7 +526,7 @@ export default function PortalTrack() {
               className="flex-1"
             >
               <Share2 className="w-4 h-4" />
-              Share Link
+              {t('portal.share_link')}
             </Button>
           </div>
         </main>
@@ -546,7 +548,7 @@ export default function PortalTrack() {
           </button>
           <div className="flex items-center gap-2">
             <Search className="w-5 h-5 text-info" />
-            <span className="font-semibold text-foreground">Track Reports</span>
+            <span className="font-semibold text-foreground">{t('portal.track_reports')}</span>
           </div>
         </div>
       </header>
@@ -558,11 +560,11 @@ export default function PortalTrack() {
           <div className="inline-flex w-16 h-16 rounded-2xl gradient-brand items-center justify-center mb-4 shadow-glow">
             <FileText className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Your Reports</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.your_reports')}</h1>
           <p className="text-muted-foreground">
             {isAuthenticated 
-              ? `Viewing reports for ${user?.name || user?.email}`
-              : 'Sign in to see your submitted reports'
+              ? t('portal.viewing_reports', { name: user?.name || user?.email })
+              : t('portal.sign_in_to_see')
             }
           </p>
         </div>
@@ -573,22 +575,22 @@ export default function PortalTrack() {
             {isLoadingMyReports ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-3" />
-                <p className="text-muted-foreground">Loading your reports...</p>
+                <p className="text-muted-foreground">{t('portal.loading_reports')}</p>
               </div>
             ) : error && myReports.length === 0 ? (
               <Card className="p-8 text-center border-destructive/20">
                 <div className="w-16 h-16 bg-destructive/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <XCircle className="w-8 h-8 text-destructive" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Unable to Load Reports</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.unable_load_reports')}</h3>
                 <p className="text-muted-foreground mb-4">{error}</p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button onClick={loadMyReports} variant="outline">
                     <RefreshCw className="w-4 h-4 mr-2" />
-                    Try Again
+                    {t('portal.try_again')}
                   </Button>
                   <Button onClick={() => navigate('/portal/login')}>
-                    Sign In Again
+                    {t('portal.sign_in_again')}
                   </Button>
                 </div>
               </Card>
@@ -608,16 +610,16 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <RefreshCw className="w-8 h-8 text-warning" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Session Refresh Required</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.session_refresh')}</h3>
                 <p className="text-muted-foreground mb-4">
-                  To view your reports, please sign out and sign back in.
+                  {t('portal.session_refresh_message')}
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button onClick={() => navigate('/portal/login')} variant="outline">
-                    Sign In Again
+                    {t('portal.sign_in_again')}
                   </Button>
                   <Button onClick={() => navigate('/portal/report')}>
-                    Submit a Report
+                    {t('portal.submit_report_btn')}
                   </Button>
                 </div>
               </Card>
@@ -626,12 +628,12 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No Reports Yet</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">{t('portal.no_reports_yet')}</h3>
                 <p className="text-muted-foreground mb-4">
-                  You haven't submitted any reports yet.
+                  {t('portal.no_reports_message')}
                 </p>
                 <Button onClick={() => navigate('/portal/report')}>
-                  Submit a Report
+                  {t('portal.submit_report_btn')}
                 </Button>
               </Card>
             )}
@@ -644,7 +646,7 @@ export default function PortalTrack() {
             {isAuthenticated && (
               <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wide">or search by reference</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">{t('portal.or_search_ref')}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
             )}
@@ -654,7 +656,7 @@ export default function PortalTrack() {
                 <div className="flex-1">
                   <Input
                     type="text"
-                    placeholder="Enter reference number (e.g., INC-2026-0001)"
+                    placeholder={t('portal.enter_reference')}
                     value={searchRef}
                     onChange={(e) => setSearchRef(e.target.value.toUpperCase())}
                     className="font-mono text-base"
@@ -676,7 +678,7 @@ export default function PortalTrack() {
             {error && (
               <Card className="p-6 text-center border-destructive/20">
                 <XCircle className="w-12 h-12 text-destructive mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-foreground mb-2">Not Found</h3>
+                <h3 className="text-lg font-bold text-foreground mb-2">{t('portal.not_found')}</h3>
                 <p className="text-muted-foreground">{error}</p>
               </Card>
             )}
@@ -690,7 +692,7 @@ export default function PortalTrack() {
             className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-2"
           >
             <Search className="w-4 h-4" />
-            Search for another report by reference number
+            {t('portal.search_another')}
           </button>
         )}
 
@@ -700,12 +702,12 @@ export default function PortalTrack() {
             <Card className="p-6 border-primary/20 bg-primary/5">
               <div className="text-center">
                 <User className="w-10 h-10 text-primary mx-auto mb-3" />
-                <h3 className="font-semibold text-foreground mb-2">Sign in for easier access</h3>
+                <h3 className="font-semibold text-foreground mb-2">{t('portal.sign_in_easier')}</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Sign in with Microsoft to automatically see all your submitted reports without entering reference numbers.
+                  {t('portal.sign_in_microsoft_desc')}
                 </p>
                 <Button onClick={() => navigate('/portal/login')}>
-                  Sign In
+                  {t('portal.sign_in_btn')}
                 </Button>
               </div>
             </Card>
@@ -716,7 +718,7 @@ export default function PortalTrack() {
         {!isAuthenticated && !error && !isSearching && (
           <div className="mt-8">
             <Card className="p-4 max-w-sm mx-auto">
-              <p className="text-xs text-muted-foreground mb-2 text-center">Example formats:</p>
+              <p className="text-xs text-muted-foreground mb-2 text-center">{t('portal.example_formats')}</p>
               <div className="flex flex-wrap gap-2 justify-center">
                 <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">INC-2026-0001</span>
                 <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">COMP-2026-0001</span>

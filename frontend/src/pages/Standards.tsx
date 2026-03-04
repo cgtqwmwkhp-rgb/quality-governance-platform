@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2 } from 'lucide-react'
 import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
 import { Input } from '../components/ui/Input'
@@ -19,6 +20,7 @@ const ISO_ICONS: Record<string, string> = {
 }
 
 export default function Standards() {
+  const { t } = useTranslation()
   const [standards, setStandards] = useState<Standard[]>([])
   const [selectedStandard, setSelectedStandard] = useState<Standard | null>(null)
   const [clauses, setClauses] = useState<Clause[]>([])
@@ -66,7 +68,7 @@ export default function Standards() {
       setComplianceScores(scores)
     } catch (err) {
       console.error('Failed to load standards:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('standards.load_error'))
       setStandards([])
     } finally {
       setLoading(false)
@@ -133,7 +135,7 @@ export default function Standards() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadStandards(); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('retry')}
           </button>
         </div>
       )}
@@ -141,8 +143,8 @@ export default function Standards() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Standards & Compliance</h1>
-          <p className="text-muted-foreground mt-1">ISO standards library, clauses & implementation tracking</p>
+          <h1 className="text-3xl font-bold text-foreground">{t('standards.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('standards.subtitle')}</p>
         </div>
       </div>
 
@@ -154,7 +156,7 @@ export default function Standards() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search standards..."
+              placeholder={t('standards.search_placeholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -166,7 +168,7 @@ export default function Standards() {
             {filteredStandards.length === 0 ? (
               <Card className="p-8 text-center">
                 <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                <p className="text-muted-foreground">No standards found</p>
+                <p className="text-muted-foreground">{t('standards.empty')}</p>
               </Card>
             ) : (
               filteredStandards.map((standard) => {
@@ -197,21 +199,21 @@ export default function Standards() {
                           <span className="font-mono text-sm text-primary">{standard.code}</span>
                           {standard.is_active && (
                             <Badge variant="success" className="text-[10px]">
-                              Active
+                              {t('standards.active')}
                             </Badge>
                           )}
                         </div>
                         <h3 className="font-semibold text-foreground truncate">{standard.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">Version {standard.version}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('standards.version', { version: standard.version })}</p>
                       </div>
                     </div>
 
                     {/* Compliance Bar */}
                     <div className="mt-4">
                       <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-muted-foreground">Compliance</span>
+                        <span className="text-muted-foreground">{t('standards.compliance')}</span>
                         {setupRequired ? (
-                          <span className="text-muted-foreground italic">Setup Required</span>
+                          <span className="text-muted-foreground italic">{t('standards.setup_required')}</span>
                         ) : (
                           <span className={cn(
                             "font-bold",
@@ -248,9 +250,9 @@ export default function Standards() {
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
                 <Award className="w-10 h-10 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">Select a Standard</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">{t('standards.select_standard')}</h3>
               <p className="text-muted-foreground max-w-md">
-                Choose a standard from the list to view its clauses, controls, and implementation status.
+                {t('standards.select_standard_description')}
               </p>
             </Card>
           ) : loadingClauses ? (
@@ -277,7 +279,7 @@ export default function Standards() {
                 {topLevelClauses.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <BookOpen className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-                    <p>No clauses defined for this standard</p>
+                    <p>{t('standards.no_clauses')}</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -339,7 +341,7 @@ export default function Standards() {
                               clauseStatus === 'implemented' ? 'resolved' :
                               clauseStatus === 'partial' ? 'in-progress' : 'destructive'
                             }>
-                              {clauseStatus.replace('_', ' ')}
+                              {t(`standards.status.${clauseStatus}`)}
                             </Badge>
                           </div>
 
@@ -377,7 +379,7 @@ export default function Standards() {
                                     }
                                     className="text-[10px]"
                                   >
-                                    {control.implementation_status?.replace('_', ' ') || 'not set'}
+                                    {control.implementation_status ? t(`standards.status.${control.implementation_status}`) : t('standards.not_set')}
                                   </Badge>
                                 </div>
                               ))}

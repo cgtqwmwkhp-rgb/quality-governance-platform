@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -89,6 +90,7 @@ interface FormTemplate {
 }
 
 export default function FormBuilder() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { templateId } = useParams();
   const isEditing = !!templateId;
@@ -236,7 +238,7 @@ export default function FormBuilder() {
       setTimeout(() => setSaveSuccess(false), 2000);
     } catch {
       console.error('Failed to save template');
-      setSaveError('Failed to save form. Please try again.');
+      setSaveError(t('admin.forms.save_error'));
     } finally {
       setIsSaving(false);
     }
@@ -256,10 +258,10 @@ export default function FormBuilder() {
             </button>
             <div>
               <h1 className="text-lg font-bold text-foreground">
-                {isEditing ? 'Edit Form' : 'Create New Form'}
+                {isEditing ? t('admin.forms.edit_form') : t('admin.forms.create_new_form')}
               </h1>
               <p className="text-sm text-muted-foreground">
-                Design your form with drag-and-drop fields
+                {t('admin.forms.design_subtitle')}
               </p>
             </div>
           </div>
@@ -267,11 +269,11 @@ export default function FormBuilder() {
           <div className="flex items-center gap-3">
             <Button variant="outline" onClick={() => setShowSettings(!showSettings)}>
               <Settings className="w-4 h-4 mr-2" />
-              Settings
+              {t('common.settings')}
             </Button>
             <Button variant="outline">
               <Eye className="w-4 h-4 mr-2" />
-              Preview
+              {t('admin.forms.preview')}
             </Button>
             <div className="flex flex-col items-end">
               <Button onClick={handleSave} disabled={isSaving}>
@@ -282,7 +284,7 @@ export default function FormBuilder() {
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                {saveSuccess ? 'Saved!' : 'Save Form'}
+                {saveSuccess ? t('admin.forms.saved') : t('admin.forms.save_form')}
               </Button>
               {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
             </div>
@@ -296,11 +298,11 @@ export default function FormBuilder() {
           <div className="lg:col-span-2 space-y-6">
             {/* Form Details */}
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">Form Details</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.forms.form_details')}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="formbuilder-field-0" className="block text-sm font-medium text-foreground mb-2">
-                    Form Name *
+                    {t('admin.forms.form_name')}
                   </label>
                   <Input id="formbuilder-field-0"
                     value={template.name}
@@ -310,7 +312,7 @@ export default function FormBuilder() {
                 </div>
                 <div>
                   <label htmlFor="formbuilder-field-1" className="block text-sm font-medium text-foreground mb-2">
-                    Form Type
+                    {t('admin.forms.form_type')}
                   </label>
                   <select id="formbuilder-field-1"
                     value={template.form_type}
@@ -329,7 +331,7 @@ export default function FormBuilder() {
                 </div>
                 <div className="md:col-span-2">
                   <label htmlFor="formbuilder-field-2" className="block text-sm font-medium text-foreground mb-2">
-                    Description
+                    {t('common.description')}
                   </label>
                   <Textarea id="formbuilder-field-2"
                     value={template.description || ''}
@@ -346,10 +348,10 @@ export default function FormBuilder() {
             {/* Steps */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">Form Steps</h2>
+                <h2 className="text-lg font-semibold text-foreground">{t('admin.forms.form_steps')}</h2>
                 <Button variant="outline" size="sm" onClick={addStep}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Step
+                  {t('admin.forms.add_step')}
                 </Button>
               </div>
 
@@ -416,8 +418,8 @@ export default function FormBuilder() {
                       {step.fields.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                           <HelpCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                          <p>No fields yet</p>
-                          <p className="text-sm">Click "Add Field" to start building</p>
+                          <p>{t('admin.forms.no_fields')}</p>
+                          <p className="text-sm">{t('admin.forms.no_fields_hint')}</p>
                         </div>
                       ) : (
                         step.fields.map((field) => (
@@ -520,11 +522,11 @@ export default function FormBuilder() {
           {/* Settings Panel */}
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Form Settings</h3>
+              <h3 className="font-semibold text-foreground mb-4">{t('admin.forms.form_settings')}</h3>
               <div className="space-y-4">
                 <div>
                   <label htmlFor="formbuilder-field-4" className="block text-sm font-medium text-foreground mb-2">
-                    Reference Prefix
+                    {t('admin.forms.reference_prefix')}
                   </label>
                   <Input id="formbuilder-field-4"
                     value={template.reference_prefix || ''}
@@ -544,7 +546,7 @@ export default function FormBuilder() {
 
                 <div className="space-y-3">
                   <label htmlFor="formbuilder-field-5" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Allow Draft Saving</span>
+                    <span className="text-sm text-foreground">{t('admin.forms.allow_drafts')}</span>
                     <input id="formbuilder-field-5"
                       type="checkbox"
                       checked={template.allow_drafts}
@@ -556,7 +558,7 @@ export default function FormBuilder() {
                   </label>
 
                   <label htmlFor="formbuilder-field-6" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Allow Attachments</span>
+                    <span className="text-sm text-foreground">{t('admin.forms.allow_attachments')}</span>
                     <input id="formbuilder-field-6"
                       type="checkbox"
                       checked={template.allow_attachments}
@@ -571,7 +573,7 @@ export default function FormBuilder() {
                   </label>
 
                   <label htmlFor="formbuilder-field-7" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Require Signature</span>
+                    <span className="text-sm text-foreground">{t('admin.forms.require_signature')}</span>
                     <input id="formbuilder-field-7"
                       type="checkbox"
                       checked={template.require_signature}
@@ -586,7 +588,7 @@ export default function FormBuilder() {
                   </label>
 
                   <label htmlFor="formbuilder-field-8" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">Notify on Submit</span>
+                    <span className="text-sm text-foreground">{t('admin.forms.notify_on_submit')}</span>
                     <input id="formbuilder-field-8"
                       type="checkbox"
                       checked={template.notify_on_submit}
@@ -604,8 +606,8 @@ export default function FormBuilder() {
                 {template.notify_on_submit && (
                   <div>
                     <label htmlFor="formbuilder-field-9" className="block text-sm font-medium text-foreground mb-2">
-                      Notification Emails
-                    </label>
+                    {t('admin.forms.notification_emails')}
+                  </label>
                     <Input id="formbuilder-field-9"
                       value={template.notification_emails || ''}
                       onChange={(e) =>
@@ -617,7 +619,7 @@ export default function FormBuilder() {
                       placeholder="email@example.com, another@example.com"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Comma-separated list of emails
+                      {t('admin.forms.notification_emails_hint')}
                     </p>
                   </div>
                 )}
@@ -625,15 +627,15 @@ export default function FormBuilder() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">Quick Actions</h3>
+              <h3 className="font-semibold text-foreground mb-4">{t('admin.forms.quick_actions')}</h3>
               <div className="space-y-2">
                 <Button variant="outline" className="w-full justify-start">
                   <Copy className="w-4 h-4 mr-2" />
-                  Duplicate Form
+                  {t('admin.forms.duplicate_form')}
                 </Button>
                 <Button variant="outline" className="w-full justify-start text-destructive hover:bg-destructive/10">
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Form
+                  {t('admin.forms.delete_form')}
                 </Button>
               </div>
             </Card>

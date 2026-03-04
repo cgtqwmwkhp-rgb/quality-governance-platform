@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BarChart3,
   TrendingUp,
@@ -41,6 +42,7 @@ interface ModuleStats {
 }
 
 export default function Analytics() {
+  const { t } = useTranslation();
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModule, setSelectedModule] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function Analytics() {
       return (
         <span className="flex items-center gap-1 text-muted-foreground text-sm">
           <Minus className="w-4 h-4" />
-          No change
+          {t('analytics.no_change')}
         </span>
       );
     }
@@ -195,9 +197,9 @@ export default function Analytics() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <BarChart3 className="w-8 h-8 text-primary" />
             </div>
-            Analytics Dashboard
+            {t('analytics.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Cross-module insights and performance metrics</p>
+          <p className="text-muted-foreground mt-1">{t('analytics.subtitle')}</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -270,20 +272,20 @@ export default function Analytics() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-primary" />
-              Monthly Trends
+              {t('analytics.chart.monthly_trends')}
             </h2>
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-info" />
-                Incidents
+                {t('analytics.chart.incidents')}
               </span>
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-warning" />
-                RTAs
+                {t('analytics.chart.rtas')}
               </span>
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-primary" />
-                Complaints
+                {t('analytics.chart.complaints')}
               </span>
             </div>
           </div>
@@ -315,7 +317,7 @@ export default function Analytics() {
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-6">
             <PieChart className="w-5 h-5 text-primary" />
-            Module Distribution
+            {t('analytics.chart.module_distribution')}
           </h2>
           
           <div className="space-y-4">
@@ -354,7 +356,7 @@ export default function Analytics() {
         <div className="p-6 border-b border-border">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <Activity className="w-5 h-5 text-primary" />
-            Module Performance
+            {t('analytics.chart.module_performance')}
           </h2>
         </div>
         
@@ -362,12 +364,12 @@ export default function Analytics() {
           <table className="w-full">
             <thead className="bg-surface">
               <tr>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Module</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Avg Resolution</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Trend</th>
+                <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.module')}</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.total')}</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.open')}</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.closed')}</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.avg_resolution')}</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('analytics.table.trend')}</th>
               </tr>
             </thead>
             <tbody>
@@ -415,7 +417,7 @@ export default function Analytics() {
             <Sparkles className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">AI-Powered Insights</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t('analytics.ai_insights')}</h3>
             <div className="space-y-2 text-muted-foreground">
               <p>• <strong className="text-foreground">Incident resolution</strong> has improved by 15.8% this quarter, reducing average time from 5 days to 4.2 days.</p>
               <p>• <strong className="text-foreground">RTA frequency</strong> shows a downward trend (-12.3%), likely due to recent safety training initiatives.</p>

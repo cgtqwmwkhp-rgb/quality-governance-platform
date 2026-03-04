@@ -14,6 +14,15 @@ i18n
       order: ['localStorage', 'navigator'],
       caches: ['localStorage'],
     },
+    debug: import.meta.env.DEV,
+    saveMissing: import.meta.env.DEV,
+    missingKeyHandler: (_lngs: readonly string[], _ns: string, key: string) => {
+      if (import.meta.env.DEV) {
+        console.warn(`[i18n] Missing key: "${key}"`);
+      }
+    },
+    pluralSeparator: '_',
+    returnNull: false,
   });
 
 export default i18n;

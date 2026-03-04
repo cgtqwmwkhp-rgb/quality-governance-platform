@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   X,
@@ -44,6 +45,7 @@ interface SearchFilter {
 }
 
 export default function GlobalSearch() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -215,9 +217,9 @@ export default function GlobalSearch() {
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-foreground mb-3 flex items-center justify-center gap-3">
           <Search className="w-10 h-10 text-primary" />
-          Global Search
+          {t('global_search.title')}
         </h1>
-        <p className="text-muted-foreground text-lg">Search across all modules instantly</p>
+        <p className="text-muted-foreground text-lg">{t('global_search.subtitle')}</p>
         <p className="text-sm text-muted-foreground mt-2 flex items-center justify-center gap-2">
           <Command className="w-4 h-4" /> + K to open from anywhere
         </p>
@@ -240,7 +242,7 @@ export default function GlobalSearch() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search incidents, RTAs, complaints, risks, audits, actions, documents..."
+            placeholder={t('global_search.placeholder')}
             className="w-full pl-14 pr-32 py-5 text-lg rounded-2xl"
           />
           
@@ -260,7 +262,7 @@ export default function GlobalSearch() {
             </Button>
             
             <Button onClick={handleSearch}>
-              Search
+              {t('global_search.search')}
               <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
@@ -355,7 +357,7 @@ export default function GlobalSearch() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-2 text-muted-foreground mb-4">
             <History className="w-5 h-5" />
-            <span className="font-medium">Recent Searches</span>
+            <span className="font-medium">{t('global_search.recent_searches')}</span>
           </div>
           <div className="flex flex-wrap gap-3">
             {searchHistory.map((term, i) => (
@@ -377,7 +379,7 @@ export default function GlobalSearch() {
           <div className="mt-8 p-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
               <Sparkles className="w-6 h-6 text-primary" />
-              <span className="font-semibold text-foreground">AI-Powered Suggestions</span>
+              <span className="font-semibold text-foreground">{t('global_search.ai_suggestions')}</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
@@ -474,7 +476,7 @@ export default function GlobalSearch() {
           <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
             <Search className="w-10 h-10 text-muted-foreground" />
           </div>
-          <h3 className="text-xl font-semibold text-foreground mb-2">No results found</h3>
+          <h3 className="text-xl font-semibold text-foreground mb-2">{t('global_search.no_results')}</h3>
           <p className="text-muted-foreground">
             Try different keywords or adjust your filters
           </p>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Shield, Mail, ArrowLeft, AlertCircle, Loader2, CheckCircle } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -12,6 +13,7 @@ const API_BASE = API_BASE_URL;
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
 export default function ForgotPassword() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -59,9 +61,9 @@ export default function ForgotPassword() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand mb-4 shadow-glow">
             <Shield className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Reset Password</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('forgot_password.title')}</h1>
           <p className="text-muted-foreground">
-            Enter your email and we'll send you a reset link
+            {t('forgot_password.subtitle')}
           </p>
         </div>
 
@@ -71,18 +73,17 @@ export default function ForgotPassword() {
               <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-success" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">Check your email</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">{t('forgot_password.success_title')}</h2>
               <p className="text-muted-foreground mb-6">
-                If an account exists for <span className="font-medium text-foreground">{email}</span>,
-                you'll receive a password reset link shortly.
+                {t('forgot_password.success_message', { email })}
               </p>
               <p className="text-sm text-muted-foreground mb-6">
-                The link will expire in 1 hour.
+                {t('forgot_password.link_expiry')}
               </p>
               <Link to="/login">
                 <Button variant="outline" className="w-full">
                   <ArrowLeft size={18} />
-                  Back to Login
+                  {t('forgot_password.back_to_login')}
                 </Button>
               </Link>
             </div>
@@ -103,14 +104,14 @@ export default function ForgotPassword() {
 
               <div className="space-y-5">
                 <div>
-                  <label htmlFor="forgotpassword-field-0" className="block text-sm font-medium text-foreground mb-2">Email Address</label>
+                  <label htmlFor="forgotpassword-field-0" className="block text-sm font-medium text-foreground mb-2">{t('forgot_password.email_label')}</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input id="forgotpassword-field-0"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@company.com"
+                      placeholder={t('forgot_password.email_placeholder')}
                       required
                       disabled={formState === 'submitting'}
                       className="pl-10"
@@ -130,7 +131,7 @@ export default function ForgotPassword() {
                 {formState === 'submitting' ? (
                   <Loader2 className="w-5 h-5 animate-spin" data-testid="spinner" />
                 ) : (
-                  'Send Reset Link'
+                  t('forgot_password.submit')
                 )}
               </Button>
 
@@ -141,7 +142,7 @@ export default function ForgotPassword() {
                   data-testid="back-to-login"
                 >
                   <ArrowLeft size={14} />
-                  Back to Login
+                  {t('forgot_password.back_to_login')}
                 </Link>
               </div>
             </form>

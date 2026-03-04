@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   ArrowRight,
@@ -251,22 +252,25 @@ const StatusBar = ({
   isOnline: boolean; 
   isSynced: boolean; 
   batteryLevel: number;
-}) => (
+}) => {
+  const { t } = useTranslation();
+  return (
   <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/80 text-xs">
     <div className={`flex items-center gap-1 ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
       {isOnline ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-      <span>{isOnline ? 'Online' : 'Offline'}</span>
+      <span>{isOnline ? t('mobile_audit.online') : t('mobile_audit.offline')}</span>
     </div>
     <div className={`flex items-center gap-1 ${isSynced ? 'text-green-400' : 'text-amber-400'}`}>
       {isSynced ? <Cloud className="w-3 h-3" /> : <CloudOff className="w-3 h-3" />}
-      <span>{isSynced ? 'Synced' : 'Pending'}</span>
+      <span>{isSynced ? t('mobile_audit.synced') : t('mobile_audit.pending')}</span>
     </div>
     <div className="flex items-center gap-1 text-slate-400 ml-auto">
       <Battery className="w-3 h-3" />
       <span>{batteryLevel}%</span>
     </div>
   </div>
-);
+  );
+};
 
 // AI Suggestion Component
 const AISuggestion = ({
@@ -282,11 +286,12 @@ const AISuggestion = ({
   onDismiss: () => void;
   isLoading: boolean;
 }) => {
+  const { t } = useTranslation();
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl animate-pulse">
         <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
-        <span className="text-sm text-purple-300">AI analyzing...</span>
+        <span className="text-sm text-purple-300">{t('mobile_audit.ai_analyzing')}</span>
       </div>
     );
   }
@@ -299,8 +304,8 @@ const AISuggestion = ({
         <Sparkles className="w-4 h-4 text-purple-400 mt-0.5 flex-shrink-0" />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-medium text-purple-400">AI Insight</span>
-            <span className="text-xs text-purple-400/60">{Math.round((confidence || 0) * 100)}% confidence</span>
+            <span className="text-xs font-medium text-purple-400">{t('mobile_audit.ai_insight')}</span>
+            <span className="text-xs text-purple-400/60">{Math.round((confidence || 0) * 100)}% {t('mobile_audit.confidence')}</span>
           </div>
           <p className="text-sm text-purple-200">{suggestion}</p>
         </div>
@@ -310,13 +315,13 @@ const AISuggestion = ({
           onClick={() => { onAccept(); triggerHaptic('light'); }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-500/30"
         >
-          <ThumbsUp className="w-3 h-3" /> Helpful
+          <ThumbsUp className="w-3 h-3" /> {t('mobile_audit.helpful')}
         </button>
         <button
           onClick={() => { onDismiss(); triggerHaptic('light'); }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-slate-700/50 text-slate-400 rounded-lg text-xs font-medium hover:bg-slate-700"
         >
-          <ThumbsDown className="w-3 h-3" /> Dismiss
+          <ThumbsDown className="w-3 h-3" /> {t('mobile_audit.dismiss')}
         </button>
       </div>
     </div>
@@ -460,6 +465,7 @@ const VoiceRecorder = ({
     }
   };
 
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -473,12 +479,12 @@ const VoiceRecorder = ({
       {isRecording ? (
         <>
           <MicOff className="w-5 h-5" />
-          <span>Stop Recording ({recordingTime}s)</span>
+          <span>{t('mobile_audit.stop_recording', { time: recordingTime })}</span>
         </>
       ) : (
         <>
           <Mic className="w-5 h-5" />
-          <span>Record Voice Note</span>
+          <span>{t('mobile_audit.record_voice')}</span>
         </>
       )}
     </button>
@@ -509,6 +515,7 @@ const PhotoCapture = ({
     }
   };
 
+  const { t } = useTranslation();
   return (
     <div className="space-y-3">
       <input
@@ -526,7 +533,7 @@ const PhotoCapture = ({
         className="w-full py-4 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 rounded-xl text-cyan-300 font-medium flex items-center justify-center gap-2 active:scale-98"
       >
         <Camera className="w-5 h-5" />
-        {photos.length > 0 ? `Add Photo (${photos.length})` : 'Take Photo'}
+        {photos.length > 0 ? `${t('mobile_audit.add_photo')} (${photos.length})` : t('mobile_audit.take_photo')}
       </button>
 
       {photos.length > 0 && (
@@ -535,7 +542,7 @@ const PhotoCapture = ({
             <div key={idx} className="relative aspect-square">
               <img
                 src={photo}
-                alt={`Evidence ${idx + 1}`}
+                alt={t('mobile_audit.evidence') + ` ${idx + 1}`}
                 className="w-full h-full object-cover rounded-lg"
               />
               <button
@@ -544,7 +551,7 @@ const PhotoCapture = ({
                   onRemove(idx);
                   triggerHaptic('light');
                 }}
-                aria-label="Remove photo"
+                aria-label={t('mobile_audit.remove_photo')}
                 className="absolute top-1 right-1 p-1.5 bg-red-500 rounded-full text-white"
               >
                 <X className="w-3 h-3" />
@@ -592,6 +599,7 @@ const LocationCapture = ({
     );
   };
 
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -606,17 +614,17 @@ const LocationCapture = ({
       {isCapturing ? (
         <>
           <Loader2 className="w-4 h-4 animate-spin" />
-          <span>Getting location...</span>
+          <span>{t('mobile_audit.getting_location')}</span>
         </>
       ) : location ? (
         <>
           <Navigation className="w-4 h-4" />
-          <span>Location captured</span>
+          <span>{t('mobile_audit.location_captured')}</span>
         </>
       ) : (
         <>
           <MapPin className="w-4 h-4" />
-          <span>Capture Location</span>
+          <span>{t('mobile_audit.capture_location')}</span>
         </>
       )}
     </button>
@@ -628,6 +636,7 @@ const LocationCapture = ({
 // ============================================================================
 
 export default function MobileAuditExecution() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   
   const [audit] = useState(MOCK_AUDIT);
@@ -785,7 +794,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              PASS
+              {t('mobile_audit.pass')}
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'fail'}
@@ -793,7 +802,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              FAIL
+              {t('mobile_audit.fail')}
             </TouchResponseButton>
           </div>
         );
@@ -807,7 +816,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              YES
+              {t('mobile_audit.yes')}
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
@@ -815,7 +824,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              NO
+              {t('mobile_audit.no')}
             </TouchResponseButton>
           </div>
         );
@@ -829,7 +838,7 @@ export default function MobileAuditExecution() {
               variant="success"
               icon={CheckCircle2}
             >
-              YES
+              {t('mobile_audit.yes')}
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'no'}
@@ -837,7 +846,7 @@ export default function MobileAuditExecution() {
               variant="danger"
               icon={XCircle}
             >
-              NO
+              {t('mobile_audit.no')}
             </TouchResponseButton>
             <TouchResponseButton
               selected={currentResponse?.response === 'na'}
@@ -845,7 +854,7 @@ export default function MobileAuditExecution() {
               variant="neutral"
               icon={MinusCircle}
             >
-              N/A
+              {t('mobile_audit.na')}
             </TouchResponseButton>
           </div>
         );
@@ -866,7 +875,7 @@ export default function MobileAuditExecution() {
             inputMode="numeric"
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
-            placeholder="Enter number..."
+            placeholder={t('mobile_audit.enter_number')}
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg text-center"
           />
         );
@@ -876,7 +885,7 @@ export default function MobileAuditExecution() {
           <textarea
             value={(currentResponse?.response as string) || ''}
             onChange={(e) => updateResponse({ response: e.target.value })}
-            placeholder="Enter response..."
+            placeholder={t('mobile_audit.enter_response')}
             rows={3}
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg"
           />
@@ -905,7 +914,7 @@ export default function MobileAuditExecution() {
             </div>
 
             <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-green-400' : 'text-red-400'}`}>
-              {passed ? 'AUDIT PASSED' : 'AUDIT FAILED'}
+              {passed ? t('mobile_audit.audit_passed') : t('mobile_audit.audit_failed')}
             </h2>
             <p className="text-slate-400 mb-6">
               {audit.templateName} - {audit.asset}
@@ -915,7 +924,7 @@ export default function MobileAuditExecution() {
             <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-4 mb-6 text-left">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-purple-400" />
-                <span className="font-semibold text-purple-300">AI Summary</span>
+                <span className="font-semibold text-purple-300">{t('mobile_audit.ai_summary')}</span>
               </div>
               <p className="text-sm text-purple-200">
                 {passed 
@@ -929,15 +938,15 @@ export default function MobileAuditExecution() {
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-white">{answeredQuestions}</p>
-                <p className="text-xs text-slate-400">Answered</p>
+                <p className="text-xs text-slate-400">{t('mobile_audit.answered')}</p>
               </div>
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-white">{formatTime(elapsedTime)}</p>
-                <p className="text-xs text-slate-400">Duration</p>
+                <p className="text-xs text-slate-400">{t('mobile_audit.duration')}</p>
               </div>
               <div className="bg-slate-800 rounded-xl p-3">
                 <p className="text-2xl font-bold text-red-400">{failedItems.length}</p>
-                <p className="text-xs text-slate-400">Failed</p>
+                <p className="text-xs text-slate-400">{t('mobile_audit.failed_items')}</p>
               </div>
             </div>
 
@@ -952,13 +961,13 @@ export default function MobileAuditExecution() {
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl active:scale-98"
               >
                 <Send className="w-5 h-5 inline mr-2" />
-                Submit Audit
+                {t('mobile_audit.submit_audit')}
               </button>
               <button
                 onClick={() => navigate('/audits')}
                 className="w-full py-3 bg-slate-800 text-slate-300 rounded-xl"
               >
-                Save as Draft
+                {t('mobile_audit.save_draft')}
               </button>
             </div>
           </div>
@@ -986,7 +995,7 @@ export default function MobileAuditExecution() {
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate('/audits')}
-              aria-label="Go back"
+              aria-label={t('mobile_audit.go_back')}
               className="p-2 -ml-2"
             >
               <ArrowLeft className="w-5 h-5 text-slate-400" />
@@ -1000,7 +1009,7 @@ export default function MobileAuditExecution() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPaused(!isPaused)}
-                aria-label={isPaused ? 'Resume' : 'Pause'}
+                aria-label={isPaused ? t('mobile_audit.resume') : t('mobile_audit.pause')}
                 className={`p-2 rounded-lg ${isPaused ? 'text-amber-400' : 'text-slate-400'}`}
               >
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
@@ -1021,7 +1030,7 @@ export default function MobileAuditExecution() {
             </div>
             <div className="flex justify-between mt-1">
               <span className="text-xs text-slate-500">{currentSection.title}</span>
-              <span className="text-xs text-slate-500">{answeredQuestions}/{totalQuestions}</span>
+              <span className="text-xs text-slate-500">{t('mobile_audit.step_of', { step: answeredQuestions, total: totalQuestions })}</span>
             </div>
           </div>
         </div>
@@ -1083,12 +1092,12 @@ export default function MobileAuditExecution() {
                 )}
                 {currentQuestion.required && (
                   <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs font-medium rounded">
-                    Required
+                    {t('mobile_audit.required')}
                   </span>
                 )}
                 {currentQuestion.evidenceRequired && (
                   <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-400 text-xs font-medium rounded flex items-center gap-1">
-                    <Camera className="w-3 h-3" /> Evidence
+                    <Camera className="w-3 h-3" /> {t('mobile_audit.evidence')}
                   </span>
                 )}
               </div>
@@ -1110,7 +1119,7 @@ export default function MobileAuditExecution() {
                   className="flex items-center gap-2 text-sm text-purple-400"
                 >
                   <Lightbulb className="w-4 h-4" />
-                  <span>Guidance</span>
+                  <span>{t('mobile_audit.guidance')}</span>
                   {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               )}
@@ -1144,7 +1153,7 @@ export default function MobileAuditExecution() {
             <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
               <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
                 <Camera className="w-4 h-4 text-cyan-400" />
-                Photo Evidence
+                {t('mobile_audit.photo_evidence')}
               </h3>
               <PhotoCapture
                 photos={currentResponse?.photos || []}
@@ -1186,7 +1195,7 @@ export default function MobileAuditExecution() {
             <textarea
               value={currentResponse?.notes || ''}
               onChange={(e) => updateResponse({ notes: e.target.value })}
-              placeholder="Add observations..."
+              placeholder={t('mobile_audit.add_observations')}
               rows={2}
               className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-sm resize-none"
             />
@@ -1205,7 +1214,7 @@ export default function MobileAuditExecution() {
             }`}
           >
             <Flag className={`w-4 h-4 ${currentResponse?.flagged ? 'fill-current' : ''}`} />
-            {currentResponse?.flagged ? 'Issue Flagged' : 'Flag for Follow-up'}
+            {currentResponse?.flagged ? t('mobile_audit.issue_flagged') : t('mobile_audit.flag_followup')}
           </button>
         </div>
       </main>
@@ -1219,7 +1228,7 @@ export default function MobileAuditExecution() {
             className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-800 text-slate-300 rounded-xl font-medium disabled:opacity-50 active:scale-98"
           >
             <ArrowLeft className="w-5 h-5" />
-            Prev
+            {t('mobile_audit.prev')}
           </button>
 
           {/* Quick Jump Dots */}
@@ -1254,8 +1263,8 @@ export default function MobileAuditExecution() {
           >
             {currentSectionIndex === audit.sections.length - 1 && 
              currentQuestionIndex === currentSection.questions.length - 1
-              ? 'Finish'
-              : 'Next'
+              ? t('mobile_audit.finish')
+              : t('mobile_audit.next')
             }
             <ArrowRight className="w-5 h-5" />
           </button>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { API_BASE_URL } from '../config/apiBase';
 
@@ -139,6 +140,7 @@ interface FormData {
 type Step = 1 | 2 | 3 | 4;
 
 export default function PortalNearMissForm() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = usePortalAuth();
   const [step, setStep] = useState<Step>(1);
@@ -305,7 +307,7 @@ export default function PortalNearMissForm() {
             <span className="text-2xl font-mono font-bold text-primary">{submittedRef}</span>
           </div>
           <p className="text-sm text-muted-foreground mb-6">
-            Thank you for reporting this near miss. Your report helps us prevent future incidents.
+            {t('portal.thank_you_near_miss')}
           </p>
           <div className="flex gap-3">
             <Button
@@ -341,9 +343,9 @@ export default function PortalNearMissForm() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
-              <span className="font-semibold text-foreground">Near Miss Report</span>
+              <span className="font-semibold text-foreground">{t('portal.near_miss_report')}</span>
             </div>
-            <div className="text-xs text-muted-foreground">Step {step} of {totalSteps}</div>
+            <div className="text-xs text-muted-foreground">{t('portal.step_of', { step, total: totalSteps })}</div>
           </div>
         </div>
         
@@ -360,25 +362,25 @@ export default function PortalNearMissForm() {
         {step === 1 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Your Details</h1>
-              <p className="text-muted-foreground text-sm">Who is reporting this near miss?</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.your_details')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.who_reporting')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-0" className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
+              <label htmlFor="portalnearmissform-field-0" className="block text-sm font-medium text-foreground mb-2">{t('portal.your_name_label')} *</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalnearmissform-field-0"
                   value={formData.reporterName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, reporterName: e.target.value }))}
-                  placeholder="Full name..."
+                  placeholder={t('portal.full_name_placeholder')}
                   className="pl-10"
                 />
               </div>
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Your Role *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.your_role')} *</span>
               <div className="grid grid-cols-3 gap-2">
                 {ROLE_OPTIONS.map((role) => (
                   <button
@@ -400,11 +402,11 @@ export default function PortalNearMissForm() {
             </div>
 
             <FuzzySearchDropdown
-              label="Contract / Site *"
+              label={`${t('portal.contract_site')} *`}
               options={CONTRACT_OPTIONS}
               value={formData.contract}
               onChange={(val) => setFormData((prev) => ({ ...prev, contract: val }))}
-              placeholder="Search contract..."
+              placeholder={t('portal.search_contract_nm')}
               required
             />
 
@@ -412,12 +414,12 @@ export default function PortalNearMissForm() {
               <Input
                 value={formData.contractOther}
                 onChange={(e) => setFormData((prev) => ({ ...prev, contractOther: e.target.value }))}
-                placeholder="Enter contract name..."
+                placeholder={t('portal.enter_contract')}
               />
             )}
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Were you involved?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.were_you_involved_nm')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -431,7 +433,7 @@ export default function PortalNearMissForm() {
                         : 'bg-card border-border text-foreground hover:border-border-strong'
                     )}
                   >
-                    {val ? 'Yes, I was involved' : 'No, I witnessed it'}
+                    {val ? t('portal.yes_involved') : t('portal.no_witnessed')}
                   </button>
                 ))}
               </div>
@@ -443,18 +445,18 @@ export default function PortalNearMissForm() {
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">What Happened?</h1>
-              <p className="text-muted-foreground text-sm">Describe the near miss event</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.what_happened')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.describe_near_miss')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-1" className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalnearmissform-field-1" className="block text-sm font-medium text-foreground mb-2">{t('portal.location_label')} *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input id="portalnearmissform-field-1"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-                  placeholder="Where did it happen?"
+                  placeholder={t('portal.where_did_happen')}
                   className="pl-10 pr-16"
                 />
                 <button
@@ -474,7 +476,7 @@ export default function PortalNearMissForm() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalnearmissform-field-2" className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalnearmissform-field-2" className="block text-sm font-medium text-foreground mb-2">{t('portal.date_label')}</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalnearmissform-field-2"
@@ -486,7 +488,7 @@ export default function PortalNearMissForm() {
                 </div>
               </div>
               <div>
-                <label htmlFor="portalnearmissform-field-3" className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalnearmissform-field-3" className="block text-sm font-medium text-foreground mb-2">{t('portal.time_label')}</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input id="portalnearmissform-field-3"
@@ -500,12 +502,12 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-4" className="block text-sm font-medium text-foreground mb-2">Description *</label>
+              <label htmlFor="portalnearmissform-field-4" className="block text-sm font-medium text-foreground mb-2">{t('portal.description_label')} *</label>
               <div className="relative">
                 <Textarea id="portalnearmissform-field-4"
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe what happened and what could have happened..."
+                  placeholder={t('portal.near_miss_placeholder')}
                   rows={5}
                 />
                 {voiceSupported && (
@@ -522,16 +524,16 @@ export default function PortalNearMissForm() {
                 )}
               </div>
               {isListening && (
-                <p className="text-primary text-xs mt-1 animate-pulse">Listening... Speak now</p>
+                <p className="text-primary text-xs mt-1 animate-pulse">{t('portal.listening_speak')}</p>
               )}
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-5" className="block text-sm font-medium text-foreground mb-2">What could have happened?</label>
+              <label htmlFor="portalnearmissform-field-5" className="block text-sm font-medium text-foreground mb-2">{t('portal.what_could_happened')}</label>
               <Textarea id="portalnearmissform-field-5"
                 value={formData.potentialConsequences}
                 onChange={(e) => setFormData((prev) => ({ ...prev, potentialConsequences: e.target.value }))}
-                placeholder="Describe the potential consequences if not avoided..."
+                placeholder={t('portal.potential_consequences_placeholder')}
                 rows={3}
               />
             </div>
@@ -542,12 +544,12 @@ export default function PortalNearMissForm() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Risk Assessment</h1>
-              <p className="text-muted-foreground text-sm">Categorize the near miss</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.risk_assessment')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.categorize_near_miss')}</p>
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Risk Category *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.risk_category')} *</span>
               <div className="grid grid-cols-3 gap-2">
                 {RISK_CATEGORIES.map((cat) => (
                   <button
@@ -569,7 +571,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Potential Severity *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.potential_severity')} *</span>
               <div className="space-y-2">
                 {SEVERITY_LEVELS.map((level) => (
                   <button
@@ -594,7 +596,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_witnesses')}</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -618,7 +620,7 @@ export default function PortalNearMissForm() {
               <Input
                 value={formData.witnessNames}
                 onChange={(e) => setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))}
-                placeholder="Witness names and contact..."
+                placeholder={t('portal.witness_contact_placeholder')}
               />
             )}
           </div>
@@ -628,51 +630,51 @@ export default function PortalNearMissForm() {
         {step === 4 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">Prevention & Evidence</h1>
-              <p className="text-muted-foreground text-sm">Suggest actions and add photos</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.prevention_evidence')}</h1>
+              <p className="text-muted-foreground text-sm">{t('portal.suggest_actions')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-6" className="block text-sm font-medium text-foreground mb-2">Suggested Preventive Action</label>
+              <label htmlFor="portalnearmissform-field-6" className="block text-sm font-medium text-foreground mb-2">{t('portal.suggested_preventive')}</label>
               <Textarea id="portalnearmissform-field-6"
                 value={formData.preventiveActionSuggested}
                 onChange={(e) => setFormData((prev) => ({ ...prev, preventiveActionSuggested: e.target.value }))}
-                placeholder="What could prevent this from happening again?"
+                placeholder={t('portal.preventive_placeholder')}
                 rows={4}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalnearmissform-field-7" className="block text-sm font-medium text-foreground mb-2">Asset Number</label>
+                <label htmlFor="portalnearmissform-field-7" className="block text-sm font-medium text-foreground mb-2">{t('portal.asset_number')}</label>
                 <Input id="portalnearmissform-field-7"
                   value={formData.assetNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value }))}
-                  placeholder="If applicable..."
+                  placeholder={t('portal.if_applicable')}
                 />
               </div>
               <div>
-                <label htmlFor="portalnearmissform-field-8" className="block text-sm font-medium text-foreground mb-2">Asset Type</label>
+                <label htmlFor="portalnearmissform-field-8" className="block text-sm font-medium text-foreground mb-2">{t('portal.asset_type')}</label>
                 <Input id="portalnearmissform-field-8"
                   value={formData.assetType}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetType: e.target.value }))}
-                  placeholder="e.g. Vehicle, Tool..."
+                  placeholder={t('portal.asset_type_placeholder')}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="portalnearmissform-field-9" className="block text-sm font-medium text-foreground mb-2">Others Involved</label>
+              <label htmlFor="portalnearmissform-field-9" className="block text-sm font-medium text-foreground mb-2">{t('portal.others_involved')}</label>
               <Input id="portalnearmissform-field-9"
                 value={formData.personsInvolved}
                 onChange={(e) => setFormData((prev) => ({ ...prev, personsInvolved: e.target.value }))}
-                placeholder="Names of others involved..."
+                placeholder={t('portal.others_placeholder')}
               />
             </div>
 
             {/* Photos */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">Photos (optional)</span>
+              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.photos_optional')}</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -705,7 +707,7 @@ export default function PortalNearMissForm() {
             <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
               <CircleAlert className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">Submission Failed</p>
+                <p className="text-sm font-medium text-destructive">{t('portal.submission_failed')}</p>
                 <p className="text-sm text-destructive/80">{error}</p>
               </div>
               <button 
@@ -724,7 +726,7 @@ export default function PortalNearMissForm() {
               onClick={() => setStep((s) => (s - 1) as Step)}
             >
               <ChevronLeft className="w-5 h-5" />
-              Back
+              {t('back')}
             </Button>
           )}
           
@@ -734,7 +736,7 @@ export default function PortalNearMissForm() {
               disabled={!canProceed()}
               className="flex-1 bg-primary hover:bg-primary/90"
             >
-              Continue
+              {t('portal.continue_btn')}
               <ChevronRight className="w-5 h-5" />
             </Button>
           ) : (
@@ -746,13 +748,22 @@ export default function PortalNearMissForm() {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  Submitting...
+                  {t('portal.submitting')}
                 </>
               ) : (
                 <>
                   <Check className="w-5 h-5" />
-                  Submit Near Miss
+                  {t('portal.submit_near_miss')}
                 </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
               )}
             </Button>
           )}

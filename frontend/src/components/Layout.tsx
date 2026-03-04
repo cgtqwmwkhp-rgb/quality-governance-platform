@@ -47,85 +47,85 @@ interface LayoutProps {
   onLogout: () => void
 }
 
-const navSections = [
-  {
-    title: 'Core',
-    items: [
-      { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-      { path: '/incidents', icon: AlertTriangle, label: 'Incidents' },
-      { path: '/rtas', icon: Car, label: 'RTAs' },
-      { path: '/complaints', icon: MessageSquare, label: 'Complaints' },
-    ]
-  },
-  {
-    title: 'Workforce',
-    items: [
-      { path: '/workforce/assessments', icon: ClipboardCheck, label: 'Assessments' },
-      { path: '/workforce/training', icon: GraduationCap, label: 'Training' },
-      { path: '/workforce/engineers', icon: Users, label: 'Engineers' },
-      { path: '/workforce/calendar', icon: Calendar, label: 'Calendar' },
-      { path: '/workforce/dashboard', icon: BarChart3, label: 'Competency' },
-    ]
-  },
-  {
-    title: 'Governance',
-    items: [
-      { path: '/audits', icon: ClipboardCheck, label: 'Audits' },
-      { path: '/audit-templates', icon: Sparkles, label: 'Audit Builder' },
-      { path: '/compliance', icon: Shield, label: 'ISO Compliance' },
-      { path: '/uvdb', icon: Award, label: 'UVDB Achilles' },
-      { path: '/planet-mark', icon: Leaf, label: 'Planet Mark' },
-      { path: '/investigations', icon: FlaskConical, label: 'Investigations' },
-      { path: '/standards', icon: BookOpen, label: 'Standards' },
-      { path: '/actions', icon: ListTodo, label: 'Actions' },
-    ]
-  },
-  {
-    title: 'Library',
-    items: [
-      { path: '/documents', icon: FolderOpen, label: 'Documents' },
-      { path: '/policies', icon: FileText, label: 'Policies' },
-      { path: '/risks', icon: Shield, label: 'Risks' },
-    ]
-  },
-  {
-    title: 'Enterprise',
-    items: [
-      { path: '/risk-register', icon: Target, label: 'Risk Register' },
-      { path: '/ims', icon: GitMerge, label: 'IMS Dashboard' },
-      { path: '/ai-intelligence', icon: Brain, label: 'AI Intelligence' },
-    ]
-  },
-  {
-    title: 'Analytics',
-    items: [
-      { path: '/analytics', icon: BarChart3, label: 'Overview' },
-      { path: '/analytics/advanced', icon: BarChart3, label: 'Advanced Analytics' },
-      { path: '/analytics/dashboards', icon: LayoutDashboard, label: 'Dashboard Builder' },
-      { path: '/analytics/reports', icon: FileText, label: 'Report Generator' },
-      { path: '/calendar', icon: Calendar, label: 'Calendar' },
-      { path: '/exports', icon: Download, label: 'Export Center' },
-    ]
-  },
-  {
-    title: 'Automation',
-    items: [
-      { path: '/workflows', icon: GitBranch, label: 'Workflow Center' },
-      { path: '/compliance-automation', icon: Shield, label: 'Compliance Automation' },
-      { path: '/signatures', icon: FileSignature, label: 'Digital Signatures' },
-    ]
-  },
-  {
-    title: 'Admin',
-    items: [
-      { path: '/users', icon: Users, label: 'User Management' },
-      { path: '/audit-trail', icon: History, label: 'Audit Trail' },
-    ]
-  }
-]
-
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
+
+  const navSections = [
+    {
+      title: t('nav.core'),
+      items: [
+        { path: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
+        { path: '/incidents', icon: AlertTriangle, label: t('nav.incidents') },
+        { path: '/rtas', icon: Car, label: t('nav.rtas') },
+        { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
+      ]
+    },
+    {
+      title: t('nav.workforce'),
+      items: [
+        { path: '/workforce/assessments', icon: ClipboardCheck, label: t('nav.assessments') },
+        { path: '/workforce/training', icon: GraduationCap, label: t('nav.training') },
+        { path: '/workforce/engineers', icon: Users, label: t('nav.engineers') },
+        { path: '/workforce/calendar', icon: Calendar, label: t('nav.calendar') },
+        { path: '/workforce/dashboard', icon: BarChart3, label: t('nav.competency') },
+      ]
+    },
+    {
+      title: t('nav.governance'),
+      items: [
+        { path: '/audits', icon: ClipboardCheck, label: t('nav.audits') },
+        { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
+        { path: '/compliance', icon: Shield, label: t('nav.iso_compliance') },
+        { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
+        { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
+        { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
+        { path: '/standards', icon: BookOpen, label: t('nav.standards') },
+        { path: '/actions', icon: ListTodo, label: t('nav.actions') },
+      ]
+    },
+    {
+      title: t('nav.library'),
+      items: [
+        { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
+        { path: '/policies', icon: FileText, label: t('nav.policies') },
+        { path: '/risks', icon: Shield, label: t('nav.risks') },
+      ]
+    },
+    {
+      title: t('nav.enterprise'),
+      items: [
+        { path: '/risk-register', icon: Target, label: t('nav.risk_register') },
+        { path: '/ims', icon: GitMerge, label: t('nav.ims_dashboard') },
+        { path: '/ai-intelligence', icon: Brain, label: t('nav.ai_intelligence') },
+      ]
+    },
+    {
+      title: t('nav.analytics'),
+      items: [
+        { path: '/analytics', icon: BarChart3, label: t('nav.overview') },
+        { path: '/analytics/advanced', icon: BarChart3, label: t('nav.advanced_analytics') },
+        { path: '/analytics/dashboards', icon: LayoutDashboard, label: t('nav.dashboard_builder') },
+        { path: '/analytics/reports', icon: FileText, label: t('nav.report_generator') },
+        { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
+        { path: '/exports', icon: Download, label: t('nav.export_center') },
+      ]
+    },
+    {
+      title: t('nav.automation'),
+      items: [
+        { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
+        { path: '/compliance-automation', icon: Shield, label: t('nav.compliance_automation') },
+        { path: '/signatures', icon: FileSignature, label: t('nav.digital_signatures') },
+      ]
+    },
+    {
+      title: t('nav.admin'),
+      items: [
+        { path: '/users', icon: Users, label: t('nav.user_management') },
+        { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
+      ]
+    }
+  ]
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
@@ -179,7 +179,6 @@ export default function Layout({ onLogout }: LayoutProps) {
         
         {/* Right Actions */}
         <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
           <ThemeToggle />
           
           <NavLink
@@ -215,7 +214,7 @@ export default function Layout({ onLogout }: LayoutProps) {
             )}
           >
             <Bot className="w-4 h-4" />
-            <span className="hidden sm:inline">Copilot</span>
+            <span className="hidden sm:inline">{t('nav.copilot')}</span>
           </Button>
         </div>
       </header>

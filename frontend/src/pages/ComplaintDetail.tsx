@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -44,6 +45,7 @@ import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
 export default function ComplaintDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [complaint, setComplaint] = useState<Complaint | null>(null)
@@ -100,7 +102,7 @@ export default function ComplaintDetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load complaint:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('complaints.detail.load_error'))
     } finally {
       setLoading(false)
     }
@@ -118,7 +120,7 @@ export default function ComplaintDetail() {
       setActions(complaintActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('complaints.detail.load_error'))
     }
   }
 
@@ -189,7 +191,7 @@ export default function ComplaintDetail() {
             id: errorData.details.existing_investigation_id,
             reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
           })
-          setInvestigationError('An investigation already exists for this complaint.')
+          setInvestigationError(t('complaints.detail.investigation_exists'))
           return
         }
       }
@@ -289,7 +291,7 @@ export default function ComplaintDetail() {
       <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
         <p className="text-sm text-destructive">{error}</p>
         <button onClick={() => { setError(null); loadComplaint(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
-          Try Again
+          {t('complaints.detail.try_again')}
         </button>
       </div>
     )
@@ -299,10 +301,10 @@ export default function ComplaintDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <MessageSquare className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground">Complaint not found</p>
+        <p className="text-muted-foreground">{t('complaints.detail.not_found')}</p>
         <Button variant="outline" onClick={() => navigate('/complaints')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Complaints
+          {t('complaints.back')}
         </Button>
       </div>
     )
@@ -314,7 +316,7 @@ export default function ComplaintDetail() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadComplaint(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('complaints.detail.try_again')}
           </button>
         </div>
       )}
@@ -340,7 +342,7 @@ export default function ComplaintDetail() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">{complaint.title}</h1>
             <p className="text-muted-foreground mt-1">
-              Received on {new Date(complaint.received_date).toLocaleDateString()}
+              {t('complaints.detail.received_on')} {new Date(complaint.received_date).toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -349,26 +351,26 @@ export default function ComplaintDetail() {
             <>
               <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
                 <X className="w-4 h-4 mr-2" />
-                Cancel
+                {t('cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Save Changes
+                {t('complaints.detail.save_changes')}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
-                Edit
+                {t('edit')}
               </Button>
               <Button variant="outline" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Action
+                {t('complaints.detail.add_action')}
               </Button>
               <Button onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
-                Start Investigation
+                {t('complaints.detail.start_investigation')}
               </Button>
             </>
           )}
@@ -384,14 +386,14 @@ export default function ComplaintDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                Complaint Details
+                {t('complaints.detail.complaint_details')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <>
                   <div>
-                    <label htmlFor="complaintdetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <label htmlFor="complaintdetail-field-0" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.title_label')}</label>
                     <Input id="complaintdetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
@@ -399,7 +401,7 @@ export default function ComplaintDetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <label htmlFor="complaintdetail-field-1" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
                     <Textarea id="complaintdetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -409,7 +411,7 @@ export default function ComplaintDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="complaintdetail-field-2" className="text-sm font-medium text-muted-foreground">Type</label>
+                      <label htmlFor="complaintdetail-field-2" className="text-sm font-medium text-muted-foreground">{t('common.type')}</label>
                       <Select
                         value={editForm.complaint_type}
                         onValueChange={(value) => setEditForm({ ...editForm, complaint_type: value })}
@@ -418,20 +420,20 @@ export default function ComplaintDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="product">Product</SelectItem>
-                          <SelectItem value="service">Service</SelectItem>
-                          <SelectItem value="delivery">Delivery</SelectItem>
-                          <SelectItem value="communication">Communication</SelectItem>
-                          <SelectItem value="billing">Billing</SelectItem>
-                          <SelectItem value="staff">Staff</SelectItem>
-                          <SelectItem value="environmental">Environmental</SelectItem>
-                          <SelectItem value="safety">Safety</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
+                          <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
+                          <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
+                          <SelectItem value="communication">{t('complaints.type.communication')}</SelectItem>
+                          <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
+                          <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
+                          <SelectItem value="environmental">{t('complaints.type.environmental')}</SelectItem>
+                          <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
+                          <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="complaintdetail-field-3" className="text-sm font-medium text-muted-foreground">Priority</label>
+                      <label htmlFor="complaintdetail-field-3" className="text-sm font-medium text-muted-foreground">{t('common.priority')}</label>
                       <Select
                         value={editForm.priority}
                         onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
@@ -440,15 +442,15 @@ export default function ComplaintDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="critical">Critical</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="critical">{t('complaints.priority.critical')}</SelectItem>
+                          <SelectItem value="high">{t('complaints.priority.high')}</SelectItem>
+                          <SelectItem value="medium">{t('complaints.priority.medium')}</SelectItem>
+                          <SelectItem value="low">{t('complaints.priority.low')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label htmlFor="complaintdetail-field-4" className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="complaintdetail-field-4" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
@@ -457,14 +459,14 @@ export default function ComplaintDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="received">Received</SelectItem>
-                          <SelectItem value="acknowledged">Acknowledged</SelectItem>
-                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
-                          <SelectItem value="pending_response">Pending Response</SelectItem>
-                          <SelectItem value="awaiting_customer">Awaiting Customer</SelectItem>
-                          <SelectItem value="escalated">Escalated</SelectItem>
-                          <SelectItem value="resolved">Resolved</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
+                          <SelectItem value="received">{t('complaints.status.received')}</SelectItem>
+                          <SelectItem value="acknowledged">{t('complaints.status.acknowledged')}</SelectItem>
+                          <SelectItem value="under_investigation">{t('complaints.status.under_investigation')}</SelectItem>
+                          <SelectItem value="pending_response">{t('complaints.status.pending_response')}</SelectItem>
+                          <SelectItem value="awaiting_customer">{t('complaints.status.awaiting_customer')}</SelectItem>
+                          <SelectItem value="escalated">{t('complaints.status.escalated')}</SelectItem>
+                          <SelectItem value="resolved">{t('complaints.status.resolved')}</SelectItem>
+                          <SelectItem value="closed">{t('complaints.status.closed')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -473,29 +475,29 @@ export default function ComplaintDetail() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Description</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {complaint.description || 'No description provided'}
+                      {complaint.description || t('complaints.detail.no_description')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Type</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.type')}</span>
                       <p className="mt-1 text-foreground capitalize flex items-center gap-2">
                         <span>{getTypeIcon(complaint.complaint_type)}</span>
                         {complaint.complaint_type.replace('_', ' ')}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Priority</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.priority')}</span>
                       <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Status</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
                       <p className="mt-1 text-foreground capitalize">{complaint.status.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Received Date</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.received_date')}</span>
                       <p className="mt-1 text-foreground">
                         {new Date(complaint.received_date).toLocaleString()}
                       </p>
@@ -511,14 +513,14 @@ export default function ComplaintDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="w-5 h-5 text-primary" />
-                Complainant Information
+                {t('complaints.detail.complainant_info')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label htmlFor="complaintdetail-field-5" className="text-sm font-medium text-muted-foreground">Name</label>
+                    <label htmlFor="complaintdetail-field-5" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.name')}</label>
                     <Input id="complaintdetail-field-5"
                       value={editForm.complainant_name || ''}
                       onChange={(e) => setEditForm({ ...editForm, complainant_name: e.target.value })}
@@ -526,7 +528,7 @@ export default function ComplaintDetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-6" className="text-sm font-medium text-muted-foreground">Email</label>
+                    <label htmlFor="complaintdetail-field-6" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.email')}</label>
                     <Input id="complaintdetail-field-6"
                       type="email"
                       value={editForm.complainant_email || ''}
@@ -535,7 +537,7 @@ export default function ComplaintDetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-7" className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <label htmlFor="complaintdetail-field-7" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.phone')}</label>
                     <Input id="complaintdetail-field-7"
                       type="tel"
                       value={editForm.complainant_phone || ''}
@@ -547,16 +549,16 @@ export default function ComplaintDetail() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Name</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_name || 'Not specified'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.name')}</span>
+                    <p className="mt-1 text-foreground">{complaint.complainant_name || t('complaints.detail.not_specified')}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Email</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_email || 'Not specified'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.email')}</span>
+                    <p className="mt-1 text-foreground">{complaint.complainant_email || t('complaints.detail.not_specified')}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Phone</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_phone || 'Not specified'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.phone')}</span>
+                    <p className="mt-1 text-foreground">{complaint.complainant_phone || t('complaints.detail.not_specified')}</p>
                   </div>
                 </div>
               )}
@@ -568,7 +570,7 @@ export default function ComplaintDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-success" />
-                Resolution
+                {t('complaints.detail.resolution')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -577,11 +579,11 @@ export default function ComplaintDetail() {
                   value={editForm.resolution_summary || ''}
                   onChange={(e) => setEditForm({ ...editForm, resolution_summary: e.target.value })}
                   rows={4}
-                  placeholder="Enter resolution details..."
+                  placeholder={t('complaints.detail.resolution_placeholder')}
                 />
               ) : (
                 <p className="text-foreground whitespace-pre-wrap">
-                  {complaint.resolution_summary || 'No resolution recorded yet'}
+                  {complaint.resolution_summary || t('complaints.detail.no_resolution')}
                 </p>
               )}
             </CardContent>
@@ -592,19 +594,19 @@ export default function ComplaintDetail() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-primary" />
-                Actions ({actions.length})
+                {t('complaints.detail.actions')} ({actions.length})
               </CardTitle>
               <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-1" />
-                Add
+                {t('complaints.detail.add')}
               </Button>
             </CardHeader>
             <CardContent>
               {actions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No actions yet</p>
-                  <p className="text-sm">Create actions to track follow-up tasks</p>
+                  <p>{t('complaints.detail.no_actions')}</p>
+                  <p className="text-sm">{t('complaints.detail.no_actions_hint')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -625,7 +627,7 @@ export default function ComplaintDetail() {
                         <div>
                           <p className="font-medium text-foreground">{action.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                            {t('complaints.detail.due')}: {action.due_date ? new Date(action.due_date).toLocaleDateString() : t('complaints.detail.no_due_date')}
                           </p>
                         </div>
                       </div>
@@ -644,7 +646,7 @@ export default function ComplaintDetail() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Quick Info</CardTitle>
+              <CardTitle className="text-base">{t('complaints.detail.quick_info')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
@@ -652,7 +654,7 @@ export default function ComplaintDetail() {
                   <Calendar className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="text-sm text-muted-foreground">{t('complaints.detail.created')}</p>
                   <p className="font-medium text-foreground">
                     {new Date(complaint.created_at).toLocaleDateString()}
                   </p>
@@ -663,8 +665,8 @@ export default function ComplaintDetail() {
                   <Mail className="w-5 h-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium text-foreground truncate">{complaint.complainant_email || 'Not specified'}</p>
+                  <p className="text-sm text-muted-foreground">{t('complaints.detail.email')}</p>
+                  <p className="font-medium text-foreground truncate">{complaint.complainant_email || t('complaints.detail.not_specified')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -672,8 +674,8 @@ export default function ComplaintDetail() {
                   <Phone className="w-5 h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Phone</p>
-                  <p className="font-medium text-foreground">{complaint.complainant_phone || 'Not specified'}</p>
+                  <p className="text-sm text-muted-foreground">{t('complaints.detail.phone')}</p>
+                  <p className="font-medium text-foreground">{complaint.complainant_phone || t('complaints.detail.not_specified')}</p>
                 </div>
               </div>
             </CardContent>
@@ -684,7 +686,7 @@ export default function ComplaintDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="w-4 h-4" />
-                Activity Timeline
+                {t('complaints.detail.activity_timeline')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -692,7 +694,7 @@ export default function ComplaintDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Complaint Received</p>
+                    <p className="text-sm font-medium text-foreground">{t('complaints.detail.complaint_received')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(complaint.received_date).toLocaleString()}
                     </p>
@@ -701,7 +703,7 @@ export default function ComplaintDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Record Created</p>
+                    <p className="text-sm font-medium text-foreground">{t('complaints.detail.record_created')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(complaint.created_at).toLocaleString()}
                     </p>
@@ -725,17 +727,16 @@ export default function ComplaintDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
-              Start Investigation
+              {t('complaints.detail.start_investigation')}
             </DialogTitle>
             <DialogDescription>
-              Create a root cause investigation for complaint {complaint.reference_number}.
-              Data will be prefilled from the complaint record.
+              {t('complaints.detail.investigation_description', { reference: complaint.reference_number })}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
               <label htmlFor="complaintdetail-field-8" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Title
+                {t('complaints.detail.investigation_title')}
               </label>
               <Input id="complaintdetail-field-8"
                 value={investigationForm.title}
@@ -745,7 +746,7 @@ export default function ComplaintDetail() {
             </div>
             <div>
               <label htmlFor="complaintdetail-field-9" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Type
+                {t('complaints.detail.investigation_type')}
               </label>
               <Select
                 value={investigationForm.investigation_type}
@@ -755,27 +756,27 @@ export default function ComplaintDetail() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
-                  <SelectItem value="5_whys">5 Whys</SelectItem>
-                  <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
-                  <SelectItem value="incident_review">Incident Review</SelectItem>
+                  <SelectItem value="root_cause_analysis">{t('complaints.investigation_type.root_cause_analysis')}</SelectItem>
+                  <SelectItem value="5_whys">{t('complaints.investigation_type.5_whys')}</SelectItem>
+                  <SelectItem value="fishbone">{t('complaints.investigation_type.fishbone')}</SelectItem>
+                  <SelectItem value="incident_review">{t('complaints.investigation_type.incident_review')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <UserEmailSearch
-              label="Lead Investigator"
+              label={t('complaints.detail.lead_investigator')}
               value={investigationForm.lead_investigator}
               onChange={handleInvestigatorChange}
-              placeholder="Search by email..."
+              placeholder={t('complaints.detail.search_by_email')}
             />
             <div>
               <label htmlFor="complaintdetail-field-10" className="block text-sm font-medium text-foreground mb-1">
-                Initial Notes
+                {t('complaints.detail.initial_notes')}
               </label>
               <Textarea id="complaintdetail-field-10"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
-                placeholder="Describe the scope and initial findings..."
+                placeholder={t('complaints.detail.initial_notes_placeholder')}
                 rows={4}
               />
             </div>
@@ -796,7 +797,7 @@ export default function ComplaintDetail() {
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    Open existing investigation ({existingInvestigation.reference})
+                    {t('complaints.detail.open_existing_investigation', { reference: existingInvestigation.reference })}
                   </Button>
                 )}
               </div>
@@ -804,10 +805,10 @@ export default function ComplaintDetail() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('complaints.detail.create_investigation')}
               </Button>
             </DialogFooter>
           </form>
@@ -820,34 +821,34 @@ export default function ComplaintDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              Add Action
+              {t('complaints.detail.add_action')}
             </DialogTitle>
             <DialogDescription>
-              Create a corrective or follow-up action for this complaint.
+              {t('complaints.detail.action_description')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
               <label htmlFor="complaintdetail-field-11" className="block text-sm font-medium text-foreground mb-1">
-                Action Title *
+                {t('complaints.detail.action_title')}
               </label>
               <Input id="complaintdetail-field-11"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
-                placeholder="e.g., Contact customer for follow-up"
+                placeholder={t('complaints.detail.action_title_placeholder')}
                 required
               />
             </div>
             <UserEmailSearch
-              label="Assign To"
+              label={t('complaints.detail.assign_to')}
               value={actionForm.assigned_to}
               onChange={handleAssigneeChange}
-              placeholder="Search by email..."
+              placeholder={t('complaints.detail.search_by_email')}
               required
             />
             <div>
               <label htmlFor="complaintdetail-field-12" className="block text-sm font-medium text-foreground mb-1">
-                Priority
+                {t('common.priority')}
               </label>
               <Select
                 value={actionForm.priority}
@@ -857,16 +858,16 @@ export default function ComplaintDetail() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="critical">{t('complaints.priority.critical')}</SelectItem>
+                  <SelectItem value="high">{t('complaints.priority.high')}</SelectItem>
+                  <SelectItem value="medium">{t('complaints.priority.medium')}</SelectItem>
+                  <SelectItem value="low">{t('complaints.priority.low')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
               <label htmlFor="complaintdetail-field-13" className="block text-sm font-medium text-foreground mb-1">
-                Due Date
+                {t('common.due_date')}
               </label>
               <Input id="complaintdetail-field-13"
                 type="date"
@@ -876,21 +877,21 @@ export default function ComplaintDetail() {
             </div>
             <div>
               <label htmlFor="complaintdetail-field-14" className="block text-sm font-medium text-foreground mb-1">
-                Description
+                {t('common.description')}
               </label>
               <Textarea id="complaintdetail-field-14"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
-                placeholder="Describe the action to be taken..."
+                placeholder={t('complaints.detail.action_description_placeholder')}
                 rows={3}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('complaints.detail.create_action')}
               </Button>
             </DialogFooter>
           </form>

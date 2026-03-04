@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Users, Award, Clock, AlertTriangle, TrendingUp, ClipboardCheck, BookOpen } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi } from '../../api/client'
@@ -6,10 +7,10 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
 
 const KPI_CARDS = [
-  { key: 'engineers', label: 'Total Engineers', icon: Users, color: 'text-primary' },
-  { key: 'active', label: 'Active Competencies', icon: Award, color: 'text-success' },
-  { key: 'expiring', label: 'Expiring Soon', icon: Clock, color: 'text-warning' },
-  { key: 'overdue', label: 'Overdue', icon: AlertTriangle, color: 'text-destructive' },
+  { key: 'engineers', labelKey: 'workforce.competency.total_engineers', icon: Users, color: 'text-primary' },
+  { key: 'active', labelKey: 'workforce.competency.active_competencies', icon: Award, color: 'text-success' },
+  { key: 'expiring', labelKey: 'workforce.competency.expiring_soon', icon: Clock, color: 'text-warning' },
+  { key: 'overdue', labelKey: 'workforce.competency.overdue', icon: AlertTriangle, color: 'text-destructive' },
 ]
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,17 +21,18 @@ const STATUS_COLORS: Record<string, string> = {
   not_assessed: 'bg-muted-foreground/40',
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  active: 'Current',
-  due: 'Expiring Soon',
-  expired: 'Expired',
-  failed: 'Failed',
-  not_assessed: 'Not Assessed',
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  active: 'workforce.competency.current',
+  due: 'workforce.competency.expiring_soon',
+  expired: 'workforce.competency.expired',
+  failed: 'workforce.competency.failed',
+  not_assessed: 'workforce.competency.not_assessed',
 }
 
 type TrendMonth = { month: string | null; total: number; passed: number; failed: number }
 
 export default function CompetencyDashboard() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState({ engineers: 0, active: 0, expiring: 0, overdue: 0 })
@@ -82,9 +84,9 @@ export default function CompetencyDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Competency Dashboard</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('workforce.competency_dashboard.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Workforce development analytics and overview
+          {t('workforce.competency_dashboard.subtitle')}
         </p>
       </div>
 
@@ -94,7 +96,7 @@ export default function CompetencyDashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">{k.label}</p>
+                  <p className="text-sm font-medium text-muted-foreground">{t(k.labelKey)}</p>
                   <p className="text-2xl font-bold text-foreground mt-1">
                     {kpis[k.key as keyof typeof kpis] ?? 0}
                   </p>
@@ -113,18 +115,18 @@ export default function CompetencyDashboard() {
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-foreground">
-              Competency Status Breakdown
+              {t('workforce.competency.status_breakdown')}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {compTotal} total competency records
+              {compTotal} {t('workforce.competency.total_records')}
             </p>
           </CardHeader>
           <CardContent>
             {compTotal === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
                 <Award className="w-10 h-10" />
-                <p className="text-sm">No competency data yet</p>
-                <p className="text-xs">Complete assessments to populate this chart</p>
+                <p className="text-sm">{t('workforce.competency.no_data')}</p>
+                <p className="text-xs">{t('workforce.competency.no_data_description')}</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -137,7 +139,7 @@ export default function CompetencyDashboard() {
                       <div key={state} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-medium text-foreground">
-                            {STATUS_LABELS[state] ?? state.replace(/_/g, ' ')}
+                            {STATUS_LABEL_KEYS[state] ? t(STATUS_LABEL_KEYS[state]) : state.replace(/_/g, ' ')}
                           </span>
                           <span className="text-muted-foreground">{count} ({pct}%)</span>
                         </div>
@@ -153,10 +155,10 @@ export default function CompetencyDashboard() {
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-4 text-sm">
-              {Object.entries(STATUS_LABELS).map(([key, label]) => (
+              {Object.entries(STATUS_LABEL_KEYS).map(([key, labelKey]) => (
                 <span key={key} className="flex items-center gap-2">
                   <span className={cn("w-3 h-3 rounded-full", STATUS_COLORS[key])} />
-                  {label}
+                  {t(labelKey)}
                 </span>
               ))}
             </div>
@@ -168,8 +170,8 @@ export default function CompetencyDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Assessment Trends</h2>
-                <p className="text-sm text-muted-foreground">Monthly pass/fail over last 12 months</p>
+                <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.assessment_trends')}</h2>
+                <p className="text-sm text-muted-foreground">{t('workforce.competency.assessment_trends_subtitle')}</p>
               </div>
               <TrendingUp className="w-5 h-5 text-muted-foreground" />
             </div>
@@ -178,20 +180,20 @@ export default function CompetencyDashboard() {
             {trends.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
                 <TrendingUp className="w-10 h-10" />
-                <p className="text-sm">No trend data yet</p>
-                <p className="text-xs">Assessment history will appear here</p>
+                <p className="text-sm">{t('workforce.competency.no_trend_data')}</p>
+                <p className="text-xs">{t('workforce.competency.trend_description')}</p>
               </div>
             ) : (
               <>
                 <div className="flex items-end gap-1 h-40">
-                  {trends.map((t, i) => {
-                    const passH = (t.passed / trendMax) * 100
-                    const failH = (t.failed / trendMax) * 100
-                    const monthLabel = t.month
-                      ? new Date(t.month).toLocaleDateString('en-GB', { month: 'short' })
+                  {trends.map((tr, i) => {
+                    const passH = (tr.passed / trendMax) * 100
+                    const failH = (tr.failed / trendMax) * 100
+                    const monthLabel = tr.month
+                      ? new Date(tr.month).toLocaleDateString('en-GB', { month: 'short' })
                       : ''
                     return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${monthLabel}: ${t.total} total, ${t.passed} passed, ${t.failed} failed`}>
+                      <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${monthLabel}: ${tr.total} total, ${tr.passed} passed, ${tr.failed} failed`}>
                         <div className="w-full flex flex-col items-center justify-end" style={{ height: '120px' }}>
                           {failH > 0 && (
                             <div
@@ -213,10 +215,10 @@ export default function CompetencyDashboard() {
                 </div>
                 <div className="mt-3 flex gap-4 text-sm">
                   <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-success" /> Passed
+                    <span className="w-3 h-3 rounded-full bg-success" /> {t('workforce.competency.passed')}
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-destructive" /> Failed
+                    <span className="w-3 h-3 rounded-full bg-destructive" /> {t('workforce.competency.failed')}
                   </span>
                 </div>
               </>
@@ -230,10 +232,10 @@ export default function CompetencyDashboard() {
         <Card>
           <CardHeader>
             <h2 className="text-lg font-semibold text-foreground">
-              Recent Assessments
+              {t('workforce.competency.recent_assessments')}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Latest competency assessments
+              {t('workforce.competency.latest_assessments')}
             </p>
           </CardHeader>
           <CardContent>
@@ -245,7 +247,7 @@ export default function CompetencyDashboard() {
               </div>
             ) : assessments.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">
-                No recent assessments.
+                {t('workforce.competency.no_recent')}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -280,8 +282,8 @@ export default function CompetencyDashboard() {
         {/* Quick actions */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-foreground">Quick Actions</h2>
-            <p className="text-sm text-muted-foreground">Common workforce actions</p>
+            <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.quick_actions')}</h2>
+            <p className="text-sm text-muted-foreground">{t('workforce.competency.common_actions')}</p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
@@ -290,28 +292,28 @@ export default function CompetencyDashboard() {
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <ClipboardCheck className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">New Assessment</span>
+                <span className="text-sm font-medium text-foreground">{t('workforce.assessments.new')}</span>
               </button>
               <button
                 onClick={() => navigate('/workforce/training/new')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <BookOpen className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">New Induction</span>
+                <span className="text-sm font-medium text-foreground">{t('workforce.induction.new')}</span>
               </button>
               <button
                 onClick={() => navigate('/workforce/engineers')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <Users className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">Engineer Directory</span>
+                <span className="text-sm font-medium text-foreground">{t('workforce.competency.engineer_directory')}</span>
               </button>
               <button
                 onClick={() => navigate('/workforce/calendar')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <Clock className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">Schedule</span>
+                <span className="text-sm font-medium text-foreground">{t('workforce.competency.schedule')}</span>
               </button>
             </div>
           </CardContent>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   HelpCircle,
   Search,
@@ -108,6 +109,7 @@ const QuickLink = ({
 );
 
 export default function PortalHelp() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [openFAQ, setOpenFAQ] = useState<number | null>(null);
@@ -225,7 +227,7 @@ export default function PortalHelp() {
           </button>
           <div className="flex items-center gap-2">
             <HelpCircle className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-foreground">Help & Support</span>
+            <span className="font-semibold text-foreground">{t('portal.help_support_title')}</span>
           </div>
         </div>
       </header>
@@ -237,8 +239,8 @@ export default function PortalHelp() {
           <div className="inline-flex w-16 h-16 rounded-2xl gradient-brand items-center justify-center mb-4 shadow-glow">
             <HelpCircle className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">How can we help?</h1>
-          <p className="text-muted-foreground">Search our knowledge base or browse by category</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.how_can_help')}</h1>
+          <p className="text-muted-foreground">{t('portal.search_knowledge')}</p>
         </div>
 
         {/* Search */}
@@ -246,7 +248,7 @@ export default function PortalHelp() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search for answers..."
+            placeholder={t('portal.search_answers')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -256,7 +258,7 @@ export default function PortalHelp() {
         {/* Categories */}
         {!searchQuery && !selectedCategory && (
           <div className="mb-8">
-            <h2 className="text-base font-semibold text-foreground mb-4">Browse by Category</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4">{t('portal.browse_category')}</h2>
             <div className="grid grid-cols-2 gap-3">
               {categories.map((cat) => (
                 <CategoryCard
@@ -276,7 +278,7 @@ export default function PortalHelp() {
               onClick={() => setSelectedCategory(null)}
               className="text-primary hover:underline transition-colors text-sm"
             >
-              All Categories
+              {t('portal.all_categories')}
             </button>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
             <span className="text-foreground font-medium text-sm">
@@ -289,7 +291,7 @@ export default function PortalHelp() {
         <div className="mb-8">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Lightbulb className="w-5 h-5 text-warning" />
-            {searchQuery ? 'Search Results' : 'Frequently Asked Questions'}
+            {searchQuery ? t('portal.search_results_title') : t('portal.faq_title')}
           </h2>
           <div className="space-y-3">
             {filteredFAQs.length > 0 ? (
@@ -303,7 +305,7 @@ export default function PortalHelp() {
                   />
                   {openFAQ === index && (
                     <div className="flex items-center justify-end gap-2 mt-2 px-4">
-                      <span className="text-xs text-muted-foreground">Was this helpful?</span>
+                      <span className="text-xs text-muted-foreground">{t('portal.was_helpful')}</span>
                       <button
                         onClick={() => giveFeedback(index, 'up')}
                         className={cn(
@@ -333,7 +335,7 @@ export default function PortalHelp() {
             ) : (
               <div className="text-center py-8">
                 <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">No articles found. Try a different search term.</p>
+                <p className="text-muted-foreground">{t('portal.no_articles')}</p>
               </div>
             )}
           </div>
@@ -343,12 +345,12 @@ export default function PortalHelp() {
         <Card className="p-6 border-primary/20 bg-primary/5">
           <h2 className="text-base font-semibold text-foreground mb-4 flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
-            Still need help?
+            {t('portal.still_need_help')}
           </h2>
           <div className="grid gap-3">
-            <QuickLink icon={MessageCircle} title="Live Chat" href="#chat" />
-            <QuickLink icon={Mail} title="Email Support" href="mailto:safety@plantexpand.com" />
-            <QuickLink icon={Phone} title="Call Helpline" href="tel:08001234567" />
+            <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href="#chat" />
+            <QuickLink icon={Mail} title={t('portal.email_support')} href="mailto:safety@plantexpand.com" />
+            <QuickLink icon={Phone} title={t('portal.call_helpline')} href="tel:08001234567" />
           </div>
         </Card>
 
@@ -360,7 +362,7 @@ export default function PortalHelp() {
             className="flex-1 border-destructive/30 text-destructive hover:bg-destructive/10"
           >
             <AlertTriangle className="w-4 h-4" />
-            Submit a Report
+            {t('portal.submit_report_btn')}
           </Button>
           <Button
             variant="outline"
@@ -368,7 +370,7 @@ export default function PortalHelp() {
             className="flex-1"
           >
             <Clock className="w-4 h-4" />
-            Track My Report
+            {t('portal.track_my_report')}
           </Button>
         </div>
       </main>

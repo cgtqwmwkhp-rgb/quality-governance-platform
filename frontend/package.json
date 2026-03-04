@@ -3,13 +3,19 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && cp staticwebapp.config.json dist/",
     "preview": "vite preview",
     "lint": "eslint src/ --max-warnings 0",
     "size-check": "npx size-limit",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "test:coverage": "vitest run --coverage",
+    "i18n:check": "node ../scripts/i18n-check.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.0",
@@ -38,6 +44,9 @@
     "@lhci/cli": "^0.14.0",
     "@playwright/test": "^1.49.0",
     "@size-limit/file": "^12.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -49,6 +58,7 @@
     "eslint-plugin-jsx-a11y": "^6.8.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.5.8",
     "size-limit": "^12.0.0",
     "tailwindcss": "^3.3.5",

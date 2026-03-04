@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../helpers/utils';
 import { Button } from '../components/ui/Button';
+import { useTranslation } from 'react-i18next';
 
 interface RegulatoryUpdate {
   id: number;
@@ -92,6 +93,7 @@ const statusColors: Record<string, string> = {
 };
 
 export default function ComplianceAutomation() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor'>('regulatory');
   const [updates, setUpdates] = useState<RegulatoryUpdate[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -217,11 +219,11 @@ export default function ComplianceAutomation() {
   };
 
   const tabs = [
-    { id: 'regulatory', label: 'Regulatory Updates', icon: Bell, count: updates.filter(u => !u.is_reviewed).length },
-    { id: 'certificates', label: 'Certificates', icon: Award, count: certificates.filter(c => c.status === 'expiring_soon').length },
-    { id: 'audits', label: 'Scheduled Audits', icon: Calendar, count: audits.filter(a => a.status === 'overdue').length },
-    { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
-    { id: 'riddor', label: 'RIDDOR', icon: FileText },
+    { id: 'regulatory', label: t('compliance.automation.regulatory_updates'), icon: Bell, count: updates.filter(u => !u.is_reviewed).length },
+    { id: 'certificates', label: t('compliance.automation.certificates'), icon: Award, count: certificates.filter(c => c.status === 'expiring_soon').length },
+    { id: 'audits', label: t('compliance.automation.scheduled_audits'), icon: Calendar, count: audits.filter(a => a.status === 'overdue').length },
+    { id: 'scoring', label: t('compliance.automation.compliance_score'), icon: BarChart3 },
+    { id: 'riddor', label: t('compliance.automation.riddor'), icon: FileText },
   ];
 
   if (loading) {
@@ -237,8 +239,8 @@ export default function ComplianceAutomation() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Compliance Automation</h1>
-          <p className="text-muted-foreground mt-1">Monitor regulations, track certificates, and automate compliance</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('compliance.automation.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('compliance.automation.subtitle')}</p>
         </div>
         <Button
           onClick={loadData}
@@ -260,7 +262,7 @@ export default function ComplianceAutomation() {
             </span>
           </div>
           <div className="text-4xl font-bold mb-1">{complianceScore.overall}%</div>
-          <div className="text-primary-foreground/80 text-sm">Overall Compliance Score</div>
+          <div className="text-primary-foreground/80 text-sm">{t('compliance.automation.overall_score')}</div>
         </div>
 
         <div className="bg-card/50 border border-border rounded-xl p-4">
@@ -268,7 +270,7 @@ export default function ComplianceAutomation() {
             <div className="p-2 rounded-lg bg-destructive/20">
               <AlertTriangle className="w-5 h-5 text-destructive" />
             </div>
-            <span className="text-muted-foreground text-sm">Regulatory Updates</span>
+            <span className="text-muted-foreground text-sm">{t('compliance.automation.regulatory_updates')}</span>
           </div>
           <div className="text-2xl font-bold text-foreground">{updates.filter(u => !u.is_reviewed).length}</div>
           <div className="text-sm text-muted-foreground">Pending review</div>
@@ -279,7 +281,7 @@ export default function ComplianceAutomation() {
             <div className="p-2 rounded-lg bg-warning/20">
               <Clock className="w-5 h-5 text-warning" />
             </div>
-            <span className="text-muted-foreground text-sm">Expiring Certificates</span>
+            <span className="text-muted-foreground text-sm">{t('compliance.automation.expiring_certs')}</span>
           </div>
           <div className="text-2xl font-bold text-foreground">{certificates.filter(c => c.status === 'expiring_soon').length}</div>
           <div className="text-sm text-muted-foreground">Within 60 days</div>
@@ -290,7 +292,7 @@ export default function ComplianceAutomation() {
             <div className="p-2 rounded-lg bg-orange-500/20">
               <Calendar className="w-5 h-5 text-orange-400" />
             </div>
-            <span className="text-muted-foreground text-sm">Overdue Audits</span>
+            <span className="text-muted-foreground text-sm">{t('compliance.automation.overdue_audits')}</span>
           </div>
           <div className="text-2xl font-bold text-foreground">{audits.filter(a => a.status === 'overdue').length}</div>
           <div className="text-sm text-muted-foreground">Require attention</div>
@@ -370,12 +372,12 @@ export default function ComplianceAutomation() {
                 <div className="flex items-center gap-2">
                   <button className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-sm transition-colors">
                     <Zap className="w-4 h-4" />
-                    Run Gap Analysis
+                    {t('compliance.automation.run_gap_analysis')}
                   </button>
                   {!update.is_reviewed && (
                     <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
                       <CheckCircle className="w-4 h-4" />
-                      Mark Reviewed
+                      {t('compliance.automation.mark_reviewed')}
                     </button>
                   )}
                 </div>
@@ -392,7 +394,7 @@ export default function ComplianceAutomation() {
             <h3 className="font-medium text-white">Certificate Expiry Tracking</h3>
             <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
               <Award className="w-4 h-4" />
-              Add Certificate
+              {t('compliance.automation.add_certificate')}
             </button>
           </div>
           <div className="divide-y divide-slate-700">
@@ -449,7 +451,7 @@ export default function ComplianceAutomation() {
             <h3 className="font-medium text-white">Scheduled Audits & Inspections</h3>
             <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
               <Calendar className="w-4 h-4" />
-              Schedule Audit
+              {t('compliance.automation.schedule_audit')}
             </button>
           </div>
           <div className="divide-y divide-slate-700">

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, type AssessmentRun, type InductionRun } from '../../api/client'
 import { cn } from '../../helpers/utils'
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
 interface CalendarEvent {
   date: number
@@ -15,6 +16,7 @@ interface CalendarEvent {
 }
 
 export default function Calendar() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [month, setMonth] = useState(() => new Date().getMonth())
@@ -103,9 +105,9 @@ export default function Calendar() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Workforce Calendar</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('workforce.calendar.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Scheduled, due and overdue assessments and inductions
+          {t('workforce.calendar.subtitle')}
         </p>
       </div>
 
@@ -145,23 +147,23 @@ export default function Calendar() {
         <div className="flex items-center gap-4 text-sm">
           <span className="flex items-center gap-2 text-muted-foreground">
             <AlertTriangle className="w-4 h-4 text-warning" />
-            Assessment
+            {t('workforce.calendar.assessment')}
           </span>
           <span className="flex items-center gap-2 text-muted-foreground">
             <GraduationCap className="w-4 h-4 text-primary" />
-            Induction
+            {t('workforce.calendar.induction')}
           </span>
         </div>
       </div>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="grid grid-cols-7 border-b border-border bg-muted/30">
-          {DAYS.map((d) => (
+          {DAY_KEYS.map((key) => (
             <div
-              key={d}
+              key={key}
               className="py-3 px-2 text-center text-xs font-medium text-muted-foreground"
             >
-              {d}
+              {t(`workforce.calendar.${key}`)}
             </div>
           ))}
         </div>

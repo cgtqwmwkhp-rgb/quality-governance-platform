@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -44,6 +45,7 @@ import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
 export default function RTADetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [rta, setRta] = useState<RTA | null>(null)
@@ -100,7 +102,7 @@ export default function RTADetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load RTA:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('rtas.detail.load_error'))
     } finally {
       setLoading(false)
     }
@@ -118,7 +120,7 @@ export default function RTADetail() {
       setActions(rtaActions)
     } catch (err) {
       console.error('Failed to load actions:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('rtas.detail.load_error'))
     }
   }
 
@@ -189,7 +191,7 @@ export default function RTADetail() {
             id: errorData.details.existing_investigation_id,
             reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
           })
-          setInvestigationError('An investigation already exists for this RTA.')
+          setInvestigationError(t('rtas.detail.investigation_exists'))
           return
         }
       }
@@ -274,7 +276,7 @@ export default function RTADetail() {
       <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
         <p className="text-sm text-destructive">{error}</p>
         <button onClick={() => { setError(null); loadRTA(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
-          Try Again
+          {t('rtas.detail.try_again')}
         </button>
       </div>
     )
@@ -284,10 +286,10 @@ export default function RTADetail() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <Car className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground">RTA not found</p>
+        <p className="text-muted-foreground">{t('rtas.detail.not_found')}</p>
         <Button variant="outline" onClick={() => navigate('/rtas')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to RTAs
+          {t('rtas.back')}
         </Button>
       </div>
     )
@@ -299,7 +301,7 @@ export default function RTADetail() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadRTA(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('rtas.detail.try_again')}
           </button>
         </div>
       )}
@@ -325,7 +327,7 @@ export default function RTADetail() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">{rta.title}</h1>
             <p className="text-muted-foreground mt-1">
-              Reported on {new Date(rta.reported_date).toLocaleDateString()}
+              {t('rtas.detail.reported_on', { date: new Date(rta.reported_date).toLocaleDateString() })}
             </p>
           </div>
         </div>
@@ -334,26 +336,26 @@ export default function RTADetail() {
             <>
               <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
                 <X className="w-4 h-4 mr-2" />
-                Cancel
+                {t('cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Save Changes
+                {t('rtas.detail.save_changes')}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
-                Edit
+                {t('edit')}
               </Button>
               <Button variant="outline" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Action
+                {t('rtas.detail.add_action')}
               </Button>
               <Button onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
-                Start Investigation
+                {t('rtas.detail.start_investigation')}
               </Button>
             </>
           )}
@@ -369,14 +371,14 @@ export default function RTADetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                Collision Details
+                {t('rtas.detail.collision_details')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <>
                   <div>
-                    <label htmlFor="rtadetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <label htmlFor="rtadetail-field-0" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.title_label')}</label>
                     <Input id="rtadetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
@@ -384,7 +386,7 @@ export default function RTADetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="rtadetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <label htmlFor="rtadetail-field-1" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
                     <Textarea id="rtadetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -394,7 +396,7 @@ export default function RTADetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="rtadetail-field-2" className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <label htmlFor="rtadetail-field-2" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</label>
                       <Select
                         value={editForm.severity}
                         onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
@@ -412,7 +414,7 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="rtadetail-field-3" className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="rtadetail-field-3" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
@@ -430,7 +432,7 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label htmlFor="rtadetail-field-4" className="text-sm font-medium text-muted-foreground">Location</label>
+                      <label htmlFor="rtadetail-field-4" className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
                       <Input id="rtadetail-field-4"
                         value={editForm.location || ''}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
@@ -442,29 +444,29 @@ export default function RTADetail() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Description</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {rta.description || 'No description provided'}
+                      {rta.description || t('rtas.detail.no_description')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Severity</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</span>
                       <p className="mt-1 text-foreground capitalize">{rta.severity.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Status</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
                       <p className="mt-1 text-foreground capitalize">{rta.status.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Collision Date</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.collision_date')}</span>
                       <p className="mt-1 text-foreground">
                         {new Date(rta.collision_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Location</span>
-                      <p className="mt-1 text-foreground">{rta.location || 'Not specified'}</p>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.location')}</span>
+                      <p className="mt-1 text-foreground">{rta.location || t('rtas.detail.not_specified')}</p>
                     </div>
                   </div>
                 </>
@@ -477,14 +479,14 @@ export default function RTADetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Car className="w-5 h-5 text-primary" />
-                Vehicle & Driver Information
+                {t('rtas.detail.vehicle_driver_info')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="rtadetail-field-5" className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
+                    <label htmlFor="rtadetail-field-5" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.vehicle_registration')}</label>
                     <Input id="rtadetail-field-5"
                       value={editForm.company_vehicle_registration || ''}
                       onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })}
@@ -493,7 +495,7 @@ export default function RTADetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="rtadetail-field-6" className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <label htmlFor="rtadetail-field-6" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_name')}</label>
                     <Input id="rtadetail-field-6"
                       value={editForm.driver_name || ''}
                       onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })}
@@ -505,33 +507,33 @@ export default function RTADetail() {
                       checked={editForm.driver_injured || false}
                       onCheckedChange={(checked) => setEditForm({ ...editForm, driver_injured: checked })}
                     />
-                    <span className="text-sm text-foreground">Driver Injured</span>
+                    <span className="text-sm text-foreground">{t('rtas.detail.driver_injured')}</span>
                   </div>
                   <div className="flex items-center gap-3 pt-4">
                     <Switch
                       checked={editForm.police_attended || false}
                       onCheckedChange={(checked) => setEditForm({ ...editForm, police_attended: checked })}
                     />
-                    <span className="text-sm text-foreground">Police Attended</span>
+                    <span className="text-sm text-foreground">{t('rtas.detail.police_attended')}</span>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Vehicle Registration</span>
-                    <p className="mt-1 text-foreground">{rta.company_vehicle_registration || 'Not specified'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.vehicle_registration')}</span>
+                    <p className="mt-1 text-foreground">{rta.company_vehicle_registration || t('rtas.detail.not_specified')}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Driver Name</span>
-                    <p className="mt-1 text-foreground">{rta.driver_name || 'Not specified'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_name')}</span>
+                    <p className="mt-1 text-foreground">{rta.driver_name || t('rtas.detail.not_specified')}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Driver Injured</span>
-                    <p className="mt-1 text-foreground">{rta.driver_injured ? 'Yes' : 'No'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_injured')}</span>
+                    <p className="mt-1 text-foreground">{rta.driver_injured ? t('common.yes') : t('common.no')}</p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Police Attended</span>
-                    <p className="mt-1 text-foreground">{rta.police_attended ? 'Yes' : 'No'}</p>
+                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.police_attended')}</span>
+                    <p className="mt-1 text-foreground">{rta.police_attended ? t('common.yes') : t('common.no')}</p>
                   </div>
                 </div>
               )}
@@ -543,19 +545,19 @@ export default function RTADetail() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-primary" />
-                Actions ({actions.length})
+                {t('rtas.detail.actions_count', { count: actions.length })}
               </CardTitle>
               <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-1" />
-                Add
+                {t('common.add')}
               </Button>
             </CardHeader>
             <CardContent>
               {actions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No actions yet</p>
-                  <p className="text-sm">Create actions to track follow-up tasks</p>
+                  <p>{t('rtas.detail.no_actions')}</p>
+                  <p className="text-sm">{t('rtas.detail.no_actions_description')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -576,7 +578,7 @@ export default function RTADetail() {
                         <div>
                           <p className="font-medium text-foreground">{action.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                            {action.due_date ? t('rtas.detail.due', { date: new Date(action.due_date).toLocaleDateString() }) : t('rtas.detail.no_due_date')}
                           </p>
                         </div>
                       </div>
@@ -595,7 +597,7 @@ export default function RTADetail() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Quick Info</CardTitle>
+              <CardTitle className="text-base">{t('rtas.detail.quick_info')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
@@ -603,7 +605,7 @@ export default function RTADetail() {
                   <Calendar className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="text-sm text-muted-foreground">{t('rtas.detail.created')}</p>
                   <p className="font-medium text-foreground">
                     {new Date(rta.created_at).toLocaleDateString()}
                   </p>
@@ -614,8 +616,8 @@ export default function RTADetail() {
                   <MapPin className="w-5 h-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Location</p>
-                  <p className="font-medium text-foreground">{rta.location || 'Not specified'}</p>
+                  <p className="text-sm text-muted-foreground">{t('common.location')}</p>
+                  <p className="font-medium text-foreground">{rta.location || t('rtas.detail.not_specified')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -623,8 +625,8 @@ export default function RTADetail() {
                   <Shield className="w-5 h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Insurance Notified</p>
-                  <p className="font-medium text-foreground">{rta.insurance_notified ? 'Yes' : 'No'}</p>
+                  <p className="text-sm text-muted-foreground">{t('rtas.detail.insurance_notified')}</p>
+                  <p className="font-medium text-foreground">{rta.insurance_notified ? t('common.yes') : t('common.no')}</p>
                 </div>
               </div>
             </CardContent>
@@ -635,7 +637,7 @@ export default function RTADetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="w-4 h-4" />
-                Activity Timeline
+                {t('rtas.detail.activity_timeline')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -643,7 +645,7 @@ export default function RTADetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">RTA Reported</p>
+                    <p className="text-sm font-medium text-foreground">{t('rtas.detail.rta_reported')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(rta.reported_date).toLocaleString()}
                     </p>
@@ -652,7 +654,7 @@ export default function RTADetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Record Created</p>
+                    <p className="text-sm font-medium text-foreground">{t('rtas.detail.record_created')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(rta.created_at).toLocaleString()}
                     </p>
@@ -676,17 +678,16 @@ export default function RTADetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
-              Start Investigation
+              {t('rtas.detail.start_investigation')}
             </DialogTitle>
             <DialogDescription>
-              Create a root cause investigation for RTA {rta.reference_number}. 
-              Data will be prefilled from the collision record.
+              {t('rtas.detail.investigation_description', { reference: rta.reference_number })}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
               <label htmlFor="rtadetail-field-7" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Title
+                {t('rtas.detail.investigation_title')}
               </label>
               <Input id="rtadetail-field-7"
                 value={investigationForm.title}
@@ -696,7 +697,7 @@ export default function RTADetail() {
             </div>
             <div>
               <label htmlFor="rtadetail-field-8" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Type
+                {t('rtas.detail.investigation_type')}
               </label>
               <Select
                 value={investigationForm.investigation_type}
@@ -714,19 +715,19 @@ export default function RTADetail() {
               </Select>
             </div>
             <UserEmailSearch
-              label="Lead Investigator"
+              label={t('rtas.detail.lead_investigator')}
               value={investigationForm.lead_investigator}
               onChange={handleInvestigatorChange}
-              placeholder="Search by email..."
+              placeholder={t('rtas.detail.search_by_email')}
             />
             <div>
               <label htmlFor="rtadetail-field-9" className="block text-sm font-medium text-foreground mb-1">
-                Initial Notes
+                {t('rtas.detail.initial_notes')}
               </label>
               <Textarea id="rtadetail-field-9"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
-                placeholder="Describe the scope and initial findings..."
+                placeholder={t('rtas.detail.initial_notes_placeholder')}
                 rows={4}
               />
             </div>
@@ -747,7 +748,7 @@ export default function RTADetail() {
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    Open existing investigation ({existingInvestigation.reference})
+                    {t('rtas.detail.open_existing_investigation', { reference: existingInvestigation.reference })}
                   </Button>
                 )}
               </div>
@@ -755,10 +756,10 @@ export default function RTADetail() {
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rtas.detail.create_investigation')}
               </Button>
             </DialogFooter>
           </form>
@@ -771,34 +772,34 @@ export default function RTADetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              Add Action
+              {t('rtas.detail.add_action')}
             </DialogTitle>
             <DialogDescription>
-              Create a corrective or follow-up action for this road traffic collision.
+              {t('rtas.detail.add_action_description')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
               <label htmlFor="rtadetail-field-10" className="block text-sm font-medium text-foreground mb-1">
-                Action Title *
+                {t('rtas.detail.action_title_required')}
               </label>
               <Input id="rtadetail-field-10"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
-                placeholder="e.g., Review driver training"
+                placeholder={t('rtas.detail.action_title_placeholder')}
                 required
               />
             </div>
             <UserEmailSearch
-              label="Assign To"
+              label={t('rtas.detail.assign_to')}
               value={actionForm.assigned_to}
               onChange={handleAssigneeChange}
-              placeholder="Search by email..."
+              placeholder={t('rtas.detail.search_by_email')}
               required
             />
             <div>
               <label htmlFor="rtadetail-field-11" className="block text-sm font-medium text-foreground mb-1">
-                Priority
+                {t('common.priority')}
               </label>
               <Select
                 value={actionForm.priority}
@@ -817,7 +818,7 @@ export default function RTADetail() {
             </div>
             <div>
               <label htmlFor="rtadetail-field-12" className="block text-sm font-medium text-foreground mb-1">
-                Due Date
+                {t('rtas.detail.due_date')}
               </label>
               <Input id="rtadetail-field-12"
                 type="date"
@@ -827,21 +828,21 @@ export default function RTADetail() {
             </div>
             <div>
               <label htmlFor="rtadetail-field-13" className="block text-sm font-medium text-foreground mb-1">
-                Description
+                {t('common.description')}
               </label>
               <Textarea id="rtadetail-field-13"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
-                placeholder="Describe the action to be taken..."
+                placeholder={t('rtas.detail.action_description_placeholder')}
                 rows={3}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rtas.detail.create_action')}
               </Button>
             </DialogFooter>
           </form>

@@ -1,0 +1,39 @@
+rules:
+  - id: no-raw-sql-strings
+    patterns:
+      - pattern: |
+          $DB.execute("..." + ...)
+      - pattern: |
+          $DB.execute(f"...")
+    message: "Avoid raw SQL string concatenation/interpolation. Use parameterized queries."
+    severity: WARNING
+    languages: [python]
+
+  - id: no-hardcoded-secrets
+    patterns:
+      - pattern: |
+          $KEY = "sk-..."
+      - pattern: |
+          $KEY = "ghp_..."
+      - pattern: |
+          password = "..."
+    message: "Potential hardcoded secret detected. Use environment variables instead."
+    severity: ERROR
+    languages: [python]
+
+  - id: missing-auth-decorator
+    pattern: |
+      @router.$METHOD(...)
+      async def $FUNC(...):
+          ...
+    message: "API endpoint may be missing authentication. Ensure auth dependency is included."
+    severity: INFO
+    languages: [python]
+    metadata:
+      note: "Review manually - some endpoints (health, login) are intentionally unauthenticated."
+
+  - id: no-console-log-in-production
+    pattern: console.log(...)
+    message: "Remove console.log before production. Use a proper logging utility."
+    severity: WARNING
+    languages: [typescript, javascript]

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import i18n from '../i18n/i18n'
 
 /**
  * Utility function for merging Tailwind CSS classes
@@ -14,7 +15,8 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleDateString('en-GB', {
+  const locale = i18n.language || 'en-GB';
+  return d.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -27,13 +29,19 @@ export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOpt
  */
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  return d.toLocaleString('en-GB', {
+  const locale = i18n.language || 'en-GB';
+  return d.toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
+  const locale = i18n.language || 'en-GB';
+  return new Intl.NumberFormat(locale, options).format(value);
 }
 
 /**

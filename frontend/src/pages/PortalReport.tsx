@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -56,6 +57,7 @@ const REPORT_TYPES = [
 ];
 
 export default function PortalReport() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   return (
@@ -71,7 +73,7 @@ export default function PortalReport() {
           </button>
           <div className="flex items-center gap-3">
             <Shield className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-foreground">Submit Report</span>
+            <span className="font-semibold text-foreground">{t('portal.submit_report')}</span>
           </div>
         </div>
       </header>
@@ -79,8 +81,8 @@ export default function PortalReport() {
       <main className="max-w-lg mx-auto px-4 sm:px-6 py-8">
         {/* Page Title */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-foreground mb-2">What are you reporting?</h1>
-          <p className="text-muted-foreground">Select the type that best describes your report</p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.what_reporting')}</h1>
+          <p className="text-muted-foreground">{t('portal.select_report_type')}</p>
         </div>
 
         {/* Report Type Options */}
@@ -119,8 +121,7 @@ export default function PortalReport() {
 
         {/* Help text */}
         <p className="mt-8 text-center text-sm text-muted-foreground">
-          Not sure which to choose? Pick the closest match —<br />
-          you can provide more details in the form.
+          {t('portal.not_sure')}
         </p>
       </main>
     </div>

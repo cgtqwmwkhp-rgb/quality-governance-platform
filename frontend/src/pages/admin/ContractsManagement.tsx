@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Search,
@@ -47,6 +48,7 @@ const INITIAL_CONTRACTS: Contract[] = [
 ];
 
 export default function ContractsManagement() {
+  const { t } = useTranslation();
   const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [showInactive, setShowInactive] = useState(false);
@@ -132,14 +134,14 @@ export default function ContractsManagement() {
       handleCancel();
     } catch {
       console.error('Failed to save');
-      setError('Failed to save contract. Please try again.');
+      setError(t('admin.contracts.save_error'));
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = (id: number) => {
-    if (confirm('Are you sure you want to delete this contract?')) {
+    if (confirm(t('admin.contracts.delete_confirm'))) {
       setContracts((prev) => prev.filter((c) => c.id !== id));
     }
   };
@@ -157,14 +159,14 @@ export default function ContractsManagement() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Contracts</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t('admin.contracts.title')}</h1>
               <p className="text-muted-foreground mt-1">
-                Manage contracts available in forms and reports
+                {t('admin.contracts.subtitle')}
               </p>
             </div>
             <Button onClick={handleAdd}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Contract
+              {t('admin.contracts.add_contract')}
             </Button>
           </div>
 
@@ -175,7 +177,7 @@ export default function ContractsManagement() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search contracts..."
+                placeholder={t('admin.contracts.search_placeholder')}
                 className="pl-10"
               />
             </div>
@@ -186,7 +188,7 @@ export default function ContractsManagement() {
                 onChange={(e) => setShowInactive(e.target.checked)}
                 className="rounded border-border"
               />
-              Show inactive
+              {t('admin.contracts.show_inactive')}
             </label>
           </div>
         </div>
@@ -211,14 +213,14 @@ export default function ContractsManagement() {
               <Card className="p-12 text-center">
                 <Building className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">
-                  No contracts found
+                  {t('admin.contracts.empty_title')}
                 </h3>
                 <p className="text-muted-foreground mb-4">
-                  Add your first contract to get started
+                  {t('admin.contracts.empty_subtitle')}
                 </p>
                 <Button onClick={handleAdd}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Contract
+                  {t('admin.contracts.add_contract')}
                 </Button>
               </Card>
             ) : (
@@ -286,14 +288,14 @@ export default function ContractsManagement() {
           <div>
             <Card className="p-6 sticky top-6">
               <h3 className="font-semibold text-foreground mb-4">
-                {isAdding ? 'Add Contract' : editingContract ? 'Edit Contract' : 'Contract Details'}
+                {isAdding ? t('admin.contracts.add_contract') : editingContract ? t('admin.contracts.edit_contract') : t('admin.contracts.contract_details')}
               </h3>
 
               {(isAdding || editingContract) ? (
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="contractsmanagement-field-0" className="block text-sm font-medium text-foreground mb-2">
-                      Name *
+                      {t('admin.contracts.name_label')}
                     </label>
                     <Input id="contractsmanagement-field-0"
                       value={formData.name || ''}
@@ -306,7 +308,7 @@ export default function ContractsManagement() {
 
                   <div>
                     <label htmlFor="contractsmanagement-field-1" className="block text-sm font-medium text-foreground mb-2">
-                      Code *
+                      {t('admin.contracts.code_label')}
                     </label>
                     <Input id="contractsmanagement-field-1"
                       value={formData.code || ''}
@@ -325,7 +327,7 @@ export default function ContractsManagement() {
 
                   <div>
                     <label htmlFor="contractsmanagement-field-2" className="block text-sm font-medium text-foreground mb-2">
-                      Client Name
+                      {t('admin.contracts.client_name')}
                     </label>
                     <Input id="contractsmanagement-field-2"
                       value={formData.client_name || ''}
@@ -352,7 +354,7 @@ export default function ContractsManagement() {
 
                   <div>
                     <label htmlFor="contractsmanagement-field-4" className="block text-sm font-medium text-foreground mb-2">
-                      Contact Email
+                      {t('admin.contracts.contact_email')}
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -370,7 +372,7 @@ export default function ContractsManagement() {
 
                   <div>
                     <label htmlFor="contractsmanagement-field-5" className="block text-sm font-medium text-foreground mb-2">
-                      Contact Phone
+                      {t('admin.contracts.contact_phone')}
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -415,7 +417,7 @@ export default function ContractsManagement() {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Building className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>Select a contract to edit</p>
+                  <p>{t('admin.contracts.select_contract')}</p>
                   <p className="text-sm">or add a new one</p>
                 </div>
               )}

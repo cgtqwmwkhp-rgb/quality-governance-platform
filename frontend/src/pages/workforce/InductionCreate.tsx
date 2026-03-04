@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft } from 'lucide-react'
 import { workforceApi, auditsApi, getApiErrorMessage, type AuditTemplate, type EngineerProfile, type AssetType } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 
 export default function InductionCreate() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
@@ -83,20 +85,20 @@ export default function InductionCreate() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">New Induction</h1>
-          <p className="text-muted-foreground text-sm">Create a training induction for an engineer</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('workforce.induction.new')}</h1>
+          <p className="text-muted-foreground text-sm">{t('workforce.induction.create_subtitle')}</p>
         </div>
       </div>
 
       <Card className="bg-card border-border">
         <CardHeader>
-          <h2 className="text-lg font-semibold text-foreground">Induction Details</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('workforce.induction.details')}</h2>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="inductioncreate-field-0" className="block text-sm font-medium text-foreground mb-1">
-                Template <span className="text-destructive">*</span>
+                {t('workforce.common.template')} <span className="text-destructive">*</span>
               </label>
               <select id="inductioncreate-field-0"
                 value={templateId}
@@ -104,7 +106,7 @@ export default function InductionCreate() {
                 required
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Select a template...</option>
+                <option value="">{t('workforce.common.select_template')}</option>
                 {templates.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.audit_type})
@@ -115,7 +117,7 @@ export default function InductionCreate() {
 
             <div>
               <label htmlFor="inductioncreate-field-1" className="block text-sm font-medium text-foreground mb-1">
-                Engineer <span className="text-destructive">*</span>
+                {t('workforce.common.engineer')} <span className="text-destructive">*</span>
               </label>
               <select id="inductioncreate-field-1"
                 value={engineerId}
@@ -123,7 +125,7 @@ export default function InductionCreate() {
                 required
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">Select an engineer...</option>
+                <option value="">{t('workforce.common.select_engineer')}</option>
                 {engineers.map((eng) => (
                   <option key={eng.id} value={eng.id}>
                     {eng.employee_number || `#${eng.id}`} — {eng.job_title || 'Engineer'} ({eng.department || 'N/A'})
@@ -133,13 +135,13 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label htmlFor="inductioncreate-field-2" className="block text-sm font-medium text-foreground mb-1">Asset Type</label>
+              <label htmlFor="inductioncreate-field-2" className="block text-sm font-medium text-foreground mb-1">{t('workforce.common.asset_type')}</label>
               <select id="inductioncreate-field-2"
                 value={assetTypeId}
                 onChange={(e) => setAssetTypeId(e.target.value)}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                <option value="">None (optional)</option>
+                <option value="">{t('workforce.common.none_optional')}</option>
                 {assetTypes.map((at) => (
                   <option key={at.id} value={at.id}>
                     {at.name} ({at.category})
@@ -149,29 +151,29 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label htmlFor="inductioncreate-field-3" className="block text-sm font-medium text-foreground mb-1">Title</label>
+              <label htmlFor="inductioncreate-field-3" className="block text-sm font-medium text-foreground mb-1">{t('common.title')}</label>
               <input id="inductioncreate-field-3"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Site induction for new starter"
+                placeholder={t('workforce.induction.title_placeholder')}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label htmlFor="inductioncreate-field-4" className="block text-sm font-medium text-foreground mb-1">Location</label>
+              <label htmlFor="inductioncreate-field-4" className="block text-sm font-medium text-foreground mb-1">{t('common.location')}</label>
               <input id="inductioncreate-field-4"
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g. Depot B"
+                placeholder={t('workforce.common.location_placeholder')}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
             <div>
-              <label htmlFor="inductioncreate-field-5" className="block text-sm font-medium text-foreground mb-1">Scheduled Date</label>
+              <label htmlFor="inductioncreate-field-5" className="block text-sm font-medium text-foreground mb-1">{t('workforce.common.scheduled_date')}</label>
               <input id="inductioncreate-field-5"
                 type="date"
                 value={scheduledDate}
@@ -181,11 +183,11 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label htmlFor="inductioncreate-field-6" className="block text-sm font-medium text-foreground mb-1">Notes</label>
+              <label htmlFor="inductioncreate-field-6" className="block text-sm font-medium text-foreground mb-1">{t('common.notes')}</label>
               <textarea id="inductioncreate-field-6"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Additional context or instructions..."
+                placeholder={t('workforce.common.notes_placeholder')}
                 className="w-full min-h-[80px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -197,7 +199,7 @@ export default function InductionCreate() {
             )}
 
             <Button type="submit" disabled={submitting} className="w-full min-h-[48px] text-base">
-              {submitting ? 'Creating...' : 'Create & Start Induction'}
+              {submitting ? t('workforce.common.creating') : t('workforce.induction.create_start')}
             </Button>
           </form>
         </CardContent>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Calendar,
   ChevronLeft,
@@ -34,6 +35,7 @@ interface CalendarEvent {
 }
 
 export default function CalendarView() {
+  const { t } = useTranslation();
   const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19));
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
   const [, setSelectedDate] = useState<Date | null>(null);
@@ -188,9 +190,9 @@ export default function CalendarView() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <Calendar className="w-8 h-8 text-primary" />
             </div>
-            Calendar
+            {t('calendar.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Audits, reviews, deadlines and events</p>
+          <p className="text-muted-foreground mt-1">{t('calendar.subtitle')}</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -201,7 +203,7 @@ export default function CalendarView() {
                 "p-2 rounded-md transition-all",
                 viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
-              title="Month View"
+              title={t('calendar.month_view')}
             >
               <Grid3X3 className="w-5 h-5" />
             </button>
@@ -211,7 +213,7 @@ export default function CalendarView() {
                 "p-2 rounded-md transition-all",
                 viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
-              title="List View"
+              title={t('calendar.list_view')}
             >
               <List className="w-5 h-5" />
             </button>
@@ -227,7 +229,7 @@ export default function CalendarView() {
           
           <Button>
             <Plus className="w-5 h-5" />
-            Add Event
+            {t('calendar.add_event')}
           </Button>
         </div>
       </div>
@@ -322,7 +324,7 @@ export default function CalendarView() {
                         ))}
                         {dayEvents.length > 3 && (
                           <span className="text-xs text-muted-foreground pl-1">
-                            +{dayEvents.length - 3} more
+                            {t('calendar.more', { count: dayEvents.length - 3 })}
                           </span>
                         )}
                       </div>
@@ -397,7 +399,7 @@ export default function CalendarView() {
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
-            Upcoming
+            {t('calendar.upcoming')}
           </h3>
           
           <div className="space-y-4">
@@ -436,7 +438,7 @@ export default function CalendarView() {
 
           {/* Legend */}
           <div className="mt-6 pt-4 border-t border-border">
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">Event Types</h4>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">{t('calendar.event_types')}</h4>
             <div className="space-y-2">
               {Object.entries(eventTypeStyles).map(([type, styles]) => (
                 <div key={type} className="flex items-center gap-2 text-sm">

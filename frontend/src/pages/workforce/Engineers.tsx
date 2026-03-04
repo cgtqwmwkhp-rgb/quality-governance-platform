@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, Users, MapPin, Building2, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, type EngineerProfile } from '../../api/client'
@@ -9,6 +10,7 @@ import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
 
 export default function Engineers() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [engineers, setEngineers] = useState<EngineerProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,9 +46,9 @@ export default function Engineers() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Engineers</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('workforce.engineers.title')}</h1>
         <p className="text-muted-foreground mt-1">
-          Engineer directory and competency overview
+          {t('workforce.engineers.subtitle')}
         </p>
       </div>
 
@@ -60,7 +62,7 @@ export default function Engineers() {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, employee number, department..."
+              placeholder={t('workforce.engineers.search_placeholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-9"
@@ -78,7 +80,7 @@ export default function Engineers() {
           {engineers.length === 0 ? (
             <Card className="col-span-full">
               <CardContent className="py-12 text-center text-muted-foreground">
-                No engineers found.
+                {t('workforce.engineers.empty')}
               </CardContent>
             </Card>
           ) : (
@@ -124,7 +126,7 @@ export default function Engineers() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Badge variant={eng.is_active ? 'success' : 'secondary'}>
-                          {eng.is_active ? 'Active' : 'Inactive'}
+                          {eng.is_active ? t('common.active') : t('common.inactive')}
                         </Badge>
                       </div>
                     </div>

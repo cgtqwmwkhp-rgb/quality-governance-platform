@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   ChevronLeft,
@@ -34,6 +35,7 @@ interface ResponseState {
 }
 
 export default function AssessmentExecution() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -100,7 +102,7 @@ export default function AssessmentExecution() {
           setTemplateName(template.name)
         } else {
           setQuestions([])
-          setTemplateName(run.title || 'Assessment')
+          setTemplateName(run.title || t('workforce.assessment.title'))
         }
 
         try {
@@ -117,7 +119,7 @@ export default function AssessmentExecution() {
       }
     }
     load()
-  }, [id, flattenQuestions])
+  }, [id, flattenQuestions, t])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -249,7 +251,7 @@ export default function AssessmentExecution() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Assessment Summary</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t('workforce.assessments.summary')}</h1>
             <p className="text-muted-foreground text-sm">
               {assessment?.reference_number} · {engineerName} · {templateName}
             </p>
@@ -258,25 +260,25 @@ export default function AssessmentExecution() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <h2 className="text-lg font-semibold text-foreground">Overall Statistics</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('workforce.common.overall_statistics')}</h2>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="rounded-lg bg-success/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{competentCount}</span>
-                <p className="text-sm text-muted-foreground">Competent</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.competency.competent')}</p>
               </div>
               <div className="rounded-lg bg-destructive/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{notCompetentCount}</span>
-                <p className="text-sm text-muted-foreground">Not Competent</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.competency.not_competent')}</p>
               </div>
               <div className="rounded-lg bg-muted border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{naCount}</span>
-                <p className="text-sm text-muted-foreground">N/A</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.common.na')}</p>
               </div>
             </div>
             <div className="rounded-lg border border-border p-4 bg-card">
-              <p className="text-sm text-muted-foreground mb-1">Outcome</p>
+              <p className="text-sm text-muted-foreground mb-1">{t('workforce.assessments.outcome')}</p>
               <p
                 className={cn(
                   'text-xl font-semibold',
@@ -285,26 +287,26 @@ export default function AssessmentExecution() {
                   outcome === 'Conditional' && 'text-warning'
                 )}
               >
-                {outcome}
+                {outcome === 'Pass' ? t('workforce.competency.pass') : outcome === 'Fail' ? t('workforce.competency.fail') : t('workforce.competency.conditional')}
               </p>
             </div>
             <div>
-              <label htmlFor="assessmentexecution-field-0" className="block text-sm font-medium text-foreground mb-2">Overall debrief notes</label>
+              <label htmlFor="assessmentexecution-field-0" className="block text-sm font-medium text-foreground mb-2">{t('workforce.assessments.debrief_notes')}</label>
               <textarea id="assessmentexecution-field-0"
                 value={debriefNotes}
                 onChange={(e) => setDebriefNotes(e.target.value)}
-                placeholder="Add overall debrief notes..."
+                placeholder={t('workforce.assessments.debrief_placeholder')}
                 className="w-full min-h-[100px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
-              <label htmlFor="assessmentexecution-field-1" className="block text-sm font-medium text-foreground mb-2">Engineer signature (final)</label>
+              <label htmlFor="assessmentexecution-field-1" className="block text-sm font-medium text-foreground mb-2">{t('workforce.assessments.engineer_signature')}</label>
               <div className="rounded-lg border border-dashed border-border bg-muted/20 min-h-[80px] flex items-center justify-center p-4">
                 <input id="assessmentexecution-field-1"
                   type="text"
                   value={finalSignature ?? ''}
                   onChange={(e) => setFinalSignature(e.target.value || null)}
-                  placeholder="Signature / type name to confirm"
+                  placeholder={t('workforce.assessments.signature_placeholder')}
                   className="w-full max-w-md px-4 py-2 rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
@@ -319,7 +321,7 @@ export default function AssessmentExecution() {
               disabled={submitting}
               className="w-full min-h-[48px] text-base"
             >
-              {submitting ? 'Submitting...' : 'Submit Assessment'}
+              {submitting ? 'Submitting...' : t('workforce.common.submit_assessment')}
             </Button>
           </CardContent>
         </Card>
@@ -335,8 +337,8 @@ export default function AssessmentExecution() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{assessment?.reference_number ?? 'Assessment'}</h1>
-            <p className="text-muted-foreground text-sm">No questions in template</p>
+            <h1 className="text-2xl font-bold text-foreground">{assessment?.reference_number ?? t('workforce.assessment.title')}</h1>
+            <p className="text-muted-foreground text-sm">{t('workforce.common.no_questions')}</p>
           </div>
         </div>
         <Card>
@@ -357,7 +359,7 @@ export default function AssessmentExecution() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{assessment?.reference_number ?? 'Assessment'}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{assessment?.reference_number ?? t('workforce.assessment.title')}</h1>
           <p className="text-muted-foreground text-sm">
             {engineerName} · {templateName} · {assessment?.scheduled_date ? new Date(assessment.scheduled_date).toLocaleDateString() : '—'}
           </p>
@@ -367,9 +369,9 @@ export default function AssessmentExecution() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Progress</span>
+            <span className="text-sm font-medium text-foreground">{t('workforce.common.progress')}</span>
             <span className="text-sm text-muted-foreground">
-              {answeredCount} / {totalQuestions} questions
+              {answeredCount} / {totalQuestions} {t('workforce.common.questions')}
             </span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden mt-2">
@@ -404,7 +406,7 @@ export default function AssessmentExecution() {
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">{question.section_title ?? 'Question'}</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">{question.section_title ?? t('workforce.common.question')}</span>
             {question.criticality && (
               <span
                 className={cn(
@@ -414,7 +416,7 @@ export default function AssessmentExecution() {
                     : 'bg-info/20 text-info'
                 )}
               >
-                {question.criticality === 'essential' ? 'Essential' : 'Good-to-Have'}
+                {question.criticality === 'essential' ? t('workforce.common.essential') : t('workforce.common.good_to_have')}
               </span>
             )}
           </div>
@@ -426,7 +428,7 @@ export default function AssessmentExecution() {
                 onClick={() => setGuidanceOpen((o) => !o)}
                 className="text-sm text-muted-foreground flex items-center gap-1 hover:text-foreground"
               >
-                Assessor guidance
+                {t('workforce.common.assessor_guidance')}
                 <ChevronDown className={cn('w-4 h-4 transition-transform', guidanceOpen && 'rotate-180')} />
               </button>
               {guidanceOpen && (
@@ -444,7 +446,7 @@ export default function AssessmentExecution() {
               onClick={() => setResponse(question.id, { verdict: 'competent' })}
             >
               <Check className="w-5 h-5" />
-              Competent
+              {t('workforce.competency.competent')}
             </Button>
             <Button
               variant={resp.verdict === 'not_competent' ? 'destructive' : 'outline'}
@@ -453,7 +455,7 @@ export default function AssessmentExecution() {
               onClick={() => setResponse(question.id, { verdict: 'not_competent' })}
             >
               <X className="w-5 h-5" />
-              Not Competent
+              {t('workforce.competency.not_competent')}
             </Button>
             <Button
               variant={resp.verdict === 'na' ? 'secondary' : 'outline'}
@@ -462,14 +464,14 @@ export default function AssessmentExecution() {
               onClick={() => setResponse(question.id, { verdict: 'na' })}
             >
               <Minus className="w-5 h-5" />
-              N/A
+              {t('workforce.common.na')}
             </Button>
           </div>
 
           <div>
             <label htmlFor="assessmentexecution-field-2" className="block text-sm font-medium text-foreground mb-2">
-              Feedback / Supervisor notes
-              {resp.verdict === 'not_competent' && <span className="text-destructive ml-1">(required)</span>}
+              {t('workforce.assessments.feedback')}
+              {resp.verdict === 'not_competent' && <span className="text-destructive ml-1">{t('workforce.common.required')}</span>}
             </label>
             <textarea id="assessmentexecution-field-2"
               value={resp.feedback || resp.supervisorNotes}
@@ -479,13 +481,13 @@ export default function AssessmentExecution() {
                   supervisorNotes: e.target.value,
                 })
               }
-              placeholder="Add feedback for this question..."
+              placeholder={t('workforce.assessments.feedback_placeholder')}
               className="w-full min-h-[80px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
 
           <div>
-            <span className="block text-sm font-medium text-foreground mb-2">Photo evidence</span>
+            <span className="block text-sm font-medium text-foreground mb-2">{t('workforce.assessments.photo_evidence')}</span>
             <div className="flex gap-4 flex-wrap">
               <div
                 role="button"
@@ -495,7 +497,7 @@ export default function AssessmentExecution() {
                 className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 bg-muted/20 min-w-[140px] cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <Camera className="w-8 h-8 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Upload</span>
+                <span className="text-sm text-muted-foreground">{t('workforce.common.upload')}</span>
               </div>
               <input
                 ref={fileInputRef}
@@ -508,7 +510,7 @@ export default function AssessmentExecution() {
                 <div className="relative">
                   <img
                     src={resp.photoPreview}
-                    alt="Evidence"
+                    alt={t('workforce.common.evidence')}
                     className="w-24 h-24 object-cover rounded-lg border border-border"
                   />
                   <button
@@ -524,13 +526,13 @@ export default function AssessmentExecution() {
           </div>
 
           <div>
-            <label htmlFor="assessmentexecution-field-3" className="block text-sm font-medium text-foreground mb-2">Engineer sign-off (this item)</label>
+            <label htmlFor="assessmentexecution-field-3" className="block text-sm font-medium text-foreground mb-2">{t('workforce.assessments.engineer_signoff')}</label>
             <div className="rounded-lg border border-dashed border-border bg-muted/20 min-h-[60px] flex items-center justify-center p-3">
               <input id="assessmentexecution-field-3"
                 type="text"
                 value={resp.signatureBase64 ?? ''}
                 onChange={(e) => setResponse(question.id, { signatureBase64: e.target.value || null })}
-                placeholder="Signature or type name"
+                placeholder={t('workforce.assessments.signoff_placeholder')}
                 className="w-full max-w-xs px-3 py-2 rounded border border-border bg-card text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -546,16 +548,16 @@ export default function AssessmentExecution() {
           className="gap-2 min-h-[44px]"
         >
           <ChevronLeft className="w-4 h-4" />
-          Previous
+          {t('common.previous')}
         </Button>
         <Button onClick={handleNext} className="gap-2 min-h-[44px]">
           {currentIndex < totalQuestions - 1 ? (
             <>
-              Next
+              {t('common.next')}
               <ChevronRight className="w-4 h-4" />
             </>
           ) : (
-            'Review & Submit'
+            t('workforce.common.review_submit')
           )}
         </Button>
       </div>

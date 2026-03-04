@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Save,
   Settings,
@@ -109,6 +110,7 @@ const INITIAL_SETTINGS: Setting[] = [
 ];
 
 export default function SystemSettings() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS);
   const [activeCategory, setActiveCategory] = useState('branding');
   const [isSaving, setIsSaving] = useState(false);
@@ -136,7 +138,7 @@ export default function SystemSettings() {
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch {
       console.error('Failed to save settings');
-      setSaveError('Failed to save settings. Please try again.');
+      setSaveError(t('admin.settings.save_error'));
     } finally {
       setIsSaving(false);
     }
@@ -248,9 +250,9 @@ export default function SystemSettings() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">System Settings</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t('admin.settings.title')}</h1>
               <p className="text-muted-foreground mt-1">
-                Configure system-wide settings and preferences
+                {t('admin.settings.subtitle')}
               </p>
             </div>
             <div className="flex flex-col items-end">
@@ -262,10 +264,10 @@ export default function SystemSettings() {
                 ) : (
                   <Save className="w-4 h-4 mr-2" />
                 )}
-                {saveSuccess ? 'Saved!' : 'Save Changes'}
+                {saveSuccess ? t('admin.settings.saved') : t('admin.settings.save_changes')}
               </Button>
               {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
-              {saveSuccess && <p className="text-sm text-green-600 mt-2">Settings saved successfully</p>}
+              {saveSuccess && <p className="text-sm text-green-600 mt-2">{t('admin.settings.save_success')}</p>}
             </div>
           </div>
         </div>
@@ -353,7 +355,7 @@ export default function SystemSettings() {
                 {categorySettings.length === 0 && (
                   <div className="text-center py-12 text-muted-foreground">
                     <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No settings in this category</p>
+                    <p>{t('admin.settings.no_settings')}</p>
                   </div>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -128,6 +129,7 @@ const MOCK_FORMS: FormTemplate[] = [
 ];
 
 export default function FormsList() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS);
   const [searchQuery, setSearchQuery] = useState('');
@@ -143,7 +145,7 @@ export default function FormsList() {
   });
 
   const handleDelete = (id: number) => {
-    if (confirm('Are you sure you want to delete this form?')) {
+    if (confirm(t('admin.forms.delete_confirm'))) {
       setForms((prev) => prev.filter((f) => f.id !== id));
     }
     setActiveMenu(null);
@@ -178,14 +180,14 @@ export default function FormsList() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Form Builder</h1>
+              <h1 className="text-2xl font-bold text-foreground">{t('admin.forms.title')}</h1>
               <p className="text-muted-foreground mt-1">
-                Create and manage customizable forms for incidents, complaints, and more
+                {t('admin.forms.list_subtitle')}
               </p>
             </div>
             <Button onClick={() => navigate('/admin/forms/new')}>
               <Plus className="w-4 h-4 mr-2" />
-              Create New Form
+              {t('admin.forms.create_new')}
             </Button>
           </div>
 
@@ -196,7 +198,7 @@ export default function FormsList() {
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search forms..."
+                placeholder={t('admin.forms.search_placeholder')}
                 className="pl-10"
               />
             </div>
@@ -211,7 +213,7 @@ export default function FormsList() {
                     : 'bg-muted text-muted-foreground hover:text-foreground'
                 )}
               >
-                All
+                {t('common.all')}
               </button>
               {Object.entries(FORM_TYPE_CONFIG).map(([type, config]) => (
                 <button
@@ -238,15 +240,15 @@ export default function FormsList() {
         {filteredForms.length === 0 ? (
           <Card className="p-12 text-center">
             <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No forms found</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">{t('admin.forms.empty_title')}</h3>
             <p className="text-muted-foreground mb-4">
               {searchQuery
-                ? 'Try adjusting your search or filters'
-                : 'Get started by creating your first form'}
+                ? t('admin.forms.empty_search_hint')
+                : t('admin.forms.empty_subtitle')}
             </p>
             <Button onClick={() => navigate('/admin/forms/new')}>
               <Plus className="w-4 h-4 mr-2" />
-              Create New Form
+              {t('admin.forms.create_new')}
             </Button>
           </Card>
         ) : (
@@ -275,11 +277,11 @@ export default function FormsList() {
                       {form.is_published ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs">
                           <Check className="w-3 h-3" />
-                          Published
+                          {t('status.published')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted text-muted-foreground rounded-full text-xs">
-                          Draft
+                          {t('status.draft')}
                         </span>
                       )}
                     </div>
@@ -290,7 +292,7 @@ export default function FormsList() {
                     {form.name}
                   </h3>
                   <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                    {form.description || 'No description'}
+                    {form.description || t('admin.forms.no_description')}
                   </p>
 
                   {/* Stats */}
@@ -326,21 +328,21 @@ export default function FormsList() {
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
                         >
                           <Edit className="w-4 h-4" />
-                          Edit Form
+                          {t('admin.forms.edit_form')}
                         </button>
                         <button
                           onClick={() => {}}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
                         >
                           <Eye className="w-4 h-4" />
-                          Preview
+                          {t('admin.forms.preview')}
                         </button>
                         <button
                           onClick={() => handleDuplicate(form)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
                         >
                           <Copy className="w-4 h-4" />
-                          Duplicate
+                          {t('common.duplicate')}
                         </button>
                         <button
                           onClick={() => togglePublish(form.id)}
@@ -349,12 +351,12 @@ export default function FormsList() {
                           {form.is_published ? (
                             <>
                               <X className="w-4 h-4" />
-                              Unpublish
+                              {t('admin.forms.unpublish')}
                             </>
                           ) : (
                             <>
                               <Check className="w-4 h-4" />
-                              Publish
+                              {t('admin.forms.publish')}
                             </>
                           )}
                         </button>
@@ -364,7 +366,7 @@ export default function FormsList() {
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
-                          Delete
+                          {t('delete')}
                         </button>
                       </div>
                     )}

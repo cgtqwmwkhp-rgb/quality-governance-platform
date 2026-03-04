@@ -13,6 +13,7 @@ import { workforceApi, auditsApi, type InductionRun, type AuditQuestion } from '
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
+import { useTranslation } from 'react-i18next'
 
 type Verdict = 'competent' | 'not_yet_competent' | 'na'
 
@@ -31,6 +32,7 @@ interface ResponseState {
 }
 
 export default function TrainingExecution() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
@@ -80,8 +82,8 @@ export default function TrainingExecution() {
 
         let template: { sections: { title: string; questions: AuditQuestion[] }[]; name: string } | null = null
         try {
-          const t = await auditsApi.getTemplate(run.template_id)
-          template = t.data
+          const templateRes = await auditsApi.getTemplate(run.template_id)
+          template = templateRes.data
         } catch {
           // template might not exist
         }
@@ -97,7 +99,7 @@ export default function TrainingExecution() {
           setTemplateName(template.name)
         } else {
           setQuestions([])
-          setTemplateName(run.title || 'Induction')
+          setTemplateName(run.title || t('workforce.induction.title'))
         }
 
         try {
@@ -114,7 +116,7 @@ export default function TrainingExecution() {
       }
     }
     load()
-  }, [id, flattenQuestions])
+  }, [id, flattenQuestions, t])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -221,7 +223,7 @@ export default function TrainingExecution() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Induction Summary</h1>
+            <h1 className="text-2xl font-bold text-foreground">{t('workforce.induction.summary')}</h1>
             <p className="text-muted-foreground text-sm">
               {induction?.reference_number} · {engineerName} · {templateName}
             </p>
@@ -230,21 +232,21 @@ export default function TrainingExecution() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <h2 className="text-lg font-semibold text-foreground">Overall Statistics</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('workforce.common.overall_statistics')}</h2>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="rounded-lg bg-success/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{competentCount}</span>
-                <p className="text-sm text-muted-foreground">Competent</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.competency.competent')}</p>
               </div>
               <div className="rounded-lg bg-destructive/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{notYetCompetentCount}</span>
-                <p className="text-sm text-muted-foreground">Not Yet Competent</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.competency.not_yet_competent')}</p>
               </div>
               <div className="rounded-lg bg-muted border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{naCount}</span>
-                <p className="text-sm text-muted-foreground">N/A</p>
+                <p className="text-sm text-muted-foreground">{t('workforce.common.na')}</p>
               </div>
             </div>
 
@@ -259,7 +261,7 @@ export default function TrainingExecution() {
               disabled={submitting}
               className="w-full min-h-[48px] text-base"
             >
-              {submitting ? 'Submitting...' : 'Submit Induction'}
+              {submitting ? 'Submitting...' : t('workforce.common.submit_induction')}
             </Button>
           </CardContent>
         </Card>
@@ -275,13 +277,13 @@ export default function TrainingExecution() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? 'Induction'}</h1>
-            <p className="text-muted-foreground text-sm">No questions in template</p>
+            <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? t('workforce.induction.title')}</h1>
+            <p className="text-muted-foreground text-sm">{t('workforce.common.no_questions')}</p>
           </div>
         </div>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground">This induction template has no questions. Please configure the template first.</p>
+            <p className="text-muted-foreground">{t('workforce.common.no_questions_description')}</p>
           </CardContent>
         </Card>
       </div>
@@ -297,7 +299,7 @@ export default function TrainingExecution() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? 'Induction'}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? t('workforce.induction.title')}</h1>
           <p className="text-muted-foreground text-sm">
             {engineerName} · {templateName} · {induction?.scheduled_date ? new Date(induction.scheduled_date).toLocaleDateString() : '—'}
           </p>
@@ -307,9 +309,9 @@ export default function TrainingExecution() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Progress</span>
+            <span className="text-sm font-medium text-foreground">{t('workforce.common.progress')}</span>
             <span className="text-sm text-muted-foreground">
-              {answeredCount} / {totalQuestions} items
+              {answeredCount} / {totalQuestions} {t('workforce.common.items')}
             </span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden mt-2">
@@ -332,7 +334,7 @@ export default function TrainingExecution() {
                       ? 'bg-muted text-foreground hover:bg-muted/80'
                       : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                 )}
-                aria-label={`Item ${i + 1}`}
+                aria-label={`${t('workforce.common.item')} ${i + 1}`}
               >
                 {i + 1}
               </button>
@@ -344,7 +346,7 @@ export default function TrainingExecution() {
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">{question.section_title ?? 'Item'}</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">{question.section_title ?? t('workforce.common.item')}</span>
             {question.criticality && (
               <span
                 className={cn(
@@ -354,7 +356,7 @@ export default function TrainingExecution() {
                     : 'bg-info/20 text-info'
                 )}
               >
-                {question.criticality === 'essential' ? 'Essential' : 'Good-to-Have'}
+                {question.criticality === 'essential' ? t('workforce.common.essential') : t('workforce.common.good_to_have')}
               </span>
             )}
           </div>
@@ -366,7 +368,7 @@ export default function TrainingExecution() {
                 onClick={() => setGuidanceOpen((o) => !o)}
                 className="text-sm text-muted-foreground flex items-center gap-1 hover:text-foreground"
               >
-                Guidance
+                {t('workforce.common.guidance')}
                 <ChevronDown className={cn('w-4 h-4 transition-transform', guidanceOpen && 'rotate-180')} />
               </button>
               {guidanceOpen && (
@@ -384,13 +386,13 @@ export default function TrainingExecution() {
                 onChange={(e) => setResponse(question.id, { shownExplained: e.target.checked })}
                 className="rounded border-border h-5 w-5"
               />
-              <span className="text-sm font-medium text-foreground">Shown &amp; Explained</span>
+              <span className="text-sm font-medium text-foreground">{t('workforce.induction.shown_explained')}</span>
             </label>
           </div>
 
           <div>
             <span className="block text-sm font-medium text-foreground mb-3">
-              Understanding verdict
+              {t('workforce.induction.verdict')}
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Button
@@ -400,7 +402,7 @@ export default function TrainingExecution() {
                 onClick={() => setResponse(question.id, { verdict: 'competent' })}
               >
                 <Check className="w-5 h-5" />
-                Competent
+                {t('workforce.competency.competent')}
               </Button>
               <Button
                 variant={resp.verdict === 'not_yet_competent' ? 'destructive' : 'outline'}
@@ -409,7 +411,7 @@ export default function TrainingExecution() {
                 onClick={() => setResponse(question.id, { verdict: 'not_yet_competent' })}
               >
                 <X className="w-5 h-5" />
-                Not Yet Competent
+                {t('workforce.competency.not_yet_competent')}
               </Button>
               <Button
                 variant={resp.verdict === 'na' ? 'secondary' : 'outline'}
@@ -418,20 +420,20 @@ export default function TrainingExecution() {
                 onClick={() => setResponse(question.id, { verdict: 'na' })}
               >
                 <Minus className="w-5 h-5" />
-                N/A
+                {t('workforce.common.na')}
               </Button>
             </div>
           </div>
 
           <div>
             <label htmlFor="trainingexecution-field-0" className="block text-sm font-medium text-foreground mb-2">
-              Supervisor notes
-              {resp.verdict === 'not_yet_competent' && <span className="text-destructive ml-1">(recommended)</span>}
+              {t('workforce.common.supervisor_notes')}
+              {resp.verdict === 'not_yet_competent' && <span className="text-destructive ml-1">{t('workforce.common.recommended')}</span>}
             </label>
             <textarea id="trainingexecution-field-0"
               value={resp.supervisorNotes}
               onChange={(e) => setResponse(question.id, { supervisorNotes: e.target.value })}
-              placeholder="Add supervisor notes for this item..."
+              placeholder={t('workforce.common.supervisor_notes_placeholder')}
               className="w-full min-h-[80px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
@@ -446,16 +448,16 @@ export default function TrainingExecution() {
           className="gap-2 min-h-[44px]"
         >
           <ChevronLeft className="w-4 h-4" />
-          Previous
+          {t('common.previous')}
         </Button>
         <Button onClick={handleNext} className="gap-2 min-h-[44px]">
           {currentIndex < totalQuestions - 1 ? (
             <>
-              Next
+              {t('common.next')}
               <ChevronRight className="w-4 h-4" />
             </>
           ) : (
-            'Review & Submit'
+            t('workforce.common.review_submit')
           )}
         </Button>
       </div>

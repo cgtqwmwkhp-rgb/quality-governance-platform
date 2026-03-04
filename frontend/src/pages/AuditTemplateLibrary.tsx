@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -101,6 +102,7 @@ function estimateMinutes(questionCount: number | undefined): string {
 // ============================================================================
 
 export default function AuditTemplateLibrary() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<AuditTemplate[]>([]);
   const [archivedTemplates, setArchivedTemplates] = useState<AuditTemplate[]>([]);
@@ -525,10 +527,10 @@ export default function AuditTemplateLibrary() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Audit Template Library
+            {t('audit_templates.title')}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Create, manage, and deploy audit templates
+            {t('audit_templates.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -546,10 +548,10 @@ export default function AuditTemplateLibrary() {
             )}
           </Button>
           <Button variant="outline" onClick={() => setShowImportDialog(true)}>
-            <Upload className="w-4 h-4" /> Import
+            <Upload className="w-4 h-4" /> {t('import')}
           </Button>
           <Button onClick={() => navigate("/audit-templates/new")}>
-            <Plus className="w-5 h-5" /> New Template
+            <Plus className="w-5 h-5" /> {t('audit_templates.new')}
           </Button>
         </div>
       </div>
@@ -749,7 +751,7 @@ export default function AuditTemplateLibrary() {
           <Input
             id="template-search"
             type="text"
-            placeholder="Search templates by name or description..."
+            placeholder={t('audit_templates.search_placeholder')}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-12"
@@ -1098,12 +1100,12 @@ export default function AuditTemplateLibrary() {
             <FolderOpen className="w-8 h-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-semibold text-foreground mb-2">
-            No templates found
+            {t('audit_templates.empty.title')}
           </h3>
           <p className="text-muted-foreground mb-6">
             {searchInput || selectedCategory !== "all"
-              ? "Try adjusting your search or filters"
-              : "Create your first audit template to get started"}
+              ? t('audit_templates.empty.filter_hint')
+              : t('audit_templates.empty.subtitle')}
           </p>
           <div className="flex items-center justify-center gap-3">
             {(searchInput || selectedCategory !== "all") && (
@@ -1114,11 +1116,11 @@ export default function AuditTemplateLibrary() {
                   setSelectedCategory("all");
                 }}
               >
-                <RotateCcw className="w-4 h-4" /> Clear Filters
+                <RotateCcw className="w-4 h-4" /> {t('audit_templates.clear_filters')}
               </Button>
             )}
             <Button onClick={() => navigate("/audit-templates/new")}>
-              <Plus className="w-4 h-4" /> New Template
+              <Plus className="w-4 h-4" /> {t('audit_templates.new')}
             </Button>
           </div>
         </div>
@@ -1207,7 +1209,7 @@ export default function AuditTemplateLibrary() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Upload className="w-5 h-5 text-primary" />
-              Batch Import Templates
+              {t('audit_templates.batch_import')}
             </DialogTitle>
             <DialogDescription>
               Import XML job-sheet templates from a server directory. Templates

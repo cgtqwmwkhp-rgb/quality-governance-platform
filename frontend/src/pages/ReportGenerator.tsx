@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Download,
@@ -142,6 +143,7 @@ const scheduledReports: ScheduledReport[] = [
 ];
 
 export default function ReportGenerator() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'generate' | 'scheduled' | 'history'>('generate');
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -172,9 +174,9 @@ export default function ReportGenerator() {
   };
 
   const tabs = [
-    { id: 'generate', label: 'Generate Report', icon: FileText },
-    { id: 'scheduled', label: 'Scheduled Reports', icon: Calendar },
-    { id: 'history', label: 'Report History', icon: Clock },
+    { id: 'generate', label: t('report_generator.generate_tab'), icon: FileText },
+    { id: 'scheduled', label: t('report_generator.scheduled_tab'), icon: Calendar },
+    { id: 'history', label: t('report_generator.history_tab'), icon: Clock },
   ];
 
   return (
@@ -182,12 +184,12 @@ export default function ReportGenerator() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Report Generator</h1>
-          <p className="text-muted-foreground mt-1">Create and schedule automated reports</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('report_generator.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('report_generator.subtitle')}</p>
         </div>
         <Button onClick={() => setShowScheduleModal(true)}>
           <Plus className="w-4 h-4" />
-          Schedule New Report
+          {t('report_generator.schedule')}
         </Button>
       </div>
 
@@ -215,7 +217,7 @@ export default function ReportGenerator() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Template Selection */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Select Report Template</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('report_generator.select_template')}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {reportTemplates.map(template => (
                 <Card
@@ -259,12 +261,12 @@ export default function ReportGenerator() {
 
           {/* Report Configuration */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Report Options</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t('report_generator.report_options')}</h2>
             <Card>
               <CardContent className="p-5 space-y-4">
                 {/* Time Range */}
                 <div>
-                  <label htmlFor="reportgenerator-field-0" className="block text-sm font-medium text-foreground mb-2">Time Range</label>
+                  <label htmlFor="reportgenerator-field-0" className="block text-sm font-medium text-foreground mb-2">{t('report_generator.time_range')}</label>
                   <Select
                     value={reportConfig.timeRange}
                     onValueChange={(value) => setReportConfig(prev => ({ ...prev, timeRange: value }))}
@@ -285,7 +287,7 @@ export default function ReportGenerator() {
 
                 {/* Format */}
                 <div>
-                  <span className="block text-sm font-medium text-foreground mb-2">Export Format</span>
+                  <span className="block text-sm font-medium text-foreground mb-2">{t('report_generator.export_format')}</span>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'pdf', label: 'PDF', icon: FileText },
@@ -320,7 +322,7 @@ export default function ReportGenerator() {
                         onChange={(e) => setReportConfig(prev => ({ ...prev, includeCharts: e.target.checked }))}
                         className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                       />
-                      <span className="text-sm text-foreground">Charts & Visualizations</span>
+                      <span className="text-sm text-foreground">{t('report_generator.include_charts')}</span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
                       <input id="reportgenerator-field-2"
@@ -329,7 +331,7 @@ export default function ReportGenerator() {
                         onChange={(e) => setReportConfig(prev => ({ ...prev, includeData: e.target.checked }))}
                         className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                       />
-                      <span className="text-sm text-foreground">Raw Data Tables</span>
+                      <span className="text-sm text-foreground">{t('report_generator.include_data')}</span>
                     </label>
                   </div>
                 </div>
@@ -343,7 +345,7 @@ export default function ReportGenerator() {
                       onChange={(e) => setReportConfig(prev => ({ ...prev, sendEmail: e.target.checked }))}
                       className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                     />
-                    <span className="text-sm text-foreground">Send via Email</span>
+                    <span className="text-sm text-foreground">{t('report_generator.email_report')}</span>
                   </label>
                   {reportConfig.sendEmail && (
                     <Input id="reportgenerator-field-3"
@@ -365,12 +367,12 @@ export default function ReportGenerator() {
                   {generating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      Generating...
+                      {t('report_generator.generating')}
                     </>
                   ) : (
                     <>
                       <Download className="w-4 h-4" />
-                      Generate Report
+                      {t('report_generator.generate')}
                     </>
                   )}
                 </Button>

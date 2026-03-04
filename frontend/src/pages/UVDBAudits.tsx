@@ -24,6 +24,7 @@ import {
   Link2,
   XCircle,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { uvdbApi, ErrorClass, createApiError } from '../api/client'
 
 interface UVDBSection {
@@ -49,6 +50,7 @@ interface UVDBAudit {
 type LoadState = 'idle' | 'loading' | 'success' | 'error'
 
 export default function UVDBAudits() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>('dashboard')
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
@@ -223,18 +225,18 @@ export default function UVDBAudits() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
             <Award className="w-8 h-8 text-warning" />
-            UVDB Achilles Verify B2
+            {t('uvdb.title')}
           </h1>
-          <p className="text-muted-foreground">Utilities Vendor Database - Supply Chain Qualification Audit</p>
+          <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
           <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
             <Download className="w-4 h-4" />
-            Export Protocol
+            {t('uvdb.export_protocol')}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
-            New Audit
+            {t('uvdb.new_audit')}
           </button>
         </div>
       </div>
@@ -243,21 +245,21 @@ export default function UVDBAudits() {
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-primary-foreground mb-1">UVDB-QS-003 - Verify B2 Audit Protocol</h2>
-            <p className="text-primary-foreground/80">Version 11.2 - UK Utilities Sector Qualification Standard</p>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">{t('uvdb.protocol_ref')}</h2>
+            <p className="text-primary-foreground/80">{t('uvdb.protocol_version')}</p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
             <div className="text-center">
               <div className="text-3xl font-bold text-primary-foreground">{sections.length}</div>
-              <div className="text-primary-foreground/80 text-sm">Sections</div>
+              <div className="text-primary-foreground/80 text-sm">{t('uvdb.sections')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-primary-foreground">{totalMaxScore}</div>
-              <div className="text-primary-foreground/80 text-sm">Max Score</div>
+              <div className="text-primary-foreground/80 text-sm">{t('uvdb.max_score')}</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-primary-foreground">4</div>
-              <div className="text-primary-foreground/80 text-sm">ISO Aligned</div>
+              <div className="text-primary-foreground/80 text-sm">{t('uvdb.iso_aligned')}</div>
             </div>
           </div>
         </div>
@@ -266,10 +268,10 @@ export default function UVDBAudits() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
         {[
-          { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-          { id: 'protocol', label: 'Protocol Sections', icon: ClipboardList },
-          { id: 'audits', label: 'Audit History', icon: Calendar },
-          { id: 'mapping', label: 'ISO Cross-Mapping', icon: Link2 },
+          { id: 'dashboard', labelKey: 'uvdb.tab.dashboard', icon: BarChart3 },
+          { id: 'protocol', labelKey: 'uvdb.tab.protocol', icon: ClipboardList },
+          { id: 'audits', labelKey: 'uvdb.tab.audit_history', icon: Calendar },
+          { id: 'mapping', labelKey: 'uvdb.tab.iso_mapping', icon: Link2 },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -283,7 +285,7 @@ export default function UVDBAudits() {
               }`}
             >
               <Icon className="w-4 h-4" />
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           )
         })}
@@ -293,7 +295,7 @@ export default function UVDBAudits() {
       {loadState === 'loading' && (
         <div className="flex flex-col items-center justify-center py-12">
           <RefreshCw className="w-8 h-8 text-warning animate-spin mb-4" />
-          <p className="text-muted-foreground">Loading UVDB data...</p>
+          <p className="text-muted-foreground">{t('uvdb.loading')}</p>
         </div>
       )}
 
@@ -301,20 +303,20 @@ export default function UVDBAudits() {
       {loadState === 'error' && (
         <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
           <XCircle className="w-12 h-12 text-destructive mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Failed to Load Data</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">{t('uvdb.failed_to_load')}</h3>
           <p className="text-muted-foreground mb-4">
-            {errorClass === ErrorClass.NETWORK_ERROR && 'Network connection failed. Please check your connection.'}
-            {errorClass === ErrorClass.SERVER_ERROR && 'Server error occurred. Please try again later.'}
-            {errorClass === ErrorClass.AUTH_ERROR && 'Authentication required. Please log in.'}
-            {errorClass === ErrorClass.NOT_FOUND && 'UVDB data not found.'}
-            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && 'An unexpected error occurred.'}
+            {errorClass === ErrorClass.NETWORK_ERROR && t('uvdb.error_network')}
+            {errorClass === ErrorClass.SERVER_ERROR && t('uvdb.error_server')}
+            {errorClass === ErrorClass.AUTH_ERROR && t('uvdb.error_auth')}
+            {errorClass === ErrorClass.NOT_FOUND && t('uvdb.error_not_found')}
+            {(errorClass === ErrorClass.UNKNOWN || !errorClass) && t('uvdb.error_unknown')}
           </p>
           <button
             onClick={() => { setRetryCount(0); loadData(); }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
-            Try Again
+            {t('uvdb.try_again')}
           </button>
         </div>
       )}
@@ -323,11 +325,11 @@ export default function UVDBAudits() {
       {loadState === 'success' && sections.length === 0 && audits.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
           <Award className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">No UVDB Data Yet</h3>
-          <p className="text-muted-foreground mb-4">Start your UVDB qualification journey by creating a new audit.</p>
+          <h3 className="text-lg font-semibold text-foreground mb-2">{t('uvdb.no_data')}</h3>
+          <p className="text-muted-foreground mb-4">{t('uvdb.no_data_description')}</p>
           <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
             <Plus className="w-4 h-4" />
-            New Audit
+            {t('uvdb.new_audit')}
           </button>
         </div>
       )}
@@ -340,10 +342,10 @@ export default function UVDBAudits() {
               {/* ISO Alignment Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { standard: 'ISO 9001:2015', title: 'Quality', icon: Shield, color: 'bg-blue-500', sections: '1.1, 2.1-2.5, 12-13' },
-                  { standard: 'ISO 14001:2015', title: 'Environmental', icon: Leaf, color: 'bg-emerald-500', sections: '1.3, 8-11, 15' },
-                  { standard: 'ISO 45001:2018', title: 'OH&S', icon: HardHat, color: 'bg-orange-500', sections: '1.2, 3-7, 14, 15' },
-                  { standard: 'ISO 27001:2022', title: 'Information Security', icon: Lock, color: 'bg-purple-500', sections: '2.3' },
+                  { standard: 'ISO 9001:2015', titleKey: 'uvdb.quality', icon: Shield, color: 'bg-blue-500', sections: '1.1, 2.1-2.5, 12-13' },
+                  { standard: 'ISO 14001:2015', titleKey: 'uvdb.environmental', icon: Leaf, color: 'bg-emerald-500', sections: '1.3, 8-11, 15' },
+                  { standard: 'ISO 45001:2018', titleKey: 'uvdb.ohs', icon: HardHat, color: 'bg-orange-500', sections: '1.2, 3-7, 14, 15' },
+                  { standard: 'ISO 27001:2022', titleKey: 'uvdb.info_security', icon: Lock, color: 'bg-purple-500', sections: '2.3' },
                 ].map((iso) => {
                   const Icon = iso.icon
                   return (
@@ -354,7 +356,7 @@ export default function UVDBAudits() {
                         </div>
                         <div>
                           <div className="font-bold text-white">{iso.standard}</div>
-                          <div className="text-xs text-gray-400">{iso.title}</div>
+                          <div className="text-xs text-gray-400">{t(iso.titleKey)}</div>
                         </div>
                       </div>
                       <div className="text-sm text-gray-300">
@@ -369,7 +371,7 @@ export default function UVDBAudits() {
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-white">Audit Status</h3>
+                    <h3 className="font-bold text-white">{t('uvdb.audit_status')}</h3>
                     <p className="text-sm text-gray-400">Plantexpand Limited (00019685)</p>
                   </div>
                   <Award className="w-8 h-8 text-yellow-400" />
@@ -395,7 +397,7 @@ export default function UVDBAudits() {
                         {audit.percentage_score && (
                           <div className="text-right">
                             <div className="text-2xl font-bold text-emerald-400">{audit.percentage_score}%</div>
-                            <div className="text-xs text-gray-400">Score</div>
+                            <div className="text-xs text-gray-400">{t('uvdb.audit_score')}</div>
                           </div>
                         )}
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}>
@@ -411,7 +413,7 @@ export default function UVDBAudits() {
               {/* KPI Summary */}
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">Section 15: Key Performance Indicators (5 Year Trend)</h3>
+                  <h3 className="font-bold text-white">{t('uvdb.kpi_summary')}</h3>
                 </div>
                 <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   {[
@@ -458,7 +460,7 @@ export default function UVDBAudits() {
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-bold text-white">{section.max_score}</div>
-                        <div className="text-xs text-gray-400">Max Score</div>
+                        <div className="text-xs text-gray-400">{t('uvdb.max_score')}</div>
                       </div>
                     </div>
                     <div className="text-lg font-bold text-white mb-1">
@@ -498,32 +500,32 @@ export default function UVDBAudits() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                       type="text"
-                      placeholder="Search audits..."
+                      placeholder={t('uvdb.search_placeholder')}
                       className="pl-10 pr-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                     />
                   </div>
                   <button className="flex items-center gap-2 px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors">
                     <Filter className="w-4 h-4" />
-                    Filter
+                    {t('uvdb.filter')}
                   </button>
                 </div>
                 <button className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors">
                   <Plus className="w-4 h-4" />
-                  New Audit
+                  {t('uvdb.new_audit')}
                 </button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-700/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Reference</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Company</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Date</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Lead Auditor</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Score</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Status</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Actions</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.reference')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.company')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.type')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.date')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.lead_auditor')}</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.score')}</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.status')}</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
@@ -567,15 +569,15 @@ export default function UVDBAudits() {
           {activeTab === 'mapping' && (
             <div className="bg-slate-800 rounded-xl border border-slate-700">
               <div className="p-4 bg-slate-700 border-b border-slate-600">
-                <h3 className="font-bold text-white">UVDB B2 to ISO Standards Cross-Mapping</h3>
-                <p className="text-sm text-gray-400">Demonstrates alignment between UVDB requirements and ISO certification standards</p>
+                <h3 className="font-bold text-white">{t('uvdb.iso_cross_mapping')}</h3>
+                <p className="text-sm text-gray-400">{t('uvdb.iso_mapping_subtitle')}</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-700/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">UVDB Section</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Topic</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.uvdb_section')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.topic')}</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 9001</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 14001</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 45001</th>

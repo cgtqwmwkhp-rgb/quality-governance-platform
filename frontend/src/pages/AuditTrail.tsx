@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   History,
   Search,
@@ -40,6 +41,7 @@ interface AuditEntry {
 }
 
 export default function AuditTrail() {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [selectedModule, setSelectedModule] = useState<string>('all');
@@ -185,9 +187,9 @@ export default function AuditTrail() {
             <div className="p-2 bg-primary/10 rounded-xl">
               <History className="w-8 h-8 text-primary" />
             </div>
-            Audit Trail
+            {t('audit_trail.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">Complete history of system activities</p>
+          <p className="text-muted-foreground mt-1">{t('audit_trail.subtitle')}</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -202,7 +204,7 @@ export default function AuditTrail() {
           
           <button className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
             <Download className="w-5 h-5" />
-            Export Log
+            {t('audit_trail.export_log')}
           </button>
         </div>
       </div>
@@ -217,7 +219,7 @@ export default function AuditTrail() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by user, action, or resource..."
+              placeholder={t('audit_trail.search_placeholder')}
               aria-label="Search audit trail"
               className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
@@ -230,7 +232,7 @@ export default function AuditTrail() {
               onChange={(e) => setSelectedAction(e.target.value)}
               className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
-              <option value="all">All Actions</option>
+              <option value="all">{t('audit_trail.all_actions')}</option>
               {actions.map((action) => (
                 <option key={action} value={action}>{action.charAt(0).toUpperCase() + action.slice(1)}</option>
               ))}
@@ -245,7 +247,7 @@ export default function AuditTrail() {
               onChange={(e) => setSelectedModule(e.target.value)}
               className="appearance-none pl-4 pr-10 py-2.5 bg-background border border-border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[150px]"
             >
-              <option value="all">All Modules</option>
+              <option value="all">{t('audit_trail.all_modules')}</option>
               {modules.map((module) => (
                 <option key={module} value={module}>{module}</option>
               ))}
@@ -345,18 +347,18 @@ export default function AuditTrail() {
                   <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-4 animate-in slide-in-from-top duration-200">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-slate-500">User Email</span>
+                        <span className="text-slate-500">{t('audit_trail.user_email')}</span>
                         <p className="text-slate-300">{entry.user.email}</p>
                       </div>
                       <div>
-                        <span className="text-slate-500">IP Address</span>
+                        <span className="text-slate-500">{t('audit_trail.ip_address')}</span>
                         <p className="text-slate-300">{entry.ipAddress}</p>
                       </div>
                     </div>
                     
                     {entry.changes && entry.changes.length > 0 && (
                       <div>
-                        <span className="text-sm text-slate-500 block mb-2">Changes Made</span>
+                        <span className="text-sm text-slate-500 block mb-2">{t('audit_trail.changes_made')}</span>
                         <div className="space-y-2">
                           {entry.changes.map((change, i) => (
                             <div
@@ -392,7 +394,7 @@ export default function AuditTrail() {
           <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
             <History className="w-10 h-10 text-slate-600" />
           </div>
-          <h3 className="text-xl font-semibold text-white mb-2">No audit entries found</h3>
+          <h3 className="text-xl font-semibold text-white mb-2">{t('audit_trail.no_entries')}</h3>
           <p className="text-slate-400">Try adjusting your filters</p>
         </div>
       )}
@@ -401,7 +403,7 @@ export default function AuditTrail() {
       {filteredEntries.length > 0 && (
         <div className="text-center">
           <button className="px-6 py-2 bg-slate-800/50 border border-slate-700 text-slate-300 font-medium rounded-xl hover:bg-slate-700/50 transition-all">
-            Load More
+            {t('audit_trail.load_more')}
           </button>
         </div>
       )}

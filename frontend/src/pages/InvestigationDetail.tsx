@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -129,6 +130,7 @@ const ACTION_STATUS_OPTIONS = [
 ];
 
 export default function InvestigationDetail() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const investigationId = parseInt(id || "0", 10);
@@ -631,11 +633,11 @@ export default function InvestigationDetail() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate("/investigations")}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Investigations
+            {t('investigations.back')}
           </Button>
           <Button onClick={loadInvestigation}>
             <RefreshCw className="w-4 h-4 mr-2" />
-            Retry
+            {t('retry')}
           </Button>
         </div>
       </div>
@@ -657,7 +659,7 @@ export default function InvestigationDetail() {
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Investigations
+            {t('investigations.back')}
           </Link>
 
           {/* Title section */}
@@ -772,7 +774,7 @@ export default function InvestigationDetail() {
               {/* Description */}
               <Card className="p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
-                  Description
+                  {t('common.description')}
                 </h3>
                 <p className="text-muted-foreground whitespace-pre-wrap">
                   {investigation.description || "No description provided."}
@@ -782,7 +784,7 @@ export default function InvestigationDetail() {
               {/* Findings & Conclusion */}
               <Card className="p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
-                  Findings & Conclusion
+                  {t('investigations.findings_conclusion')}
                 </h3>
                 <div className="space-y-4">
                   <div>
@@ -816,7 +818,7 @@ export default function InvestigationDetail() {
               <Card className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-foreground">
-                    Recent Notes
+                    {t('investigations.recent_notes')}
                   </h3>
                   <span className="text-sm text-muted-foreground">
                     {comments.length} total
@@ -858,14 +860,14 @@ export default function InvestigationDetail() {
               {/* Details */}
               <Card className="p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
-                  Details
+                  {t('common.details')}
                 </h3>
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <User className="w-4 h-4 text-muted-foreground" />
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Lead Investigator
+                        {t('investigations.lead_investigator')}
                       </p>
                       <p className="text-sm text-foreground">
                         {String(
@@ -908,7 +910,7 @@ export default function InvestigationDetail() {
               {/* Closure Checklist */}
               <Card className="p-6">
                 <h3 className="text-lg font-semibold text-foreground mb-4">
-                  Closure Checklist
+                  {t('investigations.closure_checklist')}
                 </h3>
                 {closureLoading ? (
                   <div className="flex items-center justify-center py-4">
@@ -1058,7 +1060,7 @@ export default function InvestigationDetail() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">
-                  Evidence Register
+                  {t('investigations.evidence_register')}
                 </h3>
                 <div className="flex items-center gap-2">
                   <input
@@ -1097,7 +1099,7 @@ export default function InvestigationDetail() {
                     ) : (
                       <Upload className="w-4 h-4 mr-2" />
                     )}
-                    Upload Evidence
+                    {t('investigations.upload_evidence')}
                   </Button>
                   <Button
                     variant="outline"
@@ -1286,8 +1288,8 @@ export default function InvestigationDetail() {
 
             {/* Problem Statement */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                Problem Statement
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                {t('investigations.problem_statement')}
               </h3>
               <Textarea
                 rows={3}
@@ -1302,7 +1304,7 @@ export default function InvestigationDetail() {
             {/* 5 Whys Analysis */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                <GitBranch className="w-5 h-5 text-primary" />5 Whys Analysis
+                <GitBranch className="w-5 h-5 text-primary" />{t('investigations.five_whys')}
               </h3>
               <div className="space-y-4">
                 {[1, 2, 3, 4, 5].map((num) => (
@@ -1331,7 +1333,7 @@ export default function InvestigationDetail() {
             {/* Root Cause */}
             <Card className="p-6 border-primary/20 bg-primary/5">
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Root Cause Identified
+                {t('investigations.root_cause')}
               </h3>
               <Textarea
                 rows={3}
@@ -1346,7 +1348,7 @@ export default function InvestigationDetail() {
             {/* Contributing Factors */}
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">
-                Contributing Factors
+                {t('investigations.contributing_factors')}
               </h3>
               <Textarea
                 rows={3}
@@ -1380,7 +1382,7 @@ export default function InvestigationDetail() {
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />
-                    Save RCA Analysis
+                    {t('investigations.save_rca')}
                   </>
                 )}
               </Button>
@@ -1413,7 +1415,7 @@ export default function InvestigationDetail() {
               </div>
               <Button onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Action
+                {t('investigations.add_action')}
               </Button>
             </div>
 
@@ -1529,8 +1531,8 @@ export default function InvestigationDetail() {
 
             {/* Generate Pack */}
             <Card className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">
-                Generate Report
+                <h3 className="text-lg font-semibold text-foreground mb-4">
+                {t('investigations.generate_report')}
               </h3>
 
               {/* Capability Warning */}
@@ -1621,7 +1623,7 @@ export default function InvestigationDetail() {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">
-                  Report History
+                  {t('investigations.report_history')}
                 </h3>
                 <Button
                   variant="outline"
@@ -1706,7 +1708,7 @@ export default function InvestigationDetail() {
       {activeTab === "summary" && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">
-            Add Note
+            {t('investigations.add_note')}
           </h3>
           <div className="flex gap-4">
             <Textarea

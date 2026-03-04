@@ -69,7 +69,7 @@ jobs:
       - name: SAST scan with Semgrep
         run: |
           pip install semgrep
-          semgrep --config auto src/ --json --output semgrep-results.json || true
+          semgrep --config auto --config .semgrep.yml src/ --json --output semgrep-results.json || true
           echo "[OK] Semgrep SAST scan completed"
 
       - name: Upload Semgrep results
@@ -135,7 +135,7 @@ jobs:
         working-directory: .
 
       - name: Run Trivy vulnerability gate
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'table'
@@ -144,7 +144,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Generate Trivy SARIF report
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'

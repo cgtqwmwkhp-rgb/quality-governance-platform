@@ -30,6 +30,7 @@ import {
   AlertOctagon,
   Award,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 
@@ -63,6 +64,7 @@ interface ISMSDashboardData {
 }
 
 export default function IMSDashboard() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review' | 'isms'>('overview')
   const [selectedStandard, setSelectedStandard] = useState<string | null>(null)
   const [ismsData, setIsmsData] = useState<ISMSDashboardData | null>(null)
@@ -265,18 +267,18 @@ export default function IMSDashboard() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
             <GitMerge className="w-8 h-8 text-primary" />
-            Integrated Management System
+            {t('ims.title')}
           </h1>
-          <p className="text-muted-foreground">Unified ISO 9001, 14001, 45001 & 27001 Dashboard</p>
+          <p className="text-muted-foreground">{t('ims.subtitle')}</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
           <Button variant="outline">
             <RefreshCw className="w-4 h-4 mr-2" />
-            Sync
+            {t('ims.sync')}
           </Button>
           <Button>
             <FileText className="w-4 h-4 mr-2" />
-            Generate Report
+            {t('ims.generate_report')}
           </Button>
         </div>
       </div>
@@ -285,14 +287,14 @@ export default function IMSDashboard() {
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-primary-foreground mb-1">Overall IMS Compliance</h2>
-            <p className="text-primary-foreground/80">Across all management system standards</p>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">{t('ims.overall_compliance')}</h2>
+            <p className="text-primary-foreground/80">{t('ims.across_standards')}</p>
           </div>
           <div className="text-right">
             <div className="text-5xl font-bold text-primary-foreground">{overallCompliance}%</div>
             <div className="flex items-center gap-1 text-primary-foreground/80 mt-1">
               <TrendingUp className="w-4 h-4" />
-              <span>+2% from last quarter</span>
+              <span>{t('ims.quarter_trend')}</span>
             </div>
           </div>
         </div>
@@ -319,7 +321,7 @@ export default function IMSDashboard() {
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-foreground">{standard.compliance}%</div>
-                  <div className="text-xs text-muted-foreground">Compliance</div>
+                  <div className="text-xs text-muted-foreground">{t('ims.compliance')}</div>
                 </div>
               </div>
 
@@ -338,26 +340,26 @@ export default function IMSDashboard() {
               <div className="flex justify-between text-sm">
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-destructive rounded-full"></span>
-                  <span className="text-muted-foreground">Major: {standard.findings.major}</span>
+                  <span className="text-muted-foreground">{t('ims.major')}: {standard.findings.major}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-warning rounded-full"></span>
-                  <span className="text-muted-foreground">Minor: {standard.findings.minor}</span>
+                  <span className="text-muted-foreground">{t('ims.minor')}: {standard.findings.minor}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-info rounded-full"></span>
-                  <span className="text-muted-foreground">Obs: {standard.findings.observations}</span>
+                  <span className="text-muted-foreground">{t('ims.obs')}: {standard.findings.observations}</span>
                 </div>
               </div>
 
               {/* Dates */}
               <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-muted-foreground">Next Audit</span>
+                  <span className="text-muted-foreground">{t('ims.next_audit')}</span>
                   <div className="text-foreground">{standard.nextAudit}</div>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Cert Expiry</span>
+                  <span className="text-muted-foreground">{t('ims.cert_expiry')}</span>
                   <div className="text-foreground">{standard.certificateExpiry}</div>
                 </div>
               </div>
@@ -369,11 +371,11 @@ export default function IMSDashboard() {
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border pb-2">
         {[
-          { id: 'overview', label: 'Overview', icon: BarChart3 },
-          { id: 'mapping', label: 'Cross-Standard Mapping', icon: Link2 },
-          { id: 'audit', label: 'Unified Audit Plan', icon: ClipboardList },
-          { id: 'review', label: 'Management Review', icon: Users },
-          { id: 'isms', label: 'ISO 27001 ISMS', icon: Lock },
+          { id: 'overview', labelKey: 'ims.tab.overview', icon: BarChart3 },
+          { id: 'mapping', labelKey: 'ims.tab.cross_standard', icon: Link2 },
+          { id: 'audit', labelKey: 'ims.tab.audit_plan', icon: ClipboardList },
+          { id: 'review', labelKey: 'ims.tab.management_review', icon: Users },
+          { id: 'isms', labelKey: 'ims.tab.iso27001', icon: Lock },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -388,7 +390,7 @@ export default function IMSDashboard() {
               )}
             >
               <Icon className="w-4 h-4" />
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           )
         })}
@@ -399,17 +401,17 @@ export default function IMSDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Key Metrics */}
           <div className="bg-card rounded-xl p-6 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-4">Key Performance Metrics</h3>
+            <h3 className="text-lg font-bold text-foreground mb-4">{t('ims.key_performance')}</h3>
             <div className="space-y-4">
               {[
-                { label: 'Open Actions', value: 12, target: 0, unit: '', status: 'warning' },
-                { label: 'Overdue Actions', value: 2, target: 0, unit: '', status: 'critical' },
-                { label: 'Document Review Compliance', value: 94, target: 100, unit: '%', status: 'good' },
-                { label: 'Training Completion', value: 98, target: 100, unit: '%', status: 'good' },
-                { label: 'Audit Completion', value: 75, target: 100, unit: '%', status: 'warning' },
+                { labelKey: 'ims.open_actions', value: 12, target: 0, unit: '', status: 'warning' },
+                { labelKey: 'ims.overdue_actions', value: 2, target: 0, unit: '', status: 'critical' },
+                { labelKey: 'ims.document_review', value: 94, target: 100, unit: '%', status: 'good' },
+                { labelKey: 'ims.training_completion', value: 98, target: 100, unit: '%', status: 'good' },
+                { labelKey: 'ims.audit_completion', value: 75, target: 100, unit: '%', status: 'warning' },
               ].map((metric, i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <span className="text-foreground">{metric.label}</span>
+                  <span className="text-foreground">{t(metric.labelKey)}</span>
                   <div className="flex items-center gap-2">
                     <span
                       className={`font-bold ${
@@ -432,7 +434,7 @@ export default function IMSDashboard() {
 
           {/* Recent Activity */}
           <div className="bg-card rounded-xl p-6 border border-border">
-            <h3 className="text-lg font-bold text-foreground mb-4">Recent Activity</h3>
+            <h3 className="text-lg font-bold text-foreground mb-4">{t('ims.recent_activity')}</h3>
             <div className="space-y-3">
               {[
                 { action: 'Audit Finding Closed', detail: 'Minor NC #2024-015', time: '2 hours ago', icon: CheckCircle2, color: 'text-success' },
@@ -461,20 +463,20 @@ export default function IMSDashboard() {
       {activeTab === 'mapping' && (
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <div className="p-4 bg-slate-700 border-b border-slate-600">
-            <h3 className="font-bold text-white">Annex SL Cross-Standard Mapping</h3>
-            <p className="text-sm text-gray-400">Common requirements across ISO 9001, 14001, 45001 & 27001</p>
+            <h3 className="font-bold text-white">{t('ims.annex_sl')}</h3>
+            <p className="text-sm text-gray-400">{t('ims.common_requirements')}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-700/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Common Clause</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('ims.table.common_clause')}</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 9001</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 14001</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 45001</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 27001</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Unified Control</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Evidence</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('ims.table.unified_control')}</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('ims.table.evidence')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -508,11 +510,11 @@ export default function IMSDashboard() {
         <div className="bg-slate-800 rounded-xl border border-slate-700">
           <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
             <div>
-              <h3 className="font-bold text-white">Unified Audit Schedule</h3>
-              <p className="text-sm text-gray-400">Integrated audit program covering all standards</p>
+              <h3 className="font-bold text-white">{t('ims.unified_audit')}</h3>
+              <p className="text-sm text-gray-400">{t('ims.integrated_audit_program')}</p>
             </div>
             <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors">
-              Plan New Audit
+              {t('ims.plan_new_audit')}
             </button>
           </div>
           <div className="p-4 space-y-4">
@@ -559,8 +561,8 @@ export default function IMSDashboard() {
           {/* Inputs Progress */}
           <div className="lg:col-span-2 bg-slate-800 rounded-xl border border-slate-700">
             <div className="p-4 bg-slate-700 border-b border-slate-600">
-              <h3 className="font-bold text-white">Management Review Inputs</h3>
-              <p className="text-sm text-gray-400">Next Review: March 2026</p>
+              <h3 className="font-bold text-white">{t('ims.management_review_inputs')}</h3>
+              <p className="text-sm text-gray-400">{t('ims.next_review')}</p>
             </div>
             <div className="p-4 space-y-3">
               {managementReviewInputs.map((input, i) => (
@@ -610,7 +612,7 @@ export default function IMSDashboard() {
 
           {/* Review Summary */}
           <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-            <h3 className="font-bold text-white mb-4">Review Readiness</h3>
+            <h3 className="font-bold text-white mb-4">{t('ims.review_readiness')}</h3>
             
             <div className="relative w-40 h-40 mx-auto mb-6">
               <svg className="w-full h-full transform -rotate-90">
@@ -636,27 +638,27 @@ export default function IMSDashboard() {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-3xl font-bold text-white">62%</span>
-                <span className="text-sm text-gray-400">Complete</span>
+                <span className="text-sm text-gray-400">{t('ims.complete')}</span>
               </div>
             </div>
 
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Inputs Complete</span>
+                <span className="text-gray-400">{t('ims.inputs_complete')}</span>
                 <span className="text-white font-medium">5 / 8</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Days to Review</span>
+                <span className="text-gray-400">{t('ims.days_to_review')}</span>
                 <span className="text-white font-medium">54</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Attendees Confirmed</span>
+                <span className="text-gray-400">{t('ims.attendees_confirmed')}</span>
                 <span className="text-white font-medium">6 / 8</span>
               </div>
             </div>
 
             <button className="w-full mt-6 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors">
-              Schedule Review Meeting
+              {t('ims.schedule_review')}
             </button>
           </div>
         </div>
@@ -675,14 +677,14 @@ export default function IMSDashboard() {
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-white mb-1">ISO 27001:2022 ISMS Compliance</h2>
-                    <p className="text-purple-100">Information Security Management System</p>
+                    <h2 className="text-2xl font-bold text-white mb-1">{t('ims.iso27001_compliance')}</h2>
+                    <p className="text-purple-100">{t('ims.information_security_management')}</p>
                   </div>
                   <div className="text-right">
                     <div className="text-5xl font-bold text-white">{ismsData.compliance_score}%</div>
                     <div className="flex items-center gap-1 text-purple-100 mt-1">
                       <ShieldCheck className="w-4 h-4" />
-                      <span>Annex A Controls Implemented</span>
+                      <span>{t('ims.annex_a_controls')}</span>
                     </div>
                   </div>
                 </div>
@@ -695,10 +697,10 @@ export default function IMSDashboard() {
                     <div className="p-2 bg-blue-500/20 rounded-lg">
                       <Server className="w-5 h-5 text-blue-400" />
                     </div>
-                    <span className="text-gray-400 text-sm">Information Assets</span>
+                    <span className="text-gray-400 text-sm">{t('ims.information_assets')}</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.assets.total}</div>
-                  <div className="text-sm text-yellow-400 mt-1">{ismsData.assets.critical} Critical</div>
+                  <div className="text-sm text-yellow-400 mt-1">{ismsData.assets.critical} {t('ims.critical')}</div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -706,10 +708,10 @@ export default function IMSDashboard() {
                     <div className="p-2 bg-emerald-500/20 rounded-lg">
                       <ShieldCheck className="w-5 h-5 text-emerald-400" />
                     </div>
-                    <span className="text-gray-400 text-sm">Annex A Controls</span>
+                    <span className="text-gray-400 text-sm">{t('ims.annex_a_controls')}</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.controls.implemented}/{ismsData.controls.applicable}</div>
-                  <div className="text-sm text-emerald-400 mt-1">{ismsData.controls.implementation_percentage}% Implemented</div>
+                  <div className="text-sm text-emerald-400 mt-1">{ismsData.controls.implementation_percentage}% {t('ims.implemented')}</div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -717,10 +719,10 @@ export default function IMSDashboard() {
                     <div className="p-2 bg-orange-500/20 rounded-lg">
                       <AlertOctagon className="w-5 h-5 text-orange-400" />
                     </div>
-                    <span className="text-gray-400 text-sm">Security Risks</span>
+                    <span className="text-gray-400 text-sm">{t('ims.security_risks')}</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.risks.open}</div>
-                  <div className="text-sm text-red-400 mt-1">{ismsData.risks.high_critical} High/Critical</div>
+                  <div className="text-sm text-red-400 mt-1">{ismsData.risks.high_critical} {t('ims.high_critical')}</div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -728,10 +730,10 @@ export default function IMSDashboard() {
                     <div className="p-2 bg-red-500/20 rounded-lg">
                       <Bug className="w-5 h-5 text-red-400" />
                     </div>
-                    <span className="text-gray-400 text-sm">Security Incidents</span>
+                    <span className="text-gray-400 text-sm">{t('ims.security_incidents')}</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.incidents.open}</div>
-                  <div className="text-sm text-gray-400 mt-1">{ismsData.incidents.last_30_days} in last 30 days</div>
+                  <div className="text-sm text-gray-400 mt-1">{ismsData.incidents.last_30_days} {t('ims.in_last_30_days')}</div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -739,18 +741,18 @@ export default function IMSDashboard() {
                     <div className="p-2 bg-purple-500/20 rounded-lg">
                       <Building2 className="w-5 h-5 text-purple-400" />
                     </div>
-                    <span className="text-gray-400 text-sm">Supplier Risk</span>
+                    <span className="text-gray-400 text-sm">{t('ims.supplier_risk')}</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.suppliers.high_risk}</div>
-                  <div className="text-sm text-yellow-400 mt-1">High Risk Suppliers</div>
+                  <div className="text-sm text-yellow-400 mt-1">{t('ims.high_risk_suppliers')}</div>
                 </div>
               </div>
 
               {/* Annex A Control Domains */}
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">Annex A Control Domains (ISO 27001:2022)</h3>
-                  <p className="text-sm text-gray-400">93 controls across 4 themes</p>
+                  <h3 className="font-bold text-white">{t('ims.annex_a_control_domains')}</h3>
+                  <p className="text-sm text-gray-400">{t('ims.controls_across_themes')}</p>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
@@ -773,7 +775,7 @@ export default function IMSDashboard() {
                           </div>
                         </div>
                         <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-400">Implemented</span>
+                          <span className="text-gray-400">{t('ims.implemented')}</span>
                           <span className="text-white font-medium">{domain.implemented}/{domain.count}</span>
                         </div>
                         <div className="w-full bg-slate-600 rounded-full h-2">
@@ -794,7 +796,7 @@ export default function IMSDashboard() {
                 {/* Asset Categories */}
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600">
-                    <h3 className="font-bold text-white">Information Asset Categories</h3>
+                    <h3 className="font-bold text-white">{t('ims.asset_categories')}</h3>
                   </div>
                   <div className="p-4 space-y-3">
                     {[
@@ -833,11 +835,11 @@ export default function IMSDashboard() {
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-white">Recent Security Incidents</h3>
-                      <p className="text-sm text-gray-400">Last 30 days</p>
+                      <h3 className="font-bold text-white">{t('ims.recent_security_incidents')}</h3>
+                      <p className="text-sm text-gray-400">{t('ims.last_30_days')}</p>
                     </div>
                     <button className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors">
-                      Report Incident
+                      {t('ims.report_incident')}
                     </button>
                   </div>
                   <div className="p-4 space-y-3">
@@ -875,37 +877,36 @@ export default function IMSDashboard() {
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-white">Statement of Applicability (SoA)</h3>
-                    <p className="text-sm text-gray-400">Version 2.1 - Last Updated: January 2026</p>
+                    <h3 className="font-bold text-white">{t('ims.soa')}</h3>
+                    <p className="text-sm text-gray-400">{t('ims.soa_version')}</p>
                   </div>
                   <button className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <FileText className="w-4 h-4" />
-                    Export SoA
+                    {t('ims.export_soa')}
                   </button>
                 </div>
                 <div className="p-6">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <div className="text-center p-4 bg-slate-700/50 rounded-lg">
                       <div className="text-3xl font-bold text-white">{ismsData.controls.total}</div>
-                      <div className="text-sm text-gray-400">Total Controls</div>
+                      <div className="text-sm text-gray-400">{t('ims.total_controls')}</div>
                     </div>
                     <div className="text-center p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
                       <div className="text-3xl font-bold text-emerald-400">{ismsData.controls.applicable}</div>
-                      <div className="text-sm text-gray-400">Applicable</div>
+                      <div className="text-sm text-gray-400">{t('ims.applicable')}</div>
                     </div>
                     <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
                       <div className="text-3xl font-bold text-blue-400">{ismsData.controls.implemented}</div>
-                      <div className="text-sm text-gray-400">Implemented</div>
+                      <div className="text-sm text-gray-400">{t('ims.implemented')}</div>
                     </div>
                     <div className="text-center p-4 bg-gray-500/10 rounded-lg border border-gray-500/30">
                       <div className="text-3xl font-bold text-gray-400">{ismsData.controls.total - ismsData.controls.applicable}</div>
-                      <div className="text-sm text-gray-400">Excluded</div>
+                      <div className="text-sm text-gray-400">{t('ims.excluded')}</div>
                     </div>
                   </div>
                   <div className="text-center">
                     <p className="text-gray-400 text-sm">
-                      The Statement of Applicability documents all 93 Annex A controls from ISO 27001:2022,
-                      their applicability status, implementation status, and justification for exclusions.
+                      {t('ims.soa_description')}
                     </p>
                   </div>
                 </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -52,6 +53,7 @@ const ACTION_STATUS_OPTIONS = [
 ]
 
 export default function IncidentDetail() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [incident, setIncident] = useState<Incident | null>(null)
@@ -112,7 +114,7 @@ export default function IncidentDetail() {
       loadActions()
     } catch (err) {
       console.error('Failed to load incident:', err)
-      setError('Failed to load data. Please try again.')
+      setError(t('incidents.detail.failed_to_load'))
     } finally {
       setLoading(false)
     }
@@ -198,7 +200,7 @@ export default function IncidentDetail() {
             id: errorData.details.existing_investigation_id,
             reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
           })
-          setInvestigationError('An investigation already exists for this incident.')
+          setInvestigationError(t('incidents.detail.existing_investigation'))
           return
         }
       }
@@ -234,7 +236,7 @@ export default function IncidentDetail() {
       loadActions()
     } catch (err: unknown) {
       console.error('Failed to create action:', err)
-      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
+      alert(t('incidents.detail.failed_to_create_action', { error: getApiErrorMessage(err) }))
     } finally {
       setCreating(false)
     }
@@ -280,7 +282,7 @@ export default function IncidentDetail() {
   }
 
   const handleCompleteAction = () => {
-    const notes = window.prompt('Enter completion notes (optional):')
+    const notes = window.prompt(t('incidents.detail.enter_completion_notes'))
     handleUpdateActionStatus('completed', notes || undefined)
   }
 
@@ -316,10 +318,10 @@ export default function IncidentDetail() {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <AlertTriangle className="w-12 h-12 text-muted-foreground" />
-        <p className="text-muted-foreground">Incident not found</p>
+        <p className="text-muted-foreground">{t('incidents.detail.not_found')}</p>
         <Button variant="outline" onClick={() => navigate('/incidents')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Incidents
+          {t('incidents.back')}
         </Button>
       </div>
     )
@@ -331,7 +333,7 @@ export default function IncidentDetail() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); if (id) loadIncident(parseInt(id)); }} className="text-sm font-medium text-destructive hover:underline">
-            Try Again
+            {t('incidents.detail.try_again')}
           </button>
         </div>
       )}
@@ -358,7 +360,7 @@ export default function IncidentDetail() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">{incident.title}</h1>
             <p className="text-muted-foreground mt-1">
-              Reported on {new Date(incident.reported_date).toLocaleDateString()}
+              {t('incidents.detail.reported_on', { date: new Date(incident.reported_date).toLocaleDateString() })}
             </p>
           </div>
         </div>
@@ -367,26 +369,26 @@ export default function IncidentDetail() {
             <>
               <Button variant="outline" onClick={handleCancelEdit} disabled={saving}>
                 <X className="w-4 h-4 mr-2" />
-                Cancel
+                {t('cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Save Changes
+                {t('incidents.detail.save_changes')}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
-                Edit
+                {t('edit')}
               </Button>
               <Button variant="outline" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Action
+                {t('incidents.detail.add_action')}
               </Button>
               <Button onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
-                Start Investigation
+                {t('incidents.detail.start_investigation')}
               </Button>
             </>
           )}
@@ -402,14 +404,14 @@ export default function IncidentDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                Incident Details
+                {t('incidents.detail.incident_details')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isEditing ? (
                 <>
                   <div>
-                    <label htmlFor="incidentdetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <label htmlFor="incidentdetail-field-0" className="text-sm font-medium text-muted-foreground">{t('incidents.detail.title')}</label>
                     <Input id="incidentdetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
@@ -417,7 +419,7 @@ export default function IncidentDetail() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="incidentdetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <label htmlFor="incidentdetail-field-1" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
                     <Textarea id="incidentdetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
@@ -427,7 +429,7 @@ export default function IncidentDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="incidentdetail-field-2" className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <label htmlFor="incidentdetail-field-2" className="text-sm font-medium text-muted-foreground">{t('incidents.detail.incident_type')}</label>
                       <Select
                         value={editForm.incident_type}
                         onValueChange={(value) => setEditForm({ ...editForm, incident_type: value })}
@@ -436,17 +438,17 @@ export default function IncidentDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="safety">Safety</SelectItem>
-                          <SelectItem value="environmental">Environmental</SelectItem>
-                          <SelectItem value="quality">Quality</SelectItem>
-                          <SelectItem value="security">Security</SelectItem>
-                          <SelectItem value="near_miss">Near Miss</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                          <SelectItem value="safety">{t('incidents.detail.type_safety')}</SelectItem>
+                          <SelectItem value="environmental">{t('incidents.detail.type_environmental')}</SelectItem>
+                          <SelectItem value="quality">{t('incidents.detail.type_quality')}</SelectItem>
+                          <SelectItem value="security">{t('incidents.detail.type_security')}</SelectItem>
+                          <SelectItem value="near_miss">{t('incidents.detail.type_near_miss')}</SelectItem>
+                          <SelectItem value="other">{t('incidents.detail.type_other')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="incidentdetail-field-3" className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <label htmlFor="incidentdetail-field-3" className="text-sm font-medium text-muted-foreground">{t('incidents.detail.severity')}</label>
                       <Select
                         value={editForm.severity}
                         onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
@@ -455,15 +457,15 @@ export default function IncidentDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="critical">Critical</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="critical">{t('incidents.detail.severity_critical')}</SelectItem>
+                          <SelectItem value="high">{t('incidents.detail.severity_high')}</SelectItem>
+                          <SelectItem value="medium">{t('incidents.detail.severity_medium')}</SelectItem>
+                          <SelectItem value="low">{t('incidents.detail.severity_low')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="incidentdetail-field-4" className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="incidentdetail-field-4" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
@@ -472,15 +474,15 @@ export default function IncidentDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="open">Open</SelectItem>
-                          <SelectItem value="under_investigation">Under Investigation</SelectItem>
-                          <SelectItem value="pending_actions">Pending Actions</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
+                          <SelectItem value="open">{t('incidents.detail.status_open')}</SelectItem>
+                          <SelectItem value="under_investigation">{t('incidents.detail.status_under_investigation')}</SelectItem>
+                          <SelectItem value="pending_actions">{t('incidents.detail.status_pending_actions')}</SelectItem>
+                          <SelectItem value="closed">{t('incidents.detail.status_closed')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="incidentdetail-field-5" className="text-sm font-medium text-muted-foreground">Location</label>
+                      <label htmlFor="incidentdetail-field-5" className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
                       <Input id="incidentdetail-field-5"
                         value={editForm.location || ''}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
@@ -492,29 +494,29 @@ export default function IncidentDetail() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Description</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
-                      {incident.description || 'No description provided'}
+                      {incident.description || t('incidents.detail.no_description')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Incident Type</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.incident_type')}</span>
                       <p className="mt-1 text-foreground capitalize">{incident.incident_type.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Severity</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.severity')}</span>
                       <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Incident Date</span>
+                      <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.incident_date')}</span>
                       <p className="mt-1 text-foreground">
                         {new Date(incident.incident_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">Location</span>
-                      <p className="mt-1 text-foreground">{incident.location || 'Not specified'}</p>
+                      <span className="text-sm font-medium text-muted-foreground">{t('common.location')}</span>
+                      <p className="mt-1 text-foreground">{incident.location || t('incidents.detail.not_specified')}</p>
                     </div>
                   </div>
                 </>
@@ -527,19 +529,19 @@ export default function IncidentDetail() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-primary" />
-                Actions ({actions.length})
+                {t('incidents.detail.actions_count', { count: actions.length })}
               </CardTitle>
               <Button variant="outline" size="sm" onClick={() => setShowActionModal(true)}>
                 <Plus className="w-4 h-4 mr-1" />
-                Add
+                {t('incidents.detail.add')}
               </Button>
             </CardHeader>
             <CardContent>
               {actions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No actions yet</p>
-                  <p className="text-sm">Create actions to track follow-up tasks</p>
+                  <p>{t('incidents.detail.no_actions')}</p>
+                  <p className="text-sm">{t('incidents.detail.no_actions_hint')}</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -564,7 +566,7 @@ export default function IncidentDetail() {
                         <div>
                           <p className="font-medium text-foreground">{action.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'No due date'}
+                            {action.due_date ? t('incidents.detail.due_date_value', { date: new Date(action.due_date).toLocaleDateString() }) : t('incidents.detail.no_due_date')}
                           </p>
                         </div>
                       </div>
@@ -592,7 +594,7 @@ export default function IncidentDetail() {
           {/* Quick Info Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Quick Info</CardTitle>
+              <CardTitle className="text-base">{t('incidents.detail.quick_info')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-3">
@@ -600,7 +602,7 @@ export default function IncidentDetail() {
                   <Calendar className="w-5 h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Created</p>
+                  <p className="text-sm text-muted-foreground">{t('incidents.detail.created')}</p>
                   <p className="font-medium text-foreground">
                     {new Date(incident.created_at).toLocaleDateString()}
                   </p>
@@ -611,8 +613,8 @@ export default function IncidentDetail() {
                   <MapPin className="w-5 h-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Location</p>
-                  <p className="font-medium text-foreground">{incident.location || 'Not specified'}</p>
+                  <p className="text-sm text-muted-foreground">{t('common.location')}</p>
+                  <p className="font-medium text-foreground">{incident.location || t('incidents.detail.not_specified')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -620,8 +622,8 @@ export default function IncidentDetail() {
                   <User className="w-5 h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Department</p>
-                  <p className="font-medium text-foreground">{incident.department || 'Not specified'}</p>
+                  <p className="text-sm text-muted-foreground">{t('common.department')}</p>
+                  <p className="font-medium text-foreground">{incident.department || t('incidents.detail.not_specified')}</p>
                 </div>
               </div>
             </CardContent>
@@ -632,7 +634,7 @@ export default function IncidentDetail() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="w-4 h-4" />
-                Activity Timeline
+                {t('incidents.detail.activity_timeline')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -640,7 +642,7 @@ export default function IncidentDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Incident Reported</p>
+                    <p className="text-sm font-medium text-foreground">{t('incidents.detail.incident_reported')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(incident.reported_date).toLocaleString()}
                     </p>
@@ -649,7 +651,7 @@ export default function IncidentDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">Record Created</p>
+                    <p className="text-sm font-medium text-foreground">{t('incidents.detail.record_created')}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(incident.created_at).toLocaleString()}
                     </p>
@@ -673,17 +675,16 @@ export default function IncidentDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-primary" />
-              Start Investigation
+              {t('incidents.detail.start_investigation')}
             </DialogTitle>
             <DialogDescription>
-              Create a root cause investigation for incident {incident.reference_number}.
-              Data will be prefilled from the incident record.
+              {t('incidents.detail.investigation_description', { reference: incident.reference_number })}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
               <label htmlFor="incidentdetail-field-6" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Title
+                {t('incidents.detail.investigation_title')}
               </label>
               <Input id="incidentdetail-field-6"
                 value={investigationForm.title}
@@ -693,7 +694,7 @@ export default function IncidentDetail() {
             </div>
             <div>
               <label htmlFor="incidentdetail-field-7" className="block text-sm font-medium text-foreground mb-1">
-                Investigation Type
+                {t('incidents.detail.investigation_type')}
               </label>
               <Select
                 value={investigationForm.investigation_type}
@@ -703,27 +704,27 @@ export default function IncidentDetail() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="root_cause_analysis">Root Cause Analysis</SelectItem>
-                  <SelectItem value="5_whys">5 Whys</SelectItem>
-                  <SelectItem value="fishbone">Fishbone Analysis</SelectItem>
-                  <SelectItem value="incident_review">Incident Review</SelectItem>
+                  <SelectItem value="root_cause_analysis">{t('incidents.detail.inv_type_rca')}</SelectItem>
+                  <SelectItem value="5_whys">{t('incidents.detail.inv_type_5whys')}</SelectItem>
+                  <SelectItem value="fishbone">{t('incidents.detail.inv_type_fishbone')}</SelectItem>
+                  <SelectItem value="incident_review">{t('incidents.detail.inv_type_incident_review')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <UserEmailSearch
-              label="Lead Investigator"
+              label={t('incidents.detail.lead_investigator')}
               value={investigationForm.lead_investigator}
               onChange={handleInvestigatorChange}
-              placeholder="Search by email..."
+              placeholder={t('incidents.detail.search_email_placeholder')}
             />
             <div>
               <label htmlFor="incidentdetail-field-8" className="block text-sm font-medium text-foreground mb-1">
-                Initial Notes
+                {t('incidents.detail.initial_notes')}
               </label>
               <Textarea id="incidentdetail-field-8"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
-                placeholder="Describe the scope and initial findings..."
+                placeholder={t('incidents.detail.investigation_notes_placeholder')}
                 rows={4}
               />
             </div>
@@ -744,7 +745,7 @@ export default function IncidentDetail() {
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    Open existing investigation ({existingInvestigation.reference})
+                    {t('incidents.detail.open_existing_investigation', { reference: existingInvestigation.reference })}
                   </Button>
                 )}
               </div>
@@ -752,10 +753,10 @@ export default function IncidentDetail() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Investigation'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('incidents.detail.create_investigation')}
               </Button>
             </DialogFooter>
           </form>
@@ -768,33 +769,33 @@ export default function IncidentDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              Add Action
+              {t('incidents.detail.add_action')}
             </DialogTitle>
             <DialogDescription>
-              Create a corrective or follow-up action for this incident.
+              {t('incidents.detail.add_action_description')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
               <label htmlFor="incidentdetail-field-9" className="block text-sm font-medium text-foreground mb-1">
-                Action Title *
+                {t('incidents.detail.action_title_required')}
               </label>
               <Input id="incidentdetail-field-9"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
-                placeholder="e.g., Review safety procedures"
+                placeholder={t('incidents.detail.action_title_placeholder')}
                 required
               />
             </div>
             <UserEmailSearch
-              label="Assign To"
+              label={t('incidents.detail.assign_to')}
               value={actionForm.assigned_to}
               onChange={handleAssigneeChange}
-              placeholder="Search by email..."
+              placeholder={t('incidents.detail.search_email_placeholder')}
             />
             <div>
               <label htmlFor="incidentdetail-field-10" className="block text-sm font-medium text-foreground mb-1">
-                Priority
+                {t('common.priority')}
               </label>
               <Select
                 value={actionForm.priority}
@@ -804,16 +805,16 @@ export default function IncidentDetail() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="critical">{t('incidents.detail.severity_critical')}</SelectItem>
+                  <SelectItem value="high">{t('incidents.detail.severity_high')}</SelectItem>
+                  <SelectItem value="medium">{t('incidents.detail.severity_medium')}</SelectItem>
+                  <SelectItem value="low">{t('incidents.detail.severity_low')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
               <label htmlFor="incidentdetail-field-11" className="block text-sm font-medium text-foreground mb-1">
-                Due Date
+                {t('common.due_date')}
               </label>
               <Input id="incidentdetail-field-11"
                 type="date"
@@ -823,21 +824,21 @@ export default function IncidentDetail() {
             </div>
             <div>
               <label htmlFor="incidentdetail-field-12" className="block text-sm font-medium text-foreground mb-1">
-                Description
+                {t('common.description')}
               </label>
               <Textarea id="incidentdetail-field-12"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
-                placeholder="Describe the action to be taken..."
+                placeholder={t('incidents.detail.action_description_placeholder')}
                 rows={3}
               />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowActionModal(false)}>
-                Cancel
+                {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Action'}
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('incidents.detail.create_action')}
               </Button>
             </DialogFooter>
           </form>
@@ -850,10 +851,10 @@ export default function IncidentDetail() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-primary" />
-              Action Details
+              {t('incidents.detail.action_details')}
             </DialogTitle>
             <DialogDescription>
-              View and update action status
+              {t('incidents.detail.view_update_status')}
             </DialogDescription>
           </DialogHeader>
           
@@ -862,20 +863,20 @@ export default function IncidentDetail() {
               {/* Action Info */}
               <div className="space-y-3">
                 <div>
-                  <span className="text-sm font-medium text-muted-foreground">Title</span>
+                  <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.title')}</span>
                   <p className="font-medium text-foreground">{selectedAction.title}</p>
                 </div>
                 
                 {selectedAction.description && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Description</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
                     <p className="text-foreground">{selectedAction.description}</p>
                   </div>
                 )}
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Status</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
                     <Badge 
                       variant={
                         selectedAction.status === 'completed' ? 'resolved' :
@@ -889,31 +890,31 @@ export default function IncidentDetail() {
                     </Badge>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Priority</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.priority')}</span>
                     <p className="text-foreground capitalize">{selectedAction.priority}</p>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Due Date</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.due_date')}</span>
                     <p className="text-foreground">
                       {selectedAction.due_date 
                         ? new Date(selectedAction.due_date).toLocaleDateString() 
-                        : 'Not set'}
+                        : t('incidents.detail.not_set')}
                     </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Assigned To</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.assigned_to')}</span>
                     <p className="text-foreground">
-                      {selectedAction.assigned_to_email || 'Unassigned'}
+                      {selectedAction.assigned_to_email || t('incidents.detail.unassigned')}
                     </p>
                   </div>
                 </div>
                 
                 {selectedAction.completed_at && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Completed At</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.completed_at')}</span>
                     <p className="text-foreground">
                       {new Date(selectedAction.completed_at).toLocaleString()}
                     </p>
@@ -922,7 +923,7 @@ export default function IncidentDetail() {
                 
                 {selectedAction.completion_notes && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Completion Notes</span>
+                    <span className="text-sm font-medium text-muted-foreground">{t('incidents.detail.completion_notes')}</span>
                     <p className="text-foreground">{selectedAction.completion_notes}</p>
                   </div>
                 )}
@@ -931,7 +932,7 @@ export default function IncidentDetail() {
               {/* Status Update Section */}
               <div className="border-t pt-4">
                 <span className="text-sm font-medium text-muted-foreground mb-2 block">
-                  Update Status
+                  {t('incidents.detail.update_status')}
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {ACTION_STATUS_OPTIONS.map((option) => (
@@ -964,14 +965,14 @@ export default function IncidentDetail() {
                 {updatingAction && (
                   <div className="flex items-center gap-2 mt-2 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Updating...</span>
+                    <span className="text-sm">{t('incidents.detail.updating')}</span>
                   </div>
                 )}
               </div>
               
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
-                  Close
+                  {t('close')}
                 </Button>
               </DialogFooter>
             </div>

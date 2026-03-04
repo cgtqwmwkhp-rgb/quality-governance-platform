@@ -10,6 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { DynamicFormRenderer } from '../components/DynamicForm';
 import { Card } from '../components/ui/Card';
@@ -360,6 +361,7 @@ const FORM_TYPE_CONFIG: Record<string, { title: string; icon: string; color: str
 };
 
 export default function PortalDynamicForm({ formType: propFormType }: PortalDynamicFormProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = usePortalAuth();
@@ -518,7 +520,7 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading form...</p>
+          <p className="text-muted-foreground">{t('portal.loading_form')}</p>
         </div>
       </div>
     );
@@ -530,17 +532,17 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       <div className="min-h-screen bg-surface flex items-center justify-center p-4">
         <Card className="max-w-md w-full p-8 text-center">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-foreground mb-2">Unable to Load Form</h2>
+          <h2 className="text-xl font-bold text-foreground mb-2">{t('portal.unable_load_form')}</h2>
           <p className="text-muted-foreground mb-6">
-            {error || 'Form configuration could not be loaded. Please try again.'}
+            {error || t('portal.form_load_error')}
           </p>
           <div className="flex gap-3 justify-center">
             <Button variant="outline" onClick={handleCancel}>
-              Go Back
+              {t('portal.go_back')}
             </Button>
             <Button onClick={handleRetry}>
               <RefreshCw className="w-4 h-4 mr-2" />
-              Retry
+              {t('retry')}
             </Button>
           </div>
         </Card>

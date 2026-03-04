@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, getApiErrorMessage, type InductionRun, type AssetType } from '../../api/client'
@@ -16,6 +17,7 @@ const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'info' | 'destruct
 }
 
 export default function Training() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [inductions, setInductions] = useState<InductionRun[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,14 +84,14 @@ export default function Training() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Training & Inductions</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('workforce.training.title')}</h1>
           <p className="text-muted-foreground mt-1">
-            Manage training and induction runs for engineers
+            {t('workforce.training.subtitle')}
           </p>
         </div>
         <Button onClick={() => navigate('/workforce/training/new')} className="gap-2">
           <Plus className="w-4 h-4" />
-          New Training
+          {t('workforce.training.new')}
         </Button>
       </div>
 
@@ -99,7 +101,7 @@ export default function Training() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Search by reference, engineer..."
+                placeholder={t('workforce.training.search_placeholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -111,24 +113,24 @@ export default function Training() {
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
               >
-                <option value="">All statuses</option>
-                <option value="draft">Draft</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="">{t('workforce.common.all_statuses')}</option>
+                <option value="draft">{t('common.draft')}</option>
+                <option value="in_progress">{t('common.in_progress')}</option>
+                <option value="completed">{t('common.completed')}</option>
+                <option value="cancelled">{t('common.cancelled')}</option>
               </select>
               <select
                 value={stageFilter}
                 onChange={(e) => setStageFilter(e.target.value)}
                 className="h-9 rounded-md border border-border bg-card px-3 text-sm text-foreground"
               >
-                <option value="">All stages</option>
-                <option value="stage_1_onsite">Stage 1 (On-site)</option>
-                <option value="stage_2_field">Stage 2 (Field)</option>
+                <option value="">{t('workforce.training.all_stages')}</option>
+                <option value="stage_1_onsite">{t('workforce.training.stage1')}</option>
+                <option value="stage_2_field">{t('workforce.training.stage2')}</option>
               </select>
               <Button variant="outline" size="sm" className="gap-2">
                 <Filter className="w-4 h-4" />
-                Filters
+                {t('workforce.common.filters')}
               </Button>
             </div>
           </div>
@@ -148,13 +150,13 @@ export default function Training() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Reference</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Engineer</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Template</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Asset Type</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Stage</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.reference')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.engineer')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.template')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.stage')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.status')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.date')}</th>
                     <th className="w-10" />
                   </tr>
                 </thead>
@@ -162,7 +164,7 @@ export default function Training() {
                   {inductions.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                        No training runs found. Create one to get started.
+                        {t('workforce.training.empty')}
                       </td>
                     </tr>
                   ) : (

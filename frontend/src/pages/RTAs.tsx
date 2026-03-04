@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { rtasApi, RTA, RTACreate } from '../api/client'
@@ -25,6 +26,7 @@ import {
 } from '../components/ui/Select'
 
 export default function RTAs() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [rtas, setRtas] = useState<RTA[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,19 +75,19 @@ export default function RTAs() {
       
       if (isTimeout) {
         setError({
-          message: 'Request timed out. The server took too long to respond.',
+          message: t('rtas.error.timeout'),
           code: 'TIMEOUT',
           requestId,
         })
       } else if (!err.response) {
         setError({
-          message: 'Network error. Please check your connection.',
+          message: t('rtas.error.network'),
           code: 'NETWORK_ERROR',
           requestId,
         })
       } else {
         setError({
-          message: err.response?.data?.message || err.response?.data?.detail?.message || 'Failed to load RTAs. Please try again.',
+          message: err.response?.data?.message || err.response?.data?.detail?.message || t('rtas.error.generic'),
           code: status ? `HTTP_${status}` : 'UNKNOWN',
           requestId,
         })
@@ -170,18 +172,18 @@ export default function RTAs() {
           <AlertCircle className="w-8 h-8 text-destructive" />
         </div>
         <div className="text-center">
-          <h2 className="text-lg font-semibold text-foreground mb-1">Failed to Load RTAs</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-1">{t('rtas.error.load_failed')}</h2>
           <p className="text-muted-foreground max-w-md">{error.message}</p>
           {error.code && (
             <p className="text-xs text-muted-foreground mt-1">
-              Error code: {error.code}
-              {error.requestId && ` | Request ID: ${error.requestId}`}
+              {t('rtas.error.code_label')}: {error.code}
+              {error.requestId && ` | ${t('rtas.error.request_id_label')}: ${error.requestId}`}
             </p>
           )}
         </div>
         <Button onClick={loadRtas} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
-          Retry
+          {t('retry')}
         </Button>
       </div>
     )
@@ -192,12 +194,12 @@ export default function RTAs() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Road Traffic Collisions</h1>
-          <p className="text-muted-foreground mt-1">Manage vehicle accidents and incidents</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('rtas.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('rtas.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
           <Plus size={20} />
-          Report RTA
+          {t('rtas.report')}
         </Button>
       </div>
 
@@ -207,7 +209,7 @@ export default function RTAs() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search RTAs..."
+            placeholder={t('rtas.search_placeholder')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -222,12 +224,12 @@ export default function RTAs() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Reference</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Severity</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.reference')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.title')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.location')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.severity')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.status')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('rtas.table.date')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -235,8 +237,8 @@ export default function RTAs() {
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                       <Car className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>No RTAs found</p>
-                      <p className="text-sm mt-1">Report a road traffic collision to get started</p>
+                      <p>{t('rtas.empty.title')}</p>
+                      <p className="text-sm mt-1">{t('rtas.empty.subtitle')}</p>
                     </td>
                   </tr>
                 ) : (
@@ -282,88 +284,88 @@ export default function RTAs() {
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Report Road Traffic Collision</DialogTitle>
+            <DialogTitle>{t('rtas.dialog.title')}</DialogTitle>
             <DialogDescription>
-              Record details of a road traffic collision or near miss incident for investigation and follow-up.
+              {t('rtas.dialog.description')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="rtas-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <label htmlFor="rtas-field-0" className="block text-sm font-medium text-foreground mb-2">{t('common.title')}</label>
               <Input id="rtas-field-0"
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Brief description of the collision..."
+                placeholder={t('rtas.form.placeholder.title')}
               />
             </div>
 
             <div>
-              <label htmlFor="rtas-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <label htmlFor="rtas-field-1" className="block text-sm font-medium text-foreground mb-2">{t('common.description')}</label>
               <Textarea id="rtas-field-1"
                 required
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Full details of what happened..."
+                placeholder={t('rtas.form.placeholder.description')}
               />
             </div>
 
             <div>
-              <label htmlFor="rtas-field-2" className="block text-sm font-medium text-foreground mb-2">Location</label>
+              <label htmlFor="rtas-field-2" className="block text-sm font-medium text-foreground mb-2">{t('rtas.table.location')}</label>
               <Input id="rtas-field-2"
                 type="text"
                 required
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                placeholder="Where did the collision occur..."
+                placeholder={t('rtas.form.placeholder.location')}
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="rtas-field-3" className="block text-sm font-medium text-foreground mb-2">Severity</label>
+                <label htmlFor="rtas-field-3" className="block text-sm font-medium text-foreground mb-2">{t('rtas.table.severity')}</label>
                 <Select
                   value={formData.severity}
                   onValueChange={(value) => setFormData({ ...formData, severity: value })}
                 >
                   <SelectTrigger id="rtas-field-3">
-                    <SelectValue placeholder="Select severity" />
+                    <SelectValue placeholder={t('rtas.form.placeholder.severity')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="near_miss">Near Miss</SelectItem>
-                    <SelectItem value="damage_only">Damage Only</SelectItem>
-                    <SelectItem value="minor_injury">Minor Injury</SelectItem>
-                    <SelectItem value="serious_injury">Serious Injury</SelectItem>
-                    <SelectItem value="fatal">Fatal</SelectItem>
+                    <SelectItem value="near_miss">{t('rtas.severity.near_miss')}</SelectItem>
+                    <SelectItem value="damage_only">{t('rtas.severity.damage_only')}</SelectItem>
+                    <SelectItem value="minor_injury">{t('rtas.severity.minor_injury')}</SelectItem>
+                    <SelectItem value="serious_injury">{t('rtas.severity.serious_injury')}</SelectItem>
+                    <SelectItem value="fatal">{t('rtas.severity.fatal')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label htmlFor="rtas-field-4" className="block text-sm font-medium text-foreground mb-2">Vehicle Reg</label>
+                <label htmlFor="rtas-field-4" className="block text-sm font-medium text-foreground mb-2">{t('rtas.form.vehicle_reg')}</label>
                 <Input id="rtas-field-4"
                   type="text"
                   value={formData.company_vehicle_registration || ''}
                   onChange={(e) => setFormData({ ...formData, company_vehicle_registration: e.target.value })}
-                  placeholder="AB12 CDE"
+                  placeholder={t('rtas.form.placeholder.vehicle_reg')}
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="rtas-field-5" className="block text-sm font-medium text-foreground mb-2">Driver Name</label>
+              <label htmlFor="rtas-field-5" className="block text-sm font-medium text-foreground mb-2">{t('rtas.form.driver_name')}</label>
               <Input id="rtas-field-5"
                 type="text"
                 value={formData.driver_name || ''}
                 onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
-                placeholder="Name of the driver..."
+                placeholder={t('rtas.form.placeholder.driver_name')}
               />
             </div>
 
             <div>
-              <label htmlFor="rtas-field-6" className="block text-sm font-medium text-foreground mb-2">Collision Date</label>
+              <label htmlFor="rtas-field-6" className="block text-sm font-medium text-foreground mb-2">{t('rtas.form.collision_date')}</label>
               <Input id="rtas-field-6"
                 type="datetime-local"
                 required
@@ -378,14 +380,14 @@ export default function RTAs() {
                   checked={formData.police_attended || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, police_attended: checked })}
                 />
-                <span className="text-sm text-foreground">Police Attended</span>
+                <span className="text-sm text-foreground">{t('rtas.form.police_attended')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.driver_injured || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, driver_injured: checked })}
                 />
-                <span className="text-sm text-foreground">Driver Injured</span>
+                <span className="text-sm text-foreground">{t('rtas.form.driver_injured')}</span>
               </div>
             </div>
 
@@ -395,7 +397,7 @@ export default function RTAs() {
                 variant="outline"
                 onClick={() => setShowModal(false)}
               >
-                Cancel
+                {t('cancel')}
               </Button>
               <Button
                 type="submit"
@@ -404,10 +406,10 @@ export default function RTAs() {
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Reporting...
+                    {t('rtas.reporting')}
                   </>
                 ) : (
-                  'Report RTA'
+                  t('rtas.report')
                 )}
               </Button>
             </DialogFooter>

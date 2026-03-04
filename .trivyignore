@@ -1,0 +1,7 @@
+# Trivy false positive / accepted risk documentation
+# Format: CVE-ID  (one per line)
+# 
+# Policy: All entries must have a comment explaining why they are accepted.
+# Review quarterly or when Trivy flags new findings.
+#
+# No accepted risks at this time.

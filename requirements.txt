@@ -37,25 +37,6 @@ python-dotenv>=1.0.0,<2.0.0
 httpx>=0.26.0,<1.0.0
 tenacity>=8.2.0,<9.0.0
 
-# Testing
-pytest>=7.4.0,<9.0.0
-pytest-asyncio>=0.23.0,<1.0.0
-pytest-cov>=4.1.0,<8.0.0
-factory-boy>=3.3.0,<4.0.0
-
-# Code Quality
-black>=24.1.0,<26.0.0
-isort>=5.13.0,<6.0.0
-flake8>=7.0.0,<8.0.0
-mypy>=1.8.0,<2.0.0
-
-# Security Scanning
-bandit>=1.7.0,<2.0.0
-safety>=2.3.0,<3.0.0
-
-# Performance Testing
-locust>=2.20.0,<3.0.0
-
 # Caching & Task Queue
 redis>=5.0.0,<6.0.0
 celery>=5.3.0,<6.0.0
@@ -69,14 +50,9 @@ psutil>=5.9.0,<6.0.0
 opencensus-ext-azure>=1.1.0,<2.0.0
 opencensus-ext-requests>=0.8.0,<1.0.0
 
-# Documentation
-mkdocs>=1.5.0,<2.0.0
-mkdocs-material>=9.5.0,<10.0.0
+# Logging & Context
 python-json-logger>=2.0.0,<3.0.0
 starlette-context>=0.3.0,<1.0.0
-
-# Build Tooling
-pip-tools>=7.4.0,<8.0.0
 
 # Security: pin minimum versions for transitive deps flagged by Trivy
 jaraco-context>=6.1.0

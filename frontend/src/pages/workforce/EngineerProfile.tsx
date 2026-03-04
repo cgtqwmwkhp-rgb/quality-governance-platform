@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { workforceApi, type EngineerProfile as EngineerProfileType, type CompetencyRecord } from '../../api/client'
 
 const stateColors: Record<string, string> = {
@@ -11,6 +12,7 @@ const stateColors: Record<string, string> = {
 }
 
 export default function EngineerProfile() {
+  const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const [engineer, setEngineer] = useState<EngineerProfileType | null>(null)
   const [competencies, setCompetencies] = useState<CompetencyRecord[]>([])
@@ -63,9 +65,9 @@ export default function EngineerProfile() {
   if (!engineer) {
     return (
       <div className="p-6">
-        <p className="text-muted-foreground">{error || 'Engineer not found.'}</p>
+        <p className="text-muted-foreground">{error || t('workforce.engineers.not_found')}</p>
         <Link to="/workforce/engineers" className="text-primary hover:underline mt-2 inline-block">
-          Back to Engineers
+          {t('workforce.engineers.back')}
         </Link>
       </div>
     )
@@ -79,7 +81,7 @@ export default function EngineerProfile() {
     <div className="space-y-6 p-6">
       <div className="flex items-center gap-3">
         <Link to="/workforce/engineers" className="text-muted-foreground hover:text-foreground">
-          &larr; Engineers
+          &larr; {t('workforce.engineers.title')}
         </Link>
       </div>
 
@@ -102,25 +104,25 @@ export default function EngineerProfile() {
             </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-medium ${engineer.is_active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
-            {engineer.is_active ? 'Active' : 'Inactive'}
+            {engineer.is_active ? t('common.active') : t('common.inactive')}
           </span>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Employee No.</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.engineers.employee_no')}</p>
             <p className="text-foreground font-medium mt-1">{engineer.employee_number || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Department</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.common.department')}</p>
             <p className="text-foreground font-medium mt-1">{engineer.department || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Site</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.common.site')}</p>
             <p className="text-foreground font-medium mt-1">{engineer.site || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">External ID</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.engineers.external_id')}</p>
             <p className="text-foreground font-mono text-sm mt-1">{engineer.external_id?.slice(0, 8)}...</p>
           </div>
         </div>
@@ -129,15 +131,15 @@ export default function EngineerProfile() {
       {/* Competency Summary KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground">Active Competencies</p>
+          <p className="text-sm text-muted-foreground">{t('workforce.competency.active_competencies')}</p>
           <p className="text-3xl font-bold text-success mt-1">{activeCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground">Due for Reassessment</p>
+          <p className="text-sm text-muted-foreground">{t('workforce.competency.due_reassessment')}</p>
           <p className="text-3xl font-bold text-warning mt-1">{dueCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground">Expired</p>
+          <p className="text-sm text-muted-foreground">{t('workforce.competency.expired')}</p>
           <p className="text-3xl font-bold text-destructive mt-1">{expiredCount}</p>
         </div>
       </div>
@@ -145,23 +147,23 @@ export default function EngineerProfile() {
       {/* Competency Records Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">Competency Records</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.records')}</h2>
         </div>
         {competencies.length === 0 ? (
           <div className="px-6 py-12 text-center text-muted-foreground">
-            No competency records found.
+            {t('workforce.competency.records_empty')}
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Asset Type</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Source</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Outcome</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">State</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Assessed</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expires</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.source')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.assessments.outcome')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.state')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.assessed')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.expires')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,13 +198,13 @@ export default function EngineerProfile() {
       {/* Skills Matrix */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">Skills Matrix</h2>
-          <p className="text-sm text-muted-foreground mt-1">Competency status across asset types</p>
+          <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.skills_matrix')}</h2>
+          <p className="text-sm text-muted-foreground mt-1">{t('workforce.competency.skills_matrix_subtitle')}</p>
         </div>
         <div className="p-6">
           {competencies.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              Complete assessments to populate the skills matrix.
+              {t('workforce.competency.skills_matrix_empty')}
             </p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">

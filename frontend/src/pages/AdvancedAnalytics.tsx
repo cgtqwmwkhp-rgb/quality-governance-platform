@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   BarChart3,
   TrendingUp,
@@ -340,7 +341,7 @@ export default function AdvancedAnalytics() {
           </Button>
           <Button>
             <Download className="w-4 h-4 mr-2" />
-            Export
+            {t('common.export')}
           </Button>
         </div>
       </div>

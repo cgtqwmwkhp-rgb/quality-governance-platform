@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   GitBranch,
   CheckCircle,
@@ -93,6 +94,7 @@ const slaColors: Record<string, string> = {
 };
 
 export default function WorkflowCenter() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'approvals' | 'workflows' | 'templates' | 'delegation'>('approvals');
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowInstance[]>([]);
@@ -227,8 +229,8 @@ export default function WorkflowCenter() {
   };
 
   const tabs = [
-    { id: 'approvals', label: 'Pending Approvals', icon: CheckCircle, count: stats.pending_approvals },
-    { id: 'workflows', label: 'Active Workflows', icon: GitBranch, count: stats.active_workflows },
+    { id: 'approvals', label: t('workflows.pending_approvals'), icon: CheckCircle, count: stats.pending_approvals },
+    { id: 'workflows', label: t('workflows.active_workflows'), icon: GitBranch, count: stats.active_workflows },
     { id: 'templates', label: 'Templates', icon: FileText },
     { id: 'delegation', label: 'Delegation', icon: UserPlus },
   ];
@@ -246,8 +248,8 @@ export default function WorkflowCenter() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Workflow Center</h1>
-          <p className="text-muted-foreground mt-1">Manage approvals, workflows, and automations</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('workflows.title')}</h1>
+          <p className="text-muted-foreground mt-1">{t('workflows.subtitle')}</p>
         </div>
         <Button variant="secondary" onClick={loadData}>
           <RefreshCw className="w-4 h-4" />
@@ -265,7 +267,7 @@ export default function WorkflowCenter() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">{stats.pending_approvals}</div>
-                <div className="text-sm text-muted-foreground">Pending Approvals</div>
+                <div className="text-sm text-muted-foreground">{t('workflows.pending_approvals')}</div>
               </div>
             </div>
           </CardContent>
@@ -278,7 +280,7 @@ export default function WorkflowCenter() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">{stats.active_workflows}</div>
-                <div className="text-sm text-muted-foreground">Active Workflows</div>
+                <div className="text-sm text-muted-foreground">{t('workflows.active_workflows')}</div>
               </div>
             </div>
           </CardContent>
@@ -304,7 +306,7 @@ export default function WorkflowCenter() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">{stats.completed_today}</div>
-                <div className="text-sm text-muted-foreground">Completed Today</div>
+                <div className="text-sm text-muted-foreground">{t('workflows.completed_today')}</div>
               </div>
             </div>
           </CardContent>
@@ -349,7 +351,7 @@ export default function WorkflowCenter() {
               </span>
               <Button variant="success" onClick={handleBulkApprove}>
                 <CheckCircle className="w-4 h-4" />
-                Approve Selected
+                {t('workflows.approve_selected')}
               </Button>
               <Button variant="ghost" onClick={() => setSelectedApprovals(new Set())}>
                 Cancel
@@ -371,7 +373,7 @@ export default function WorkflowCenter() {
                     <Square className="w-5 h-5" />
                   )}
                 </button>
-                <span className="text-foreground font-medium">All Pending Approvals</span>
+                <span className="text-foreground font-medium">{t('workflows.all_pending')}</span>
               </div>
               <Button variant="ghost" size="sm">
                 <Filter className="w-4 h-4" />
@@ -430,7 +432,7 @@ export default function WorkflowCenter() {
                         </Button>
                         <Button variant="secondary" size="sm">
                           <Eye className="w-4 h-4" />
-                          View Details
+                          {t('workflows.view_details')}
                         </Button>
                       </div>
                     </div>
@@ -486,11 +488,11 @@ export default function WorkflowCenter() {
                 <div className="flex items-center gap-2">
                   <Button variant="secondary" size="sm">
                     <Eye className="w-4 h-4" />
-                    View Details
+                    {t('workflows.view_details')}
                   </Button>
                   <Button variant="secondary" size="sm">
                     <BarChart3 className="w-4 h-4" />
-                    Timeline
+                    {t('workflows.timeline')}
                   </Button>
                 </div>
               </CardContent>
@@ -521,7 +523,7 @@ export default function WorkflowCenter() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">{template.steps_count} steps</span>
                   <button className="text-primary hover:text-primary-hover text-sm font-medium">
-                    View Template →
+                    {t('workflows.view_template')}
                   </button>
                 </div>
               </CardContent>
@@ -535,14 +537,14 @@ export default function WorkflowCenter() {
         <div className="space-y-6">
           <Card>
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Set Up Delegation</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">{t('workflows.set_up_delegation')}</h3>
               <p className="text-muted-foreground mb-6">
                 Configure out-of-office delegation to automatically route your approvals to a colleague.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label htmlFor="workflowcenter-field-0" className="block text-sm font-medium text-foreground mb-2">Delegate To</label>
+                  <label htmlFor="workflowcenter-field-0" className="block text-sm font-medium text-foreground mb-2">{t('workflows.delegate_to')}</label>
                   <Select>
                     <SelectTrigger id="workflowcenter-field-0">
                       <SelectValue placeholder="Select a colleague..." />
@@ -555,7 +557,7 @@ export default function WorkflowCenter() {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="workflowcenter-field-1" className="block text-sm font-medium text-foreground mb-2">Reason</label>
+                  <label htmlFor="workflowcenter-field-1" className="block text-sm font-medium text-foreground mb-2">{t('workflows.reason')}</label>
                   <Input id="workflowcenter-field-1" type="text" placeholder="e.g., Annual leave" />
                 </div>
                 <div>
@@ -570,7 +572,7 @@ export default function WorkflowCenter() {
 
               <Button>
                 <UserPlus className="w-4 h-4" />
-                Set Delegation
+                {t('workflows.set_delegation')}
               </Button>
             </CardContent>
           </Card>
@@ -578,7 +580,7 @@ export default function WorkflowCenter() {
           {/* Current Delegations */}
           <Card>
             <CardHeader>
-              <h3 className="font-medium text-foreground">Current & Scheduled Delegations</h3>
+              <h3 className="font-medium text-foreground">{t('workflows.current_delegations')}</h3>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
