@@ -25,6 +25,7 @@ export default function Portal() {
 
   useEffect(() => {
     announce(t('portal.loaded'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable after init
   }, [announce]);
 
   const handleLogout = () => {

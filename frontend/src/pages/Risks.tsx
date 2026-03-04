@@ -42,6 +42,7 @@ export default function Risks() {
 
   useEffect(() => {
     loadRisks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, [])
 
   const loadRisks = async () => {
