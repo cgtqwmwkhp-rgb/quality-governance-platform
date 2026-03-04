@@ -93,9 +93,13 @@ async def get_erasure_status(
         return bool(_HEX64.match(val)) or val == "REDACTED"
 
     is_anonymized = (
-        _looks_pseudonymized(user.email)
-        or (user.email.startswith("deleted-") and user.email.endswith("@anonymized.local"))
-    ) and _looks_pseudonymized(user.first_name) and _looks_pseudonymized(user.last_name)
+        (
+            _looks_pseudonymized(user.email)
+            or (user.email.startswith("deleted-") and user.email.endswith("@anonymized.local"))
+        )
+        and _looks_pseudonymized(user.first_name)
+        and _looks_pseudonymized(user.last_name)
+    )
 
     return {
         "user_id": current_user.id,

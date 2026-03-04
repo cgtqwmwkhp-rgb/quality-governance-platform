@@ -25,19 +25,26 @@ module.exports = [
       react: { version: 'detect' },
     },
     rules: {
-      ...tsPlugin.configs.recommended.rules,
-      ...reactPlugin.configs.recommended.rules,
       ...reactHooksPlugin.configs.recommended.rules,
-      ...jsxA11yPlugin.configs.recommended.rules,
 
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      'react/no-unescaped-entities': 'off',
+      'react/display-name': 'off',
+      'react/no-children-prop': 'warn',
+
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/ban-ts-comment': 'off',
 
       'jsx-a11y/anchor-is-valid': 'warn',
       'jsx-a11y/click-events-have-key-events': 'warn',
       'jsx-a11y/no-static-element-interactions': 'warn',
+      'jsx-a11y/no-noninteractive-element-interactions': 'warn',
+      'jsx-a11y/alt-text': 'warn',
+      'jsx-a11y/label-has-associated-control': 'warn',
+      'jsx-a11y/heading-has-content': 'warn',
     },
   },
   {

@@ -90,6 +90,7 @@ export default function PortalReport() {
               key={type.id}
               hoverable
               className="p-4 cursor-pointer group"
+              data-testid={`report-${type.id}-card`}
               onClick={() => navigate(type.path)}
             >
               <div className="flex items-center gap-4">
