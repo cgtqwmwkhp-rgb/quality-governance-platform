@@ -1,5 +1,9 @@
 # Contributing to QGP
 
+> **Canonical repository:** [`cgtqwmwkhp-rgb/quality-governance-platform`](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform)
+> All development, issues, and pull requests should target this repository.
+> The former `Plantexpand/quality-governance-platform` mirror is retired as of March 2026.
+
 ## Prerequisites
 
 | Tool       | Version | Check              |
