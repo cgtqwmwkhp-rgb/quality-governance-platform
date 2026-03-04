@@ -597,15 +597,14 @@ class TestAPIContractVerification:
             TestResult.record("SUAT-018", "PARTIAL", f"Missing on: {missing_request_id}")
 
     @pytest.mark.asyncio
-    async def test_suat_019_pagination_fields_consistent(self, client):
+    async def test_suat_019_pagination_fields_consistent(self, authenticated_client):
         """
         SUAT-019: Paginated responses have consistent structure.
 
         Note: This test checks portal stats which doesn't paginate,
         but real paginated endpoints require auth.
         """
-        # Portal stats doesn't paginate, but let's verify consistency
-        response = await client.get("/api/v1/portal/stats/")
+        response = await authenticated_client.get("/api/v1/portal/stats/")
         assert response.status_code == 200
 
         # Verify the response has expected structure
