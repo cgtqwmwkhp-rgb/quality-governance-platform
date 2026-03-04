@@ -90,6 +90,21 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 
 @pytest_asyncio.fixture(scope="function")
+async def authenticated_client() -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client with a valid auth token for UAT tests."""
+    from src.core.security import create_access_token
+
+    token = create_access_token(data={"sub": "1", "tenant_id": 1})
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as ac:
+        yield ac
+
+
+@pytest_asyncio.fixture(scope="function")
 async def fresh_client() -> AsyncGenerator[AsyncClient, None]:
     """Fresh async client (alias for client with transaction rollback)."""
     transport = ASGITransport(app=app)

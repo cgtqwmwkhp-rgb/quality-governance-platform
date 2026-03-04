@@ -79,9 +79,9 @@ class TestEmployeePortalWorkflows:
         assert "timeline" in data
 
     @pytest.mark.asyncio
-    async def test_uat_005_get_portal_statistics(self, client):
+    async def test_uat_005_get_portal_statistics(self, authenticated_client):
         """UAT-005: Portal statistics endpoint is accessible."""
-        response = await client.get("/api/v1/portal/stats/")
+        response = await authenticated_client.get("/api/v1/portal/stats/")
 
         assert response.status_code == 200
         data = response.json()

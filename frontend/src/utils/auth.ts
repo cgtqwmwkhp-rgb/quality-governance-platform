@@ -10,6 +10,14 @@
 
 const ADMIN_TOKEN_KEY = 'access_token';
 const PORTAL_TOKEN_KEY = 'platform_access_token';
+const PORTAL_REFRESH_TOKEN_KEY = 'platform_refresh_token';
+
+/**
+ * Get the platform refresh token (portal/SSO only).
+ */
+export function getPlatformRefreshToken(): string | null {
+  return sessionStorage.getItem(PORTAL_REFRESH_TOKEN_KEY);
+}
 
 /**
  * Get the current platform JWT token.
