@@ -34,6 +34,7 @@ export default function Standards() {
 
   useEffect(() => {
     loadStandards()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadStandards = async () => {

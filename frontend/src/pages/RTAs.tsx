@@ -49,6 +49,7 @@ export default function RTAs() {
 
   useEffect(() => {
     loadRtas()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadRtas = async () => {

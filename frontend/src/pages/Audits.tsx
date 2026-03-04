@@ -64,6 +64,7 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 };
 
 export default function Audits() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])

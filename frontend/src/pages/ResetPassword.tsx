@@ -47,6 +47,7 @@ export default function ResetPassword() {
       setFormState('invalid_token')
       setErrorMessage(t('reset_password.invalid_token_message'))
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable after init
   }, [token])
 
   const passwordStrength = calculatePasswordStrength(password)

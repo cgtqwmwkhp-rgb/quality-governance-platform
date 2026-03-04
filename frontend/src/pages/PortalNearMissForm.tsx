@@ -764,11 +764,3 @@ export default function PortalNearMissForm() {
   );
 }
 
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}

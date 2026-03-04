@@ -98,6 +98,7 @@ const timeRanges = [
 ];
 
 export default function AdvancedAnalytics() {
+  const { t } = useTranslation();
   const [timeRange, setTimeRange] = useState('last_30_days');
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'benchmarks' | 'costs' | 'roi'>('overview');
   const [kpis, setKpis] = useState<KPIData | null>(null);

@@ -64,15 +64,6 @@ interface HeatMapData {
   impact_labels: Record<number, string>
 }
 
-const CATEGORIES = [
-  { id: 'strategic', label: 'Strategic', color: 'bg-primary' },
-  { id: 'operational', label: 'Operational', color: 'bg-info' },
-  { id: 'financial', label: 'Financial', color: 'bg-success' },
-  { id: 'compliance', label: 'Compliance', color: 'bg-warning' },
-  { id: 'reputational', label: 'Reputational', color: 'bg-destructive' },
-  { id: 'health_safety', label: 'Health & Safety', color: 'bg-destructive' },
-  { id: 'environmental', label: 'Environmental', color: 'bg-success' },
-]
 
 const TREATMENT_STRATEGIES = [
   { id: 'treat', label: 'Treat', icon: '🛠️' },
