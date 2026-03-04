@@ -240,7 +240,10 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleNotificationClick(notification)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(notification); }}
                     className={`
                       p-4 cursor-pointer transition-all duration-200 
                       hover:bg-slate-700/50 group

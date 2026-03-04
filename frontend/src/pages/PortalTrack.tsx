@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Search,
@@ -236,21 +236,7 @@ export default function PortalTrack() {
   const [error, setError] = useState<string | null>(null);
   const [showManualSearch, setShowManualSearch] = useState(false);
 
-  // Load user's reports if authenticated with platform token
-  useEffect(() => {
-    if (isAuthenticated && user && platformToken) {
-      loadMyReports();
-    }
-  }, [isAuthenticated, user, platformToken]);
-
-  // Load specific report from URL
-  useEffect(() => {
-    if (urlRef) {
-      searchReport(urlRef);
-    }
-  }, [urlRef]);
-
-  const loadMyReports = async () => {
+  const loadMyReports = useCallback(async () => {
     setIsLoadingMyReports(true);
     setError(null);
     
@@ -308,7 +294,21 @@ export default function PortalTrack() {
     } finally {
       setIsLoadingMyReports(false);
     }
-  };
+  }, [platformToken]);
+
+  // Load user's reports if authenticated with platform token
+  useEffect(() => {
+    if (isAuthenticated && user && platformToken) {
+      loadMyReports();
+    }
+  }, [isAuthenticated, user, platformToken, loadMyReports]);
+
+  // Load specific report from URL
+  useEffect(() => {
+    if (urlRef) {
+      searchReport(urlRef);
+    }
+  }, [urlRef]);
 
   const getStatusLabel = (status: string): string => {
     const labels: Record<string, string> = {

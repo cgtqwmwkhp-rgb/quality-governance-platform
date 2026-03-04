@@ -545,7 +545,7 @@ export default function MobileAuditExecution() {
     } else {
       setShowAISuggestion(false);
     }
-  }, [currentSectionIndex, currentQuestionIndex, audit.sections]);
+  }, [currentSectionIndex, currentQuestionIndex, audit]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

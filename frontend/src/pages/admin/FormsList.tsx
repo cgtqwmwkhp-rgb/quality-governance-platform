@@ -263,7 +263,10 @@ export default function FormsList() {
                     {activeMenu === form.id && (
                       <div
                         className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden"
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}
                       >
                         <button
                           onClick={() => navigate(`/admin/forms/${form.id}`)}

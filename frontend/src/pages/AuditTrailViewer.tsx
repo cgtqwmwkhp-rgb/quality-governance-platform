@@ -316,8 +316,11 @@ export default function AuditTrailViewer() {
                 >
                   {/* Entry Header */}
                   <div
+                    role="button"
+                    tabIndex={0}
                     className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
                     onClick={() => toggleExpanded(entry.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpanded(entry.id); }}
                   >
                     <div className="flex items-center gap-4">
                       {/* Hash Chain Visualization */}

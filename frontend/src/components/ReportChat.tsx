@@ -9,7 +9,7 @@
  * - Conversation closure option
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Send,
   Paperclip,
@@ -245,17 +245,7 @@ export default function ReportChat({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load messages
-  useEffect(() => {
-    loadMessages();
-  }, [referenceNumber]);
-
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`);
@@ -271,7 +261,17 @@ export default function ReportChat({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [referenceNumber]);
+
+  // Load messages
+  useEffect(() => {
+    loadMessages();
+  }, [referenceNumber, loadMessages]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleSend = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;

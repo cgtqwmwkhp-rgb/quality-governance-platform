@@ -194,12 +194,15 @@ export default function AuditTrail() {
             
             {/* Entry Card */}
             <div
+              role="button"
+              tabIndex={0}
               className={`bg-card/50 backdrop-blur-sm rounded-xl border transition-all cursor-pointer ${
                 expandedEntry === entry.id
                   ? 'border-primary/50'
                   : 'border-border hover:border-border-strong'
               }`}
               onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedEntry(expandedEntry === entry.id ? null : entry.id); }}
             >
               <div className="p-4">
                 <div className="flex items-start justify-between gap-4">

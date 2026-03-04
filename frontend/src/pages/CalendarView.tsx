@@ -214,12 +214,15 @@ export default function CalendarView() {
                   return (
                     <div
                       key={index}
+                      role="button"
+                      tabIndex={0}
                       className={cn(
                         "min-h-[100px] p-2 rounded-lg transition-all",
                         day && "bg-surface hover:bg-surface-hover cursor-pointer",
                         today && "ring-2 ring-primary"
                       )}
                       onClick={() => day && setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
+                      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && day) setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day)); }}
                     >
                       {day && (
                         <>

@@ -296,10 +296,13 @@ export default function IMSDashboard() {
           return (
             <div
               key={standard.id}
+              role="button"
+              tabIndex={0}
               className={`bg-card rounded-xl p-6 border border-border hover:border-border-strong transition-colors cursor-pointer ${
                 selectedStandard === standard.id ? 'ring-2 ring-primary' : ''
               }`}
               onClick={() => setSelectedStandard(standard.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedStandard(standard.id); }}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-xl ${standard.color}`}>
