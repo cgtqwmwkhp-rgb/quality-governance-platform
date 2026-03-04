@@ -11,11 +11,12 @@ Features:
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.notification import NotificationPriority, NotificationType
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -98,73 +99,39 @@ class MentionSearchResult(BaseModel):
 @router.get("/", response_model=NotificationListResponse)
 async def list_notifications(
     current_user: CurrentUser,
+    db: DbSession,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     unread_only: bool = Query(False),
     notification_type: Optional[str] = None,
 ):
-    """
-    List notifications for the current user.
+    """List notifications for the current user."""
+    from sqlalchemy import func, select
 
-    Supports filtering by read status and notification type.
-    """
-    # Parse notification type filter (placeholder for production implementation)
-    _ = notification_type  # Used in production for filtering
+    from src.domain.models.notification import Notification
 
-    # Mock notifications for demonstration
-    mock_notifications = [
-        NotificationResponse(
-            id=1,
-            type="mention",
-            priority="medium",
-            title="You were mentioned",
-            message="John Smith mentioned you in an incident report",
-            entity_type="incident",
-            entity_id="INC-001",
-            action_url="/incidents/INC-001",
-            sender_id=2,
-            is_read=False,
-            created_at=datetime.utcnow(),
-        ),
-        NotificationResponse(
-            id=2,
-            type="assignment",
-            priority="high",
-            title="Action assigned to you",
-            message="Complete risk assessment for Site A",
-            entity_type="action",
-            entity_id="ACT-042",
-            action_url="/actions/ACT-042",
-            sender_id=3,
-            is_read=False,
-            created_at=datetime.utcnow(),
-        ),
-        NotificationResponse(
-            id=3,
-            type="action_due_soon",
-            priority="medium",
-            title="Action due tomorrow",
-            message="Update safety documentation - due in 24 hours",
-            entity_type="action",
-            entity_id="ACT-038",
-            action_url="/actions/ACT-038",
-            sender_id=None,
-            is_read=True,
-            created_at=datetime.utcnow(),
-        ),
-    ]
+    query = select(Notification).where(Notification.user_id == current_user.id)
 
-    # Filter by read status
     if unread_only:
-        mock_notifications = [n for n in mock_notifications if not n.is_read]
+        query = query.where(Notification.is_read == False)
+    if notification_type:
+        query = query.where(Notification.type == notification_type)
 
-    total = len(mock_notifications)
-    unread = len([n for n in mock_notifications if not n.is_read])
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
 
-    # Paginate
-    start = (page - 1) * page_size
-    end = start + page_size
-    items = mock_notifications[start:end]
+    unread_query = select(func.count()).where(
+        Notification.user_id == current_user.id,
+        Notification.is_read == False,
+    )
+    unread_result = await db.execute(unread_query)
+    unread = unread_result.scalar() or 0
+
+    query = query.order_by(Notification.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    items = result.scalars().all()
 
     return NotificationListResponse(
         items=items,
@@ -176,111 +143,178 @@ async def list_notifications(
 
 
 @router.get("/unread-count")
-async def get_unread_count(current_user: CurrentUser):
+async def get_unread_count(current_user: CurrentUser, db: DbSession):
     """Get the count of unread notifications for the current user."""
-    # Mock count for demonstration
-    return {"unread_count": 5}
+    from sqlalchemy import func, select
+
+    from src.domain.models.notification import Notification
+
+    result = await db.execute(
+        select(func.count()).where(
+            Notification.user_id == current_user.id,
+            Notification.is_read == False,
+        )
+    )
+    count = result.scalar() or 0
+    return {"unread_count": count}
 
 
 @router.post("/{notification_id}/read")
-async def mark_notification_read(notification_id: int, current_user: CurrentUser):
+async def mark_notification_read(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Mark a specific notification as read."""
-    # In production, update database
+    from sqlalchemy import select
+
+    from src.domain.models.notification import Notification
+
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notification.is_read = True
+    await db.commit()
     return {"success": True, "notification_id": notification_id}
 
 
 @router.post("/read-all")
-async def mark_all_notifications_read(current_user: CurrentUser):
+async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
     """Mark all notifications as read for the current user."""
-    # In production, update database
-    return {"success": True, "count": 5}
+    from sqlalchemy import update
+
+    from src.domain.models.notification import Notification
+
+    result = await db.execute(
+        update(Notification)
+        .where(Notification.user_id == current_user.id, Notification.is_read == False)
+        .values(is_read=True)
+    )
+    await db.commit()
+    return {"success": True, "count": result.rowcount}
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(notification_id: int, current_user: CurrentUser):
+async def delete_notification(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Delete a specific notification."""
+    from sqlalchemy import select
+
+    from src.domain.models.notification import Notification
+
+    result = await db.execute(
+        select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+    )
+    notification = result.scalar_one_or_none()
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    await db.delete(notification)
+    await db.commit()
     return {"success": True, "notification_id": notification_id}
 
 
 @router.get("/preferences")
-async def get_notification_preferences(current_user: CurrentUser):
+async def get_notification_preferences(current_user: CurrentUser, db: DbSession):
     """Get notification preferences for the current user."""
-    # Mock preferences
+    from sqlalchemy import select
+
+    from src.domain.models.notification import NotificationPreference
+
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
+    prefs = result.scalar_one_or_none()
+
+    if not prefs:
+        return {
+            "email_enabled": True,
+            "sms_enabled": False,
+            "push_enabled": True,
+            "phone_number": None,
+            "quiet_hours_enabled": False,
+            "quiet_hours_start": "22:00",
+            "quiet_hours_end": "07:00",
+            "email_digest_enabled": False,
+            "email_digest_frequency": "daily",
+            "category_preferences": {},
+        }
+
     return {
-        "email_enabled": True,
-        "sms_enabled": False,
-        "push_enabled": True,
-        "phone_number": None,
-        "quiet_hours_enabled": False,
-        "quiet_hours_start": "22:00",
-        "quiet_hours_end": "07:00",
-        "email_digest_enabled": True,
-        "email_digest_frequency": "daily",
-        "category_preferences": {
-            "mention": ["in_app", "email"],
-            "assignment": ["in_app", "email", "push"],
-            "sos_alert": ["in_app", "email", "sms", "push"],
-            "action_due_soon": ["in_app", "email"],
-        },
+        "email_enabled": getattr(prefs, "email_enabled", True),
+        "sms_enabled": getattr(prefs, "sms_enabled", False),
+        "push_enabled": getattr(prefs, "push_enabled", True),
+        "phone_number": getattr(prefs, "phone_number", None),
+        "quiet_hours_enabled": getattr(prefs, "quiet_hours_enabled", False),
+        "quiet_hours_start": getattr(prefs, "quiet_hours_start", "22:00"),
+        "quiet_hours_end": getattr(prefs, "quiet_hours_end", "07:00"),
+        "email_digest_enabled": getattr(prefs, "email_digest_enabled", False),
+        "email_digest_frequency": getattr(prefs, "email_digest_frequency", "daily"),
+        "category_preferences": getattr(prefs, "category_preferences", {}),
     }
 
 
 @router.put("/preferences")
-async def update_notification_preferences(preferences: NotificationPreferencesUpdate, current_user: CurrentUser):
+async def update_notification_preferences(
+    preferences: NotificationPreferencesUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+):
     """Update notification preferences for the current user."""
-    # In production, update database
+    from sqlalchemy import select
+
+    from src.domain.models.notification import NotificationPreference
+
+    result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
+    prefs = result.scalar_one_or_none()
+
+    if not prefs:
+        prefs = NotificationPreference(user_id=current_user.id)
+        db.add(prefs)
+
+    for key, value in preferences.dict(exclude_unset=True).items():
+        if hasattr(prefs, key):
+            setattr(prefs, key, value)
+
+    await db.commit()
     return {"success": True, "preferences": preferences.dict(exclude_unset=True)}
 
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])
 async def search_users_for_mention(
+    current_user: CurrentUser,
+    db: DbSession,
     q: str = Query(..., min_length=1, max_length=50),
     limit: int = Query(10, ge=1, le=50),
 ):
-    """
-    Search users for @mention autocomplete.
+    """Search users for @mention autocomplete."""
+    from sqlalchemy import or_, select
 
-    Returns users matching the query by name or email.
-    """
-    # Mock users for demonstration
-    mock_users = [
+    query = (
+        select(User)
+        .where(
+            User.is_active == True,
+            or_(
+                User.full_name.ilike(f"%{q}%"),
+                User.email.ilike(f"%{q}%"),
+            ),
+        )
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    return [
         MentionSearchResult(
-            id=1,
-            display_name="John Smith",
-            email="john.smith@plantexpand.com",
+            id=u.id,
+            display_name=u.full_name or u.email,
+            email=u.email,
             avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=2,
-            display_name="Jane Doe",
-            email="jane.doe@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=3,
-            display_name="Bob Wilson",
-            email="bob.wilson@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=4,
-            display_name="Alice Brown",
-            email="alice.brown@plantexpand.com",
-            avatar_url=None,
-        ),
-        MentionSearchResult(
-            id=5,
-            display_name="Charlie Davis",
-            email="charlie.davis@plantexpand.com",
-            avatar_url=None,
-        ),
+        )
+        for u in users
     ]
-
-    # Filter by query
-    q_lower = q.lower()
-    filtered = [u for u in mock_users if q_lower in u.display_name.lower() or q_lower in u.email.lower()]
-
-    return filtered[:limit]
 
 
 @router.post("/test-notification")

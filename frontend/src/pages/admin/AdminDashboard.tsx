@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Building,
@@ -83,45 +82,38 @@ const QUICK_ACTIONS: QuickAction[] = [
 const STATS: StatCard[] = [
   {
     label: 'Active Forms',
-    value: '12',
-    change: '+2 this month',
-    trend: 'up',
+    value: '0',
+    change: 'No data yet',
+    trend: 'neutral',
     icon: <FileText className="w-5 h-5" />,
   },
   {
     label: 'Active Contracts',
-    value: '10',
-    change: 'No change',
+    value: '0',
+    change: 'No data yet',
     trend: 'neutral',
     icon: <Building className="w-5 h-5" />,
   },
   {
     label: 'Submissions Today',
-    value: '24',
-    change: '+15% vs yesterday',
-    trend: 'up',
+    value: '0',
+    change: 'No data yet',
+    trend: 'neutral',
     icon: <Activity className="w-5 h-5" />,
   },
   {
     label: 'Pending Actions',
-    value: '8',
-    change: '-3 from last week',
-    trend: 'down',
+    value: '0',
+    change: 'No data yet',
+    trend: 'neutral',
     icon: <Clock className="w-5 h-5" />,
   },
 ];
 
-const RECENT_ACTIVITY = [
-  { action: 'Form "Incident Report" updated', user: 'David Harris', time: '2 hours ago', type: 'edit' },
-  { action: 'New contract "National Grid" added', user: 'Admin', time: '4 hours ago', type: 'add' },
-  { action: 'System settings updated', user: 'David Harris', time: '1 day ago', type: 'settings' },
-  { action: 'Form "RTA Report" published', user: 'Admin', time: '2 days ago', type: 'publish' },
-  { action: 'User "John Smith" added', user: 'Admin', time: '3 days ago', type: 'add' },
-];
+const RECENT_ACTIVITY: { action: string; user: string; time: string; type: string }[] = [];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
 
   return (
     <div className="min-h-screen bg-surface">
@@ -130,15 +122,15 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-foreground">{t('admin.dashboard.title')}</h1>
+              <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
               <p className="text-muted-foreground mt-2">
-                {t('admin.dashboard.subtitle')}
+                Manage forms, contracts, settings, and system configuration
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg">
                 <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">{t('admin.dashboard.system_healthy')}</span>
+                <span className="text-sm font-medium">System Healthy</span>
               </div>
             </div>
           </div>
@@ -177,7 +169,7 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.quick_actions')}</h2>
+          <h2 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {QUICK_ACTIONS.map((action) => (
               <Card
@@ -208,8 +200,14 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Activity */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.recent_activity')}</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Recent Activity</h2>
             <div className="space-y-4">
+              {RECENT_ACTIVITY.length === 0 && (
+                <div className="text-center py-8">
+                  <Activity className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-muted-foreground">No recent activity</p>
+                </div>
+              )}
               {RECENT_ACTIVITY.map((activity, index) => (
                 <div
                   key={index}
@@ -242,7 +240,7 @@ export default function AdminDashboard() {
 
           {/* System Status */}
           <Card className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.dashboard.system_status')}</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">System Status</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-3">

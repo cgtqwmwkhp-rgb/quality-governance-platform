@@ -103,4 +103,5 @@ node_modules/
 # Frontend build
 frontend/dist/
 artifacts/
+artifacts-analysis/auth-tokens/
 tests/ux-coverage/results/

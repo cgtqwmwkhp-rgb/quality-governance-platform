@@ -456,9 +456,9 @@ class PortalService:
 
         return {
             "total_reports_today": total_today,
-            "average_resolution_days": 3.2,
+            "average_resolution_days": 0.0,
             "reports_resolved_this_week": resolved_week,
-            "anonymous_reports_percentage": 15.0,
+            "anonymous_reports_percentage": 0.0,
         }
 
     # ------------------------------------------------------------------

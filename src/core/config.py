@@ -45,6 +45,22 @@ class Settings(BaseSettings):
                     "Generate a secure key with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
+            if self.pseudonymization_pepper in placeholder_keys:
+                raise ValueError(
+                    "SECURITY ERROR: PSEUDONYMIZATION_PEPPER contains a placeholder value in production! "
+                    "GDPR pseudonymization requires a unique, secret pepper. "
+                    "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+
+            if self.uat_mode.upper() != "READ_ONLY":
+                import warnings
+
+                warnings.warn(
+                    "SECURITY WARNING: UAT_MODE is not READ_ONLY in production! "
+                    "Set UAT_MODE=READ_ONLY to prevent unintended writes.",
+                    stacklevel=2,
+                )
+
             # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
             if not self.database_url:
                 raise ValueError("CONFIGURATION ERROR: DATABASE_URL must be set in production mode!")

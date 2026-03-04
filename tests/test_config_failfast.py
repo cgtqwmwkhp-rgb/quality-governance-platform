@@ -38,8 +38,9 @@ class TestProductionFailFast:
             os.environ,
             {
                 "APP_ENV": "production",
-                "SECRET_KEY": "a" * 64,  # Non-placeholder value
-                "JWT_SECRET_KEY": "b" * 64,  # Non-placeholder value
+                "SECRET_KEY": "a" * 64,
+                "JWT_SECRET_KEY": "b" * 64,
+                "PSEUDONYMIZATION_PEPPER": "c" * 32,
                 "DATABASE_URL": "postgresql://user:pass@localhost:5432/db",
             },
         ):
@@ -55,8 +56,9 @@ class TestProductionFailFast:
             os.environ,
             {
                 "APP_ENV": "production",
-                "SECRET_KEY": "a" * 64,  # Non-placeholder value
-                "JWT_SECRET_KEY": "b" * 64,  # Non-placeholder value
+                "SECRET_KEY": "a" * 64,
+                "JWT_SECRET_KEY": "b" * 64,
+                "PSEUDONYMIZATION_PEPPER": "c" * 32,
                 "DATABASE_URL": "postgresql://user:pass@127.0.0.1:5432/db",
             },
         ):
@@ -72,8 +74,9 @@ class TestProductionFailFast:
             os.environ,
             {
                 "APP_ENV": "production",
-                "SECRET_KEY": "a" * 64,  # Non-placeholder value
-                "JWT_SECRET_KEY": "b" * 64,  # Non-placeholder value
+                "SECRET_KEY": "a" * 64,
+                "JWT_SECRET_KEY": "b" * 64,
+                "PSEUDONYMIZATION_PEPPER": "c" * 32,
                 "DATABASE_URL": "postgresql://user:pass@prod-db.example.com:5432/db",
                 "AZURE_STORAGE_CONNECTION_STRING": "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=test123==;EndpointSuffix=core.windows.net",
             },

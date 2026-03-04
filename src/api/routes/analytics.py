@@ -110,41 +110,7 @@ class ROIInvestmentCreate(BaseModel):
 @router.get("/dashboards")
 async def list_dashboards(current_user: CurrentUser):
     """List all dashboards for the current user."""
-    # Mock dashboards
-    return {
-        "dashboards": [
-            {
-                "id": 1,
-                "name": "Executive Overview",
-                "description": "High-level KPIs and trends",
-                "icon": "LayoutDashboard",
-                "color": "#10B981",
-                "is_default": True,
-                "widget_count": 8,
-                "updated_at": datetime.utcnow().isoformat(),
-            },
-            {
-                "id": 2,
-                "name": "Safety Performance",
-                "description": "Incident and action tracking",
-                "icon": "Shield",
-                "color": "#3B82F6",
-                "is_default": False,
-                "widget_count": 6,
-                "updated_at": datetime.utcnow().isoformat(),
-            },
-            {
-                "id": 3,
-                "name": "Compliance Monitor",
-                "description": "ISO compliance tracking",
-                "icon": "CheckCircle",
-                "color": "#8B5CF6",
-                "is_default": False,
-                "widget_count": 5,
-                "updated_at": datetime.utcnow().isoformat(),
-            },
-        ]
-    }
+    return {"dashboards": []}
 
 
 @router.post("/dashboards")
@@ -165,44 +131,9 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
     """Get dashboard with widgets."""
     return {
         "id": dashboard_id,
-        "name": "Executive Overview",
-        "description": "High-level KPIs and trends",
-        "widgets": [
-            {
-                "id": 1,
-                "widget_type": "kpi_card",
-                "title": "Total Incidents",
-                "data_source": "incidents",
-                "metric": "count",
-                "grid_x": 0,
-                "grid_y": 0,
-                "grid_w": 3,
-                "grid_h": 2,
-            },
-            {
-                "id": 2,
-                "widget_type": "line_chart",
-                "title": "Incident Trend",
-                "data_source": "incidents",
-                "metric": "count",
-                "grid_x": 3,
-                "grid_y": 0,
-                "grid_w": 6,
-                "grid_h": 4,
-            },
-            {
-                "id": 3,
-                "widget_type": "pie_chart",
-                "title": "Incidents by Type",
-                "data_source": "incidents",
-                "metric": "count",
-                "group_by": "type",
-                "grid_x": 9,
-                "grid_y": 0,
-                "grid_w": 3,
-                "grid_h": 4,
-            },
-        ],
+        "name": "",
+        "description": "",
+        "widgets": [],
     }
 
 
@@ -234,17 +165,16 @@ async def get_widget_data(
     time_range: str = Query("last_30_days"),
 ):
     """Get data for a specific widget."""
-    # Mock widget data based on ID
     return {
         "widget_id": widget_id,
         "data": {
-            "value": 47,
-            "previous_value": 52,
-            "change": -9.6,
-            "trend": "down",
+            "value": 0,
+            "previous_value": 0,
+            "change": 0.0,
+            "trend": "stable",
             "chart_data": {
-                "labels": ["Week 1", "Week 2", "Week 3", "Week 4"],
-                "values": [15, 12, 10, 10],
+                "labels": [],
+                "values": [],
             },
         },
         "updated_at": datetime.utcnow().isoformat(),
@@ -309,35 +239,12 @@ async def get_drill_down_data(
     time_range: str = Query("last_30_days"),
 ):
     """Get drill-down data for a specific dimension value."""
-    # Mock drill-down data
     return {
         "data_source": data_source,
         "dimension": dimension,
         "value": value,
-        "records": [
-            {
-                "id": "INC-001",
-                "title": "Slip and fall incident",
-                "date": "2026-01-15",
-                "status": "closed",
-                "severity": "medium",
-            },
-            {
-                "id": "INC-002",
-                "title": "Near miss - falling object",
-                "date": "2026-01-12",
-                "status": "closed",
-                "severity": "low",
-            },
-            {
-                "id": "INC-003",
-                "title": "Equipment malfunction",
-                "date": "2026-01-10",
-                "status": "open",
-                "severity": "high",
-            },
-        ],
-        "total": 3,
+        "records": [],
+        "total": 0,
     }
 
 

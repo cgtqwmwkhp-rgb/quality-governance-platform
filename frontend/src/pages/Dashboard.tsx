@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { 
   AlertTriangle, 
@@ -166,6 +165,14 @@ function ComplianceGauge({ standard, score, icon: Icon, variant }: {
 }
 
 function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
+  if (activities.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground text-sm">
+        No recent activity
+      </div>
+    );
+  }
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'incident': return AlertTriangle;
@@ -221,13 +228,14 @@ function ActivityFeed({ activities }: { activities: RecentActivity[] }) {
   );
 }
 
-function UpcomingEvents() {
-  const events = [
-    { id: 1, title: 'UVDB B2 Audit', date: 'Mar 15', type: 'audit', days: 54 },
-    { id: 2, title: 'ISO Surveillance Audit', date: 'Mar 15', type: 'audit', days: 54 },
-    { id: 3, title: 'Management Review', date: 'Feb 28', type: 'meeting', days: 39 },
-    { id: 4, title: 'Planet Mark Submission', date: 'Jun 30', type: 'deadline', days: 161 },
-  ];
+function UpcomingEvents({ events }: { events: {id: number; title: string; date: string; type: string; days: number}[] }) {
+  if (events.length === 0) {
+    return (
+      <div className="text-center py-6 text-muted-foreground text-sm">
+        No upcoming events
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -258,7 +266,6 @@ function UpcomingEvents() {
 // ============================================================================
 
 export default function Dashboard() {
-  const { t } = useTranslation()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<ModuleStats>({
@@ -268,10 +275,11 @@ export default function Dashboard() {
     audits: { scheduled: 0, completed: 0, avgScore: 0, trend: 0 },
     actions: { total: 0, overdue: 0, dueSoon: 0, trend: 0 },
     risks: { total: 0, high: 0, outsideAppetite: 0 },
-    compliance: { iso9001: 94, iso14001: 91, iso45001: 96, iso27001: 89 },
-    carbon: { totalEmissions: 278.5, perFTE: 4.06, trend: -5 },
+    compliance: { iso9001: 0, iso14001: 0, iso45001: 0, iso27001: 0 },
+    carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
   })
   const [activities, setActivities] = useState<RecentActivity[]>([])
+  const [upcomingEvents] = useState<{id: number; title: string; date: string; type: string; days: number}[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -290,25 +298,18 @@ export default function Dashboard() {
           total: response.data?.total ?? 0,
           open: items.filter(i => i.status !== 'closed').length,
           critical: items.filter(i => i.severity === 'critical' || i.severity === 'high').length,
-          trend: -12,
+          trend: 0,
         },
-        rtas: { total: 15, open: 3, trend: -8 },
-        complaints: { total: 42, open: 8, overdue: 2, trend: 5 },
-        audits: { scheduled: 7, completed: 23, avgScore: 87, trend: 3 },
-        actions: { total: 156, overdue: 12, dueSoon: 24, trend: -15 },
-        risks: { total: 67, high: 8, outsideAppetite: 3 },
-        compliance: { iso9001: 94, iso14001: 91, iso45001: 96, iso27001: 89 },
-        carbon: { totalEmissions: 278.5, perFTE: 4.06, trend: -5 },
+        rtas: { total: 0, open: 0, trend: 0 },
+        complaints: { total: 0, open: 0, overdue: 0, trend: 0 },
+        audits: { scheduled: 0, completed: 0, avgScore: 0, trend: 0 },
+        actions: { total: 0, overdue: 0, dueSoon: 0, trend: 0 },
+        risks: { total: 0, high: 0, outsideAppetite: 0 },
+        compliance: { iso9001: 0, iso14001: 0, iso45001: 0, iso27001: 0 },
+        carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
       })
 
-      // Generate recent activities
-      setActivities([
-        { id: '1', type: 'incident', title: 'Slip hazard reported - Warehouse B', time: '10 mins ago', status: 'open', severity: 'medium' },
-        { id: '2', type: 'audit', title: 'ISO 9001 Internal Audit completed', time: '2 hours ago', status: 'completed' },
-        { id: '3', type: 'action', title: 'CAPA-2026-015 marked complete', time: '3 hours ago', status: 'completed' },
-        { id: '4', type: 'complaint', title: 'Customer delivery delay complaint', time: '5 hours ago', status: 'in_progress' },
-        { id: '5', type: 'rta', title: 'Minor vehicle incident - PLT-042', time: 'Yesterday', status: 'in_progress' },
-      ])
+      setActivities([])
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
       setError('Failed to load data. Please try again.')
@@ -331,7 +332,7 @@ export default function Dashboard() {
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
           <button onClick={() => { setError(null); loadData(); }} className="text-sm font-medium text-destructive hover:underline">
-            {t('retry')}
+            Try Again
           </button>
         </div>
       )}
@@ -339,20 +340,20 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">{t('dashboard.title')}</h1>
-          <p className="text-muted-foreground">{t('dashboard.subtitle')}</p>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Quality Governance Platform Overview</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" asChild>
             <Link to="/notifications">
               <Bell className="w-4 h-4" />
-              <span className="hidden sm:inline">{t('notifications')}</span>
+              <span className="hidden sm:inline">Notifications</span>
               <Badge variant="destructive" className="ml-2">5</Badge>
             </Link>
           </Button>
           <Button onClick={loadData}>
             <RefreshCw className="w-4 h-4" />
-            {t('refresh')}
+            Refresh
           </Button>
         </div>
       </div>
@@ -360,7 +361,7 @@ export default function Dashboard() {
       {/* Primary Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard 
-          title={t('dashboard.open_incidents')} 
+          title="Open Incidents" 
           value={stats.incidents.open}
           icon={AlertTriangle} 
           variant="destructive"
@@ -369,7 +370,7 @@ export default function Dashboard() {
           subtitle={`${stats.incidents.critical} critical`}
         />
         <StatCard 
-          title={t('dashboard.open_rtas')} 
+          title="Open RTAs" 
           value={stats.rtas.open}
           icon={Car} 
           variant="warning"
@@ -377,7 +378,7 @@ export default function Dashboard() {
           link="/rtas"
         />
         <StatCard 
-          title={t('dashboard.open_complaints')} 
+          title="Open Complaints" 
           value={stats.complaints.open}
           icon={MessageSquare} 
           variant="primary"
@@ -386,7 +387,7 @@ export default function Dashboard() {
           subtitle={`${stats.complaints.overdue} overdue`}
         />
         <StatCard 
-          title={t('dashboard.overdue_actions')} 
+          title="Overdue Actions" 
           value={stats.actions.overdue}
           icon={Zap} 
           variant="warning"
@@ -399,7 +400,7 @@ export default function Dashboard() {
       {/* Secondary Row: Audits, Risks, Carbon */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard 
-          title={t('dashboard.audit_score_avg')} 
+          title="Audit Score (Avg)" 
           value={`${stats.audits.avgScore}%`}
           icon={ClipboardCheck} 
           variant="info"
@@ -408,7 +409,7 @@ export default function Dashboard() {
           subtitle={`${stats.audits.completed} completed this year`}
         />
         <StatCard 
-          title={t('dashboard.high_risks')} 
+          title="High Risks" 
           value={stats.risks.high}
           icon={Target} 
           variant="destructive"
@@ -416,7 +417,7 @@ export default function Dashboard() {
           subtitle={`${stats.risks.outsideAppetite} outside appetite`}
         />
         <StatCard 
-          title={t('dashboard.carbon_per_fte')} 
+          title="Carbon (tCO₂e/FTE)" 
           value={stats.carbon.perFTE.toFixed(2)}
           icon={Leaf} 
           variant="success"
@@ -431,10 +432,10 @@ export default function Dashboard() {
         {/* Compliance Overview */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{t('dashboard.ims_compliance')}</CardTitle>
+            <CardTitle>IMS Compliance</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/ims">
-                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
+                View All <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
@@ -449,10 +450,10 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{t('dashboard.recent_activity')}</CardTitle>
+            <CardTitle>Recent Activity</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/audit-trail">
-                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
+                View All <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
@@ -464,15 +465,15 @@ export default function Dashboard() {
         {/* Upcoming Events */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{t('dashboard.upcoming_events')}</CardTitle>
+            <CardTitle>Upcoming Events</CardTitle>
             <Button variant="link" size="sm" asChild>
               <Link to="/calendar">
-                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
+                View All <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </Button>
           </CardHeader>
           <CardContent>
-            <UpcomingEvents />
+            <UpcomingEvents events={upcomingEvents} />
           </CardContent>
         </Card>
       </div>
@@ -480,30 +481,30 @@ export default function Dashboard() {
       {/* Recent Incidents Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{t('dashboard.recent_incidents')}</CardTitle>
+          <CardTitle>Recent Incidents</CardTitle>
           <Button variant="link" size="sm" asChild>
             <Link to="/incidents">
-                {t('dashboard.view_all')} <ArrowRight className="w-4 h-4 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
+              View All <ArrowRight className="w-4 h-4 ml-1" />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.reference')}</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.title')}</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.severity')}</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.status')}</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('incidents.table.date')}</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Reference</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Title</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Severity</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {incidents.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-center py-8 text-muted-foreground">
-                      {t('incidents.empty.title')}
+                      No incidents found
                     </td>
                   </tr>
                 ) : (
@@ -548,7 +549,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-destructive/5 border-destructive/20">
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-destructive" />
-              <span className="text-foreground font-medium">{t('incidents.new')}</span>
+              <span className="text-foreground font-medium">New Incident</span>
             </div>
           </Card>
         </Link>
@@ -556,7 +557,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-info/5 border-info/20">
             <div className="flex items-center gap-3">
               <ClipboardCheck className="w-5 h-5 text-info" />
-              <span className="text-foreground font-medium">{t('dashboard.start_audit')}</span>
+              <span className="text-foreground font-medium">Start Audit</span>
             </div>
           </Card>
         </Link>
@@ -572,7 +573,7 @@ export default function Dashboard() {
           <Card hoverable className="p-4 bg-success/5 border-success/20">
             <div className="flex items-center gap-3">
               <Shield className="w-5 h-5 text-success" />
-              <span className="text-foreground font-medium">{t('dashboard.compliance')}</span>
+              <span className="text-foreground font-medium">Compliance</span>
             </div>
           </Card>
         </Link>

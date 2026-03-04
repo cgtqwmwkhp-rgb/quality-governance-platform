@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Users,
   UserPlus,
@@ -50,70 +49,13 @@ interface Role {
 }
 
 export default function UserManagement() {
-  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [_selectedUser] = useState<User | null>(null); void _selectedUser;
 
-  const users: User[] = [
-    {
-      id: 'USR001',
-      name: 'John Smith',
-      email: 'john.smith@company.com',
-      phone: '+44 7700 900123',
-      department: 'Operations',
-      role: 'Admin',
-      status: 'active',
-      lastLogin: '2024-01-19 09:45',
-      createdAt: '2023-06-15',
-      permissions: ['all']
-    },
-    {
-      id: 'USR002',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@company.com',
-      department: 'Quality',
-      role: 'Manager',
-      status: 'active',
-      lastLogin: '2024-01-19 08:30',
-      createdAt: '2023-08-20',
-      permissions: ['incidents.manage', 'audits.manage', 'reports.view']
-    },
-    {
-      id: 'USR003',
-      name: 'Mike Chen',
-      email: 'mike.chen@company.com',
-      department: 'Fleet',
-      role: 'Supervisor',
-      status: 'active',
-      lastLogin: '2024-01-18 17:20',
-      createdAt: '2023-09-10',
-      permissions: ['rtas.manage', 'incidents.view', 'actions.manage']
-    },
-    {
-      id: 'USR004',
-      name: 'Emma Wilson',
-      email: 'emma.wilson@company.com',
-      department: 'Customer Service',
-      role: 'User',
-      status: 'inactive',
-      lastLogin: '2024-01-10 14:00',
-      createdAt: '2023-10-05',
-      permissions: ['complaints.view', 'complaints.create']
-    },
-    {
-      id: 'USR005',
-      name: 'David Brown',
-      email: 'david.brown@company.com',
-      department: 'Safety',
-      role: 'Manager',
-      status: 'pending',
-      createdAt: '2024-01-15',
-      permissions: ['incidents.manage', 'risks.manage', 'actions.manage']
-    }
-  ];
+  const users: User[] = [];
 
   const roles: Role[] = [
     {
@@ -194,14 +136,14 @@ export default function UserManagement() {
             <div className="p-2 bg-gradient-to-br from-primary to-primary-hover rounded-xl">
               <Users className="w-8 h-8 text-primary-foreground" />
             </div>
-            {t('users.title')}
+            User Management
           </h1>
-          <p className="text-muted-foreground mt-1">{t('users.subtitle')}</p>
+          <p className="text-muted-foreground mt-1">Manage users, roles, and permissions</p>
         </div>
         
         <Button onClick={() => setShowAddModal(true)}>
           <UserPlus className="w-5 h-5" />
-          {t('users.add_user')}
+          Add User
         </Button>
       </div>
 
@@ -218,7 +160,7 @@ export default function UserManagement() {
         >
           <span className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            {t('users.tab.users')} ({users.length})
+            Users ({users.length})
           </span>
         </button>
         <button
@@ -232,7 +174,7 @@ export default function UserManagement() {
         >
           <span className="flex items-center gap-2">
             <Shield className="w-5 h-5" />
-            {t('users.tab.roles')} ({roles.length})
+            Roles ({roles.length})
           </span>
         </button>
       </div>
@@ -248,17 +190,17 @@ export default function UserManagement() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('users.search_placeholder')}
+                placeholder="Search users..."
                 className="pl-10"
               />
             </div>
             
             <Select value={selectedRole} onValueChange={setSelectedRole}>
               <SelectTrigger className="w-48">
-                <SelectValue placeholder={t('users.all_roles')} />
+                <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t('users.all_roles')}</SelectItem>
+                <SelectItem value="all">All Roles</SelectItem>
                 {roles.map((role) => (
                   <SelectItem key={role.id} value={role.name}>{role.name}</SelectItem>
                 ))}
@@ -272,12 +214,12 @@ export default function UserManagement() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('users.table.user')}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('users.table.department')}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('users.table.role')}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('users.table.status')}</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('users.table.last_login')}</th>
-                    <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('users.table.actions')}</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">User</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Department</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Role</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Last Login</th>
+                    <th className="text-center p-4 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -315,21 +257,21 @@ export default function UserManagement() {
                         </Badge>
                       </td>
                       <td className="p-4 text-muted-foreground text-sm">
-                        {user.lastLogin || t('users.never')}
+                        {user.lastLogin || 'Never'}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
-                          <Button variant="ghost" size="sm" title={t('users.edit_user')}>
+                          <Button variant="ghost" size="sm" title="Edit User">
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            title={user.status === 'active' ? t('users.deactivate') : t('users.activate')}
+                            title={user.status === 'active' ? 'Deactivate' : 'Activate'}
                           >
                             {user.status === 'active' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title={t('users.delete_user')}>
+                          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete User">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -366,10 +308,10 @@ export default function UserManagement() {
                 
                 <div className="flex items-center justify-between pt-4 border-t border-border">
                   <span className="text-sm text-muted-foreground">
-                    <span className="text-foreground font-medium">{role.userCount}</span> {t('users.users_label')}
+                    <span className="text-foreground font-medium">{role.userCount}</span> users
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    <span className="text-foreground font-medium">{role.permissions.length}</span> {t('users.permissions_label')}
+                    <span className="text-foreground font-medium">{role.permissions.length}</span> permissions
                   </span>
                 </div>
                 
@@ -397,7 +339,7 @@ export default function UserManagement() {
             <div className="p-3 rounded-xl bg-muted">
               <Shield className="w-6 h-6 text-muted-foreground" />
             </div>
-            <span className="text-muted-foreground font-medium">{t('users.create_new_role')}</span>
+            <span className="text-muted-foreground font-medium">Create New Role</span>
           </button>
         </div>
       )}
@@ -406,38 +348,42 @@ export default function UserManagement() {
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{t('users.add_new_user')}</DialogTitle>
+            <DialogTitle>Add New User</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="usermanagement-field-0" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.first_name')}</label>
-                <Input id="usermanagement-field-0" type="text" placeholder="John" />
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
+                <Input type="text" placeholder="First name" />
               </div>
               <div>
-                <label htmlFor="usermanagement-field-1" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.last_name')}</label>
-                <Input id="usermanagement-field-1" type="text" placeholder="Smith" />
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
+                <Input type="text" placeholder="Last name" />
               </div>
             </div>
             
             <div>
-              <label htmlFor="usermanagement-field-2" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.email_address')}</label>
+              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="usermanagement-field-2"
+                <Input
                   type="email"
                   className="pl-10"
-                  placeholder="john.smith@company.com"
+                  placeholder="user@company.com"
                 />
               </div>
             </div>
             
             <div>
-              <label htmlFor="usermanagement-field-3" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.phone')}</label>
+              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+              <label className="block text-sm font-medium text-muted-foreground mb-2">Phone (Optional)</label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="usermanagement-field-3"
+                <Input
                   type="tel"
                   className="pl-10"
                   placeholder="+44 7700 900000"
@@ -447,10 +393,11 @@ export default function UserManagement() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="usermanagement-field-4" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.department')}</label>
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Department</label>
                 <Select>
-                  <SelectTrigger id="usermanagement-field-4">
-                    <SelectValue placeholder={t('users.form.select_department')} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="operations">Operations</SelectItem>
@@ -463,10 +410,11 @@ export default function UserManagement() {
                 </Select>
               </div>
               <div>
-                <label htmlFor="usermanagement-field-5" className="block text-sm font-medium text-muted-foreground mb-2">{t('users.form.role')}</label>
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                <label className="block text-sm font-medium text-muted-foreground mb-2">Role</label>
                 <Select>
-                  <SelectTrigger id="usermanagement-field-5">
-                    <SelectValue placeholder={t('users.form.select_role')} />
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
                     {roles.map((role) => (
@@ -480,18 +428,18 @@ export default function UserManagement() {
             <div className="p-4 bg-warning/10 border border-warning/30 rounded-xl flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
               <p className="text-sm text-warning">
-                {t('users.invite_warning')}
+                An email will be sent to the user with instructions to set their password and complete account setup.
               </p>
             </div>
           </div>
           
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowAddModal(false)}>
-              {t('users.cancel')}
+              Cancel
             </Button>
             <Button>
               <Save className="w-5 h-5" />
-              {t('users.create')}
+              Create User
             </Button>
           </DialogFooter>
         </DialogContent>

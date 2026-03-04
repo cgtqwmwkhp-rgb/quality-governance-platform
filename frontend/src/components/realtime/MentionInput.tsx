@@ -30,17 +30,6 @@ interface MentionInputProps {
   maxLength?: number;
 }
 
-const mockUsers: MentionUser[] = [
-  { id: 1, display_name: 'John Smith', email: 'john.smith@plantexpand.com' },
-  { id: 2, display_name: 'Jane Doe', email: 'jane.doe@plantexpand.com' },
-  { id: 3, display_name: 'Bob Wilson', email: 'bob.wilson@plantexpand.com' },
-  { id: 4, display_name: 'Alice Brown', email: 'alice.brown@plantexpand.com' },
-  { id: 5, display_name: 'Charlie Davis', email: 'charlie.davis@plantexpand.com' },
-  { id: 6, display_name: 'Diana Evans', email: 'diana.evans@plantexpand.com' },
-  { id: 7, display_name: 'Edward Foster', email: 'edward.foster@plantexpand.com' },
-  { id: 8, display_name: 'Fiona Green', email: 'fiona.green@plantexpand.com' },
-];
-
 const MentionInput: React.FC<MentionInputProps> = ({
   value,
   onChange,
@@ -61,20 +50,37 @@ const MentionInput: React.FC<MentionInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
 
-  // Filter users based on search query
+  // Search users via API when query changes
   useEffect(() => {
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const filtered = mockUsers.filter(
-        u => u.display_name.toLowerCase().includes(query) || 
-             u.email.toLowerCase().includes(query)
-      );
-      setUsers(filtered.slice(0, 8));
-    } else {
-      setUsers(mockUsers.slice(0, 8));
-    }
+    if (!showPopup) return;
+
+    const controller = new AbortController();
+
+    const searchUsers = async () => {
+      try {
+        const endpoint = searchQuery
+          ? `/api/v1/notifications/mentions/search?q=${encodeURIComponent(searchQuery)}`
+          : `/api/v1/notifications/mentions/search?q=`;
+        const response = await fetch(endpoint, { signal: controller.signal });
+        if (response.ok) {
+          const data: MentionUser[] = await response.json();
+          setUsers(data.slice(0, 8));
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Failed to search users:', err);
+        }
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsers, 200);
     setSelectedIndex(0);
-  }, [searchQuery]);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      controller.abort();
+    };
+  }, [searchQuery, showPopup]);
 
   // Calculate popup position
   const updatePopupPosition = useCallback(() => {

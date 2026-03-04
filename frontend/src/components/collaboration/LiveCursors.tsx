@@ -26,41 +26,9 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
   const [cursors, setCursors] = useState<CursorPosition[]>([]);
 
   useEffect(() => {
-    // In production, this would connect to WebSocket for real-time updates
-    // For now, we simulate with mock data
-    const mockCursors: CursorPosition[] = [
-      {
-        userId: '1',
-        userName: 'Sarah Johnson',
-        userColor: '#3B82F6',
-        position: { x: 200, y: 150 },
-        isTyping: true,
-        lastUpdate: Date.now(),
-      },
-      {
-        userId: '2',
-        userName: 'Mike Chen',
-        userColor: '#10B981',
-        position: { x: 450, y: 320 },
-        lastUpdate: Date.now(),
-      },
-    ];
-
-    // Simulate cursor movement
-    const interval = setInterval(() => {
-      setCursors(prev => prev.map(c => ({
-        ...c,
-        position: {
-          x: c.position.x + (Math.random() - 0.5) * 10,
-          y: c.position.y + (Math.random() - 0.5) * 10,
-        },
-        lastUpdate: Date.now(),
-      })));
-    }, 100);
-
-    setCursors(mockCursors);
-
-    return () => clearInterval(interval);
+    // TODO: Connect to WebSocket for real-time cursor position updates
+    // Cursors will be populated via WebSocket events from other collaborators
+    setCursors([]);
   }, [documentId]);
 
   return (

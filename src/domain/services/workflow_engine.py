@@ -352,14 +352,13 @@ class WorkflowEngine:
         """
         now = datetime.utcnow()
 
-        # Mock response - in production would update database
         return {
             "workflow_id": workflow_id,
             "action": "advanced",
             "outcome": outcome,
             "outcome_by": outcome_by,
             "notes": notes,
-            "next_step": "Effectiveness Verification",
+            "next_step": None,
             "timestamp": now.isoformat(),
         }
 
@@ -367,35 +366,7 @@ class WorkflowEngine:
 
     def get_pending_approvals(self, user_id: int) -> List[Dict[str, Any]]:
         """Get all pending approvals for a user."""
-        # Mock data
-        return [
-            {
-                "id": "APR-001",
-                "workflow_id": "WF-20260119001",
-                "workflow_name": "RIDDOR Reporting",
-                "step_name": "Management Sign-off",
-                "entity_type": "incident",
-                "entity_id": "INC-2026-0042",
-                "entity_title": "Slip and fall incident - Site A",
-                "requested_at": "2026-01-19T10:00:00Z",
-                "due_at": "2026-01-19T14:00:00Z",
-                "priority": "high",
-                "sla_status": "warning",
-            },
-            {
-                "id": "APR-002",
-                "workflow_id": "WF-20260119002",
-                "workflow_name": "Document Approval",
-                "step_name": "Quality Review",
-                "entity_type": "document",
-                "entity_id": "DOC-POL-012",
-                "entity_title": "Updated Safety Policy v2.1",
-                "requested_at": "2026-01-18T15:00:00Z",
-                "due_at": "2026-01-20T15:00:00Z",
-                "priority": "normal",
-                "sla_status": "ok",
-            },
-        ]
+        return []
 
     def approve(
         self,

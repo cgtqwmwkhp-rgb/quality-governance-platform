@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from src.api.dependencies import CurrentUser, DbSession
 from src.infrastructure.database import get_db
 
 router = APIRouter()
@@ -87,6 +88,7 @@ class SuggestedAction(BaseModel):
 @router.post("/sessions", response_model=SessionResponse)
 async def create_session(
     data: SessionCreate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """Create a new copilot conversation session."""
@@ -94,13 +96,9 @@ async def create_session(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-    user_id = 1
-
     session = service.create_session(
-        tenant_id=tenant_id,
-        user_id=user_id,
+        tenant_id=current_user.tenant_id or 1,
+        user_id=current_user.id,
         context_type=data.context_type,
         context_id=data.context_id,
         context_data=data.context_data,
@@ -111,16 +109,16 @@ async def create_session(
 
 
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
-async def get_active_session(db: Session = Depends(get_db)):
+async def get_active_session(
+    current_user: CurrentUser,
+    db: Session = Depends(get_db),
+):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    user_id = 1
-
-    session = service.get_active_session(user_id)
+    session = service.get_active_session(current_user.id)
     return session
 
 
@@ -151,18 +149,16 @@ async def close_session(session_id: int, db: Session = Depends(get_db)):
 
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
+    current_user: CurrentUser,
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
-    # TODO: Get from auth
-    user_id = 1
-
     sessions = (
         db.query(CopilotSession)
-        .filter(CopilotSession.user_id == user_id)
+        .filter(CopilotSession.user_id == current_user.id)
         .order_by(CopilotSession.updated_at.desc())
         .limit(limit)
         .all()
@@ -180,6 +176,7 @@ async def list_sessions(
 async def send_message(
     session_id: int,
     data: MessageCreate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """Send a message and get AI response."""
@@ -187,14 +184,11 @@ async def send_message(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    user_id = 1
-
     try:
         message = await service.send_message(
             session_id=session_id,
             content=data.content,
-            user_id=user_id,
+            user_id=current_user.id,
         )
         return message
     except ValueError as e:
@@ -220,6 +214,7 @@ async def get_messages(
 async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
+    current_user: CurrentUser,
     db: Session = Depends(get_db),
 ):
     """Submit feedback on a copilot response."""
@@ -227,15 +222,11 @@ async def submit_feedback(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-    user_id = 1
-
     try:
         feedback = service.submit_feedback(
             message_id=message_id,
-            user_id=user_id,
-            tenant_id=tenant_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id or 1,
             rating=data.rating,
             feedback_type=data.feedback_type,
             feedback_text=data.feedback_text,
@@ -366,6 +357,7 @@ async def suggest_actions(
 
 @router.get("/knowledge/search")
 async def search_knowledge(
+    current_user: CurrentUser,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
@@ -376,12 +368,9 @@ async def search_knowledge(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-
     results = service.search_knowledge(
         query=query,
-        tenant_id=tenant_id,
+        tenant_id=current_user.tenant_id or 1,
         category=category,
         limit=limit,
     )
@@ -403,6 +392,7 @@ async def add_knowledge(
     title: str,
     content: str,
     category: str,
+    current_user: CurrentUser,
     tags: Optional[list[str]] = None,
     db: Session = Depends(get_db),
 ):
@@ -411,14 +401,11 @@ async def add_knowledge(
 
     service = CopilotService(db)
 
-    # TODO: Get from auth
-    tenant_id = 1
-
     knowledge = service.add_knowledge(
         title=title,
         content=content,
         category=category,
-        tenant_id=tenant_id,
+        tenant_id=current_user.tenant_id or 1,
         tags=tags,
     )
 

@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Search,
@@ -19,13 +18,11 @@ import { cn } from '../helpers/utils';
 
 export default function Portal() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
   const { user, logout } = usePortalAuth();
   const { announce } = useLiveAnnouncer();
 
   useEffect(() => {
-    announce(t('portal.loaded'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable after init
+    announce('Employee portal loaded');
   }, [announce]);
 
   const handleLogout = () => {
@@ -34,7 +31,7 @@ export default function Portal() {
   };
 
   return (
-    <div className="min-h-screen bg-surface" data-testid="portal-home">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4">
@@ -44,8 +41,8 @@ export default function Portal() {
                 <Shield className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-foreground font-semibold">{t('portal.company_name')}</h1>
-                <p className="text-muted-foreground text-xs">{t('portal.employee_portal')}</p>
+                <h1 className="text-foreground font-semibold">Plantexpand</h1>
+                <p className="text-muted-foreground text-xs">Employee Portal</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -53,7 +50,7 @@ export default function Portal() {
               <button
                 onClick={handleLogout}
                 className="p-2 hover:bg-surface rounded-lg transition-colors"
-                title={t('portal.sign_out')}
+                title="Sign out"
               >
                 <LogOut className="w-5 h-5 text-muted-foreground hover:text-foreground" />
               </button>
@@ -72,26 +69,20 @@ export default function Portal() {
             <div className="flex-1">
               <p className="text-foreground font-semibold">{user?.name || 'Employee'}</p>
               <p className="text-muted-foreground text-sm">{user?.email}</p>
-              {user?.isDemoUser && (
-                <span className="inline-block mt-1 px-2 py-0.5 bg-warning/10 text-warning text-xs font-medium rounded-full border border-warning/20">
-                  {t('portal.demo_mode')}
-                </span>
-              )}
             </div>
           </div>
         </Card>
 
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">{t('portal.welcome_question')}</h2>
-          <p className="text-muted-foreground">{t('portal.select_option')}</p>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">What would you like to do?</h2>
+          <p className="text-muted-foreground">Select an option below</p>
         </div>
 
         {/* Main Actions */}
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
-            data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",
@@ -103,9 +94,9 @@ export default function Portal() {
             </div>
             <div className="flex-1 text-left">
               <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-                {t('portal.submit_report_title')}
+                Submit a Report
               </h3>
-              <p className="text-sm text-muted-foreground">{t('portal.submit_report_desc')}</p>
+              <p className="text-sm text-muted-foreground">Incident, Near Miss, Complaint, or RTA</p>
             </div>
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
@@ -122,9 +113,9 @@ export default function Portal() {
               </div>
               <div className="flex-1 text-left">
                 <h3 className="font-semibold text-foreground group-hover:text-info transition-colors">
-                  {t('portal.track_report_title')}
+                  Track My Report
                 </h3>
-                <p className="text-sm text-muted-foreground">{t('portal.track_report_desc')}</p>
+                <p className="text-sm text-muted-foreground">Check status with reference number</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -142,9 +133,9 @@ export default function Portal() {
               </div>
               <div className="flex-1 text-left">
                 <h3 className="font-semibold text-foreground group-hover:text-foreground/80 transition-colors">
-                  {t('portal.help_title')}
+                  Help & Support
                 </h3>
-                <p className="text-sm text-muted-foreground">{t('portal.help_desc')}</p>
+                <p className="text-sm text-muted-foreground">FAQs and contact information</p>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
             </div>
@@ -154,7 +145,7 @@ export default function Portal() {
         {/* Mobile Optimized Badge */}
         <div className="mt-10 flex items-center justify-center gap-2 text-muted-foreground text-sm">
           <Smartphone className="w-4 h-4" />
-          <span>{t('portal.mobile_optimized')}</span>
+          <span>Optimized for mobile devices</span>
         </div>
       </main>
 
@@ -164,7 +155,7 @@ export default function Portal() {
           onClick={() => navigate('/login')}
           className="text-muted-foreground hover:text-primary text-sm transition-colors"
         >
-          {t('portal.admin_login')}
+          Admin Login →
         </button>
       </footer>
     </div>

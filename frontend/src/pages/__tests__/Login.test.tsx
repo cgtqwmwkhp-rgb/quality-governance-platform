@@ -92,7 +92,10 @@ describe('Login', () => {
     expect(passwordInput).toHaveValue('secret123');
   });
 
-  it('calls onLogin with demo credentials', async () => {
+  it('calls authApi.login and invokes onLogin on success', async () => {
+    const { authApi } = await import('../../api/client');
+    vi.mocked(authApi.login).mockResolvedValueOnce({ data: { access_token: 'real-jwt-token' } });
+
     const user = userEvent.setup();
     render(<Login onLogin={onLogin} />, { wrapper: Wrapper });
 
@@ -108,7 +111,6 @@ describe('Login', () => {
       expect(onLogin).toHaveBeenCalledOnce();
     });
 
-    const token = onLogin.mock.calls[0][0] as string;
-    expect(token).toContain('demo.');
+    expect(onLogin).toHaveBeenCalledWith('real-jwt-token');
   });
 });
