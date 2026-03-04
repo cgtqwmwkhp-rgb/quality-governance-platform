@@ -1311,10 +1311,10 @@ export default function InvestigationDetail() {
                       {num}
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-foreground mb-2">
+                      <label htmlFor="investigationdetail-field-0" className="block text-sm font-medium text-foreground mb-2">
                         Why {num}?
                       </label>
-                      <Textarea
+                      <Textarea id="investigationdetail-field-0"
                         rows={2}
                         placeholder={`Enter the ${num === 1 ? "initial" : "deeper"} cause...`}
                         value={rcaData[`why_${num}`] || ""}
@@ -1741,10 +1741,10 @@ export default function InvestigationDetail() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigationdetail-field-1" className="block text-sm font-medium text-foreground mb-1">
                 Action Title *
               </label>
-              <Input
+              <Input id="investigationdetail-field-1"
                 value={actionForm.title}
                 onChange={(e) =>
                   setActionForm({ ...actionForm, title: e.target.value })
@@ -1762,9 +1762,9 @@ export default function InvestigationDetail() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <span className="block text-sm font-medium text-foreground mb-1">
                 Priority
-              </label>
+              </span>
               <Select
                 value={actionForm.priority}
                 onValueChange={(value) =>
@@ -1783,10 +1783,10 @@ export default function InvestigationDetail() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigationdetail-field-2" className="block text-sm font-medium text-foreground mb-1">
                 Due Date
               </label>
-              <Input
+              <Input id="investigationdetail-field-2"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) =>
@@ -1795,10 +1795,10 @@ export default function InvestigationDetail() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigationdetail-field-3" className="block text-sm font-medium text-foreground mb-1">
                 Description
               </label>
-              <Textarea
+              <Textarea id="investigationdetail-field-3"
                 value={actionForm.description}
                 onChange={(e) =>
                   setActionForm({ ...actionForm, description: e.target.value })

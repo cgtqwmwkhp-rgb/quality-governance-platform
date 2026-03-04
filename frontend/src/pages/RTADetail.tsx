@@ -78,6 +78,7 @@ export default function RTADetail() {
     if (id) {
       loadRTA(parseInt(id))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const loadRTA = async (rtaId: number) => {
@@ -375,16 +376,16 @@ export default function RTADetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Title</label>
-                    <Input
+                    <label htmlFor="rtadetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input id="rtadetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <Textarea
+                    <label htmlFor="rtadetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea id="rtadetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={4}
@@ -393,12 +394,12 @@ export default function RTADetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <label htmlFor="rtadetail-field-2" className="text-sm font-medium text-muted-foreground">Severity</label>
                       <Select
                         value={editForm.severity}
                         onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="rtadetail-field-2" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -411,12 +412,12 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="rtadetail-field-3" className="text-sm font-medium text-muted-foreground">Status</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="rtadetail-field-3" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -429,8 +430,8 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
-                      <Input
+                      <label htmlFor="rtadetail-field-4" className="text-sm font-medium text-muted-foreground">Location</label>
+                      <Input id="rtadetail-field-4"
                         value={editForm.location || ''}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                         className="mt-1"
@@ -441,28 +442,28 @@ export default function RTADetail() {
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <span className="text-sm font-medium text-muted-foreground">Description</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
                       {rta.description || 'No description provided'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <span className="text-sm font-medium text-muted-foreground">Severity</span>
                       <p className="mt-1 text-foreground capitalize">{rta.severity.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <span className="text-sm font-medium text-muted-foreground">Status</span>
                       <p className="mt-1 text-foreground capitalize">{rta.status.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Collision Date</label>
+                      <span className="text-sm font-medium text-muted-foreground">Collision Date</span>
                       <p className="mt-1 text-foreground">
                         {new Date(rta.collision_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <span className="text-sm font-medium text-muted-foreground">Location</span>
                       <p className="mt-1 text-foreground">{rta.location || 'Not specified'}</p>
                     </div>
                   </div>
@@ -483,8 +484,8 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
-                    <Input
+                    <label htmlFor="rtadetail-field-5" className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
+                    <Input id="rtadetail-field-5"
                       value={editForm.company_vehicle_registration || ''}
                       onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })}
                       className="mt-1"
@@ -492,8 +493,8 @@ export default function RTADetail() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
-                    <Input
+                    <label htmlFor="rtadetail-field-6" className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <Input id="rtadetail-field-6"
                       value={editForm.driver_name || ''}
                       onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })}
                       className="mt-1"
@@ -504,32 +505,32 @@ export default function RTADetail() {
                       checked={editForm.driver_injured || false}
                       onCheckedChange={(checked) => setEditForm({ ...editForm, driver_injured: checked })}
                     />
-                    <label className="text-sm text-foreground">Driver Injured</label>
+                    <span className="text-sm text-foreground">Driver Injured</span>
                   </div>
                   <div className="flex items-center gap-3 pt-4">
                     <Switch
                       checked={editForm.police_attended || false}
                       onCheckedChange={(checked) => setEditForm({ ...editForm, police_attended: checked })}
                     />
-                    <label className="text-sm text-foreground">Police Attended</label>
+                    <span className="text-sm text-foreground">Police Attended</span>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Vehicle Registration</label>
+                    <span className="text-sm font-medium text-muted-foreground">Vehicle Registration</span>
                     <p className="mt-1 text-foreground">{rta.company_vehicle_registration || 'Not specified'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <span className="text-sm font-medium text-muted-foreground">Driver Name</span>
                     <p className="mt-1 text-foreground">{rta.driver_name || 'Not specified'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Driver Injured</label>
+                    <span className="text-sm font-medium text-muted-foreground">Driver Injured</span>
                     <p className="mt-1 text-foreground">{rta.driver_injured ? 'Yes' : 'No'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Police Attended</label>
+                    <span className="text-sm font-medium text-muted-foreground">Police Attended</span>
                     <p className="mt-1 text-foreground">{rta.police_attended ? 'Yes' : 'No'}</p>
                   </div>
                 </div>
@@ -684,24 +685,24 @@ export default function RTADetail() {
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-7" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Title
               </label>
-              <Input
+              <Input id="rtadetail-field-7"
                 value={investigationForm.title}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
                 placeholder={`Investigation - ${rta.reference_number}`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-8" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Type
               </label>
               <Select
                 value={investigationForm.investigation_type}
                 onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="rtadetail-field-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -719,10 +720,10 @@ export default function RTADetail() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-9" className="block text-sm font-medium text-foreground mb-1">
                 Initial Notes
               </label>
-              <Textarea
+              <Textarea id="rtadetail-field-9"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
                 placeholder="Describe the scope and initial findings..."
@@ -778,10 +779,10 @@ export default function RTADetail() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-10" className="block text-sm font-medium text-foreground mb-1">
                 Action Title *
               </label>
-              <Input
+              <Input id="rtadetail-field-10"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder="e.g., Review driver training"
@@ -796,14 +797,14 @@ export default function RTADetail() {
               required
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-11" className="block text-sm font-medium text-foreground mb-1">
                 Priority
               </label>
               <Select
                 value={actionForm.priority}
                 onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="rtadetail-field-11">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -815,20 +816,20 @@ export default function RTADetail() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-12" className="block text-sm font-medium text-foreground mb-1">
                 Due Date
               </label>
-              <Input
+              <Input id="rtadetail-field-12"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="rtadetail-field-13" className="block text-sm font-medium text-foreground mb-1">
                 Description
               </label>
-              <Textarea
+              <Textarea id="rtadetail-field-13"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder="Describe the action to be taken..."

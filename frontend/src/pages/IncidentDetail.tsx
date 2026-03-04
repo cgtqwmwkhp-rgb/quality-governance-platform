@@ -92,6 +92,7 @@ export default function IncidentDetail() {
     if (id) {
       loadIncident(parseInt(id))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const loadIncident = async (incidentId: number) => {
@@ -408,16 +409,16 @@ export default function IncidentDetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Title</label>
-                    <Input
+                    <label htmlFor="incidentdetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input id="incidentdetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <Textarea
+                    <label htmlFor="incidentdetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea id="incidentdetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={4}
@@ -426,12 +427,12 @@ export default function IncidentDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <label htmlFor="incidentdetail-field-2" className="text-sm font-medium text-muted-foreground">Incident Type</label>
                       <Select
                         value={editForm.incident_type}
                         onValueChange={(value) => setEditForm({ ...editForm, incident_type: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="incidentdetail-field-2" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -445,12 +446,12 @@ export default function IncidentDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <label htmlFor="incidentdetail-field-3" className="text-sm font-medium text-muted-foreground">Severity</label>
                       <Select
                         value={editForm.severity}
                         onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="incidentdetail-field-3" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -462,12 +463,12 @@ export default function IncidentDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="incidentdetail-field-4" className="text-sm font-medium text-muted-foreground">Status</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="incidentdetail-field-4" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -479,8 +480,8 @@ export default function IncidentDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
-                      <Input
+                      <label htmlFor="incidentdetail-field-5" className="text-sm font-medium text-muted-foreground">Location</label>
+                      <Input id="incidentdetail-field-5"
                         value={editForm.location || ''}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                         className="mt-1"
@@ -491,28 +492,28 @@ export default function IncidentDetail() {
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <span className="text-sm font-medium text-muted-foreground">Description</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
                       {incident.description || 'No description provided'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Type</label>
+                      <span className="text-sm font-medium text-muted-foreground">Incident Type</span>
                       <p className="mt-1 text-foreground capitalize">{incident.incident_type.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Severity</label>
+                      <span className="text-sm font-medium text-muted-foreground">Severity</span>
                       <p className="mt-1 text-foreground capitalize">{incident.severity}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Incident Date</label>
+                      <span className="text-sm font-medium text-muted-foreground">Incident Date</span>
                       <p className="mt-1 text-foreground">
                         {new Date(incident.incident_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Location</label>
+                      <span className="text-sm font-medium text-muted-foreground">Location</span>
                       <p className="mt-1 text-foreground">{incident.location || 'Not specified'}</p>
                     </div>
                   </div>
@@ -547,6 +548,9 @@ export default function IncidentDetail() {
                       key={action.id}
                       className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
                       onClick={() => handleOpenAction(action)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenAction(action); } }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
@@ -678,24 +682,24 @@ export default function IncidentDetail() {
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-6" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Title
               </label>
-              <Input
+              <Input id="incidentdetail-field-6"
                 value={investigationForm.title}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
                 placeholder={`Investigation - ${incident.reference_number}`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-7" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Type
               </label>
               <Select
                 value={investigationForm.investigation_type}
                 onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="incidentdetail-field-7">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -713,10 +717,10 @@ export default function IncidentDetail() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-8" className="block text-sm font-medium text-foreground mb-1">
                 Initial Notes
               </label>
-              <Textarea
+              <Textarea id="incidentdetail-field-8"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
                 placeholder="Describe the scope and initial findings..."
@@ -772,10 +776,10 @@ export default function IncidentDetail() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-9" className="block text-sm font-medium text-foreground mb-1">
                 Action Title *
               </label>
-              <Input
+              <Input id="incidentdetail-field-9"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder="e.g., Review safety procedures"
@@ -789,14 +793,14 @@ export default function IncidentDetail() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-10" className="block text-sm font-medium text-foreground mb-1">
                 Priority
               </label>
               <Select
                 value={actionForm.priority}
                 onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="incidentdetail-field-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -808,20 +812,20 @@ export default function IncidentDetail() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-11" className="block text-sm font-medium text-foreground mb-1">
                 Due Date
               </label>
-              <Input
+              <Input id="incidentdetail-field-11"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="incidentdetail-field-12" className="block text-sm font-medium text-foreground mb-1">
                 Description
               </label>
-              <Textarea
+              <Textarea id="incidentdetail-field-12"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder="Describe the action to be taken..."
@@ -858,20 +862,20 @@ export default function IncidentDetail() {
               {/* Action Info */}
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Title</label>
+                  <span className="text-sm font-medium text-muted-foreground">Title</span>
                   <p className="font-medium text-foreground">{selectedAction.title}</p>
                 </div>
                 
                 {selectedAction.description && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <span className="text-sm font-medium text-muted-foreground">Description</span>
                     <p className="text-foreground">{selectedAction.description}</p>
                   </div>
                 )}
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Status</label>
+                    <span className="text-sm font-medium text-muted-foreground">Status</span>
                     <Badge 
                       variant={
                         selectedAction.status === 'completed' ? 'resolved' :
@@ -885,14 +889,14 @@ export default function IncidentDetail() {
                     </Badge>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                    <span className="text-sm font-medium text-muted-foreground">Priority</span>
                     <p className="text-foreground capitalize">{selectedAction.priority}</p>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Due Date</label>
+                    <span className="text-sm font-medium text-muted-foreground">Due Date</span>
                     <p className="text-foreground">
                       {selectedAction.due_date 
                         ? new Date(selectedAction.due_date).toLocaleDateString() 
@@ -900,7 +904,7 @@ export default function IncidentDetail() {
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Assigned To</label>
+                    <span className="text-sm font-medium text-muted-foreground">Assigned To</span>
                     <p className="text-foreground">
                       {selectedAction.assigned_to_email || 'Unassigned'}
                     </p>
@@ -909,7 +913,7 @@ export default function IncidentDetail() {
                 
                 {selectedAction.completed_at && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Completed At</label>
+                    <span className="text-sm font-medium text-muted-foreground">Completed At</span>
                     <p className="text-foreground">
                       {new Date(selectedAction.completed_at).toLocaleString()}
                     </p>
@@ -918,7 +922,7 @@ export default function IncidentDetail() {
                 
                 {selectedAction.completion_notes && (
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Completion Notes</label>
+                    <span className="text-sm font-medium text-muted-foreground">Completion Notes</span>
                     <p className="text-foreground">{selectedAction.completion_notes}</p>
                   </div>
                 )}
@@ -926,9 +930,9 @@ export default function IncidentDetail() {
               
               {/* Status Update Section */}
               <div className="border-t pt-4">
-                <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                <span className="text-sm font-medium text-muted-foreground mb-2 block">
                   Update Status
-                </label>
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {ACTION_STATUS_OPTIONS.map((option) => (
                     <Button

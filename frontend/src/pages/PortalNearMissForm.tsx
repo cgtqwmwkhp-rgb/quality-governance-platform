@@ -365,10 +365,10 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
+              <label htmlFor="portalnearmissform-field-0" className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalnearmissform-field-0"
                   value={formData.reporterName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, reporterName: e.target.value }))}
                   placeholder="Full name..."
@@ -378,7 +378,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Your Role *</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Your Role *</span>
               <div className="grid grid-cols-3 gap-2">
                 {ROLE_OPTIONS.map((role) => (
                   <button
@@ -417,7 +417,7 @@ export default function PortalNearMissForm() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Were you involved?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Were you involved?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -448,10 +448,10 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalnearmissform-field-1" className="block text-sm font-medium text-foreground mb-2">Location *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalnearmissform-field-1"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="Where did it happen?"
@@ -474,10 +474,10 @@ export default function PortalNearMissForm() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalnearmissform-field-2" className="block text-sm font-medium text-foreground mb-2">Date</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalnearmissform-field-2"
                     type="date"
                     value={formData.eventDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, eventDate: e.target.value }))}
@@ -486,10 +486,10 @@ export default function PortalNearMissForm() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalnearmissform-field-3" className="block text-sm font-medium text-foreground mb-2">Time</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalnearmissform-field-3"
                     type="time"
                     value={formData.eventTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, eventTime: e.target.value }))}
@@ -500,9 +500,9 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description *</label>
+              <label htmlFor="portalnearmissform-field-4" className="block text-sm font-medium text-foreground mb-2">Description *</label>
               <div className="relative">
-                <Textarea
+                <Textarea id="portalnearmissform-field-4"
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe what happened and what could have happened..."
@@ -527,8 +527,8 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">What could have happened?</label>
-              <Textarea
+              <label htmlFor="portalnearmissform-field-5" className="block text-sm font-medium text-foreground mb-2">What could have happened?</label>
+              <Textarea id="portalnearmissform-field-5"
                 value={formData.potentialConsequences}
                 onChange={(e) => setFormData((prev) => ({ ...prev, potentialConsequences: e.target.value }))}
                 placeholder="Describe the potential consequences if not avoided..."
@@ -547,7 +547,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Risk Category *</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Risk Category *</span>
               <div className="grid grid-cols-3 gap-2">
                 {RISK_CATEGORIES.map((cat) => (
                   <button
@@ -569,7 +569,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Potential Severity *</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Potential Severity *</span>
               <div className="space-y-2">
                 {SEVERITY_LEVELS.map((level) => (
                   <button
@@ -594,7 +594,7 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Any witnesses?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -633,8 +633,8 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Suggested Preventive Action</label>
-              <Textarea
+              <label htmlFor="portalnearmissform-field-6" className="block text-sm font-medium text-foreground mb-2">Suggested Preventive Action</label>
+              <Textarea id="portalnearmissform-field-6"
                 value={formData.preventiveActionSuggested}
                 onChange={(e) => setFormData((prev) => ({ ...prev, preventiveActionSuggested: e.target.value }))}
                 placeholder="What could prevent this from happening again?"
@@ -644,16 +644,16 @@ export default function PortalNearMissForm() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Asset Number</label>
-                <Input
+                <label htmlFor="portalnearmissform-field-7" className="block text-sm font-medium text-foreground mb-2">Asset Number</label>
+                <Input id="portalnearmissform-field-7"
                   value={formData.assetNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value }))}
                   placeholder="If applicable..."
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Asset Type</label>
-                <Input
+                <label htmlFor="portalnearmissform-field-8" className="block text-sm font-medium text-foreground mb-2">Asset Type</label>
+                <Input id="portalnearmissform-field-8"
                   value={formData.assetType}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetType: e.target.value }))}
                   placeholder="e.g. Vehicle, Tool..."
@@ -662,8 +662,8 @@ export default function PortalNearMissForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Others Involved</label>
-              <Input
+              <label htmlFor="portalnearmissform-field-9" className="block text-sm font-medium text-foreground mb-2">Others Involved</label>
+              <Input id="portalnearmissform-field-9"
                 value={formData.personsInvolved}
                 onChange={(e) => setFormData((prev) => ({ ...prev, personsInvolved: e.target.value }))}
                 placeholder="Names of others involved..."
@@ -672,7 +672,7 @@ export default function PortalNearMissForm() {
 
             {/* Photos */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Photos (optional)</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Photos (optional)</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -686,11 +686,11 @@ export default function PortalNearMissForm() {
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
+                <span className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
                   <Camera className="w-6 h-6 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground mt-1">Add</span>
                   <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" multiple />
-                </label>
+                </span>
               </div>
             </div>
           </div>

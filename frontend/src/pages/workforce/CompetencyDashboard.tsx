@@ -257,6 +257,9 @@ export default function CompetencyDashboard() {
                       "hover:bg-muted/30 cursor-pointer transition-colors"
                     )}
                     onClick={() => navigate(`/workforce/assessments/${a.id}/execute`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/workforce/assessments/${a.id}/execute`); } }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <ClipboardCheck className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">

@@ -190,6 +190,9 @@ export default function AdvancedAnalytics() {
     <div 
       className={`bg-card/50 backdrop-blur-sm border border-border rounded-xl p-5 hover:border-primary/50 transition-all cursor-pointer group`}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+      role="button"
+      tabIndex={0}
     >
       <div className="flex items-start justify-between mb-3">
         <div className={`p-2.5 rounded-lg bg-${color}-500/20`}>

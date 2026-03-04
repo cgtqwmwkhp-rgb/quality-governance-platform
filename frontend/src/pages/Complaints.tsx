@@ -248,8 +248,8 @@ export default function Complaints() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input
+              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input id="complaints-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -259,8 +259,8 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea
+              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea id="complaints-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -271,12 +271,12 @@ export default function Complaints() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <label htmlFor="complaints-field-2" className="block text-sm font-medium text-foreground mb-2">Type</label>
                 <Select
                   value={formData.complaint_type}
                   onValueChange={(value) => setFormData({ ...formData, complaint_type: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="complaints-field-2">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -294,12 +294,12 @@ export default function Complaints() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                <label htmlFor="complaints-field-3" className="block text-sm font-medium text-foreground mb-2">Priority</label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => setFormData({ ...formData, priority: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="complaints-field-3">
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,8 +313,8 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Complainant Name</label>
-              <Input
+              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">Complainant Name</label>
+              <Input id="complaints-field-4"
                 type="text"
                 required
                 value={formData.complainant_name}
@@ -325,8 +325,8 @@ export default function Complaints() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Email</label>
-                <Input
+                <label htmlFor="complaints-field-5" className="block text-sm font-medium text-foreground mb-2">Email</label>
+                <Input id="complaints-field-5"
                   type="email"
                   value={formData.complainant_email || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
@@ -334,8 +334,8 @@ export default function Complaints() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Phone</label>
-                <Input
+                <label htmlFor="complaints-field-6" className="block text-sm font-medium text-foreground mb-2">Phone</label>
+                <Input id="complaints-field-6"
                   type="tel"
                   value={formData.complainant_phone || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
@@ -345,8 +345,8 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Received Date</label>
-              <Input
+              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">Received Date</label>
+              <Input id="complaints-field-7"
                 type="datetime-local"
                 required
                 value={formData.received_date}

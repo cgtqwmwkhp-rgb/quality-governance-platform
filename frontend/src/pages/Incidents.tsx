@@ -229,8 +229,8 @@ export default function Incidents() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input
+              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input id="incidents-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -240,8 +240,8 @@ export default function Incidents() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea
+              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea id="incidents-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -252,12 +252,12 @@ export default function Incidents() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <label htmlFor="incidents-field-2" className="block text-sm font-medium text-foreground mb-2">Type</label>
                 <Select
                   value={formData.incident_type}
                   onValueChange={(value) => setFormData({ ...formData, incident_type: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="incidents-field-2">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -274,12 +274,12 @@ export default function Incidents() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Severity</label>
+                <label htmlFor="incidents-field-3" className="block text-sm font-medium text-foreground mb-2">Severity</label>
                 <Select
                   value={formData.severity}
                   onValueChange={(value) => setFormData({ ...formData, severity: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="incidents-field-3">
                     <SelectValue placeholder="Select severity" />
                   </SelectTrigger>
                   <SelectContent>
@@ -294,8 +294,8 @@ export default function Incidents() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Incident Date</label>
-              <Input
+              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">Incident Date</label>
+              <Input id="incidents-field-4"
                 type="datetime-local"
                 required
                 value={formData.incident_date}

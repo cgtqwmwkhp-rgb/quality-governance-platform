@@ -12,9 +12,7 @@ from datetime import datetime, timezone
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.complaint import Complaint
-from src.domain.models.incident import Incident
-from src.domain.models.policy import Policy
+from tests.factories import ComplaintFactory, IncidentFactory, PolicyFactory
 
 
 class TestPoliciesPaginationRuntimeContract:
@@ -25,7 +23,7 @@ class TestPoliciesPaginationRuntimeContract:
         """Verify that page and page_size parameters are honored."""
         # Create 15 policies
         for i in range(15):
-            policy = Policy(
+            policy = PolicyFactory.build(
                 title=f"Policy {i}",
                 description=f"Description {i}",
                 document_type="policy",
@@ -52,7 +50,7 @@ class TestPoliciesPaginationRuntimeContract:
         """Verify that total and pages fields are calculated correctly."""
         # Create 23 policies
         for i in range(23):
-            policy = Policy(
+            policy = PolicyFactory.build(
                 title=f"Policy {i}",
                 description=f"Description {i}",
                 document_type="policy",
@@ -78,7 +76,7 @@ class TestPoliciesPaginationRuntimeContract:
         # Create 10 policies with same reference_number prefix but different IDs
         policies = []
         for i in range(10):
-            policy = Policy(
+            policy = PolicyFactory.build(
                 title=f"Policy {i}",
                 description=f"Description {i}",
                 document_type="policy",
@@ -119,14 +117,12 @@ class TestIncidentsPaginationRuntimeContract:
         """Verify that page and page_size parameters are honored."""
         # Create 12 incidents
         for i in range(12):
-            incident = Incident(
+            incident = IncidentFactory.build(
                 title=f"Incident {i}",
                 description=f"Description {i}",
                 incident_type="injury",
                 severity="low",
                 status="reported",
-                incident_date=datetime.now(timezone.utc),
-                reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
                 reference_number=f"INC-PH-{uuid.uuid4().hex[:6]}{i}",
@@ -152,14 +148,12 @@ class TestIncidentsPaginationRuntimeContract:
         """Verify that total and pages fields are calculated correctly."""
         # Create 17 incidents
         for i in range(17):
-            incident = Incident(
+            incident = IncidentFactory.build(
                 title=f"Incident {i}",
                 description=f"Description {i}",
                 incident_type="injury",
                 severity="low",
                 status="reported",
-                incident_date=datetime.now(timezone.utc),
-                reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
                 reference_number=f"INC-TP-{uuid.uuid4().hex[:6]}{i}",
@@ -184,14 +178,12 @@ class TestIncidentsPaginationRuntimeContract:
         # Create 8 incidents
         incidents = []
         for i in range(8):
-            incident = Incident(
+            incident = IncidentFactory.build(
                 title=f"Incident {i}",
                 description=f"Description {i}",
                 incident_type="injury",
                 severity="low",
                 status="reported",
-                incident_date=datetime.now(timezone.utc),
-                reported_date=datetime.now(timezone.utc),
                 location="Test Location",
                 department="Test Department",
                 reference_number=f"INC-OD-{uuid.uuid4().hex[:6]}{i}",
@@ -231,12 +223,11 @@ class TestComplaintsPaginationRuntimeContract:
         """Verify that page and page_size parameters are honored."""
         # Create 14 complaints
         for i in range(14):
-            complaint = Complaint(
+            complaint = ComplaintFactory.build(
                 title=f"Complaint {i}",
                 description=f"Description {i}",
                 complainant_name="Test User",
                 complainant_email="test@example.com",
-                received_date=datetime.now(timezone.utc),
                 status="received",
                 priority="medium",
                 complaint_type="service",
@@ -260,12 +251,11 @@ class TestComplaintsPaginationRuntimeContract:
         """Verify that total and pages fields are calculated correctly."""
         # Create 19 complaints
         for i in range(19):
-            complaint = Complaint(
+            complaint = ComplaintFactory.build(
                 title=f"Complaint {i}",
                 description=f"Description {i}",
                 complainant_name="Test User",
                 complainant_email="test@example.com",
-                received_date=datetime.now(timezone.utc),
                 status="received",
                 priority="medium",
                 complaint_type="service",
@@ -288,12 +278,11 @@ class TestComplaintsPaginationRuntimeContract:
         # Create 9 complaints
         complaints = []
         for i in range(9):
-            complaint = Complaint(
+            complaint = ComplaintFactory.build(
                 title=f"Complaint {i}",
                 description=f"Description {i}",
                 complainant_name="Test User",
                 complainant_email="test@example.com",
-                received_date=datetime.now(timezone.utc),
                 status="received",
                 priority="medium",
                 complaint_type="service",

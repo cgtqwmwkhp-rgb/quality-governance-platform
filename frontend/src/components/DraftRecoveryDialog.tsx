@@ -73,6 +73,7 @@ export function DraftRecoveryDialog({
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onDiscard}
+        aria-hidden="true"
       />
       
       {/* Dialog */}

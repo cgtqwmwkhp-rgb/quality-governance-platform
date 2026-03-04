@@ -91,7 +91,6 @@ export default function AuditTrailViewer() {
   const [loading, setLoading] = useState(true);
   const [verification, setVerification] = useState<Verification | null>(null);
   const [verifying, setVerifying] = useState(false);
-  const [_selectedEntry, _setSelectedEntry] = useState<AuditEntry | null>(null);
   const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   
   // Filters
@@ -378,6 +377,9 @@ export default function AuditTrailViewer() {
                   <div
                     className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
                     onClick={() => toggleExpanded(entry.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(entry.id); } }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <div className="flex items-center gap-4">
                       {/* Hash Chain Visualization */}

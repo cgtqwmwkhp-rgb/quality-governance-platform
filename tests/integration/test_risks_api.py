@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.domain.models.risk import OperationalRiskControl, Risk
 from src.domain.models.user import User
 from tests.conftest import generate_test_reference
+from tests.factories import RiskFactory
 
 
 class TestRisksAPI:
@@ -54,7 +55,7 @@ class TestRisksAPI:
     ):
         """Test listing risks with pagination."""
         risks = [
-            Risk(
+            RiskFactory.build(
                 title=f"Risk {i}",
                 description=f"Description {i}",
                 category="operational",
@@ -90,7 +91,7 @@ class TestRisksAPI:
         auth_headers: dict,
     ):
         """Test getting risk details."""
-        risk = Risk(
+        risk = RiskFactory.build(
             title="Supply Chain Disruption",
             description="Supplier failure causing production delays",
             category="operational",
@@ -124,7 +125,7 @@ class TestRisksAPI:
         auth_headers: dict,
     ):
         """Test updating a risk."""
-        risk = Risk(
+        risk = RiskFactory.build(
             title="Original Title",
             description="Original description",
             category="operational",
@@ -167,7 +168,7 @@ class TestRisksAPI:
         auth_headers: dict,
     ):
         """Test adding a control to a risk."""
-        risk = Risk(
+        risk = RiskFactory.build(
             title="Cybersecurity Risk",
             description="Malware infection",
             category="information_security",
@@ -210,7 +211,7 @@ class TestRisksAPI:
         auth_headers: dict,
     ):
         """Test listing controls for a risk."""
-        risk = Risk(
+        risk = RiskFactory.build(
             title="Test Risk",
             description="For control testing",
             category="operational",
@@ -258,9 +259,8 @@ class TestRisksAPI:
     ):
         """Test getting risk statistics."""
         risks = [
-            Risk(
+            RiskFactory.build(
                 title="Risk 1",
-                description="Desc",
                 category="operational",
                 likelihood=5,
                 impact=5,
@@ -269,9 +269,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 1),
             ),
-            Risk(
+            RiskFactory.build(
                 title="Risk 2",
-                description="Desc",
                 category="operational",
                 likelihood=4,
                 impact=4,
@@ -280,9 +279,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 2),
             ),
-            Risk(
+            RiskFactory.build(
                 title="Risk 3",
-                description="Desc",
                 category="financial",
                 likelihood=2,
                 impact=2,
@@ -317,9 +315,8 @@ class TestRisksAPI:
     ):
         """Test getting risk matrix with counts."""
         risks = [
-            Risk(
+            RiskFactory.build(
                 title="R1",
-                description="D",
                 category="operational",
                 likelihood=1,
                 impact=1,
@@ -328,9 +325,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 1),
             ),
-            Risk(
+            RiskFactory.build(
                 title="R2",
-                description="D",
                 category="operational",
                 likelihood=3,
                 impact=3,
@@ -339,9 +335,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 2),
             ),
-            Risk(
+            RiskFactory.build(
                 title="R3",
-                description="D",
                 category="operational",
                 likelihood=5,
                 impact=5,
@@ -375,9 +370,8 @@ class TestRisksAPI:
     ):
         """Test filtering risks by risk level."""
         risks = [
-            Risk(
+            RiskFactory.build(
                 title="High Risk 1",
-                description="D",
                 category="operational",
                 likelihood=4,
                 impact=4,
@@ -386,9 +380,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 1),
             ),
-            Risk(
+            RiskFactory.build(
                 title="High Risk 2",
-                description="D",
                 category="operational",
                 likelihood=5,
                 impact=4,
@@ -397,9 +390,8 @@ class TestRisksAPI:
                 created_by_id=test_user.id,
                 reference_number=generate_test_reference("RSK", 2),
             ),
-            Risk(
+            RiskFactory.build(
                 title="Low Risk",
-                description="D",
                 category="operational",
                 likelihood=1,
                 impact=2,

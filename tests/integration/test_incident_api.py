@@ -7,6 +7,7 @@ import pytest
 from httpx import AsyncClient
 
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from tests.factories import IncidentFactory
 
 
 @pytest.mark.asyncio
@@ -33,12 +34,9 @@ async def test_create_incident(client: AsyncClient, auth_headers: dict, test_ses
 @pytest.mark.asyncio
 async def test_get_incident_by_id(client: AsyncClient, auth_headers: dict, test_session):
     """Test getting an incident by ID."""
-    # Create incident directly in DB
-    incident = Incident(
+    incident = IncidentFactory.build(
         title="Get Test Incident",
         description="Test Description",
-        incident_date=datetime.now(timezone.utc),
-        reported_date=datetime.now(timezone.utc),
         reference_number=f"INC-2026-{uuid.uuid4().hex[:8]}",
     )
     test_session.add(incident)
@@ -55,11 +53,9 @@ async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_h
     """Test that incidents are returned in deterministic order (reported_date DESC, id ASC)."""
     now = datetime.now(timezone.utc)
 
-    # Create 3 incidents with different reported dates
     incidents = [
-        Incident(
+        IncidentFactory.build(
             title=f"Incident {i}",
-            description="Test",
             incident_date=now,
             reported_date=now - timedelta(days=i),
             reference_number=f"INC-2026-L{uuid.uuid4().hex[:6]}{i}",
@@ -84,11 +80,8 @@ async def test_list_incidents_deterministic_ordering(client: AsyncClient, auth_h
 @pytest.mark.asyncio
 async def test_update_incident_status(client: AsyncClient, auth_headers: dict, test_session):
     """Test updating incident status via PATCH and checks audit log."""
-    incident = Incident(
+    incident = IncidentFactory.build(
         title="Status Update Test",
-        description="Test",
-        incident_date=datetime.now(timezone.utc),
-        reported_date=datetime.now(timezone.utc),
         reference_number=f"INC-2026-{uuid.uuid4().hex[:8]}",
         status=IncidentStatus.REPORTED,
     )
@@ -106,11 +99,9 @@ async def test_update_incident_status(client: AsyncClient, auth_headers: dict, t
 async def test_list_incidents_pagination(client: AsyncClient, auth_headers: dict, test_session):
     """Test pagination behavior."""
     now = datetime.now(timezone.utc)
-    # Create 5 incidents
     for i in range(5):
-        inc = Incident(
+        inc = IncidentFactory.build(
             title=f"Paginated {i}",
-            description="Test",
             incident_date=now,
             reported_date=now - timedelta(minutes=i),
             reference_number=f"INC-2026-P{uuid.uuid4().hex[:6]}{i}",
@@ -141,11 +132,8 @@ async def test_list_incidents_pagination(client: AsyncClient, auth_headers: dict
 @pytest.mark.asyncio
 async def test_delete_incident(client: AsyncClient, auth_headers: dict, test_session):
     """Test deleting an incident via API and checks audit log."""
-    incident = Incident(
+    incident = IncidentFactory.build(
         title="Delete Test Incident",
-        description="Test",
-        incident_date=datetime.now(timezone.utc),
-        reported_date=datetime.now(timezone.utc),
         reference_number=f"INC-2026-D{uuid.uuid4().hex[:7]}",
         status=IncidentStatus.REPORTED,
     )

@@ -264,8 +264,8 @@ export default function Risks() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input
+              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input id="risks-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -275,8 +275,8 @@ export default function Risks() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea
+              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea id="risks-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -287,12 +287,12 @@ export default function Risks() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <label htmlFor="risks-field-2" className="block text-sm font-medium text-foreground mb-2">Category</label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => setFormData({ ...formData, category: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="risks-field-2">
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
@@ -309,12 +309,12 @@ export default function Risks() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Treatment</label>
+                <label htmlFor="risks-field-3" className="block text-sm font-medium text-foreground mb-2">Treatment</label>
                 <Select
                   value={formData.treatment_strategy}
                   onValueChange={(value) => setFormData({ ...formData, treatment_strategy: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="risks-field-3">
                     <SelectValue placeholder="Select treatment" />
                   </SelectTrigger>
                   <SelectContent>
@@ -329,10 +329,10 @@ export default function Risks() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="risks-field-4" className="block text-sm font-medium text-foreground mb-2">
                   Likelihood (1-5)
                 </label>
-                <input
+                <input id="risks-field-4"
                   type="range"
                   min="1"
                   max="5"
@@ -349,10 +349,10 @@ export default function Risks() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="risks-field-5" className="block text-sm font-medium text-foreground mb-2">
                   Impact (1-5)
                 </label>
-                <input
+                <input id="risks-field-5"
                   type="range"
                   min="1"
                   max="5"

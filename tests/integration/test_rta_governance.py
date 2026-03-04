@@ -7,6 +7,7 @@ import pytest
 from httpx import AsyncClient
 
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RTASeverity, RTAStatus
+from tests.factories import ComplaintFactory
 
 
 @pytest.mark.asyncio
@@ -309,13 +310,11 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 @pytest.mark.asyncio
 async def test_complaint_investigations_linkage(client: AsyncClient, auth_headers: dict, test_session):
     """Test that complaint investigations linkage endpoint works and returns deterministic order."""
-    from src.domain.models.complaint import Complaint
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 
-    # Create complaint
-    complaint = Complaint(
+    complaint = ComplaintFactory.build(
         title="Test Complaint",
         description="Test",
         received_date=now,
@@ -326,7 +325,6 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     await test_session.commit()
     await test_session.refresh(complaint)
 
-    # Create investigation template
     template = InvestigationTemplate(
         name="Test Template",
         description="Test",
@@ -337,7 +335,6 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     await test_session.commit()
     await test_session.refresh(template)
 
-    # Create 2 investigations for this complaint
     for i in range(2):
         investigation = InvestigationRun(
             template_id=template.id,
@@ -352,12 +349,10 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
 
     await test_session.commit()
 
-    # Get investigations for complaint
     response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
 
-    # Response is paginated envelope
     assert "items" in data
     assert "total" in data
     assert "page" in data
@@ -367,11 +362,9 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     items = data["items"]
     assert len(items) >= 2
 
-    # Verify deterministic ordering: newest first (created_at DESC, id ASC)
     assert items[0]["title"] == "Complaint Investigation 0"
     assert items[1]["title"] == "Complaint Investigation 1"
 
-    # Pagination fields correct
     assert data["total"] == 2
     assert data["page"] == 1
     assert data["page_size"] == 25
@@ -548,13 +541,11 @@ async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, a
 @pytest.mark.asyncio
 async def test_complaint_investigations_pagination_fields(client: AsyncClient, auth_headers: dict, test_session):
     """Test that complaint investigations pagination fields are correct."""
-    from src.domain.models.complaint import Complaint
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun, InvestigationTemplate
 
     now = datetime.now(timezone.utc)
 
-    # Create complaint
-    complaint = Complaint(
+    complaint = ComplaintFactory.build(
         title="Complaint for Pagination Test",
         description="Test",
         received_date=now,

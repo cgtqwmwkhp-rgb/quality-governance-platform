@@ -239,9 +239,9 @@ function CreateInvestigationModal({
         <div className="space-y-4 py-4 overflow-y-auto max-h-[60vh]">
           {/* Source Type Selection */}
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <span className="block text-sm font-medium text-foreground mb-2">
               Source Record Type *
-            </label>
+            </span>
             <div className="grid grid-cols-2 gap-2">
               {SOURCE_TYPES.map((type) => {
                 const Icon = type.icon
@@ -268,12 +268,12 @@ function CreateInvestigationModal({
           {/* Source Record Selector (replaces free-text ID) */}
           {sourceType && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-0" className="block text-sm font-medium text-foreground mb-1">
                 Select Source Record *
               </label>
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
+                <Input id="investigations-field-0"
                   value={searchQuery}
                   onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder="Search by reference or title..."
@@ -369,10 +369,10 @@ function CreateInvestigationModal({
           {/* Investigation Title */}
           {selectedRecord && (
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-1" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Title *
               </label>
-              <Input
+              <Input id="investigations-field-1"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Investigation into vehicle collision on A1"
@@ -805,10 +805,10 @@ export default function Investigations() {
                           {num}
                         </div>
                         <div className="flex-1">
-                          <label className="block text-sm font-medium text-foreground mb-2">
+                          <label htmlFor="investigations-field-2" className="block text-sm font-medium text-foreground mb-2">
                             Why {num}?
                           </label>
-                          <Textarea
+                          <Textarea id="investigations-field-2"
                             rows={2}
                             placeholder={`Enter the ${num === 1 ? 'initial' : 'deeper'} cause...`}
                           />
@@ -925,10 +925,10 @@ export default function Investigations() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-3" className="block text-sm font-medium text-foreground mb-1">
                 Action Title *
               </label>
-              <Input
+              <Input id="investigations-field-3"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder="e.g., Implement additional safety controls"
@@ -942,14 +942,14 @@ export default function Investigations() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-4" className="block text-sm font-medium text-foreground mb-1">
                 Priority
               </label>
               <Select
                 value={actionForm.priority}
                 onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="investigations-field-4">
                   <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
@@ -961,20 +961,20 @@ export default function Investigations() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-5" className="block text-sm font-medium text-foreground mb-1">
                 Due Date
               </label>
-              <Input
+              <Input id="investigations-field-5"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="investigations-field-6" className="block text-sm font-medium text-foreground mb-1">
                 Description
               </label>
-              <Textarea
+              <Textarea id="investigations-field-6"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder="Describe the corrective action to be taken..."
@@ -1019,7 +1019,7 @@ export default function Investigations() {
               {/* Status and Priority */}
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Status</label>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">Status</span>
                   <span className={cn(
                     "inline-block px-3 py-1 text-sm font-medium rounded",
                     selectedAction.status === 'open' && "bg-warning/10 text-warning",
@@ -1032,7 +1032,7 @@ export default function Investigations() {
                   </span>
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Priority</label>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">Priority</span>
                   <span className={cn(
                     "inline-block px-3 py-1 text-sm font-medium rounded",
                     selectedAction.priority === 'critical' && "bg-destructive/10 text-destructive",
@@ -1049,13 +1049,13 @@ export default function Investigations() {
               <div className="flex gap-4">
                 {selectedAction.owner_email && (
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">Assigned To</label>
+                    <span className="block text-sm font-medium text-muted-foreground mb-1">Assigned To</span>
                     <span className="text-sm text-foreground">{selectedAction.owner_email}</span>
                   </div>
                 )}
                 {selectedAction.due_date && (
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-muted-foreground mb-1">Due Date</label>
+                    <span className="block text-sm font-medium text-muted-foreground mb-1">Due Date</span>
                     <span className="text-sm text-foreground">{new Date(selectedAction.due_date).toLocaleDateString()}</span>
                   </div>
                 )}
@@ -1064,14 +1064,14 @@ export default function Investigations() {
               {/* Completion Notes */}
               {selectedAction.completion_notes && (
                 <div>
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Completion Notes</label>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">Completion Notes</span>
                   <p className="text-sm text-foreground bg-muted/50 p-2 rounded">{selectedAction.completion_notes}</p>
                 </div>
               )}
 
               {/* Status Update Section */}
               <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-foreground mb-2">Update Status</label>
+                <span className="block text-sm font-medium text-foreground mb-2">Update Status</span>
                 <div className="flex flex-wrap gap-2">
                   {ACTION_STATUS_OPTIONS.map((option) => (
                     <Button

@@ -165,6 +165,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
     } catch (error) {
       console.error('[Collaboration] Failed to connect:', error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentId, userId, localUser]);
 
   // Disconnect from collaboration server

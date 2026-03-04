@@ -10,13 +10,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.incident import Incident
+from tests.factories import IncidentFactory, UserFactory
 
 
 @pytest.fixture
 async def test_incident(test_session: AsyncSession):
     """Create a test incident for investigation tests."""
-    incident = Incident(
+    incident = IncidentFactory.build(
         title="Test Incident for Investigations",
         description="Test incident",
         incident_date=datetime.now(timezone.utc),
@@ -245,15 +245,13 @@ class TestIncidentsInvestigationLinkage:
     async def test_create_template_inactive_user_403(self, client: AsyncClient, test_session):
         """Test that an inactive user cannot create a template (403 Forbidden)."""
         from src.core.security import create_access_token, get_password_hash
-        from src.domain.models.user import User
 
-        # Create inactive user
-        inactive_user = User(
+        inactive_user = UserFactory.build(
             email="inactive@example.com",
             hashed_password=get_password_hash("password123"),
             first_name="Inactive",
             last_name="User",
-            is_active=False,  # Inactive
+            is_active=False,
             is_superuser=False,
         )
         test_session.add(inactive_user)
@@ -284,7 +282,6 @@ class TestIncidentsInvestigationLinkage:
         """Test that an inactive user cannot create an investigation (403 Forbidden)."""
         from src.core.security import create_access_token, get_password_hash
         from src.domain.models.investigation import InvestigationTemplate
-        from src.domain.models.user import User
 
         # Create a template first (using active user)
         template = InvestigationTemplate(
@@ -300,12 +297,12 @@ class TestIncidentsInvestigationLinkage:
         await test_session.refresh(template)
 
         # Create inactive user
-        inactive_user = User(
+        inactive_user = UserFactory.build(
             email="inactive2@example.com",
             hashed_password=get_password_hash("password123"),
             first_name="Inactive",
             last_name="User2",
-            is_active=False,  # Inactive
+            is_active=False,
             is_superuser=False,
         )
         test_session.add(inactive_user)

@@ -43,7 +43,11 @@ module.exports = [
       'jsx-a11y/no-static-element-interactions': 'warn',
       'jsx-a11y/no-noninteractive-element-interactions': 'warn',
       'jsx-a11y/alt-text': 'warn',
-      'jsx-a11y/label-has-associated-control': 'warn',
+      'jsx-a11y/label-has-associated-control': ['warn', {
+        controlComponents: ['Input', 'Textarea', 'Select', 'SelectTrigger'],
+        assert: 'either',
+        depth: 3,
+      }],
       'jsx-a11y/heading-has-content': 'warn',
     },
   },

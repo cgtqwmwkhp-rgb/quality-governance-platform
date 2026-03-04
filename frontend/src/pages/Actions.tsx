@@ -457,10 +457,10 @@ export default function Actions() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="actions-field-0" className="block text-sm font-medium text-foreground mb-2">
                   Title <span className="text-destructive">*</span>
                 </label>
-                <Input 
+                <Input id="actions-field-0" 
                   placeholder="Action title..." 
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
@@ -470,10 +470,10 @@ export default function Actions() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="actions-field-1" className="block text-sm font-medium text-foreground mb-2">
                   Description <span className="text-destructive">*</span>
                 </label>
-                <Textarea 
+                <Textarea id="actions-field-1" 
                   rows={3} 
                   placeholder="Describe the action required..."
                   value={formData.description}
@@ -484,12 +484,12 @@ export default function Actions() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Source Type</label>
+                  <label htmlFor="actions-field-2" className="block text-sm font-medium text-foreground mb-2">Source Type</label>
                   <Select 
                     value={formData.source_type} 
                     onValueChange={(value) => setFormData(prev => ({ ...prev, source_type: value }))}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="actions-field-2">
                       <SelectValue placeholder="Select source" />
                     </SelectTrigger>
                     <SelectContent>
@@ -500,10 +500,10 @@ export default function Actions() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="actions-field-3" className="block text-sm font-medium text-foreground mb-2">
                     Source ID <span className="text-destructive">*</span>
                   </label>
-                  <Input 
+                  <Input id="actions-field-3" 
                     type="number"
                     placeholder="e.g., 42"
                     value={formData.source_id}
@@ -516,12 +516,12 @@ export default function Actions() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Priority</label>
+                  <label htmlFor="actions-field-4" className="block text-sm font-medium text-foreground mb-2">Priority</label>
                   <Select 
                     value={formData.priority}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="actions-field-4">
                       <SelectValue placeholder="Select priority" />
                     </SelectTrigger>
                     <SelectContent>
@@ -533,8 +533,8 @@ export default function Actions() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Due Date</label>
-                  <Input 
+                  <label htmlFor="actions-field-5" className="block text-sm font-medium text-foreground mb-2">Due Date</label>
+                  <Input id="actions-field-5" 
                     type="date"
                     value={formData.due_date}
                     onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}

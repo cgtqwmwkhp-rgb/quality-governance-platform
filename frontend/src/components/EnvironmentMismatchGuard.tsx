@@ -14,7 +14,7 @@ interface EnvironmentMismatchGuardProps {
 
 export function EnvironmentMismatchGuard({ children }: EnvironmentMismatchGuardProps) {
   const [mismatchError, setMismatchError] = useState<string | null>(null);
-  const [_isChecking, setIsChecking] = useState(true);
+  const [, setIsChecking] = useState(true);
 
   useEffect(() => {
     async function checkEnvironment() {
@@ -26,8 +26,7 @@ export function EnvironmentMismatchGuard({ children }: EnvironmentMismatchGuardP
     
     checkEnvironment();
   }, []);
-  
-  // Note: _isChecking is available for loading state if needed in future
+
 
   // Show mismatch warning if detected
   if (mismatchError) {

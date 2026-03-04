@@ -289,8 +289,8 @@ export default function AssessmentExecution() {
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Overall debrief notes</label>
-              <textarea
+              <label htmlFor="assessmentexecution-field-0" className="block text-sm font-medium text-foreground mb-2">Overall debrief notes</label>
+              <textarea id="assessmentexecution-field-0"
                 value={debriefNotes}
                 onChange={(e) => setDebriefNotes(e.target.value)}
                 placeholder="Add overall debrief notes..."
@@ -298,9 +298,9 @@ export default function AssessmentExecution() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Engineer signature (final)</label>
+              <label htmlFor="assessmentexecution-field-1" className="block text-sm font-medium text-foreground mb-2">Engineer signature (final)</label>
               <div className="rounded-lg border border-dashed border-border bg-muted/20 min-h-[80px] flex items-center justify-center p-4">
-                <input
+                <input id="assessmentexecution-field-1"
                   type="text"
                   value={finalSignature ?? ''}
                   onChange={(e) => setFinalSignature(e.target.value || null)}
@@ -467,11 +467,11 @@ export default function AssessmentExecution() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="assessmentexecution-field-2" className="block text-sm font-medium text-foreground mb-2">
               Feedback / Supervisor notes
               {resp.verdict === 'not_competent' && <span className="text-destructive ml-1">(required)</span>}
             </label>
-            <textarea
+            <textarea id="assessmentexecution-field-2"
               value={resp.feedback || resp.supervisorNotes}
               onChange={(e) =>
                 setResponse(question.id, {
@@ -485,7 +485,7 @@ export default function AssessmentExecution() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Photo evidence</label>
+            <span className="block text-sm font-medium text-foreground mb-2">Photo evidence</span>
             <div className="flex gap-4 flex-wrap">
               <div
                 role="button"
@@ -524,9 +524,9 @@ export default function AssessmentExecution() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">Engineer sign-off (this item)</label>
+            <label htmlFor="assessmentexecution-field-3" className="block text-sm font-medium text-foreground mb-2">Engineer sign-off (this item)</label>
             <div className="rounded-lg border border-dashed border-border bg-muted/20 min-h-[60px] flex items-center justify-center p-3">
-              <input
+              <input id="assessmentexecution-field-3"
                 type="text"
                 value={resp.signatureBase64 ?? ''}
                 onChange={(e) => setResponse(question.id, { signatureBase64: e.target.value || null })}

@@ -309,6 +309,9 @@ export default function IMSDashboard() {
                 selectedStandard === standard.id ? 'ring-2 ring-primary' : ''
               }`}
               onClick={() => setSelectedStandard(standard.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedStandard(standard.id); } }}
+              role="button"
+              tabIndex={0}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-xl ${standard.color}`}>

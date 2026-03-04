@@ -134,6 +134,9 @@ export default function ISOTagSelector({
         
         <div 
           onClick={() => setIsOpen(!isOpen)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(!isOpen); } }}
+          role="button"
+          tabIndex={0}
           className="p-3 bg-slate-700 border border-slate-600 rounded-lg cursor-pointer hover:border-slate-500 transition-all"
         >
           <div className="flex items-center justify-between">
@@ -174,6 +177,9 @@ export default function ISOTagSelector({
                   <div
                     key={clause.id}
                     onClick={() => toggleClause(clause.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleClause(clause.id); } }}
+                    role="button"
+                    tabIndex={0}
                     className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
                       isSelected ? 'bg-emerald-600/20 border border-emerald-500/50' : 'bg-slate-700/50 hover:bg-slate-700'
                     }`}
@@ -315,6 +321,9 @@ export default function ISOTagSelector({
                   <div
                     key={clause.id}
                     onClick={() => toggleClause(clause.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleClause(clause.id); } }}
+                    role="button"
+                    tabIndex={0}
                     className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all ${
                       isSelected 
                         ? 'bg-emerald-600/20 border border-emerald-500/50' 

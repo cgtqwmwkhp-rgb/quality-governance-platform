@@ -323,6 +323,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
       

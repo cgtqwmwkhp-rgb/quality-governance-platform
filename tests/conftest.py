@@ -201,14 +201,16 @@ def clean_db(db_session):
 
 @pytest.fixture
 def incident_data():
-    """Factory for incident test data."""
+    """Factory for incident test data, backed by IncidentFactory."""
+    from tests.factories import IncidentFactory
 
     def _create_incident(title: str = "Test Incident", severity: str = "medium", **kwargs) -> dict:
+        incident = IncidentFactory.build(title=title, severity=severity, **kwargs)
         return {
-            "title": title,
-            "description": kwargs.get("description", "Test incident description"),
-            "severity": severity,
-            "incident_type": kwargs.get("incident_type", "safety"),
+            "title": incident.title,
+            "description": kwargs.get("description", incident.description),
+            "severity": str(incident.severity),
+            "incident_type": kwargs.get("incident_type", str(incident.incident_type)),
             "location": kwargs.get("location", "Test Location"),
             **kwargs,
         }
@@ -218,15 +220,17 @@ def incident_data():
 
 @pytest.fixture
 def risk_data():
-    """Factory for risk test data."""
+    """Factory for risk test data, backed by RiskFactory."""
+    from tests.factories import RiskFactory
 
     def _create_risk(title: str = "Test Risk", likelihood: int = 3, impact: int = 3, **kwargs) -> dict:
+        risk = RiskFactory.build(title=title, likelihood=likelihood, impact=impact, **kwargs)
         return {
-            "title": title,
-            "description": kwargs.get("description", "Test risk description"),
-            "category": kwargs.get("category", "operational"),
-            "likelihood": likelihood,
-            "impact": impact,
+            "title": risk.title,
+            "description": kwargs.get("description", risk.description),
+            "category": kwargs.get("category", risk.category),
+            "likelihood": risk.likelihood,
+            "impact": risk.impact,
             **kwargs,
         }
 

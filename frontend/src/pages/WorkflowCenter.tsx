@@ -542,9 +542,9 @@ export default function WorkflowCenter() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Delegate To</label>
+                  <label htmlFor="workflowcenter-field-0" className="block text-sm font-medium text-foreground mb-2">Delegate To</label>
                   <Select>
-                    <SelectTrigger>
+                    <SelectTrigger id="workflowcenter-field-0">
                       <SelectValue placeholder="Select a colleague..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -555,16 +555,16 @@ export default function WorkflowCenter() {
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Reason</label>
-                  <Input type="text" placeholder="e.g., Annual leave" />
+                  <label htmlFor="workflowcenter-field-1" className="block text-sm font-medium text-foreground mb-2">Reason</label>
+                  <Input id="workflowcenter-field-1" type="text" placeholder="e.g., Annual leave" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Start Date</label>
-                  <Input type="date" />
+                  <label htmlFor="workflowcenter-field-2" className="block text-sm font-medium text-foreground mb-2">Start Date</label>
+                  <Input id="workflowcenter-field-2" type="date" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">End Date</label>
-                  <Input type="date" />
+                  <label htmlFor="workflowcenter-field-3" className="block text-sm font-medium text-foreground mb-2">End Date</label>
+                  <Input id="workflowcenter-field-3" type="date" />
                 </div>
               </div>
 

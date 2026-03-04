@@ -172,12 +172,12 @@ export default function ResetPassword() {
               <div className="space-y-5">
                 {/* New Password */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="resetpassword-field-0" className="block text-sm font-medium text-foreground mb-2">
                     New Password
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="resetpassword-field-0"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -218,12 +218,12 @@ export default function ResetPassword() {
 
                 {/* Confirm Password */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="resetpassword-field-1" className="block text-sm font-medium text-foreground mb-2">
                     Confirm Password
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="resetpassword-field-1"
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}

@@ -33,7 +33,7 @@ export default function Assessments() {
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [engineerFilter, _setEngineerFilter] = useState('')
+  const [engineerFilter] = useState('')
   const [assetTypeFilter, setAssetTypeFilter] = useState('')
 
   // Search debounce (300ms)

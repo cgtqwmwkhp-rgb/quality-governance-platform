@@ -289,8 +289,8 @@ export default function RTAs() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input
+              <label htmlFor="rtas-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input id="rtas-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -300,8 +300,8 @@ export default function RTAs() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea
+              <label htmlFor="rtas-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea id="rtas-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -311,8 +311,8 @@ export default function RTAs() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Location</label>
-              <Input
+              <label htmlFor="rtas-field-2" className="block text-sm font-medium text-foreground mb-2">Location</label>
+              <Input id="rtas-field-2"
                 type="text"
                 required
                 value={formData.location}
@@ -323,12 +323,12 @@ export default function RTAs() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Severity</label>
+                <label htmlFor="rtas-field-3" className="block text-sm font-medium text-foreground mb-2">Severity</label>
                 <Select
                   value={formData.severity}
                   onValueChange={(value) => setFormData({ ...formData, severity: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="rtas-field-3">
                     <SelectValue placeholder="Select severity" />
                   </SelectTrigger>
                   <SelectContent>
@@ -342,8 +342,8 @@ export default function RTAs() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Vehicle Reg</label>
-                <Input
+                <label htmlFor="rtas-field-4" className="block text-sm font-medium text-foreground mb-2">Vehicle Reg</label>
+                <Input id="rtas-field-4"
                   type="text"
                   value={formData.company_vehicle_registration || ''}
                   onChange={(e) => setFormData({ ...formData, company_vehicle_registration: e.target.value })}
@@ -353,8 +353,8 @@ export default function RTAs() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Driver Name</label>
-              <Input
+              <label htmlFor="rtas-field-5" className="block text-sm font-medium text-foreground mb-2">Driver Name</label>
+              <Input id="rtas-field-5"
                 type="text"
                 value={formData.driver_name || ''}
                 onChange={(e) => setFormData({ ...formData, driver_name: e.target.value })}
@@ -363,8 +363,8 @@ export default function RTAs() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Collision Date</label>
-              <Input
+              <label htmlFor="rtas-field-6" className="block text-sm font-medium text-foreground mb-2">Collision Date</label>
+              <Input id="rtas-field-6"
                 type="datetime-local"
                 required
                 value={formData.collision_date}
@@ -378,14 +378,14 @@ export default function RTAs() {
                   checked={formData.police_attended || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, police_attended: checked })}
                 />
-                <label className="text-sm text-foreground">Police Attended</label>
+                <span className="text-sm text-foreground">Police Attended</span>
               </div>
               <div className="flex items-center gap-2">
                 <Switch
                   checked={formData.driver_injured || false}
                   onCheckedChange={(checked) => setFormData({ ...formData, driver_injured: checked })}
                 />
-                <label className="text-sm text-foreground">Driver Injured</label>
+                <span className="text-sm text-foreground">Driver Injured</span>
               </div>
             </div>
 

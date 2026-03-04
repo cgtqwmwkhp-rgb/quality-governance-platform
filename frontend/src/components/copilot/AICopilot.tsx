@@ -69,7 +69,6 @@ const AICopilot: React.FC<AICopilotProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [_sessionId, _setSessionId] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedAction[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   
@@ -91,6 +90,7 @@ const AICopilot: React.FC<AICopilotProps> = ({
       // Get context-aware suggestions
       fetchSuggestions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
   
   // Scroll to bottom on new messages

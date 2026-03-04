@@ -30,6 +30,17 @@ interface MentionInputProps {
   maxLength?: number;
 }
 
+const mockUsers: MentionUser[] = [
+  { id: 1, display_name: 'John Smith', email: 'john.smith@plantexpand.com' },
+  { id: 2, display_name: 'Jane Doe', email: 'jane.doe@plantexpand.com' },
+  { id: 3, display_name: 'Bob Wilson', email: 'bob.wilson@plantexpand.com' },
+  { id: 4, display_name: 'Alice Brown', email: 'alice.brown@plantexpand.com' },
+  { id: 5, display_name: 'Charlie Davis', email: 'charlie.davis@plantexpand.com' },
+  { id: 6, display_name: 'Diana Evans', email: 'diana.evans@plantexpand.com' },
+  { id: 7, display_name: 'Edward Foster', email: 'edward.foster@plantexpand.com' },
+  { id: 8, display_name: 'Fiona Green', email: 'fiona.green@plantexpand.com' },
+];
+
 const MentionInput: React.FC<MentionInputProps> = ({
   value,
   onChange,
@@ -49,18 +60,6 @@ const MentionInput: React.FC<MentionInputProps> = ({
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-
-  // Mock users for demonstration
-  const mockUsers: MentionUser[] = [
-    { id: 1, display_name: 'John Smith', email: 'john.smith@plantexpand.com' },
-    { id: 2, display_name: 'Jane Doe', email: 'jane.doe@plantexpand.com' },
-    { id: 3, display_name: 'Bob Wilson', email: 'bob.wilson@plantexpand.com' },
-    { id: 4, display_name: 'Alice Brown', email: 'alice.brown@plantexpand.com' },
-    { id: 5, display_name: 'Charlie Davis', email: 'charlie.davis@plantexpand.com' },
-    { id: 6, display_name: 'Diana Evans', email: 'diana.evans@plantexpand.com' },
-    { id: 7, display_name: 'Edward Foster', email: 'edward.foster@plantexpand.com' },
-    { id: 8, display_name: 'Fiona Green', email: 'fiona.green@plantexpand.com' },
-  ];
 
   // Filter users based on search query
   useEffect(() => {

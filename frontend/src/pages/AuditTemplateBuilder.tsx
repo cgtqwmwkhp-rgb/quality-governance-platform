@@ -328,7 +328,7 @@ const QuestionEditor = ({
               onSelect={(type) => onUpdate(question.id, { type })}
             />
 
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+            <label htmlFor="audittemplatebuilder-field-0" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
               <input
                 type="checkbox"
                 checked={question.required}
@@ -338,8 +338,8 @@ const QuestionEditor = ({
               Required
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
+            <label htmlFor="audittemplatebuilder-field-1" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input id="audittemplatebuilder-field-0"
                 type="checkbox"
                 checked={question.evidenceRequired}
                 onChange={(e) => onUpdate(question.id, { evidenceRequired: e.target.checked })}
@@ -349,8 +349,8 @@ const QuestionEditor = ({
               Evidence
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
+            <label htmlFor="audittemplatebuilder-field-2" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input id="audittemplatebuilder-field-1"
                 type="checkbox"
                 checked={question.failureTriggersAction}
                 onChange={(e) => onUpdate(question.id, { failureTriggersAction: e.target.checked })}
@@ -362,7 +362,7 @@ const QuestionEditor = ({
 
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Weight:</span>
-              <input
+              <input id="audittemplatebuilder-field-2"
                 type="number"
                 value={question.weight}
                 onChange={(e) => onUpdate(question.id, { weight: parseFloat(e.target.value) || 1 })}
@@ -428,8 +428,8 @@ const QuestionEditor = ({
           {showAdvanced && (
             <div className="grid grid-cols-2 gap-3 p-3 bg-muted rounded-lg">
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
-                <input
+                <label htmlFor="audittemplatebuilder-field-3" className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
+                <input id="audittemplatebuilder-field-3"
                   type="text"
                   value={question.isoClause || ''}
                   onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
@@ -438,8 +438,8 @@ const QuestionEditor = ({
                 />
               </div>
               <div>
-                <label className="block text-xs text-muted-foreground mb-1">Risk Level</label>
-                <select
+                <label htmlFor="audittemplatebuilder-field-4" className="block text-xs text-muted-foreground mb-1">Risk Level</label>
+                <select id="audittemplatebuilder-field-4"
                   value={question.riskLevel || ''}
                   onChange={(e) => onUpdate(question.id, { riskLevel: e.target.value as Question['riskLevel'] })}
                   className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
@@ -452,8 +452,8 @@ const QuestionEditor = ({
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
-                <textarea
+                <label htmlFor="audittemplatebuilder-field-5" className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
+                <textarea id="audittemplatebuilder-field-5"
                   value={question.guidance || ''}
                   onChange={(e) => onUpdate(question.id, { guidance: e.target.value })}
                   placeholder="Tips for auditors on how to assess this item..."
@@ -949,10 +949,10 @@ export default function AuditTemplateBuilder() {
             <div className="lg:col-span-3 space-y-4">
               {/* Description */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
-                <label className="block text-sm font-medium text-foreground mb-2">
+                <label htmlFor="audittemplatebuilder-field-6" className="block text-sm font-medium text-foreground mb-2">
                   Template Description
                 </label>
-                <textarea
+                <textarea id="audittemplatebuilder-field-6"
                   value={template.description}
                   onChange={(e) => setTemplate(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Describe the purpose and scope of this audit template..."
@@ -998,7 +998,7 @@ export default function AuditTemplateBuilder() {
               <div className="space-y-6">
                 {/* Category */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Category</label>
+                  <span className="block text-sm font-medium text-foreground mb-2">Category</span>
                   <div className="grid grid-cols-2 gap-2">
                     {CATEGORIES.map((cat) => (
                       <button
@@ -1022,7 +1022,7 @@ export default function AuditTemplateBuilder() {
 
                 {/* Scoring Method */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Scoring Method</label>
+                  <span className="block text-sm font-medium text-foreground mb-2">Scoring Method</span>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { id: 'weighted', label: 'Weighted', description: 'Questions have different weights' },
@@ -1049,10 +1049,10 @@ export default function AuditTemplateBuilder() {
 
                 {/* Pass Threshold */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="audittemplatebuilder-field-7" className="block text-sm font-medium text-foreground mb-2">
                     Pass Threshold: {template.passThreshold}%
                   </label>
-                  <input
+                  <input id="audittemplatebuilder-field-7"
                     type="range"
                     min="0"
                     max="100"
@@ -1068,10 +1068,10 @@ export default function AuditTemplateBuilder() {
 
                 {/* Estimated Duration */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="audittemplatebuilder-field-8" className="block text-sm font-medium text-foreground mb-2">
                     Estimated Duration (minutes)
                   </label>
-                  <input
+                  <input id="audittemplatebuilder-field-8"
                     type="number"
                     value={template.estimatedDuration}
                     onChange={(e) => setTemplate(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
@@ -1082,8 +1082,8 @@ export default function AuditTemplateBuilder() {
 
                 {/* Version */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Version</label>
-                  <input
+                  <label htmlFor="audittemplatebuilder-field-9" className="block text-sm font-medium text-foreground mb-2">Version</label>
+                  <input id="audittemplatebuilder-field-9"
                     type="text"
                     value={template.version}
                     onChange={(e) => setTemplate(prev => ({ ...prev, version: e.target.value }))}

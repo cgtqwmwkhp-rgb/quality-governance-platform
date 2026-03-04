@@ -14,6 +14,8 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
+from tests.factories import IncidentFactory
+
 
 class TestActionsAPIAuth:
     """Test authentication requirements for Actions API."""
@@ -322,16 +324,9 @@ class TestActionsAPIAuthenticatedNegative:
         self, client: AsyncClient, auth_headers: dict, test_session
     ):
         """POST /api/v1/actions/ with various date formats should not 500."""
-        from datetime import datetime
-
-        from src.domain.models.incident import Incident
-
-        # Create a valid incident first
-        incident = Incident(
+        incident = IncidentFactory.build(
             title="Test Incident for Date Test",
             description="Testing date parsing",
-            incident_date=datetime.now(),
-            reported_date=datetime.now(),
             reference_number=f"INC-DATE-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(incident)
@@ -370,16 +365,9 @@ class TestActionsAPIAuthenticatedNegative:
         self, client: AsyncClient, auth_headers: dict, test_session
     ):
         """Verify reference_number is always set, never null."""
-        from datetime import datetime
-
-        from src.domain.models.incident import Incident
-
-        # Create a valid incident
-        incident = Incident(
+        incident = IncidentFactory.build(
             title="Test Incident for RefNum Test",
             description="Testing reference number generation",
-            incident_date=datetime.now(),
-            reported_date=datetime.now(),
             reference_number=f"INC-REFNUM-{uuid.uuid4().hex[:8]}",
         )
         test_session.add(incident)

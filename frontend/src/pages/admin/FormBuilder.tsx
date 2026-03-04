@@ -299,20 +299,20 @@ export default function FormBuilder() {
               <h2 className="text-lg font-semibold text-foreground mb-4">Form Details</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="formbuilder-field-0" className="block text-sm font-medium text-foreground mb-2">
                     Form Name *
                   </label>
-                  <Input
+                  <Input id="formbuilder-field-0"
                     value={template.name}
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. Incident Report Form"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="formbuilder-field-1" className="block text-sm font-medium text-foreground mb-2">
                     Form Type
                   </label>
-                  <select
+                  <select id="formbuilder-field-1"
                     value={template.form_type}
                     onChange={(e) =>
                       setTemplate((prev) => ({ ...prev, form_type: e.target.value }))
@@ -328,10 +328,10 @@ export default function FormBuilder() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="formbuilder-field-2" className="block text-sm font-medium text-foreground mb-2">
                     Description
                   </label>
-                  <Textarea
+                  <Textarea id="formbuilder-field-2"
                     value={template.description || ''}
                     onChange={(e) =>
                       setTemplate((prev) => ({ ...prev, description: e.target.value }))
@@ -365,6 +365,9 @@ export default function FormBuilder() {
                       setSelectedStepId(step.id);
                       toggleStepExpanded(step.id);
                     }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedStepId(step.id); toggleStepExpanded(step.id); } }}
+                    role="button"
+                    tabIndex={0}
                   >
                     <div className="flex items-center gap-3">
                       <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
@@ -446,8 +449,8 @@ export default function FormBuilder() {
                                 ))}
                               </select>
                               <div className="flex items-center gap-2">
-                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <input
+                                <label htmlFor="formbuilder-field-3" className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <input id="formbuilder-field-3"
                                     type="checkbox"
                                     checked={field.is_required}
                                     onChange={(e) =>
@@ -520,10 +523,10 @@ export default function FormBuilder() {
               <h3 className="font-semibold text-foreground mb-4">Form Settings</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="formbuilder-field-4" className="block text-sm font-medium text-foreground mb-2">
                     Reference Prefix
                   </label>
-                  <Input
+                  <Input id="formbuilder-field-4"
                     value={template.reference_prefix || ''}
                     onChange={(e) =>
                       setTemplate((prev) => ({
@@ -540,9 +543,9 @@ export default function FormBuilder() {
                 </div>
 
                 <div className="space-y-3">
-                  <label className="flex items-center justify-between">
+                  <label htmlFor="formbuilder-field-5" className="flex items-center justify-between">
                     <span className="text-sm text-foreground">Allow Draft Saving</span>
-                    <input
+                    <input id="formbuilder-field-5"
                       type="checkbox"
                       checked={template.allow_drafts}
                       onChange={(e) =>
@@ -552,9 +555,9 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label className="flex items-center justify-between">
+                  <label htmlFor="formbuilder-field-6" className="flex items-center justify-between">
                     <span className="text-sm text-foreground">Allow Attachments</span>
-                    <input
+                    <input id="formbuilder-field-6"
                       type="checkbox"
                       checked={template.allow_attachments}
                       onChange={(e) =>
@@ -567,9 +570,9 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label className="flex items-center justify-between">
+                  <label htmlFor="formbuilder-field-7" className="flex items-center justify-between">
                     <span className="text-sm text-foreground">Require Signature</span>
-                    <input
+                    <input id="formbuilder-field-7"
                       type="checkbox"
                       checked={template.require_signature}
                       onChange={(e) =>
@@ -582,9 +585,9 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label className="flex items-center justify-between">
+                  <label htmlFor="formbuilder-field-8" className="flex items-center justify-between">
                     <span className="text-sm text-foreground">Notify on Submit</span>
-                    <input
+                    <input id="formbuilder-field-8"
                       type="checkbox"
                       checked={template.notify_on_submit}
                       onChange={(e) =>
@@ -600,10 +603,10 @@ export default function FormBuilder() {
 
                 {template.notify_on_submit && (
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="formbuilder-field-9" className="block text-sm font-medium text-foreground mb-2">
                       Notification Emails
                     </label>
-                    <Input
+                    <Input id="formbuilder-field-9"
                       value={template.notification_emails || ''}
                       onChange={(e) =>
                         setTemplate((prev) => ({

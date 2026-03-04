@@ -33,6 +33,7 @@ export const usePreferencesStore = create<PreferencesState>()(
 
       clearFilter: (page) =>
         set((state) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [page]: _, ...rest } = state.savedFilters;
           return { savedFilters: rest };
         }),

@@ -248,6 +248,7 @@ export default function ReportChat({
   // Load messages
   useEffect(() => {
     loadMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceNumber]);
 
   // Scroll to bottom on new messages

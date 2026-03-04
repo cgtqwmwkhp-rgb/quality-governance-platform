@@ -289,42 +289,43 @@ export default function CalendarView() {
                   const dayEvents = day ? getEventsForDate(day) : [];
                   const today = isToday(day || 0);
                   
+                  if (!day) {
+                    return <div key={index} className="min-h-[100px] p-2 rounded-lg transition-all" />;
+                  }
                   return (
                     <div
                       key={index}
                       className={cn(
-                        "min-h-[100px] p-2 rounded-lg transition-all",
-                        day && "bg-surface hover:bg-surface-hover cursor-pointer",
+                        "min-h-[100px] p-2 rounded-lg transition-all bg-surface hover:bg-surface-hover cursor-pointer",
                         today && "ring-2 ring-primary"
                       )}
-                      onClick={() => day && setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
+                      onClick={() => setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
+                      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day)); } }}
+                      role="button"
+                      tabIndex={0}
                     >
-                      {day && (
-                        <>
-                          <span className={cn(
-                            "text-sm font-medium",
-                            today ? 'text-primary' : 'text-muted-foreground'
-                          )}>
-                            {day}
+                      <span className={cn(
+                        "text-sm font-medium",
+                        today ? 'text-primary' : 'text-muted-foreground'
+                      )}>
+                        {day}
+                      </span>
+                      <div className="mt-1 space-y-1">
+                        {dayEvents.slice(0, 3).map((event) => (
+                          <Badge
+                            key={event.id}
+                            variant={eventTypeStyles[event.type].variant as any}
+                            className="text-[10px] truncate w-full justify-start"
+                          >
+                            {event.title}
+                          </Badge>
+                        ))}
+                        {dayEvents.length > 3 && (
+                          <span className="text-xs text-muted-foreground pl-1">
+                            +{dayEvents.length - 3} more
                           </span>
-                          <div className="mt-1 space-y-1">
-                            {dayEvents.slice(0, 3).map((event) => (
-                              <Badge
-                                key={event.id}
-                                variant={eventTypeStyles[event.type].variant as any}
-                                className="text-[10px] truncate w-full justify-start"
-                              >
-                                {event.title}
-                              </Badge>
-                            ))}
-                            {dayEvents.length > 3 && (
-                              <span className="text-xs text-muted-foreground pl-1">
-                                +{dayEvents.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      )}
+                        )}
+                      </div>
                     </div>
                   );
                 })}

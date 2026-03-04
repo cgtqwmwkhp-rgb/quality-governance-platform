@@ -10,22 +10,19 @@ import uuid
 import pytest
 from httpx import AsyncClient
 
-from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
+from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
+from tests.factories import IncidentFactory
 
 
 @pytest.fixture
 async def test_incident(test_session, test_user):
     """Create a test incident."""
-    from datetime import datetime, timezone
-
-    incident = Incident(
+    incident = IncidentFactory.build(
         title="Test Incident for Audit",
         description="Description",
         incident_type=IncidentType.QUALITY,
         severity=IncidentSeverity.MEDIUM,
         status=IncidentStatus.REPORTED,
-        incident_date=datetime.now(timezone.utc),
-        reported_date=datetime.now(timezone.utc),
         reference_number=f"INC-AUDIT-{uuid.uuid4().hex[:8]}",
         reporter_id=test_user.id,
         created_by_id=test_user.id,

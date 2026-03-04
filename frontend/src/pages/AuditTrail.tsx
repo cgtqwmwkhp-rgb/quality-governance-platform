@@ -298,6 +298,9 @@ export default function AuditTrail() {
                   : 'border-border hover:border-border-strong'
               }`}
               onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedEntry(expandedEntry === entry.id ? null : entry.id); } }}
+              role="button"
+              tabIndex={0}
             >
               <div className="p-4">
                 <div className="flex items-start justify-between gap-4">

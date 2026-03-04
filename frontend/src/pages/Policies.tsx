@@ -199,8 +199,8 @@ export default function Policies() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Title</label>
-              <Input
+              <label htmlFor="policies-field-0" className="block text-sm font-medium text-foreground mb-2">Title</label>
+              <Input id="policies-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -210,8 +210,8 @@ export default function Policies() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description</label>
-              <Textarea
+              <label htmlFor="policies-field-1" className="block text-sm font-medium text-foreground mb-2">Description</label>
+              <Textarea id="policies-field-1"
                 rows={3}
                 value={formData.description || ''}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -221,12 +221,12 @@ export default function Policies() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Type</label>
+                <label htmlFor="policies-field-2" className="block text-sm font-medium text-foreground mb-2">Type</label>
                 <Select
                   value={formData.document_type}
                   onValueChange={(value) => setFormData({ ...formData, document_type: value })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="policies-field-2">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -245,12 +245,12 @@ export default function Policies() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Review Frequency</label>
+                <label htmlFor="policies-field-3" className="block text-sm font-medium text-foreground mb-2">Review Frequency</label>
                 <Select
                   value={String(formData.review_frequency_months)}
                   onValueChange={(value) => setFormData({ ...formData, review_frequency_months: parseInt(value) })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="policies-field-3">
                     <SelectValue placeholder="Select frequency" />
                   </SelectTrigger>
                   <SelectContent>
@@ -265,8 +265,8 @@ export default function Policies() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Category</label>
-                <Input
+                <label htmlFor="policies-field-4" className="block text-sm font-medium text-foreground mb-2">Category</label>
+                <Input id="policies-field-4"
                   type="text"
                   value={formData.category || ''}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -274,8 +274,8 @@ export default function Policies() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Department</label>
-                <Input
+                <label htmlFor="policies-field-5" className="block text-sm font-medium text-foreground mb-2">Department</label>
+                <Input id="policies-field-5"
                   type="text"
                   value={formData.department || ''}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}

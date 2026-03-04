@@ -271,6 +271,7 @@ export default function PortalIncidentForm() {
   useEffect(() => {
     if (autosaveEnabled && !isSubmitting && !submittedRef) {
       // Create autosave data (exclude photos, include step)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { photos, ...dataWithoutPhotos } = formData;
       const autosaveData: AutosaveData = {
         ...dataWithoutPhotos,
@@ -536,9 +537,9 @@ export default function PortalIncidentForm() {
               <>
                 {/* Were you involved? */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <span className="block text-sm font-medium text-foreground mb-2">
                     Were you directly involved?
-                  </label>
+                  </span>
                   <div className="grid grid-cols-2 gap-3">
                     {[true, false].map((val) => (
                       <button
@@ -560,12 +561,12 @@ export default function PortalIncidentForm() {
 
                 {/* Person Name */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label htmlFor="portalincidentform-field-0" className="block text-sm font-medium text-foreground mb-2">
                     {formData.wasInvolved ? 'Your Name' : 'Name of Person Involved'} *
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="portalincidentform-field-0"
                       value={formData.personName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, personName: e.target.value }))}
                       placeholder="Full name..."
@@ -589,10 +590,10 @@ export default function PortalIncidentForm() {
               <>
                 {/* Complainant Name */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Complainant Name *</label>
+                  <label htmlFor="portalincidentform-field-1" className="block text-sm font-medium text-foreground mb-2">Complainant Name *</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="portalincidentform-field-1"
                       value={formData.complainantName}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantName: e.target.value }))}
                       placeholder="Full name..."
@@ -603,10 +604,10 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Role */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Their Role/Title</label>
+                  <label htmlFor="portalincidentform-field-2" className="block text-sm font-medium text-foreground mb-2">Their Role/Title</label>
                   <div className="relative">
                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="portalincidentform-field-2"
                       value={formData.complainantRole}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantRole: e.target.value }))}
                       placeholder="e.g. Site Manager..."
@@ -617,10 +618,10 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Contact */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Contact Details</label>
+                  <label htmlFor="portalincidentform-field-3" className="block text-sm font-medium text-foreground mb-2">Contact Details</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
+                    <Input id="portalincidentform-field-3"
                       value={formData.complainantContact}
                       onChange={(e) => setFormData((prev) => ({ ...prev, complainantContact: e.target.value }))}
                       placeholder="Phone or email..."
@@ -633,10 +634,10 @@ export default function PortalIncidentForm() {
 
             {/* Location */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalincidentform-field-4" className="block text-sm font-medium text-foreground mb-2">Location *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalincidentform-field-4"
                   value={formData.location}
                   onChange={(e) => {
                     setFormData((prev) => ({ ...prev, location: e.target.value }));
@@ -668,10 +669,10 @@ export default function PortalIncidentForm() {
             {/* Date & Time */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalincidentform-field-5" className="block text-sm font-medium text-foreground mb-2">Date</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalincidentform-field-5"
                     type="date"
                     value={formData.incidentDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, incidentDate: e.target.value }))}
@@ -680,10 +681,10 @@ export default function PortalIncidentForm() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalincidentform-field-6" className="block text-sm font-medium text-foreground mb-2">Time</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalincidentform-field-6"
                     type="time"
                     value={formData.incidentTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, incidentTime: e.target.value }))}
@@ -705,9 +706,9 @@ export default function PortalIncidentForm() {
 
             {/* Description */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Description *</label>
+              <label htmlFor="portalincidentform-field-7" className="block text-sm font-medium text-foreground mb-2">Description *</label>
               <div className="relative">
-                <Textarea
+                <Textarea id="portalincidentform-field-7"
                   value={formData.description}
                   onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
                   placeholder="What happened? Be specific..."
@@ -746,10 +747,10 @@ export default function PortalIncidentForm() {
 
             {/* Asset Number */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Asset / Vehicle Registration</label>
+              <label htmlFor="portalincidentform-field-8" className="block text-sm font-medium text-foreground mb-2">Asset / Vehicle Registration</label>
               <div className="relative">
                 <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalincidentform-field-8"
                   value={formData.assetNumber}
                   onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value.toUpperCase() }))}
                   placeholder="e.g. PN22P102..."
@@ -760,7 +761,7 @@ export default function PortalIncidentForm() {
 
             {/* Witnesses */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Any witnesses?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -782,10 +783,10 @@ export default function PortalIncidentForm() {
 
             {formData.hasWitnesses && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Witness Names</label>
+                <label htmlFor="portalincidentform-field-9" className="block text-sm font-medium text-foreground mb-2">Witness Names</label>
                 <div className="relative">
                   <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
+                  <Input id="portalincidentform-field-9"
                     value={formData.witnessNames}
                     onChange={(e) => setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))}
                     placeholder="Names of witnesses..."
@@ -807,7 +808,7 @@ export default function PortalIncidentForm() {
 
             {/* Injuries */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Any injuries sustained?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Any injuries sustained?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -848,7 +849,7 @@ export default function PortalIncidentForm() {
 
             {/* Photos */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Photos</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Photos</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -867,10 +868,10 @@ export default function PortalIncidentForm() {
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
+                <label htmlFor="portalincidentform-field-10" className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
                   <Camera className="w-6 h-6 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground mt-1">Add</span>
-                  <input
+                  <input id="portalincidentform-field-10"
                     type="file"
                     accept="image/*"
                     capture="environment"

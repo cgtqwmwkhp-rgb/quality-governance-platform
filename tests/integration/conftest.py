@@ -253,12 +253,13 @@ async def _seed_default_data():
         from src.domain.models.tenant import Tenant
         from src.domain.models.user import User
         from src.infrastructure.database import async_session_maker
+        from tests.factories import TenantFactory, UserFactory
 
         async with async_session_maker() as session:
             result = await session.execute(select(Tenant).where(Tenant.id == 1))
             if result.scalar_one_or_none() is None:
                 session.add(
-                    Tenant(
+                    TenantFactory.build(
                         id=1,
                         name="Test Tenant",
                         slug="test-tenant",
@@ -270,12 +271,10 @@ async def _seed_default_data():
             result = await session.execute(select(User).where(User.id == 1))
             if result.scalar_one_or_none() is None:
                 session.add(
-                    User(
+                    UserFactory.build(
                         id=1,
                         email="test@example.com",
                         hashed_password=get_password_hash("testpassword123"),
-                        first_name="Test",
-                        last_name="User",
                         is_active=True,
                         is_superuser=False,
                         tenant_id=1,
@@ -432,25 +431,19 @@ async def test_tenant(test_session):
 
     The tenant is automatically cleaned up after the test via transaction rollback.
     """
-    import uuid
+    from tests.factories import TenantFactory
 
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from src.domain.models.tenant import Tenant
-
-    tenant = Tenant(
+    tenant = TenantFactory.build(
         name="Test Tenant",
         slug=f"test-tenant-{uuid.uuid4().hex[:8]}",
         admin_email="admin@test.example.com",
         is_active=True,
     )
     test_session.add(tenant)
-    await test_session.flush()  # Flush to get the ID without committing
+    await test_session.flush()
     await test_session.refresh(tenant)
 
     yield tenant
-
-    # Cleanup handled by transaction rollback in test_session fixture
 
 
 @pytest.fixture
@@ -459,53 +452,51 @@ async def test_user(test_session, test_tenant):
 
     The user is automatically cleaned up after the test via transaction rollback.
     """
-    import uuid
-
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from src.core.security import get_password_hash
-    from src.domain.models.user import User
+    from tests.factories import UserFactory
 
-    user = User(
+    user = UserFactory.build(
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
         hashed_password=get_password_hash("testpassword123"),
-        first_name="Test",
-        last_name="User",
         is_active=True,
         is_superuser=False,
         tenant_id=test_tenant.id,
     )
     test_session.add(user)
-    await test_session.flush()  # Flush to get the ID without committing
+    await test_session.flush()
     await test_session.refresh(user)
 
     yield user
-
-    # Cleanup handled by transaction rollback in test_session fixture
 
 
 @pytest.fixture
 def test_user_dict():
     """Test user fixture – returns a mock user dict (for backward compatibility)."""
+    from tests.factories import UserFactory
+
+    user = UserFactory.build()
     return {
-        "id": "1",
-        "email": "test@example.com",
-        "full_name": "Test User",
+        "id": str(user.id) if user.id else "1",
+        "email": user.email,
+        "full_name": f"{user.first_name} {user.last_name}",
         "tenant_id": 1,
         "role": "admin",
-        "is_active": True,
-        "is_superuser": False,
+        "is_active": user.is_active,
+        "is_superuser": user.is_superuser,
     }
 
 
 @pytest.fixture
 def test_incident():
     """Test incident fixture – returns a mock incident dict."""
+    from tests.factories import IncidentFactory
+
+    incident = IncidentFactory.build()
     return {
-        "title": "Integration Test Incident",
-        "description": "Created by integration test",
-        "severity": "medium",
-        "status": "open",
+        "title": incident.title,
+        "description": incident.description,
+        "severity": incident.severity,
+        "status": incident.status,
         "tenant_id": 1,
         "reported_by": "1",
     }

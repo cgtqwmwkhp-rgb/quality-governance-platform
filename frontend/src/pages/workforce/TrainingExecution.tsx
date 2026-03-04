@@ -389,9 +389,9 @@ export default function TrainingExecution() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-3">
+            <span className="block text-sm font-medium text-foreground mb-3">
               Understanding verdict
-            </label>
+            </span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Button
                 variant={resp.verdict === 'competent' ? 'success' : 'outline'}
@@ -424,11 +424,11 @@ export default function TrainingExecution() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="trainingexecution-field-0" className="block text-sm font-medium text-foreground mb-2">
               Supervisor notes
               {resp.verdict === 'not_yet_competent' && <span className="text-destructive ml-1">(recommended)</span>}
             </label>
-            <textarea
+            <textarea id="trainingexecution-field-0"
               value={resp.supervisorNotes}
               onChange={(e) => setResponse(question.id, { supervisorNotes: e.target.value })}
               placeholder="Add supervisor notes for this item..."

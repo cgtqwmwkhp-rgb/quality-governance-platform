@@ -240,7 +240,8 @@ export default function Documents() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in" onDragEnter={handleDrag}>
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- drag-and-drop is mouse-only; upload button provides keyboard access
+    <div className="space-y-6 animate-fade-in" onDragEnter={handleDrag} role="region" aria-label="Document library">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
@@ -368,6 +369,9 @@ export default function Documents() {
                   const doc = documents.find(d => d.id === result.document_id)
                   if (doc) setSelectedDocument(doc)
                 }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const doc = documents.find(d => d.id === result.document_id); if (doc) setSelectedDocument(doc); } }}
+                role="button"
+                tabIndex={0}
                 className="flex items-center gap-4 p-3 bg-surface rounded-xl hover:bg-surface-hover cursor-pointer transition-colors"
               >
                 <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">

@@ -7,6 +7,7 @@ import pytest
 from httpx import AsyncClient
 
 from src.domain.models.complaint import Complaint, ComplaintStatus, ComplaintType
+from tests.factories import ComplaintFactory
 
 
 @pytest.mark.asyncio
@@ -31,10 +32,9 @@ async def test_create_complaint(client: AsyncClient, auth_headers: dict, test_se
 @pytest.mark.asyncio
 async def test_get_complaint_by_id(client: AsyncClient, auth_headers: dict, test_session):
     """Test getting a complaint by ID."""
-    complaint = Complaint(
+    complaint = ComplaintFactory.build(
         title="Billing Error",
         description="Overcharged by $50.",
-        received_date=datetime.now(),
         complainant_name="Bob Brown",
         reference_number=f"COMP-2026-{uuid.uuid4().hex[:8]}",
     )
@@ -51,21 +51,21 @@ async def test_get_complaint_by_id(client: AsyncClient, auth_headers: dict, test
 async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_headers: dict, test_session):
     """Test listing complaints with deterministic ordering (received_date DESC, id ASC)."""
     now = datetime.now()
-    c1 = Complaint(
+    c1 = ComplaintFactory.build(
         title="C1",
         description="D1",
         received_date=now - timedelta(days=1),
         complainant_name="N1",
         reference_number=f"REF-{uuid.uuid4().hex[:8]}",
     )
-    c2 = Complaint(
+    c2 = ComplaintFactory.build(
         title="C2",
         description="D2",
         received_date=now,
         complainant_name="N2",
         reference_number=f"REF-{uuid.uuid4().hex[:8]}",
     )
-    c3 = Complaint(
+    c3 = ComplaintFactory.build(
         title="C3",
         description="D3",
         received_date=now,
@@ -91,10 +91,9 @@ async def test_list_complaints_deterministic_ordering(client: AsyncClient, auth_
 @pytest.mark.asyncio
 async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, test_session):
     """Test updating complaint status and recording audit log."""
-    complaint = Complaint(
+    complaint = ComplaintFactory.build(
         title="Delivery Issue",
         description="Package lost.",
-        received_date=datetime.now(),
         complainant_name="Alice Green",
         reference_number=f"COMP-2026-{uuid.uuid4().hex[:8]}",
         status=ComplaintStatus.RECEIVED,

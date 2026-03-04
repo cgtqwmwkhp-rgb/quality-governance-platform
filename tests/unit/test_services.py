@@ -16,6 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.factories import AuditTemplateFactory, IncidentFactory, RiskFactory
+
 # ============================================================================
 # Test Helpers
 # ============================================================================
@@ -76,31 +78,47 @@ def mock_db_session():
 @pytest.fixture
 def sample_incident_data():
     """Sample incident data for testing."""
+    incident = IncidentFactory.build(
+        title="Test Incident",
+        description="Test description",
+        severity="MEDIUM",
+        status="REPORTED",
+        incident_type="OTHER",
+        reference_number="INC-2026-0001",
+    )
     return {
         "id": 1,
-        "reference_number": "INC-2026-0001",
-        "title": "Test Incident",
-        "description": "Test description",
+        "reference_number": incident.reference_number,
+        "title": incident.title,
+        "description": incident.description,
         "severity": "medium",
         "status": "open",
         "incident_type": "safety",
         "location": "Test Location",
-        "created_at": datetime.now(),
-        "updated_at": datetime.now(),
+        "created_at": incident.created_at,
+        "updated_at": incident.updated_at,
     }
 
 
 @pytest.fixture
 def sample_risk_data():
     """Sample risk data for testing."""
+    risk = RiskFactory.build(
+        title="Test Risk",
+        description="Test risk description",
+        category="operational",
+        likelihood=3,
+        impact=4,
+        risk_score=12,
+    )
     return {
         "id": 1,
-        "title": "Test Risk",
-        "description": "Test risk description",
-        "category": "operational",
-        "likelihood": 3,
-        "impact": 4,
-        "risk_score": 12,
+        "title": risk.title,
+        "description": risk.description,
+        "category": risk.category,
+        "likelihood": risk.likelihood,
+        "impact": risk.impact,
+        "risk_score": risk.risk_score,
         "status": "open",
         "owner": "Test Owner",
     }
@@ -109,9 +127,10 @@ def sample_risk_data():
 @pytest.fixture
 def sample_audit_data():
     """Sample audit data for testing."""
+    audit = AuditTemplateFactory.build(name="Test Audit")
     return {
         "id": 1,
-        "name": "Test Audit",
+        "name": audit.name,
         "standard": "ISO 9001:2015",
         "status": "scheduled",
         "scheduled_date": datetime.now() + timedelta(days=7),

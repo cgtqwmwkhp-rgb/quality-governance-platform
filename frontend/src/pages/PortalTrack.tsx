@@ -241,6 +241,7 @@ export default function PortalTrack() {
     if (isAuthenticated && user && platformToken) {
       loadMyReports();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user, platformToken]);
 
   // Load specific report from URL

@@ -292,10 +292,10 @@ export default function ContractsManagement() {
               {(isAdding || editingContract) ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-0" className="block text-sm font-medium text-foreground mb-2">
                       Name *
                     </label>
-                    <Input
+                    <Input id="contractsmanagement-field-0"
                       value={formData.name || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, name: e.target.value }))
@@ -305,10 +305,10 @@ export default function ContractsManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-1" className="block text-sm font-medium text-foreground mb-2">
                       Code *
                     </label>
-                    <Input
+                    <Input id="contractsmanagement-field-1"
                       value={formData.code || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
@@ -324,10 +324,10 @@ export default function ContractsManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-2" className="block text-sm font-medium text-foreground mb-2">
                       Client Name
                     </label>
-                    <Input
+                    <Input id="contractsmanagement-field-2"
                       value={formData.client_name || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, client_name: e.target.value }))
@@ -337,10 +337,10 @@ export default function ContractsManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-3" className="block text-sm font-medium text-foreground mb-2">
                       Description
                     </label>
-                    <Textarea
+                    <Textarea id="contractsmanagement-field-3"
                       value={formData.description || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, description: e.target.value }))
@@ -351,12 +351,12 @@ export default function ContractsManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-4" className="block text-sm font-medium text-foreground mb-2">
                       Contact Email
                     </label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
+                      <Input id="contractsmanagement-field-4"
                         type="email"
                         value={formData.client_email || ''}
                         onChange={(e) =>
@@ -369,12 +369,12 @@ export default function ContractsManagement() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
+                    <label htmlFor="contractsmanagement-field-5" className="block text-sm font-medium text-foreground mb-2">
                       Contact Phone
                     </label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
+                      <Input id="contractsmanagement-field-5"
                         type="tel"
                         value={formData.client_contact || ''}
                         onChange={(e) =>
@@ -386,9 +386,9 @@ export default function ContractsManagement() {
                     </div>
                   </div>
 
-                  <label className="flex items-center justify-between">
+                  <label htmlFor="contractsmanagement-field-6" className="flex items-center justify-between">
                     <span className="text-sm text-foreground">Active</span>
-                    <input
+                    <input id="contractsmanagement-field-6"
                       type="checkbox"
                       checked={formData.is_active ?? true}
                       onChange={(e) =>

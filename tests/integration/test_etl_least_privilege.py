@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from src.domain.models.complaint import Complaint
 from src.domain.models.user import Role, User
+from tests.factories import UserFactory
 
 
 @pytest.fixture
@@ -56,7 +57,7 @@ async def etl_user_token(client: AsyncClient, test_session):
         await test_session.commit()
         await test_session.refresh(etl_role)
 
-    etl_user = User(
+    etl_user = UserFactory.build(
         email=etl_email,
         hashed_password=get_password_hash(etl_password),
         first_name="ETL",

@@ -7,6 +7,7 @@ from src.api.routes.audits import create_run, create_template, get_template, pub
 from src.api.schemas.audit import AuditRunCreate, AuditTemplateCreate, AuditTemplateUpdate
 from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditTemplate
 from src.domain.models.user import User
+from tests.factories import UserFactory
 
 
 @pytest.fixture
@@ -30,7 +31,7 @@ async def isolated_db_session():
 
 @pytest.fixture
 async def test_user(isolated_db_session: AsyncSession):
-    user = User(
+    user = UserFactory.build(
         email="audit.integrity@test.local",
         hashed_password="not-used-in-test",
         first_name="Audit",

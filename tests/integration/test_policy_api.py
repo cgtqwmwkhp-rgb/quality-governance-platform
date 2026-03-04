@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from src.domain.models.policy import DocumentStatus, DocumentType, Policy
 from src.domain.models.user import User
+from tests.factories import PolicyFactory
 
 
 @pytest.mark.asyncio
@@ -41,8 +42,7 @@ async def test_create_policy(client: AsyncClient, test_user: User, auth_headers:
 @pytest.mark.asyncio
 async def test_get_policy_by_id(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test getting a policy by ID."""
-    # Create a policy directly in the database
-    policy = Policy(
+    policy = PolicyFactory.build(
         title="Test Policy",
         description="Test description",
         document_type=DocumentType.POLICY,
@@ -55,7 +55,6 @@ async def test_get_policy_by_id(client: AsyncClient, test_user: User, auth_heade
     await test_session.commit()
     await test_session.refresh(policy)
 
-    # Get the policy via API
     response = await client.get(
         f"/api/v1/policies/{policy.id}",
         headers=auth_headers,
@@ -91,12 +90,11 @@ async def test_list_policies_deterministic_ordering(
     test_session,
 ):
     """Test that list policies returns results in deterministic order."""
-    # Create multiple policies with slight time differences
     import asyncio
 
     policies = []
     for i in range(5):
-        policy = Policy(
+        policy = PolicyFactory.build(
             title=f"Policy {i}",
             description=f"Description {i}",
             document_type=DocumentType.POLICY,
@@ -109,9 +107,8 @@ async def test_list_policies_deterministic_ordering(
         await test_session.commit()
         await test_session.refresh(policy)
         policies.append(policy)
-        await asyncio.sleep(0.01)  # Small delay to ensure different timestamps
+        await asyncio.sleep(0.01)
 
-    # Get the list via API
     response = await client.get(
         "/api/v1/policies",
         headers=auth_headers,
@@ -123,21 +120,17 @@ async def test_list_policies_deterministic_ordering(
     assert "total" in data
     assert data["total"] >= 5
 
-    # Verify ordering: newest first (created_at DESC), then by id ASC
     items = data["items"]
     assert len(items) >= 5
 
-    # The most recently created policy should be first
     assert items[0]["title"] == "Policy 4"
 
-    # Verify deterministic ordering by checking that results are consistent
     response2 = await client.get(
         "/api/v1/policies",
         headers=auth_headers,
     )
     data2 = response2.json()
 
-    # Same order on repeated calls
     assert [item["id"] for item in items] == [item["id"] for item in data2["items"]]
 
 
@@ -149,9 +142,8 @@ async def test_list_policies_pagination(
     test_session,
 ):
     """Test pagination in list policies."""
-    # Create 10 policies
     for i in range(10):
-        policy = Policy(
+        policy = PolicyFactory.build(
             title=f"Policy {i}",
             document_type=DocumentType.POLICY,
             status=DocumentStatus.DRAFT,
@@ -162,7 +154,6 @@ async def test_list_policies_pagination(
         test_session.add(policy)
     await test_session.commit()
 
-    # Get first page
     response = await client.get(
         "/api/v1/policies?page=1&page_size=5",
         headers=auth_headers,
@@ -175,7 +166,6 @@ async def test_list_policies_pagination(
     assert data["page_size"] == 5
     assert data["total"] >= 10
 
-    # Get second page
     response2 = await client.get(
         "/api/v1/policies?page=2&page_size=5",
         headers=auth_headers,
@@ -186,7 +176,6 @@ async def test_list_policies_pagination(
     assert len(data2["items"]) == 5
     assert data2["page"] == 2
 
-    # Verify no overlap between pages
     page1_ids = {item["id"] for item in data["items"]}
     page2_ids = {item["id"] for item in data2["items"]}
     assert page1_ids.isdisjoint(page2_ids)
@@ -195,8 +184,7 @@ async def test_list_policies_pagination(
 @pytest.mark.asyncio
 async def test_update_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test updating a policy."""
-    # Create a policy
-    policy = Policy(
+    policy = PolicyFactory.build(
         title="Original Title",
         description="Original description",
         document_type=DocumentType.POLICY,
@@ -209,7 +197,6 @@ async def test_update_policy(client: AsyncClient, test_user: User, auth_headers:
     await test_session.commit()
     await test_session.refresh(policy)
 
-    # Update the policy
     update_data = {
         "title": "Updated Title",
         "status": "approved",
@@ -225,7 +212,7 @@ async def test_update_policy(client: AsyncClient, test_user: User, auth_headers:
     data = response.json()
     assert data["title"] == "Updated Title"
     assert data["status"] == "approved"
-    assert data["description"] == "Original description"  # Unchanged
+    assert data["description"] == "Original description"
 
 
 @pytest.mark.asyncio
@@ -245,8 +232,7 @@ async def test_update_policy_not_found(client: AsyncClient, auth_headers: dict):
 @pytest.mark.asyncio
 async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers: dict, test_session):
     """Test deleting a policy."""
-    # Create a policy
-    policy = Policy(
+    policy = PolicyFactory.build(
         title="Policy to Delete",
         document_type=DocumentType.POLICY,
         status=DocumentStatus.DRAFT,
@@ -259,7 +245,6 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
     await test_session.refresh(policy)
     policy_id = policy.id
 
-    # Delete the policy
     response = await client.delete(
         f"/api/v1/policies/{policy_id}",
         headers=auth_headers,
@@ -267,7 +252,6 @@ async def test_delete_policy(client: AsyncClient, test_user: User, auth_headers:
 
     assert response.status_code == 204
 
-    # Verify it's deleted
     result = await test_session.execute(select(Policy).where(Policy.id == policy_id))
     deleted_policy = result.scalar_one_or_none()
     assert deleted_policy is None
@@ -343,7 +327,6 @@ async def test_full_crud_flow(client: AsyncClient, test_user: User, auth_headers
     )
     assert get_after_delete.status_code == 404
 
-    # Verify it's gone from the database
     from sqlalchemy import select
 
     from src.domain.models.policy import Policy

@@ -95,10 +95,10 @@ export default function InductionCreate() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="inductioncreate-field-0" className="block text-sm font-medium text-foreground mb-1">
                 Template <span className="text-destructive">*</span>
               </label>
-              <select
+              <select id="inductioncreate-field-0"
                 value={templateId}
                 onChange={(e) => setTemplateId(e.target.value)}
                 required
@@ -114,10 +114,10 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="inductioncreate-field-1" className="block text-sm font-medium text-foreground mb-1">
                 Engineer <span className="text-destructive">*</span>
               </label>
-              <select
+              <select id="inductioncreate-field-1"
                 value={engineerId}
                 onChange={(e) => setEngineerId(e.target.value)}
                 required
@@ -133,8 +133,8 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Asset Type</label>
-              <select
+              <label htmlFor="inductioncreate-field-2" className="block text-sm font-medium text-foreground mb-1">Asset Type</label>
+              <select id="inductioncreate-field-2"
                 value={assetTypeId}
                 onChange={(e) => setAssetTypeId(e.target.value)}
                 className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -149,8 +149,8 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Title</label>
-              <input
+              <label htmlFor="inductioncreate-field-3" className="block text-sm font-medium text-foreground mb-1">Title</label>
+              <input id="inductioncreate-field-3"
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -160,8 +160,8 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Location</label>
-              <input
+              <label htmlFor="inductioncreate-field-4" className="block text-sm font-medium text-foreground mb-1">Location</label>
+              <input id="inductioncreate-field-4"
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
@@ -171,8 +171,8 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Scheduled Date</label>
-              <input
+              <label htmlFor="inductioncreate-field-5" className="block text-sm font-medium text-foreground mb-1">Scheduled Date</label>
+              <input id="inductioncreate-field-5"
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
@@ -181,8 +181,8 @@ export default function InductionCreate() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Notes</label>
-              <textarea
+              <label htmlFor="inductioncreate-field-6" className="block text-sm font-medium text-foreground mb-1">Notes</label>
+              <textarea id="inductioncreate-field-6"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Additional context or instructions..."

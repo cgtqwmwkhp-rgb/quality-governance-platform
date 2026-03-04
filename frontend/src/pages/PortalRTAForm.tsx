@@ -410,10 +410,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
+              <label htmlFor="portalrtaform-field-0" className="block text-sm font-medium text-foreground mb-2">Your Name *</label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalrtaform-field-0"
                   value={formData.employeeName}
                   onChange={(e) => setFormData((prev) => ({ ...prev, employeeName: e.target.value }))}
                   placeholder="Full name..."
@@ -441,7 +441,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             )}
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Any passengers? *</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Any passengers? *</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -463,8 +463,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {formData.hasPassengers && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Passenger Details</label>
-                <Input
+                <label htmlFor="portalrtaform-field-1" className="block text-sm font-medium text-foreground mb-2">Passenger Details</label>
+                <Input id="portalrtaform-field-1"
                   value={formData.passengerDetails}
                   onChange={(e) => setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))}
                   placeholder="Name and reason in vehicle..."
@@ -483,10 +483,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Location *</label>
+              <label htmlFor="portalrtaform-field-2" className="block text-sm font-medium text-foreground mb-2">Location *</label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalrtaform-field-2"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="Road name, junction..."
@@ -506,10 +506,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Date</label>
+                <label htmlFor="portalrtaform-field-3" className="block text-sm font-medium text-foreground mb-2">Date</label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalrtaform-field-3"
                     type="date"
                     value={formData.accidentDate}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentDate: e.target.value }))}
@@ -518,10 +518,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Time</label>
+                <label htmlFor="portalrtaform-field-4" className="block text-sm font-medium text-foreground mb-2">Time</label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
+                  <Input id="portalrtaform-field-4"
                     type="time"
                     value={formData.accidentTime}
                     onChange={(e) => setFormData((prev) => ({ ...prev, accidentTime: e.target.value }))}
@@ -532,7 +532,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Type of Accident *</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Type of Accident *</span>
               <div className="grid grid-cols-3 gap-2">
                 {ACCIDENT_TYPES.map((type) => (
                   <button
@@ -554,7 +554,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Other vehicles involved?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Other vehicles involved?</span>
               <Card className="p-4">
                 <div className="flex items-center justify-center gap-6">
                   <button
@@ -640,7 +640,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             ))}
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Any witnesses?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Any witnesses?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -679,7 +679,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Point of Impact</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Point of Impact</span>
               <div className="grid grid-cols-4 gap-2">
                 {IMPACT_POINTS.map((point) => (
                   <button
@@ -700,8 +700,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Damage Description *</label>
-              <Textarea
+              <label htmlFor="portalrtaform-field-5" className="block text-sm font-medium text-foreground mb-2">Damage Description *</label>
+              <Textarea id="portalrtaform-field-5"
                 value={formData.damageDescription}
                 onChange={(e) => setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))}
                 placeholder="Describe all damage..."
@@ -710,7 +710,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Vehicle drivable?</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Vehicle drivable?</span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -731,7 +731,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Weather</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Weather</span>
               <div className="grid grid-cols-6 gap-2">
                 {WEATHER_OPTIONS.map((w) => (
                   <button
@@ -752,7 +752,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Road Condition</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Road Condition</span>
               <div className="flex flex-wrap gap-2">
                 {ROAD_CONDITIONS.map((cond) => (
                   <button
@@ -774,7 +774,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {/* Photos */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Photos</label>
+              <span className="block text-sm font-medium text-foreground mb-2">Photos</span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -789,11 +789,11 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                     </button>
                   </div>
                 ))}
-                <label className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
+                <span className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
                   <Camera className="w-6 h-6 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground mt-1">Add</span>
                   <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" multiple />
-                </label>
+                </span>
               </div>
             </div>
           </div>
@@ -808,9 +808,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Full Description *</label>
+              <label htmlFor="portalrtaform-field-6" className="block text-sm font-medium text-foreground mb-2">Full Description *</label>
               <div className="relative">
-                <Textarea
+                <Textarea id="portalrtaform-field-6"
                   value={formData.fullDescription}
                   onChange={(e) => setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))}
                   placeholder="Describe exactly what happened..."
@@ -831,8 +831,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Purpose of Journey</label>
-                <Input
+                <label htmlFor="portalrtaform-field-7" className="block text-sm font-medium text-foreground mb-2">Purpose of Journey</label>
+                <Input id="portalrtaform-field-7"
                   value={formData.purposeOfJourney}
                   onChange={(e) => setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))}
                   placeholder="e.g. Work site visit"
@@ -840,8 +840,8 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2">Speed at Impact</label>
-                <Input
+                <label htmlFor="portalrtaform-field-8" className="block text-sm font-medium text-foreground mb-2">Speed at Impact</label>
+                <Input id="portalrtaform-field-8"
                   value={formData.speed}
                   onChange={(e) => setFormData((prev) => ({ ...prev, speed: e.target.value }))}
                   placeholder="e.g. 20 mph"
@@ -876,10 +876,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">Emergency Services?</label>
+              <label htmlFor="portalrtaform-field-9" className="block text-sm font-medium text-foreground mb-2">Emergency Services?</label>
               <div className="relative">
                 <Siren className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="portalrtaform-field-9"
                   value={formData.emergencyServices}
                   onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))}
                   placeholder="No / Police / Ambulance..."

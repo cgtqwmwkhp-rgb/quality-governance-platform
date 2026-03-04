@@ -410,20 +410,20 @@ export default function UserManagement() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
-                <Input type="text" placeholder="John" />
+                <label htmlFor="usermanagement-field-0" className="block text-sm font-medium text-muted-foreground mb-2">First Name</label>
+                <Input id="usermanagement-field-0" type="text" placeholder="John" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
-                <Input type="text" placeholder="Smith" />
+                <label htmlFor="usermanagement-field-1" className="block text-sm font-medium text-muted-foreground mb-2">Last Name</label>
+                <Input id="usermanagement-field-1" type="text" placeholder="Smith" />
               </div>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">Email Address</label>
+              <label htmlFor="usermanagement-field-2" className="block text-sm font-medium text-muted-foreground mb-2">Email Address</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="usermanagement-field-2"
                   type="email"
                   className="pl-10"
                   placeholder="john.smith@company.com"
@@ -432,10 +432,10 @@ export default function UserManagement() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-muted-foreground mb-2">Phone (Optional)</label>
+              <label htmlFor="usermanagement-field-3" className="block text-sm font-medium text-muted-foreground mb-2">Phone (Optional)</label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
+                <Input id="usermanagement-field-3"
                   type="tel"
                   className="pl-10"
                   placeholder="+44 7700 900000"
@@ -445,9 +445,9 @@ export default function UserManagement() {
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">Department</label>
+                <label htmlFor="usermanagement-field-4" className="block text-sm font-medium text-muted-foreground mb-2">Department</label>
                 <Select>
-                  <SelectTrigger>
+                  <SelectTrigger id="usermanagement-field-4">
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
                   <SelectContent>
@@ -461,9 +461,9 @@ export default function UserManagement() {
                 </Select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">Role</label>
+                <label htmlFor="usermanagement-field-5" className="block text-sm font-medium text-muted-foreground mb-2">Role</label>
                 <Select>
-                  <SelectTrigger>
+                  <SelectTrigger id="usermanagement-field-5">
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>

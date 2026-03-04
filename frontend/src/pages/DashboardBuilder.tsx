@@ -160,6 +160,9 @@ export default function DashboardBuilder() {
           setSelectedWidget(widget.id);
           setShowConfigPanel(true);
         }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedWidget(widget.id); setShowConfigPanel(true); } }}
+        role="button"
+        tabIndex={0}
         draggable
       >
         {/* Drag Handle */}
@@ -359,8 +362,8 @@ export default function DashboardBuilder() {
           <div className="p-4 space-y-4">
             {/* Title */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Title</label>
-              <input
+              <label htmlFor="dashboardbuilder-field-0" className="block text-sm font-medium text-gray-300 mb-2">Title</label>
+              <input id="dashboardbuilder-field-0"
                 type="text"
                 value={selectedWidgetData.title}
                 onChange={(e) => updateWidget(selectedWidgetData.id, { title: e.target.value })}
@@ -370,8 +373,8 @@ export default function DashboardBuilder() {
 
             {/* Widget Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Widget Type</label>
-              <select
+              <label htmlFor="dashboardbuilder-field-1" className="block text-sm font-medium text-gray-300 mb-2">Widget Type</label>
+              <select id="dashboardbuilder-field-1"
                 value={selectedWidgetData.type}
                 onChange={(e) => updateWidget(selectedWidgetData.id, { type: e.target.value })}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-emerald-500"
@@ -384,8 +387,8 @@ export default function DashboardBuilder() {
 
             {/* Data Source */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Data Source</label>
-              <select
+              <label htmlFor="dashboardbuilder-field-2" className="block text-sm font-medium text-gray-300 mb-2">Data Source</label>
+              <select id="dashboardbuilder-field-2"
                 value={selectedWidgetData.dataSource}
                 onChange={(e) => updateWidget(selectedWidgetData.id, { 
                   dataSource: e.target.value,
@@ -401,8 +404,8 @@ export default function DashboardBuilder() {
 
             {/* Metric */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Metric</label>
-              <select
+              <label htmlFor="dashboardbuilder-field-3" className="block text-sm font-medium text-gray-300 mb-2">Metric</label>
+              <select id="dashboardbuilder-field-3"
                 value={selectedWidgetData.metric}
                 onChange={(e) => updateWidget(selectedWidgetData.id, { metric: e.target.value })}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:ring-2 focus:ring-emerald-500"
@@ -416,8 +419,8 @@ export default function DashboardBuilder() {
             {/* Size */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Width</label>
-                <select
+                <label htmlFor="dashboardbuilder-field-4" className="block text-sm font-medium text-gray-300 mb-2">Width</label>
+                <select id="dashboardbuilder-field-4"
                   value={selectedWidgetData.w}
                   onChange={(e) => updateWidget(selectedWidgetData.id, { w: parseInt(e.target.value) })}
                   className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
@@ -428,8 +431,8 @@ export default function DashboardBuilder() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Height</label>
-                <select
+                <label htmlFor="dashboardbuilder-field-5" className="block text-sm font-medium text-gray-300 mb-2">Height</label>
+                <select id="dashboardbuilder-field-5"
                   value={selectedWidgetData.h}
                   onChange={(e) => updateWidget(selectedWidgetData.id, { h: parseInt(e.target.value) })}
                   className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"

@@ -318,6 +318,8 @@ export default function FormsList() {
                       <div
                         className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg z-10 overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
+                        role="menu"
+                        onKeyDown={(e) => e.stopPropagation()}
                       >
                         <button
                           onClick={() => navigate(`/admin/forms/${form.id}`)}

@@ -78,6 +78,7 @@ export default function ComplaintDetail() {
     if (id) {
       loadComplaint(parseInt(id))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   const loadComplaint = async (complaintId: number) => {
@@ -390,16 +391,16 @@ export default function ComplaintDetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Title</label>
-                    <Input
+                    <label htmlFor="complaintdetail-field-0" className="text-sm font-medium text-muted-foreground">Title</label>
+                    <Input id="complaintdetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
-                    <Textarea
+                    <label htmlFor="complaintdetail-field-1" className="text-sm font-medium text-muted-foreground">Description</label>
+                    <Textarea id="complaintdetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={4}
@@ -408,12 +409,12 @@ export default function ComplaintDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Type</label>
+                      <label htmlFor="complaintdetail-field-2" className="text-sm font-medium text-muted-foreground">Type</label>
                       <Select
                         value={editForm.complaint_type}
                         onValueChange={(value) => setEditForm({ ...editForm, complaint_type: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="complaintdetail-field-2" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -430,12 +431,12 @@ export default function ComplaintDetail() {
                       </Select>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                      <label htmlFor="complaintdetail-field-3" className="text-sm font-medium text-muted-foreground">Priority</label>
                       <Select
                         value={editForm.priority}
                         onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="complaintdetail-field-3" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -447,12 +448,12 @@ export default function ComplaintDetail() {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <label htmlFor="complaintdetail-field-4" className="text-sm font-medium text-muted-foreground">Status</label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
                       >
-                        <SelectTrigger className="mt-1">
+                        <SelectTrigger id="complaintdetail-field-4" className="mt-1">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -472,29 +473,29 @@ export default function ComplaintDetail() {
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Description</label>
+                    <span className="text-sm font-medium text-muted-foreground">Description</span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
                       {complaint.description || 'No description provided'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Type</label>
+                      <span className="text-sm font-medium text-muted-foreground">Type</span>
                       <p className="mt-1 text-foreground capitalize flex items-center gap-2">
                         <span>{getTypeIcon(complaint.complaint_type)}</span>
                         {complaint.complaint_type.replace('_', ' ')}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                      <span className="text-sm font-medium text-muted-foreground">Priority</span>
                       <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Status</label>
+                      <span className="text-sm font-medium text-muted-foreground">Status</span>
                       <p className="mt-1 text-foreground capitalize">{complaint.status.replace('_', ' ')}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-muted-foreground">Received Date</label>
+                      <span className="text-sm font-medium text-muted-foreground">Received Date</span>
                       <p className="mt-1 text-foreground">
                         {new Date(complaint.received_date).toLocaleString()}
                       </p>
@@ -517,16 +518,16 @@ export default function ComplaintDetail() {
               {isEditing ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Name</label>
-                    <Input
+                    <label htmlFor="complaintdetail-field-5" className="text-sm font-medium text-muted-foreground">Name</label>
+                    <Input id="complaintdetail-field-5"
                       value={editForm.complainant_name || ''}
                       onChange={(e) => setEditForm({ ...editForm, complainant_name: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Email</label>
-                    <Input
+                    <label htmlFor="complaintdetail-field-6" className="text-sm font-medium text-muted-foreground">Email</label>
+                    <Input id="complaintdetail-field-6"
                       type="email"
                       value={editForm.complainant_email || ''}
                       onChange={(e) => setEditForm({ ...editForm, complainant_email: e.target.value })}
@@ -534,8 +535,8 @@ export default function ComplaintDetail() {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Phone</label>
-                    <Input
+                    <label htmlFor="complaintdetail-field-7" className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <Input id="complaintdetail-field-7"
                       type="tel"
                       value={editForm.complainant_phone || ''}
                       onChange={(e) => setEditForm({ ...editForm, complainant_phone: e.target.value })}
@@ -546,15 +547,15 @@ export default function ComplaintDetail() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Name</label>
+                    <span className="text-sm font-medium text-muted-foreground">Name</span>
                     <p className="mt-1 text-foreground">{complaint.complainant_name || 'Not specified'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <span className="text-sm font-medium text-muted-foreground">Email</span>
                     <p className="mt-1 text-foreground">{complaint.complainant_email || 'Not specified'}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Phone</label>
+                    <span className="text-sm font-medium text-muted-foreground">Phone</span>
                     <p className="mt-1 text-foreground">{complaint.complainant_phone || 'Not specified'}</p>
                   </div>
                 </div>
@@ -733,24 +734,24 @@ export default function ComplaintDetail() {
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-8" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Title
               </label>
-              <Input
+              <Input id="complaintdetail-field-8"
                 value={investigationForm.title}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
                 placeholder={`Investigation - ${complaint.reference_number}`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-9" className="block text-sm font-medium text-foreground mb-1">
                 Investigation Type
               </label>
               <Select
                 value={investigationForm.investigation_type}
                 onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="complaintdetail-field-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -768,10 +769,10 @@ export default function ComplaintDetail() {
               placeholder="Search by email..."
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-10" className="block text-sm font-medium text-foreground mb-1">
                 Initial Notes
               </label>
-              <Textarea
+              <Textarea id="complaintdetail-field-10"
                 value={investigationForm.description}
                 onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
                 placeholder="Describe the scope and initial findings..."
@@ -827,10 +828,10 @@ export default function ComplaintDetail() {
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-11" className="block text-sm font-medium text-foreground mb-1">
                 Action Title *
               </label>
-              <Input
+              <Input id="complaintdetail-field-11"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder="e.g., Contact customer for follow-up"
@@ -845,14 +846,14 @@ export default function ComplaintDetail() {
               required
             />
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-12" className="block text-sm font-medium text-foreground mb-1">
                 Priority
               </label>
               <Select
                 value={actionForm.priority}
                 onValueChange={(value) => setActionForm({ ...actionForm, priority: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="complaintdetail-field-12">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -864,20 +865,20 @@ export default function ComplaintDetail() {
               </Select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-13" className="block text-sm font-medium text-foreground mb-1">
                 Due Date
               </label>
-              <Input
+              <Input id="complaintdetail-field-13"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
+              <label htmlFor="complaintdetail-field-14" className="block text-sm font-medium text-foreground mb-1">
                 Description
               </label>
-              <Textarea
+              <Textarea id="complaintdetail-field-14"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder="Describe the action to be taken..."

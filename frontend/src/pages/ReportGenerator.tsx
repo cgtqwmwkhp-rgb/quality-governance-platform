@@ -264,12 +264,12 @@ export default function ReportGenerator() {
               <CardContent className="p-5 space-y-4">
                 {/* Time Range */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Time Range</label>
+                  <label htmlFor="reportgenerator-field-0" className="block text-sm font-medium text-foreground mb-2">Time Range</label>
                   <Select
                     value={reportConfig.timeRange}
                     onValueChange={(value) => setReportConfig(prev => ({ ...prev, timeRange: value }))}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="reportgenerator-field-0">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -285,7 +285,7 @@ export default function ReportGenerator() {
 
                 {/* Format */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Export Format</label>
+                  <span className="block text-sm font-medium text-foreground mb-2">Export Format</span>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'pdf', label: 'PDF', icon: FileText },
@@ -311,10 +311,10 @@ export default function ReportGenerator() {
 
                 {/* Include Options */}
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">Include</label>
+                  <label htmlFor="reportgenerator-field-1" className="block text-sm font-medium text-foreground mb-2">Include</label>
                   <div className="space-y-2">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
+                    <label htmlFor="reportgenerator-field-2" className="flex items-center gap-3 cursor-pointer">
+                      <input id="reportgenerator-field-1"
                         type="checkbox"
                         checked={reportConfig.includeCharts}
                         onChange={(e) => setReportConfig(prev => ({ ...prev, includeCharts: e.target.checked }))}
@@ -323,7 +323,7 @@ export default function ReportGenerator() {
                       <span className="text-sm text-foreground">Charts & Visualizations</span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
-                      <input
+                      <input id="reportgenerator-field-2"
                         type="checkbox"
                         checked={reportConfig.includeData}
                         onChange={(e) => setReportConfig(prev => ({ ...prev, includeData: e.target.checked }))}
@@ -336,7 +336,7 @@ export default function ReportGenerator() {
 
                 {/* Email Option */}
                 <div>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label htmlFor="reportgenerator-field-3" className="flex items-center gap-3 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={reportConfig.sendEmail}
@@ -346,7 +346,7 @@ export default function ReportGenerator() {
                     <span className="text-sm text-foreground">Send via Email</span>
                   </label>
                   {reportConfig.sendEmail && (
-                    <Input
+                    <Input id="reportgenerator-field-3"
                       type="email"
                       placeholder="Enter email addresses"
                       value={reportConfig.recipients}

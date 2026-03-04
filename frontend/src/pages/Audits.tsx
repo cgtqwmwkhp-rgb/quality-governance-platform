@@ -751,9 +751,9 @@ export default function Audits() {
             <form onSubmit={handleSubmitAudit} className="space-y-5">
               {/* Template Selection */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
+                <span className="text-sm font-medium text-foreground">
                   Audit Template <span className="text-destructive">*</span>
-                </label>
+                </span>
                 {templates.length === 0 ? (
                   <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                     <p className="text-sm text-warning">

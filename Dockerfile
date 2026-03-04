@@ -12,10 +12,10 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Install Python dependencies
-COPY requirements.txt .
+# Install Python dependencies (use lockfile for reproducible builds)
+COPY requirements.txt requirements.lock .
 RUN pip install --no-cache-dir --upgrade pip setuptools && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.lock
 
 # Production stage
 FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd973bb82eb71b7512c15a4da AS production

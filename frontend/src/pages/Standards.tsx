@@ -293,11 +293,12 @@ export default function Standards() {
                       
                       return (
                         <div key={clause.id}>
+                          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- role/tabIndex/handlers are conditionally applied when hasChildren is true */}
                           <div 
-                            onClick={() => hasChildren && toggleExpanded(clause.id)}
+                            onClick={hasChildren ? () => toggleExpanded(clause.id) : undefined}
                             role={hasChildren ? "button" : undefined}
                             tabIndex={hasChildren ? 0 : undefined}
-                            onKeyDown={hasChildren ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(clause.id); } } : undefined}
+                            onKeyDown={hasChildren ? (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(clause.id); } } : undefined}
                             className={cn(
                               "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
                               hasChildren && "cursor-pointer hover:bg-surface"

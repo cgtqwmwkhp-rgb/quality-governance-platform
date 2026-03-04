@@ -18,6 +18,7 @@ from src.core.security import create_access_token
 from src.domain.models.user import User
 from src.infrastructure.database import async_session_maker
 from src.main import app
+from tests.factories import UserFactory
 
 
 class TestPortalAuth:
@@ -157,7 +158,7 @@ class TestReadYourWritesGuarantee:
         test_email = f"ryw-{uuid.uuid4().hex[:8]}@example.com"
 
         async with async_session_maker() as session:
-            user = User(
+            user = UserFactory.build(
                 email=test_email,
                 first_name="Test",
                 last_name="User",
@@ -275,7 +276,7 @@ class TestReadYourWritesGuarantee:
         reference_number = create_response.json()["reference_number"]
 
         async with async_session_maker() as session:
-            other_user = User(
+            other_user = UserFactory.build(
                 email=f"other-{uuid.uuid4().hex[:8]}@example.com",
                 first_name="Other",
                 last_name="User",
