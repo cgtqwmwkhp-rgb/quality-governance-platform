@@ -16,9 +16,9 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, select
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.infrastructure.database import Base
@@ -149,7 +149,7 @@ class SendNotificationRequest(BaseModel):
 class PushNotificationService:
     """Service for sending push notifications via Web Push."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
         self.vapid_public_key = os.getenv("VAPID_PUBLIC_KEY")
@@ -163,15 +163,16 @@ class PushNotificationService:
     ) -> PushSubscription:
         """Register a new push subscription."""
         # Check if subscription already exists
-        existing = (
-            self.db.query(PushSubscription).filter(PushSubscription.endpoint == subscription_data.endpoint).first()
+        result = await self.db.execute(
+            select(PushSubscription).where(PushSubscription.endpoint == subscription_data.endpoint)
         )
+        existing = result.scalar_one_or_none()
 
         if existing:
             existing.user_id = user_id
             existing.is_active = True
             existing.last_used_at = datetime.utcnow()
-            self.db.commit()
+            await self.db.commit()
             return existing
 
         subscription = PushSubscription(
@@ -183,17 +184,20 @@ class PushNotificationService:
             is_active=True,
         )
         self.db.add(subscription)
-        self.db.commit()
-        self.db.refresh(subscription)
+        await self.db.commit()
+        await self.db.refresh(subscription)
         return subscription
 
     async def unsubscribe(self, endpoint: str) -> bool:
         """Unsubscribe from push notifications."""
-        subscription = self.db.query(PushSubscription).filter(PushSubscription.endpoint == endpoint).first()
+        result = await self.db.execute(
+            select(PushSubscription).where(PushSubscription.endpoint == endpoint)
+        )
+        subscription = result.scalar_one_or_none()
 
         if subscription:
             subscription.is_active = False
-            self.db.commit()
+            await self.db.commit()
             return True
         return False
 
@@ -210,20 +214,22 @@ class PushNotificationService:
         results = []
 
         # Check user preferences
-        prefs = self.db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
+        prefs_result = await self.db.execute(
+            select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+        )
+        prefs = prefs_result.scalar_one_or_none()
 
         if prefs and not prefs.push_enabled:
             return [{"status": "skipped", "reason": "Push notifications disabled"}]
 
         # Get active subscriptions for user
-        subscriptions = (
-            self.db.query(PushSubscription)
-            .filter(
+        subs_result = await self.db.execute(
+            select(PushSubscription).where(
                 PushSubscription.user_id == user_id,
                 PushSubscription.is_active == True,
             )
-            .all()
         )
+        subscriptions = subs_result.scalars().all()
 
         if not subscriptions:
             return [{"status": "skipped", "reason": "No active subscriptions"}]
@@ -266,7 +272,7 @@ class PushNotificationService:
             except Exception as e:
                 results.append({"success": False, "error": str(e)})
 
-        self.db.commit()
+        await self.db.commit()
         return results
 
     async def _send_web_push(
@@ -287,7 +293,10 @@ class PushNotificationService:
                 },
             }
 
-            webpush(
+            import asyncio
+
+            await asyncio.to_thread(
+                webpush,
                 subscription_info=subscription_info,
                 data=payload,
                 vapid_private_key=self.vapid_private_key,
@@ -354,7 +363,7 @@ class PushNotificationService:
 async def subscribe_to_push(
     subscription: PushSubscriptionCreate,
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Subscribe to push notifications."""
     service = PushNotificationService(db)
@@ -376,7 +385,7 @@ async def subscribe_to_push(
 async def unsubscribe_from_push(
     endpoint: str,
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Unsubscribe from push notifications."""
     service = PushNotificationService(db)
@@ -391,10 +400,13 @@ async def unsubscribe_from_push(
 @router.get("/preferences", response_model=dict)
 async def get_notification_preferences(
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Get notification preferences for current user."""
-    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
+    result = await db.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
+    )
+    prefs = result.scalar_one_or_none()
 
     if not prefs:
         # Return defaults
@@ -429,10 +441,13 @@ async def get_notification_preferences(
 async def update_notification_preferences(
     updates: NotificationPreferenceUpdate,
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Update notification preferences."""
-    prefs = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
+    result = await db.execute(
+        select(NotificationPreference).where(NotificationPreference.user_id == current_user.id)
+    )
+    prefs = result.scalar_one_or_none()
 
     if not prefs:
         prefs = NotificationPreference(user_id=current_user.id)
@@ -441,7 +456,7 @@ async def update_notification_preferences(
     for key, value in updates.model_dump(exclude_unset=True).items():
         setattr(prefs, key, value)
 
-    db.commit()
+    await db.commit()
 
     return {"success": True, "message": "Preferences updated"}
 
@@ -450,7 +465,7 @@ async def update_notification_preferences(
 async def send_notification(
     request: SendNotificationRequest,
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
     if not current_user.is_superuser and not current_user.has_permission("notifications:send"):
@@ -472,14 +487,13 @@ async def send_notification(
         )
     else:
         # Get all users with active subscriptions
-        subscriptions = (
-            db.query(PushSubscription)
-            .filter(
+        subs_result = await db.execute(
+            select(PushSubscription).where(
                 PushSubscription.is_active == True,
                 PushSubscription.user_id.isnot(None),
             )
-            .all()
         )
+        subscriptions = subs_result.scalars().all()
 
         user_ids = list(set(s.user_id for s in subscriptions if s.user_id))
 
@@ -501,7 +515,7 @@ async def send_notification(
 @router.get("/test", response_model=dict)
 async def test_push_notification(
     current_user: CurrentUser,
-    db: Session = Depends(DbSession),
+    db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
     """Send a test push notification to current user."""
     service = PushNotificationService(db)

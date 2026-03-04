@@ -13,9 +13,9 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, get_db
+from src.api.dependencies import CurrentUser, DbSession
 from src.domain.services.audit_log_service import AuditLogService
 
 router = APIRouter()
@@ -80,7 +80,7 @@ class ExportRequest(BaseModel):
 
 
 @router.get("/", response_model=list[AuditLogEntryResponse])
-def list_audit_logs(
+async def list_audit_logs(
     current_user: CurrentUser,
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
@@ -90,13 +90,13 @@ def list_audit_logs(
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> Any:
     """List audit log entries with filters."""
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    entries = service.get_entries(
+    entries = await service.get_entries(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
@@ -112,17 +112,17 @@ def list_audit_logs(
 
 
 @router.get("/entity/{entity_type}/{entity_id}", response_model=list[AuditLogDetailResponse])
-def get_entity_history(
+async def get_entity_history(
     entity_type: str,
     entity_id: str,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Get complete audit history for an entity."""
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    entries = service.get_entity_history(
+    entries = await service.get_entity_history(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
@@ -132,17 +132,17 @@ def get_entity_history(
 
 
 @router.get("/user/{user_id}", response_model=list[AuditLogEntryResponse])
-def get_user_activity(
+async def get_user_activity(
     user_id: int,
     current_user: CurrentUser,
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> Any:
     """Get recent activity for a user."""
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    entries = service.get_user_activity(
+    entries = await service.get_user_activity(
         tenant_id=tenant_id,
         user_id=user_id,
         days=days,
@@ -152,15 +152,16 @@ def get_user_activity(
 
 
 @router.get("/{entry_id}", response_model=AuditLogDetailResponse)
-def get_audit_entry(
+async def get_audit_entry(
     entry_id: int,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Get a single audit log entry with full details."""
     from src.domain.models.audit_log import AuditLogEntry
 
-    entry = db.query(AuditLogEntry).filter(AuditLogEntry.id == entry_id).first()
+    result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
+    entry = result.scalar_one_or_none()
 
     if not entry:
         raise HTTPException(status_code=404, detail="Audit entry not found")
@@ -174,11 +175,11 @@ def get_audit_entry(
 
 
 @router.post("/verify", response_model=VerificationResponse)
-def verify_chain(
+async def verify_chain(
     current_user: CurrentUser,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> Any:
     """
     Verify the integrity of the audit log hash chain.
@@ -189,7 +190,7 @@ def verify_chain(
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    verification = service.verify_chain(
+    verification = await service.verify_chain(
         tenant_id=tenant_id,
         start_sequence=start_sequence,
         end_sequence=end_sequence,
@@ -200,16 +201,16 @@ def verify_chain(
 
 
 @router.get("/verifications", response_model=list[VerificationResponse])
-def list_verifications(
+async def list_verifications(
     current_user: CurrentUser,
     limit: int = Query(10, ge=1, le=50),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> Any:
     """Get history of chain verifications."""
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    verifications = service.get_verifications(
+    verifications = await service.get_verifications(
         tenant_id=tenant_id,
         limit=limit,
     )
@@ -223,10 +224,10 @@ def list_verifications(
 
 
 @router.post("/export")
-def export_audit_logs(
+async def export_audit_logs(
     data: ExportRequest,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """
     Export audit logs for compliance.
@@ -237,7 +238,7 @@ def export_audit_logs(
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    exported_data, export_record = service.export_logs(
+    exported_data, export_record = await service.export_logs(
         tenant_id=tenant_id,
         exported_by_id=current_user.id,
         export_format=data.format,
@@ -261,16 +262,16 @@ def export_audit_logs(
 
 
 @router.get("/stats")
-def get_audit_stats(
+async def get_audit_stats(
     current_user: CurrentUser,
     days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> Any:
     """Get audit log statistics."""
     service = AuditLogService(db)
     tenant_id = current_user.tenant_id
 
-    stats = service.get_stats(tenant_id=tenant_id, days=days)
+    stats = await service.get_stats(tenant_id=tenant_id, days=days)
 
     return stats
 
@@ -281,7 +282,7 @@ def get_audit_stats(
 
 
 @router.get("/actions")
-def list_actions(current_user: CurrentUser) -> Any:
+async def list_actions(current_user: CurrentUser) -> Any:
     """Get list of possible audit actions."""
     return {
         "data": [
@@ -322,7 +323,7 @@ def list_actions(current_user: CurrentUser) -> Any:
 
 
 @router.get("/entity-types")
-def list_entity_types(current_user: CurrentUser) -> Any:
+async def list_entity_types(current_user: CurrentUser) -> Any:
     """Get list of auditable entity types."""
     return [
         "incident",

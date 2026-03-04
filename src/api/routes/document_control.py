@@ -12,11 +12,11 @@ Provides endpoints for:
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -28,7 +28,6 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
-from src.infrastructure.database import get_db
 
 router = APIRouter()
 
@@ -122,26 +121,31 @@ async def list_documents(
     search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """List controlled documents with filtering"""
-    query = db.query(ControlledDocument).filter(ControlledDocument.is_current == True)
+    stmt = select(ControlledDocument).where(ControlledDocument.is_current == True)
 
     if document_type:
-        query = query.filter(ControlledDocument.document_type == document_type)
+        stmt = stmt.where(ControlledDocument.document_type == document_type)
     if category:
-        query = query.filter(ControlledDocument.category == category)
+        stmt = stmt.where(ControlledDocument.category == category)
     if department:
-        query = query.filter(ControlledDocument.department == department)
+        stmt = stmt.where(ControlledDocument.department == department)
     if status:
-        query = query.filter(ControlledDocument.status == status)
+        stmt = stmt.where(ControlledDocument.status == status)
     if search:
-        query = query.filter(
+        stmt = stmt.where(
             ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
         )
 
-    total = query.count()
-    documents = query.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit).all()
+    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = count_result.scalar()
+
+    result = await db.execute(
+        stmt.order_by(ControlledDocument.updated_at.desc()).offset(skip).limit(limit)
+    )
+    documents = result.scalars().all()
 
     return {
         "total": total,
@@ -169,11 +173,11 @@ async def list_documents(
 async def create_document(
     document_data: DocumentCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
-    # Generate document number
-    count = db.query(ControlledDocument).count()
+    count_result = await db.execute(select(func.count()).select_from(ControlledDocument))
+    count = count_result.scalar()
     type_prefix = document_data.document_type[:3].upper()
     document_number = f"{type_prefix}-{(count + 1):05d}"
 
@@ -187,8 +191,8 @@ async def create_document(
     )
 
     db.add(document)
-    db.commit()
-    db.refresh(document)
+    await db.commit()
+    await db.refresh(document)
 
     # Create initial version record
     version = ControlledDocumentVersion(
@@ -202,7 +206,7 @@ async def create_document(
         created_by_name=document_data.author_name,
     )
     db.add(version)
-    db.commit()
+    await db.commit()
 
     return {
         "id": document.id,
@@ -215,23 +219,29 @@ async def create_document(
 async def get_document(
     document_id: int,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Get version history
-    versions = (
-        db.query(ControlledDocumentVersion)
-        .filter(ControlledDocumentVersion.document_id == document_id)
+    result = await db.execute(
+        select(ControlledDocumentVersion)
+        .where(ControlledDocumentVersion.document_id == document_id)
         .order_by(ControlledDocumentVersion.created_at.desc())
-        .all()
     )
+    versions = result.scalars().all()
 
     # Get distributions
-    distributions = db.query(DocumentDistribution).filter(DocumentDistribution.document_id == document_id).all()
+    result = await db.execute(
+        select(DocumentDistribution).where(DocumentDistribution.document_id == document_id)
+    )
+    distributions = result.scalars().all()
 
     # Log access
     log = DocumentAccessLog(
@@ -241,7 +251,7 @@ async def get_document(
     )
     db.add(log)
     document.view_count += 1
-    db.commit()
+    await db.commit()
 
     return {
         "id": document.id,
@@ -308,10 +318,13 @@ async def update_document(
     document_id: int,
     document_data: DocumentUpdate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Update document metadata"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -320,8 +333,8 @@ async def update_document(
         setattr(document, key, value)
 
     document.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(document)
+    await db.commit()
+    await db.refresh(document)
 
     return {"message": "Document updated successfully", "id": document.id}
 
@@ -334,10 +347,13 @@ async def create_new_version(
     document_id: int,
     version_data: VersionCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -370,8 +386,8 @@ async def create_new_version(
         status="draft",
     )
     db.add(version)
-    db.commit()
-    db.refresh(version)
+    await db.commit()
+    await db.refresh(version)
 
     return {
         "id": version.id,
@@ -386,22 +402,21 @@ async def get_version_diff(
     version_id: int,
     current_user: CurrentUser,
     compare_to: Optional[int] = Query(None, description="Version ID to compare with"),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Get diff between versions"""
-    version = (
-        db.query(ControlledDocumentVersion)
-        .filter(
+    result = await db.execute(
+        select(ControlledDocumentVersion).where(
             ControlledDocumentVersion.id == version_id,
             ControlledDocumentVersion.document_id == document_id,
         )
-        .first()
     )
+    version = result.scalar_one_or_none()
 
     if not version:
         raise HTTPException(status_code=404, detail="Version not found")
 
-    result = {
+    diff_result = {
         "version": {
             "id": version.id,
             "version_number": version.version_number,
@@ -412,21 +427,20 @@ async def get_version_diff(
     }
 
     if compare_to:
-        compare_version = (
-            db.query(ControlledDocumentVersion)
-            .filter(
+        result = await db.execute(
+            select(ControlledDocumentVersion).where(
                 ControlledDocumentVersion.id == compare_to,
                 ControlledDocumentVersion.document_id == document_id,
             )
-            .first()
         )
+        compare_version = result.scalar_one_or_none()
         if compare_version:
-            result["compare_to"] = {
+            diff_result["compare_to"] = {
                 "id": compare_version.id,
                 "version_number": compare_version.version_number,
             }
 
-    return result
+    return diff_result
 
 
 # ============ Approval Workflow Endpoints ============
@@ -435,10 +449,13 @@ async def get_version_diff(
 @router.get("/workflows", response_model=list)
 async def list_workflows(
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> list[dict[str, Any]]:
     """List approval workflows"""
-    workflows = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.is_active == True).all()
+    result = await db.execute(
+        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True)
+    )
+    workflows = result.scalars().all()
 
     return [
         {
@@ -457,13 +474,13 @@ async def list_workflows(
 async def create_workflow(
     workflow_data: WorkflowCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Create approval workflow"""
     workflow = DocumentApprovalWorkflow(**workflow_data.model_dump())
     db.add(workflow)
-    db.commit()
-    db.refresh(workflow)
+    await db.commit()
+    await db.refresh(workflow)
 
     return {"id": workflow.id, "message": "Workflow created successfully"}
 
@@ -473,14 +490,20 @@ async def submit_for_approval(
     document_id: int,
     current_user: CurrentUser,
     workflow_id: int = Query(...),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == workflow_id).first()
+    result = await db.execute(
+        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -499,8 +522,8 @@ async def submit_for_approval(
     document.status = "pending_approval"
 
     db.add(instance)
-    db.commit()
-    db.refresh(instance)
+    await db.commit()
+    await db.refresh(instance)
 
     return {
         "instance_id": instance.id,
@@ -515,10 +538,13 @@ async def take_approval_action(
     instance_id: int,
     action_request: ApprovalActionRequest,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    instance = db.query(DocumentApprovalInstance).filter(DocumentApprovalInstance.id == instance_id).first()
+    result = await db.execute(
+        select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id)
+    )
+    instance = result.scalar_one_or_none()
     if not instance:
         raise HTTPException(status_code=404, detail="Approval instance not found")
 
@@ -536,9 +562,15 @@ async def take_approval_action(
     db.add(action)
 
     # Get workflow to determine next steps
-    workflow = db.query(DocumentApprovalWorkflow).filter(DocumentApprovalWorkflow.id == instance.workflow_id).first()
+    result = await db.execute(
+        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == instance.workflow_id)
+    )
+    workflow = result.scalar_one_or_none()
 
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == instance.document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == instance.document_id)
+    )
+    document = result.scalar_one_or_none()
 
     if action_request.action == "approved":
         # Check if this was the last step
@@ -566,7 +598,7 @@ async def take_approval_action(
         if document:
             document.status = "draft"
 
-    db.commit()
+    await db.commit()
 
     return {
         "message": f"Action '{action_request.action}' recorded",
@@ -583,10 +615,13 @@ async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -596,8 +631,8 @@ async def distribute_document(
         **distribution.model_dump(),
     )
     db.add(dist)
-    db.commit()
-    db.refresh(dist)
+    await db.commit()
+    await db.refresh(dist)
 
     # TODO: Send notification email
 
@@ -613,24 +648,23 @@ async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
-    dist = (
-        db.query(DocumentDistribution)
-        .filter(
+    result = await db.execute(
+        select(DocumentDistribution).where(
             DocumentDistribution.id == distribution_id,
             DocumentDistribution.document_id == document_id,
         )
-        .first()
     )
+    dist = result.scalar_one_or_none()
 
     if not dist:
         raise HTTPException(status_code=404, detail="Distribution not found")
 
     dist.acknowledged = True
     dist.acknowledged_date = datetime.utcnow()
-    db.commit()
+    await db.commit()
 
     return {"message": "Acknowledgment recorded"}
 
@@ -643,10 +677,13 @@ async def mark_document_obsolete(
     document_id: int,
     obsolete_data: ObsoleteRequest,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    document = db.query(ControlledDocument).filter(ControlledDocument.id == document_id).first()
+    result = await db.execute(
+        select(ControlledDocument).where(ControlledDocument.id == document_id)
+    )
+    document = result.scalar_one_or_none()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -667,7 +704,7 @@ async def mark_document_obsolete(
         retention_end_date=datetime.utcnow() + timedelta(days=document.retention_period_years * 365),
     )
     db.add(record)
-    db.commit()
+    await db.commit()
 
     return {
         "message": "Document marked as obsolete",
@@ -683,16 +720,16 @@ async def get_access_log(
     document_id: int,
     current_user: CurrentUser,
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> list[dict[str, Any]]:
     """Get document access log"""
-    logs = (
-        db.query(DocumentAccessLog)
-        .filter(DocumentAccessLog.document_id == document_id)
+    result = await db.execute(
+        select(DocumentAccessLog)
+        .where(DocumentAccessLog.document_id == document_id)
         .order_by(DocumentAccessLog.timestamp.desc())
         .limit(limit)
-        .all()
     )
+    logs = result.scalars().all()
 
     return [
         {
@@ -712,56 +749,68 @@ async def get_access_log(
 @router.get("/summary", response_model=dict)
 async def get_document_summary(
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession = None,
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
-    total = db.query(ControlledDocument).filter(ControlledDocument.is_current == True).count()
-    active = (
-        db.query(ControlledDocument)
-        .filter(ControlledDocument.status == "active", ControlledDocument.is_current == True)
-        .count()
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True)
     )
-    draft = (
-        db.query(ControlledDocument)
-        .filter(ControlledDocument.status == "draft", ControlledDocument.is_current == True)
-        .count()
+    total = result.scalar()
+
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(
+            ControlledDocument.status == "active",
+            ControlledDocument.is_current == True,
+        )
     )
-    pending_approval = (
-        db.query(ControlledDocument)
-        .filter(
+    active = result.scalar()
+
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(
+            ControlledDocument.status == "draft",
+            ControlledDocument.is_current == True,
+        )
+    )
+    draft = result.scalar()
+
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(
             ControlledDocument.status == "pending_approval",
             ControlledDocument.is_current == True,
         )
-        .count()
     )
-    overdue_review = (
-        db.query(ControlledDocument)
-        .filter(
+    pending_approval = result.scalar()
+
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(
             ControlledDocument.next_review_date < datetime.utcnow(),
             ControlledDocument.status == "active",
             ControlledDocument.is_current == True,
         )
-        .count()
     )
-    obsolete = db.query(ControlledDocument).filter(ControlledDocument.status == "obsolete").count()
+    overdue_review = result.scalar()
+
+    result = await db.execute(
+        select(func.count(ControlledDocument.id)).where(ControlledDocument.status == "obsolete")
+    )
+    obsolete = result.scalar()
 
     # Pending acknowledgments
-    pending_ack = (
-        db.query(DocumentDistribution)
-        .filter(
+    result = await db.execute(
+        select(func.count(DocumentDistribution.id)).where(
             DocumentDistribution.acknowledged == False,
             DocumentDistribution.acknowledgment_required == True,
         )
-        .count()
     )
+    pending_ack = result.scalar()
 
     # By type
-    by_type = (
-        db.query(ControlledDocument.document_type, db.func.count(ControlledDocument.id))
-        .filter(ControlledDocument.is_current == True)
+    result = await db.execute(
+        select(ControlledDocument.document_type, func.count(ControlledDocument.id))
+        .where(ControlledDocument.is_current == True)
         .group_by(ControlledDocument.document_type)
-        .all()
     )
+    by_type = result.all()
 
     return {
         "total_documents": total,

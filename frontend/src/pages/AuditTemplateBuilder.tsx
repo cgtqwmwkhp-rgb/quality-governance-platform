@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -40,6 +40,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import AITemplateGenerator from '../components/AITemplateGenerator';
+import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer';
+import { auditsApi, getApiErrorMessage } from '../api/client';
 
 // ============================================================================
 // TYPES
@@ -329,8 +331,8 @@ const QuestionEditor = ({
               onSelect={(type) => onUpdate(question.id, { type })}
             />
 
-            <label htmlFor="audittemplatebuilder-field-0" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
+            <label htmlFor={`required-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input id={`required-${question.id}`}
                 type="checkbox"
                 checked={question.required}
                 onChange={(e) => onUpdate(question.id, { required: e.target.checked })}
@@ -339,8 +341,8 @@ const QuestionEditor = ({
               Required
             </label>
 
-            <label htmlFor="audittemplatebuilder-field-1" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input id="audittemplatebuilder-field-0"
+            <label htmlFor={`evidence-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input id={`evidence-${question.id}`}
                 type="checkbox"
                 checked={question.evidenceRequired}
                 onChange={(e) => onUpdate(question.id, { evidenceRequired: e.target.checked })}
@@ -350,8 +352,8 @@ const QuestionEditor = ({
               Evidence
             </label>
 
-            <label htmlFor="audittemplatebuilder-field-2" className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input id="audittemplatebuilder-field-1"
+            <label htmlFor={`auto-action-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
+              <input id={`auto-action-${question.id}`}
                 type="checkbox"
                 checked={question.failureTriggersAction}
                 onChange={(e) => onUpdate(question.id, { failureTriggersAction: e.target.checked })}
@@ -363,7 +365,7 @@ const QuestionEditor = ({
 
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Weight:</span>
-              <input id="audittemplatebuilder-field-2"
+              <input id={`weight-${question.id}`}
                 type="number"
                 value={question.weight}
                 onChange={(e) => onUpdate(question.id, { weight: parseFloat(e.target.value) || 1 })}
@@ -429,8 +431,8 @@ const QuestionEditor = ({
           {showAdvanced && (
             <div className="grid grid-cols-2 gap-3 p-3 bg-muted rounded-lg">
               <div>
-                <label htmlFor="audittemplatebuilder-field-3" className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
-                <input id="audittemplatebuilder-field-3"
+                <label htmlFor={`iso-clause-${question.id}`} className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
+                <input id={`iso-clause-${question.id}`}
                   type="text"
                   value={question.isoClause || ''}
                   onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
@@ -439,8 +441,8 @@ const QuestionEditor = ({
                 />
               </div>
               <div>
-                <label htmlFor="audittemplatebuilder-field-4" className="block text-xs text-muted-foreground mb-1">Risk Level</label>
-                <select id="audittemplatebuilder-field-4"
+                <label htmlFor={`risk-level-${question.id}`} className="block text-xs text-muted-foreground mb-1">Risk Level</label>
+                <select id={`risk-level-${question.id}`}
                   value={question.riskLevel || ''}
                   onChange={(e) => onUpdate(question.id, { riskLevel: e.target.value as Question['riskLevel'] })}
                   className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
@@ -453,8 +455,8 @@ const QuestionEditor = ({
                 </select>
               </div>
               <div className="col-span-2">
-                <label htmlFor="audittemplatebuilder-field-5" className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
-                <textarea id="audittemplatebuilder-field-5"
+                <label htmlFor={`guidance-${question.id}`} className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
+                <textarea id={`guidance-${question.id}`}
                   value={question.guidance || ''}
                   onChange={(e) => onUpdate(question.id, { guidance: e.target.value })}
                   placeholder="Tips for auditors on how to assess this item..."
@@ -630,6 +632,7 @@ export default function AuditTemplateBuilder() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { templateId } = useParams();
+  const { announce } = useLiveAnnouncer();
 
   const [template, setTemplate] = useState<AuditTemplate>({
     id: templateId || generateId(),
@@ -654,9 +657,92 @@ export default function AuditTemplateBuilder() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showAIAssist, setShowAIAssist] = useState(false);
+  const [backendId, setBackendId] = useState<number | null>(
+    templateId && !isNaN(Number(templateId)) ? Number(templateId) : null
+  );
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isLoading, setIsLoading] = useState(!!templateId);
+  const sectionIdMap = useRef<Record<string, number>>({});
+  const questionIdMap = useRef<Record<string, number>>({});
 
   // Get all questions across all sections
   const allQuestions = template.sections.flatMap(s => s.questions);
+
+  // Load existing template from API when editing
+  useEffect(() => {
+    if (!templateId) return;
+    const numericId = Number(templateId);
+    if (isNaN(numericId)) return;
+
+    (async () => {
+      try {
+        const { data } = await auditsApi.getTemplate(numericId);
+        sectionIdMap.current = {};
+        questionIdMap.current = {};
+
+        const mappedSections: Section[] = data.sections.map((s, idx) => {
+          const localSectionId = String(s.id);
+          sectionIdMap.current[localSectionId] = s.id;
+          return {
+            id: localSectionId,
+            title: s.title,
+            description: s.description,
+            questions: s.questions.map((q) => {
+              const localQuestionId = String(q.id);
+              questionIdMap.current[localQuestionId] = q.id;
+              return {
+                id: localQuestionId,
+                text: q.question_text,
+                description: q.description,
+                type: (q.question_type || 'yes_no') as QuestionType,
+                required: q.is_required,
+                weight: q.weight,
+                options: q.options?.map(o => ({
+                  id: generateId(),
+                  label: o.label,
+                  value: o.value,
+                  score: o.score,
+                  isCorrect: o.is_correct,
+                })),
+                evidenceRequired: false,
+                failureTriggersAction: false,
+                riskLevel: q.risk_category as Question['riskLevel'],
+                guidance: q.help_text,
+              };
+            }),
+            isExpanded: true,
+            weight: s.weight,
+            order: s.sort_order,
+            color: SECTION_COLORS[idx % SECTION_COLORS.length],
+          };
+        });
+
+        setTemplate({
+          id: String(data.id),
+          name: data.name,
+          description: data.description || '',
+          version: String(data.version),
+          status: data.is_published ? 'published' : 'draft',
+          category: data.category || 'quality',
+          isoStandards: [],
+          sections: mappedSections.length > 0 ? mappedSections : [createNewSection(1)],
+          scoringMethod: (data.scoring_method || 'weighted') as ScoringMethod,
+          passThreshold: data.passing_score || 80,
+          createdAt: data.created_at,
+          updatedAt: data.updated_at || data.created_at,
+          createdBy: 'Current User',
+          tags: [],
+          estimatedDuration: 60,
+          isLocked: false,
+        });
+        setBackendId(data.id);
+      } catch (error) {
+        setSaveError(getApiErrorMessage(error));
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [templateId]);
 
   // Section handlers
   const handleAddSection = () => {
@@ -743,24 +829,145 @@ export default function AuditTemplateBuilder() {
     }));
   };
 
+  const mapOptions = (opts?: QuestionOption[]) =>
+    opts?.length
+      ? opts.map(o => ({ value: o.value, label: o.label, score: o.score, is_correct: o.isCorrect }))
+      : undefined;
+
   // Save handler
   const handleSave = async () => {
     if (!template.name.trim()) {
-      setSaveError('Template name is required');
+      const msg = 'Template name is required';
+      setSaveError(msg);
+      announce(msg, 'assertive');
       return;
     }
     setIsSaving(true);
     setSaveError(null);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('Saving template:', template);
-      // In production, call API here
+      const templatePayload = {
+        name: template.name,
+        description: template.description || undefined,
+        category: template.category || undefined,
+        scoring_method: template.scoringMethod,
+        passing_score: template.passThreshold,
+      };
+
+      if (backendId) {
+        await auditsApi.updateTemplate(backendId, templatePayload);
+
+        for (let sIdx = 0; sIdx < template.sections.length; sIdx++) {
+          const section = template.sections[sIdx];
+          let sectionBackendId = sectionIdMap.current[section.id];
+          const sectionPayload = {
+            title: section.title,
+            description: section.description,
+            sort_order: sIdx,
+            weight: section.weight,
+          };
+
+          if (sectionBackendId) {
+            await auditsApi.updateSection(sectionBackendId, sectionPayload);
+          } else {
+            const { data: created } = await auditsApi.createSection(backendId, sectionPayload);
+            sectionBackendId = created.id;
+            sectionIdMap.current[section.id] = sectionBackendId;
+          }
+
+          for (let qIdx = 0; qIdx < section.questions.length; qIdx++) {
+            const q = section.questions[qIdx];
+            const qBackendId = questionIdMap.current[q.id];
+
+            if (qBackendId) {
+              await auditsApi.updateQuestion(qBackendId, {
+                question_text: q.text,
+                question_type: q.type,
+                description: q.description,
+                help_text: q.guidance,
+                is_required: q.required,
+                weight: q.weight,
+                sort_order: qIdx,
+                options: mapOptions(q.options),
+                risk_category: q.riskLevel,
+              });
+            } else {
+              const { data: createdQ } = await auditsApi.createQuestion(backendId, {
+                section_id: sectionBackendId,
+                question_text: q.text,
+                question_type: q.type,
+                description: q.description,
+                help_text: q.guidance,
+                is_required: q.required,
+                weight: q.weight,
+                sort_order: qIdx,
+                options: mapOptions(q.options),
+                risk_category: q.riskLevel,
+              });
+              questionIdMap.current[q.id] = createdQ.id;
+            }
+          }
+        }
+      } else {
+        const { data: created } = await auditsApi.createTemplate(templatePayload);
+        const newId = created.id;
+        setBackendId(newId);
+
+        for (let sIdx = 0; sIdx < template.sections.length; sIdx++) {
+          const section = template.sections[sIdx];
+          const { data: createdSection } = await auditsApi.createSection(newId, {
+            title: section.title,
+            description: section.description,
+            sort_order: sIdx,
+            weight: section.weight,
+          });
+          sectionIdMap.current[section.id] = createdSection.id;
+
+          for (let qIdx = 0; qIdx < section.questions.length; qIdx++) {
+            const q = section.questions[qIdx];
+            const { data: createdQ } = await auditsApi.createQuestion(newId, {
+              section_id: createdSection.id,
+              question_text: q.text,
+              question_type: q.type,
+              description: q.description,
+              help_text: q.guidance,
+              is_required: q.required,
+              weight: q.weight,
+              sort_order: qIdx,
+              options: mapOptions(q.options),
+              risk_category: q.riskLevel,
+            });
+            questionIdMap.current[q.id] = createdQ.id;
+          }
+        }
+      }
     } catch (error) {
-      console.error('Save failed:', error);
-      setSaveError('Failed to save template. Please try again.');
+      const msg = getApiErrorMessage(error);
+      setSaveError(msg);
+      announce(msg, 'assertive');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Publish handler
+  const handlePublish = async () => {
+    if (!backendId) {
+      const msg = 'Please save the template before publishing';
+      setSaveError(msg);
+      announce(msg, 'assertive');
+      return;
+    }
+    setIsPublishing(true);
+    setSaveError(null);
+    try {
+      await auditsApi.publishTemplate(backendId);
+      setTemplate(prev => ({ ...prev, status: 'published' }));
+    } catch (error) {
+      const msg = getApiErrorMessage(error);
+      setSaveError(msg);
+      announce(msg, 'assertive');
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -832,19 +1039,33 @@ export default function AuditTemplateBuilder() {
                 {t('audit_builder.ai_assist')}
               </button>
 
-              <div className="flex flex-col items-end">
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  {t('audit_builder.save')}
-                </button>
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePublish}
+                    disabled={isPublishing || !backendId || template.status === 'published'}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-opacity disabled:opacity-50"
+                  >
+                    {isPublishing ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4" />
+                    )}
+                    Publish
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    {t('audit_builder.save')}
+                  </button>
+                </div>
                 {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
               </div>
             </div>
@@ -854,6 +1075,11 @@ export default function AuditTemplateBuilder() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : (<>
         {activeTab === 'builder' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Left Sidebar - Stats & Quick Actions */}
@@ -1197,6 +1423,7 @@ export default function AuditTemplateBuilder() {
             </div>
           </div>
         )}
+        </>)}
       </main>
 
       {/* AI Template Generator */}

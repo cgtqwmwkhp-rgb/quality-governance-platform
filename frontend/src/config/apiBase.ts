@@ -71,7 +71,7 @@ export function getApiBaseUrl(): string {
     // Enforce HTTPS (except localhost)
     if (baseUrl.startsWith('http://') && !baseUrl.includes('localhost')) {
       baseUrl = baseUrl.replace('http://', 'https://');
-      console.warn('[API Config] Converted HTTP to HTTPS for security');
+      if (import.meta.env.DEV) console.warn('[API Config] Converted HTTP to HTTPS for security');
     }
     
     // Remove trailing slash
@@ -113,7 +113,7 @@ export async function validateEnvironmentMatch(): Promise<string | null> {
     });
     
     if (!response.ok) {
-      console.warn('[API Config] Failed to fetch API version for environment validation');
+      if (import.meta.env.DEV) console.warn('[API Config] Failed to fetch API version for environment validation');
       return null; // Don't block on validation failures
     }
     
@@ -126,7 +126,7 @@ export async function validateEnvironmentMatch(): Promise<string | null> {
     
     return null; // Matched
   } catch (error) {
-    console.warn('[API Config] Environment validation failed:', error);
+    if (import.meta.env.DEV) console.warn('[API Config] Environment validation failed:', error);
     return null; // Don't block on network errors
   }
 }
@@ -135,13 +135,14 @@ export async function validateEnvironmentMatch(): Promise<string | null> {
  * Log the API configuration at module load time.
  */
 function logApiConfig(): void {
+  if (!import.meta.env.DEV) return;
+
   const env = detectEnvironment();
   const url = getApiBaseUrl();
   
   console.log(`[API Config] Environment: ${env}`);
   console.log(`[API Config] Base URL: ${url}`);
   
-  // Warn if build-time URL doesn't match detected environment
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
     if (env === 'staging' && envUrl.includes('prod')) {

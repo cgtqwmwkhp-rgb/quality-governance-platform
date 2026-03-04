@@ -11,11 +11,11 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
-from src.api.dependencies import get_db
+from src.api.dependencies import DbSession
 from src.domain.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -84,16 +84,16 @@ class TenantResponse(BaseModel):
 
 
 @router.post("/", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-def create_tenant(
+async def create_tenant(
     data: TenantCreate,
-    db: Session = Depends(get_db),
+    db: DbSession,
     # current_user = Depends(get_current_superuser),  # Only superusers can create tenants
 ) -> Any:
     """Create a new tenant."""
     service = TenantService(db)
 
     try:
-        tenant = service.create_tenant(
+        tenant = await service.create_tenant(
             name=data.name,
             slug=data.slug,
             admin_email=data.admin_email,
@@ -107,26 +107,27 @@ def create_tenant(
 
 
 @router.get("/", response_model=list[TenantResponse])
-def list_tenants(
+async def list_tenants(
+    db: DbSession,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
 ) -> Any:
     """List all tenants (admin only)."""
     from src.domain.models.tenant import Tenant
 
-    tenants = db.query(Tenant).offset(skip).limit(limit).all()
+    result = await db.execute(select(Tenant).offset(skip).limit(limit))
+    tenants = result.scalars().all()
     return tenants
 
 
 @router.get("/current", response_model=TenantResponse)
-def get_current_tenant(
-    db: Session = Depends(get_db),
+async def get_current_tenant(
+    db: DbSession,
     # tenant_id: int = Depends(get_current_tenant_id),
 ) -> Any:
     """Get the current tenant context."""
     service = TenantService(db)
-    tenant = service.get_tenant(1)  # Should use tenant_id from context
+    tenant = await service.get_tenant(1)  # Should use tenant_id from context
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -135,13 +136,13 @@ def get_current_tenant(
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)
-def get_tenant(
+async def get_tenant(
     tenant_id: int,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Get tenant by ID."""
     service = TenantService(db)
-    tenant = service.get_tenant(tenant_id)
+    tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -150,17 +151,17 @@ def get_tenant(
 
 
 @router.patch("/{tenant_id}", response_model=TenantResponse)
-def update_tenant(
+async def update_tenant(
     tenant_id: int,
     data: TenantUpdate,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Update tenant settings."""
     service = TenantService(db)
 
     try:
         updates = data.dict(exclude_unset=True)
-        tenant = service.update_tenant(tenant_id, **updates)
+        tenant = await service.update_tenant(tenant_id, **updates)
         return tenant
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -172,16 +173,16 @@ def update_tenant(
 
 
 @router.put("/{tenant_id}/branding", response_model=TenantResponse)
-def update_branding(
+async def update_branding(
     tenant_id: int,
     data: TenantBranding,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Update tenant branding."""
     service = TenantService(db)
 
     try:
-        tenant = service.update_branding(tenant_id, **data.dict(exclude_unset=True))
+        tenant = await service.update_branding(tenant_id, **data.dict(exclude_unset=True))
         return tenant
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -193,13 +194,13 @@ def update_branding(
 
 
 @router.get("/{tenant_id}/users")
-def list_tenant_users(
+async def list_tenant_users(
     tenant_id: int,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """List all users in a tenant."""
     service = TenantService(db)
-    users = service.get_tenant_users(tenant_id)
+    users = await service.get_tenant_users(tenant_id)
 
     return {
         "items": [
@@ -216,20 +217,19 @@ def list_tenant_users(
 
 
 @router.post("/{tenant_id}/users")
-def add_user_to_tenant(
+async def add_user_to_tenant(
     tenant_id: int,
     data: TenantUserAdd,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Add a user to a tenant."""
     service = TenantService(db)
 
-    # Check user limit
-    if not service.can_add_user(tenant_id):
+    if not await service.can_add_user(tenant_id):
         raise HTTPException(status_code=400, detail="User limit reached")
 
     try:
-        tenant_user = service.add_user_to_tenant(
+        tenant_user = await service.add_user_to_tenant(
             tenant_id=tenant_id,
             user_id=data.user_id,
             role=data.role,
@@ -240,16 +240,16 @@ def add_user_to_tenant(
 
 
 @router.delete("/{tenant_id}/users/{user_id}")
-def remove_user_from_tenant(
+async def remove_user_from_tenant(
     tenant_id: int,
     user_id: int,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Remove a user from a tenant."""
     service = TenantService(db)
 
     try:
-        service.remove_user_from_tenant(tenant_id, user_id)
+        await service.remove_user_from_tenant(tenant_id, user_id)
         return {"status": "removed"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -261,15 +261,15 @@ def remove_user_from_tenant(
 
 
 @router.post("/{tenant_id}/invitations")
-def create_invitation(
+async def create_invitation(
     tenant_id: int,
     data: TenantInvite,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Create an invitation to join a tenant."""
     service = TenantService(db)
 
-    invitation = service.create_invitation(
+    invitation = await service.create_invitation(
         tenant_id=tenant_id,
         email=data.email,
         invited_by_id=1,  # Should be current_user.id
@@ -285,15 +285,15 @@ def create_invitation(
 
 
 @router.post("/invitations/{token}/accept")
-def accept_invitation(
+async def accept_invitation(
     token: str,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Accept a tenant invitation."""
     service = TenantService(db)
 
     try:
-        tenant_user = service.accept_invitation(token, user_id=1)  # Should be current_user.id
+        tenant_user = await service.accept_invitation(token, user_id=1)  # Should be current_user.id
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -305,13 +305,13 @@ def accept_invitation(
 
 
 @router.get("/{tenant_id}/features")
-def get_features(
+async def get_features(
     tenant_id: int,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Get enabled features for a tenant."""
     service = TenantService(db)
-    tenant = service.get_tenant(tenant_id)
+    tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -320,19 +320,19 @@ def get_features(
 
 
 @router.put("/{tenant_id}/features/{feature}")
-def toggle_feature(
+async def toggle_feature(
     tenant_id: int,
     feature: str,
+    db: DbSession,
     enabled: bool = True,
-    db: Session = Depends(get_db),
 ) -> Any:
     """Enable or disable a feature for a tenant."""
     service = TenantService(db)
 
     if enabled:
-        service.enable_feature(tenant_id, feature)
+        await service.enable_feature(tenant_id, feature)
     else:
-        service.disable_feature(tenant_id, feature)
+        await service.disable_feature(tenant_id, feature)
 
     return {"feature": feature, "enabled": enabled}
 
@@ -343,18 +343,18 @@ def toggle_feature(
 
 
 @router.get("/{tenant_id}/limits")
-def get_limits(
+async def get_limits(
     tenant_id: int,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ) -> Any:
     """Get usage limits for a tenant."""
     service = TenantService(db)
-    tenant = service.get_tenant(tenant_id)
+    tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    current_users, max_users = service.check_user_limit(tenant_id)
+    current_users, max_users = await service.check_user_limit(tenant_id)
 
     return {
         "users": {"current": current_users, "max": max_users},

@@ -1,11 +1,13 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
 import { useWebVitals } from './hooks/useWebVitals'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { startAutoSync } from './lib/syncService'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
+import { useNotificationStore } from './stores'
+import { getPlatformToken, setAdminToken, clearTokens } from './utils/auth'
 
 const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
@@ -82,13 +84,56 @@ function PageLoader() {
   )
 }
 
+function RouteErrorFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="max-w-md w-full text-center space-y-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+          <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">This section encountered an error</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The rest of the application is still working. Try navigating to a different page.
+          </p>
+        </div>
+        <div className="flex gap-3 justify-center">
+          <a
+            href="/dashboard"
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Go to Dashboard
+          </a>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-surface transition-colors"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RouteErrorBoundary() {
+  const location = useLocation()
+  return (
+    <ErrorBoundary key={location.pathname} fallback={<RouteErrorFallback />}>
+      <Outlet />
+    </ErrorBoundary>
+  )
+}
+
 function App() {
   useWebVitals()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
+    const token = getPlatformToken()
     setIsAuthenticated(!!token)
     setIsLoading(false)
   }, [])
@@ -100,12 +145,13 @@ function App() {
   }, [isAuthenticated])
 
   const handleLogin = (token: string) => {
-    localStorage.setItem('access_token', token)
+    setAdminToken(token)
     setIsAuthenticated(true)
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token')
+    clearTokens()
+    useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)
   }
 
@@ -186,60 +232,80 @@ function App() {
               }
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="incidents" element={<Incidents />} />
-              <Route path="incidents/:id" element={<IncidentDetail />} />
-              <Route path="rtas" element={<RTAs />} />
-              <Route path="rtas/:id" element={<RTADetail />} />
-              <Route path="complaints" element={<Complaints />} />
-              <Route path="complaints/:id" element={<ComplaintDetail />} />
-              <Route path="policies" element={<Policies />} />
-              <Route path="risks" element={<Risks />} />
-              <Route path="audits" element={<Audits />} />
-              <Route path="audit-templates" element={<AuditTemplateLibrary />} />
-              <Route path="audit-templates/new" element={<AuditTemplateBuilder />} />
-              <Route path="audit-templates/:templateId/edit" element={<AuditTemplateBuilder />} />
-              <Route path="audits/:auditId/execute" element={<AuditExecution />} />
-              <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
-              <Route path="investigations" element={<Investigations />} />
-              <Route path="standards" element={<Standards />} />
-              <Route path="actions" element={<Actions />} />
-              <Route path="documents" element={<Documents />} />
-              <Route path="analytics" element={<Analytics />} />
-              <Route path="analytics/advanced" element={<AdvancedAnalytics />} />
-              <Route path="analytics/dashboards" element={<DashboardBuilder />} />
-              <Route path="analytics/reports" element={<ReportGenerator />} />
-              <Route path="search" element={<GlobalSearch />} />
-              <Route path="users" element={<UserManagement />} />
-              <Route path="audit-trail" element={<AuditTrail />} />
-              <Route path="calendar" element={<CalendarView />} />
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="exports" element={<ExportCenter />} />
-              <Route path="compliance" element={<ComplianceEvidence />} />
-              <Route path="workflows" element={<WorkflowCenter />} />
-              <Route path="compliance-automation" element={<ComplianceAutomation />} />
-              <Route path="risk-register" element={<RiskRegister />} />
-              <Route path="ims" element={<IMSDashboard />} />
-              <Route path="ai-intelligence" element={<AIIntelligence />} />
-              <Route path="uvdb" element={<UVDBAudits />} />
-              <Route path="planet-mark" element={<PlanetMark />} />
-              <Route path="signatures" element={<DigitalSignatures />} />
-              <Route path="workforce/assessments" element={<WorkforceAssessments />} />
-              <Route path="workforce/assessments/new" element={<WorkforceAssessmentCreate />} />
-              <Route path="workforce/assessments/:id/execute" element={<WorkforceAssessmentExecution />} />
-              <Route path="workforce/training" element={<WorkforceTraining />} />
-              <Route path="workforce/training/new" element={<WorkforceInductionCreate />} />
-              <Route path="workforce/training/:id/execute" element={<WorkforceTrainingExecution />} />
-              <Route path="workforce/engineers" element={<WorkforceEngineers />} />
-              <Route path="workforce/engineers/:id" element={<WorkforceEngineerProfile />} />
-              <Route path="workforce/calendar" element={<WorkforceCalendar />} />
-              <Route path="workforce/dashboard" element={<WorkforceCompetencyDashboard />} />
-              <Route path="admin" element={<AdminDashboard />} />
-              <Route path="admin/forms" element={<FormsList />} />
-              <Route path="admin/forms/new" element={<FormBuilder />} />
-              <Route path="admin/forms/:templateId" element={<FormBuilder />} />
-              <Route path="admin/contracts" element={<ContractsManagement />} />
-              <Route path="admin/settings" element={<SystemSettings />} />
+
+              {/* Core routes */}
+              <Route element={<RouteErrorBoundary />}>
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="incidents" element={<Incidents />} />
+                <Route path="incidents/:id" element={<IncidentDetail />} />
+                <Route path="rtas" element={<RTAs />} />
+                <Route path="rtas/:id" element={<RTADetail />} />
+                <Route path="complaints" element={<Complaints />} />
+                <Route path="complaints/:id" element={<ComplaintDetail />} />
+              </Route>
+
+              {/* Governance routes */}
+              <Route element={<RouteErrorBoundary />}>
+                <Route path="audits" element={<Audits />} />
+                <Route path="audit-templates" element={<AuditTemplateLibrary />} />
+                <Route path="audit-templates/new" element={<AuditTemplateBuilder />} />
+                <Route path="audit-templates/:templateId/edit" element={<AuditTemplateBuilder />} />
+                <Route path="audits/:auditId/execute" element={<AuditExecution />} />
+                <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
+                <Route path="investigations" element={<Investigations />} />
+                <Route path="standards" element={<Standards />} />
+                <Route path="actions" element={<Actions />} />
+                <Route path="compliance" element={<ComplianceEvidence />} />
+                <Route path="uvdb" element={<UVDBAudits />} />
+                <Route path="planet-mark" element={<PlanetMark />} />
+                <Route path="signatures" element={<DigitalSignatures />} />
+              </Route>
+
+              {/* Analytics & tools routes */}
+              <Route element={<RouteErrorBoundary />}>
+                <Route path="analytics" element={<Analytics />} />
+                <Route path="analytics/advanced" element={<AdvancedAnalytics />} />
+                <Route path="analytics/dashboards" element={<DashboardBuilder />} />
+                <Route path="analytics/reports" element={<ReportGenerator />} />
+                <Route path="search" element={<GlobalSearch />} />
+                <Route path="calendar" element={<CalendarView />} />
+                <Route path="notifications" element={<Notifications />} />
+                <Route path="exports" element={<ExportCenter />} />
+                <Route path="documents" element={<Documents />} />
+                <Route path="policies" element={<Policies />} />
+                <Route path="risks" element={<Risks />} />
+              </Route>
+
+              {/* Workforce routes */}
+              <Route element={<RouteErrorBoundary />}>
+                <Route path="workforce/assessments" element={<WorkforceAssessments />} />
+                <Route path="workforce/assessments/new" element={<WorkforceAssessmentCreate />} />
+                <Route path="workforce/assessments/:id/execute" element={<WorkforceAssessmentExecution />} />
+                <Route path="workforce/training" element={<WorkforceTraining />} />
+                <Route path="workforce/training/new" element={<WorkforceInductionCreate />} />
+                <Route path="workforce/training/:id/execute" element={<WorkforceTrainingExecution />} />
+                <Route path="workforce/engineers" element={<WorkforceEngineers />} />
+                <Route path="workforce/engineers/:id" element={<WorkforceEngineerProfile />} />
+                <Route path="workforce/calendar" element={<WorkforceCalendar />} />
+                <Route path="workforce/dashboard" element={<WorkforceCompetencyDashboard />} />
+              </Route>
+
+              {/* Admin & enterprise routes */}
+              <Route element={<RouteErrorBoundary />}>
+                <Route path="users" element={<UserManagement />} />
+                <Route path="audit-trail" element={<AuditTrail />} />
+                <Route path="workflows" element={<WorkflowCenter />} />
+                <Route path="compliance-automation" element={<ComplianceAutomation />} />
+                <Route path="risk-register" element={<RiskRegister />} />
+                <Route path="ims" element={<IMSDashboard />} />
+                <Route path="ai-intelligence" element={<AIIntelligence />} />
+                <Route path="admin" element={<AdminDashboard />} />
+                <Route path="admin/forms" element={<FormsList />} />
+                <Route path="admin/forms/new" element={<FormBuilder />} />
+                <Route path="admin/forms/:templateId" element={<FormBuilder />} />
+                <Route path="admin/contracts" element={<ContractsManagement />} />
+                <Route path="admin/settings" element={<SystemSettings />} />
+              </Route>
             </Route>
           </Routes>
         </Suspense>

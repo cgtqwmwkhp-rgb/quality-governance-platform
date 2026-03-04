@@ -9,10 +9,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.infrastructure.database import get_db
+from src.core.security import decode_token
+from src.infrastructure.database import async_session_maker
 
 router = APIRouter()
 
@@ -89,14 +90,14 @@ class SuggestedAction(BaseModel):
 async def create_session(
     data: SessionCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    session = service.create_session(
+    session = await service.create_session(
         tenant_id=current_user.tenant_id or 1,
         user_id=current_user.id,
         context_type=data.context_type,
@@ -111,24 +112,24 @@ async def create_session(
 @router.get("/sessions/active", response_model=Optional[SessionResponse])
 async def get_active_session(
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Get the user's active session, if any."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    session = service.get_active_session(current_user.id)
+    session = await service.get_active_session(current_user.id)
     return session
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: int, db: Session = Depends(get_db)):
+async def get_session(session_id: int, db: DbSession):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    session = service.get_session(session_id)
+    session = await service.get_session(session_id)
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -137,12 +138,12 @@ async def get_session(session_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/sessions/{session_id}")
-async def close_session(session_id: int, db: Session = Depends(get_db)):
+async def close_session(session_id: int, db: DbSession):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    service.close_session(session_id)
+    await service.close_session(session_id)
 
     return {"status": "closed"}
 
@@ -150,19 +151,19 @@ async def close_session(session_id: int, db: Session = Depends(get_db)):
 @router.get("/sessions", response_model=list[SessionResponse])
 async def list_sessions(
     current_user: CurrentUser,
+    db: DbSession,
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
 ):
     """List user's recent sessions."""
     from src.domain.models.ai_copilot import CopilotSession
 
-    sessions = (
-        db.query(CopilotSession)
-        .filter(CopilotSession.user_id == current_user.id)
+    result = await db.execute(
+        select(CopilotSession)
+        .where(CopilotSession.user_id == current_user.id)
         .order_by(CopilotSession.updated_at.desc())
         .limit(limit)
-        .all()
     )
+    sessions = result.scalars().all()
 
     return sessions
 
@@ -177,7 +178,7 @@ async def send_message(
     session_id: int,
     data: MessageCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Send a message and get AI response."""
     from src.domain.services.copilot_service import CopilotService
@@ -198,14 +199,14 @@ async def send_message(
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     session_id: int,
+    db: DbSession,
     limit: int = Query(50, ge=1, le=200),
-    db: Session = Depends(get_db),
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
-    messages = service.get_session_messages(session_id, limit=limit)
+    messages = await service.get_session_messages(session_id, limit=limit)
 
     return messages
 
@@ -215,7 +216,7 @@ async def submit_feedback(
     message_id: int,
     data: FeedbackCreate,
     current_user: CurrentUser,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
@@ -223,7 +224,7 @@ async def submit_feedback(
     service = CopilotService(db)
 
     try:
-        feedback = service.submit_feedback(
+        feedback = await service.submit_feedback(
             message_id=message_id,
             user_id=current_user.id,
             tenant_id=current_user.tenant_id or 1,
@@ -257,7 +258,7 @@ async def list_actions(category: Optional[str] = None):
 @router.post("/actions/execute")
 async def execute_action(
     data: ActionExecute,
-    db: Session = Depends(get_db),
+    db: DbSession,
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
@@ -358,17 +359,17 @@ async def suggest_actions(
 @router.get("/knowledge/search")
 async def search_knowledge(
     current_user: CurrentUser,
+    db: DbSession,
     query: str = Query(..., min_length=2),
     category: Optional[str] = None,
     limit: int = Query(5, ge=1, le=20),
-    db: Session = Depends(get_db),
 ):
     """Search the copilot knowledge base."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    results = service.search_knowledge(
+    results = await service.search_knowledge(
         query=query,
         tenant_id=current_user.tenant_id or 1,
         category=category,
@@ -393,15 +394,15 @@ async def add_knowledge(
     content: str,
     category: str,
     current_user: CurrentUser,
+    db: DbSession,
     tags: Optional[list[str]] = None,
-    db: Session = Depends(get_db),
 ):
     """Add to the knowledge base."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
 
-    knowledge = service.add_knowledge(
+    knowledge = await service.add_knowledge(
         title=title,
         content=content,
         category=category,
@@ -440,9 +441,54 @@ manager = ConnectionManager()
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: int):
-    """WebSocket endpoint for real-time chat."""
+    """WebSocket endpoint for real-time chat. Requires token in query params."""
+    from src.domain.models.ai_copilot import CopilotSession
+    from src.domain.models.user import User
     from src.domain.services.copilot_service import CopilotService
-    from src.infrastructure.database import SessionLocal
+
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    payload = decode_token(token)
+    if not payload:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    user_id_raw = payload.get("sub")
+    if user_id_raw is None:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    async with async_session_maker() as db:
+        jti = payload.get("jti")
+        if jti:
+            from src.domain.services.token_service import TokenService
+
+            if await TokenService.is_revoked(db, jti):
+                await websocket.close(code=4001, reason="Token revoked")
+                return
+
+        user_result = await db.execute(select(User).where(User.id == int(user_id_raw)))
+        user = user_result.scalar_one_or_none()
+        if not user or not user.is_active:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+
+        session_result = await db.execute(
+            select(CopilotSession).where(
+                CopilotSession.id == session_id,
+                CopilotSession.user_id == user.id,
+            )
+        )
+        session_obj = session_result.scalar_one_or_none()
+        if not session_obj:
+            await websocket.close(code=4003, reason="Session not found or access denied")
+            return
+
+        user_id = user.id
+        tenant_id = user.tenant_id or 1
 
     await manager.connect(websocket, session_id)
 
@@ -450,8 +496,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
         while True:
             data = await websocket.receive_json()
 
-            db = SessionLocal()
-            try:
+            async with async_session_maker() as db:
                 service = CopilotService(db)
 
                 # Handle different message types
@@ -459,7 +504,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                     message = await service.send_message(
                         session_id=session_id,
                         content=data["content"],
-                        user_id=data.get("user_id", 1),
+                        user_id=user_id,
                     )
 
                     await manager.send_message(
@@ -483,10 +528,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                     pass
 
                 elif data.get("type") == "feedback":
-                    service.submit_feedback(
+                    await service.submit_feedback(
                         message_id=data["message_id"],
-                        user_id=data.get("user_id", 1),
-                        tenant_id=1,
+                        user_id=user_id,
+                        tenant_id=tenant_id,
                         rating=data["rating"],
                         feedback_type=data.get("feedback_type", "other"),
                     )
@@ -495,9 +540,6 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
                         {"type": "feedback_received"},
                         session_id,
                     )
-
-            finally:
-                db.close()
 
     except WebSocketDisconnect:
         manager.disconnect(session_id)

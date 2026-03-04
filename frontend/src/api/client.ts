@@ -1,5 +1,11 @@
-import axios, { AxiosError } from "axios";
-import { getPlatformToken, isTokenExpired, clearTokens } from "../utils/auth";
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
+import {
+  getPlatformToken,
+  getPlatformRefreshToken,
+  isTokenExpired,
+  clearTokens,
+  setPortalToken,
+} from "../utils/auth";
 import { API_BASE_URL } from "../config/apiBase";
 import { useAppStore } from "../stores/useAppStore";
 
@@ -189,6 +195,56 @@ const api = axios.create({
 
 let activeRequests = 0;
 
+// Token refresh: prevent infinite loops and queue concurrent 401s
+let refreshPromise: Promise<string | null> | null = null;
+
+function isAuthEndpoint(url?: string): boolean {
+  if (!url) return false;
+  return (
+    url.includes("/auth/login") ||
+    url.includes("/auth/token-exchange") ||
+    url.includes("/auth/refresh")
+  );
+}
+
+async function doRefreshToken(): Promise<string | null> {
+  const refreshToken = getPlatformRefreshToken();
+  if (!refreshToken) {
+    return null;
+  }
+  try {
+    const res = await axios.post<RefreshResponse>(
+      `${HTTPS_API_BASE}/api/v1/auth/refresh`,
+      { refresh_token: refreshToken },
+      {
+        headers: { "Content-Type": "application/json" },
+        timeout: REQUEST_TIMEOUT_MS,
+      },
+    );
+    const data = res.data;
+    if (data.access_token) {
+      setPortalToken(data.access_token, data.refresh_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshAndGetToken(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+  refreshPromise = doRefreshToken();
+  try {
+    const token = await refreshPromise;
+    return token;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
 // CRITICAL: Enforce HTTPS on all requests at interceptor level
 api.interceptors.request.use((config) => {
   activeRequests++;
@@ -215,7 +271,7 @@ api.interceptors.request.use((config) => {
     config.url?.includes("/auth/login") ||
     config.url?.includes("/auth/token-exchange");
 
-  if (isApiCall && !isAuthEndpoint) {
+  if (import.meta.env.DEV && isApiCall && !isAuthEndpoint) {
     console.log(
       `[Auth Debug] ${config.method?.toUpperCase()} ${config.url} | token_present=${!!token} | token_length=${token?.length || 0}`,
     );
@@ -224,7 +280,7 @@ api.interceptors.request.use((config) => {
   if (token) {
     // Check if token is expired before attaching
     if (isTokenExpired(token)) {
-      console.warn("[Axios] Token expired - clearing and redirecting to login");
+      if (import.meta.env.DEV) console.warn("[Axios] Token expired - clearing and redirecting to login");
       // Clear expired tokens
       clearTokens();
       // Only redirect if not already on login page and not an auth endpoint
@@ -243,7 +299,7 @@ api.interceptors.request.use((config) => {
     } else {
       config.headers.Authorization = `Bearer ${token}`;
     }
-  } else if (isApiCall && !isAuthEndpoint) {
+  } else if (import.meta.env.DEV && isApiCall && !isAuthEndpoint) {
     console.warn(
       "[Auth Debug] No token available for API call - will likely get 401",
     );
@@ -265,7 +321,7 @@ api.interceptors.response.use(
     useAppStore.getState().setConnectionStatus("connected");
     return response;
   },
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     activeRequests--;
     if (activeRequests === 0) {
       useAppStore.getState().setLoading(false);
@@ -282,19 +338,45 @@ api.interceptors.response.use(
       currentPath === "/portal/login";
 
     if (status === 401) {
-      // Token is invalid or expired
-      const isAuthEndpoint = error.config?.url?.includes("/auth/");
+      const requestUrl = error.config?.url ?? "";
+      const isAuth = isAuthEndpoint(requestUrl);
 
-      // Only auto-redirect for auth endpoint failures (login failures)
-      if (isAuthEndpoint && !isLoginPage) {
+      // Auth endpoints (login, token-exchange, refresh): never try refresh; clear and redirect
+      if (isAuth && !isLoginPage) {
         clearTokens();
         window.location.href = "/login";
+        return Promise.reject(error);
       }
-      // For data endpoints, enhance the error with a clear message
-      if (!error.response?.data) {
-        (error as ClassifiedAxiosError).classifiedMessage =
-          "Session expired. Please sign in again.";
+
+      // Data endpoint 401: attempt token refresh (refresh uses axios directly, so its 401 never reaches here)
+      if (!isAuth && error.config && !(error.config as InternalAxiosRequestConfig & { _retry?: boolean })._retry) {
+        const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const refreshToken = getPlatformRefreshToken();
+        if (!refreshToken) {
+          clearTokens();
+          if (!isLoginPage) window.location.href = "/login";
+          (error as ClassifiedAxiosError).classifiedMessage =
+            "Session expired. Please sign in again.";
+          return Promise.reject(error);
+        }
+
+        try {
+          const newToken = await refreshAndGetToken();
+          if (newToken) {
+            config._retry = true;
+            config.headers.Authorization = `Bearer ${newToken}`;
+            return api.request(config);
+          }
+        } catch {
+          // refreshAndGetToken returns null on failure; fall through to clear
+        }
+
+        clearTokens();
+        if (!isLoginPage) window.location.href = "/login";
       }
+
+      (error as ClassifiedAxiosError).classifiedMessage =
+        "Session expired. Please sign in again.";
     } else if (status === 403) {
       (error as ClassifiedAxiosError).classifiedMessage =
         "You don't have permission to perform this action.";
@@ -361,6 +443,12 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+}
+
+export interface RefreshResponse {
+  access_token: string;
+  refresh_token?: string;
+  token_type?: string;
 }
 
 // ============ Common Types ============
@@ -654,6 +742,13 @@ export interface AuditTemplateUpdate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+}
+
+export interface AuditRunDetail extends AuditRun {
+  template_name?: string;
+  responses: AuditResponse[];
+  findings: AuditFinding[];
+  completion_percentage: number;
 }
 
 export interface AuditRunCreate {
@@ -1235,6 +1330,8 @@ export const auditsApi = {
   createRun: (data: AuditRunCreate) =>
     api.post<AuditRun>("/api/v1/audits/runs", data),
   getRun: (id: number) => api.get<AuditRun>(`/api/v1/audits/runs/${id}`),
+  getRunDetail: (id: number) =>
+    api.get<AuditRunDetail>(`/api/v1/audits/runs/${id}`),
   updateRun: (id: number, data: AuditRunUpdate) =>
     api.patch<AuditRun>(`/api/v1/audits/runs/${id}`, data),
   startRun: (id: number) =>

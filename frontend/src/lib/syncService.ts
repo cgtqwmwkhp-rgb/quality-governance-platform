@@ -3,6 +3,8 @@
  * to the backend API when the browser is online.
  */
 
+import api from '../api/client'
+
 const DB_NAME = 'qgp-offline'
 const STORE_NAME = 'pending-sync'
 const MAX_RETRIES = 5
@@ -67,7 +69,6 @@ async function flushPending(): Promise<void> {
   if (!navigator.onLine) return
 
   const records = await getAllPending()
-  const token = localStorage.getItem('access_token')
 
   for (const rec of records) {
     if (rec.retries >= MAX_RETRIES) {
@@ -76,16 +77,11 @@ async function flushPending(): Promise<void> {
     }
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-
-      const res = await fetch(rec.url, {
+      await api.request({
+        url: rec.url,
         method: rec.method,
-        headers,
-        body: rec.body ? JSON.stringify(rec.body) : undefined,
+        data: rec.body ?? undefined,
       })
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await deleteRecord(rec.id)
     } catch {
       await updateRetries(rec)

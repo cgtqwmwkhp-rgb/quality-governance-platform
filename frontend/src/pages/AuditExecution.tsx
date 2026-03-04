@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,7 +20,9 @@ import {
   CheckCheck,
   MinusCircle,
   ClipboardCheck,
+  Loader2,
 } from 'lucide-react';
+import { auditsApi, getApiErrorMessage } from '../api/client';
 
 // ============================================================================
 // TYPES
@@ -82,7 +84,49 @@ interface AuditData {
   sections: AuditSection[];
 }
 
-const MOCK_AUDIT: AuditData | null = null;
+const SECTION_COLORS = [
+  'from-blue-500/20 to-blue-600/20',
+  'from-green-500/20 to-green-600/20',
+  'from-purple-500/20 to-purple-600/20',
+  'from-orange-500/20 to-orange-600/20',
+  'from-pink-500/20 to-pink-600/20',
+  'from-cyan-500/20 to-cyan-600/20',
+  'from-yellow-500/20 to-yellow-600/20',
+  'from-red-500/20 to-red-600/20',
+];
+
+function mapBackendQuestionType(q: { question_type: string; allow_na?: boolean; max_score?: number; max_value?: number }): string {
+  switch (q.question_type) {
+    case 'yes_no': return q.allow_na ? 'yes_no_na' : 'yes_no';
+    case 'pass_fail': return 'pass_fail';
+    case 'text': return 'text_short';
+    case 'textarea': return 'text_long';
+    case 'number': return 'numeric';
+    case 'signature': return 'signature';
+    case 'rating':
+    case 'score':
+      return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5';
+    default: return 'text_short';
+  }
+}
+
+function parseResponseValue(value: string | undefined | null, questionType: string): ResponseType {
+  if (value == null || value === '') return null;
+  if (['yes_no', 'yes_no_na'].includes(questionType)) return value as 'yes' | 'no' | 'na';
+  if (questionType === 'pass_fail') return value as 'pass' | 'fail';
+  if (['scale_1_5', 'scale_1_10', 'numeric'].includes(questionType)) {
+    const num = Number(value);
+    return isNaN(num) ? value : num;
+  }
+  return value;
+}
+
+function serializeResponse(response: ResponseType): string | undefined {
+  if (response === null || response === undefined) return undefined;
+  if (typeof response === 'number') return String(response);
+  if (Array.isArray(response)) return JSON.stringify(response);
+  return String(response);
+}
 
 // ============================================================================
 // COMPONENTS
@@ -334,8 +378,13 @@ const SignaturePad = ({
 
 export default function AuditExecution() {
   const navigate = useNavigate();
-  
-  const [audit] = useState<AuditData | null>(MOCK_AUDIT);
+  const { auditId: runId } = useParams<{ auditId: string }>();
+
+  const [audit, setAudit] = useState<AuditData | null>(null);
+  const [loading, setLoading] = useState(!!runId);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [responseIdMap, setResponseIdMap] = useState<Record<string, number>>({});
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
@@ -343,6 +392,8 @@ export default function AuditExecution() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [showGuidance, setShowGuidance] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+
+  const runIdNum = runId ? Number(runId) : null;
 
   // Timer
   useEffect(() => {
@@ -355,20 +406,197 @@ export default function AuditExecution() {
     return () => clearInterval(timer);
   }, [isPaused, audit]);
 
+  // Load audit run from API
+  useEffect(() => {
+    if (!runIdNum || isNaN(runIdNum)) return;
+
+    let cancelled = false;
+
+    const loadRun = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const runRes = await auditsApi.getRunDetail(runIdNum);
+        const runData = runRes.data;
+
+        const templateRes = await auditsApi.getTemplate(runData.template_id);
+        const templateData = templateRes.data;
+
+        if (cancelled) return;
+
+        const sections: AuditSection[] = templateData.sections
+          .filter(s => s.is_active)
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((s, idx) => ({
+            id: String(s.id),
+            title: s.title,
+            description: s.description || undefined,
+            color: SECTION_COLORS[idx % SECTION_COLORS.length],
+            questions: s.questions
+              .filter(q => q.is_active)
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map(q => ({
+                id: String(q.id),
+                text: q.question_text,
+                description: q.description || undefined,
+                type: mapBackendQuestionType(q),
+                required: q.is_required,
+                weight: q.weight,
+                options: q.options?.map(o => ({
+                  id: o.value,
+                  label: o.label,
+                  value: o.value,
+                  score: o.score ?? undefined,
+                })),
+                evidenceRequired: false,
+                guidance: q.help_text || undefined,
+                riskLevel: q.risk_category || undefined,
+                isoClause: undefined,
+              })),
+            isComplete: false,
+          }));
+
+        const questionTypeMap: Record<string, string> = {};
+        for (const section of sections) {
+          for (const q of section.questions) {
+            questionTypeMap[q.id] = q.type;
+          }
+        }
+
+        const existingResponses: Record<string, QuestionResponse> = {};
+        const idMap: Record<string, number> = {};
+
+        for (const r of runData.responses || []) {
+          const qId = String(r.question_id);
+          const qType = questionTypeMap[qId] || 'text_short';
+          existingResponses[qId] = {
+            questionId: qId,
+            response: parseResponseValue(r.response_value, qType),
+            notes: r.notes || undefined,
+            timestamp: r.created_at,
+          };
+          idMap[qId] = r.id;
+        }
+
+        setAudit({
+          id: String(runData.id),
+          templateId: String(runData.template_id),
+          templateName: runData.template_name || templateData.name,
+          location: runData.location || '',
+          asset: runData.title || '',
+          scheduledDate: runData.scheduled_date || '',
+          auditor: '',
+          sections,
+        });
+        setResponses(existingResponses);
+        setResponseIdMap(idMap);
+
+        if (runData.status === 'scheduled') {
+          await auditsApi.startRun(runIdNum);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(getApiErrorMessage(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadRun();
+
+    return () => { cancelled = true; };
+  }, [runIdNum]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const saveAllResponses = async (): Promise<boolean> => {
+    if (!runIdNum) return false;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const updatedIdMap = { ...responseIdMap };
+
+      for (const [questionId, resp] of Object.entries(responses)) {
+        if (resp.response === null && !resp.notes) continue;
+
+        const payload = {
+          response_value: serializeResponse(resp.response),
+          notes: resp.notes || undefined,
+        };
+
+        const existingId = updatedIdMap[questionId];
+        if (existingId) {
+          await auditsApi.updateResponse(existingId, payload);
+        } else {
+          const res = await auditsApi.createResponse(runIdNum, {
+            question_id: Number(questionId),
+            ...payload,
+          });
+          updatedIdMap[questionId] = res.data.id;
+        }
+      }
+
+      setResponseIdMap(updatedIdMap);
+      return true;
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    await saveAllResponses();
+  };
+
+  const handleSubmitAudit = async () => {
+    if (!runIdNum) return;
+
+    const saved = await saveAllResponses();
+    if (!saved) return;
+
+    try {
+      setSaving(true);
+      await auditsApi.completeRun(runIdNum);
+      navigate('/audits');
+    } catch (err) {
+      setError(getApiErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading audit...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!audit) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-card border border-border rounded-2xl p-8 text-center">
           <ClipboardCheck className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-          <h2 className="text-2xl font-bold text-foreground mb-2">No Audit Loaded</h2>
+          <h2 className="text-2xl font-bold text-foreground mb-2">
+            {error ? 'Error Loading Audit' : 'No Audit Loaded'}
+          </h2>
           <p className="text-muted-foreground mb-6">
-            Select an audit from the audit list to begin execution.
+            {error || 'Select an audit from the audit list to begin execution.'}
           </p>
           <button
             onClick={() => navigate('/audits')}
@@ -670,10 +898,11 @@ export default function AuditExecution() {
               Back to Audits
             </button>
             <button
-              onClick={() => {/* Submit audit */}}
-              className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
+              onClick={handleSubmitAudit}
+              disabled={saving}
+              className="flex-1 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              Submit Audit
+              {saving ? 'Submitting...' : 'Submit Audit'}
             </button>
           </div>
         </div>
@@ -720,8 +949,12 @@ export default function AuditExecution() {
               </button>
 
               {/* Save Draft */}
-              <button className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted">
-                <Save className="w-4 h-4" />
+              <button
+                onClick={handleSaveDraft}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save
               </button>
             </div>
@@ -742,6 +975,16 @@ export default function AuditExecution() {
           </div>
         </div>
       </header>
+
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-destructive">{error}</p>
+          <button onClick={() => setError(null)} className="text-destructive hover:text-destructive/80">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Section Navigation */}
       <div className="bg-card/50 border-b border-border overflow-x-auto">

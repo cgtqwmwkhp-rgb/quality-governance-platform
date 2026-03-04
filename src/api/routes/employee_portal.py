@@ -107,6 +107,7 @@ class MyReportsResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    pages: int
 
 
 # ============================================================================
@@ -564,7 +565,7 @@ async def track_report(
     summary="Portal Statistics",
     description="Get transparency statistics about report handling.",
 )
-async def get_portal_stats(db: DbSession):
+async def get_portal_stats(current_user: CurrentUser, db: DbSession):
     """
     Get portal statistics for transparency.
 
@@ -572,29 +573,36 @@ async def get_portal_stats(db: DbSession):
     """
     from datetime import timedelta
 
+    tid = current_user.tenant_id
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_ago = now - timedelta(days=7)
 
-    # Count today's reports
     incidents_today = await db.execute(
-        select(func.count()).select_from(Incident).where(Incident.created_at >= today_start)
+        select(func.count())
+        .select_from(Incident)
+        .where(Incident.tenant_id == tid)
+        .where(Incident.created_at >= today_start)
     )
     complaints_today = await db.execute(
-        select(func.count()).select_from(Complaint).where(Complaint.created_at >= today_start)
+        select(func.count())
+        .select_from(Complaint)
+        .where(Complaint.tenant_id == tid)
+        .where(Complaint.created_at >= today_start)
     )
     total_today = (incidents_today.scalar() or 0) + (complaints_today.scalar() or 0)
 
-    # Count resolved this week
     resolved_incidents = await db.execute(
         select(func.count())
         .select_from(Incident)
+        .where(Incident.tenant_id == tid)
         .where(Incident.status == IncidentStatus.CLOSED)
         .where(Incident.updated_at >= week_ago)
     )
     resolved_complaints = await db.execute(
         select(func.count())
         .select_from(Complaint)
+        .where(Complaint.tenant_id == tid)
         .where(Complaint.status == ComplaintStatus.CLOSED)
         .where(Complaint.updated_at >= week_ago)
     )
@@ -715,10 +723,14 @@ async def get_my_reports(
         - No email enumeration possible
     """
     user_email = current_user.email.lower()
+    tid = current_user.tenant_id
     all_reports: list[MyReportSummary] = []
 
-    # Fetch incidents where user is reporter
-    incidents_query = select(Incident).where(func.lower(Incident.reporter_email) == user_email)
+    incidents_query = (
+        select(Incident)
+        .where(Incident.tenant_id == tid)
+        .where(func.lower(Incident.reporter_email) == user_email)
+    )
     incidents_result = await db.execute(incidents_query)
     incidents = incidents_result.scalars().all()
 
@@ -735,8 +747,11 @@ async def get_my_reports(
             )
         )
 
-    # Fetch complaints where user is complainant
-    complaints_query = select(Complaint).where(func.lower(Complaint.complainant_email) == user_email)
+    complaints_query = (
+        select(Complaint)
+        .where(Complaint.tenant_id == tid)
+        .where(func.lower(Complaint.complainant_email) == user_email)
+    )
     complaints_result = await db.execute(complaints_query)
     complaints = complaints_result.scalars().all()
 
@@ -753,8 +768,11 @@ async def get_my_reports(
             )
         )
 
-    # Fetch RTAs where user is reporter
-    rtas_query = select(RoadTrafficCollision).where(func.lower(RoadTrafficCollision.reporter_email) == user_email)
+    rtas_query = (
+        select(RoadTrafficCollision)
+        .where(RoadTrafficCollision.tenant_id == tid)
+        .where(func.lower(RoadTrafficCollision.reporter_email) == user_email)
+    )
     rtas_result = await db.execute(rtas_query)
     rtas = rtas_result.scalars().all()
 
@@ -771,8 +789,11 @@ async def get_my_reports(
             )
         )
 
-    # Fetch near misses where user is reporter
-    nm_query = select(NearMiss).where(func.lower(NearMiss.reporter_email) == user_email)
+    nm_query = (
+        select(NearMiss)
+        .where(NearMiss.tenant_id == tid)
+        .where(func.lower(NearMiss.reporter_email) == user_email)
+    )
     nm_result = await db.execute(nm_query)
     near_misses = nm_result.scalars().all()
 
@@ -798,9 +819,11 @@ async def get_my_reports(
     end = start + page_size
     paginated = all_reports[start:end]
 
+    pages = ((total or 0) + page_size - 1) // page_size if (total or 0) > 0 else 0
     return MyReportsResponse(
         items=paginated,
         total=total,
         page=page,
         page_size=page_size,
+        pages=pages,
     )
