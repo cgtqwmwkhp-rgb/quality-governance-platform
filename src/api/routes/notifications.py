@@ -15,8 +15,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.models.user import User
 from src.domain.models.notification import NotificationPriority, NotificationType
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -106,8 +106,9 @@ async def list_notifications(
     notification_type: Optional[str] = None,
 ):
     """List notifications for the current user."""
+    from sqlalchemy import func, select
+
     from src.domain.models.notification import Notification
-    from sqlalchemy import select, func
 
     query = select(Notification).where(Notification.user_id == current_user.id)
 
@@ -144,8 +145,9 @@ async def list_notifications(
 @router.get("/unread-count")
 async def get_unread_count(current_user: CurrentUser, db: DbSession):
     """Get the count of unread notifications for the current user."""
+    from sqlalchemy import func, select
+
     from src.domain.models.notification import Notification
-    from sqlalchemy import select, func
 
     result = await db.execute(
         select(func.count()).where(
@@ -160,8 +162,9 @@ async def get_unread_count(current_user: CurrentUser, db: DbSession):
 @router.post("/{notification_id}/read")
 async def mark_notification_read(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Mark a specific notification as read."""
-    from src.domain.models.notification import Notification
     from sqlalchemy import select
+
+    from src.domain.models.notification import Notification
 
     result = await db.execute(
         select(Notification).where(
@@ -180,8 +183,9 @@ async def mark_notification_read(notification_id: int, current_user: CurrentUser
 @router.post("/read-all")
 async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
     """Mark all notifications as read for the current user."""
-    from src.domain.models.notification import Notification
     from sqlalchemy import update
+
+    from src.domain.models.notification import Notification
 
     result = await db.execute(
         update(Notification)
@@ -195,8 +199,9 @@ async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
 @router.delete("/{notification_id}")
 async def delete_notification(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Delete a specific notification."""
-    from src.domain.models.notification import Notification
     from sqlalchemy import select
+
+    from src.domain.models.notification import Notification
 
     result = await db.execute(
         select(Notification).where(
@@ -215,8 +220,9 @@ async def delete_notification(notification_id: int, current_user: CurrentUser, d
 @router.get("/preferences")
 async def get_notification_preferences(current_user: CurrentUser, db: DbSession):
     """Get notification preferences for the current user."""
-    from src.domain.models.notification import NotificationPreference
     from sqlalchemy import select
+
+    from src.domain.models.notification import NotificationPreference
 
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
@@ -256,8 +262,9 @@ async def update_notification_preferences(
     db: DbSession,
 ):
     """Update notification preferences for the current user."""
-    from src.domain.models.notification import NotificationPreference
     from sqlalchemy import select
+
+    from src.domain.models.notification import NotificationPreference
 
     result = await db.execute(select(NotificationPreference).where(NotificationPreference.user_id == current_user.id))
     prefs = result.scalar_one_or_none()
@@ -282,7 +289,7 @@ async def search_users_for_mention(
     limit: int = Query(10, ge=1, le=50),
 ):
     """Search users for @mention autocomplete."""
-    from sqlalchemy import select, or_
+    from sqlalchemy import or_, select
 
     query = (
         select(User)
