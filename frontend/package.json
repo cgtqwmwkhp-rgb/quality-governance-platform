@@ -41,7 +41,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@lhci/cli": "^0.14.0",
+    "@lhci/cli": "^0.15.1",
     "@playwright/test": "^1.49.0",
     "@size-limit/file": "^12.0.0",
     "@testing-library/jest-dom": "^6.9.1",
