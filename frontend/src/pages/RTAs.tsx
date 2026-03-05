@@ -166,33 +166,9 @@ export default function RTAs() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-destructive" />
-        </div>
-        <div className="text-center">
-          <h2 className="text-lg font-semibold text-foreground mb-1">{t('rtas.error.load_failed')}</h2>
-          <p className="text-muted-foreground max-w-md">{error.message}</p>
-          {error.code && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {t('rtas.error.code_label')}: {error.code}
-              {error.requestId && ` | ${t('rtas.error.request_id_label')}: ${error.requestId}`}
-            </p>
-          )}
-        </div>
-        <Button onClick={loadRtas} variant="outline">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          {t('retry')}
-        </Button>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+      {/* Header — always visible so users can create RTAs even if list fails */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('rtas.title')}</h1>
@@ -203,6 +179,30 @@ export default function RTAs() {
           {t('rtas.report')}
         </Button>
       </div>
+
+      {error && (
+        <div className="flex flex-col items-center justify-center h-64 gap-4">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+            <AlertCircle className="w-8 h-8 text-destructive" />
+          </div>
+          <div className="text-center">
+            <h2 className="text-lg font-semibold text-foreground mb-1">{t('rtas.error.load_failed')}</h2>
+            <p className="text-muted-foreground max-w-md">{error.message}</p>
+            {error.code && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {t('rtas.error.code_label')}: {error.code}
+                {error.requestId && ` | ${t('rtas.error.request_id_label')}: ${error.requestId}`}
+              </p>
+            )}
+          </div>
+          <Button onClick={loadRtas} variant="outline">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {t('retry')}
+          </Button>
+        </div>
+      )}
+
+      {!error && (
 
       {/* Search */}
       <div className="flex gap-4">
@@ -280,6 +280,7 @@ export default function RTAs() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Create Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
