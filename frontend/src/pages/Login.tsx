@@ -402,10 +402,10 @@ export default function Login({ onLogin }: LoginProps) {
 
             <Button
               type="submit"
-              disabled={isLoading || ssoLoading}
+              disabled={isLoading || ssoLoading || !email.trim() || !password}
               className="mt-6 w-full"
               size="lg"
-              data-testid="submit-button"
+              data-testid="login-submit-btn"
               data-loading={isLoading}
             >
               {showSpinner ? (

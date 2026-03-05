@@ -44,16 +44,19 @@ test.describe('Login UX Contract (P0)', () => {
   // ============================================================================
 
   test('[P0] Login form starts in idle state', async ({ page }) => {
-    // Form elements visible and enabled
     await expect(page.getByTestId('email-input')).toBeVisible();
     await expect(page.getByTestId('password-input')).toBeVisible();
-    await expect(page.getByTestId('submit-button')).toBeVisible();
-    await expect(page.getByTestId('submit-button')).toBeEnabled();
-    
-    // No spinner visible in idle state
+    await expect(page.getByTestId('login-submit-btn')).toBeVisible();
+
+    // Button disabled when fields are empty
+    await expect(page.getByTestId('login-submit-btn')).toBeDisabled();
+
+    // Enabled once credentials are filled
+    await page.getByTestId('email-input').fill('test@example.com');
+    await page.getByTestId('password-input').fill('anypassword');
+    await expect(page.getByTestId('login-submit-btn')).toBeEnabled();
+
     await expect(page.getByTestId('spinner')).not.toBeVisible();
-    
-    // No error visible in idle state
     await expect(page.getByTestId('login-error')).not.toBeVisible();
   });
 
@@ -62,13 +65,13 @@ test.describe('Login UX Contract (P0)', () => {
     await page.getByTestId('password-input').fill('anypassword');
     
     // Start login
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Button should be disabled immediately
-    await expect(page.getByTestId('submit-button')).toBeDisabled({ timeout: 1000 });
+    await expect(page.getByTestId('login-submit-btn')).toBeDisabled({ timeout: 1000 });
     
     // Loading attribute should be true
-    await expect(page.getByTestId('submit-button')).toHaveAttribute('data-loading', 'true');
+    await expect(page.getByTestId('login-submit-btn')).toHaveAttribute('data-loading', 'true');
   });
 
   test('[P0] Spinner appears after 250ms delay (not immediately)', async ({ page }) => {
@@ -81,7 +84,7 @@ test.describe('Login UX Contract (P0)', () => {
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
     
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Spinner should NOT be visible immediately (within first 200ms)
     await page.waitForTimeout(100);
@@ -103,7 +106,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('invalid@test.example');
     await page.getByTestId('password-input').fill('wrongpassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Error should be visible with correct code
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
@@ -116,7 +119,7 @@ test.describe('Login UX Contract (P0)', () => {
     await expect(page.getByTestId('spinner')).not.toBeVisible();
     
     // Button should be re-enabled
-    await expect(page.getByTestId('submit-button')).toBeEnabled();
+    await expect(page.getByTestId('login-submit-btn')).toBeEnabled();
     
     // No recovery actions for UNAUTHORIZED (user fixes credentials)
     await expect(page.getByTestId('recovery-actions')).not.toBeVisible();
@@ -129,7 +132,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId('login-error')).toHaveAttribute('data-error-code', 'UNAVAILABLE');
@@ -147,7 +150,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId('login-error')).toHaveAttribute('data-error-code', 'SERVER_ERROR');
@@ -163,7 +166,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId('login-error')).toHaveAttribute('data-error-code', 'NETWORK_ERROR');
@@ -186,7 +189,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Slow warning should appear after 3 seconds
     await expect(page.getByTestId('slow-warning')).toBeVisible({ timeout: 5000 });
@@ -204,7 +207,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Should show timeout error
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 20000 });
@@ -214,7 +217,7 @@ test.describe('Login UX Contract (P0)', () => {
     await expect(page.getByTestId('spinner')).not.toBeVisible();
     
     // Button must be re-enabled
-    await expect(page.getByTestId('submit-button')).toBeEnabled();
+    await expect(page.getByTestId('login-submit-btn')).toBeEnabled();
   });
 
   // ============================================================================
@@ -228,7 +231,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     
@@ -239,7 +242,7 @@ test.describe('Login UX Contract (P0)', () => {
     await expect(page.getByTestId('login-error')).not.toBeVisible();
     
     // Button should be enabled (back to idle state)
-    await expect(page.getByTestId('submit-button')).toBeEnabled();
+    await expect(page.getByTestId('login-submit-btn')).toBeEnabled();
   });
 
   test('[P0] Clear session button reloads page', async ({ page }) => {
@@ -249,7 +252,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     
@@ -269,7 +272,7 @@ test.describe('Login UX Contract (P0)', () => {
   test('[P0] Demo credentials login succeeds', async ({ page }) => {
     await page.getByTestId('email-input').fill('demo@plantexpand.com');
     await page.getByTestId('password-input').fill('demo123');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // Should redirect away from login
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
@@ -290,7 +293,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     // INVARIANT: Within 15 seconds, must reach terminal state
     await page.waitForTimeout(1000);
@@ -307,7 +310,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     // INVARIANT: Button must be enabled after error
     if (isOnLogin) {
-      await expect(page.getByTestId('submit-button')).toBeEnabled({ timeout: 1000 });
+      await expect(page.getByTestId('login-submit-btn')).toBeEnabled({ timeout: 1000 });
     }
   });
 
@@ -318,7 +321,7 @@ test.describe('Login UX Contract (P0)', () => {
     
     await page.getByTestId('email-input').fill('test@example.com');
     await page.getByTestId('password-input').fill('anypassword');
-    await page.getByTestId('submit-button').click();
+    await page.getByTestId('login-submit-btn').click();
     
     await expect(page.getByTestId('login-error')).toBeVisible({ timeout: 5000 });
     

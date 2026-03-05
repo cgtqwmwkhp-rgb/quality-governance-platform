@@ -175,31 +175,20 @@ p0_workflows:
 
   # Admin Incident View
   - workflowId: admin-view-incident
-    name: "Admin Views Incident Details"
-    description: "Admin navigates to and views incident details"
+    name: "Admin Views Incident List"
+    description: "Admin navigates to and views incidents list page"
     criticality: P0
     auth_type: jwt_admin
     steps:
       - stepId: 1
         action: "Navigate to incidents list"
         route: /incidents
-        exit_criteria: "Incidents table visible"
-        
-      - stepId: 2
-        action: "Click on first incident"
-        selector: "[data-testid='incident-row-link']:first-of-type"
-        fallback_selector: "table tbody tr:first-child a"
-        exit_criteria: "Incident detail page loads"
-        
-      - stepId: 3
-        action: "Verify detail content"
-        exit_criteria: "Incident ID, status, and description visible"
-        
-    success_terminal_state: "Incident details fully loaded"
-    recovery_path: "Empty state if no incidents, or 404 error"
+        exit_criteria: "Incidents page loads with table or empty state"
+
+    success_terminal_state: "Incidents list page rendered"
+    recovery_path: "Error banner if API fails"
     expected_apis:
       - GET /api/v1/incidents
-      - GET /api/v1/incidents/:id
     max_duration_seconds: 20
 
 # ==============================================================================

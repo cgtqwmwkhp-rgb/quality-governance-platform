@@ -114,7 +114,7 @@ admin_actions:
     criticality: P0
     expected_outcome: network_call
     expected_api: POST /api/v1/auth/login
-    disabled_reason: "Credentials incomplete"
+    disabled_reason: "Disabled when email or password fields are empty"
     description: "Submit login form"
 
   # Dashboard Navigation
