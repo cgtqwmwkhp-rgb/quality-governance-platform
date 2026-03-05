@@ -119,7 +119,7 @@ p0_workflows:
         selectors:
           - "[data-testid='email-input']"
           - "[data-testid='password-input']"
-          - "[data-testid='submit-button']"
+          - "[data-testid='login-submit-btn']"
         
       - stepId: 2
         action: "Enter credentials"
@@ -132,7 +132,7 @@ p0_workflows:
         
       - stepId: 3
         action: "Submit login"
-        selector: "[data-testid='submit-button']"
+        selector: "[data-testid='login-submit-btn']"
         exit_criteria: "Redirect to dashboard OR bounded error shown"
         expected_api: POST /api/v1/auth/login
         

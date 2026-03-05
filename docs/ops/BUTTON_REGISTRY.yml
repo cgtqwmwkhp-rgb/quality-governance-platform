@@ -153,11 +153,11 @@ admin_actions:
     actionId: view-incident-detail
     selector: "[data-testid='incident-row-link']"
     fallback_selector: "tr[data-testid*='incident'] a, table tbody tr:first-child a"
-    criticality: P0
+    criticality: P1
     expected_outcome: navigation
     expected_route: /incidents/:id
-    disabled_reason: null
-    description: "View incident details"
+    disabled_reason: "Requires incident data — row links only present when incidents exist"
+    description: "View incident details (data-dependent)"
 
   # RTA List Actions  
   - pageId: rtas-list
@@ -291,6 +291,6 @@ draft_recovery_actions:
 # ==============================================================================
 summary:
   total_actions: 27
-  p0_actions: 12
-  p1_actions: 11
+  p0_actions: 11
+  p1_actions: 12
   p2_actions: 4
