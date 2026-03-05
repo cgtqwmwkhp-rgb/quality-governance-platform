@@ -187,13 +187,20 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             if (step.form_fields) {
               for (const field of step.form_fields) {
                 const value = replaceTestData(field.value);
-                const input = page.locator(field.selector).first();
-                
-                // Wait for input to be visible
-                await input.waitFor({ state: 'visible', timeout: 5000 });
-                
-                // Clear and fill
-                await input.fill(value);
+                const wrapper = page.locator(field.selector).first();
+                await wrapper.waitFor({ state: 'visible', timeout: 5000 });
+
+                const input = wrapper.locator('input, textarea').first();
+                if (await input.count() > 0) {
+                  await input.fill(value);
+                } else {
+                  const sel = wrapper.locator('select').first();
+                  if (await sel.count() > 0) {
+                    await sel.selectOption({ label: value });
+                  } else {
+                    await wrapper.fill(value);
+                  }
+                }
               }
             }
             

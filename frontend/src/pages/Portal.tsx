@@ -104,6 +104,7 @@ export default function Portal() {
 
           {/* Secondary Action: Track Status */}
           <Card
+            data-testid="portal-track-btn"
             hoverable
             className="p-4 cursor-pointer group"
             onClick={() => navigate('/portal/track')}
