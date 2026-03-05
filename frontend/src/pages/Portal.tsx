@@ -31,7 +31,7 @@ export default function Portal() {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div data-testid="portal-home" className="min-h-screen bg-surface">
       {/* Header */}
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4">

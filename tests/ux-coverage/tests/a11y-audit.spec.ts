@@ -60,6 +60,12 @@ async function setupAuth(page: Page, authType: string): Promise<void> {
     if (token) {
       await page.addInitScript((t: string) => {
         sessionStorage.setItem('platform_access_token', t);
+        localStorage.setItem('portal_user', JSON.stringify({
+          id: 'test-user-001', email: 'test@example.com',
+          name: 'Test User', firstName: 'Test', lastName: 'User',
+          isDemoUser: true,
+        }));
+        localStorage.setItem('portal_session_time', Date.now().toString());
       }, token);
     }
     return;
