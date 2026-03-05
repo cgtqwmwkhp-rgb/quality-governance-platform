@@ -69,7 +69,7 @@ async def list_assessment_runs(
     db: DbSession,
     user: CurrentUser,
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     engineer_id: Optional[int] = None,
     status: Optional[str] = None,
     asset_type_id: Optional[int] = None,
