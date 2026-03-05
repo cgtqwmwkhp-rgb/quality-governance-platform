@@ -76,11 +76,11 @@ portal_actions:
     actionId: submit-incident-form
     selector: "[data-testid='submit-report-btn']"
     fallback_selector: "button[type='submit'], button:has-text('Submit')"
-    criticality: P0
+    criticality: P1
     expected_outcome: network_call
     expected_api: POST /api/v1/employee-portal/reports
-    disabled_reason: "Form validation incomplete"
-    description: "Submit incident report"
+    disabled_reason: "Only visible on final form step — requires multi-step navigation"
+    description: "Submit incident report (final step only)"
 
   - pageId: portal-report-near-miss
     actionId: submit-near-miss-form

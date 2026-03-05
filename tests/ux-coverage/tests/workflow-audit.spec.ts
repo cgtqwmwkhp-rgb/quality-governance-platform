@@ -198,7 +198,23 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
                   if (await sel.count() > 0) {
                     await sel.selectOption({ label: value });
                   } else {
-                    await wrapper.fill(value);
+                    // Custom dropdown (e.g. FuzzySearchDropdown): click trigger, then fill search input
+                    const trigger = wrapper.locator('button').first();
+                    if (await trigger.count() > 0) {
+                      await trigger.click();
+                      await page.waitForTimeout(300);
+                      const searchInput = wrapper.locator('input').first();
+                      if (await searchInput.count() > 0) {
+                        await searchInput.fill(value);
+                        await page.waitForTimeout(300);
+                        const option = wrapper.locator(`button:has-text("${value}")`).first();
+                        if (await option.isVisible().catch(() => false)) {
+                          await option.click();
+                        }
+                      }
+                    } else {
+                      await wrapper.fill(value);
+                    }
                   }
                 }
               }
