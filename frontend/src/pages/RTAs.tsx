@@ -198,7 +198,7 @@ export default function RTAs() {
           <h1 className="text-2xl font-bold text-foreground">{t('rtas.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('rtas.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowModal(true)}>
+        <Button data-testid="create-rta-btn" onClick={() => setShowModal(true)}>
           <Plus size={20} />
           {t('rtas.report')}
         </Button>
