@@ -63,26 +63,47 @@ class NearMissUpdate(BaseModel):
     potential_severity: Optional[str] = None
 
 
-class NearMissResponse(NearMissBase):
-    """Schema for Near Miss response."""
+class NearMissResponse(BaseModel):
+    """Response schema for Near Miss.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from NearMissBase to prevent Field constraints
+    (min_length, max_length, pattern) from running on DB output
+    and causing 500 errors.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
-
+    reporter_name: str
+    reporter_email: Optional[str] = None
+    reporter_phone: Optional[str] = None
+    reporter_role: Optional[str] = None
+    was_involved: bool
+    contract: str
+    contract_other: Optional[str] = None
+    location: str
+    location_coordinates: Optional[str] = None
+    event_date: datetime
+    event_time: Optional[str] = None
+    description: str
+    potential_consequences: Optional[str] = None
+    preventive_action_suggested: Optional[str] = None
+    persons_involved: Optional[str] = None
+    witnesses_present: bool
+    witness_names: Optional[str] = None
+    asset_number: Optional[str] = None
+    asset_type: Optional[str] = None
+    risk_category: Optional[str] = None
+    potential_severity: Optional[str] = None
     status: str
     priority: str
-
     assigned_to_id: Optional[int] = None
     assigned_at: Optional[datetime] = None
-
     resolution_notes: Optional[str] = None
     corrective_actions_taken: Optional[str] = None
     closed_at: Optional[datetime] = None
-
     attachments: Optional[str] = None
-
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None

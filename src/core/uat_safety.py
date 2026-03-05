@@ -39,6 +39,7 @@ ALWAYS_ALLOWED_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/token",
     "/api/v1/auth/refresh",
+    "/api/v1/telemetry",
     "/docs",
     "/redoc",
     "/openapi.json",

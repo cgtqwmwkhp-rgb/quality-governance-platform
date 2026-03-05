@@ -34,12 +34,21 @@ class AssetTypeUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class AssetTypeResponse(AssetTypeBase):
-    """Schema for Asset Type response."""
+class AssetTypeResponse(BaseModel):
+    """Response schema for Asset Types.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from AssetTypeBase to avoid inheriting Field validators
+    (min_length, max_length) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    category: str
+    name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    is_active: bool = True
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -124,13 +133,36 @@ class AssetUpdate(BaseModel):
     metadata_json: Optional[Dict[str, Any]] = None
 
 
-class AssetResponse(AssetBase):
-    """Schema for Asset response."""
+class AssetResponse(BaseModel):
+    """Response schema for Assets.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from AssetBase to avoid inheriting Field validators
+    (min_length, max_length) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     external_id: str
+    asset_type_id: int
+    asset_number: str
+    name: str
+    description: Optional[str] = None
+    make: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    year_of_manufacture: Optional[int] = None
+    safe_working_load: Optional[float] = None
+    swl_unit: Optional[str] = None
+    status: str = "active"
+    last_service_date: Optional[datetime] = None
+    next_service_due: Optional[datetime] = None
+    last_loler_date: Optional[datetime] = None
+    next_loler_due: Optional[datetime] = None
+    site: Optional[str] = None
+    department: Optional[str] = None
+    qr_code_data: Optional[str] = None
+    metadata_json: Optional[Dict[str, Any]] = None
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime

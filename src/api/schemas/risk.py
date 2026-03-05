@@ -54,13 +54,28 @@ class RiskControlUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class RiskControlResponse(RiskControlBase):
-    """Schema for Risk Control response."""
+class RiskControlResponse(BaseModel):
+    """Response schema for Risk Control.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from RiskControlBase to avoid inheriting input validators
+    (min_length, max_length, pattern) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     risk_id: int
+    title: str
+    description: Optional[str] = None
+    control_type: str = "preventive"
+    implementation_status: str = "planned"
+    effectiveness: Optional[str] = None
+    owner_id: Optional[int] = None
+    clause_ids: Optional[List[int]] = None
+    control_ids: Optional[List[int]] = None
+    last_tested_date: Optional[datetime] = None
+    next_test_date: Optional[datetime] = None
+    test_frequency_months: Optional[int] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -101,23 +116,38 @@ class RiskAssessmentCreate(RiskAssessmentBase):
     pass
 
 
-class RiskAssessmentResponse(RiskAssessmentBase):
-    """Schema for Risk Assessment response."""
+class RiskAssessmentResponse(BaseModel):
+    """Response schema for Risk Assessment.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from RiskAssessmentBase to avoid inheriting input validators
+    (ge, le, pattern) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     risk_id: int
+    assessment_date: datetime
+    assessment_type: str = "periodic"
+    inherent_likelihood: int
+    inherent_impact: int
+    residual_likelihood: int
+    residual_impact: int
+    target_likelihood: Optional[int] = None
+    target_impact: Optional[int] = None
+    assessment_notes: Optional[str] = None
+    control_effectiveness_notes: Optional[str] = None
+    assessed_by_id: Optional[int] = None
 
     # Calculated scores
     inherent_score: int
     residual_score: int
-    target_score: Optional[int]
+    target_score: Optional[int] = None
 
     # Risk levels
     inherent_level: str
     residual_level: str
-    target_level: Optional[str]
+    target_level: Optional[str] = None
 
     created_at: datetime
 
@@ -204,13 +234,54 @@ class RiskUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class RiskResponse(RiskBase):
-    """Schema for Risk response."""
+class RiskResponse(BaseModel):
+    """Response schema for Risk.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from RiskBase to avoid inheriting input validators
+    (min_length, max_length, ge, le, pattern) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
+    title: str
+    description: str
+
+    # Classification
+    category: str = "operational"
+    subcategory: Optional[str] = None
+
+    # Risk details
+    risk_source: Optional[str] = None
+    risk_event: Optional[str] = None
+    risk_consequence: Optional[str] = None
+
+    # Current assessment
+    likelihood: int = 3
+    impact: int = 3
+
+    # Ownership
+    owner_id: Optional[int] = None
+    department: Optional[str] = None
+
+    # Review cycle
+    review_frequency_months: int = 12
+    next_review_date: Optional[datetime] = None
+
+    # Standard mapping
+    clause_ids: Optional[List[int]] = None
+    control_ids: Optional[List[int]] = None
+
+    # Linkages
+    linked_audit_ids: Optional[List[int]] = None
+    linked_incident_ids: Optional[List[int]] = None
+    linked_policy_ids: Optional[List[int]] = None
+
+    # Treatment
+    treatment_strategy: str = "mitigate"
+    treatment_plan: Optional[str] = None
+    treatment_due_date: Optional[datetime] = None
 
     # Calculated fields
     risk_score: int
@@ -221,7 +292,7 @@ class RiskResponse(RiskBase):
     is_active: bool
 
     # Timestamps
-    created_by_id: Optional[int]
+    created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

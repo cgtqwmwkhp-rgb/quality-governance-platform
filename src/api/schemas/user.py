@@ -28,12 +28,19 @@ class RoleUpdate(BaseModel):
     permissions: Optional[str] = None
 
 
-class RoleResponse(RoleBase):
-    """Schema for Role response."""
+class RoleResponse(BaseModel):
+    """Response schema for Role.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from RoleBase to prevent Field validators
+    (min_length, max_length) from triggering 500 errors on response serialisation.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    name: str
+    description: Optional[str] = None
+    permissions: Optional[str] = None
     is_system_role: bool
     created_at: datetime
     updated_at: datetime
@@ -70,12 +77,22 @@ class UserUpdate(BaseModel):
     role_ids: Optional[List[int]] = None
 
 
-class UserResponse(UserBase):
-    """Schema for User response."""
+class UserResponse(BaseModel):
+    """Response schema for User.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from UserBase to prevent Field validators
+    (EmailStr, min_length, max_length) from triggering 500 errors on response serialisation.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    email: str
+    first_name: str
+    last_name: str
+    job_title: Optional[str] = None
+    department: Optional[str] = None
+    phone: Optional[str] = None
     is_active: bool
     is_superuser: bool
     created_at: datetime

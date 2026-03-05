@@ -30,15 +30,33 @@ class AcknowledgmentRequirementCreate(AcknowledgmentRequirementBase):
     pass
 
 
-class AcknowledgmentRequirementResponse(AcknowledgmentRequirementBase):
-    """Schema for acknowledgment requirement response."""
+class AcknowledgmentRequirementResponse(BaseModel):
+    """Response schema for acknowledgment requirements.
+
+    Does NOT inherit from AcknowledgmentRequirementBase to prevent
+    Field validators (ge, le) from triggering 500 errors on response serialisation.
+    """
 
     id: int
+    policy_id: int
+    acknowledgment_type: str = "read_only"
+    required_for_all: bool = False
+    required_departments: Optional[List[str]] = None
+    required_roles: Optional[List[str]] = None
+    required_user_ids: Optional[List[int]] = None
+    due_within_days: int = 30
+    reminder_days_before: Optional[List[int]] = None
+    re_acknowledge_on_update: bool = True
+    re_acknowledge_period_months: Optional[int] = None
+    quiz_questions: Optional[List[Dict[str, Any]]] = None
+    quiz_passing_score: int = 80
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class PolicyAcknowledgmentBase(BaseModel):

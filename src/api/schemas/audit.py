@@ -144,15 +144,48 @@ class AuditQuestionUpdate(BaseModel):
     failure_triggers_action: Optional[bool] = None
 
 
-class AuditQuestionResponse(AuditQuestionBase):
-    """Schema for Audit Question response."""
+class AuditQuestionResponse(BaseModel):
+    """Schema for Audit Question response.
+
+    Does NOT inherit AuditQuestionBase so that input-only validators
+    (pattern, min_length) don't re-run on output serialization.
+    """
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     template_id: int
-    section_id: Optional[int]
-    is_active: bool
+    section_id: Optional[int] = None
+    question_text: str
+    question_type: str
+    description: Optional[str] = None
+    help_text: Optional[str] = None
+    is_required: bool = True
+    allow_na: bool = False
+    max_score: Optional[float] = None
+    weight: float = 1.0
+    options: Optional[List[Any]] = Field(None, validation_alias="options_json")
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    decimal_places: Optional[int] = None
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    evidence_requirements: Optional[Dict[str, Any]] = Field(None, validation_alias="evidence_requirements_json")
+    conditional_logic: Optional[List[Any]] = Field(None, validation_alias="conditional_logic_json")
+    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json")
+    control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
+    risk_category: Optional[str] = None
+    risk_weight: Optional[float] = None
+    guidance: Optional[str] = None
+    criticality: Optional[str] = None
+    regulatory_reference: Optional[str] = None
+    guidance_notes: Optional[str] = None
+    sign_off_required: bool = False
+    assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
+    training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
+    failure_triggers_action: bool = False
+    sort_order: int = 0
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
 
@@ -189,14 +222,24 @@ class AuditSectionUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class AuditSectionResponse(AuditSectionBase):
-    """Schema for Audit Section response."""
+class AuditSectionResponse(BaseModel):
+    """Schema for Audit Section response.
+
+    Does NOT inherit AuditSectionBase so that input-only validators
+    (min_length, max_length) don't re-run on output serialization.
+    """
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     template_id: int
-    is_active: bool
+    title: str
+    description: Optional[str] = None
+    sort_order: int = 0
+    weight: float = 1.0
+    is_repeatable: bool = False
+    max_repeats: Optional[int] = None
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
     questions: List[AuditQuestionResponse] = []
@@ -274,19 +317,41 @@ class AuditTemplateUpdate(BaseModel):
     template_status: Optional[str] = None
 
 
-class AuditTemplateResponse(AuditTemplateBase):
-    """Schema for Audit Template response."""
+class AuditTemplateResponse(BaseModel):
+    """Schema for Audit Template response.
+
+    Does NOT inherit AuditTemplateBase so that input-only validators
+    (pattern, min_length, ge, le) don't re-run on output serialization
+    and cause 500s when legacy data doesn't match.
+    """
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
-    external_id: str
-    reference_number: Optional[str]
-    version: int
-    is_active: bool
-    is_published: bool
+    external_id: str = ""
+    reference_number: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    audit_type: str = "inspection"
+    frequency: Optional[str] = None
+    scoring_method: str = "percentage"
+    passing_score: Optional[float] = None
+    standard_ids: Optional[List[int]] = Field(None, validation_alias="standard_ids_json")
+    allow_offline: bool = False
+    require_gps: bool = False
+    require_signature: bool = False
+    require_approval: bool = False
+    auto_create_findings: bool = True
+    subcategory: Optional[str] = None
+    tags: Optional[List[str]] = Field(None, validation_alias="tags_json")
+    estimated_duration: Optional[int] = None
+    pass_threshold: Optional[float] = None
+    version: int = 1
+    is_active: bool = True
+    is_published: bool = False
     template_status: str = "published"
-    created_by_id: Optional[int]
+    created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
     question_count: int = 0
@@ -321,7 +386,7 @@ class PurgeExpiredTemplatesResponse(BaseModel):
     """Schema for purge expired templates response."""
 
     purged_count: int
-    message: str
+    purged_templates: List[str] = []
 
 
 # ============== Audit Run Schemas ==============
@@ -362,8 +427,12 @@ class AuditRunUpdate(BaseModel):
     status: Optional[str] = None
 
 
-class AuditRunResponse(AuditRunBase):
-    """Schema for Audit Run response."""
+class AuditRunResponse(BaseModel):
+    """Schema for Audit Run response.
+
+    Does NOT inherit AuditRunBase so that input-only validators
+    (max_length) don't re-run on output serialization.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -371,15 +440,23 @@ class AuditRunResponse(AuditRunBase):
     reference_number: str
     template_id: int
     template_version: int
+    title: Optional[str] = None
+    location: Optional[str] = None
+    location_details: Optional[str] = None
+    scheduled_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+    notes: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     status: str
-    assigned_to_id: Optional[int]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    score: Optional[float]
-    max_score: Optional[float]
-    score_percentage: Optional[float]
-    passed: Optional[bool]
-    created_by_id: Optional[int]
+    assigned_to_id: Optional[int] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    score: Optional[float] = None
+    max_score: Optional[float] = None
+    score_percentage: Optional[float] = None
+    passed: Optional[bool] = None
+    created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

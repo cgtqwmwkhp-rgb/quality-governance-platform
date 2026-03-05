@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.domain.models.investigation import AssignedEntityType, InvestigationStatus
 
@@ -60,17 +60,26 @@ class InvestigationTemplateUpdate(BaseModel):
         return v
 
 
-class InvestigationTemplateResponse(InvestigationTemplateBase):
-    """Schema for investigation template response."""
+class InvestigationTemplateResponse(BaseModel):
+    """Response schema for investigation templates.
+
+    Decoupled from InvestigationTemplateBase to avoid inheriting input validators
+    (min_length, max_length, field_validator) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    name: str
+    description: Optional[str] = None
+    version: str = "1.0"
+    is_active: bool = True
+    structure: Dict[str, Any]
+    applicable_entity_types: List[str]
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 class InvestigationTemplateListResponse(BaseModel):
@@ -144,10 +153,23 @@ class InvestigationRunUpdate(BaseModel):
         return v
 
 
-class InvestigationRunResponse(InvestigationRunBase):
-    """Schema for investigation run response."""
+class InvestigationRunResponse(BaseModel):
+    """Response schema for investigation runs.
+
+    Decoupled from InvestigationRunBase to avoid inheriting input validators
+    (min_length, max_length, field_validator) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    template_id: int
+    assigned_entity_type: str
+    assigned_entity_id: int
+    title: str
+    description: Optional[str] = None
+    status: str = "draft"
+    data: Dict[str, Any] = {}
     reference_number: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -159,9 +181,6 @@ class InvestigationRunResponse(InvestigationRunBase):
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 class InvestigationRunListResponse(BaseModel):

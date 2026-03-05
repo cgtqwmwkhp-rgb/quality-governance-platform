@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class KRIBase(BaseModel):
@@ -55,19 +55,39 @@ class KRIUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class KRIResponse(KRIBase):
-    """Schema for KRI response."""
+class KRIResponse(BaseModel):
+    """Response schema for KRI.
+
+    Decoupled from KRIBase to avoid inheriting input validators
+    (max_length, Field descriptions) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    code: str
+    name: str
+    description: Optional[str] = None
+    category: str
+    unit: str
+    measurement_frequency: str = "monthly"
+    data_source: str
+    calculation_method: Optional[str] = None
+    auto_calculate: bool = True
+    lower_is_better: bool = True
+    green_threshold: float
+    amber_threshold: float
+    red_threshold: float
+    linked_risk_ids: Optional[List[int]] = None
+    owner_id: Optional[int] = None
+    department: Optional[str] = None
+    is_active: bool = True
     current_value: Optional[float] = None
     current_status: Optional[str] = None
     last_updated: Optional[datetime] = None
     trend_direction: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class KRIListResponse(BaseModel):

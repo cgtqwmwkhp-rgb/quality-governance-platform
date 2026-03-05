@@ -6,14 +6,13 @@ import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
-from src.api.exceptions import generic_exception_handler, http_exception_handler, validation_exception_handler
+from src.api.middleware.error_handler import register_exception_handlers
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
@@ -260,10 +259,8 @@ def create_application() -> FastAPI:
         max_age=86400,  # Cache preflight for 24 hours
     )
 
-    # Register exception handlers (all include CORS fallback headers)
-    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 FastAPI exception handler type mismatch
-    app.add_exception_handler(Exception, generic_exception_handler)  # type: ignore[arg-type]  # TYPE-IGNORE: MYPY-002 Catch-all for 500s with CORS
+    # Register exception handlers (DomainError, HTTPException, ValidationError, catch-all)
+    register_exception_handlers(app)
 
     # Include API routes
     app.include_router(api_router, prefix="/api/v1")

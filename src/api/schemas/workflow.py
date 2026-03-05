@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # Enums as string literals for API
@@ -84,16 +84,34 @@ class WorkflowRuleUpdate(BaseModel):
     contract: Optional[str] = None
 
 
-class WorkflowRuleResponse(WorkflowRuleBase):
-    """Schema for workflow rule response."""
+class WorkflowRuleResponse(BaseModel):
+    """Response schema for workflow rules.
+
+    Decoupled from WorkflowRuleBase to avoid inheriting Field validators
+    (max_length) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    name: str
+    description: Optional[str] = None
+    rule_type: str
+    entity_type: str
+    trigger_event: str
+    conditions: Optional[Dict[str, Any]] = None
+    delay_hours: Optional[float] = None
+    delay_from_field: Optional[str] = None
+    action_type: str
+    action_config: Dict[str, Any]
+    priority: int = 100
+    stop_processing: bool = False
+    is_active: bool = True
+    department: Optional[str] = None
+    contract: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
 
 
 class WorkflowRuleListResponse(BaseModel):
@@ -177,15 +195,33 @@ class SLAConfigurationUpdate(BaseModel):
     match_priority: Optional[int] = None
 
 
-class SLAConfigurationResponse(SLAConfigurationBase):
-    """Schema for SLA configuration response."""
+class SLAConfigurationResponse(BaseModel):
+    """Response schema for SLA configurations.
+
+    Decoupled from SLAConfigurationBase to avoid inheriting Field validators
+    (ge, le) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    entity_type: str
+    priority: Optional[str] = None
+    category: Optional[str] = None
+    department: Optional[str] = None
+    contract: Optional[str] = None
+    acknowledgment_hours: Optional[float] = None
+    response_hours: Optional[float] = None
+    resolution_hours: float
+    warning_threshold_percent: int = 75
+    business_hours_only: bool = True
+    business_start_hour: int = 9
+    business_end_hour: int = 17
+    exclude_weekends: bool = True
+    is_active: bool = True
+    match_priority: int = 0
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class SLAConfigurationListResponse(BaseModel):
@@ -272,15 +308,29 @@ class EscalationLevelUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class EscalationLevelResponse(EscalationLevelBase):
-    """Schema for escalation level response."""
+class EscalationLevelResponse(BaseModel):
+    """Response schema for escalation levels.
+
+    Decoupled from EscalationLevelBase to avoid inheriting Field validators
+    (ge, max_length) that cause 500 errors on API responses.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    entity_type: str
+    level: int
+    name: str
+    description: Optional[str] = None
+    escalate_to_role: Optional[str] = None
+    escalate_to_user_id: Optional[int] = None
+    notification_template: Optional[str] = None
+    notify_original_assignee: bool = True
+    notify_reporter: bool = False
+    hours_after_previous: float
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class EscalationLevelListResponse(BaseModel):

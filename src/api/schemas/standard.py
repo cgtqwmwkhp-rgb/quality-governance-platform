@@ -37,13 +37,24 @@ class ControlUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ControlResponse(ControlBase):
-    """Schema for Control response."""
+class ControlResponse(BaseModel):
+    """Response schema for Control.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from ControlBase to prevent Field validators
+    (min_length, max_length) from triggering 500 errors on response serialisation.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     clause_id: int
+    control_number: str
+    title: str
+    description: Optional[str] = None
+    implementation_guidance: Optional[str] = None
+    is_applicable: bool = True
+    applicability_justification: Optional[str] = None
+    implementation_status: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -78,14 +89,23 @@ class ClauseUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class ClauseResponse(ClauseBase):
-    """Schema for Clause response."""
+class ClauseResponse(BaseModel):
+    """Response schema for Clause.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from ClauseBase to prevent Field validators
+    (min_length, max_length) from triggering 500 errors on response serialisation.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     standard_id: int
-    parent_clause_id: Optional[int]
+    clause_number: str
+    title: str
+    description: Optional[str] = None
+    level: int = 1
+    sort_order: int = 0
+    parent_clause_id: Optional[int] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -121,12 +141,22 @@ class StandardUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
-class StandardResponse(StandardBase):
-    """Schema for Standard response."""
+class StandardResponse(BaseModel):
+    """Response schema for Standard.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from StandardBase to prevent Field validators
+    (min_length, max_length) from triggering 500 errors on response serialisation.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    code: str
+    name: str
+    full_name: str
+    version: str
+    description: Optional[str] = None
+    effective_date: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

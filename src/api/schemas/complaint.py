@@ -74,14 +74,29 @@ class ComplaintUpdate(BaseModel):
         return v
 
 
-class ComplaintResponse(ComplaintBase):
-    """Schema for complaint response."""
+class ComplaintResponse(BaseModel):
+    """Response schema for complaints.
 
-    model_config = ConfigDict(from_attributes=True)
+    Does NOT inherit from ComplaintBase to prevent input validators
+    (min_length, max_length, field_validator) from running on DB output
+    and causing 500 errors.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
     external_ref: Optional[str] = None
+    title: str
+    description: str
+    complaint_type: ComplaintType
+    priority: ComplaintPriority
+    received_date: datetime
+    complainant_name: str
+    complainant_email: Optional[str] = None
+    complainant_phone: Optional[str] = None
+    complainant_company: Optional[str] = None
+    related_reference: Optional[str] = None
     status: ComplaintStatus
     created_at: datetime
     updated_at: datetime

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.domain.models.policy import DocumentStatus, DocumentType
 
@@ -51,20 +51,25 @@ class PolicyUpdate(BaseModel):
         return v.strip() if v else None
 
 
-class PolicyResponse(PolicyBase):
-    """Schema for policy responses."""
+class PolicyResponse(BaseModel):
+    """Response schema for policies.
+
+    Does NOT inherit from PolicyBase to prevent Field constraints
+    (min_length, max_length) from running on DB output and causing 500 errors.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
+    title: str
+    description: Optional[str] = None
+    document_type: DocumentType
+    status: DocumentStatus
     created_at: datetime
     updated_at: datetime
     created_by_id: Optional[int] = None
     updated_by_id: Optional[int] = None
-
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
 
 
 class PolicyListResponse(BaseModel):

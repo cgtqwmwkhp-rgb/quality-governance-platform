@@ -120,13 +120,51 @@ class RTAUpdate(BaseModel):
         return v.strip() if v is not None else None
 
 
-class RTAResponse(RTABase):
-    """Schema for RTA response."""
+class RTAResponse(BaseModel):
+    """Response schema for RTA.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from RTABase to avoid inheriting input validators
+    (min_length, max_length, field_validator) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
+    title: str
+    description: str
+    severity: RTASeverity = RTASeverity.DAMAGE_ONLY
+    status: RTAStatus = RTAStatus.REPORTED
+    collision_date: datetime
+    reported_date: datetime
+    location: str
+    road_name: Optional[str] = None
+    postcode: Optional[str] = None
+    collision_time: Optional[str] = None
+    weather_conditions: Optional[str] = None
+    road_conditions: Optional[str] = None
+    lighting_conditions: Optional[str] = None
+    company_vehicle_registration: Optional[str] = None
+    company_vehicle_make_model: Optional[str] = None
+    company_vehicle_damage: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_statement: Optional[str] = None
+    driver_injured: bool = False
+    driver_injury_details: Optional[str] = None
+    third_parties: Optional[dict] = None
+    witnesses: Optional[str] = None
+    police_attended: bool = False
+    police_reference: Optional[str] = None
+    police_station: Optional[str] = None
+    insurance_notified: bool = False
+    insurance_reference: Optional[str] = None
+    insurance_notes: Optional[str] = None
+    estimated_cost: Optional[int] = None
+    investigation_notes: Optional[str] = None
+    root_cause: Optional[str] = None
+    fault_determination: Optional[str] = None
+    linked_risk_ids: Optional[str] = None
+    closure_notes: Optional[str] = None
     driver_id: Optional[int] = None
     driver_email: Optional[str] = None
     investigator_id: Optional[int] = None
@@ -200,14 +238,24 @@ class RTAActionUpdate(BaseModel):
         return v.strip() if v is not None else None
 
 
-class RTAActionResponse(RTAActionBase):
-    """Schema for RTA Action response."""
+class RTAActionResponse(BaseModel):
+    """Response schema for RTA Action.
 
-    model_config = ConfigDict(from_attributes=True)
+    Decoupled from RTAActionBase to avoid inheriting input validators
+    (min_length, max_length, field_validator) that cause 500 errors on response serialization.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     rta_id: int
     reference_number: str
+    title: str
+    description: str
+    action_type: str = "corrective"
+    priority: str = "medium"
+    owner_id: Optional[int] = None
+    due_date: Optional[datetime] = None
     status: str
     completed_at: Optional[datetime] = None
     verified_at: Optional[datetime] = None

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 
@@ -70,11 +70,25 @@ class IncidentUpdate(BaseModel):
         return v.strip() if v else None
 
 
-class IncidentResponse(IncidentBase):
-    """Schema for incident responses."""
+class IncidentResponse(BaseModel):
+    """Response schema for incidents.
+
+    Does NOT inherit from IncidentBase to prevent Field constraints
+    (min_length, max_length) from running on DB output and causing 500 errors.
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     reference_number: str
+    title: str
+    description: str
+    incident_type: IncidentType
+    severity: IncidentSeverity
+    status: IncidentStatus
+    incident_date: datetime
+    location: Optional[str] = None
+    department: Optional[str] = None
     reported_date: datetime
     created_at: datetime
     updated_at: datetime
@@ -83,11 +97,6 @@ class IncidentResponse(IncidentBase):
     reporter_name: Optional[str] = None
     investigator_id: Optional[int] = None
     closed_at: Optional[datetime] = None
-
-    class Config:
-        """Pydantic config."""
-
-        from_attributes = True
 
 
 class IncidentListResponse(BaseModel):
