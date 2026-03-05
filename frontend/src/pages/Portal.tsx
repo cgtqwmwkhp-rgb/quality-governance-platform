@@ -83,6 +83,7 @@ export default function Portal() {
         <div className="space-y-3">
           {/* Primary Action: Submit Report */}
           <button
+            data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
               "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",

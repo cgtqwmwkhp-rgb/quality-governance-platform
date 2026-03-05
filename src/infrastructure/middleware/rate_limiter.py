@@ -11,6 +11,7 @@ Features:
 
 import asyncio
 import hashlib
+import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -19,6 +20,8 @@ from typing import Callable, Optional
 
 from fastapi import HTTPException, Request, Response, status
 from fastapi.routing import APIRoute
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -94,7 +97,7 @@ class RedisRateLimiter:
                 self._redis = redis.from_url(self._redis_url)
                 await self._redis.ping()
             except Exception as e:
-                print(f"[RateLimit] Redis unavailable, using in-memory: {e}")
+                logger.warning("Redis unavailable, using in-memory rate limiter: %s", e)
                 self._redis = None
         return self._redis
 
@@ -134,7 +137,7 @@ class RedisRateLimiter:
             return True, remaining - 1, reset_time
 
         except Exception as e:
-            print(f"[RateLimit] Redis error, falling back: {e}")
+            logger.warning("Redis error, falling back to in-memory: %s", e)
             return await self._fallback.is_allowed(key, limit, window_seconds)
 
 
@@ -238,7 +241,7 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     - X-RateLimit-Reset: Unix timestamp when limit resets
     """
     # Skip rate limiting for health checks
-    if request.url.path in ["/health", "/api/health", "/ready"]:
+    if request.url.path in ["/health", "/healthz", "/readyz", "/api/health", "/ready"]:
         return await call_next(request)
 
     # Skip rate limiting for CORS preflight requests (OPTIONS)

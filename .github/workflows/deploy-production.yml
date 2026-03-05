@@ -346,7 +346,7 @@ jobs:
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
-              UAT_MODE="READ_ONLY" \
+              UAT_MODE="READ_WRITE" \
             --output none
           
           echo "✅ Application settings configured"

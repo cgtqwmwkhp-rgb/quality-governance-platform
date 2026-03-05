@@ -107,6 +107,7 @@ export enum ErrorClass {
   VALIDATION_ERROR = "VALIDATION_ERROR",
   AUTH_ERROR = "AUTH_ERROR",
   NOT_FOUND = "NOT_FOUND",
+  WRITE_BLOCKED = "WRITE_BLOCKED",
   NETWORK_ERROR = "NETWORK_ERROR",
   SERVER_ERROR = "SERVER_ERROR",
   SETUP_REQUIRED = "SETUP_REQUIRED",
@@ -158,6 +159,12 @@ export function classifyError(error: unknown): ErrorClass {
   }
   if (status === 404) {
     return ErrorClass.NOT_FOUND;
+  }
+  if (status === 409) {
+    const data = axiosError.response.data as Record<string, unknown> | undefined;
+    if (data?.error_class === "UAT_WRITE_BLOCKED") {
+      return ErrorClass.WRITE_BLOCKED;
+    }
   }
   if (status >= 500) {
     return ErrorClass.SERVER_ERROR;
@@ -380,6 +387,12 @@ api.interceptors.response.use(
     } else if (status === 403) {
       (error as ClassifiedAxiosError).classifiedMessage =
         "You don't have permission to perform this action.";
+    } else if (status === 409) {
+      const data409 = error.response?.data as Record<string, unknown> | undefined;
+      if (data409?.error_class === "UAT_WRITE_BLOCKED") {
+        (error as ClassifiedAxiosError).classifiedMessage =
+          "This environment is in read-only mode. Contact your administrator to enable writes.";
+      }
     } else if (status === 422) {
       const data = error.response?.data as Record<string, unknown> | undefined;
       (error as ClassifiedAxiosError).classifiedMessage =

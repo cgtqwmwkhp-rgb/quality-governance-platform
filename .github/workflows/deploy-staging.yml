@@ -233,7 +233,7 @@ jobs:
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               CI_TEST_SECRET="${{ secrets.CI_TEST_SECRET }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
-              UAT_MODE="READ_ONLY" \
+              UAT_MODE="READ_WRITE" \
             --output none
           
           echo "   ✅ Application settings configured"

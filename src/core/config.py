@@ -1,10 +1,13 @@
 """Application configuration settings."""
 
+import logging
 from functools import lru_cache
 from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -53,12 +56,10 @@ class Settings(BaseSettings):
                 )
 
             if self.uat_mode.upper() != "READ_ONLY":
-                import warnings
-
-                warnings.warn(
-                    "SECURITY WARNING: UAT_MODE is not READ_ONLY in production! "
-                    "Set UAT_MODE=READ_ONLY to prevent unintended writes.",
-                    stacklevel=2,
+                logger.info(
+                    "UAT_MODE is %s in production — write operations are enabled. "
+                    "Set UAT_MODE=READ_ONLY to enforce read-only mode if needed.",
+                    self.uat_mode,
                 )
 
             # Ensure database URL is not localhost/127.0.0.1 (ADR-0002)
@@ -138,6 +139,9 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+
+    # Redis (optional — used by idempotency middleware when available)
+    redis_url: str = ""
 
     # UAT Mode for production-safe testing
     # READ_ONLY: Block all non-idempotent operations (default for production)

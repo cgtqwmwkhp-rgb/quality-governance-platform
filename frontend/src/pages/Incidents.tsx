@@ -182,6 +182,7 @@ export default function Incidents() {
                   filteredIncidents.map((incident, index) => (
                     <tr
                       key={incident.id}
+                      data-testid="incident-row-link"
                       className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
                       onClick={() => navigate(`/incidents/${incident.id}`)}

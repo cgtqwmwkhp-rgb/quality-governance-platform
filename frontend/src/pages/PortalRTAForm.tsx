@@ -935,6 +935,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </Button>
           ) : (
             <Button
+              data-testid="submit-rta-btn"
               onClick={handleSubmit}
               disabled={isSubmitting}
               className="flex-1 bg-success hover:bg-success/90"

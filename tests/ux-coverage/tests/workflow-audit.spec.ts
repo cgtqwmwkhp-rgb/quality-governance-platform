@@ -114,7 +114,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        localStorage.setItem('portal_token', token);
+        sessionStorage.setItem('platform_access_token', token);
       }, process.env.PORTAL_TEST_TOKEN);
       return true;
     } catch (storageError: any) {
@@ -126,7 +126,7 @@ async function setupAuth(page: Page, authType: string): Promise<boolean> {
   if (authType === 'jwt_admin' && process.env.ADMIN_TEST_TOKEN) {
     try {
       await page.evaluate((token) => {
-        localStorage.setItem('access_token', token);
+        sessionStorage.setItem('platform_access_token', token);
       }, process.env.ADMIN_TEST_TOKEN);
       return true;
     } catch (storageError: any) {
