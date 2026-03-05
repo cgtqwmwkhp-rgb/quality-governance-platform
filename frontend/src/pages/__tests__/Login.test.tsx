@@ -74,7 +74,7 @@ describe('Login', () => {
 
     expect(screen.getByTestId('email-input')).toBeInTheDocument();
     expect(screen.getByTestId('password-input')).toBeInTheDocument();
-    expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+    expect(screen.getByTestId('login-submit-btn')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Sign In' })).toBeInTheDocument();
   });
 
@@ -105,7 +105,7 @@ describe('Login', () => {
     fireEvent.change(screen.getByTestId('password-input'), {
       target: { value: 'TestUser123!' },
     });
-    await user.click(screen.getByTestId('submit-button'));
+    await user.click(screen.getByTestId('login-submit-btn'));
 
     await vi.waitFor(() => {
       expect(onLogin).toHaveBeenCalledOnce();
