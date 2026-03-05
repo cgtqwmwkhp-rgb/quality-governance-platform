@@ -151,46 +151,81 @@ async def list_templates(
 ) -> Any:
     """List all audit templates with pagination and filtering."""
     started = time.perf_counter()
-    query = select(AuditTemplate).where(
-        AuditTemplate.is_active == True,
-        or_(
-            AuditTemplate.tenant_id == current_user.tenant_id,
-            AuditTemplate.tenant_id.is_(None),
-        ),
-    )
-
-    if search:
-        search_filter = f"%{search}%"
-        query = query.where(
-            (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
+    try:
+        query = select(AuditTemplate).where(
+            AuditTemplate.is_active == True,
+            or_(
+                AuditTemplate.tenant_id == current_user.tenant_id,
+                AuditTemplate.tenant_id.is_(None),
+            ),
         )
-    if category:
-        query = query.where(AuditTemplate.category == category)
-    if audit_type:
-        query = query.where(AuditTemplate.audit_type == audit_type)
-    if is_published is not None:
-        query = query.where(AuditTemplate.is_published == is_published)
 
-    count_query = select(func.count()).select_from(query.subquery())
-    total = await db.scalar(count_query) or 0
+        if search:
+            search_filter = f"%{search}%"
+            query = query.where(
+                (AuditTemplate.name.ilike(search_filter)) | (AuditTemplate.description.ilike(search_filter))
+            )
+        if category:
+            query = query.where(AuditTemplate.category == category)
+        if audit_type:
+            query = query.where(AuditTemplate.audit_type == audit_type)
+        if is_published is not None:
+            query = query.where(AuditTemplate.is_published == is_published)
 
-    page = params.page
-    page_size = params.page_size
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    query = query.order_by(AuditTemplate.name)
+        count_query = select(func.count()).select_from(query.subquery())
+        total = await db.scalar(count_query) or 0
 
-    result = await db.execute(query)
-    templates = result.scalars().all()
+        page = params.page
+        page_size = params.page_size
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        query = query.order_by(AuditTemplate.name)
 
-    response = AuditTemplateListResponse(
-        items=[_decode_template_response_entities(AuditTemplateResponse.model_validate(t)) for t in templates],
-        total=total,
-        page=page,
-        page_size=page_size,
-        pages=(total + page_size - 1) // page_size if total > 0 else 0,
-    )
-    _record_audit_endpoint_event("GET /api/v1/audits/templates", 200, (time.perf_counter() - started) * 1000)
-    return response
+        result = await db.execute(query)
+        templates = result.scalars().all()
+
+        items: list[AuditTemplateResponse] = []
+        for idx, t in enumerate(templates):
+            try:
+                items.append(
+                    _decode_template_response_entities(AuditTemplateResponse.model_validate(t))
+                )
+            except Exception as item_exc:
+                logger.error(
+                    "Failed to serialize template id=%s (index %d): %s\n%s",
+                    getattr(t, "id", "?"),
+                    idx,
+                    item_exc,
+                    traceback.format_exc(),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        f"Serialization error on template id={getattr(t, 'id', '?')}: "
+                        f"{type(item_exc).__name__}: {item_exc}"
+                    ),
+                ) from item_exc
+
+        response = AuditTemplateListResponse(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            pages=(total + page_size - 1) // page_size if total > 0 else 0,
+        )
+        _record_audit_endpoint_event("GET /api/v1/audits/templates", 200, (time.perf_counter() - started) * 1000)
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "list_templates failed: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list templates: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.post(
@@ -246,25 +281,55 @@ async def list_archived_templates(
     params: PaginationParams = Depends(),
 ) -> Any:
     """List archived templates that are within the 30-day recovery window."""
-    service = AuditService(db)
-    result = await service.list_archived_templates(
-        current_user.tenant_id,
-        page=params.page,
-        page_size=params.page_size,
-    )
-    return {
-        "items": result.items,
-        "total": result.total,
-        "page": result.page,
-        "page_size": result.page_size,
-        "pages": result.pages,
-        "links": build_collection_links(
-            "audits/templates/archived",
-            result.page,
-            result.page_size,
-            result.pages,
-        ),
-    }
+    try:
+        service = AuditService(db)
+        result = await service.list_archived_templates(
+            current_user.tenant_id,
+            page=params.page,
+            page_size=params.page_size,
+        )
+
+        validated_items = []
+        for idx, t in enumerate(result.items):
+            try:
+                validated_items.append(
+                    _decode_template_response_entities(AuditTemplateResponse.model_validate(t))
+                )
+            except Exception as item_exc:
+                logger.error(
+                    "Failed to serialize archived template id=%s (index %d): %s\n%s",
+                    getattr(t, "id", "?"),
+                    idx,
+                    item_exc,
+                    traceback.format_exc(),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        f"Serialization error on archived template id={getattr(t, 'id', '?')}: "
+                        f"{type(item_exc).__name__}: {item_exc}"
+                    ),
+                ) from item_exc
+
+        return AuditTemplateListResponse(
+            items=validated_items,
+            total=result.total,
+            page=result.page,
+            page_size=result.page_size,
+            pages=result.pages,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "list_archived_templates failed: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list archived templates: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.post("/templates/purge-expired", response_model=PurgeExpiredTemplatesResponse)
@@ -656,23 +721,56 @@ async def list_runs(
     assigned_to_id: Optional[int] = None,
 ) -> Any:
     """List all audit runs with pagination and filtering."""
-    service = AuditService(db)
-    result = await service.list_runs(
-        current_user.tenant_id,
-        page=params.page,
-        page_size=params.page_size,
-        status_filter=status_filter,
-        template_id=template_id,
-        assigned_to_id=assigned_to_id,
-    )
-    return {
-        "items": result.items,
-        "total": result.total,
-        "page": result.page,
-        "page_size": result.page_size,
-        "pages": result.pages,
-        "links": build_collection_links("audits/runs", result.page, result.page_size, result.pages),
-    }
+    try:
+        service = AuditService(db)
+        result = await service.list_runs(
+            current_user.tenant_id,
+            page=params.page,
+            page_size=params.page_size,
+            status_filter=status_filter,
+            template_id=template_id,
+            assigned_to_id=assigned_to_id,
+        )
+
+        validated_items = []
+        for idx, run in enumerate(result.items):
+            try:
+                validated_items.append(AuditRunResponse.model_validate(run))
+            except Exception as item_exc:
+                logger.error(
+                    "Failed to serialize run id=%s (index %d): %s\n%s",
+                    getattr(run, "id", "?"),
+                    idx,
+                    item_exc,
+                    traceback.format_exc(),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        f"Serialization error on run id={getattr(run, 'id', '?')}: "
+                        f"{type(item_exc).__name__}: {item_exc}"
+                    ),
+                ) from item_exc
+
+        return AuditRunListResponse(
+            items=validated_items,
+            total=result.total,
+            page=result.page,
+            page_size=result.page_size,
+            pages=result.pages,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "list_runs failed: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list runs: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.post("/runs", response_model=AuditRunResponse, status_code=status.HTTP_201_CREATED)
@@ -978,23 +1076,56 @@ async def list_findings(
     run_id: Optional[int] = None,
 ) -> Any:
     """List all audit findings with pagination and filtering."""
-    service = AuditService(db)
-    result = await service.list_findings(
-        current_user.tenant_id,
-        page=params.page,
-        page_size=params.page_size,
-        status_filter=status_filter,
-        severity=severity,
-        run_id=run_id,
-    )
-    return {
-        "items": result.items,
-        "total": result.total,
-        "page": result.page,
-        "page_size": result.page_size,
-        "pages": result.pages,
-        "links": build_collection_links("audits/findings", result.page, result.page_size, result.pages),
-    }
+    try:
+        service = AuditService(db)
+        result = await service.list_findings(
+            current_user.tenant_id,
+            page=params.page,
+            page_size=params.page_size,
+            status_filter=status_filter,
+            severity=severity,
+            run_id=run_id,
+        )
+
+        validated_items = []
+        for idx, f in enumerate(result.items):
+            try:
+                validated_items.append(AuditFindingResponse.model_validate(f))
+            except Exception as item_exc:
+                logger.error(
+                    "Failed to serialize finding id=%s (index %d): %s\n%s",
+                    getattr(f, "id", "?"),
+                    idx,
+                    item_exc,
+                    traceback.format_exc(),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=(
+                        f"Serialization error on finding id={getattr(f, 'id', '?')}: "
+                        f"{type(item_exc).__name__}: {item_exc}"
+                    ),
+                ) from item_exc
+
+        return AuditFindingListResponse(
+            items=validated_items,
+            total=result.total,
+            page=result.page,
+            page_size=result.page_size,
+            pages=result.pages,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "list_findings failed: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list findings: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.post(
