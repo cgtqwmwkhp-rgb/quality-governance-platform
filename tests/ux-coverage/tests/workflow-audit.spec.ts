@@ -200,6 +200,7 @@ test.describe('Workflow Audit (P0 Critical Paths)', () => {
             // Click element if selector specified (and not form_fields step)
             if (step.selector && !step.form_fields) {
               let element = page.locator(step.selector).first();
+              await element.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
               let visible = await element.isVisible().catch(() => false);
               
               // Try fallback

@@ -397,6 +397,69 @@ admin_routes:
     expected_degraded_state: null
     description: "Digital signatures"
 
+  - pageId: workforce-dashboard
+    route: /workforce/dashboard
+    auth: jwt_admin
+    criticality: P2
+    component: CompetencyDashboard
+    expected_empty_state: "Competency dashboard with empty metrics"
+    expected_degraded_state: null
+    description: "Workforce competency dashboard"
+
+  - pageId: workforce-assessments
+    route: /workforce/assessments
+    auth: jwt_admin
+    criticality: P2
+    component: Assessments
+    expected_empty_state: "Empty assessments list"
+    expected_degraded_state: null
+    description: "Workforce assessments"
+
+  - pageId: workforce-training
+    route: /workforce/training
+    auth: jwt_admin
+    criticality: P2
+    component: Training
+    expected_empty_state: "Empty training list"
+    expected_degraded_state: null
+    description: "Workforce training records"
+
+  - pageId: workforce-engineers
+    route: /workforce/engineers
+    auth: jwt_admin
+    criticality: P2
+    component: Engineers
+    expected_empty_state: "Empty engineers list"
+    expected_degraded_state: null
+    description: "Workforce engineer profiles"
+
+  - pageId: workforce-calendar
+    route: /workforce/calendar
+    auth: jwt_admin
+    criticality: P2
+    component: Calendar
+    expected_empty_state: "Calendar grid visible"
+    expected_degraded_state: null
+    description: "Workforce calendar"
+
+  - pageId: analytics-dashboards
+    route: /analytics/dashboards
+    auth: jwt_admin
+    criticality: P2
+    component: AnalyticsDashboards
+    expected_empty_state: "Dashboard selection visible"
+    expected_degraded_state: null
+    description: "Analytics dashboards"
+
+  - pageId: analytics-reports
+    route: /analytics/reports
+    auth: jwt_admin
+    criticality: P2
+    component: AnalyticsReports
+    expected_empty_state: "Reports list visible"
+    expected_degraded_state: null
+    description: "Analytics reports"
+
   - pageId: admin-dashboard
     route: /admin
     auth: jwt_admin
@@ -437,7 +500,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 48
+  total_routes: 55
   p0_routes: 12
   p1_routes: 22
-  p2_routes: 14
+  p2_routes: 21
