@@ -9,6 +9,7 @@ layers can interfere when exceptions propagate through the middleware chain.
 """
 
 import logging
+import re
 import traceback
 import uuid
 
@@ -56,7 +57,6 @@ def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
         return response
 
     from src.core.config import settings
-    import re
 
     allowed = origin in settings.cors_origins
     if not allowed:

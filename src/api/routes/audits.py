@@ -5,7 +5,9 @@ All business logic and data access is delegated to
 """
 
 import html
+import logging
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Optional
 
@@ -59,6 +61,7 @@ from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 observability_logger = StructuredLogger("audit.observability")
 
 
@@ -201,11 +204,6 @@ async def create_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
-    import logging
-    import traceback
-
-    logger = logging.getLogger(__name__)
-
     try:
         template_data_dict = template_data.model_dump(exclude={"standard_ids", "tags"})
         for field in ("name", "description", "category"):
