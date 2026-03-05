@@ -33,7 +33,7 @@ interface A11yResult {
   error_message?: string;
 }
 
-const APP_URL = process.env.APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:3000';
 const results: A11yResult[] = [];
 
 function loadP0Pages(): PageEntry[] {

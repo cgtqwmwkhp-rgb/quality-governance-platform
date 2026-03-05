@@ -25,7 +25,7 @@ export default defineConfig({
   outputDir: 'results/test-artifacts',
   
   use: {
-    baseURL: process.env.APP_URL || 'http://localhost:5173',
+    baseURL: process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

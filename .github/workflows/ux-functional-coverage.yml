@@ -18,6 +18,7 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
+  FRONTEND_URL: 'https://purple-water-03205fa03.6.azurestaticapps.net'
 
 jobs:
   # Only run if staging deployment succeeded
