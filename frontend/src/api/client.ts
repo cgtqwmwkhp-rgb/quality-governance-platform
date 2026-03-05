@@ -400,8 +400,14 @@ api.interceptors.response.use(
         (data?.["message"] as string) ||
         "Validation error. Please check your input.";
     } else if (status && status >= 500) {
+      const data500 = error.response?.data as Record<string, unknown> | undefined;
+      const errorEnvelope = data500?.["error"] as Record<string, unknown> | undefined;
+      const serverMsg = errorEnvelope?.["message"] as string | undefined
+        || (data500?.["detail"] as string | undefined);
       (error as ClassifiedAxiosError).classifiedMessage =
-        "Server error. Please try again later.";
+        serverMsg
+          ? `Server error: ${serverMsg}`
+          : "Server error. Please try again later.";
     } else if (
       error.code === "ECONNABORTED" ||
       error.message?.includes("timeout")

@@ -201,25 +201,44 @@ async def create_template(
     current_user: CurrentUser,
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
-    template_data_dict = template_data.model_dump(exclude={"standard_ids"})
-    for field in ("name", "description", "category"):
-        if field in template_data_dict and isinstance(template_data_dict[field], str):
-            template_data_dict[field] = html.unescape(template_data_dict[field])
+    import logging
+    import traceback
 
-    template = AuditTemplate(
-        **template_data_dict,
-        created_by_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-    )
+    logger = logging.getLogger(__name__)
 
-    # Generate reference number
-    template.reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
+    try:
+        template_data_dict = template_data.model_dump(exclude={"standard_ids", "tags"})
+        for field in ("name", "description", "category"):
+            if field in template_data_dict and isinstance(template_data_dict[field], str):
+                template_data_dict[field] = html.unescape(template_data_dict[field])
 
-    db.add(template)
-    await db.commit()
-    await db.refresh(template)
+        template_data_dict["standard_ids_json"] = template_data.standard_ids
+        template_data_dict["tags_json"] = template_data.tags
 
-    return _decode_template_response_entities(AuditTemplateResponse.model_validate(template))
+        template = AuditTemplate(
+            **template_data_dict,
+            created_by_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+        )
+
+        template.reference_number = await ReferenceNumberService.generate(db, "audit_template", AuditTemplate)
+
+        db.add(template)
+        await db.commit()
+        await db.refresh(template)
+
+        return _decode_template_response_entities(AuditTemplateResponse.model_validate(template))
+    except Exception as exc:
+        await db.rollback()
+        logger.error(
+            "Failed to create audit template: %s\n%s",
+            str(exc),
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create template: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @router.get("/templates/archived", response_model=AuditTemplateListResponse)

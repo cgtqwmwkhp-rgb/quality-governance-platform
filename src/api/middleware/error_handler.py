@@ -2,6 +2,10 @@
 
 Handles DomainError subclasses, HTTPException, RequestValidationError,
 and uncaught exceptions — all with a unified error envelope.
+
+CORS headers are injected directly into error responses as a safety net.
+Starlette's CORSMiddleware normally handles this, but BaseHTTPMiddleware
+layers can interfere when exceptions propagate through the middleware chain.
 """
 
 import logging
@@ -45,6 +49,27 @@ def _build_envelope(
     }
 
 
+def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
+    """Add CORS headers directly to error responses as a safety net."""
+    origin = request.headers.get("origin")
+    if not origin:
+        return response
+
+    from src.core.config import settings
+    import re
+
+    allowed = origin in settings.cors_origins
+    if not allowed:
+        allowed = bool(re.match(r"^https://[a-z0-9-]+\.[0-9]+\.azurestaticapps\.net$", origin))
+
+    if allowed:
+        response.headers.setdefault("Access-Control-Allow-Origin", origin)
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        response.headers.setdefault("Vary", "Origin")
+
+    return response
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the FastAPI app."""
 
@@ -58,10 +83,11 @@ def register_exception_handlers(app: FastAPI) -> None:
             exc.message,
             extra={"request_id": request_id, "error_code": exc.code},
         )
-        return JSONResponse(
+        resp = JSONResponse(
             status_code=exc.http_status,
             content=_build_envelope(exc.code, exc.message, request_id, exc.details),
         )
+        return _add_cors_headers(request, resp)
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
@@ -69,10 +95,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         code = _STATUS_TO_ERROR_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
         details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
         message = exc.detail if isinstance(exc.detail, str) else _status_phrase(exc.status_code)
-        return JSONResponse(
+        resp = JSONResponse(
             status_code=exc.status_code,
             content=_build_envelope(code, message, request_id, details),
         )
+        return _add_cors_headers(request, resp)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -87,7 +114,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     "type": error.get("type", ""),
                 }
             )
-        return JSONResponse(
+        resp = JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=_build_envelope(
                 ErrorCode.VALIDATION_ERROR,
@@ -96,6 +123,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 {"errors": field_errors},
             ),
         )
+        return _add_cors_headers(request, resp)
 
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -106,10 +134,11 @@ def register_exception_handlers(app: FastAPI) -> None:
             str(exc),
             traceback.format_exc(),
         )
-        return JSONResponse(
+        resp = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_build_envelope(ErrorCode.INTERNAL_ERROR, "Internal server error", request_id),
         )
+        return _add_cors_headers(request, resp)
 
 
 def _status_phrase(code: int) -> str:

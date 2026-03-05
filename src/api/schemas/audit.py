@@ -262,7 +262,7 @@ class AuditTemplateBase(BaseModel):
     frequency: Optional[str] = Field(None, pattern="^(daily|weekly|monthly|quarterly|annually|ad_hoc)$")
 
     # Scoring configuration
-    scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|pass_fail)$")
+    scoring_method: str = Field(default="percentage", pattern="^(percentage|points|weighted|equal|pass_fail)$")
     passing_score: Optional[float] = None
 
     # Standard mapping
