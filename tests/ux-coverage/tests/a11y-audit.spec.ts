@@ -56,29 +56,21 @@ async function setupAuth(page: Page, authType: string): Promise<void> {
   if (authType === 'anon' || authType === 'none') return;
 
   if (authType === 'portal_sso') {
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => {
-      localStorage.setItem('portal_user', JSON.stringify({
-        email: 'test@example.com',
-        name: 'Test User',
-        company: 'Test Corp',
-      }));
-      sessionStorage.setItem('portal_session_time', Date.now().toString());
-    });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
+    const token = process.env.PORTAL_TEST_TOKEN;
+    if (token) {
+      await page.addInitScript((t: string) => {
+        sessionStorage.setItem('platform_access_token', t);
+      }, token);
+    }
     return;
   }
 
   if (authType === 'jwt_admin') {
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => {
-      const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.test';
-      localStorage.setItem('access_token', fakeJwt);
-      localStorage.setItem('platform_access_token', fakeJwt);
-    });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1000);
+    const token = process.env.ADMIN_TEST_TOKEN ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJhZG1pbkB0ZXN0LmNvbSIsInJvbGUiOiJhZG1pbiIsImV4cCI6OTk5OTk5OTk5OX0.test';
+    await page.addInitScript((t: string) => {
+      sessionStorage.setItem('platform_access_token', t);
+    }, token);
     return;
   }
 }

@@ -81,72 +81,38 @@ function loadPageRoute(pageId: string): string | null {
 // Test storage
 const buttonAuditResults: ButtonAuditResult[] = [];
 
-// Auth helper - navigates to base URL first to establish origin for localStorage
+// Auth helper — uses addInitScript to inject token before any page JS runs,
+// avoiding SSO redirects that break the navigate-then-evaluate approach.
 async function setupAuth(page: Page, pageId: string): Promise<boolean> {
-  // Determine auth type from page registry
   const registryPath = path.join(__dirname, '../../../docs/ops/PAGE_REGISTRY.yml');
   const content = fs.readFileSync(registryPath, 'utf-8');
   const registry = yaml.load(content) as any;
-  
+
   const allPages = [
     ...(registry.public_routes || []),
     ...(registry.portal_routes || []),
     ...(registry.admin_routes || []),
   ];
-  
+
   const pageEntry = allPages.find((p: any) => p.pageId === pageId);
   const authType = pageEntry?.auth || 'anon';
-  
+
   if (authType === 'anon') return true;
-  
-  // Navigate to base URL first to establish origin (localStorage blocked on about:blank)
-  const baseUrl = process.env.APP_URL || 'http://localhost:3000';
-  
-  try {
-    const response = await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    
-    // Verify we landed on a valid page with proper origin
-    const currentUrl = page.url();
-    if (!currentUrl || currentUrl === 'about:blank' || !currentUrl.startsWith('http')) {
-      console.warn(`[setupAuth] Invalid page URL after navigation: ${currentUrl}`);
-      return false;
-    }
-    
-    // Check for navigation errors
-    if (!response || response.status() >= 400) {
-      console.warn(`[setupAuth] Navigation failed with status: ${response?.status()}`);
-      return false;
-    }
-  } catch (navError: any) {
-    console.warn(`[setupAuth] Navigation failed: ${navError.message?.slice(0, 100)}`);
-    return false;
-  }
-  
-  if (authType === 'portal_sso' && process.env.PORTAL_TEST_TOKEN) {
-    try {
-      await page.evaluate((token) => {
-        localStorage.setItem('portal_token', token);
-      }, process.env.PORTAL_TEST_TOKEN);
-      return true;
-    } catch (storageError: any) {
-      console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
-      return false;
-    }
-  }
-  
-  if (authType === 'jwt_admin' && process.env.ADMIN_TEST_TOKEN) {
-    try {
-      await page.evaluate((token) => {
-        localStorage.setItem('access_token', token);
-      }, process.env.ADMIN_TEST_TOKEN);
-      return true;
-    } catch (storageError: any) {
-      console.warn(`[setupAuth] localStorage access failed: ${storageError.message?.slice(0, 100)}`);
-      return false;
-    }
-  }
-  
-  return false;
+
+  const token =
+    authType === 'portal_sso'
+      ? process.env.PORTAL_TEST_TOKEN
+      : authType === 'jwt_admin'
+        ? process.env.ADMIN_TEST_TOKEN
+        : undefined;
+
+  if (!token) return false;
+
+  await page.addInitScript((t: string) => {
+    sessionStorage.setItem('platform_access_token', t);
+  }, token);
+
+  return true;
 }
 
 // Dynamic test generation
