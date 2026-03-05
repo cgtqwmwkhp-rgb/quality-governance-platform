@@ -8,12 +8,10 @@ import enum
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -88,13 +86,13 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     # Rule identification
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    rule_type: Mapped[RuleType] = mapped_column(SQLEnum(RuleType, native_enum=False), nullable=False)
+    rule_type: Mapped[RuleType] = mapped_column(CaseInsensitiveEnum(RuleType), nullable=False)
 
     # Applies to which entities
-    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
+    entity_type: Mapped[EntityType] = mapped_column(CaseInsensitiveEnum(EntityType), nullable=False, index=True)
 
     # Trigger conditions
-    trigger_event: Mapped[TriggerEvent] = mapped_column(SQLEnum(TriggerEvent, native_enum=False), nullable=False)
+    trigger_event: Mapped[TriggerEvent] = mapped_column(CaseInsensitiveEnum(TriggerEvent), nullable=False)
 
     # Condition JSON - evaluated to determine if rule fires
     # Example: {"field": "severity", "operator": "equals", "value": "critical"}
@@ -108,7 +106,7 @@ class WorkflowRule(Base, TimestampMixin, AuditTrailMixin):
     )  # e.g., "created_at", "due_date"
 
     # Action to perform
-    action_type: Mapped[ActionType] = mapped_column(SQLEnum(ActionType, native_enum=False), nullable=False)
+    action_type: Mapped[ActionType] = mapped_column(CaseInsensitiveEnum(ActionType), nullable=False)
 
     # Action configuration JSON
     # For email: {"template": "escalation", "recipients": ["manager"], "subject": "..."}
@@ -151,9 +149,9 @@ class RuleExecution(Base, TimestampMixin):
     )
 
     # What triggered this execution
-    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False)
+    entity_type: Mapped[EntityType] = mapped_column(CaseInsensitiveEnum(EntityType), nullable=False)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    trigger_event: Mapped[TriggerEvent] = mapped_column(SQLEnum(TriggerEvent, native_enum=False), nullable=False)
+    trigger_event: Mapped[TriggerEvent] = mapped_column(CaseInsensitiveEnum(TriggerEvent), nullable=False)
 
     # Execution result
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -183,7 +181,7 @@ class SLAConfiguration(Base, TimestampMixin, AuditTrailMixin):
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # What this SLA applies to
-    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
+    entity_type: Mapped[EntityType] = mapped_column(CaseInsensitiveEnum(EntityType), nullable=False, index=True)
 
     # Matching criteria (all optional, more specific = higher priority)
     priority: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # critical, high, medium, low
@@ -229,7 +227,7 @@ class SLATracking(Base, TimestampMixin):
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Entity being tracked
-    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
+    entity_type: Mapped[EntityType] = mapped_column(CaseInsensitiveEnum(EntityType), nullable=False, index=True)
     entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # SLA configuration used
@@ -277,7 +275,7 @@ class EscalationLevel(Base, TimestampMixin):
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Entity type this applies to
-    entity_type: Mapped[EntityType] = mapped_column(SQLEnum(EntityType, native_enum=False), nullable=False, index=True)
+    entity_type: Mapped[EntityType] = mapped_column(CaseInsensitiveEnum(EntityType), nullable=False, index=True)
 
     # Level (1 = first escalation, 2 = second, etc.)
     level: Mapped[int] = mapped_column(Integer, nullable=False)

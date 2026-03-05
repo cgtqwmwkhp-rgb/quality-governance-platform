@@ -15,10 +15,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -132,13 +132,13 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # Assignment to entity
     assigned_entity_type: Mapped[AssignedEntityType] = mapped_column(
-        Enum(AssignedEntityType, native_enum=False), nullable=False, index=True
+        CaseInsensitiveEnum(AssignedEntityType), nullable=False, index=True
     )
     assigned_entity_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
 
     # Investigation details
     status: Mapped[InvestigationStatus] = mapped_column(
-        Enum(InvestigationStatus, native_enum=False),
+        CaseInsensitiveEnum(InvestigationStatus),
         nullable=False,
         default=InvestigationStatus.DRAFT,
     )
@@ -147,7 +147,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # Investigation level (determines required sections per Template Contract v2.1)
     level: Mapped[Optional[str]] = mapped_column(
-        Enum(InvestigationLevel, native_enum=False), nullable=True, default=None
+        CaseInsensitiveEnum(InvestigationLevel), nullable=True, default=None
     )
 
     # Investigation data (responses to template fields)
@@ -326,7 +326,7 @@ class InvestigationCustomerPack(Base, TimestampMixin):
 
     # Audience (determines redaction rules)
     audience: Mapped[CustomerPackAudience] = mapped_column(
-        Enum(CustomerPackAudience, native_enum=False), nullable=False
+        CaseInsensitiveEnum(CustomerPackAudience), nullable=False
     )
 
     # Pack content (with redaction applied)
@@ -399,7 +399,7 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
     # Use native_enum=False to store as VARCHAR instead of PostgreSQL ENUM.
     # This must match migration 20260202_fix_action_status_type which converts the column.
     status: Mapped[InvestigationActionStatus] = mapped_column(
-        Enum(InvestigationActionStatus, native_enum=False, create_constraint=False),
+        CaseInsensitiveEnum(InvestigationActionStatus),
         default=InvestigationActionStatus.OPEN,
     )
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

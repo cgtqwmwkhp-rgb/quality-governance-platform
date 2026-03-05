@@ -11,12 +11,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -61,7 +59,7 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
 
     # Overall competence level
     competence_level: Mapped[CompetenceLevel] = mapped_column(
-        SQLEnum(CompetenceLevel, native_enum=False), default=CompetenceLevel.TRAINEE
+        CaseInsensitiveEnum(CompetenceLevel), default=CompetenceLevel.TRAINEE
     )
 
     # Experience
@@ -141,7 +139,7 @@ class AuditorCertification(Base, TimestampMixin):
 
     # Status
     status: Mapped[CertificationStatus] = mapped_column(
-        SQLEnum(CertificationStatus, native_enum=False),
+        CaseInsensitiveEnum(CertificationStatus),
         default=CertificationStatus.ACTIVE,
     )
 
@@ -339,7 +337,7 @@ class AuditAssignmentCriteria(Base, TimestampMixin):
 
     # Minimum auditor level
     minimum_auditor_level: Mapped[CompetenceLevel] = mapped_column(
-        SQLEnum(CompetenceLevel, native_enum=False), default=CompetenceLevel.AUDITOR
+        CaseInsensitiveEnum(CompetenceLevel), default=CompetenceLevel.AUDITOR
     )
 
     # Experience requirements

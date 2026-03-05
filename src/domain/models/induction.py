@@ -11,12 +11,10 @@ if TYPE_CHECKING:
     from src.domain.models.engineer import Engineer
     from src.domain.models.user import User
 
-from sqlalchemy import Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -59,11 +57,11 @@ class InductionRun(Base, TimestampMixin, AuditTrailMixin):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     stage: Mapped[InductionStage] = mapped_column(
-        SQLEnum(InductionStage, native_enum=False),
+        CaseInsensitiveEnum(InductionStage),
         default=InductionStage.STAGE_1_ONSITE,
     )
     status: Mapped[InductionStatus] = mapped_column(
-        SQLEnum(InductionStatus, native_enum=False),
+        CaseInsensitiveEnum(InductionStatus),
         default=InductionStatus.DRAFT,
         index=True,
     )
@@ -102,7 +100,7 @@ class InductionResponse(Base, TimestampMixin):
     shown_explained: Mapped[bool] = mapped_column(Boolean, default=False)
 
     understanding: Mapped[Optional[UnderstandingVerdict]] = mapped_column(
-        SQLEnum(UnderstandingVerdict, native_enum=False), nullable=True
+        CaseInsensitiveEnum(UnderstandingVerdict), nullable=True
     )
 
     supervisor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

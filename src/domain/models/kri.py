@@ -8,12 +8,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -60,7 +58,7 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     code: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[KRICategory] = mapped_column(SQLEnum(KRICategory, native_enum=False), nullable=False)
+    category: Mapped[KRICategory] = mapped_column(CaseInsensitiveEnum(KRICategory), nullable=False)
 
     # Measurement
     unit: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "count", "percentage", "days"
@@ -82,11 +80,11 @@ class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     # Current state
     current_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     current_status: Mapped[Optional[ThresholdStatus]] = mapped_column(
-        SQLEnum(ThresholdStatus, native_enum=False), nullable=True
+        CaseInsensitiveEnum(ThresholdStatus), nullable=True
     )
     last_updated: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     trend_direction: Mapped[Optional[KRITrendDirection]] = mapped_column(
-        SQLEnum(KRITrendDirection, native_enum=False), nullable=True
+        CaseInsensitiveEnum(KRITrendDirection), nullable=True
     )
 
     # Linked risks
@@ -145,7 +143,7 @@ class KRIMeasurement(Base, TimestampMixin):
     # Measurement
     measurement_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     value: Mapped[float] = mapped_column(Float, nullable=False)
-    status: Mapped[ThresholdStatus] = mapped_column(SQLEnum(ThresholdStatus, native_enum=False), nullable=False)
+    status: Mapped[ThresholdStatus] = mapped_column(CaseInsensitiveEnum(ThresholdStatus), nullable=False)
 
     # Period
     period_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -182,7 +180,7 @@ class KRIAlert(Base, TimestampMixin):
 
     # Alert details
     alert_type: Mapped[str] = mapped_column(String(50), nullable=False)  # threshold_breach, trend_warning
-    severity: Mapped[ThresholdStatus] = mapped_column(SQLEnum(ThresholdStatus, native_enum=False), nullable=False)
+    severity: Mapped[ThresholdStatus] = mapped_column(CaseInsensitiveEnum(ThresholdStatus), nullable=False)
 
     # Trigger
     triggered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

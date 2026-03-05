@@ -5,11 +5,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -68,13 +67,13 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     complaint_type: Mapped[ComplaintType] = mapped_column(
-        SQLEnum(ComplaintType, native_enum=False), default=ComplaintType.OTHER
+        CaseInsensitiveEnum(ComplaintType), default=ComplaintType.OTHER
     )
     priority: Mapped[ComplaintPriority] = mapped_column(
-        SQLEnum(ComplaintPriority, native_enum=False), default=ComplaintPriority.MEDIUM
+        CaseInsensitiveEnum(ComplaintPriority), default=ComplaintPriority.MEDIUM
     )
     status: Mapped[ComplaintStatus] = mapped_column(
-        SQLEnum(ComplaintStatus, native_enum=False), default=ComplaintStatus.RECEIVED
+        CaseInsensitiveEnum(ComplaintStatus), default=ComplaintStatus.RECEIVED
     )
 
     # Dates
@@ -156,7 +155,7 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
+    status: Mapped[ActionStatus] = mapped_column(CaseInsensitiveEnum(ActionStatus), default=ActionStatus.OPEN)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

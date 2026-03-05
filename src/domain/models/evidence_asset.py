@@ -12,12 +12,10 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -96,14 +94,14 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     # Asset classification
     asset_type: Mapped[EvidenceAssetType] = mapped_column(
-        SQLEnum(EvidenceAssetType, native_enum=False),
+        CaseInsensitiveEnum(EvidenceAssetType),
         nullable=False,
         default=EvidenceAssetType.OTHER,
     )
 
     # Source linkage (polymorphic association)
     source_module: Mapped[EvidenceSourceModule] = mapped_column(
-        SQLEnum(EvidenceSourceModule, native_enum=False),
+        CaseInsensitiveEnum(EvidenceSourceModule),
         nullable=False,
         index=True,
     )
@@ -143,7 +141,7 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     # Visibility and customer pack rules
     visibility: Mapped[EvidenceVisibility] = mapped_column(
-        SQLEnum(EvidenceVisibility, native_enum=False),
+        CaseInsensitiveEnum(EvidenceVisibility),
         nullable=False,
         default=EvidenceVisibility.INTERNAL_CUSTOMER,
     )
@@ -154,7 +152,7 @@ class EvidenceAsset(Base, TimestampMixin, AuditTrailMixin):
 
     # Retention
     retention_policy: Mapped[EvidenceRetentionPolicy] = mapped_column(
-        SQLEnum(EvidenceRetentionPolicy, native_enum=False),
+        CaseInsensitiveEnum(EvidenceRetentionPolicy),
         nullable=False,
         default=EvidenceRetentionPolicy.STANDARD,
     )

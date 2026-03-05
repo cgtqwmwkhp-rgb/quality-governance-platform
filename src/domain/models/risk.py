@@ -5,11 +5,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -78,7 +77,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     treatment_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[RiskStatus] = mapped_column(SQLEnum(RiskStatus, native_enum=False), default=RiskStatus.IDENTIFIED)
+    status: Mapped[RiskStatus] = mapped_column(CaseInsensitiveEnum(RiskStatus), default=RiskStatus.IDENTIFIED)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership

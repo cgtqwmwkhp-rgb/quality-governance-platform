@@ -11,12 +11,10 @@ if TYPE_CHECKING:
     from src.domain.models.engineer import Engineer
     from src.domain.models.user import User
 
-from sqlalchemy import JSON, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -72,7 +70,7 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
 
     # Status and dates
     status: Mapped[AssessmentStatus] = mapped_column(
-        SQLEnum(AssessmentStatus, native_enum=False),
+        CaseInsensitiveEnum(AssessmentStatus),
         default=AssessmentStatus.DRAFT,
         index=True,
     )
@@ -82,7 +80,7 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
 
     # Outcome
     outcome: Mapped[Optional[AssessmentOutcome]] = mapped_column(
-        SQLEnum(AssessmentOutcome, native_enum=False), nullable=True
+        CaseInsensitiveEnum(AssessmentOutcome), nullable=True
     )
     overall_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -118,7 +116,7 @@ class AssessmentResponse(Base, TimestampMixin):
 
     # Verdict
     verdict: Mapped[Optional[CompetencyVerdict]] = mapped_column(
-        SQLEnum(CompetencyVerdict, native_enum=False), nullable=True
+        CaseInsensitiveEnum(CompetencyVerdict), nullable=True
     )
 
     # Supervisor feedback

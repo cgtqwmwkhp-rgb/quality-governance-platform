@@ -8,12 +8,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import TimestampMixin
+from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -48,7 +46,7 @@ class PolicyAcknowledgmentRequirement(Base, TimestampMixin):
 
     # Requirement details
     acknowledgment_type: Mapped[AcknowledgmentType] = mapped_column(
-        SQLEnum(AcknowledgmentType, native_enum=False),
+        CaseInsensitiveEnum(AcknowledgmentType),
         default=AcknowledgmentType.READ_ONLY,
     )
 
@@ -108,7 +106,7 @@ class PolicyAcknowledgment(Base, TimestampMixin):
 
     # Status
     status: Mapped[AcknowledgmentStatus] = mapped_column(
-        SQLEnum(AcknowledgmentStatus, native_enum=False),
+        CaseInsensitiveEnum(AcknowledgmentStatus),
         default=AcknowledgmentStatus.PENDING,
     )
 

@@ -4,12 +4,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -72,13 +70,13 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     incident_type: Mapped[IncidentType] = mapped_column(
-        SQLEnum(IncidentType, native_enum=False), default=IncidentType.OTHER
+        CaseInsensitiveEnum(IncidentType), default=IncidentType.OTHER
     )
     severity: Mapped[IncidentSeverity] = mapped_column(
-        SQLEnum(IncidentSeverity, native_enum=False), default=IncidentSeverity.MEDIUM
+        CaseInsensitiveEnum(IncidentSeverity), default=IncidentSeverity.MEDIUM
     )
     status: Mapped[IncidentStatus] = mapped_column(
-        SQLEnum(IncidentStatus, native_enum=False), default=IncidentStatus.REPORTED
+        CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED
     )
 
     # When and where
@@ -171,7 +169,7 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Status and dates
-    status: Mapped[ActionStatus] = mapped_column(SQLEnum(ActionStatus, native_enum=False), default=ActionStatus.OPEN)
+    status: Mapped[ActionStatus] = mapped_column(CaseInsensitiveEnum(ActionStatus), default=ActionStatus.OPEN)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

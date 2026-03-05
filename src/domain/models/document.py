@@ -8,12 +8,10 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 # =============================================================================
@@ -104,24 +102,24 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # File info
     file_name: Mapped[str] = mapped_column(String(500), nullable=False)
-    file_type: Mapped[FileType] = mapped_column(SQLEnum(FileType, native_enum=False), nullable=False)
+    file_type: Mapped[FileType] = mapped_column(CaseInsensitiveEnum(FileType), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)  # bytes
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)  # Azure Blob path
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Classification
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, native_enum=False), default=DocumentType.OTHER
+        CaseInsensitiveEnum(DocumentType), default=DocumentType.OTHER
     )
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     sensitivity: Mapped[SensitivityLevel] = mapped_column(
-        SQLEnum(SensitivityLevel, native_enum=False), default=SensitivityLevel.INTERNAL
+        CaseInsensitiveEnum(SensitivityLevel), default=SensitivityLevel.INTERNAL
     )
 
     # Status & workflow
     status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.PENDING
+        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.PENDING
     )
     reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -323,7 +321,7 @@ class IndexJob(Base, TimestampMixin):
     # Job info
     job_type: Mapped[str] = mapped_column(String(50), nullable=False)  # single, bulk, reindex
     status: Mapped[IndexJobStatus] = mapped_column(
-        SQLEnum(IndexJobStatus, native_enum=False), default=IndexJobStatus.PENDING
+        CaseInsensitiveEnum(IndexJobStatus), default=IndexJobStatus.PENDING
     )
 
     # Scope

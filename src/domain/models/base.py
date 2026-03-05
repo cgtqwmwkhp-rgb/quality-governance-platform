@@ -1,10 +1,46 @@
 """Base model mixins for common functionality."""
 
+import enum
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Type
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator, VARCHAR
+
+
+class CaseInsensitiveEnum(TypeDecorator):
+    """VARCHAR-backed enum column that normalises values to lowercase on read.
+
+    Guards against legacy data stored with uppercase labels (e.g. 'DRAFT')
+    when the Python enum uses lowercase values (e.g. 'draft').
+    """
+
+    impl = VARCHAR
+    cache_ok = True
+
+    def __init__(self, enum_class: Type[enum.Enum], length: int = 50):
+        self.enum_class = enum_class
+        super().__init__(length)
+
+    def process_bind_param(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        if isinstance(value, self.enum_class):
+            return value.value
+        return str(value).lower()
+
+    def process_result_value(self, value, dialect):  # type: ignore[override]
+        if value is None:
+            return None
+        lowered = value.lower()
+        try:
+            return self.enum_class(lowered)
+        except (ValueError, KeyError):
+            for member in self.enum_class:
+                if member.value.lower() == lowered or member.name.lower() == lowered:
+                    return member
+            return value
 
 
 class TimestampMixin:

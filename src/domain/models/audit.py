@@ -5,12 +5,10 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -94,7 +92,7 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
 
     # Template approval workflow lifecycle
     template_status: Mapped[TemplateLifecycleStatus] = mapped_column(
-        SQLEnum(TemplateLifecycleStatus, native_enum=False),
+        CaseInsensitiveEnum(TemplateLifecycleStatus),
         default=TemplateLifecycleStatus.PUBLISHED,
     )
 
@@ -239,7 +237,7 @@ class AuditQuestion(Base, TimestampMixin):
     # Workforce Development fields
     guidance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     criticality: Mapped[Optional[QuestionCriticality]] = mapped_column(
-        SQLEnum(QuestionCriticality, native_enum=False), nullable=True
+        CaseInsensitiveEnum(QuestionCriticality), nullable=True
     )
     regulatory_reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     guidance_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -279,7 +277,7 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Status and dates
-    status: Mapped[AuditStatus] = mapped_column(SQLEnum(AuditStatus, native_enum=False), default=AuditStatus.SCHEDULED)
+    status: Mapped[AuditStatus] = mapped_column(CaseInsensitiveEnum(AuditStatus), default=AuditStatus.SCHEDULED)
     scheduled_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -363,7 +361,7 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="medium")
     finding_type: Mapped[str] = mapped_column(String(50), default="nonconformity")
-    status: Mapped[FindingStatus] = mapped_column(SQLEnum(FindingStatus, native_enum=False), default=FindingStatus.OPEN)
+    status: Mapped[FindingStatus] = mapped_column(CaseInsensitiveEnum(FindingStatus), default=FindingStatus.OPEN)
 
     # Standard mapping (JSON arrays)
     # clause_ids_json was renamed to clause_ids_json_legacy by the

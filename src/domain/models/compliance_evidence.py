@@ -9,12 +9,10 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.domain.models.base import TimestampMixin
+from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -48,7 +46,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     clause_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
 
     linked_by: Mapped[EvidenceLinkMethod] = mapped_column(
-        SQLEnum(EvidenceLinkMethod, native_enum=False),
+        CaseInsensitiveEnum(EvidenceLinkMethod),
         nullable=False,
         default=EvidenceLinkMethod.MANUAL,
     )

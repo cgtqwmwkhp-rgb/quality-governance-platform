@@ -5,11 +5,10 @@ from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -53,10 +52,10 @@ class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     document_type: Mapped[DocumentType] = mapped_column(
-        SQLEnum(DocumentType, native_enum=False), default=DocumentType.POLICY
+        CaseInsensitiveEnum(DocumentType), default=DocumentType.POLICY
     )
     status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT
+        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.DRAFT
     )
 
     # Classification
@@ -123,7 +122,7 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
 
     # Approval workflow
     status: Mapped[DocumentStatus] = mapped_column(
-        SQLEnum(DocumentStatus, native_enum=False), default=DocumentStatus.DRAFT
+        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.DRAFT
     )
     submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     submitted_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

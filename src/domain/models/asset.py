@@ -5,12 +5,10 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -37,7 +35,7 @@ class AssetType(Base, TimestampMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     category: Mapped[AssetCategory] = mapped_column(
-        SQLEnum(AssetCategory, native_enum=False), nullable=False, index=True
+        CaseInsensitiveEnum(AssetCategory), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -84,7 +82,7 @@ class Asset(Base, TimestampMixin, AuditTrailMixin):
 
     # Status
     status: Mapped[AssetStatus] = mapped_column(
-        SQLEnum(AssetStatus, native_enum=False), default=AssetStatus.ACTIVE, index=True
+        CaseInsensitiveEnum(AssetStatus), default=AssetStatus.ACTIVE, index=True
     )
 
     # Service dates

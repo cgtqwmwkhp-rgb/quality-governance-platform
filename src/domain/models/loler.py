@@ -10,12 +10,10 @@ from typing import TYPE_CHECKING, List, Optional
 if TYPE_CHECKING:
     from src.domain.models.asset import Asset
 
-from sqlalchemy import Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -50,7 +48,7 @@ class LOLERExamination(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 
     # Examination details
     examination_type: Mapped[LOLERExaminationType] = mapped_column(
-        SQLEnum(LOLERExaminationType, native_enum=False),
+        CaseInsensitiveEnum(LOLERExaminationType),
         default=LOLERExaminationType.THOROUGH_EXAMINATION,
     )
     examination_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -102,7 +100,7 @@ class LOLERDefect(Base, TimestampMixin):
     )
 
     category: Mapped[LOLERDefectCategory] = mapped_column(
-        SQLEnum(LOLERDefectCategory, native_enum=False), nullable=False
+        CaseInsensitiveEnum(LOLERDefectCategory), nullable=False
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
     location_on_equipment: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)

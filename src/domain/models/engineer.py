@@ -9,12 +9,10 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime
-from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -93,7 +91,7 @@ class CompetencyRecord(Base, TimestampMixin):
 
     # Outcome
     state: Mapped[CompetencyLifecycleState] = mapped_column(
-        SQLEnum(CompetencyLifecycleState, native_enum=False),
+        CaseInsensitiveEnum(CompetencyLifecycleState),
         default=CompetencyLifecycleState.NOT_ASSESSED,
         index=True,
     )
@@ -145,7 +143,7 @@ class OnboardingChecklist(Base, TimestampMixin):
     requirement_id: Mapped[int] = mapped_column(ForeignKey("competency_requirements.id"), nullable=False)
 
     status: Mapped[OnboardingStatus] = mapped_column(
-        SQLEnum(OnboardingStatus, native_enum=False),
+        CaseInsensitiveEnum(OnboardingStatus),
         default=OnboardingStatus.PENDING,
         index=True,
     )
