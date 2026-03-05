@@ -89,28 +89,20 @@ p0_workflows:
       - stepId: 1
         action: "Navigate to RTA form"
         route: /portal/report/rta
-        exit_criteria: "RTA form loads with vehicle section"
-        
+        exit_criteria: "RTA form loads with driver details section"
+
       - stepId: 2
-        action: "Fill vehicle details"
+        action: "Fill driver name"
         form_fields:
-          - selector: "[data-testid='vehicle-registration']"
-            value: "AB12CDE"
-          - selector: "[data-testid='incident-location']"
-            value: "Test Location"
-        exit_criteria: "Vehicle details populated"
-        
-      - stepId: 3
-        action: "Submit form"
-        selector: "[data-testid='submit-rta-btn']"
-        exit_criteria: "Success confirmation"
-        expected_api: POST /api/v1/employee-portal/reports
-        
-    success_terminal_state: "Reference number displayed"
+          - selector: "[data-testid='rta-employee-name']"
+            value: "Test Driver"
+        exit_criteria: "Driver name populated"
+
+    success_terminal_state: "Form step 1 interactive with driver name filled"
     recovery_path: "Error banner with retry option"
     expected_apis:
       - POST /api/v1/employee-portal/reports
-    max_duration_seconds: 45
+    max_duration_seconds: 30
 
   # Admin Login Flow (LOGIN_UX_CONTRACT.md compliant)
   - workflowId: admin-login

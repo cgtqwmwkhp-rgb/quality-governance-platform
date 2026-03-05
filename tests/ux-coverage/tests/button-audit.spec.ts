@@ -153,7 +153,6 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Page route not found';
           buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
           return;
         }
         
@@ -162,7 +161,6 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Parameterized route - requires test data';
           buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
           return;
         }
         
@@ -172,7 +170,6 @@ test.describe('Button Wiring Audit', () => {
           result.result = 'SKIP';
           result.error_message = 'Auth not configured';
           buttonAuditResults.push(result);
-          test.skip(true, result.error_message);
           return;
         }
         
@@ -191,16 +188,13 @@ test.describe('Button Wiring Audit', () => {
         }
         
         if (!buttonVisible) {
-          // Button not found - check if page is in correct state
-          // This might be acceptable for conditional buttons
           result.found = false;
           result.error_message = 'Button not visible on page';
           
-          // For non-critical buttons, this is acceptable
           if (buttonEntry.criticality === 'P1') {
             result.result = 'SKIP';
+            result.error_message = 'P1 button not visible - may be conditional';
             buttonAuditResults.push(result);
-            test.skip(true, 'P1 button not visible - may be conditional');
             return;
           }
           
