@@ -202,7 +202,7 @@ export default function RTAs() {
         </div>
       )}
 
-      {!error && (
+      {!error && (<>
 
       {/* Search */}
       <div className="flex gap-4">
@@ -280,7 +280,7 @@ export default function RTAs() {
           </div>
         </CardContent>
       </Card>
-      )}
+      </>)}
 
       {/* Create Modal */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
