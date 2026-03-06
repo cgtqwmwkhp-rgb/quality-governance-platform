@@ -95,11 +95,16 @@ const SECTION_COLORS = [
   'from-red-500/20 to-red-600/20',
 ];
 
-function mapBackendQuestionType(q: { question_type: string; allow_na?: boolean; max_score?: number; max_value?: number }): string {
+function mapBackendQuestionType(q: { question_type: string; question_text?: string; allow_na?: boolean; max_score?: number; max_value?: number }): string {
   switch (q.question_type) {
     case 'yes_no': return q.allow_na ? 'yes_no_na' : 'yes_no';
     case 'pass_fail': return 'pass_fail';
-    case 'text': return 'text_short';
+    case 'date': return 'date';
+    case 'text': {
+      const label = (q.question_text || '').toLowerCase().trim();
+      if (label === 'date' || label === 'date of inspection' || label === 'inspection date' || label === 'audit date') return 'date';
+      return 'text_short';
+    }
     case 'textarea': return 'text_long';
     case 'number': return 'numeric';
     case 'signature': return 'signature';
@@ -777,6 +782,16 @@ export default function AuditExecution() {
             value={currentResponse?.response as number | null}
             onChange={(val) => updateResponse({ response: val })}
             max={10}
+          />
+        );
+
+      case 'date':
+        return (
+          <input
+            type="date"
+            value={(currentResponse?.response as string) || ''}
+            onChange={(e) => updateResponse({ response: e.target.value })}
+            className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground focus:outline-none focus:border-ring cursor-pointer"
           />
         );
 
