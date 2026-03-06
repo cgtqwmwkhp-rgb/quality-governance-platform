@@ -20,6 +20,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
+import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -123,15 +124,10 @@ export default function IncidentDetail() {
   const loadActions = async () => {
     if (!id) return
     try {
-      // Load actions filtered by this specific incident
-      const response = await actionsApi.list(1, 50)
-      // Filter client-side for this incident's actions
-      const incidentActions = (response.data.items || []).filter(
-        (a) => a.source_type === 'incident' && a.source_id === parseInt(id)
-      )
-      setActions(incidentActions)
+      const response = await actionsApi.list(1, 50, undefined, 'incident', parseInt(id))
+      setActions(response.data.items || [])
     } catch (err) {
-      console.error('Failed to load actions:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'loadActions' })
     }
   }
 

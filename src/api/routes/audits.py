@@ -43,7 +43,7 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
     PurgeExpiredTemplatesResponse,
 )
-from src.api.schemas.links import build_collection_links, build_resource_links
+from src.api.schemas.links import build_collection_links
 from src.api.utils.pagination import PaginationParams
 from src.domain.models.audit import (
     AuditFinding,
@@ -838,7 +838,6 @@ async def get_run(
     response = AuditRunDetailResponse.model_validate(detail.run)
     response.template_name = detail.template_name
     response.completion_percentage = detail.completion_percentage
-    response.links = build_resource_links("", "audits/runs", run_id)
     return response
 
 
