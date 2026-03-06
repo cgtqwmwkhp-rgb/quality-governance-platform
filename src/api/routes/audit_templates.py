@@ -141,11 +141,30 @@ async def update_template(
     db: DbSession,
     user: CurrentUser,
 ):
-    """Update an existing audit template."""
+    """Update an existing audit template with optimistic locking."""
+    from datetime import datetime as dt
+
     service = AuditService(db)
+
+    update_data = updates.model_dump(exclude_unset=True)
+    expected = update_data.pop("expected_updated_at", None)
+
+    if expected:
+        from src.domain.models.audit_template import AuditTemplate
+
+        existing = await db.get(AuditTemplate, template_id)
+        if existing and existing.updated_at:
+            expected_dt = dt.fromisoformat(expected.replace("Z", "+00:00"))
+            actual_dt = existing.updated_at.replace(tzinfo=expected_dt.tzinfo)
+            if abs((actual_dt - expected_dt).total_seconds()) > 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Template has been modified by another user. Please refresh and try again.",
+                )
+
     template = await service.update_template(
         template_id=template_id,
-        update_data=updates.model_dump(exclude_unset=True),
+        update_data=update_data,
         tenant_id=user.tenant_id,
         actor_user_id=user.id,
     )

@@ -40,11 +40,6 @@ export default function Risks() {
   })
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadRisks()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
-  }, [])
-
   const loadRisks = async () => {
     setError(null)
     try {
@@ -57,6 +52,27 @@ export default function Risks() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setError(null)
+      try {
+        const response = await risksApi.list(1, 50)
+        if (!cancelled) setRisks(response.data.items ?? [])
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load risks:', err)
+          setError(t('risks.error.load_failed'))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

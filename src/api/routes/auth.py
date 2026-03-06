@@ -117,7 +117,8 @@ async def exchange_azure_token(
         db.add(user)
         await db.commit()
         await db.refresh(user)
-        logger.info(f"Created new user from Azure AD: {email}")
+        masked = email[:3] + "***@" + (email.split("@")[1] if "@" in email else "***")
+        logger.info("Created new user from Azure AD: %s", masked)
     else:
         # Update Azure OID if not set
         if azure_oid and not user.azure_oid:

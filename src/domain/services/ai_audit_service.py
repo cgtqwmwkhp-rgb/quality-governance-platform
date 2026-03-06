@@ -10,9 +10,12 @@ Features:
 """
 
 import json
+import logging
 import os
 import re
 from collections import Counter, defaultdict
+
+logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
@@ -568,8 +571,13 @@ class AuditQuestionGenerator:
             try:
                 ai_questions = self._generate_ai_questions(standard, clause, context)
                 questions.extend(ai_questions)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error(
+                    "AI question generation failed for %s/%s: %s",
+                    standard,
+                    clause,
+                    exc,
+                )
 
         return questions
 
@@ -631,8 +639,8 @@ Format as JSON array with objects containing: question, type (compliance/effecti
                     q["standard"] = standard
                     q["ai_generated"] = True
                 return questions
-        except (json.JSONDecodeError, IndexError):
-            pass
+        except (json.JSONDecodeError, IndexError) as exc:
+            logger.warning("Failed to parse AI-generated questions: %s", exc)
 
         return []
 

@@ -315,6 +315,10 @@ class AuditTemplateUpdate(BaseModel):
     estimated_duration: Optional[int] = None
     pass_threshold: Optional[float] = None
     template_status: Optional[str] = None
+    expected_updated_at: Optional[str] = Field(
+        None,
+        description="ISO timestamp of the last known update; if provided, returns 409 on conflict",
+    )
 
 
 class AuditTemplateResponse(BaseModel):

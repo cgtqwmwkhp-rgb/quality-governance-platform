@@ -231,9 +231,16 @@ class NotificationService:
                 logger.info(f"SMS sent to user {notification.user_id}")
 
     async def _deliver_push(self, notification: Notification):
-        """Deliver notification via push notification"""
-        # TODO: Implement push notifications (FCM/APNs)
-        logger.debug(f"Push notification queued for user {notification.user_id}")
+        """Deliver notification via Web Push (dispatched to Celery task)."""
+        from src.infrastructure.tasks.notification_tasks import send_push_notification
+
+        send_push_notification.delay(
+            user_id=notification.user_id,
+            title=notification.title,
+            body=notification.message,
+            data={"type": notification.notification_type, "id": notification.id},
+        )
+        logger.info("Push notification dispatched for user %d", notification.user_id)
 
     # ==================== Mention Handling ====================
 

@@ -18,6 +18,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+
 logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.5-pro-preview-05-06"
@@ -46,6 +48,7 @@ class GeminiAIService:
                 return None
         return self._client
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def document_to_template(self, file_content: bytes, filename: str, asset_type: Optional[str] = None) -> dict:
         """Convert an uploaded document (PDF, image, etc.) into a structured audit template.
 
@@ -115,6 +118,7 @@ Only return valid JSON, no markdown formatting."""
             logger.error("Gemini document_to_template failed: %s", e)
             return self._fallback_template(filename)
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def web_search_enrichment(self, asset_type: str, manufacturer: Optional[str] = None) -> dict:
         """Search the web for manufacturer service recommendations and regulatory requirements.
 
@@ -184,6 +188,7 @@ Only return valid JSON."""
             logger.error("Gemini web_search_enrichment failed: %s", e)
             return {"recommendations": [], "regulatory": [], "best_practices": []}
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def template_to_assessment(self, template_data: dict) -> dict:
         """Convert a compliance/inspection template into a competency assessment version.
 
@@ -223,6 +228,7 @@ Only return valid JSON."""
             logger.error("Gemini template_to_assessment failed: %s", e)
             return template_data
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def generate_assessor_guidance(self, question_text: str, asset_type: Optional[str] = None) -> dict:
         """Generate detailed assessor guidance for a specific question/skill.
 
@@ -278,6 +284,7 @@ Only return valid JSON."""
                 "estimated_observation_time_minutes": 5,
             }
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def gap_analysis(self, existing_templates: list, asset_type: str) -> dict:
         """Analyse gaps between existing templates and industry standards for an asset type.
 

@@ -38,7 +38,10 @@ export function detectEnvironment(): Environment {
   // Infer from API URL (build-time)
   const apiUrl = import.meta.env.VITE_API_URL;
   if (apiUrl) {
-    if (apiUrl.includes('staging') || apiUrl.includes('localhost')) {
+    if (apiUrl.includes('localhost')) {
+      return 'development';
+    }
+    if (apiUrl.includes('staging')) {
       return 'staging';
     }
     if (apiUrl.includes('prod')) {

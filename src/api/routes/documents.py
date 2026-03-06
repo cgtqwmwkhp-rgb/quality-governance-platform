@@ -173,9 +173,17 @@ async def upload_document(
             detail=f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}",
         )
 
+    MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
     # Read file content
     content = await file.read()
     file_size = len(content)
+
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size ({file_size // (1024*1024)}MB) exceeds maximum allowed size (50MB).",
+        )
 
     # Generate unique file path (for Azure Blob Storage)
     file_path = f"documents/{datetime.utcnow().strftime('%Y/%m')}/{uuid.uuid4()}/{file.filename}"

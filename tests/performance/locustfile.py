@@ -109,7 +109,7 @@ class QGPUser(HttpUser):
     def get_dashboard(self):
         """Load main dashboard data."""
         with self.client.get(
-            "/api/incidents?page=1&per_page=10",
+            "/api/incidents?page=1&page_size=10",
             headers=self.auth_headers,
             catch_response=True,
         ) as response:
@@ -125,7 +125,7 @@ class QGPUser(HttpUser):
         """List incidents with pagination."""
         page = random.randint(1, 5)
         self.client.get(
-            f"/api/incidents?page={page}&per_page=20",
+            f"/api/incidents?page={page}&page_size=20",
             headers=self.auth_headers,
             name="/api/incidents?page=[n]",
         )
@@ -167,7 +167,7 @@ class QGPUser(HttpUser):
     def list_audits(self):
         """List audits."""
         self.client.get(
-            "/api/audits/runs?page=1&per_page=20",
+            "/api/audits/runs?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -175,7 +175,7 @@ class QGPUser(HttpUser):
     def list_audit_templates(self):
         """List audit templates."""
         self.client.get(
-            "/api/audit-templates?page=1&per_page=20",
+            "/api/audit-templates?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -183,7 +183,7 @@ class QGPUser(HttpUser):
     def get_audit_findings(self):
         """Get audit findings."""
         self.client.get(
-            "/api/audits/findings?page=1&per_page=50",
+            "/api/audits/findings?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -195,7 +195,7 @@ class QGPUser(HttpUser):
     def list_risks(self):
         """List risks."""
         self.client.get(
-            "/api/risks?page=1&per_page=20",
+            "/api/risks?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -223,7 +223,7 @@ class QGPUser(HttpUser):
     def get_compliance_evidence(self):
         """Get compliance evidence."""
         self.client.get(
-            "/api/compliance/evidence?page=1&per_page=50",
+            "/api/compliance/evidence?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -317,7 +317,7 @@ class AdminUser(HttpUser):
     def list_users(self):
         """List all users."""
         self.client.get(
-            "/api/users?page=1&per_page=50",
+            "/api/users?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -325,7 +325,7 @@ class AdminUser(HttpUser):
     def get_audit_trail(self):
         """Get audit trail logs."""
         self.client.get(
-            "/api/audit-trail?page=1&per_page=100",
+            "/api/audit-trail?page=1&page_size=100",
             headers=self.auth_headers,
         )
 

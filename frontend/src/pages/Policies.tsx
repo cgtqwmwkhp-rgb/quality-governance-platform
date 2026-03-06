@@ -40,10 +40,6 @@ export default function Policies() {
     review_frequency_months: 12,
   })
 
-  useEffect(() => {
-    loadPolicies()
-  }, [])
-
   const loadPolicies = async () => {
     try {
       const response = await policiesApi.list(1, 50)
@@ -55,6 +51,25 @@ export default function Policies() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const response = await policiesApi.list(1, 50)
+        if (!cancelled) setPolicies(response.data.items ?? [])
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load policies:', err)
+          setLoadError(getApiErrorMessage(err))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

@@ -13,11 +13,9 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-
-# pathlib available if needed
 from typing import Any, Dict, List, Optional
 
-# Settings imported if needed: from src.core.config import settings
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +187,11 @@ class EmailService:
         </html>
         """
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
     async def send_email(
         self,
         to: List[str],

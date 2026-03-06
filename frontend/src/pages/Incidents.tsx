@@ -42,10 +42,6 @@ export default function Incidents() {
     reported_date: new Date().toISOString().slice(0, 16),
   })
 
-  useEffect(() => {
-    loadIncidents()
-  }, [])
-
   const loadIncidents = async () => {
     try {
       const response = await incidentsApi.list(1, 50)
@@ -57,6 +53,25 @@ export default function Incidents() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const response = await incidentsApi.list(1, 50)
+        if (!cancelled) setIncidents(response.data.items ?? [])
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load incidents:', err)
+          setLoadError(getApiErrorMessage(err))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()

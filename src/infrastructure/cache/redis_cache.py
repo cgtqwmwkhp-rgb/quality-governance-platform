@@ -6,14 +6,14 @@ Features:
 - Fallback to in-memory cache
 - Configurable TTLs per cache type
 - Cache invalidation patterns
-- Serialization with JSON and pickle
+- Serialization with JSON
 """
 
 import asyncio
 import hashlib
 import json
+import logging
 import os
-import pickle
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -170,7 +170,7 @@ class RedisCache:
             data = await redis.get(self._make_key(key))
             if data is None:
                 return None
-            return pickle.loads(data)  # nosec B301 - internal cache data only
+            return json.loads(data)
         except Exception as e:
             print(f"[Cache] Redis get error: {e}")
             return await self._fallback.get(key)
@@ -185,7 +185,7 @@ class RedisCache:
             return await self._fallback.set(key, value, ttl)
 
         try:
-            data = pickle.dumps(value)
+            data = json.dumps(value, default=str)
             if ttl > 0:
                 await redis.setex(self._make_key(key), ttl, data)
             else:

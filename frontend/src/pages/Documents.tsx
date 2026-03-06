@@ -116,9 +116,7 @@ export default function Documents() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     try {

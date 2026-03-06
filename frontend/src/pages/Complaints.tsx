@@ -43,10 +43,6 @@ export default function Complaints() {
     complainant_phone: '',
   })
 
-  useEffect(() => {
-    loadComplaints()
-  }, [])
-
   const loadComplaints = async () => {
     try {
       const response = await complaintsApi.list(1, 50)
@@ -58,6 +54,25 @@ export default function Complaints() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const response = await complaintsApi.list(1, 50)
+        if (!cancelled) setComplaints(response.data.items ?? [])
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load complaints:', err)
+          setFormError(getApiErrorMessage(err))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
