@@ -395,7 +395,15 @@ api.interceptors.response.use(
       }
     } else if (status === 422) {
       const data = error.response?.data as Record<string, unknown> | undefined;
+      const errorEnvelope = data?.["error"] as Record<string, unknown> | undefined;
+      const fieldErrors = (errorEnvelope?.["details"] as Record<string, unknown>)?.["errors"] as Array<Record<string, string>> | undefined;
+      let validationMsg: string | undefined;
+      if (fieldErrors && Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+        validationMsg = fieldErrors.map(e => `${e.field || "field"}: ${e.message}`).join("; ");
+      }
       (error as ClassifiedAxiosError).classifiedMessage =
+        validationMsg ||
+        (errorEnvelope?.["message"] as string) ||
         (data?.["detail"] as string) ||
         (data?.["message"] as string) ||
         "Validation error. Please check your input.";

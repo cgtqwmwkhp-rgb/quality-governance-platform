@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Shield, Search, Loader2 } from 'lucide-react'
-import { risksApi, Risk, RiskCreate } from '../api/client'
+import { risksApi, Risk, RiskCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -61,6 +61,7 @@ export default function Risks() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
+    setError(null)
     try {
       await risksApi.create(formData)
       setShowModal(false)
@@ -75,6 +76,7 @@ export default function Risks() {
       loadRisks()
     } catch (err) {
       console.error('Failed to create risk:', err)
+      setError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }

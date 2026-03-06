@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
-import { incidentsApi, Incident, IncidentCreate } from '../api/client'
+import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -30,6 +30,8 @@ export default function Incidents() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<IncidentCreate>({
     title: '',
@@ -50,6 +52,7 @@ export default function Incidents() {
       setIncidents(response.data.items ?? [])
     } catch (err) {
       console.error('Failed to load incidents:', err)
+      setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -58,6 +61,7 @@ export default function Incidents() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
+    setCreateError(null)
     try {
       await incidentsApi.create({
         ...formData,
@@ -76,6 +80,7 @@ export default function Incidents() {
       loadIncidents()
     } catch (err) {
       console.error('Failed to create incident:', err)
+      setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }
@@ -128,6 +133,9 @@ export default function Incidents() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {loadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -231,6 +239,9 @@ export default function Incidents() {
             <DialogTitle>{t('incidents.dialog.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
+            {createError && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
+            )}
             <div>
               <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.title')}</label>
               <Input id="incidents-field-0"

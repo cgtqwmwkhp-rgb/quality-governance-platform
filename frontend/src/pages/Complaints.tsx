@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
-import { complaintsApi, Complaint, ComplaintCreate } from '../api/client'
+import { complaintsApi, Complaint, ComplaintCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -53,6 +53,7 @@ export default function Complaints() {
       setComplaints(response.data.items ?? [])
     } catch (err) {
       console.error('Failed to load complaints:', err)
+      setFormError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -85,6 +86,7 @@ export default function Complaints() {
       loadComplaints()
     } catch (err) {
       console.error('Failed to create complaint:', err)
+      setFormError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }

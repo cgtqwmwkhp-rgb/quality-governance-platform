@@ -6,7 +6,7 @@ import {
   CheckCircle2, Loader2, Grid3X3, List, 
   ChevronRight, ExternalLink, Brain, Zap
 } from 'lucide-react'
-import api from '../api/client'
+import api, { getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
@@ -113,6 +113,8 @@ export default function Documents() {
   const [dragActive, setDragActive] = useState(false)
   const [filterType, setFilterType] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -129,6 +131,8 @@ export default function Documents() {
     } catch (err) {
       console.error('Failed to load documents:', err)
       setDocuments([])
+      setStats(null)
+      setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -209,6 +213,7 @@ export default function Documents() {
       setShowUploadModal(false)
     } catch (err) {
       console.error('Upload failed:', err)
+      setUploadError(getApiErrorMessage(err))
     } finally {
       setUploading(false)
       setUploadProgress(0)
@@ -244,6 +249,12 @@ export default function Documents() {
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- drag-and-drop is mouse-only; upload button provides keyboard access
     <div className="space-y-6 animate-fade-in" onDragEnter={handleDrag} role="region" aria-label="Document library">
+      {loadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+      )}
+      {uploadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{uploadError}</div>
+      )}
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>

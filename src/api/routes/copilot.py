@@ -124,7 +124,7 @@ async def get_active_session(
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
-async def get_session(session_id: int, db: DbSession):
+async def get_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Get a session by ID."""
     from src.domain.services.copilot_service import CopilotService
 
@@ -138,7 +138,7 @@ async def get_session(session_id: int, db: DbSession):
 
 
 @router.delete("/sessions/{session_id}")
-async def close_session(session_id: int, db: DbSession):
+async def close_session(session_id: int, db: DbSession, current_user: CurrentUser):
     """Close a session."""
     from src.domain.services.copilot_service import CopilotService
 

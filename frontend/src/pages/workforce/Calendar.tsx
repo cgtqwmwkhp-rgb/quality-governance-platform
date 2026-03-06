@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, type AssessmentRun, type InductionRun } from '../../api/client'
+import { workforceApi, getApiErrorMessage, type AssessmentRun, type InductionRun } from '../../api/client'
 import { cn } from '../../helpers/utils'
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -22,6 +22,7 @@ export default function Calendar() {
   const [month, setMonth] = useState(() => new Date().getMonth())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
 
@@ -83,7 +84,9 @@ export default function Calendar() {
           ...mapToEvents(assessments, 'assessment'),
           ...mapToEvents(inductions, 'induction'),
         ])
-      } catch {
+      } catch (err) {
+        console.error('Failed to load calendar:', err)
+        setError(getApiErrorMessage(err))
         setEvents([])
       } finally {
         setLoading(false)
@@ -104,6 +107,9 @@ export default function Calendar() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('workforce.calendar.title')}</h1>
         <p className="text-muted-foreground mt-1">

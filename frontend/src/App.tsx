@@ -75,6 +75,10 @@ const FormsList = lazy(() => import('./pages/admin/FormsList'))
 const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'))
 const ContractsManagement = lazy(() => import('./pages/admin/ContractsManagement'))
 const SystemSettings = lazy(() => import('./pages/admin/SystemSettings'))
+const AdminUserManagement = lazy(() => import('./pages/admin/UserManagement'))
+const LookupTables = lazy(() => import('./pages/admin/LookupTables'))
+const NotificationSettings = lazy(() => import('./pages/admin/NotificationSettings'))
+const RequireRole = lazy(() => import('./components/RequireRole'))
 
 function PageLoader() {
   return (
@@ -302,12 +306,15 @@ function App() {
                 <Route path="risk-register" element={<RiskRegister />} />
                 <Route path="ims" element={<IMSDashboard />} />
                 <Route path="ai-intelligence" element={<AIIntelligence />} />
-                <Route path="admin" element={<AdminDashboard />} />
-                <Route path="admin/forms" element={<FormsList />} />
-                <Route path="admin/forms/new" element={<FormBuilder />} />
-                <Route path="admin/forms/:templateId" element={<FormBuilder />} />
-                <Route path="admin/contracts" element={<ContractsManagement />} />
-                <Route path="admin/settings" element={<SystemSettings />} />
+                <Route path="admin" element={<RequireRole allowed={['admin', 'manager']}><AdminDashboard /></RequireRole>} />
+                <Route path="admin/forms" element={<RequireRole allowed={['admin', 'manager']}><FormsList /></RequireRole>} />
+                <Route path="admin/forms/new" element={<RequireRole allowed={['admin', 'manager']}><FormBuilder /></RequireRole>} />
+                <Route path="admin/forms/:templateId" element={<RequireRole allowed={['admin', 'manager']}><FormBuilder /></RequireRole>} />
+                <Route path="admin/contracts" element={<RequireRole allowed={['admin', 'manager']}><ContractsManagement /></RequireRole>} />
+                <Route path="admin/settings" element={<RequireRole allowed={['admin']}><SystemSettings /></RequireRole>} />
+                <Route path="admin/users" element={<RequireRole allowed={['admin']}><AdminUserManagement /></RequireRole>} />
+                <Route path="admin/lookups" element={<RequireRole allowed={['admin', 'manager']}><LookupTables /></RequireRole>} />
+                <Route path="admin/notifications" element={<RequireRole allowed={['admin']}><NotificationSettings /></RequireRole>} />
               </Route>
 
               {/* Catch-all 404 */}

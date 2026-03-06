@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
-import { rtasApi, RTA, RTACreate } from '../api/client'
+import { rtasApi, RTA, RTACreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -33,6 +33,7 @@ export default function RTAs() {
   const [error, setError] = useState<{ message: string; code?: string; requestId?: string } | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<RTACreate>({
     title: '',
@@ -103,6 +104,7 @@ export default function RTAs() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
+    setCreateError(null)
     try {
       await rtasApi.create({
         ...formData,
@@ -125,6 +127,7 @@ export default function RTAs() {
       loadRtas()
     } catch (err) {
       console.error('Failed to create RTA:', err)
+      setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }
@@ -292,6 +295,9 @@ export default function RTAs() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
+            {createError && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
+            )}
             <div>
               <label htmlFor="rtas-field-0" className="block text-sm font-medium text-foreground mb-2">{t('common.title')}</label>
               <Input id="rtas-field-0"

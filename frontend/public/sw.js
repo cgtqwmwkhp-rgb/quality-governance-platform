@@ -5,8 +5,8 @@
  * Old cached bundles may contain HTTP URLs - the SW rewrites them to HTTPS.
  */
 
-// Cache version - CI replaces __SW_VERSION__ with git SHA + timestamp at build time
-const CACHE_VERSION = '__SW_VERSION__';
+// Cache version - CI replaces this with git SHA + timestamp at build time
+const CACHE_VERSION = 'qgp-v2.0.0-dev';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const DYNAMIC_CACHE = `${CACHE_VERSION}-dynamic`;
 const API_CACHE = `${CACHE_VERSION}-api`;
@@ -342,7 +342,7 @@ async function syncPendingReports() {
           // No token available - submit without auth
         }
 
-        const response = await fetch('/api/v1/portal/report', {
+        const response = await fetch('/api/v1/portal/reports/', {
           method: 'POST',
           headers: authHeaders,
           body: JSON.stringify(report.data),

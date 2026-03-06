@@ -1,10 +1,25 @@
 """Async email dispatch tasks."""
 
+import asyncio
 import logging
 
 from src.infrastructure.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro):
+    """Run an async coroutine from a synchronous Celery task."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
 
 
 @celery_app.task(
@@ -17,8 +32,18 @@ logger = logging.getLogger(__name__)
 def send_email(self, to: str, subject: str, body: str, html: bool = False) -> dict:
     """Send an email asynchronously with retry logic."""
     try:
-        logger.info("Sending email to %s: %s", to, subject)
-        return {"status": "sent", "to": to, "subject": subject}
+        from src.domain.services.email_service import email_service
+
+        if not email_service.enabled:
+            logger.warning("Email service not configured — skipping send to %s", to)
+            return {"status": "skipped", "to": to, "subject": subject}
+
+        success = _run_async(
+            email_service.send_email(to=[to], subject=subject, html_content=body if html else f"<pre>{body}</pre>")
+        )
+        status = "sent" if success else "failed"
+        logger.info("Email %s to %s: %s", status, to, subject)
+        return {"status": status, "to": to, "subject": subject}
     except Exception as exc:
         logger.error("Email send failed: %s", exc)
         raise self.retry(exc=exc)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Search, Loader2 } from 'lucide-react'
-import { policiesApi, Policy, PolicyCreate } from '../api/client'
+import { policiesApi, Policy, PolicyCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -28,6 +28,8 @@ export default function Policies() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<PolicyCreate>({
     title: '',
@@ -48,6 +50,7 @@ export default function Policies() {
       setPolicies(response.data.items ?? [])
     } catch (err) {
       console.error('Failed to load policies:', err)
+      setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -56,6 +59,7 @@ export default function Policies() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
+    setCreateError(null)
     try {
       await policiesApi.create(formData)
       setShowModal(false)
@@ -70,6 +74,7 @@ export default function Policies() {
       loadPolicies()
     } catch (err) {
       console.error('Failed to create policy:', err)
+      setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
     }
@@ -118,6 +123,9 @@ export default function Policies() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {loadError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -200,6 +208,9 @@ export default function Policies() {
             <DialogTitle>{t('policies.dialog.title')}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
+            {createError && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
+            )}
             <div>
               <label htmlFor="policies-field-0" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.title')}</label>
               <Input id="policies-field-0"

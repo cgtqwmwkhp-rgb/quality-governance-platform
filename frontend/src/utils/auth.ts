@@ -130,3 +130,23 @@ export function getValidPlatformToken(): string | null {
   }
   return token;
 }
+
+/**
+ * Extract the user's role from the JWT token.
+ * Falls back to 'viewer' if no role claim is present.
+ */
+export function getUserRole(): string {
+  const token = getPlatformToken();
+  if (!token) return 'viewer';
+  const payload = decodeTokenPayload(token);
+  if (!payload) return 'viewer';
+  return (payload.role as string) || (payload.roles as string) || 'viewer';
+}
+
+/**
+ * Check if the current user has one of the allowed roles.
+ */
+export function hasRole(...allowedRoles: string[]): boolean {
+  const role = getUserRole().toLowerCase();
+  return allowedRoles.some((r) => r.toLowerCase() === role);
+}

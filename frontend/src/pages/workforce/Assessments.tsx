@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, type AssessmentRun, type AssetType } from '../../api/client'
+import { workforceApi, auditsApi, getApiErrorMessage, type AssessmentRun, type AssetType } from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
@@ -32,6 +32,7 @@ export default function Assessments() {
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
   const [templateMap, setTemplateMap] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -80,7 +81,9 @@ export default function Assessments() {
         if (assetTypeFilter) params.asset_type_id = assetTypeFilter
         const res = await workforceApi.listAssessments(params)
         setAssessments(res.data.items || [])
-      } catch {
+      } catch (err) {
+        console.error('Failed to load assessments:', err)
+        setError(getApiErrorMessage(err))
         setAssessments([])
       } finally {
         setLoading(false)
@@ -91,6 +94,9 @@ export default function Assessments() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('workforce.assessments.title')}</h1>
