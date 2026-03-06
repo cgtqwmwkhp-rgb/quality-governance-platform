@@ -60,6 +60,11 @@ export default function ComplaintDetail() {
   const [saving, setSaving] = useState(false)
   const [editForm, setEditForm] = useState<ComplaintUpdate>({})
 
+  const [selectedAction, setSelectedAction] = useState<Action | null>(null)
+  const [showActionDetailModal, setShowActionDetailModal] = useState(false)
+  const [updatingAction, setUpdatingAction] = useState(false)
+  const [actionUpdateError, setActionUpdateError] = useState('')
+
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({
     title: '',
@@ -236,6 +241,44 @@ export default function ComplaintDetail() {
 
   const handleInvestigatorChange = (email: string, _user?: UserSearchResult) => {
     setInvestigationForm({ ...investigationForm, lead_investigator: email })
+  }
+
+  const ACTION_STATUS_OPTIONS = [
+    { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
+    { value: 'in_progress', label: 'In Progress', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
+    { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
+    { value: 'completed', label: 'Completed', className: 'bg-green-100 text-green-800 hover:bg-green-200' },
+    { value: 'cancelled', label: 'Cancelled', className: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
+  ]
+
+  const handleOpenAction = (action: Action) => {
+    setSelectedAction(action)
+    setActionUpdateError('')
+    setShowActionDetailModal(true)
+  }
+
+  const handleUpdateActionStatus = async (newStatus: string, completionNotes?: string) => {
+    if (!selectedAction) return
+    setUpdatingAction(true)
+    setActionUpdateError('')
+    try {
+      const updatePayload: { status: string; completion_notes?: string } = { status: newStatus }
+      if (completionNotes) updatePayload.completion_notes = completionNotes
+      const response = await actionsApi.update(selectedAction.id, 'complaint', updatePayload)
+      setSelectedAction(response.data)
+      setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'updateActionStatus' })
+      setActionUpdateError(getApiErrorMessage(err))
+    } finally {
+      setUpdatingAction(false)
+    }
+  }
+
+  const handleCompleteAction = () => {
+    const notes = window.prompt('Enter completion notes (optional):')
+    if (notes === null) return
+    handleUpdateActionStatus('completed', notes.trim() || undefined)
   }
 
   const getPriorityVariant = (priority: string) => {
@@ -610,7 +653,11 @@ export default function ComplaintDetail() {
                   {actions.slice(0, 5).map((action) => (
                     <div
                       key={action.id}
-                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border"
+                      className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleOpenAction(action)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenAction(action); } }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
@@ -628,9 +675,17 @@ export default function ComplaintDetail() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant={action.status === 'completed' ? 'resolved' : 'in-progress' as any}>
-                        {action.status}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={
+                          action.status === 'completed' ? 'resolved' :
+                          action.status === 'cancelled' ? 'destructive' :
+                          action.status === 'in_progress' ? 'in-progress' :
+                          'secondary' as any
+                        }>
+                          {action.status.replace(/_/g, ' ')}
+                        </Badge>
+                        <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -892,6 +947,148 @@ export default function ComplaintDetail() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Action Detail Modal */}
+      <Dialog
+        open={showActionDetailModal}
+        onOpenChange={(open) => {
+          setShowActionDetailModal(open)
+          if (!open) {
+            setSelectedAction(null)
+            setActionUpdateError('')
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
+              Action Details
+            </DialogTitle>
+            <DialogDescription>
+              View / Update Status
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedAction && (
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <span className="text-sm font-medium text-muted-foreground">Title</span>
+                  <p className="font-medium text-foreground">{selectedAction.title}</p>
+                </div>
+                
+                {selectedAction.description && (
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
+                    <p className="text-foreground">{selectedAction.description}</p>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
+                    <Badge 
+                      variant={
+                        selectedAction.status === 'completed' ? 'resolved' :
+                        selectedAction.status === 'cancelled' ? 'destructive' :
+                        selectedAction.status === 'in_progress' ? 'in-progress' :
+                        'secondary' as any
+                      }
+                      className="mt-1"
+                    >
+                      {selectedAction.status.replace(/_/g, ' ')}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Priority</span>
+                    <p className="text-foreground capitalize">{selectedAction.priority}</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Due Date</span>
+                    <p className="text-foreground">
+                      {selectedAction.due_date 
+                        ? new Date(selectedAction.due_date).toLocaleDateString() 
+                        : 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Assigned to</span>
+                    <p className="text-foreground">
+                      {selectedAction.assigned_to_email || 'Unassigned'}
+                    </p>
+                  </div>
+                </div>
+                
+                {selectedAction.completed_at && (
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Completed at</span>
+                    <p className="text-foreground">
+                      {new Date(selectedAction.completed_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+                
+                {selectedAction.completion_notes && (
+                  <div>
+                    <span className="text-sm font-medium text-muted-foreground">Completion Notes</span>
+                    <p className="text-foreground">{selectedAction.completion_notes}</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="border-t pt-4">
+                <span className="text-sm font-medium text-muted-foreground mb-2 block">
+                  Update Status
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {ACTION_STATUS_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        option.className,
+                        selectedAction.status === option.value && 'ring-2 ring-primary'
+                      )}
+                      disabled={updatingAction || selectedAction.status === option.value}
+                      onClick={() => {
+                        if (option.value === 'completed') {
+                          handleCompleteAction()
+                        } else {
+                          handleUpdateActionStatus(option.value)
+                        }
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+                
+                {actionUpdateError && (
+                  <p className="text-sm text-destructive mt-2">{actionUpdateError}</p>
+                )}
+                
+                {updatingAction && (
+                  <div className="flex items-center gap-2 mt-2 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Updating...</span>
+                  </div>
+                )}
+              </div>
+              
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

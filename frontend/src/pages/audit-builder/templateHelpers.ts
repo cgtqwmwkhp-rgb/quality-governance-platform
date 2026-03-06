@@ -19,6 +19,7 @@ function mapApiQuestion(q: any, questionIdMap: Record<string, number>): Question
     failureTriggersAction: false,
     riskLevel: q.risk_category as Question['riskLevel'],
     guidance: q.help_text,
+    positiveAnswer: q.positive_answer || undefined,
   };
 }
 
@@ -101,6 +102,7 @@ export function buildQuestionPayload(q: Question, sortOrder: number, sectionId?:
       ? q.options.map(o => ({ value: o.value, label: o.label, score: o.score, is_correct: o.isCorrect }))
       : undefined,
     risk_category: q.riskLevel,
+    positive_answer: q.positiveAnswer || undefined,
   };
   if (sectionId !== undefined) return { ...base, section_id: sectionId };
   return base;

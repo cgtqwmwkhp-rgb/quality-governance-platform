@@ -469,6 +469,11 @@ class TestActionLifecycleWorkflow:
     Test ID: ACTIONS-LIFECYCLE-001
     """
 
+    @staticmethod
+    def _unique_entity_id() -> int:
+        """Generate collision-resistant entity IDs for integration runs."""
+        return (uuid.uuid4().int % 1_000_000_000) + 1_000
+
     @pytest.mark.asyncio
     async def test_create_action_for_investigation(self, client: AsyncClient, auth_headers: dict, test_session):
         """Create an action linked to an investigation and verify it persists."""
@@ -488,7 +493,7 @@ class TestActionLifecycleWorkflow:
         investigation = InvestigationRun(
             template_id=template.id,
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
-            assigned_entity_id=1,
+            assigned_entity_id=self._unique_entity_id(),
             title="Lifecycle Test Investigation",
             reference_number=f"INV-LIFECYCLE-{uuid.uuid4().hex[:8]}",
         )
@@ -537,7 +542,7 @@ class TestActionLifecycleWorkflow:
         investigation = InvestigationRun(
             template_id=template.id,
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
-            assigned_entity_id=2,
+            assigned_entity_id=self._unique_entity_id(),
             title="Status Update Test Investigation",
             reference_number=f"INV-STATUS-{uuid.uuid4().hex[:8]}",
         )
@@ -588,7 +593,7 @@ class TestActionLifecycleWorkflow:
         investigation = InvestigationRun(
             template_id=template.id,
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
-            assigned_entity_id=3,
+            assigned_entity_id=self._unique_entity_id(),
             title="Complete Action Test Investigation",
             reference_number=f"INV-COMPLETE-{uuid.uuid4().hex[:8]}",
         )
@@ -653,7 +658,7 @@ class TestActionLifecycleWorkflow:
         investigation = InvestigationRun(
             template_id=template.id,
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
-            assigned_entity_id=4,
+            assigned_entity_id=self._unique_entity_id(),
             title="Status Clear Test Investigation",
             reference_number=f"INV-CLEAR-{uuid.uuid4().hex[:8]}",
         )
@@ -707,7 +712,7 @@ class TestActionLifecycleWorkflow:
         investigation = InvestigationRun(
             template_id=template.id,
             assigned_entity_type=AssignedEntityType.REPORTING_INCIDENT,
-            assigned_entity_id=5,
+            assigned_entity_id=self._unique_entity_id(),
             title="List Status Test Investigation",
             reference_number=f"INV-LIST-{uuid.uuid4().hex[:8]}",
         )

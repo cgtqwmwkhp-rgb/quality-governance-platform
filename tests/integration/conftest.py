@@ -19,10 +19,13 @@ from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
-from src.api.dependencies import get_current_user, security
-from src.core.config import settings
-from src.core.security import decode_token
-from src.main import app
+# Force test-mode DB engine settings (e.g., NullPool) during imports.
+os.environ.setdefault("TESTING", "1")
+
+from src.api.dependencies import get_current_user, security  # noqa: E402
+from src.core.config import settings  # noqa: E402
+from src.core.security import decode_token  # noqa: E402
+from src.main import app  # noqa: E402
 
 # Align with the application's JWT secret so decode_token() succeeds.
 TEST_JWT_SECRET = settings.jwt_secret_key
@@ -238,7 +241,7 @@ def _override_auth():
     app.dependency_overrides.pop(get_current_user, None)
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(autouse=True)
 async def _seed_default_data():
     """Seed a default tenant and user for FK integrity.
 
@@ -410,12 +413,30 @@ def superuser_auth_headers() -> dict[str, str]:
 async def test_session():
     """Async database session for direct ORM operations in tests."""
     try:
-        from sqlalchemy.ext.asyncio import AsyncSession
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.pool import NullPool
 
-        from src.infrastructure.database import async_session_maker
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "sqlite+aiosqlite:///./test_integration.db",
+        )
+        engine = create_async_engine(database_url, poolclass=NullPool, future=True)
+        session_maker = async_sessionmaker(
+            engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
 
-        async with async_session_maker() as session:
-            yield session
+        async with session_maker() as session:
+            try:
+                yield session
+            finally:
+                # Ensure failed tests do not leak open transactions into later tests.
+                if session.in_transaction():
+                    await session.rollback()
+        await engine.dispose()
     except Exception as exc:
         pytest.skip(f"DB session setup failed: {exc}")
 

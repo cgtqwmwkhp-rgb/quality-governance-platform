@@ -863,6 +863,7 @@ export interface AuditQuestionCreate {
   sort_order?: number;
   risk_category?: string;
   risk_weight?: number;
+  positive_answer?: "yes" | "no";
 }
 
 export interface AuditQuestionUpdate {
@@ -883,6 +884,7 @@ export interface AuditQuestionUpdate {
   sort_order?: number;
   risk_category?: string;
   risk_weight?: number;
+  positive_answer?: "yes" | "no";
   is_active?: boolean;
 }
 
@@ -923,6 +925,7 @@ export interface AuditQuestion {
   sort_order: number;
   risk_category?: string;
   risk_weight?: number;
+  positive_answer?: "yes" | "no";
   criticality?: string;
   created_at: string;
   updated_at: string;

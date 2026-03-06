@@ -71,6 +71,7 @@ interface AuditQuestion {
   guidance?: string;
   riskLevel?: string;
   isoClause?: string;
+  positiveAnswer?: 'yes' | 'no';
 }
 
 interface AuditData {
@@ -458,6 +459,7 @@ export default function AuditExecution() {
                 guidance: q.help_text || undefined,
                 riskLevel: q.risk_category || undefined,
                 isoClause: undefined,
+                positiveAnswer: q.positive_answer || undefined,
               })),
             isComplete: false,
           }));
@@ -618,6 +620,19 @@ export default function AuditExecution() {
   const currentSection = audit.sections[currentSectionIndex];
   const currentQuestion = currentSection.questions[currentQuestionIndex];
   const currentResponse = responses[currentQuestion.id];
+  const allQuestions = audit.sections.flatMap(s => s.questions);
+
+  const isFindingResponse = (response: QuestionResponse): boolean => {
+    const question = allQuestions.find(q => q.id === response.questionId);
+    if (!question) return false;
+    if (!['pass_fail', 'yes_no', 'yes_no_na'].includes(question.type)) return false;
+
+    const inverted = question.positiveAnswer === 'no';
+    if (question.type === 'pass_fail') {
+      return inverted ? response.response === 'pass' : response.response === 'fail';
+    }
+    return inverted ? response.response === 'yes' : response.response === 'no';
+  };
 
   // Calculate progress
   const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
@@ -637,11 +652,15 @@ export default function AuditExecution() {
         totalWeight += question.weight;
 
         if (question.type === 'pass_fail' || question.type === 'yes_no') {
-          if (response.response === 'pass' || response.response === 'yes') {
+          const positiveVal = question.positiveAnswer === 'no'
+            ? (question.type === 'pass_fail' ? 'fail' : 'no')
+            : (question.type === 'pass_fail' ? 'pass' : 'yes');
+          if (response.response === positiveVal) {
             achievedWeight += question.weight;
           }
         } else if (question.type === 'yes_no_na') {
-          if (response.response === 'yes' || response.response === 'na') {
+          const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes';
+          if (response.response === positiveVal || response.response === 'na') {
             achievedWeight += question.weight;
           }
         } else if (question.type.startsWith('scale_')) {
@@ -691,6 +710,12 @@ export default function AuditExecution() {
   };
 
   // Render question input based on type
+  const isInverted = currentQuestion.positiveAnswer === 'no';
+  const yesVariant: 'success' | 'danger' = isInverted ? 'danger' : 'success';
+  const noVariant: 'success' | 'danger' = isInverted ? 'success' : 'danger';
+  const yesIcon = isInverted ? XCircle : CheckCircle2;
+  const noIcon = isInverted ? CheckCircle2 : XCircle;
+
   const renderQuestionInput = () => {
     switch (currentQuestion.type) {
       case 'pass_fail':
@@ -699,16 +724,16 @@ export default function AuditExecution() {
             <ResponseButton
               selected={currentResponse?.response === 'pass'}
               onClick={() => updateResponse({ response: 'pass' })}
-              variant="success"
-              icon={CheckCircle2}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               PASS
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'fail'}
               onClick={() => updateResponse({ response: 'fail' })}
-              variant="danger"
-              icon={XCircle}
+              variant={noVariant}
+              icon={noIcon}
             >
               FAIL
             </ResponseButton>
@@ -721,16 +746,16 @@ export default function AuditExecution() {
             <ResponseButton
               selected={currentResponse?.response === 'yes'}
               onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               YES
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'no'}
               onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
+              variant={noVariant}
+              icon={noIcon}
             >
               NO
             </ResponseButton>
@@ -743,16 +768,16 @@ export default function AuditExecution() {
             <ResponseButton
               selected={currentResponse?.response === 'yes'}
               onClick={() => updateResponse({ response: 'yes' })}
-              variant="success"
-              icon={CheckCircle2}
+              variant={yesVariant}
+              icon={yesIcon}
             >
               YES
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'no'}
               onClick={() => updateResponse({ response: 'no' })}
-              variant="danger"
-              icon={XCircle}
+              variant={noVariant}
+              icon={noIcon}
             >
               NO
             </ResponseButton>
@@ -886,7 +911,7 @@ export default function AuditExecution() {
             <h3 className="text-lg font-semibold text-foreground mb-3">Findings</h3>
             <div className="space-y-2">
               {Object.values(responses)
-                .filter(r => r.response === 'fail' || r.response === 'no')
+                .filter(isFindingResponse)
                 .map((r, idx) => {
                   const question = audit.sections
                     .flatMap(s => s.questions)
@@ -898,7 +923,7 @@ export default function AuditExecution() {
                     </div>
                   );
                 })}
-              {Object.values(responses).filter(r => r.response === 'fail' || r.response === 'no').length === 0 && (
+              {Object.values(responses).filter(isFindingResponse).length === 0 && (
                 <p className="text-sm text-muted-foreground">No failed items</p>
               )}
             </div>

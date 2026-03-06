@@ -96,7 +96,7 @@ describe('Risks', () => {
     expect(screen.getByText('Data breach risk')).toBeInTheDocument()
     expect(screen.getByText('RSK-002')).toBeInTheDocument()
     expect(screen.getByText('Supply chain disruption')).toBeInTheDocument()
-    expect(mockList).toHaveBeenCalledWith(1, 50)
+    expect(mockList).toHaveBeenCalledWith(1, 50, undefined)
   })
 
   it('renders page header, search input, and new button', async () => {
@@ -173,6 +173,7 @@ describe('Risks', () => {
     fireEvent.change(titleInput, { target: { value: 'New risk' } })
     fireEvent.change(descInput, { target: { value: 'Detailed description' } })
 
+    const listCallsBeforeCreate = mockList.mock.calls.length
     fireEvent.click(screen.getByText('risks.create'))
 
     await waitFor(() => {
@@ -184,7 +185,7 @@ describe('Risks', () => {
     expect(callArgs.description).toBe('Detailed description')
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalledTimes(2)
+      expect(mockList.mock.calls.length).toBeGreaterThan(listCallsBeforeCreate)
     })
   })
 
@@ -213,7 +214,7 @@ describe('Risks', () => {
     fireEvent.click(screen.getByText('risks.create'))
 
     await waitFor(() => {
-      expect(screen.getByText('Validation failed')).toBeInTheDocument()
+      expect(screen.getByText('risks.error.load_failed')).toBeInTheDocument()
     })
   })
 

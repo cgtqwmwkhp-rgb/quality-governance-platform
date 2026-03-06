@@ -11,6 +11,7 @@ import { Badge } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -263,6 +264,7 @@ export default function Risks() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('risks.dialog.title')}</DialogTitle>
+            <DialogDescription>{t('risks.subtitle')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>

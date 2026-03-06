@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -253,6 +254,7 @@ export default function Incidents() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('incidents.dialog.title')}</DialogTitle>
+            <DialogDescription>{t('incidents.subtitle')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             {createError && (

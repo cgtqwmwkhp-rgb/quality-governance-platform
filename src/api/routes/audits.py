@@ -394,7 +394,11 @@ async def update_template(
         template.version += 1
         template.is_published = False
 
-    update_data = template_data.model_dump(exclude_unset=True, exclude={"standard_ids"})
+    # Protect workflow/system-controlled fields from mass assignment.
+    update_data = template_data.model_dump(
+        exclude_unset=True,
+        exclude={"standard_ids", "is_active", "is_published", "template_status"},
+    )
     for field in ("name", "description", "category"):
         if field in update_data and isinstance(update_data[field], str):
             update_data[field] = html.unescape(update_data[field])
@@ -608,6 +612,11 @@ async def create_question(
         ]
     del question_dict["conditional_logic"]
 
+    if "assessor_guidance" in question_dict:
+        question_dict["assessor_guidance_json"] = question_dict.pop("assessor_guidance")
+    if "training_materials" in question_dict:
+        question_dict["training_materials_json"] = question_dict.pop("training_materials")
+
     # Handle clause_ids and control_ids
     clause_ids = question_dict.pop("clause_ids", None)
     control_ids = question_dict.pop("control_ids", None)
@@ -673,6 +682,10 @@ async def update_question(
         update_data["evidence_requirements_json"] = update_data.pop("evidence_requirements")
     if "conditional_logic" in update_data:
         update_data["conditional_logic_json"] = update_data.pop("conditional_logic")
+    if "assessor_guidance" in update_data:
+        update_data["assessor_guidance_json"] = update_data.pop("assessor_guidance")
+    if "training_materials" in update_data:
+        update_data["training_materials_json"] = update_data.pop("training_materials")
     if "clause_ids" in update_data:
         update_data["clause_ids_json"] = update_data.pop("clause_ids")
     if "control_ids" in update_data:

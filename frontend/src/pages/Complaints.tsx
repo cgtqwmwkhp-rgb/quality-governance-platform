@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -265,6 +266,7 @@ export default function Complaints() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('complaints.dialog.title')}</DialogTitle>
+            <DialogDescription>{t('complaints.subtitle')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>

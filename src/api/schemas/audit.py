@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ============== Question Types & Options ==============
 
@@ -102,6 +102,9 @@ class AuditQuestionBase(BaseModel):
     training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
     failure_triggers_action: bool = False
 
+    # Yes/No polarity: "yes" (default) or "no" — which answer is the positive/green one
+    positive_answer: str = Field("yes", pattern="^(yes|no)$")
+
     # Display
     sort_order: int = 0
 
@@ -142,6 +145,14 @@ class AuditQuestionUpdate(BaseModel):
     assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
     training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
     failure_triggers_action: Optional[bool] = None
+    positive_answer: Optional[str] = Field(None, pattern="^(yes|no)$")
+
+    @field_validator("positive_answer")
+    @classmethod
+    def validate_positive_answer_not_null(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            raise ValueError("positive_answer cannot be null; use 'yes' or 'no'")
+        return value
 
 
 class AuditQuestionResponse(BaseModel):
@@ -184,6 +195,7 @@ class AuditQuestionResponse(BaseModel):
     assessor_guidance: Optional[Dict[str, Any]] = Field(None, validation_alias="assessor_guidance_json")
     training_materials: Optional[List[Any]] = Field(None, validation_alias="training_materials_json")
     failure_triggers_action: bool = False
+    positive_answer: str = "yes"
     sort_order: int = 0
     is_active: bool = True
     created_at: datetime

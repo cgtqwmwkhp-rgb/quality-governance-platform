@@ -22,6 +22,7 @@ from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
 
 T = TypeVar("T")
+logger = logging.getLogger(__name__)
 
 
 class CacheType(Enum):

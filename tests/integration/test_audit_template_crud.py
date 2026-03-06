@@ -117,7 +117,10 @@ class TestAuditTemplateCRUD:
             headers=superuser_auth_headers,
         )
 
-        assert response.status_code == 204
+        assert response.status_code == 200
+        archived = response.json()
+        assert archived["id"] == template.id
+        assert archived.get("archived_at") is not None
 
         # Verify it's soft-deleted (not in list)
         list_response = await client.get(
@@ -200,7 +203,7 @@ class TestAuditTemplateCRUD:
             headers=auth_headers,
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         resp_data = response.json()
         error_msg = resp_data.get("error", {}).get("message", resp_data.get("detail", ""))
         assert "at least one question" in error_msg.lower()
@@ -304,7 +307,7 @@ class TestAuditSectionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test soft-deleting a section."""
         template = AuditTemplate(
@@ -329,7 +332,7 @@ class TestAuditSectionCRUD:
 
         response = await client.delete(
             f"/api/v1/audits/sections/{section.id}",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 204
@@ -438,7 +441,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test soft-deleting a question."""
         template = AuditTemplate(
@@ -464,7 +467,7 @@ class TestAuditQuestionCRUD:
 
         response = await client.delete(
             f"/api/v1/audits/questions/{question.id}",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 204
@@ -514,6 +517,117 @@ class TestAuditQuestionCRUD:
         assert len(data["options"]) == 4
         assert data["options"][0]["label"] == "Excellent"
         assert data["options"][0]["score"] == 5.0
+
+    @pytest.mark.asyncio
+    async def test_create_question_with_positive_answer(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test creating yes/no question with explicit positive_answer polarity."""
+        template = AuditTemplate(
+            name="Template",
+            category="Safety",
+            audit_type="inspection",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        response = await client.post(
+            f"/api/v1/audits/templates/{template.id}/questions",
+            json={
+                "question_text": "Any spillages present?",
+                "question_type": "yes_no",
+                "positive_answer": "no",
+                "sort_order": 0,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["positive_answer"] == "no"
+
+    @pytest.mark.asyncio
+    async def test_update_question_rejects_invalid_positive_answer(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test updating question rejects invalid positive_answer values."""
+        template = AuditTemplate(
+            name="Template",
+            category="Safety",
+            audit_type="inspection",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        question = AuditQuestion(
+            template_id=template.id,
+            question_text="Original question",
+            question_type="yes_no",
+            sort_order=0,
+        )
+        test_session.add(question)
+        await test_session.commit()
+        await test_session.refresh(question)
+
+        response = await client.patch(
+            f"/api/v1/audits/questions/{question.id}",
+            json={"positive_answer": "maybe"},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_update_question_rejects_null_positive_answer(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test updating question rejects null positive_answer values."""
+        template = AuditTemplate(
+            name="Template",
+            category="Safety",
+            audit_type="inspection",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        question = AuditQuestion(
+            template_id=template.id,
+            question_text="Original question",
+            question_type="yes_no",
+            sort_order=0,
+        )
+        test_session.add(question)
+        await test_session.commit()
+        await test_session.refresh(question)
+
+        response = await client.patch(
+            f"/api/v1/audits/questions/{question.id}",
+            json={"positive_answer": None},
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422
 
 
 class TestAuditTemplateLifecycle:

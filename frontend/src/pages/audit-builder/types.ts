@@ -46,6 +46,7 @@ export interface Question {
   guidance?: string;
   failureTriggersAction: boolean;
   tags?: string[];
+  positiveAnswer?: 'yes' | 'no';
 }
 
 export interface Section {

@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -245,6 +245,11 @@ class AuditQuestion(Base, TimestampMixin):
     assessor_guidance_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     training_materials_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     failure_triggers_action: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Yes/No polarity: which answer is positive (green)? Default "yes".
+    positive_answer: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="yes", server_default=text("'yes'")
+    )
 
     # Ordering
     sort_order: Mapped[int] = mapped_column(Integer, default=0)

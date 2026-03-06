@@ -183,4 +183,4 @@ async def test_template_detail_decodes_html_entities_for_questions_and_options(
     assert detail.category == "Health & Safety"
     assert detail.sections[0].title == "Area & Access"
     assert detail.sections[0].questions[0].question_text == "Are welfare areas clean & tidy?"
-    assert detail.sections[0].questions[0].options[0].label == "Yes & compliant"
+    assert detail.sections[0].questions[0].options[0]["label"] == "Yes & compliant"

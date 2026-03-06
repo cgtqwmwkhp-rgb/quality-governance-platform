@@ -100,7 +100,7 @@ class TestRisksAPI:
             risk_score=16,
             risk_level="high",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK", 1),
+            reference_number=generate_test_reference("RSK"),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -134,7 +134,7 @@ class TestRisksAPI:
             risk_score=4,
             risk_level="low",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK", 1),
+            reference_number=generate_test_reference("RSK"),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -177,7 +177,7 @@ class TestRisksAPI:
             risk_score=12,
             risk_level="high",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK", 1),
+            reference_number=generate_test_reference("RSK"),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -220,7 +220,7 @@ class TestRisksAPI:
             risk_score=9,
             risk_level="medium",
             created_by_id=test_user.id,
-            reference_number=generate_test_reference("RSK", 1),
+            reference_number=generate_test_reference("RSK"),
         )
         test_session.add(risk)
         await test_session.commit()
@@ -267,7 +267,7 @@ class TestRisksAPI:
                 risk_score=25,
                 risk_level="critical",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 1),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="Risk 2",
@@ -277,7 +277,7 @@ class TestRisksAPI:
                 risk_score=16,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 2),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="Risk 3",
@@ -287,7 +287,7 @@ class TestRisksAPI:
                 risk_score=4,
                 risk_level="low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 3),
+                reference_number=generate_test_reference("RSK"),
             ),
         ]
         for risk in risks:
@@ -323,7 +323,7 @@ class TestRisksAPI:
                 risk_score=1,
                 risk_level="very_low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 1),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="R2",
@@ -333,7 +333,7 @@ class TestRisksAPI:
                 risk_score=9,
                 risk_level="medium",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 2),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="R3",
@@ -343,7 +343,7 @@ class TestRisksAPI:
                 risk_score=25,
                 risk_level="critical",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 3),
+                reference_number=generate_test_reference("RSK"),
             ),
         ]
         for risk in risks:
@@ -378,7 +378,7 @@ class TestRisksAPI:
                 risk_score=16,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 1),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="High Risk 2",
@@ -388,7 +388,7 @@ class TestRisksAPI:
                 risk_score=20,
                 risk_level="high",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 2),
+                reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
                 title="Low Risk",
@@ -398,7 +398,7 @@ class TestRisksAPI:
                 risk_score=2,
                 risk_level="low",
                 created_by_id=test_user.id,
-                reference_number=generate_test_reference("RSK", 3),
+                reference_number=generate_test_reference("RSK"),
             ),
         ]
         for risk in risks:

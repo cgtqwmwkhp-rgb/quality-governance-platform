@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from src.api.schemas.audit import (
     AuditFindingCreate,
     AuditQuestionCreate,
+    AuditQuestionUpdate,
     AuditResponseCreate,
     AuditRunCreate,
     AuditSectionCreate,
@@ -165,6 +166,60 @@ class TestAuditQuestionCreate:
             ],
         )
         assert len(question.options) == 3
+
+    def test_positive_answer_accepts_yes_and_no(self):
+        """Test positive_answer accepts both allowed values."""
+        yes_question = AuditQuestionCreate(
+            question_text="Is spill containment present?",
+            question_type="yes_no",
+            positive_answer="yes",
+        )
+        no_question = AuditQuestionCreate(
+            question_text="Any spillages found?",
+            question_type="yes_no",
+            positive_answer="no",
+        )
+        assert yes_question.positive_answer == "yes"
+        assert no_question.positive_answer == "no"
+
+    def test_positive_answer_rejects_invalid_value(self):
+        """Test positive_answer rejects values outside yes/no."""
+        with pytest.raises(ValidationError):
+            AuditQuestionCreate(
+                question_text="Is area compliant?",
+                question_type="yes_no",
+                positive_answer="maybe",
+            )
+
+    def test_positive_answer_rejects_null(self):
+        """Test positive_answer rejects null values."""
+        with pytest.raises(ValidationError):
+            AuditQuestionCreate(
+                question_text="Is area compliant?",
+                question_type="yes_no",
+                positive_answer=None,  # type: ignore[arg-type]
+            )
+
+
+class TestAuditQuestionUpdate:
+    """Tests for AuditQuestionUpdate schema."""
+
+    def test_positive_answer_accepts_yes_and_no(self):
+        """Test update payload accepts valid polarity values."""
+        yes_update = AuditQuestionUpdate(positive_answer="yes")
+        no_update = AuditQuestionUpdate(positive_answer="no")
+        assert yes_update.positive_answer == "yes"
+        assert no_update.positive_answer == "no"
+
+    def test_positive_answer_rejects_invalid_value(self):
+        """Test update payload rejects invalid polarity values."""
+        with pytest.raises(ValidationError):
+            AuditQuestionUpdate(positive_answer="invalid")
+
+    def test_positive_answer_rejects_null(self):
+        """Test update payload rejects null polarity values."""
+        with pytest.raises(ValidationError):
+            AuditQuestionUpdate(positive_answer=None)
 
 
 class TestAuditSectionCreate:
