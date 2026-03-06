@@ -2,9 +2,10 @@
 
 import math
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -778,15 +779,30 @@ async def autosave_investigation(
     return investigation
 
 
+class AddCommentRequest(BaseModel):
+    """Request body for adding a comment to an investigation."""
+
+    content: str = Field(..., min_length=1, max_length=10000)
+    body: Optional[str] = Field(None, exclude=True)
+    section_id: Optional[str] = None
+    field_id: Optional[str] = None
+    parent_comment_id: Optional[int] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_body_as_content(cls, data: Any) -> Any:
+        """Accept 'body' as an alias for 'content' for backward compatibility."""
+        if isinstance(data, dict) and "body" in data and "content" not in data:
+            data["content"] = data.pop("body")
+        return data
+
+
 @router.post("/{investigation_id}/comments", status_code=201)
 async def add_comment(
     investigation_id: int,
-    content: str,
+    payload: AddCommentRequest,
     db: DbSession,
     current_user: CurrentUser,
-    section_id: Optional[str] = None,
-    field_id: Optional[str] = None,
-    parent_comment_id: Optional[int] = None,
 ):
     """Add an internal comment to an investigation.
 
@@ -814,9 +830,9 @@ async def add_comment(
         )
 
     # Validate parent comment if provided
-    if parent_comment_id:
+    if payload.parent_comment_id:
         parent_query = select(InvestigationComment).where(
-            InvestigationComment.id == parent_comment_id,
+            InvestigationComment.id == payload.parent_comment_id,
             InvestigationComment.investigation_id == investigation_id,
             InvestigationComment.deleted_at.is_(None),
         )
@@ -827,7 +843,7 @@ async def add_comment(
                 status_code=404,
                 detail={
                     "error_code": "PARENT_COMMENT_NOT_FOUND",
-                    "message": f"Parent comment {parent_comment_id} not found",
+                    "message": f"Parent comment {payload.parent_comment_id} not found",
                     "request_id": request_id,
                 },
             )
@@ -835,10 +851,10 @@ async def add_comment(
     # Create comment
     comment = InvestigationComment(
         investigation_id=investigation_id,
-        content=content,
-        section_id=section_id,
-        field_id=field_id,
-        parent_comment_id=parent_comment_id,
+        content=payload.content,
+        section_id=payload.section_id,
+        field_id=payload.field_id,
+        parent_comment_id=payload.parent_comment_id,
         author_id=current_user.id,
     )
 
@@ -851,9 +867,9 @@ async def add_comment(
         event_type="COMMENT_ADDED",
         actor_id=current_user.id,
         metadata={
-            "section_id": section_id,
-            "field_id": field_id,
-            "is_reply": parent_comment_id is not None,
+            "section_id": payload.section_id,
+            "field_id": payload.field_id,
+            "is_reply": payload.parent_comment_id is not None,
         },
     )
 

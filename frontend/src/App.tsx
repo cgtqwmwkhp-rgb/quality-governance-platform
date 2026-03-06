@@ -21,6 +21,7 @@ const Policies = lazy(() => import('./pages/Policies'))
 const Risks = lazy(() => import('./pages/Risks'))
 const Audits = lazy(() => import('./pages/Audits'))
 const Investigations = lazy(() => import('./pages/Investigations'))
+const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
 const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
 const Documents = lazy(() => import('./pages/Documents'))
@@ -68,6 +69,7 @@ const WorkforceEngineers = lazy(() => import('./pages/workforce/Engineers'))
 const WorkforceEngineerProfile = lazy(() => import('./pages/workforce/EngineerProfile'))
 const WorkforceCalendar = lazy(() => import('./pages/workforce/Calendar'))
 const WorkforceCompetencyDashboard = lazy(() => import('./pages/workforce/CompetencyDashboard'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const FormsList = lazy(() => import('./pages/admin/FormsList'))
 const FormBuilder = lazy(() => import('./pages/admin/FormBuilder'))
@@ -253,6 +255,7 @@ function App() {
                 <Route path="audits/:auditId/execute" element={<AuditExecution />} />
                 <Route path="audits/:auditId/mobile" element={<MobileAuditExecution />} />
                 <Route path="investigations" element={<Investigations />} />
+                <Route path="investigations/:id" element={<InvestigationDetail />} />
                 <Route path="standards" element={<Standards />} />
                 <Route path="actions" element={<Actions />} />
                 <Route path="compliance" element={<ComplianceEvidence />} />
@@ -306,6 +309,9 @@ function App() {
                 <Route path="admin/contracts" element={<ContractsManagement />} />
                 <Route path="admin/settings" element={<SystemSettings />} />
               </Route>
+
+              {/* Catch-all 404 */}
+              <Route path="*" element={<NotFound />} />
             </Route>
           </Routes>
         </Suspense>

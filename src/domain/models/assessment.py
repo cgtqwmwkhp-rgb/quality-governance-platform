@@ -79,9 +79,7 @@ class AssessmentRun(Base, TimestampMixin, AuditTrailMixin):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Outcome
-    outcome: Mapped[Optional[AssessmentOutcome]] = mapped_column(
-        CaseInsensitiveEnum(AssessmentOutcome), nullable=True
-    )
+    outcome: Mapped[Optional[AssessmentOutcome]] = mapped_column(CaseInsensitiveEnum(AssessmentOutcome), nullable=True)
     overall_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Debrief
@@ -115,9 +113,7 @@ class AssessmentResponse(Base, TimestampMixin):
     question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False, index=True)
 
     # Verdict
-    verdict: Mapped[Optional[CompetencyVerdict]] = mapped_column(
-        CaseInsensitiveEnum(CompetencyVerdict), nullable=True
-    )
+    verdict: Mapped[Optional[CompetencyVerdict]] = mapped_column(CaseInsensitiveEnum(CompetencyVerdict), nullable=True)
 
     # Supervisor feedback
     feedback: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

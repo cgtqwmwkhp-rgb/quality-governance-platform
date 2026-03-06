@@ -1641,7 +1641,7 @@ export const investigationsApi = {
    */
   addComment: (id: number, body: string) =>
     api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, {
-      body,
+      content: body,
     }),
 
   /**

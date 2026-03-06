@@ -13,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
 from src.api.middleware.error_handler import register_exception_handlers
+from src.api.middleware.idempotency import IdempotencyMiddleware
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
@@ -231,6 +232,9 @@ def create_application() -> FastAPI:
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
 
+    # Add Idempotency Middleware (caches POST responses by Idempotency-Key header)
+    app.add_middleware(IdempotencyMiddleware)
+
     # Configure CORS - explicit allowlist + regex for staging/preview
     # Production origins are explicit in cors_origins for security
     # Regex pattern for staging/preview Azure SWA deployments
@@ -243,6 +247,7 @@ def create_application() -> FastAPI:
         allow_headers=[
             "Authorization",
             "Content-Type",
+            "Idempotency-Key",
             "X-Request-Id",
             "X-UAT-Write-Enable",
             "X-UAT-Issue-Id",

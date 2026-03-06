@@ -269,14 +269,14 @@ class RiskResponse(BaseModel):
     review_frequency_months: int = 12
     next_review_date: Optional[datetime] = None
 
-    # Standard mapping
-    clause_ids: Optional[List[int]] = None
-    control_ids: Optional[List[int]] = None
+    # Standard mapping — model columns are *_json_legacy after normalisation migration
+    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
+    control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json_legacy")
 
-    # Linkages
-    linked_audit_ids: Optional[List[int]] = None
-    linked_incident_ids: Optional[List[int]] = None
-    linked_policy_ids: Optional[List[int]] = None
+    # Linkages — same legacy column names
+    linked_audit_ids: Optional[List[int]] = Field(None, validation_alias="linked_audit_ids_json_legacy")
+    linked_incident_ids: Optional[List[int]] = Field(None, validation_alias="linked_incident_ids_json_legacy")
+    linked_policy_ids: Optional[List[int]] = Field(None, validation_alias="linked_policy_ids_json")
 
     # Treatment
     treatment_strategy: str = "mitigate"

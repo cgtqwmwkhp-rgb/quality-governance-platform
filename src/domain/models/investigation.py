@@ -146,9 +146,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     description = Column(Text, nullable=True)
 
     # Investigation level (determines required sections per Template Contract v2.1)
-    level: Mapped[Optional[str]] = mapped_column(
-        CaseInsensitiveEnum(InvestigationLevel), nullable=True, default=None
-    )
+    level: Mapped[Optional[str]] = mapped_column(CaseInsensitiveEnum(InvestigationLevel), nullable=True, default=None)
 
     # Investigation data (responses to template fields)
     data = Column(JSON, nullable=False, default=dict)
@@ -325,9 +323,7 @@ class InvestigationCustomerPack(Base, TimestampMixin):
     pack_uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
 
     # Audience (determines redaction rules)
-    audience: Mapped[CustomerPackAudience] = mapped_column(
-        CaseInsensitiveEnum(CustomerPackAudience), nullable=False
-    )
+    audience: Mapped[CustomerPackAudience] = mapped_column(CaseInsensitiveEnum(CustomerPackAudience), nullable=False)
 
     # Pack content (with redaction applied)
     content: Mapped[dict] = mapped_column(JSON, nullable=False)

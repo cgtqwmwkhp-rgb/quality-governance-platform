@@ -186,9 +186,7 @@ async def list_templates(
         items: list[AuditTemplateResponse] = []
         for idx, t in enumerate(templates):
             try:
-                items.append(
-                    _decode_template_response_entities(AuditTemplateResponse.model_validate(t))
-                )
+                items.append(_decode_template_response_entities(AuditTemplateResponse.model_validate(t)))
             except Exception as item_exc:
                 logger.error(
                     "Failed to serialize template id=%s (index %d): %s\n%s",
@@ -292,9 +290,7 @@ async def list_archived_templates(
         validated_items = []
         for idx, t in enumerate(result.items):
             try:
-                validated_items.append(
-                    _decode_template_response_entities(AuditTemplateResponse.model_validate(t))
-                )
+                validated_items.append(_decode_template_response_entities(AuditTemplateResponse.model_validate(t)))
             except Exception as item_exc:
                 logger.error(
                     "Failed to serialize archived template id=%s (index %d): %s\n%s",

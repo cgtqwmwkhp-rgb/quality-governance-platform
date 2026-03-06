@@ -108,9 +108,7 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Classification
-    document_type: Mapped[DocumentType] = mapped_column(
-        CaseInsensitiveEnum(DocumentType), default=DocumentType.OTHER
-    )
+    document_type: Mapped[DocumentType] = mapped_column(CaseInsensitiveEnum(DocumentType), default=DocumentType.OTHER)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     sensitivity: Mapped[SensitivityLevel] = mapped_column(
@@ -118,9 +116,7 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
 
     # Status & workflow
-    status: Mapped[DocumentStatus] = mapped_column(
-        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.PENDING
-    )
+    status: Mapped[DocumentStatus] = mapped_column(CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.PENDING)
     reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -320,9 +316,7 @@ class IndexJob(Base, TimestampMixin):
 
     # Job info
     job_type: Mapped[str] = mapped_column(String(50), nullable=False)  # single, bulk, reindex
-    status: Mapped[IndexJobStatus] = mapped_column(
-        CaseInsensitiveEnum(IndexJobStatus), default=IndexJobStatus.PENDING
-    )
+    status: Mapped[IndexJobStatus] = mapped_column(CaseInsensitiveEnum(IndexJobStatus), default=IndexJobStatus.PENDING)
 
     # Scope
     document_ids: Mapped[list] = mapped_column(JSON, nullable=False)  # [1, 2, 3]

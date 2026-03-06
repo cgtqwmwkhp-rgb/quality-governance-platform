@@ -69,15 +69,11 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     # Incident identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    incident_type: Mapped[IncidentType] = mapped_column(
-        CaseInsensitiveEnum(IncidentType), default=IncidentType.OTHER
-    )
+    incident_type: Mapped[IncidentType] = mapped_column(CaseInsensitiveEnum(IncidentType), default=IncidentType.OTHER)
     severity: Mapped[IncidentSeverity] = mapped_column(
         CaseInsensitiveEnum(IncidentSeverity), default=IncidentSeverity.MEDIUM
     )
-    status: Mapped[IncidentStatus] = mapped_column(
-        CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED
-    )
+    status: Mapped[IncidentStatus] = mapped_column(CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED)
 
     # When and where
     incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

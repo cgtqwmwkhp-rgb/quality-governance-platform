@@ -34,9 +34,7 @@ class AssetType(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "asset_types"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    category: Mapped[AssetCategory] = mapped_column(
-        CaseInsensitiveEnum(AssetCategory), nullable=False, index=True
-    )
+    category: Mapped[AssetCategory] = mapped_column(CaseInsensitiveEnum(AssetCategory), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

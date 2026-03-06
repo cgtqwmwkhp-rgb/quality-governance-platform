@@ -99,9 +99,7 @@ class LOLERDefect(Base, TimestampMixin):
         index=True,
     )
 
-    category: Mapped[LOLERDefectCategory] = mapped_column(
-        CaseInsensitiveEnum(LOLERDefectCategory), nullable=False
-    )
+    category: Mapped[LOLERDefectCategory] = mapped_column(CaseInsensitiveEnum(LOLERDefectCategory), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     location_on_equipment: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     remedial_action: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

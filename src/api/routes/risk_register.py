@@ -154,7 +154,9 @@ async def list_risks(
 
     return {
         "total": total,
-        "risks": [
+        "page": (skip // limit) + 1,
+        "page_size": limit,
+        "items": [
             {
                 "id": r.id,
                 "reference": r.reference,
