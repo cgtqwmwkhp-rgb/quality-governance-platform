@@ -6,7 +6,7 @@ from typing import Optional, Type
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator, VARCHAR
+from sqlalchemy.types import VARCHAR, TypeDecorator
 
 
 class CaseInsensitiveEnum(TypeDecorator):
