@@ -130,9 +130,9 @@ def _get_user_info(request: Request) -> tuple[Optional[int], Optional[int]]:
                         try:
                             user_id = int(user_id_raw)
                         except (ValueError, TypeError):
-                            pass
+                            logger.debug("Could not parse user_id from token: %s", user_id_raw)
             except Exception:
-                pass
+                logger.debug("Could not extract user from auth header", exc_info=True)
 
     # Note: We don't do DB lookups here to avoid blocking the request.
     # If tenant_id is not available, we'll skip logging (which is fine for

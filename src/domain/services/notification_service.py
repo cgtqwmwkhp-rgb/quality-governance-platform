@@ -119,7 +119,12 @@ class NotificationService:
                 if notification.delivered_channels is not None:
                     notification.delivered_channels.append(channel.value)
             except Exception as e:
-                logger.error(f"Failed to deliver via {channel}: {e}")
+                logger.error(f"Failed to deliver via {channel}: {e}", exc_info=True)
+                if notification.extra_data is None:
+                    notification.extra_data = {}
+                failed = notification.extra_data.get("failed_channels", [])
+                failed.append(channel.value)
+                notification.extra_data["failed_channels"] = failed
 
         # Update delivered channels
         if self.db:

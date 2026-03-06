@@ -114,7 +114,7 @@ export default function IncidentDetail() {
       })
       loadActions()
     } catch (err) {
-      console.error('Failed to load incident:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'loadIncident' })
       setError(t('incidents.detail.failed_to_load'))
     } finally {
       setLoading(false)
@@ -139,7 +139,7 @@ export default function IncidentDetail() {
       setIncident(response.data)
       setIsEditing(false)
     } catch (err) {
-      console.error('Failed to update incident:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'updateIncident' })
     } finally {
       setSaving(false)
     }
@@ -186,7 +186,7 @@ export default function IncidentDetail() {
       })
       navigate('/investigations')
     } catch (err: any) {
-      console.error('Failed to create investigation:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'createInvestigation' })
       
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
@@ -231,7 +231,7 @@ export default function IncidentDetail() {
       })
       loadActions()
     } catch (err: unknown) {
-      console.error('Failed to create action:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'createAction' })
       alert(t('incidents.detail.failed_to_create_action', { error: getApiErrorMessage(err) }))
     } finally {
       setCreating(false)
@@ -270,7 +270,7 @@ export default function IncidentDetail() {
       setSelectedAction(response.data)
       setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
     } catch (err) {
-      console.error('Failed to update action status:', err)
+      trackError(err, { component: 'IncidentDetail', action: 'updateActionStatus' })
       setActionUpdateError(getApiErrorMessage(err))
     } finally {
       setUpdatingAction(false)

@@ -93,7 +93,7 @@ class ConditionEvaluator:
         try:
             return op_func(entity_value, value)
         except Exception as e:
-            logger.warning(f"Error evaluating condition: {e}")
+            logger.error(f"Error evaluating condition: {e}", exc_info=True)
             return False
 
     @staticmethod

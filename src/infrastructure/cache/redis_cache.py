@@ -426,4 +426,4 @@ async def invalidate_tenant_cache(tenant_id: int, namespace: str) -> None:
         pattern = f"tenant:{tenant_id}:{namespace}:*"
         await cache.delete_pattern(pattern)
     except Exception:
-        pass
+        logger.warning("Cache invalidation failed for tenant=%s ns=%s", tenant_id, namespace, exc_info=True)

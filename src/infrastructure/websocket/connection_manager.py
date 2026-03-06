@@ -309,7 +309,7 @@ class ConnectionManager:
         try:
             await connection.websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
         except Exception:
-            pass
+            logger.debug("Failed to send pong to WebSocket connection", exc_info=True)
         return None
 
     def register_event_handler(self, event: str, handler: Callable):

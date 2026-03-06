@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
+import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
   Car,
@@ -101,7 +102,7 @@ export default function RTADetail() {
       })
       loadActions()
     } catch (err) {
-      console.error('Failed to load RTA:', err)
+      trackError(err, { component: 'RTADetail', action: 'loadRTA' })
       setError(t('rtas.detail.load_error'))
     } finally {
       setLoading(false)
@@ -112,14 +113,10 @@ export default function RTADetail() {
     if (!id) return
     try {
       // Load actions filtered by this specific RTA
-      const response = await actionsApi.list(1, 50)
-      // Filter client-side for this RTA's actions
-      const rtaActions = (response.data.items || []).filter(
-        (a) => a.source_type === 'rta' && a.source_id === parseInt(id)
-      )
-      setActions(rtaActions)
+      const response = await actionsApi.list(1, 50, undefined, 'rta', parseInt(id))
+      setActions(response.data.items || [])
     } catch (err) {
-      console.error('Failed to load actions:', err)
+      trackError(err, { component: 'RTADetail', action: 'loadActions' })
       setError(t('rtas.detail.load_error'))
     }
   }
@@ -132,7 +129,7 @@ export default function RTADetail() {
       setRta(response.data)
       setIsEditing(false)
     } catch (err) {
-      console.error('Failed to update RTA:', err)
+      trackError(err, { component: 'RTADetail', action: 'saveEdit' })
     } finally {
       setSaving(false)
     }
@@ -181,7 +178,7 @@ export default function RTADetail() {
       })
       navigate('/investigations')
     } catch (err: any) {
-      console.error('Failed to create investigation:', err)
+      trackError(err, { component: 'RTADetail', action: 'createInvestigation' })
       
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
@@ -226,7 +223,7 @@ export default function RTADetail() {
       })
       loadActions()
     } catch (err: unknown) {
-      console.error('Failed to create action:', err)
+      trackError(err, { component: 'RTADetail', action: 'createAction' })
       alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
+import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
   MessageSquare,
@@ -101,7 +102,7 @@ export default function ComplaintDetail() {
       })
       loadActions()
     } catch (err) {
-      console.error('Failed to load complaint:', err)
+      trackError(err, { component: 'ComplaintDetail', action: 'loadComplaint' })
       setError(t('complaints.detail.load_error'))
     } finally {
       setLoading(false)
@@ -112,14 +113,10 @@ export default function ComplaintDetail() {
     if (!id) return
     try {
       // Load actions filtered by this specific Complaint
-      const response = await actionsApi.list(1, 50)
-      // Filter client-side for this complaint's actions
-      const complaintActions = (response.data.items || []).filter(
-        (a) => a.source_type === 'complaint' && a.source_id === parseInt(id)
-      )
-      setActions(complaintActions)
+      const response = await actionsApi.list(1, 50, undefined, 'complaint', parseInt(id))
+      setActions(response.data.items || [])
     } catch (err) {
-      console.error('Failed to load actions:', err)
+      trackError(err, { component: 'ComplaintDetail', action: 'loadActions' })
       setError(t('complaints.detail.load_error'))
     }
   }
@@ -181,7 +178,7 @@ export default function ComplaintDetail() {
       })
       navigate('/investigations')
     } catch (err: any) {
-      console.error('Failed to create investigation:', err)
+      trackError(err, { component: 'ComplaintDetail', action: 'createInvestigation' })
       
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
@@ -226,7 +223,7 @@ export default function ComplaintDetail() {
       })
       loadActions()
     } catch (err: unknown) {
-      console.error('Failed to create action:', err)
+      trackError(err, { component: 'ComplaintDetail', action: 'createAction' })
       alert(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)

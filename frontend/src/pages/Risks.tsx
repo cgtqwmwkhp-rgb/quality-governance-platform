@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, Shield, Search, Loader2 } from 'lucide-react'
@@ -41,39 +41,25 @@ export default function Risks() {
   })
   const [error, setError] = useState<string | null>(null)
 
-  const loadRisks = async () => {
+  const loadRisks = useCallback(async (search?: string) => {
     setError(null)
     try {
-      const response = await risksApi.list(1, 50)
+      const response = await risksApi.list(1, 50, search || undefined)
       setRisks(response.data.items ?? [])
     } catch (err) {
-      trackError(err, { component: 'Risks', action: 'load' })
+      trackError(err, { component: 'Risks', action: 'loadRisks' })
       setError(t('risks.error.load_failed'))
     } finally {
       setLoading(false)
     }
-  }
+  }, [t])
 
+  useEffect(() => { loadRisks() }, [loadRisks])
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      setError(null)
-      try {
-        const response = await risksApi.list(1, 50)
-        if (!cancelled) setRisks(response.data.items ?? [])
-      } catch (err) {
-        if (!cancelled) {
-          trackError(err, { component: 'Risks', action: 'load' })
-          setError(t('risks.error.load_failed'))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
-  }, [])
+    if (!searchTerm) return
+    const timer = setTimeout(() => loadRisks(searchTerm), 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm, loadRisks])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -92,8 +78,8 @@ export default function Risks() {
       })
       loadRisks()
     } catch (err) {
-      trackError(err, { component: 'Risks', action: 'create' })
-      setError(getApiErrorMessage(err))
+      trackError(err, { component: 'Risks', action: 'createRisk' })
+      setError(t('risks.error.load_failed'))
     } finally {
       setCreating(false)
     }
@@ -130,12 +116,6 @@ export default function Risks() {
       default: return '📊'
     }
   }
-
-  const filteredRisks = risks.filter(
-    r => r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         r.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         r.category.toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
   const riskStats = {
     critical: risks.filter(r => r.risk_score >= 20).length,
@@ -224,7 +204,7 @@ export default function Risks() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filteredRisks.length === 0 ? (
+              {risks.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                     <Shield className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
@@ -233,7 +213,7 @@ export default function Risks() {
                   </td>
                 </tr>
               ) : (
-                filteredRisks.map((risk) => (
+                risks.map((risk) => (
                   <tr
                     key={risk.id}
                     className="hover:bg-surface transition-colors cursor-pointer"

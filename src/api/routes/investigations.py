@@ -565,7 +565,7 @@ async def list_source_records(
     ),
     q: Optional[str] = Query(None, description="Search query (searches title, reference)"),
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(20, ge=1, le=100, description="Page size"),
+    page_size: int = Query(20, ge=1, le=100, description="Page size"),
 ):
     """List source records available for investigation creation.
 
@@ -576,7 +576,7 @@ async def list_source_records(
     - source_type: Required. One of: near_miss, road_traffic_collision, complaint, reporting_incident
     - q: Optional search query
     - page: Page number (default: 1)
-    - size: Page size (default: 20, max: 100)
+    - page_size: Page size (default: 20, max: 100)
 
     Response includes:
     - source_id: Record ID
@@ -651,8 +651,8 @@ async def list_source_records(
 
     # Apply deterministic ordering and pagination
     base_query = base_query.order_by(model_class.created_at.desc(), model_class.id.asc())
-    offset = (page - 1) * size
-    base_query = base_query.offset(offset).limit(size)
+    offset = (page - 1) * page_size
+    base_query = base_query.offset(offset).limit(page_size)
 
     # Execute query
     result = await db.execute(base_query)
@@ -701,13 +701,13 @@ async def list_source_records(
             )
         )
 
-    total_pages = math.ceil(total / size) if total > 0 else 1
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
 
     return SourceRecordsResponse(
         items=items,
         total=total,
         page=page,
-        page_size=size,
+        page_size=page_size,
         total_pages=total_pages,
         source_type=source_type,
     )

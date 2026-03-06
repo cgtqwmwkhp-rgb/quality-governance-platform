@@ -1274,10 +1274,11 @@ export const policiesApi = {
 };
 
 export const risksApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Risk>>(
-      `/api/v1/risks/?page=${page}&page_size=${pageSize}`,
-    ),
+  list: (page = 1, pageSize = 10, search?: string) => {
+    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+    if (search) params.set('search', search);
+    return api.get<PaginatedResponse<Risk>>(`/api/v1/risks/?${params.toString()}`);
+  },
   create: (data: RiskCreate) => api.post<Risk>("/api/v1/risks/", data),
   get: (id: number) => api.get<Risk>(`/api/v1/risks/${id}`),
 };

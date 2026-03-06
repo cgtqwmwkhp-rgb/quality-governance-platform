@@ -43,7 +43,6 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
     PurgeExpiredTemplatesResponse,
 )
-from src.api.schemas.links import build_collection_links
 from src.api.utils.pagination import PaginationParams
 from src.domain.models.audit import (
     AuditFinding,

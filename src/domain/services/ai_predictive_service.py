@@ -11,6 +11,7 @@ Features:
 
 import hashlib
 import json
+import logging
 import os
 import re
 from collections import Counter, defaultdict
@@ -436,7 +437,9 @@ class RecommendationEngine:
             try:
                 return self._get_ai_recommendations(incident_description, category)
             except Exception:
-                pass  # Fall back to rule-based
+                logging.getLogger(__name__).warning(
+                    "AI recommendation service unavailable, falling back to rule-based", exc_info=True
+                )
 
         # Rule-based recommendations
         return self._get_rule_based_recommendations(incident_description, category)
