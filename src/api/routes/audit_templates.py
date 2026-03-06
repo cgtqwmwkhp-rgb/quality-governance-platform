@@ -9,7 +9,7 @@ to the same AuditService that backs /api/v1/audits/templates.
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession

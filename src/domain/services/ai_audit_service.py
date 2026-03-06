@@ -14,13 +14,13 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-
-logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 # AI Integration
 try:
