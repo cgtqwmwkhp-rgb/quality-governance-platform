@@ -28,9 +28,7 @@ INDEXES = [
 
 def upgrade() -> None:
     for idx_name, table, columns in INDEXES:
-        op.execute(
-            f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({', '.join(columns)})"
-        )
+        op.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({', '.join(columns)})")
 
 
 def downgrade() -> None:
