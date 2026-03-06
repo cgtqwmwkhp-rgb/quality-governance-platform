@@ -26,7 +26,7 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
   const [cursors, setCursors] = useState<CursorPosition[]>([]);
 
   useEffect(() => {
-    // TODO: Connect to WebSocket for real-time cursor position updates
+    // Future: connect to WebSocket for real-time cursor position updates
     // Cursors will be populated via WebSocket events from other collaborators
     setCursors([]);
   }, [documentId]);

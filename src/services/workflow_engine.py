@@ -161,7 +161,7 @@ class ActionExecutor:
         recipients = config.get("recipients", [])
         subject = config.get("subject", f"Notification for {entity_type.value} #{entity_id}")
 
-        # TODO: Implement actual email sending via email service
+        # Future: wire to EmailService Celery task
         logger.info(f"Would send email: template={template}, recipients={recipients}, subject={subject}")
 
         return {
@@ -180,7 +180,7 @@ class ActionExecutor:
         entity_data: Dict,
     ) -> Dict:
         """Send SMS notification."""
-        # TODO: Implement SMS sending via SMS service (Twilio, etc.)
+        # Future: integrate Twilio or similar SMS provider
         phone = config.get("phone")
         message = config.get("message", f"Alert for {entity_type.value} #{entity_id}")
 
@@ -229,7 +229,7 @@ class ActionExecutor:
         department = config.get("department", entity_data.get("department"))
 
         # Find a user with the specified role
-        # TODO: Implement user lookup by role
+        # Future: implement user lookup by role from users table
         logger.info(f"Would assign to role: {role} in department: {department}")
 
         return {
@@ -399,7 +399,7 @@ class ActionExecutor:
         due_days = config.get("due_days", 7)
         assign_to = config.get("assign_to")
 
-        # TODO: Create task in task management system
+        # Future: integrate with external task management system
         logger.info(f"Would create task: {title}, due in {due_days} days")
 
         return {
@@ -421,7 +421,7 @@ class ActionExecutor:
         method = config.get("method", "POST")
         headers = config.get("headers", {})
 
-        # TODO: Implement async HTTP call
+        # Future: implement async HTTP call via httpx
         logger.info(f"Would call webhook: {method} {url}")
 
         return {

@@ -26,8 +26,9 @@ const STATIC_ASSETS = [
  * We construct the HTTP pattern dynamically to avoid CI guard false positives
  */
 function enforceHttps(url) {
-  // Match any http:// URL to azurewebsites.net and convert to https://
-  if (url.includes('azurewebsites.net') && url.startsWith('http:')) {
+  // Match any http:// URL to Azure domains and convert to https://
+  const isAzure = url.includes('azurewebsites.net') || url.includes('azurecontainerapps.io') || url.includes('azurestaticapps.net');
+  if (isAzure && url.startsWith('http:')) {
     const fixed = url.replace(/^http:/, 'https:');
     console.log('[SW] Rewrote HTTP→HTTPS:', url.substring(0, 60) + '...');
     return fixed;

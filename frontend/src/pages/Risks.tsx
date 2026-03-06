@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../utils/errorTracker'
 import { Plus, Shield, Search, Loader2 } from 'lucide-react'
 import { risksApi, Risk, RiskCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -46,7 +47,7 @@ export default function Risks() {
       const response = await risksApi.list(1, 50)
       setRisks(response.data.items ?? [])
     } catch (err) {
-      console.error('Failed to load risks:', err)
+      trackError(err, { component: 'Risks', action: 'load' })
       setError(t('risks.error.load_failed'))
     } finally {
       setLoading(false)
@@ -62,7 +63,7 @@ export default function Risks() {
         if (!cancelled) setRisks(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
-          console.error('Failed to load risks:', err)
+          trackError(err, { component: 'Risks', action: 'load' })
           setError(t('risks.error.load_failed'))
         }
       } finally {
@@ -91,7 +92,7 @@ export default function Risks() {
       })
       loadRisks()
     } catch (err) {
-      console.error('Failed to create risk:', err)
+      trackError(err, { component: 'Risks', action: 'create' })
       setError(getApiErrorMessage(err))
     } finally {
       setCreating(false)

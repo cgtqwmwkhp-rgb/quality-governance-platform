@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../utils/errorTracker'
 import { Plus, FileText, Search, Loader2 } from 'lucide-react'
 import { policiesApi, Policy, PolicyCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -45,7 +46,7 @@ export default function Policies() {
       const response = await policiesApi.list(1, 50)
       setPolicies(response.data.items ?? [])
     } catch (err) {
-      console.error('Failed to load policies:', err)
+      trackError(err, { component: 'Policies', action: 'load' })
       setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
@@ -60,7 +61,7 @@ export default function Policies() {
         if (!cancelled) setPolicies(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
-          console.error('Failed to load policies:', err)
+          trackError(err, { component: 'Policies', action: 'load' })
           setLoadError(getApiErrorMessage(err))
         }
       } finally {
@@ -88,7 +89,7 @@ export default function Policies() {
       })
       loadPolicies()
     } catch (err) {
-      console.error('Failed to create policy:', err)
+      trackError(err, { component: 'Policies', action: 'create' })
       setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)

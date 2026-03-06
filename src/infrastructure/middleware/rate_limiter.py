@@ -161,22 +161,13 @@ def get_rate_limiter() -> InMemoryRateLimiter | RedisRateLimiter:
 
 def get_client_identifier(request: Request) -> str:
     """Get unique identifier for rate limiting."""
-    # Try to get user ID from auth token
-    user_id = None
+    import hashlib
+
     auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        try:
-            import jwt
-
-            token = auth_header[7:]
-            # Decode without verification just to get sub claim
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get("sub")
-        except Exception:
-            pass
-
-    if user_id:
-        return f"user:{user_id}"
+    if auth_header.startswith("Bearer ") and len(auth_header) > 27:
+        token_prefix = auth_header[7:27]
+        token_hash = hashlib.sha256(token_prefix.encode()).hexdigest()[:16]
+        return f"token:{token_hash}"
 
     # Fall back to IP address
     forwarded = request.headers.get("X-Forwarded-For")

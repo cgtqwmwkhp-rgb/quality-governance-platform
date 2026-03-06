@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../../utils/errorTracker'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, getApiErrorMessage, type AssessmentRun, type InductionRun } from '../../api/client'
@@ -85,7 +86,7 @@ export default function Calendar() {
           ...mapToEvents(inductions, 'induction'),
         ])
       } catch (err) {
-        console.error('Failed to load calendar:', err)
+        trackError(err, { component: 'Calendar', action: 'load' })
         setError(getApiErrorMessage(err))
         setEvents([])
       } finally {

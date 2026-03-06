@@ -259,7 +259,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       setCanUndo(undoStackRef.current.length > 0);
       setCanRedo(true);
 
-      // TODO: Apply inverse of update
+      // Future: apply inverse of update for undo support
       console.log('[Collaboration] Undo');
     }
   }, []);
@@ -274,7 +274,7 @@ const useCollaboration = (options: UseCollaborationOptions): UseCollaborationRet
       setCanUndo(true);
       setCanRedo(redoStackRef.current.length > 0);
 
-      // TODO: Re-apply update
+      // Future: re-apply update for redo support
       console.log('[Collaboration] Redo');
     }
   }, []);

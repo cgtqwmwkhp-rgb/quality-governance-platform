@@ -67,8 +67,16 @@ export default function AIIntelligence() {
     setTimeout(() => setAnalyzing(false), 2000)
   }
 
+  const isComingSoon = true
+
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
+      {isComingSoon && (
+        <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+          <span className="text-lg">🚧</span>
+          <span className="font-medium">Coming Soon</span> — AI Intelligence features are under active development. Data shown below is illustrative.
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>

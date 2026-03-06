@@ -110,6 +110,9 @@ class Settings(BaseSettings):
     email_username: str = ""
     email_password: str = ""
 
+    # Frontend URL — used for password reset links, email CTAs, etc.
+    frontend_url: str = "https://purple-water-03205fa03.6.azurestaticapps.net"
+
     # CORS - explicit allowlist for production safety
     # Production SWA origins must be listed explicitly (no wildcards)
     # Regex in main.py serves as fallback for staging/preview environments

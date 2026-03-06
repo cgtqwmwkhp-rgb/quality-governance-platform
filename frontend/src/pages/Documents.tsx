@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../utils/errorTracker'
 import { 
   Plus, Search, Upload, FileText, FileSpreadsheet, Image, File, 
   Eye, Download, Tag, Calendar, Sparkles, 
@@ -127,7 +128,7 @@ export default function Documents() {
       setDocuments(docsResult.status === 'fulfilled' ? docsResult.value.data.items || [] : [])
       if (statsResult.status === 'fulfilled') setStats(statsResult.value.data)
     } catch (err) {
-      console.error('Failed to load documents:', err)
+      trackError(err, { component: 'Documents', action: 'load' })
       setDocuments([])
       setStats(null)
       setLoadError(getApiErrorMessage(err))
@@ -147,7 +148,7 @@ export default function Documents() {
       const response = await api.get(`/api/v1/documents/search/semantic?q=${encodeURIComponent(query)}&top_k=10`)
       setSearchResults(response.data.results)
     } catch (err) {
-      console.error('Search failed:', err)
+      trackError(err, { component: 'Documents', action: 'search' })
       setSearchResults([])
     } finally {
       setIsSearching(false)
@@ -210,7 +211,7 @@ export default function Documents() {
       await loadData()
       setShowUploadModal(false)
     } catch (err) {
-      console.error('Upload failed:', err)
+      trackError(err, { component: 'Documents', action: 'upload' })
       setUploadError(getApiErrorMessage(err))
     } finally {
       setUploading(false)

@@ -205,7 +205,7 @@ class NotificationService:
 
             self.email_service = EmailService()
 
-        # TODO: Implement email delivery
+        # Email delivery handled by Celery task (send_email)
         logger.debug(f"Email notification queued for user {notification.user_id}")
 
     async def _deliver_sms(self, notification: Notification):

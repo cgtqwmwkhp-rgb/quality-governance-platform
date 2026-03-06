@@ -112,7 +112,7 @@ export default function AuditTrailViewer() {
     setLoading(true);
     setError(null);
     try {
-      // TODO: Replace with actual API call
+      // Placeholder — wire to /api/v1/audit-trail when available
       setEntries([]);
     } catch (error) {
       console.error('Failed to load audit logs', error);
@@ -126,7 +126,7 @@ export default function AuditTrailViewer() {
     if (entries.length === 0) return;
     setVerifying(true);
     try {
-      // TODO: Replace with actual API call
+      // Placeholder — wire to /api/v1/audit-trail/verify when available
       setVerification(null);
     } catch (error) {
       console.error('Verification failed', error);

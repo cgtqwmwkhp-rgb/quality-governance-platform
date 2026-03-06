@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { rtasApi, RTA, RTACreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -68,7 +69,7 @@ export default function RTAs() {
       setRtas(response.data.items ?? [])
       setError(null)
     } catch (err: any) {
-      console.error('Failed to load RTAs:', err)
+      trackError(err, { component: 'RTAs', action: 'load' })
       
       // Extract error details for display
       const isTimeout = err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.name === 'AbortError'
@@ -126,7 +127,7 @@ export default function RTAs() {
       })
       loadRtas()
     } catch (err) {
-      console.error('Failed to create RTA:', err)
+      trackError(err, { component: 'RTAs', action: 'create' })
       setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)
@@ -217,6 +218,7 @@ export default function RTAs() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
+            aria-label="Search RTAs"
           />
         </div>
       </div>
@@ -252,6 +254,10 @@ export default function RTAs() {
                       className="hover:bg-surface transition-colors cursor-pointer"
                       style={{ animationDelay: `${index * 30}ms` }}
                       onClick={() => navigate(`/rtas/${rta.id}`)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate(`/rtas/${rta.id}`) }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View RTA: ${rta.title}`}
                     >
                       <td className="px-6 py-4">
                         <span className="font-mono text-sm text-primary">{rta.reference_number}</span>

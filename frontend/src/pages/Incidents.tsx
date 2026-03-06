@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
+import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -47,7 +48,7 @@ export default function Incidents() {
       const response = await incidentsApi.list(1, 50)
       setIncidents(response.data.items ?? [])
     } catch (err) {
-      console.error('Failed to load incidents:', err)
+      trackError(err, { component: 'Incidents', action: 'load' })
       setLoadError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
@@ -62,7 +63,7 @@ export default function Incidents() {
         if (!cancelled) setIncidents(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
-          console.error('Failed to load incidents:', err)
+          trackError(err, { component: 'Incidents', action: 'load' })
           setLoadError(getApiErrorMessage(err))
         }
       } finally {
@@ -94,7 +95,7 @@ export default function Incidents() {
       })
       loadIncidents()
     } catch (err) {
-      console.error('Failed to create incident:', err)
+      trackError(err, { component: 'Incidents', action: 'create' })
       setCreateError(getApiErrorMessage(err))
     } finally {
       setCreating(false)

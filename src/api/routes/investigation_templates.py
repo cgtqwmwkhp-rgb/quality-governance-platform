@@ -3,7 +3,7 @@
 import math
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -94,12 +94,13 @@ async def list_templates(
 
 @router.get("/{template_id}", response_model=InvestigationTemplateResponse)
 async def get_template(
+    request: Request,
     template_id: int,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Get a specific investigation template by ID."""
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
     result = await db.execute(query)
@@ -122,6 +123,7 @@ async def get_template(
 
 @router.patch("/{template_id}", response_model=InvestigationTemplateResponse)
 async def update_template(
+    request: Request,
     template_id: int,
     template_data: InvestigationTemplateUpdate,
     db: DbSession,
@@ -131,7 +133,7 @@ async def update_template(
 
     Only provided fields will be updated (partial update).
     """
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Get existing template
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
@@ -173,7 +175,7 @@ async def delete_template(
 
     Only safe if no investigation runs reference this template.
     """
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Get existing template
     query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)

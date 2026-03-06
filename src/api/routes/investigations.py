@@ -4,7 +4,7 @@ import math
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -89,6 +89,7 @@ async def validate_assigned_entity(
 
 @router.post("/", response_model=InvestigationRunResponse, status_code=201)
 async def create_investigation(
+    request: Request,
     investigation_data: InvestigationRunCreate,
     db: DbSession,
     current_user: CurrentUser,
@@ -102,7 +103,7 @@ async def create_investigation(
 
     Returns 400 for invalid entity type, 404 for missing template or entity.
     """
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Validate template exists, create default if missing
     template_query = select(InvestigationTemplate).where(InvestigationTemplate.id == investigation_data.template_id)
@@ -204,6 +205,7 @@ async def create_investigation(
 
 @router.get("/", response_model=InvestigationRunListResponse)
 async def list_investigations(
+    request: Request,
     db: DbSession,
     current_user: CurrentUser,
     page: int = Query(1, ge=1, description="Page number"),
@@ -217,7 +219,7 @@ async def list_investigations(
     Returns investigations in deterministic order (created_at DESC, id ASC).
     Can filter by entity_type, entity_id, and status.
     """
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Build query
     query = select(InvestigationRun)
@@ -290,12 +292,13 @@ async def list_investigations(
 
 @router.get("/{investigation_id}", response_model=InvestigationRunResponse)
 async def get_investigation(
+    request: Request,
     investigation_id: int,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """Get a specific investigation run by ID."""
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
     result = await db.execute(query)
@@ -317,6 +320,7 @@ async def get_investigation(
 
 @router.patch("/{investigation_id}", response_model=InvestigationRunResponse)
 async def update_investigation(
+    request: Request,
     investigation_id: int,
     investigation_data: InvestigationRunUpdate,
     db: DbSession,
@@ -327,7 +331,7 @@ async def update_investigation(
     Only provided fields will be updated (partial update).
     Can update RCA section fields via the data field.
     """
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Get existing investigation
     query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
@@ -375,6 +379,7 @@ async def update_investigation(
 
 @router.post("/from-record", response_model=InvestigationRunResponse, status_code=201)
 async def create_investigation_from_record(
+    request: Request,
     request_body: CreateFromRecordRequest,
     db: DbSession,
     current_user: CurrentUser,
@@ -410,7 +415,7 @@ async def create_investigation_from_record(
     from src.services.investigation_service import InvestigationService
     from src.services.reference_number import ReferenceNumberService
 
-    request_id = "N/A"  # TODO: Get from request context
+    request_id = request.headers.get("X-Request-ID", "N/A")
 
     # Extract values from request body
     source_type = request_body.source_type
@@ -1041,7 +1046,7 @@ async def generate_customer_pack(
         audience=audience_enum,
         evidence_assets=evidence_assets,
         generated_by_id=current_user.id,
-        generated_by_role=None,  # TODO: Get user role
+        generated_by_role=getattr(current_user, "role", None),
     )
 
     # Create pack entity

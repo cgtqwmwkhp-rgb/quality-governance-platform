@@ -628,7 +628,9 @@ async def generate_qr_code(reference_number: str):
     Returns the URL that the QR code should point to.
     """
     # Return QR code data (frontend will render it)
-    tracking_url = f"https://purple-water-03205fa03.6.azurestaticapps.net/portal/track/{reference_number}"
+    from src.core.config import settings
+
+    tracking_url = f"{settings.frontend_url}/portal/track/{reference_number}"
 
     return {
         "reference_number": reference_number,

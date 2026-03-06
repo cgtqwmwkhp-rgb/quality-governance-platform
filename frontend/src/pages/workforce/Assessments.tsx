@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../../utils/errorTracker'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, getApiErrorMessage, type AssessmentRun, type AssetType } from '../../api/client'
@@ -82,7 +83,7 @@ export default function Assessments() {
         const res = await workforceApi.listAssessments(params)
         setAssessments(res.data.items || [])
       } catch (err) {
-        console.error('Failed to load assessments:', err)
+        trackError(err, { component: 'Assessments', action: 'load' })
         setError(getApiErrorMessage(err))
         setAssessments([])
       } finally {

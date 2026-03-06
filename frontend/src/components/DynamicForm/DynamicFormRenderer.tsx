@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { trackError } from '../../utils/errorTracker';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
@@ -692,7 +693,7 @@ export default function DynamicFormRenderer({
       clearDraft();
       setSubmittedRef(result.reference_number);
     } catch (error) {
-      console.error('Submission failed:', error);
+      trackError(error, { component: 'DynamicFormRenderer', action: 'handleSubmit' });
       setErrors({ _form: 'Submission failed. Please try again.' });
     } finally {
       setIsSubmitting(false);

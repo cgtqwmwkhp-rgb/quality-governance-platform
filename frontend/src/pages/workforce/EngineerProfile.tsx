@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../../utils/errorTracker'
 import { workforceApi, getApiErrorMessage, type EngineerProfile as EngineerProfileType, type CompetencyRecord } from '../../api/client'
 
 const stateColors: Record<string, string> = {
@@ -46,7 +47,7 @@ export default function EngineerProfile() {
         setEngineer(engRes.data)
         setCompetencies(compRes.data || [])
       } catch (err) {
-        console.error('Failed to load engineer profile:', err)
+        trackError(err, { component: 'EngineerProfile', action: 'load' })
         setError(getApiErrorMessage(err))
       } finally {
         setLoading(false)

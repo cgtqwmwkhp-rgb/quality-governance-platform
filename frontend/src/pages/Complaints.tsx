@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -48,7 +49,7 @@ export default function Complaints() {
       const response = await complaintsApi.list(1, 50)
       setComplaints(response.data.items ?? [])
     } catch (err) {
-      console.error('Failed to load complaints:', err)
+      trackError(err, { component: 'Complaints', action: 'load' })
       setFormError(getApiErrorMessage(err))
     } finally {
       setLoading(false)
@@ -63,7 +64,7 @@ export default function Complaints() {
         if (!cancelled) setComplaints(response.data.items ?? [])
       } catch (err) {
         if (!cancelled) {
-          console.error('Failed to load complaints:', err)
+          trackError(err, { component: 'Complaints', action: 'load' })
           setFormError(getApiErrorMessage(err))
         }
       } finally {
@@ -100,7 +101,7 @@ export default function Complaints() {
       })
       loadComplaints()
     } catch (err) {
-      console.error('Failed to create complaint:', err)
+      trackError(err, { component: 'Complaints', action: 'create' })
       setFormError(getApiErrorMessage(err))
     } finally {
       setCreating(false)

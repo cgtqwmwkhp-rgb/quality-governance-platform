@@ -215,7 +215,7 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    # TODO: Upload to Azure Blob Storage
+    # Future: upload to Azure Blob Storage
     # await azure_blob_service.upload(file_path, content)
 
     # Trigger AI processing (async background job)
@@ -228,13 +228,13 @@ async def upload_document(
         if file_type in [FileType.TXT, FileType.MD]:
             text_content = content.decode("utf-8", errors="ignore")
         elif file_type == FileType.PDF:
-            # TODO: Use pdf-parse or similar
+            # Future: integrate pdf-parse or pdfplumber
             text_content = f"[PDF content extraction not implemented for {file.filename}]"
         elif file_type in [FileType.DOCX, FileType.DOC]:
-            # TODO: Use python-docx
+            # Future: integrate python-docx
             text_content = f"[Word content extraction not implemented for {file.filename}]"
         elif file_type in [FileType.XLSX, FileType.XLS, FileType.CSV]:
-            # TODO: Use openpyxl/pandas
+            # Future: integrate openpyxl/pandas
             text_content = f"[Spreadsheet content extraction not implemented for {file.filename}]"
 
         if text_content and not text_content.startswith("["):

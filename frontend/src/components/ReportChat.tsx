@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { trackError } from '../utils/errorTracker';
 import {
   Send,
   Paperclip,
@@ -256,7 +257,7 @@ export default function ReportChat({
         setMessages([]);
       }
     } catch (err) {
-      console.error('Failed to load messages:', err);
+      trackError(err, { component: 'ReportChat', action: 'loadMessages' });
       setMessages([]);
     } finally {
       setIsLoading(false);
@@ -311,7 +312,7 @@ export default function ReportChat({
       setNewMessage('');
       setAttachments([]);
     } catch (err) {
-      console.error('Failed to send message:', err);
+      trackError(err, { component: 'ReportChat', action: 'sendMessage' });
     } finally {
       setIsSending(false);
     }

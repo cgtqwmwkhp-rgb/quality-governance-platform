@@ -2,152 +2,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Save,
-  Plus,
-  Trash2,
-  GripVertical,
-  Copy,
-  Settings,
-  ChevronDown,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  ToggleLeft,
-  ToggleRight,
-  Type,
-  Hash,
-  Calendar,
-  Camera,
-  FileSignature,
-  ListChecks,
-  Scale,
-  MessageSquare,
-  AlertTriangle,
-  Shield,
-  Leaf,
-  HardHat,
-  Zap,
-  Star,
-  Lock,
-  Unlock,
-  History,
-  Download,
-  Upload,
-  Layers,
-  Award,
-  FileText,
-  Sparkles,
+  Plus, Copy, Upload, Download, History, Camera,
+  Award, FileText, HardHat, Leaf, Shield, Zap, Layers, Lock, Unlock,
 } from 'lucide-react';
 import AITemplateGenerator from '../components/AITemplateGenerator';
 import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer';
 import { auditsApi, getApiErrorMessage } from '../api/client';
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-type QuestionType = 
-  | 'yes_no' 
-  | 'yes_no_na' 
-  | 'scale_1_5' 
-  | 'scale_1_10' 
-  | 'text_short' 
-  | 'text_long' 
-  | 'numeric' 
-  | 'date' 
-  | 'photo' 
-  | 'signature' 
-  | 'multi_choice' 
-  | 'checklist'
-  | 'pass_fail';
-
-type ScoringMethod = 'weighted' | 'equal' | 'pass_fail' | 'points';
-
-interface QuestionOption {
-  id: string;
-  label: string;
-  value: string;
-  score?: number;
-  isCorrect?: boolean;
-}
-
-interface ConditionalLogic {
-  enabled: boolean;
-  showWhen: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than';
-  dependsOnQuestionId: string;
-  value: string;
-}
-
-interface Question {
-  id: string;
-  text: string;
-  description?: string;
-  type: QuestionType;
-  required: boolean;
-  weight: number;
-  options?: QuestionOption[];
-  conditionalLogic?: ConditionalLogic;
-  evidenceRequired: boolean;
-  evidenceType?: 'photo' | 'document' | 'signature' | 'any';
-  isoClause?: string;
-  riskLevel?: 'critical' | 'high' | 'medium' | 'low';
-  guidance?: string;
-  failureTriggersAction: boolean;
-  tags?: string[];
-}
-
-interface Section {
-  id: string;
-  title: string;
-  description?: string;
-  icon?: string;
-  color?: string;
-  questions: Question[];
-  isExpanded: boolean;
-  weight: number;
-  order: number;
-}
-
-interface AuditTemplate {
-  id: string;
-  name: string;
-  description: string;
-  version: string;
-  status: 'draft' | 'published' | 'archived';
-  category: string;
-  subcategory?: string;
-  isoStandards: string[];
-  sections: Section[];
-  scoringMethod: ScoringMethod;
-  passThreshold: number;
-  createdAt: string;
-  updatedAt: string;
-  createdBy: string;
-  tags: string[];
-  estimatedDuration: number; // minutes
-  isLocked: boolean;
-}
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const QUESTION_TYPES: { type: QuestionType; label: string; icon: React.ElementType; description: string }[] = [
-  { type: 'yes_no', label: 'Yes / No', icon: ToggleLeft, description: 'Binary choice' },
-  { type: 'yes_no_na', label: 'Yes / No / N/A', icon: ToggleRight, description: 'With not applicable option' },
-  { type: 'pass_fail', label: 'Pass / Fail', icon: CheckCircle, description: 'Compliance check' },
-  { type: 'scale_1_5', label: 'Scale 1-5', icon: Star, description: 'Rating scale' },
-  { type: 'scale_1_10', label: 'Scale 1-10', icon: Scale, description: 'Detailed rating' },
-  { type: 'multi_choice', label: 'Multiple Choice', icon: ListChecks, description: 'Select one option' },
-  { type: 'checklist', label: 'Checklist', icon: CheckCircle, description: 'Multiple selections' },
-  { type: 'text_short', label: 'Short Text', icon: Type, description: 'Single line response' },
-  { type: 'text_long', label: 'Long Text', icon: MessageSquare, description: 'Multi-line response' },
-  { type: 'numeric', label: 'Numeric', icon: Hash, description: 'Number input' },
-  { type: 'date', label: 'Date', icon: Calendar, description: 'Date picker' },
-  { type: 'photo', label: 'Photo', icon: Camera, description: 'Image capture' },
-  { type: 'signature', label: 'Signature', icon: FileSignature, description: 'Digital signature' },
-];
+import type { AuditTemplate, Section, Question, ScoringMethod } from './audit-builder/types';
+import { generateId, createNewSection, createNewQuestion } from './audit-builder/types';
+import { mapApiToTemplate, mapAISectionsToLocal, buildQuestionPayload } from './audit-builder/templateHelpers';
+import { QUESTION_TYPES } from './audit-builder/QuestionEditor';
+import SectionEditor from './audit-builder/SectionEditor';
+import TemplateHeader from './audit-builder/TemplateHeader';
+import PublishDialog from './audit-builder/PublishDialog';
 
 const CATEGORIES = [
   { id: 'quality', label: 'Quality Management', icon: Award, color: 'blue' },
@@ -168,466 +35,6 @@ const ISO_STANDARDS = [
   { id: 'iso50001', label: 'ISO 50001:2018', description: 'Energy Management' },
 ];
 
-const SECTION_COLORS = [
-  'from-blue-500 to-cyan-500',
-  'from-lime-500 to-teal-500',
-  'from-emerald-500 to-green-500',
-  'from-orange-500 to-amber-500',
-  'from-red-500 to-rose-500',
-  'from-indigo-500 to-violet-500',
-];
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-const generateId = () => Math.random().toString(36).substring(2, 11);
-
-const createNewQuestion = (): Question => ({
-  id: generateId(),
-  text: '',
-  type: 'yes_no',
-  required: true,
-  weight: 1,
-  evidenceRequired: false,
-  failureTriggersAction: false,
-});
-
-const createNewSection = (order: number): Section => ({
-  id: generateId(),
-  title: `Section ${order}`,
-  questions: [],
-  isExpanded: true,
-  weight: 1,
-  order,
-  color: SECTION_COLORS[order % SECTION_COLORS.length],
-});
-
-// ============================================================================
-// COMPONENTS
-// ============================================================================
-
-// Question Type Selector
-const QuestionTypeSelector = ({ 
-  selectedType, 
-  onSelect 
-}: { 
-  selectedType: QuestionType; 
-  onSelect: (type: QuestionType) => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selected = QUESTION_TYPES.find(t => t.type === selectedType);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-input border border-input rounded-lg text-sm text-foreground hover:bg-muted transition-colors"
-      >
-        {selected && <selected.icon className="w-4 h-4 text-primary" />}
-        <span>{selected?.label}</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-20 mt-1 w-64 bg-secondary border border-border rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-            {QUESTION_TYPES.map((type) => (
-              <button
-                key={type.type}
-                type="button"
-                onClick={() => {
-                  onSelect(type.type);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                  selectedType === type.type
-                    ? 'bg-primary/20 text-primary'
-                    : 'hover:bg-muted text-foreground'
-                }`}
-              >
-                <type.icon className="w-4 h-4 text-primary" />
-                <div>
-                  <p className="text-sm font-medium">{type.label}</p>
-                  <p className="text-xs text-muted-foreground">{type.description}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Question Editor
-const QuestionEditor = ({
-  question,
-  onUpdate,
-  onDelete,
-  onDuplicate,
-}: {
-  question: Question;
-  onUpdate: (questionId: string, updates: Partial<Question>) => void;
-  onDelete: (questionId: string) => void;
-  onDuplicate: (questionId: string) => void;
-}) => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const handleOptionAdd = () => {
-    const newOptions = [
-      ...(question.options || []),
-      { id: generateId(), label: '', value: '', score: 0 }
-    ];
-    onUpdate(question.id, { options: newOptions });
-  };
-
-  const handleOptionUpdate = (optionId: string, updates: Partial<QuestionOption>) => {
-    const newOptions = (question.options || []).map(opt =>
-      opt.id === optionId ? { ...opt, ...updates } : opt
-    );
-    onUpdate(question.id, { options: newOptions });
-  };
-
-  const handleOptionDelete = (optionId: string) => {
-    const newOptions = (question.options || []).filter(opt => opt.id !== optionId);
-    onUpdate(question.id, { options: newOptions });
-  };
-
-  const needsOptions = ['multi_choice', 'checklist'].includes(question.type);
-
-  return (
-    <div className="bg-secondary/50 border border-border rounded-xl p-4 group">
-      {/* Header */}
-      <div className="flex items-start gap-3 mb-4">
-        <div className="p-1.5 bg-input rounded cursor-grab hover:bg-muted">
-          <GripVertical className="w-4 h-4 text-muted-foreground" />
-        </div>
-        
-        <div className="flex-1 space-y-3">
-          {/* Question Text */}
-          <input
-            type="text"
-            value={question.text}
-            onChange={(e) => onUpdate(question.id, { text: e.target.value })}
-            placeholder="Enter question text..."
-            className="w-full px-3 py-2 bg-input border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring text-sm"
-          />
-
-          {/* Description */}
-          <input
-            type="text"
-            value={question.description || ''}
-            onChange={(e) => onUpdate(question.id, { description: e.target.value })}
-            placeholder="Optional description or guidance..."
-            className="w-full px-3 py-2 bg-muted/50 border border-input/50 rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring text-xs"
-          />
-
-          {/* Type and Settings Row */}
-          <div className="flex flex-wrap items-center gap-3">
-            <QuestionTypeSelector
-              selectedType={question.type}
-              onSelect={(type) => onUpdate(question.id, { type })}
-            />
-
-            <label htmlFor={`required-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input id={`required-${question.id}`}
-                type="checkbox"
-                checked={question.required}
-                onChange={(e) => onUpdate(question.id, { required: e.target.checked })}
-                className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
-              />
-              Required
-            </label>
-
-            <label htmlFor={`evidence-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input id={`evidence-${question.id}`}
-                type="checkbox"
-                checked={question.evidenceRequired}
-                onChange={(e) => onUpdate(question.id, { evidenceRequired: e.target.checked })}
-                className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
-              />
-              <Camera className="w-4 h-4" />
-              Evidence
-            </label>
-
-            <label htmlFor={`auto-action-${question.id}`} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input id={`auto-action-${question.id}`}
-                type="checkbox"
-                checked={question.failureTriggersAction}
-                onChange={(e) => onUpdate(question.id, { failureTriggersAction: e.target.checked })}
-                className="w-4 h-4 rounded border-input bg-input text-destructive focus:ring-destructive"
-              />
-              <AlertTriangle className="w-4 h-4 text-destructive" />
-              Auto-Action
-            </label>
-
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Weight:</span>
-              <input id={`weight-${question.id}`}
-                type="number"
-                value={question.weight}
-                onChange={(e) => onUpdate(question.id, { weight: parseFloat(e.target.value) || 1 })}
-                min="0"
-                max="10"
-                step="0.5"
-                className="w-16 px-2 py-1 bg-input border border-input rounded text-sm text-foreground text-center"
-              />
-            </div>
-          </div>
-
-          {/* Options for multi-choice/checklist */}
-          {needsOptions && (
-            <div className="space-y-2 mt-3 pl-4 border-l-2 border-primary/30">
-              <p className="text-xs text-muted-foreground font-medium">Options:</p>
-              {(question.options || []).map((option, idx) => (
-                <div key={option.id} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-4">{idx + 1}.</span>
-                  <input
-                    type="text"
-                    value={option.label}
-                    onChange={(e) => handleOptionUpdate(option.id, { label: e.target.value, value: e.target.value })}
-                    placeholder="Option label..."
-                    className="flex-1 px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
-                  />
-                  <input
-                    type="number"
-                    value={option.score || 0}
-                    onChange={(e) => handleOptionUpdate(option.id, { score: parseInt(e.target.value) || 0 })}
-                    placeholder="Score"
-                    className="w-16 px-2 py-1 bg-input border border-input rounded text-sm text-foreground text-center"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleOptionDelete(option.id)}
-                    className="p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <XCircle className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={handleOptionAdd}
-                className="flex items-center gap-1 text-xs text-primary hover:text-primary"
-              >
-                <Plus className="w-3 h-3" /> Add Option
-              </button>
-            </div>
-          )}
-
-          {/* Advanced Settings */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <Settings className="w-3 h-3" />
-            Advanced Settings
-            <ChevronRight className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} />
-          </button>
-
-          {showAdvanced && (
-            <div className="grid grid-cols-2 gap-3 p-3 bg-muted rounded-lg">
-              <div>
-                <label htmlFor={`iso-clause-${question.id}`} className="block text-xs text-muted-foreground mb-1">ISO Clause</label>
-                <input id={`iso-clause-${question.id}`}
-                  type="text"
-                  value={question.isoClause || ''}
-                  onChange={(e) => onUpdate(question.id, { isoClause: e.target.value })}
-                  placeholder="e.g., 7.1.2"
-                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
-                />
-              </div>
-              <div>
-                <label htmlFor={`risk-level-${question.id}`} className="block text-xs text-muted-foreground mb-1">Risk Level</label>
-                <select id={`risk-level-${question.id}`}
-                  value={question.riskLevel || ''}
-                  onChange={(e) => onUpdate(question.id, { riskLevel: e.target.value as Question['riskLevel'] })}
-                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground"
-                >
-                  <option value="">None</option>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label htmlFor={`guidance-${question.id}`} className="block text-xs text-muted-foreground mb-1">Auditor Guidance</label>
-                <textarea id={`guidance-${question.id}`}
-                  value={question.guidance || ''}
-                  onChange={(e) => onUpdate(question.id, { guidance: e.target.value })}
-                  placeholder="Tips for auditors on how to assess this item..."
-                  rows={2}
-                  className="w-full px-2 py-1 bg-input border border-input rounded text-sm text-foreground resize-none"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            onClick={() => onDuplicate(question.id)}
-            className="p-1.5 text-muted-foreground hover:text-primary rounded"
-            title="Duplicate"
-          >
-            <Copy className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(question.id)}
-            className="p-1.5 text-muted-foreground hover:text-destructive rounded"
-            title="Delete"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Section Editor
-const SectionEditor = ({
-  section,
-  onUpdate,
-  onDelete,
-  onAddQuestion,
-  onUpdateQuestion,
-  onDeleteQuestion,
-  onDuplicateQuestion,
-}: {
-  section: Section;
-  onUpdate: (updates: Partial<Section>) => void;
-  onDelete: () => void;
-  onAddQuestion: () => void;
-  onUpdateQuestion: (questionId: string, updates: Partial<Question>) => void;
-  onDeleteQuestion: (questionId: string) => void;
-  onDuplicateQuestion: (questionId: string) => void;
-}) => {
-  const { t } = useTranslation();
-
-  return (
-    <div className="bg-card/50 border border-border rounded-2xl overflow-hidden">
-      {/* Section Header */}
-      <div 
-        className={`bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}
-      >
-        <div className="bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-secondary rounded cursor-grab hover:bg-muted">
-              <GripVertical className="w-5 h-5 text-muted-foreground" />
-            </div>
-            
-            <button
-              type="button"
-              onClick={() => onUpdate({ isExpanded: !section.isExpanded })}
-              className="p-1"
-            >
-              {section.isExpanded ? (
-                <ChevronDown className="w-5 h-5 text-foreground" />
-              ) : (
-                <ChevronRight className="w-5 h-5 text-foreground" />
-              )}
-            </button>
-
-            <div className="flex-1">
-              <input
-                type="text"
-                value={section.title}
-                onChange={(e) => onUpdate({ title: e.target.value })}
-                placeholder="Section title..."
-                className="w-full bg-transparent text-lg font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none"
-              />
-              <input
-                type="text"
-                value={section.description || ''}
-                onChange={(e) => onUpdate({ description: e.target.value })}
-                placeholder="Section description..."
-                className="w-full bg-transparent text-sm text-muted-foreground placeholder:text-muted-foreground focus:outline-none mt-1"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-secondary rounded-lg text-xs text-foreground">
-                {section.questions.length} questions
-              </span>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">Weight:</span>
-                <input
-                  type="number"
-                  value={section.weight}
-                  onChange={(e) => onUpdate({ weight: parseFloat(e.target.value) || 1 })}
-                  min="0"
-                  max="10"
-                  step="0.5"
-                  className="w-14 px-2 py-1 bg-secondary border border-border rounded text-sm text-foreground text-center"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={onDelete}
-                className="p-1.5 text-muted-foreground hover:text-destructive rounded"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Section Content */}
-      {section.isExpanded && (
-        <div className="p-4 space-y-3">
-          {section.questions.length === 0 ? (
-            <div className="text-center py-8">
-              <ListChecks className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-muted-foreground mb-4">No questions in this section</p>
-              <button
-                type="button"
-                onClick={onAddQuestion}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                {t('audit_builder.add_question')}
-              </button>
-            </div>
-          ) : (
-            <>
-              {section.questions.map((question) => (
-                <QuestionEditor
-                  key={question.id}
-                  question={question}
-                  onUpdate={onUpdateQuestion}
-                  onDelete={onDeleteQuestion}
-                  onDuplicate={onDuplicateQuestion}
-                />
-              ))}
-              <button
-                type="button"
-                onClick={onAddQuestion}
-                className="w-full py-3 border-2 border-dashed border-border rounded-xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                {t('audit_builder.add_question')}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
 export default function AuditTemplateBuilder() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -636,27 +43,18 @@ export default function AuditTemplateBuilder() {
 
   const [template, setTemplate] = useState<AuditTemplate>({
     id: templateId || generateId(),
-    name: '',
-    description: '',
-    version: '1.0.0',
-    status: 'draft',
-    category: 'quality',
-    isoStandards: [],
-    sections: [createNewSection(1)],
-    scoringMethod: 'weighted',
-    passThreshold: 80,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'Current User',
-    tags: [],
-    estimatedDuration: 60,
-    isLocked: false,
+    name: '', description: '', version: '1.0.0', status: 'draft',
+    category: 'quality', isoStandards: [], sections: [createNewSection(1)],
+    scoringMethod: 'weighted', passThreshold: 80,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    createdBy: 'Current User', tags: [], estimatedDuration: 60, isLocked: false,
   });
 
   const [activeTab, setActiveTab] = useState<'builder' | 'settings' | 'preview'>('builder');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showAIAssist, setShowAIAssist] = useState(false);
+  const [showPublishDialog, setShowPublishDialog] = useState(false);
   const [backendId, setBackendId] = useState<number | null>(
     templateId && !isNaN(Number(templateId)) ? Number(templateId) : null
   );
@@ -664,314 +62,108 @@ export default function AuditTemplateBuilder() {
   const [isLoading, setIsLoading] = useState(!!templateId);
   const sectionIdMap = useRef<Record<string, number>>({});
   const questionIdMap = useRef<Record<string, number>>({});
-
-  // Get all questions across all sections
   const allQuestions = template.sections.flatMap(s => s.questions);
 
-  // Load existing template from API when editing
   useEffect(() => {
     if (!templateId) return;
     const numericId = Number(templateId);
     if (isNaN(numericId)) return;
-
     (async () => {
       try {
         const { data } = await auditsApi.getTemplate(numericId);
         sectionIdMap.current = {};
         questionIdMap.current = {};
-
-        const mappedSections: Section[] = data.sections.map((s, idx) => {
-          const localSectionId = String(s.id);
-          sectionIdMap.current[localSectionId] = s.id;
-          return {
-            id: localSectionId,
-            title: s.title,
-            description: s.description,
-            questions: s.questions.map((q) => {
-              const localQuestionId = String(q.id);
-              questionIdMap.current[localQuestionId] = q.id;
-              return {
-                id: localQuestionId,
-                text: q.question_text,
-                description: q.description,
-                type: (q.question_type || 'yes_no') as QuestionType,
-                required: q.is_required,
-                weight: q.weight,
-                options: q.options?.map(o => ({
-                  id: generateId(),
-                  label: o.label,
-                  value: o.value,
-                  score: o.score,
-                  isCorrect: o.is_correct,
-                })),
-                evidenceRequired: false,
-                failureTriggersAction: false,
-                riskLevel: q.risk_category as Question['riskLevel'],
-                guidance: q.help_text,
-              };
-            }),
-            isExpanded: true,
-            weight: s.weight,
-            order: s.sort_order,
-            color: SECTION_COLORS[idx % SECTION_COLORS.length],
-          };
-        });
-
-        setTemplate({
-          id: String(data.id),
-          name: data.name,
-          description: data.description || '',
-          version: String(data.version),
-          status: data.is_published ? 'published' : 'draft',
-          category: data.category || 'quality',
-          isoStandards: [],
-          sections: mappedSections.length > 0 ? mappedSections : [createNewSection(1)],
-          scoringMethod: (data.scoring_method || 'weighted') as ScoringMethod,
-          passThreshold: data.passing_score || 80,
-          createdAt: data.created_at,
-          updatedAt: data.updated_at || data.created_at,
-          createdBy: 'Current User',
-          tags: [],
-          estimatedDuration: 60,
-          isLocked: false,
-        });
+        setTemplate(mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current));
         setBackendId(data.id);
-      } catch (error) {
-        setSaveError(getApiErrorMessage(error));
-      } finally {
-        setIsLoading(false);
-      }
+      } catch (error) { setSaveError(getApiErrorMessage(error)); }
+      finally { setIsLoading(false); }
     })();
   }, [templateId]);
 
-  // Section handlers
-  const handleAddSection = () => {
-    const newSection = createNewSection(template.sections.length + 1);
-    setTemplate(prev => ({
-      ...prev,
-      sections: [...prev.sections, newSection],
-    }));
+  const updateSections = (fn: (ss: Section[]) => Section[]) =>
+    setTemplate(prev => ({ ...prev, sections: fn(prev.sections) }));
+
+  const handleAddSection = () =>
+    updateSections(ss => [...ss, createNewSection(ss.length + 1)]);
+  const handleUpdateSection = (id: string, updates: Partial<Section>) =>
+    updateSections(ss => ss.map(s => s.id === id ? { ...s, ...updates } : s));
+  const handleDeleteSection = (id: string) =>
+    updateSections(ss => ss.filter(s => s.id !== id));
+  const handleAddQuestion = (sid: string) => {
+    const q = createNewQuestion();
+    updateSections(ss => ss.map(s => s.id === sid ? { ...s, questions: [...s.questions, q] } : s));
   };
-
-  const handleUpdateSection = (sectionId: string, updates: Partial<Section>) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId ? { ...s, ...updates } : s
-      ),
+  const handleUpdateQuestion = (sid: string, qid: string, updates: Partial<Question>) =>
+    updateSections(ss => ss.map(s => s.id === sid
+      ? { ...s, questions: s.questions.map(q => q.id === qid ? { ...q, ...updates } : q) } : s));
+  const handleDeleteQuestion = (sid: string, qid: string) =>
+    updateSections(ss => ss.map(s => s.id === sid
+      ? { ...s, questions: s.questions.filter(q => q.id !== qid) } : s));
+  const handleDuplicateQuestion = (sid: string, qid: string) =>
+    updateSections(ss => ss.map(s => {
+      if (s.id !== sid) return s;
+      const i = s.questions.findIndex(q => q.id === qid);
+      if (i === -1) return s;
+      const dup = { ...s.questions[i], id: generateId(), text: `${s.questions[i].text} (Copy)` };
+      const qs = [...s.questions];
+      qs.splice(i + 1, 0, dup);
+      return { ...s, questions: qs };
     }));
-  };
 
-  const handleDeleteSection = (sectionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.filter(s => s.id !== sectionId),
-    }));
-  };
-
-  // Question handlers
-  const handleAddQuestion = (sectionId: string) => {
-    const newQuestion = createNewQuestion();
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? { ...s, questions: [...s.questions, newQuestion] }
-          : s
-      ),
-    }));
-  };
-
-  const handleUpdateQuestion = (sectionId: string, questionId: string, updates: Partial<Question>) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? {
-              ...s,
-              questions: s.questions.map(q =>
-                q.id === questionId ? { ...q, ...updates } : q
-              ),
-            }
-          : s
-      ),
-    }));
-  };
-
-  const handleDeleteQuestion = (sectionId: string, questionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s =>
-        s.id === sectionId
-          ? { ...s, questions: s.questions.filter(q => q.id !== questionId) }
-          : s
-      ),
-    }));
-  };
-
-  const handleDuplicateQuestion = (sectionId: string, questionId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      sections: prev.sections.map(s => {
-        if (s.id !== sectionId) return s;
-        const questionIndex = s.questions.findIndex(q => q.id === questionId);
-        if (questionIndex === -1) return s;
-        const originalQuestion = s.questions[questionIndex];
-        const duplicatedQuestion = {
-          ...originalQuestion,
-          id: generateId(),
-          text: `${originalQuestion.text} (Copy)`,
-        };
-        const newQuestions = [...s.questions];
-        newQuestions.splice(questionIndex + 1, 0, duplicatedQuestion);
-        return { ...s, questions: newQuestions };
-      }),
-    }));
-  };
-
-  const mapOptions = (opts?: QuestionOption[]) =>
-    opts?.length
-      ? opts.map(o => ({ value: o.value, label: o.label, score: o.score, is_correct: o.isCorrect }))
-      : undefined;
-
-  // Save handler
   const handleSave = async () => {
     if (!template.name.trim()) {
       const msg = 'Template name is required';
-      setSaveError(msg);
-      announce(msg, 'assertive');
+      setSaveError(msg); announce(msg, 'assertive');
       return;
     }
-    setIsSaving(true);
-    setSaveError(null);
+    setIsSaving(true); setSaveError(null);
     try {
-      const templatePayload = {
-        name: template.name,
-        description: template.description || undefined,
+      const payload = {
+        name: template.name, description: template.description || undefined,
         category: template.category || undefined,
-        scoring_method: template.scoringMethod,
-        passing_score: template.passThreshold,
+        scoring_method: template.scoringMethod, passing_score: template.passThreshold,
       };
+      let tid = backendId;
+      if (tid) await auditsApi.updateTemplate(tid, payload);
+      else { const { data } = await auditsApi.createTemplate(payload); tid = data.id; setBackendId(tid); }
 
-      if (backendId) {
-        await auditsApi.updateTemplate(backendId, templatePayload);
-
-        for (let sIdx = 0; sIdx < template.sections.length; sIdx++) {
-          const section = template.sections[sIdx];
-          let sectionBackendId = sectionIdMap.current[section.id];
-          const sectionPayload = {
-            title: section.title,
-            description: section.description,
-            sort_order: sIdx,
-            weight: section.weight,
-          };
-
-          if (sectionBackendId) {
-            await auditsApi.updateSection(sectionBackendId, sectionPayload);
-          } else {
-            const { data: created } = await auditsApi.createSection(backendId, sectionPayload);
-            sectionBackendId = created.id;
-            sectionIdMap.current[section.id] = sectionBackendId;
-          }
-
-          for (let qIdx = 0; qIdx < section.questions.length; qIdx++) {
-            const q = section.questions[qIdx];
-            const qBackendId = questionIdMap.current[q.id];
-
-            if (qBackendId) {
-              await auditsApi.updateQuestion(qBackendId, {
-                question_text: q.text,
-                question_type: q.type,
-                description: q.description,
-                help_text: q.guidance,
-                is_required: q.required,
-                weight: q.weight,
-                sort_order: qIdx,
-                options: mapOptions(q.options),
-                risk_category: q.riskLevel,
-              });
-            } else {
-              const { data: createdQ } = await auditsApi.createQuestion(backendId, {
-                section_id: sectionBackendId,
-                question_text: q.text,
-                question_type: q.type,
-                description: q.description,
-                help_text: q.guidance,
-                is_required: q.required,
-                weight: q.weight,
-                sort_order: qIdx,
-                options: mapOptions(q.options),
-                risk_category: q.riskLevel,
-              });
-              questionIdMap.current[q.id] = createdQ.id;
-            }
-          }
-        }
-      } else {
-        const { data: created } = await auditsApi.createTemplate(templatePayload);
-        const newId = created.id;
-        setBackendId(newId);
-
-        for (let sIdx = 0; sIdx < template.sections.length; sIdx++) {
-          const section = template.sections[sIdx];
-          const { data: createdSection } = await auditsApi.createSection(newId, {
-            title: section.title,
-            description: section.description,
-            sort_order: sIdx,
-            weight: section.weight,
-          });
-          sectionIdMap.current[section.id] = createdSection.id;
-
-          for (let qIdx = 0; qIdx < section.questions.length; qIdx++) {
-            const q = section.questions[qIdx];
-            const { data: createdQ } = await auditsApi.createQuestion(newId, {
-              section_id: createdSection.id,
-              question_text: q.text,
-              question_type: q.type,
-              description: q.description,
-              help_text: q.guidance,
-              is_required: q.required,
-              weight: q.weight,
-              sort_order: qIdx,
-              options: mapOptions(q.options),
-              risk_category: q.riskLevel,
-            });
-            questionIdMap.current[q.id] = createdQ.id;
+      for (const [sIdx, section] of template.sections.entries()) {
+        let sid = sectionIdMap.current[section.id];
+        const sp = { title: section.title, description: section.description, sort_order: sIdx, weight: section.weight };
+        if (sid) await auditsApi.updateSection(sid, sp);
+        else { const { data } = await auditsApi.createSection(tid!, sp); sid = data.id; sectionIdMap.current[section.id] = sid; }
+        for (const [qIdx, q] of section.questions.entries()) {
+          const qbid = questionIdMap.current[q.id];
+          if (qbid) await auditsApi.updateQuestion(qbid, buildQuestionPayload(q, qIdx));
+          else {
+            const { data } = await auditsApi.createQuestion(tid!, buildQuestionPayload(q, qIdx, sid));
+            questionIdMap.current[q.id] = data.id;
           }
         }
       }
     } catch (error) {
       const msg = getApiErrorMessage(error);
-      setSaveError(msg);
-      announce(msg, 'assertive');
-    } finally {
-      setIsSaving(false);
-    }
+      setSaveError(msg); announce(msg, 'assertive');
+    } finally { setIsSaving(false); }
   };
 
-  // Publish handler
   const handlePublish = async () => {
     if (!backendId) {
       const msg = 'Please save the template before publishing';
-      setSaveError(msg);
-      announce(msg, 'assertive');
+      setSaveError(msg); announce(msg, 'assertive');
       return;
     }
-    setIsPublishing(true);
-    setSaveError(null);
+    setIsPublishing(true); setSaveError(null);
     try {
       await auditsApi.publishTemplate(backendId);
       setTemplate(prev => ({ ...prev, status: 'published' }));
+      setShowPublishDialog(false);
     } catch (error) {
       const msg = getApiErrorMessage(error);
-      setSaveError(msg);
-      announce(msg, 'assertive');
-    } finally {
-      setIsPublishing(false);
-    }
+      setSaveError(msg); announce(msg, 'assertive');
+    } finally { setIsPublishing(false); }
   };
 
-  // Calculate stats
   const totalQuestions = allQuestions.length;
   const totalWeight = allQuestions.reduce((sum, q) => sum + q.weight, 0);
   const requiredQuestions = allQuestions.filter(q => q.required).length;
@@ -979,101 +171,23 @@ export default function AuditTemplateBuilder() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/audit-templates')}
-                className="p-2 hover:bg-secondary rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-              </button>
-              <div>
-                <input
-                  type="text"
-                  value={template.name}
-                  onChange={(e) => setTemplate(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder={t('audit_builder.untitled_template')}
-                  className="bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2 py-0.5 text-xs rounded ${
-                    template.status === 'published' ? 'bg-success/20 text-success' :
-                    template.status === 'archived' ? 'bg-muted text-muted-foreground' :
-                    'bg-warning/20 text-warning'
-                  }`}>
-                    {template.status}
-                  </span>
-                  <span className="text-xs text-muted-foreground">v{template.version}</span>
-                  <span className="text-xs text-muted-foreground">•</span>
-                  <span className="text-xs text-muted-foreground">{totalQuestions} questions</span>
-                </div>
-              </div>
-            </div>
+      <TemplateHeader
+        templateName={template.name}
+        templateStatus={template.status}
+        templateVersion={template.version}
+        totalQuestions={totalQuestions}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onNameChange={(name) => setTemplate(prev => ({ ...prev, name }))}
+        onBack={() => navigate('/audit-templates')}
+        onSave={handleSave}
+        isSaving={isSaving}
+        onPublish={() => setShowPublishDialog(true)}
+        canPublish={!!backendId && template.status !== 'published'}
+        onAIAssist={() => setShowAIAssist(true)}
+        saveError={saveError}
+      />
 
-            <div className="flex items-center gap-3">
-              {/* Tabs */}
-              <div className="flex bg-secondary rounded-lg p-1">
-                {(['builder', 'settings', 'preview'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === tab
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setShowAIAssist(true)}
-                className="flex items-center gap-2 px-3 py-2 bg-accent border border-primary/30 rounded-lg text-primary hover:bg-primary/30 transition-colors"
-              >
-                <Sparkles className="w-4 h-4" />
-                {t('audit_builder.ai_assist')}
-              </button>
-
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handlePublish}
-                    disabled={isPublishing || !backendId || template.status === 'published'}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-opacity disabled:opacity-50"
-                  >
-                    {isPublishing ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-4 h-4" />
-                    )}
-                    Publish
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-opacity disabled:opacity-50"
-                  >
-                    {isSaving ? (
-                      <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    {t('audit_builder.save')}
-                  </button>
-                </div>
-                {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -1082,32 +196,22 @@ export default function AuditTemplateBuilder() {
         ) : (<>
         {activeTab === 'builder' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Left Sidebar - Stats & Quick Actions */}
             <div className="lg:col-span-1 space-y-4">
-              {/* Stats Card */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
                 <h3 className="text-sm font-semibold text-foreground mb-4">{t('audit_builder.template_stats')}</h3>
                 <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">{t('audit_builder.sections')}</span>
-                    <span className="text-sm font-medium text-foreground">{template.sections.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">{t('audit_builder.questions')}</span>
-                    <span className="text-sm font-medium text-foreground">{totalQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">{t('audit_builder.required')}</span>
-                    <span className="text-sm font-medium text-foreground">{requiredQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">{t('audit_builder.with_evidence')}</span>
-                    <span className="text-sm font-medium text-foreground">{evidenceQuestions}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">{t('audit_builder.total_weight')}</span>
-                    <span className="text-sm font-medium text-foreground">{totalWeight}</span>
-                  </div>
+                  {[
+                    [t('audit_builder.sections'), template.sections.length],
+                    [t('audit_builder.questions'), totalQuestions],
+                    [t('audit_builder.required'), requiredQuestions],
+                    [t('audit_builder.with_evidence'), evidenceQuestions],
+                    [t('audit_builder.total_weight'), totalWeight],
+                  ].map(([label, value]) => (
+                    <div key={String(label)} className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                      <span className="text-sm font-medium text-foreground">{value}</span>
+                    </div>
+                  ))}
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">{t('audit_builder.pass_threshold')}</span>
                     <span className="text-sm font-medium text-success">{template.passThreshold}%</span>
@@ -1115,53 +219,38 @@ export default function AuditTemplateBuilder() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Quick Actions</h3>
                 <div className="space-y-2">
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
-                    <Upload className="w-4 h-4" />
-                    {t('audit_builder.import_excel')}
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
-                    <Download className="w-4 h-4" />
-                    {t('audit_builder.export_template')}
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
-                    <Copy className="w-4 h-4" />
-                    {t('audit_builder.duplicate_template')}
-                  </button>
-                  <button className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
-                    <History className="w-4 h-4" />
-                    {t('audit_builder.version_history')}
-                  </button>
+                  {[
+                    { icon: Upload, label: t('audit_builder.import_excel') },
+                    { icon: Download, label: t('audit_builder.export_template') },
+                    { icon: Copy, label: t('audit_builder.duplicate_template') },
+                    { icon: History, label: t('audit_builder.version_history') },
+                  ].map(({ icon: Icon, label }) => (
+                    <button key={label} className="w-full flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg text-sm text-foreground transition-colors">
+                      <Icon className="w-4 h-4" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* ISO Standards */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
                 <h3 className="text-sm font-semibold text-foreground mb-4">{t('audit_builder.iso_standards')}</h3>
                 <div className="space-y-2">
                   {ISO_STANDARDS.map((standard) => (
-                    <label
-                      key={standard.id}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
+                    <label key={standard.id} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={template.isoStandards.includes(standard.id)}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setTemplate(prev => ({
-                              ...prev,
-                              isoStandards: [...prev.isoStandards, standard.id],
-                            }));
-                          } else {
-                            setTemplate(prev => ({
-                              ...prev,
-                              isoStandards: prev.isoStandards.filter(s => s !== standard.id),
-                            }));
-                          }
+                          setTemplate(prev => ({
+                            ...prev,
+                            isoStandards: e.target.checked
+                              ? [...prev.isoStandards, standard.id]
+                              : prev.isoStandards.filter(s => s !== standard.id),
+                          }));
                         }}
                         className="w-4 h-4 rounded border-input bg-input text-primary focus:ring-ring"
                       />
@@ -1175,9 +264,7 @@ export default function AuditTemplateBuilder() {
               </div>
             </div>
 
-            {/* Main Builder Area */}
             <div className="lg:col-span-3 space-y-4">
-              {/* Description */}
               <div className="bg-card/50 border border-border rounded-2xl p-4">
                 <label htmlFor="audittemplatebuilder-field-6" className="block text-sm font-medium text-foreground mb-2">
                   {t('audit_builder.template_description')}
@@ -1190,8 +277,6 @@ export default function AuditTemplateBuilder() {
                   className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
                 />
               </div>
-
-              {/* Sections */}
               <div className="space-y-4">
                 {template.sections.map((section) => (
                   <SectionEditor
@@ -1205,13 +290,8 @@ export default function AuditTemplateBuilder() {
                     onDuplicateQuestion={(qId) => handleDuplicateQuestion(section.id, qId)}
                   />
                 ))}
-
-                {/* Add Section Button */}
-                <button
-                  type="button"
-                  onClick={handleAddSection}
-                  className="w-full py-4 border-2 border-dashed border-border rounded-2xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
-                >
+                <button type="button" onClick={handleAddSection}
+                  className="w-full py-4 border-2 border-dashed border-border rounded-2xl text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2">
                   <Plus className="w-5 h-5" />
                   {t('audit_builder.add_section')}
                 </button>
@@ -1224,129 +304,84 @@ export default function AuditTemplateBuilder() {
           <div className="max-w-2xl mx-auto space-y-6">
             <div className="bg-card/50 border border-border rounded-2xl p-6">
               <h2 className="text-lg font-semibold text-foreground mb-6">{t('audit_builder.template_settings')}</h2>
-              
               <div className="space-y-6">
-                {/* Category */}
                 <div>
                   <span className="block text-sm font-medium text-foreground mb-2">Category</span>
                   <div className="grid grid-cols-2 gap-2">
                     {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.id}
-                        type="button"
+                      <button key={cat.id} type="button"
                         onClick={() => setTemplate(prev => ({ ...prev, category: cat.id }))}
                         className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
-                          template.category === cat.id
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-input'
-                        }`}
-                      >
-                        <cat.icon className={`w-5 h-5 ${
-                          template.category === cat.id ? 'text-primary' : 'text-muted-foreground'
-                        }`} />
+                          template.category === cat.id ? 'border-primary bg-primary/10' : 'border-border hover:border-input'
+                        }`}>
+                        <cat.icon className={`w-5 h-5 ${template.category === cat.id ? 'text-primary' : 'text-muted-foreground'}`} />
                         <span className="text-sm text-foreground">{cat.label}</span>
                       </button>
                     ))}
                   </div>
                 </div>
-
-                {/* Scoring Method */}
                 <div>
                   <span className="block text-sm font-medium text-foreground mb-2">Scoring Method</span>
                   <div className="grid grid-cols-2 gap-2">
-                    {[
+                    {([
                       { id: 'weighted', label: 'Weighted', description: 'Questions have different weights' },
                       { id: 'equal', label: 'Equal Weight', description: 'All questions count equally' },
                       { id: 'pass_fail', label: 'Pass/Fail', description: 'Binary pass or fail result' },
                       { id: 'points', label: 'Points Based', description: 'Accumulate points' },
-                    ].map((method) => (
-                      <button
-                        key={method.id}
-                        type="button"
+                    ] as const).map((method) => (
+                      <button key={method.id} type="button"
                         onClick={() => setTemplate(prev => ({ ...prev, scoringMethod: method.id as ScoringMethod }))}
                         className={`p-3 rounded-xl border-2 text-left transition-all ${
-                          template.scoringMethod === method.id
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border hover:border-input'
-                        }`}
-                      >
+                          template.scoringMethod === method.id ? 'border-primary bg-primary/10' : 'border-border hover:border-input'
+                        }`}>
                         <p className="text-sm font-medium text-foreground">{method.label}</p>
                         <p className="text-xs text-muted-foreground mt-1">{method.description}</p>
                       </button>
                     ))}
                   </div>
                 </div>
-
-                {/* Pass Threshold */}
                 <div>
                   <label htmlFor="audittemplatebuilder-field-7" className="block text-sm font-medium text-foreground mb-2">
                     Pass Threshold: {template.passThreshold}%
                   </label>
-                  <input id="audittemplatebuilder-field-7"
-                    type="range"
-                    min="0"
-                    max="100"
+                  <input id="audittemplatebuilder-field-7" type="range" min="0" max="100"
                     value={template.passThreshold}
                     onChange={(e) => setTemplate(prev => ({ ...prev, passThreshold: parseInt(e.target.value) }))}
-                    className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer"
-                  />
+                    className="w-full h-2 bg-input rounded-lg appearance-none cursor-pointer" />
                   <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>0%</span>
-                    <span>100%</span>
+                    <span>0%</span><span>100%</span>
                   </div>
                 </div>
-
-                {/* Estimated Duration */}
                 <div>
                   <label htmlFor="audittemplatebuilder-field-8" className="block text-sm font-medium text-foreground mb-2">
                     Estimated Duration (minutes)
                   </label>
-                  <input id="audittemplatebuilder-field-8"
-                    type="number"
+                  <input id="audittemplatebuilder-field-8" type="number" min="0"
                     value={template.estimatedDuration}
                     onChange={(e) => setTemplate(prev => ({ ...prev, estimatedDuration: parseInt(e.target.value) || 0 }))}
-                    min="0"
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring"
-                  />
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring" />
                 </div>
-
-                {/* Version */}
                 <div>
                   <label htmlFor="audittemplatebuilder-field-9" className="block text-sm font-medium text-foreground mb-2">Version</label>
-                  <input id="audittemplatebuilder-field-9"
-                    type="text"
+                  <input id="audittemplatebuilder-field-9" type="text" placeholder="1.0.0"
                     value={template.version}
                     onChange={(e) => setTemplate(prev => ({ ...prev, version: e.target.value }))}
-                    placeholder="1.0.0"
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring"
-                  />
+                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:border-ring" />
                 </div>
-
-                {/* Lock Toggle */}
                 <div className="flex items-center justify-between p-4 bg-secondary rounded-xl">
                   <div className="flex items-center gap-3">
-                    {template.isLocked ? (
-                      <Lock className="w-5 h-5 text-warning" />
-                    ) : (
-                      <Unlock className="w-5 h-5 text-muted-foreground" />
-                    )}
+                    {template.isLocked
+                      ? <Lock className="w-5 h-5 text-warning" />
+                      : <Unlock className="w-5 h-5 text-muted-foreground" />}
                     <div>
                       <p className="text-sm font-medium text-foreground">Lock Template</p>
                       <p className="text-xs text-muted-foreground">Prevent edits after publishing</p>
                     </div>
                   </div>
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => setTemplate(prev => ({ ...prev, isLocked: !prev.isLocked }))}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
-                      template.isLocked ? 'bg-warning' : 'bg-muted'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform ${
-                        template.isLocked ? 'translate-x-7' : 'translate-x-1'
-                      }`}
-                    />
+                    className={`relative w-12 h-6 rounded-full transition-colors ${template.isLocked ? 'bg-warning' : 'bg-muted'}`}>
+                    <span className={`absolute top-1 w-4 h-4 bg-card rounded-full transition-transform ${template.isLocked ? 'translate-x-7' : 'translate-x-1'}`} />
                   </button>
                 </div>
               </div>
@@ -1361,28 +396,17 @@ export default function AuditTemplateBuilder() {
                 <h2 className="text-2xl font-bold text-foreground mb-2">{template.name || t('audit_builder.untitled_template')}</h2>
                 <p className="text-muted-foreground">{template.description}</p>
                 <div className="flex items-center justify-center gap-4 mt-4">
-                  <span className="px-3 py-1 bg-primary/20 text-primary rounded-lg text-sm">
-                    {totalQuestions} Questions
-                  </span>
-                  <span className="px-3 py-1 bg-input text-foreground rounded-lg text-sm">
-                    ~{template.estimatedDuration} min
-                  </span>
-                  <span className="px-3 py-1 bg-success/20 text-success rounded-lg text-sm">
-                    Pass: {template.passThreshold}%
-                  </span>
+                  <span className="px-3 py-1 bg-primary/20 text-primary rounded-lg text-sm">{totalQuestions} Questions</span>
+                  <span className="px-3 py-1 bg-input text-foreground rounded-lg text-sm">~{template.estimatedDuration} min</span>
+                  <span className="px-3 py-1 bg-success/20 text-success rounded-lg text-sm">Pass: {template.passThreshold}%</span>
                 </div>
               </div>
-
               {template.sections.map((section, sectionIndex) => (
                 <div key={section.id} className="mb-6">
                   <div className={`bg-gradient-to-r ${section.color} p-0.5 rounded-xl`}>
                     <div className="bg-card p-4 rounded-xl">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {sectionIndex + 1}. {section.title}
-                      </h3>
-                      {section.description && (
-                        <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-                      )}
+                      <h3 className="text-lg font-semibold text-foreground">{sectionIndex + 1}. {section.title}</h3>
+                      {section.description && <p className="text-sm text-muted-foreground mt-1">{section.description}</p>}
                     </div>
                   </div>
                   <div className="mt-3 space-y-3 pl-4">
@@ -1396,7 +420,7 @@ export default function AuditTemplateBuilder() {
                           </p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-muted-foreground bg-input px-2 py-0.5 rounded">
-                              {QUESTION_TYPES.find(t => t.type === question.type)?.label}
+                              {QUESTION_TYPES.find(qt => qt.type === question.type)?.label}
                             </span>
                             {question.evidenceRequired && (
                               <span className="text-xs text-info bg-info/10 px-2 py-0.5 rounded flex items-center gap-1">
@@ -1406,8 +430,7 @@ export default function AuditTemplateBuilder() {
                             {question.riskLevel && (
                               <span className={`text-xs px-2 py-0.5 rounded ${
                                 question.riskLevel === 'critical' ? 'text-destructive bg-destructive/10' :
-                                question.riskLevel === 'high' ? 'text-warning bg-warning/10' :
-                                question.riskLevel === 'medium' ? 'text-warning bg-warning/10' :
+                                question.riskLevel === 'high' || question.riskLevel === 'medium' ? 'text-warning bg-warning/10' :
                                 'text-success bg-success/10'
                               }`}>
                                 {question.riskLevel} risk
@@ -1426,38 +449,20 @@ export default function AuditTemplateBuilder() {
         </>)}
       </main>
 
-      {/* AI Template Generator */}
+      <PublishDialog
+        isOpen={showPublishDialog}
+        onClose={() => setShowPublishDialog(false)}
+        onConfirm={handlePublish}
+        isPublishing={isPublishing}
+        templateName={template.name}
+        error={saveError}
+      />
+
       {showAIAssist && (
         <AITemplateGenerator
           onClose={() => setShowAIAssist(false)}
-          onApply={(generatedSections) => {
-            // Convert generated sections to template format
-            const newSections: Section[] = generatedSections.map((gs, idx) => ({
-              id: gs.id,
-              title: gs.title,
-              description: gs.description,
-              questions: gs.questions.map((q) => ({
-                id: q.id,
-                text: q.text,
-                type: q.type as QuestionType,
-                required: q.required,
-                weight: q.weight,
-                riskLevel: (q.riskLevel as 'critical' | 'high' | 'medium' | 'low' | undefined),
-                evidenceRequired: q.evidenceRequired,
-                isoClause: q.isoClause,
-                guidance: q.guidance,
-                failureTriggersAction: false,
-              })),
-              isExpanded: true,
-              weight: 1,
-              order: template.sections.length + idx,
-              color: SECTION_COLORS[(template.sections.length + idx) % SECTION_COLORS.length],
-            }));
-            
-            setTemplate(prev => ({
-              ...prev,
-              sections: [...prev.sections, ...newSections],
-            }));
+          onApply={(gs) => {
+            updateSections(ss => [...ss, ...mapAISectionsToLocal(gs, ss.length)]);
             setShowAIAssist(false);
           }}
         />

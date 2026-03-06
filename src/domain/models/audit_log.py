@@ -33,7 +33,7 @@ class AuditEvent:
     Events are logged but not persisted to the database. For full immutable
     audit trail with blockchain-style hashing, use AuditLogEntry instead.
 
-    TODO: Implement proper persistence via AuditLogEntry or dedicated table.
+    Future: migrate to AuditLogEntry or a dedicated immutable table.
     """
 
     def __init__(

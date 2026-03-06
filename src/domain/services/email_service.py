@@ -32,6 +32,14 @@ class EmailService:
         self.from_name = os.getenv("FROM_NAME", "Quality Governance Platform")
         self.enabled = bool(self.smtp_user and self.smtp_password)
 
+    @staticmethod
+    def _safe_format(template: str, **kwargs) -> str:
+        """Format a template string with safe defaults for missing keys."""
+        from collections import defaultdict
+
+        safe_vars = defaultdict(str, kwargs)
+        return template.format_map(safe_vars)
+
     def _get_base_template(self) -> str:
         """Return the base HTML email template."""
         return """
@@ -305,7 +313,8 @@ class EmailService:
         {f'<a href="{action_url}" class="button">View Incident →</a>' if action_url else ''}
         """
 
-        html = self._get_base_template().format(
+        html = self._safe_format(
+            self._get_base_template(),
             subject=f"[{severity.upper()}] Incident: {title}",
             content=content,
             alert_color=alert_color,
@@ -356,7 +365,8 @@ class EmailService:
         {f'<a href="{action_url}" class="button">View Action →</a>' if action_url else ''}
         """
 
-        html = self._get_base_template().format(
+        html = self._safe_format(
+            self._get_base_template(),
             subject=f"{'[OVERDUE]' if is_overdue else '[REMINDER]'} Action: {title}",
             content=content,
             alert_color=alert_color,
@@ -416,7 +426,8 @@ class EmailService:
         <a href="{summary.get('dashboard_url', '/')}" class="button">View Dashboard →</a>
         """
 
-        html = self._get_base_template().format(
+        html = self._safe_format(
+            self._get_base_template(),
             subject="Weekly IMS Summary",
             content=content,
             alert_color="#7c3aed",
@@ -475,7 +486,8 @@ class EmailService:
         </p>
         """
 
-        html = self._get_base_template().format(
+        html = self._safe_format(
+            self._get_base_template(),
             subject="Reset Your Password",
             content=content,
             alert_color="#f59e0b",

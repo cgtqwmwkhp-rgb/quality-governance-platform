@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { trackError } from '../utils/errorTracker'
 import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
@@ -128,7 +129,7 @@ function CreateInvestigationModal({
       })
       setSourceRecords(response.data.items ?? [])
     } catch (err) {
-      console.error('Failed to load source records:', err)
+      trackError(err, { component: 'Investigations', action: 'loadSourceRecords' })
       setRecordsError('Failed to load records. Please try again.')
       setSourceRecords([])
     } finally {
@@ -487,7 +488,7 @@ export default function Investigations() {
       const response = await actionsApi.list(1, 50, undefined, 'investigation', investigation.id)
       setInvestigationActions(response.data.items || [])
     } catch (err) {
-      console.error('Failed to load actions:', err)
+      trackError(err, { component: 'Investigations', action: 'loadActions' })
       setInvestigationActions([])
     } finally {
       setLoadingActions(false)
@@ -499,7 +500,7 @@ export default function Investigations() {
       const response = await investigationsApi.list(1, 100)
       setInvestigations(response.data.items || [])
     } catch (err) {
-      console.error('Failed to load investigations:', err)
+      trackError(err, { component: 'Investigations', action: 'load' })
       setInvestigations([])
     } finally {
       setLoading(false)
@@ -541,7 +542,7 @@ export default function Investigations() {
       // Reload actions to show the new one
       loadActionsForInvestigation(selectedInvestigation)
     } catch (err: any) {
-      console.error('Failed to create action:', err)
+      trackError(err, { component: 'Investigations', action: 'createAction' })
       const errorMessage = getApiErrorMessage(err)
       setActionError(errorMessage)
       // Don't close modal on error - let user see and fix the issue
@@ -577,7 +578,7 @@ export default function Investigations() {
       // Update selected action locally
       setSelectedAction(prev => prev ? { ...prev, status: newStatus, completion_notes: completionNotes } : null)
     } catch (err: any) {
-      console.error('Failed to update action:', err)
+      trackError(err, { component: 'Investigations', action: 'updateAction' })
       const errorMessage = getApiErrorMessage(err)
       setActionUpdateError(errorMessage)
     } finally {

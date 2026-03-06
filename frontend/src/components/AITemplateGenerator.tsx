@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { trackError } from '../utils/errorTracker';
 import {
   Sparkles,
   Wand2,
@@ -155,7 +156,7 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
       setSelectedSections(new Set(sections.map(s => s.id)));
     } catch (err) {
       setError('Failed to generate template. Please try again.');
-      console.error('Generation error:', err);
+      trackError(err, { component: 'AITemplateGenerator', action: 'handleGenerate' });
     } finally {
       setIsGenerating(false);
     }

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { trackError } from "../utils/errorTracker";
 import {
   Plus,
   Search,
@@ -177,7 +178,7 @@ export default function AuditTemplateLibrary() {
     } catch (err) {
       if (thisRequestId !== requestIdRef.current) return;
       setError("Failed to load templates.");
-      console.error(err);
+      trackError(err, { component: 'AuditTemplateLibrary', action: 'loadTemplates' });
     } finally {
       if (thisRequestId === requestIdRef.current) setLoading(false);
     }
@@ -190,7 +191,7 @@ export default function AuditTemplateLibrary() {
       setArchivedTemplates(response.data.items);
       setArchivedCount(response.data.total);
     } catch (err) {
-      console.error("Failed to load archived templates:", err);
+      trackError(err, { component: 'AuditTemplateLibrary', action: 'loadArchived' });
     } finally {
       setArchiveLoading(false);
     }
@@ -201,7 +202,7 @@ export default function AuditTemplateLibrary() {
       const response = await auditsApi.listCategories();
       setCategories(response.data);
     } catch (err) {
-      console.error("Failed to load categories:", err);
+      trackError(err, { component: 'AuditTemplateLibrary', action: 'loadCategories' });
     }
   }, []);
 
@@ -235,7 +236,7 @@ export default function AuditTemplateLibrary() {
       loadCategories();
     } catch (err) {
       showToast("Failed to archive template.", "error");
-      console.error(err);
+      trackError(err, { component: 'AuditTemplateLibrary', action: 'archive' });
     } finally {
       setArchiving(false);
     }
@@ -252,7 +253,7 @@ export default function AuditTemplateLibrary() {
         loadCategories();
       } catch (err) {
         showToast("Failed to restore template.", "error");
-        console.error(err);
+        trackError(err, { component: 'AuditTemplateLibrary', action: 'restore' });
       } finally {
         setRestoring(null);
       }
@@ -271,7 +272,7 @@ export default function AuditTemplateLibrary() {
         loadCategories();
       } catch (err) {
         showToast("Failed to clone template.", "error");
-        console.error(err);
+        trackError(err, { component: 'AuditTemplateLibrary', action: 'clone' });
       } finally {
         setCloning(null);
       }
@@ -297,7 +298,7 @@ export default function AuditTemplateLibrary() {
       }
     } catch (err) {
       showToast("Import failed. Check the directory path.", "error");
-      console.error(err);
+      trackError(err, { component: 'AuditTemplateLibrary', action: 'import' });
     } finally {
       setImporting(false);
     }

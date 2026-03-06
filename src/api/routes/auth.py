@@ -308,12 +308,9 @@ async def request_password_reset(
         # Generate password reset token
         reset_token = create_password_reset_token(user.id)
 
-        # Build reset URL (frontend will handle this route)
-        # Use environment variable for frontend URL, fallback to common values
-        import os
+        from src.core.config import settings
 
-        frontend_url = os.getenv("FRONTEND_URL", "https://app-qgp-prod.azurestaticapps.net")
-        reset_url = f"{frontend_url}/reset-password?token={reset_token}"
+        reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
 
         # Send password reset email
         try:

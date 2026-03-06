@@ -11,6 +11,7 @@
 
 import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
 import { User, Search } from 'lucide-react';
+import { trackError } from '../../utils/errorTracker';
 
 interface MentionUser {
   id: number;
@@ -68,7 +69,7 @@ const MentionInput: React.FC<MentionInputProps> = ({
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
-          console.error('Failed to search users:', err);
+          trackError(err, { component: 'MentionInput', action: 'searchUsers' });
         }
       }
     };

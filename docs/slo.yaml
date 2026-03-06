@@ -1,0 +1,88 @@
+# Quality Governance Platform — Service Level Objectives (SLOs)
+# Version: 1.0.0
+# Last updated: 2026-03-06
+
+service: quality-governance-platform
+environment: production
+
+slos:
+  # Availability
+  - name: API Availability
+    description: Percentage of successful (non-5xx) API responses
+    target: 99.5%
+    window: 30d
+    measurement: |
+      1 - (count of 5xx responses) / (total responses)
+    alert_threshold: 99.0%
+
+  # Latency — Read endpoints
+  - name: Read API Latency (p95)
+    description: 95th percentile response time for GET endpoints
+    target: 500ms
+    window: 7d
+    endpoints:
+      - GET /api/v1/audits/templates
+      - GET /api/v1/audits/runs
+      - GET /api/v1/incidents
+      - GET /api/v1/risks
+      - GET /api/v1/complaints
+      - GET /api/v1/documents
+      - GET /api/v1/policies
+    alert_threshold: 750ms
+
+  # Latency — Write endpoints
+  - name: Write API Latency (p95)
+    description: 95th percentile response time for POST/PATCH/PUT/DELETE endpoints
+    target: 1000ms
+    window: 7d
+    alert_threshold: 1500ms
+
+  # Error Rate
+  - name: API Error Rate
+    description: Percentage of responses with 4xx/5xx status (excluding 401/404)
+    target: < 0.5%
+    window: 7d
+    excluded_codes: [401, 404]
+    alert_threshold: 1.0%
+
+  # Database Performance
+  - name: Database Query Latency (p95)
+    description: 95th percentile query execution time
+    target: 200ms
+    window: 7d
+    alert_threshold: 500ms
+
+  # Frontend Performance
+  - name: Frontend LCP (Largest Contentful Paint)
+    description: Time for largest content element to render
+    target: 2500ms
+    window: 7d
+    measurement: Web Vitals LCP metric
+
+  - name: Frontend FID (First Input Delay)
+    description: Time from first user interaction to browser response
+    target: 100ms
+    window: 7d
+    measurement: Web Vitals FID metric
+
+  # Background Jobs
+  - name: Email Delivery Latency
+    description: Time from email task queued to delivered
+    target: 60s
+    window: 7d
+
+  - name: Push Notification Delivery Latency
+    description: Time from notification task queued to delivered
+    target: 10s
+    window: 7d
+
+escalation_policy:
+  - level: 1
+    condition: SLO breached for > 15 minutes
+    action: Alert on-call engineer via PagerDuty
+  - level: 2
+    condition: SLO breached for > 1 hour
+    action: Escalate to engineering lead
+  - level: 3
+    condition: SLO breached for > 4 hours
+    action: Escalate to CTO and initiate incident response

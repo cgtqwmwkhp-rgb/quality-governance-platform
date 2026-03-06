@@ -166,7 +166,7 @@ Return as JSON:
 Only return valid JSON."""
 
         def _run():
-            # TODO: Grounding/web search requires correct SDK API; current SDK does not
+            # Grounding/web search blocked by SDK limitation; current SDK does not
             # support Tool(google_search=True). Use standard generation without grounding.
             from google.generativeai import GenerationConfig
 
@@ -338,7 +338,7 @@ Return as JSON:
 Only return valid JSON."""
 
         def _run():
-            # TODO: Grounding/web search requires correct SDK API; current SDK does not
+            # Grounding/web search blocked by SDK limitation; current SDK does not
             # support Tool(google_search=True). Use standard generation without grounding.
             from google.generativeai import GenerationConfig
 

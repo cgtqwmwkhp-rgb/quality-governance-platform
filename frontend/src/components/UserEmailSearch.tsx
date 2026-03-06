@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { trackError } from '../utils/errorTracker'
 import { Search, User, Loader2, X } from 'lucide-react'
 import { Input } from './ui/Input'
 import { usersApi, UserSearchResult } from '../api/client'
@@ -52,7 +53,7 @@ export function UserEmailSearch({
       const response = await usersApi.search(searchQuery)
       setResults(response.data || [])
     } catch (err) {
-      console.error('Failed to search users:', err)
+      trackError(err, { component: 'UserEmailSearch', action: 'searchUsers' })
       // Fallback: try to list users and filter
       try {
         const listResponse = await usersApi.list(1, 50)

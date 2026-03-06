@@ -10,6 +10,8 @@
  * 2. Hostname detection (for local development only)
  */
 
+import { trackError } from '../utils/errorTracker';
+
 // API URLs for each environment
 const API_URLS = {
   staging: 'https://qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io',
@@ -149,9 +151,9 @@ function logApiConfig(): void {
   const envUrl = import.meta.env.VITE_API_URL;
   if (envUrl) {
     if (env === 'staging' && envUrl.includes('prod')) {
-      console.error('[API Config] WARNING: Staging frontend configured with production API URL!');
+      trackError('[API Config] WARNING: Staging frontend configured with production API URL!', { component: 'apiBase', action: 'logApiConfig' });
     } else if (env === 'production' && envUrl.includes('staging')) {
-      console.error('[API Config] WARNING: Production frontend configured with staging API URL!');
+      trackError('[API Config] WARNING: Production frontend configured with staging API URL!', { component: 'apiBase', action: 'logApiConfig' });
     }
   }
 }

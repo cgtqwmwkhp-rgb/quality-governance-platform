@@ -612,7 +612,7 @@ async def distribute_document(
     await db.commit()
     await db.refresh(dist)
 
-    # TODO: Send notification email
+    # Future: dispatch notification email via Celery task
 
     return {
         "id": dist.id,

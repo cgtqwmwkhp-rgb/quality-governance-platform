@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { trackError } from '../../utils/errorTracker';
 import {
   Bell,
   CheckCheck,
@@ -64,7 +65,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
           setUnreadCount(data.filter(n => !n.is_read).length);
         }
       } catch (err) {
-        console.error('Failed to fetch notifications:', err);
+        trackError(err, { component: 'NotificationCenter', action: 'fetchNotifications' });
       }
     };
     fetchNotifications();
@@ -84,7 +85,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
 
   // WebSocket connection for real-time updates
   useEffect(() => {
-    // TODO: Connect to WebSocket for real-time notifications
+    // Future: connect to WebSocket for real-time notifications
     // const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     // const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/v1/realtime/ws/${userId}`);
     // ws.onmessage = (event) => {
