@@ -167,6 +167,7 @@ async def update_template(
 
 @router.delete("/{template_id}", status_code=204)
 async def delete_template(
+    request: Request,
     template_id: int,
     db: DbSession,
     current_user: CurrentUser,
