@@ -26,31 +26,31 @@ CONSTRAINTS = [
     (
         "incidents",
         "ck_incidents_status",
-        "status IN ('reported','under_investigation','pending_actions',"
-        "'actions_in_progress','pending_review','closed')",
+        "status IN (''reported'',''under_investigation'',''pending_actions'',"
+        "''actions_in_progress'',''pending_review'',''closed'')",
     ),
     (
         "risks",
         "ck_risks_status",
-        "status IN ('open','mitigating','accepted','closed')",
+        "status IN (''open'',''mitigating'',''accepted'',''closed'')",
     ),
     (
         "audits",
         "ck_audits_status",
-        "status IN ('planned','in_progress','completed','cancelled')",
+        "status IN (''planned'',''in_progress'',''completed'',''cancelled'')",
     ),
     (
         "complaints",
         "ck_complaints_status",
-        "status IN ('received','acknowledged','under_investigation',"
-        "'pending_response','awaiting_customer','resolved','closed','escalated')",
+        "status IN (''received'',''acknowledged'',''under_investigation'',"
+        "''pending_response'',''awaiting_customer'',''resolved'',''closed'',''escalated'')",
     ),
 ]
 
 
 def upgrade() -> None:
     conn = op.get_bind()
-    for table, cname, condition in CONSTRAINTS:
+    for table, cname, _ in CONSTRAINTS:
         conn.execute(
             sa.text(
                 f"DO $$ BEGIN "
@@ -62,6 +62,8 @@ def upgrade() -> None:
                 f"END $$"
             )
         )
+
+    for table, cname, condition in CONSTRAINTS:
         conn.execute(
             sa.text(
                 f"DO $$ BEGIN "
