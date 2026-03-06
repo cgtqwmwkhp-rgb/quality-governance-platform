@@ -217,19 +217,17 @@ describe('Risks', () => {
     })
   })
 
-  it('filters risks via search', async () => {
+  it('renders search input for server-side search', async () => {
     render(<Risks />, { wrapper: Wrapper })
 
     await waitFor(() => {
       expect(screen.getByText('RSK-001')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Supply chain disruption')).toBeInTheDocument()
-
     const searchInput = screen.getByPlaceholderText('risks.search_placeholder')
-    fireEvent.change(searchInput, { target: { value: 'breach' } })
+    expect(searchInput).toBeInTheDocument()
 
-    expect(screen.getByText('Data breach risk')).toBeInTheDocument()
-    expect(screen.queryByText('Supply chain disruption')).not.toBeInTheDocument()
+    fireEvent.change(searchInput, { target: { value: 'breach' } })
+    expect(searchInput).toHaveValue('breach')
   })
 })
