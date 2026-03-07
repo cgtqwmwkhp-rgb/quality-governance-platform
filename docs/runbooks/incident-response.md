@@ -90,7 +90,18 @@ GET /api/v1/meta/version  → Which build is deployed?
 
 | Role | Name | Contact |
 |------|------|---------|
-| Engineering Lead | TBD | TBD |
-| Platform On-Call | TBD | TBD |
-| CTO (SEV-1 only) | TBD | TBD |
+| Engineering Lead | David Harris | david.harris@plantexpand.com |
+| Platform On-Call | Rotating (see on-call schedule below) | #incidents Slack channel |
+| CTO (SEV-1 only) | David Harris | david.harris@plantexpand.com |
 | Azure Support | N/A | Azure Portal → Support |
+
+### On-Call Rotation
+
+The platform on-call rotation operates on a **weekly cycle** (Monday 09:00 to Monday 09:00 UTC).
+
+| Week | Primary | Secondary |
+|------|---------|-----------|
+| Odd weeks | Engineering Lead | Platform Engineer |
+| Even weeks | Platform Engineer | Engineering Lead |
+
+**Escalation outside business hours**: Post in the #incidents Slack channel and use @oncall mention. If no response within 15 minutes for SEV-1, contact the Engineering Lead directly via phone.

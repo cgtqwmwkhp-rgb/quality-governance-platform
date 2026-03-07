@@ -19,10 +19,25 @@ import {
   Lock,
   Bell,
   RefreshCw,
-  Loader2,
 } from 'lucide-react'
-import { incidentsApi, Incident } from '../api/client'
+import {
+  incidentsApi,
+  rtasApi,
+  complaintsApi,
+  risksApi,
+  actionsApi,
+  auditsApi,
+  notificationsApi,
+  type Incident,
+  type RTA,
+  type Complaint,
+  type Risk,
+  type Action,
+  type AuditRun,
+  type PaginatedResponse,
+} from '../api/client'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { cn } from "../helpers/utils"
@@ -265,9 +280,17 @@ function UpcomingEvents({ events }: { events: {id: number; title: string; date: 
 // Main Dashboard Component
 // ============================================================================
 
+const today = () => new Date().toISOString().slice(0, 10)
+const daysFromNow = (days: number) => {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
 export default function Dashboard() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
   const [stats, setStats] = useState<ModuleStats>({
     incidents: { total: 0, open: 0, critical: 0, trend: 0 },
     rtas: { total: 0, open: 0, trend: 0 },
@@ -288,28 +311,140 @@ export default function Dashboard() {
 
   const loadData = async () => {
     setError(null)
+    setLoading(true)
     try {
-      const response = await incidentsApi.list(1, 100)
-      const items = response.data?.items ?? []
-      setIncidents(items.slice(0, 5))
-      
+      const results = await Promise.allSettled([
+        incidentsApi.list(1, 100),
+        rtasApi.list(1, 100),
+        complaintsApi.list(1, 100),
+        risksApi.list(1, 100),
+        actionsApi.list(1, 100),
+        auditsApi.listRuns(1, 100),
+        notificationsApi.getUnreadCount(),
+      ])
+
+      const getData = <T,>(r: PromiseSettledResult<{ data: T }>, def: T): T =>
+        r.status === 'fulfilled' ? (r.value?.data ?? def) : def
+
+      const incidentsRes = results[0]
+      const incidentsData = incidentsRes.status === 'fulfilled' ? incidentsRes.value?.data : null
+      const incidentItems = incidentsData?.items ?? []
+      const incidentTotal = incidentsData?.total ?? 0
+      setIncidents(incidentItems.slice(0, 5))
+
+      const rtaData = getData(results[1] as PromiseSettledResult<{ data: PaginatedResponse<RTA> }>, { items: [], total: 0 } as PaginatedResponse<RTA>)
+      const rtaItems = rtaData?.items ?? []
+      const rtaTotal = rtaData?.total ?? 0
+      const rtaOpen = rtaItems.filter((r) => r.status !== 'closed').length
+
+      const complaintData = getData(results[2] as PromiseSettledResult<{ data: PaginatedResponse<Complaint> }>, { items: [], total: 0 } as PaginatedResponse<Complaint>)
+      const complaintItems = complaintData?.items ?? []
+      const complaintTotal = complaintData?.total ?? 0
+      const complaintOpen = complaintItems.filter((c) => c.status !== 'closed' && c.status !== 'resolved').length
+      const complaintOverdue = complaintItems.filter(
+        (c) => c.due_date && c.due_date < today() && c.status !== 'closed' && c.status !== 'resolved'
+      ).length
+
+      const riskData = getData(results[3] as PromiseSettledResult<{ data: PaginatedResponse<Risk> }>, { items: [], total: 0 } as PaginatedResponse<Risk>)
+      const riskItems = riskData?.items ?? []
+      const riskTotal = riskData?.total ?? 0
+      const riskHigh = riskItems.filter((r) => r.risk_level === 'high' || r.risk_level === 'critical').length
+
+      const actionData = getData(results[4] as PromiseSettledResult<{ data: PaginatedResponse<Action> }>, { items: [], total: 0 } as PaginatedResponse<Action>)
+      const actionItems = actionData?.items ?? []
+      const actionTotal = actionData?.total ?? 0
+      const openStatuses = ['open', 'in_progress', 'pending_verification']
+      const actionOverdue = actionItems.filter(
+        (a) => a.due_date && a.due_date < today() && openStatuses.includes(a.status)
+      ).length
+      const actionDueSoon = actionItems.filter(
+        (a) => a.due_date && a.due_date >= today() && a.due_date <= daysFromNow(7) && openStatuses.includes(a.status)
+      ).length
+
+      const auditData = getData(results[5] as PromiseSettledResult<{ data: PaginatedResponse<AuditRun> }>, { items: [], total: 0 } as PaginatedResponse<AuditRun>)
+      const auditItems = auditData?.items ?? []
+      const auditScheduled = auditItems.filter((a) => a.status === 'scheduled').length
+      const auditCompleted = auditItems.filter((a) => a.status === 'completed').length
+      const completedWithScores = auditItems.filter((a) => a.status === 'completed' && a.score_percentage != null)
+      const auditAvgScore = completedWithScores.length > 0
+        ? Math.round(completedWithScores.reduce((sum, a) => sum + (a.score_percentage ?? 0), 0) / completedWithScores.length)
+        : 0
+
+      const unreadRes = results[6]
+      const unreadData = unreadRes.status === 'fulfilled' ? unreadRes.value?.data : null
+      setUnreadCount(unreadData?.unread_count ?? 0)
+
+      // Build recent activity from combined recent items
+      const activityItems: Array<{ id: string; type: RecentActivity['type']; title: string; time: string; status: string; severity?: string; created_at: string }> = []
+      incidentItems.slice(0, 5).forEach((i) =>
+        activityItems.push({
+          id: `incident-${i.id}`,
+          type: 'incident',
+          title: i.title,
+          time: new Date(i.created_at).toLocaleDateString(),
+          status: i.status,
+          severity: i.severity,
+          created_at: i.created_at,
+        })
+      )
+      rtaItems.slice(0, 5).forEach((r) =>
+        activityItems.push({
+          id: `rta-${r.id}`,
+          type: 'rta',
+          title: r.title,
+          time: new Date(r.created_at).toLocaleDateString(),
+          status: r.status,
+          created_at: r.created_at,
+        })
+      )
+      complaintItems.slice(0, 5).forEach((c) =>
+        activityItems.push({
+          id: `complaint-${c.id}`,
+          type: 'complaint',
+          title: c.title,
+          time: new Date(c.created_at).toLocaleDateString(),
+          status: c.status,
+          created_at: c.created_at,
+        })
+      )
+      auditItems.slice(0, 5).forEach((a) =>
+        activityItems.push({
+          id: `audit-${a.id}`,
+          type: 'audit',
+          title: a.title ?? a.reference_number ?? `Audit ${a.id}`,
+          time: new Date(a.created_at).toLocaleDateString(),
+          status: a.status,
+          created_at: a.created_at,
+        })
+      )
+      actionItems.slice(0, 5).forEach((a) =>
+        activityItems.push({
+          id: `action-${a.id}`,
+          type: 'action',
+          title: a.title,
+          time: new Date(a.created_at).toLocaleDateString(),
+          status: a.status,
+          created_at: a.created_at,
+        })
+      )
+      activityItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      setActivities(activityItems.slice(0, 15).map(({ created_at, ...rest }) => rest))
+
       setStats({
         incidents: {
-          total: response.data?.total ?? 0,
-          open: items.filter(i => i.status !== 'closed').length,
-          critical: items.filter(i => i.severity === 'critical' || i.severity === 'high').length,
+          total: incidentTotal,
+          open: incidentItems.filter((i) => i.status !== 'closed').length,
+          critical: incidentItems.filter((i) => i.severity === 'critical' || i.severity === 'high').length,
           trend: 0,
         },
-        rtas: { total: 0, open: 0, trend: 0 },
-        complaints: { total: 0, open: 0, overdue: 0, trend: 0 },
-        audits: { scheduled: 0, completed: 0, avgScore: 0, trend: 0 },
-        actions: { total: 0, overdue: 0, dueSoon: 0, trend: 0 },
-        risks: { total: 0, high: 0, outsideAppetite: 0 },
+        rtas: { total: rtaTotal, open: rtaOpen, trend: 0 },
+        complaints: { total: complaintTotal, open: complaintOpen, overdue: complaintOverdue, trend: 0 },
+        audits: { scheduled: auditScheduled, completed: auditCompleted, avgScore: auditAvgScore, trend: 0 },
+        actions: { total: actionTotal, overdue: actionOverdue, dueSoon: actionDueSoon, trend: 0 },
+        risks: { total: riskTotal, high: riskHigh, outsideAppetite: 0 },
         compliance: { iso9001: 0, iso14001: 0, iso45001: 0, iso27001: 0 },
         carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
       })
-
-      setActivities([])
     } catch (err) {
       console.error('Failed to load dashboard data:', err)
       setError('Failed to load data. Please try again.')
@@ -320,8 +455,16 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-2">
+            <div className="h-9 w-48 rounded bg-muted animate-pulse" />
+            <div className="h-4 w-64 rounded bg-muted/70 animate-pulse" />
+          </div>
+        </div>
+        <CardSkeleton count={4} className="grid-cols-2 md:grid-cols-4" />
+        <CardSkeleton count={3} className="grid-cols-1 md:grid-cols-3" />
+        <CardSkeleton count={3} className="grid-cols-1 lg:grid-cols-3 gap-6" />
       </div>
     )
   }
@@ -348,7 +491,9 @@ export default function Dashboard() {
             <Link to="/notifications">
               <Bell className="w-4 h-4" />
               <span className="hidden sm:inline">Notifications</span>
-              <Badge variant="destructive" className="ml-2">5</Badge>
+              {unreadCount > 0 && (
+                <Badge variant="destructive" className="ml-2">{unreadCount}</Badge>
+              )}
             </Link>
           </Button>
           <Button onClick={loadData}>

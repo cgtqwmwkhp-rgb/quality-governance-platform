@@ -43,7 +43,7 @@ Before escalating, prepare a brief:
 ### Step 2: Contact Escalation Target
 1. **Primary**: Message in #incidents channel, tagging the escalation target
 2. **Urgent**: Direct message / phone call
-3. **After hours**: Use on-call rotation contact (TBD: PagerDuty / OpsGenie)
+3. **After hours**: Use on-call rotation (see `incident-response.md` § On-Call Rotation). Contact via Slack #incidents with @oncall mention. If no response in 15 min for SEV-1, phone the Engineering Lead directly.
 
 ### Step 3: Handoff
 - Share diagnostic data gathered so far

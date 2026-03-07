@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import './i18n/i18n'
 import App from './App'
 import { ThemeProvider } from './contexts/ThemeContext'
+import { ToastProvider } from './contexts/ToastContext'
 import { LiveAnnouncerProvider } from './components/ui/LiveAnnouncer'
 import { TooltipProvider } from './components/ui/Tooltip'
 import { initErrorTracking } from './services/errorTracker'
@@ -26,12 +27,14 @@ reportWebVitals()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ThemeProvider>
-      <LiveAnnouncerProvider>
-        <TooltipProvider>
-          <App />
-        </TooltipProvider>
-      </LiveAnnouncerProvider>
-    </ThemeProvider>
+        <ThemeProvider>
+          <LiveAnnouncerProvider>
+            <TooltipProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </TooltipProvider>
+          </LiveAnnouncerProvider>
+        </ThemeProvider>
   </React.StrictMode>,
 )

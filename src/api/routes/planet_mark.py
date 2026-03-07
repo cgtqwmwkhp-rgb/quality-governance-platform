@@ -21,7 +21,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import DbSession
+from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.planet_mark import (
@@ -245,6 +245,7 @@ class UtilityReadingCreate(BaseModel):
 async def list_reporting_years(
     request: Request,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
     try:
@@ -303,6 +304,7 @@ async def list_reporting_years(
 async def create_reporting_year(
     year_data: ReportingYearCreate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
     year = CarbonReportingYear(
@@ -336,6 +338,7 @@ async def create_reporting_year(
 async def get_reporting_year(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get detailed reporting year data"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -405,6 +408,7 @@ async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -452,6 +456,7 @@ async def list_emission_sources(
     year_id: int,
     scope: Optional[str] = Query(None),
     db: DbSession = None,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List emission sources for a year"""
     stmt = select(EmissionSource).where(EmissionSource.reporting_year_id == year_id)
@@ -491,6 +496,7 @@ async def list_emission_sources(
 async def get_scope3_breakdown(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get Scope 3 category breakdown"""
     result = await db.execute(
@@ -543,6 +549,7 @@ async def list_improvement_actions(
     year_id: int,
     status: Optional[str] = Query(None),
     db: DbSession = None,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
     stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
@@ -591,6 +598,7 @@ async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -627,6 +635,7 @@ async def update_action_status(
     action_id: int,
     status_data: ActionStatusUpdate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Update improvement action status"""
     result = await db.execute(
@@ -656,6 +665,7 @@ async def update_action_status(
 async def get_data_quality_assessment(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get data quality assessment with recommendations"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -742,6 +752,7 @@ async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -780,6 +791,7 @@ async def add_fleet_record(
 async def get_fleet_summary(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get fleet emissions summary with driver leaderboard"""
     result = await db.execute(select(FleetEmissionRecord).where(FleetEmissionRecord.reporting_year_id == year_id))
@@ -835,6 +847,7 @@ async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Add utility meter reading"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -860,6 +873,7 @@ async def add_utility_reading(
 async def get_certification_status(
     year_id: int,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get certification status and evidence checklist"""
     result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
@@ -955,6 +969,7 @@ async def get_certification_status(
 async def get_carbon_dashboard(
     request: Request,
     db: DbSession,
+    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     try:
@@ -1068,7 +1083,7 @@ async def get_carbon_dashboard(
 
 
 @router.get("/iso14001-mapping", response_model=dict)
-async def get_iso14001_mapping() -> dict[str, Any]:
+async def get_iso14001_mapping(current_user: CurrentUser = None) -> dict[str, Any]:
     """Get Planet Mark to ISO 14001 cross-mapping"""
     return {
         "description": "Cross-mapping between Planet Mark requirements and ISO 14001:2015 clauses",

@@ -79,7 +79,7 @@ async def readiness_check():
 
 
 @router.get("/metrics/resources", response_model=Dict[str, Any])
-async def resource_metrics():
+async def resource_metrics(current_user: CurrentUser = None):
     """Resource utilization metrics for cost monitoring."""
     process = psutil.Process()
     mem = process.memory_info()

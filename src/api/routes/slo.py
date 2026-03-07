@@ -24,6 +24,8 @@ from fastapi import APIRouter, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from src.api.dependencies import CurrentUser
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -273,7 +275,7 @@ async def get_slo_metrics():
 
 
 @router.get("/slo/metrics")
-async def get_slo_raw_metrics():
+async def get_slo_raw_metrics(current_user: CurrentUser = None):
     """Expose raw SLO metrics snapshot (availability, latency percentiles)."""
     return {
         "request_metrics": metrics_collector.snapshot(),

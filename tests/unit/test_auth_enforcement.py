@@ -47,6 +47,31 @@ NEAR_MISS_ENDPOINTS = [
     ("POST", "/api/v1/near-misses/"),
 ]
 
+PLANET_MARK_ENDPOINTS = [
+    ("GET", "/api/v1/planet-mark/years"),
+    ("POST", "/api/v1/planet-mark/years"),
+    ("GET", "/api/v1/planet-mark/dashboard"),
+    ("GET", "/api/v1/planet-mark/iso14001-mapping"),
+]
+
+UVDB_ENDPOINTS = [
+    ("GET", "/api/v1/uvdb/protocol"),
+    ("GET", "/api/v1/uvdb/sections"),
+    ("GET", "/api/v1/uvdb/audits"),
+    ("POST", "/api/v1/uvdb/audits"),
+    ("GET", "/api/v1/uvdb/dashboard"),
+    ("GET", "/api/v1/uvdb/iso-mapping"),
+]
+
+SLO_ENDPOINTS = [
+    ("GET", "/api/v1/slo/current"),
+    ("GET", "/api/v1/slo/metrics"),
+]
+
+HEALTH_PROTECTED_ENDPOINTS = [
+    ("GET", "/metrics/resources"),
+]
+
 ALL_PROTECTED = (
     TENANT_WRITE_ENDPOINTS
     + INCIDENT_ENDPOINTS
@@ -54,6 +79,10 @@ ALL_PROTECTED = (
     + RISK_ENDPOINTS
     + AUDIT_ENDPOINTS
     + NEAR_MISS_ENDPOINTS
+    + PLANET_MARK_ENDPOINTS
+    + UVDB_ENDPOINTS
+    + SLO_ENDPOINTS
+    + HEALTH_PROTECTED_ENDPOINTS
 )
 
 
