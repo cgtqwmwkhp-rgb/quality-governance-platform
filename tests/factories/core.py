@@ -86,6 +86,7 @@ class IncidentFactory(factory.Factory):
     is_sif = False
     is_psif = False
     life_altering_potential = False
+    tenant_id = 1
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)
 
@@ -107,6 +108,7 @@ class ComplaintFactory(factory.Factory):
     complaint_type = "OTHER"
     priority = "MEDIUM"
     status = "RECEIVED"
+    tenant_id = 1
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)
 
@@ -128,6 +130,7 @@ class NearMissFactory(factory.Factory):
     description = factory.Faker("paragraph")
     status = "REPORTED"
     priority = "MEDIUM"
+    tenant_id = 1
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)
 
@@ -196,6 +199,7 @@ class RiskFactory(factory.Factory):
     treatment_strategy = "mitigate"
     status = "open"
     is_active = True
+    tenant_id = 1
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)
 
@@ -215,5 +219,6 @@ class PolicyFactory(factory.Factory):
     status = "DRAFT"
     is_public = False
     review_frequency_months = 12
+    tenant_id = 1
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)

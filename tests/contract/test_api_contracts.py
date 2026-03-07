@@ -8,7 +8,6 @@ real FastAPI TestClient to catch regressions before deployment.
 import pytest
 from fastapi.testclient import TestClient
 
-
 PROTECTED_ENDPOINTS = [
     ("GET", "/api/v1/incidents/"),
     ("GET", "/api/v1/complaints/"),
