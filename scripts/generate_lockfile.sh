@@ -25,7 +25,7 @@ fi
 
 "$PYTHON_BIN" -m pip install --quiet pip-tools 2>/dev/null || true
 "$PYTHON_BIN" -m piptools compile \
-    "$REPO_ROOT/requirements.txt" \
+    "requirements.txt" \
     -o "$REPO_ROOT/requirements.lock" \
     --no-header \
     --strip-extras \

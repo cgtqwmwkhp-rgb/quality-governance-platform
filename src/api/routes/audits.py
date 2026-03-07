@@ -16,7 +16,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditFindingCreate,
@@ -44,8 +43,9 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
     PurgeExpiredTemplatesResponse,
 )
-from src.api.utils.pagination import PaginationParams
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
+from src.api.utils.pagination import PaginationParams
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
