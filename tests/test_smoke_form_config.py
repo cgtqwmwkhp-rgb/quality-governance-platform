@@ -12,6 +12,13 @@ from src.domain.models.form_config import Contract, FormField, FormStep, FormTem
 from src.main import app
 
 
+@pytest.fixture(autouse=True)
+def _require_auth_headers(auth_headers: dict):
+    """Skip smoke form-config tests when auth headers are unavailable."""
+    if not auth_headers:
+        pytest.skip("Smoke form-config tests require configured auth credentials")
+
+
 class TestFormTemplateEndpoints:
     """Test form template CRUD operations."""
 

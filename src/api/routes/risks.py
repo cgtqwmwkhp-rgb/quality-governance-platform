@@ -151,7 +151,7 @@ async def create_risk(
         **risk_dict,
         risk_score=score,
         risk_level=level,
-        status=RiskStatus.IDENTIFIED,
+        status=RiskStatus.OPEN,
         created_by_id=current_user.id,
     )
 

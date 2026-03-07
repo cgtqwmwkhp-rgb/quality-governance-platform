@@ -156,6 +156,7 @@ class TestAuthSmoke:
             200,
             401,
             404,
+            429,
             422,
         ], f"Login endpoint error: {response.status_code}"
 

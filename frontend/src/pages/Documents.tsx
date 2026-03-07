@@ -117,12 +117,13 @@ export default function Documents() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  useEffect(() => { loadData() }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async (docType?: string, status?: string) => {
     try {
+      const params = new URLSearchParams({ page: '1', page_size: '50' })
+      if (docType) params.set('document_type', docType)
+      if (status) params.set('status', status)
       const [docsResult, statsResult] = await Promise.allSettled([
-        api.get('/api/v1/documents/?page=1&page_size=50'),
+        api.get(`/api/v1/documents/?${params}`),
         api.get('/api/v1/documents/stats/overview'),
       ])
       setDocuments(docsResult.status === 'fulfilled' ? docsResult.value.data.items || [] : [])
@@ -135,7 +136,13 @@ export default function Documents() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => { loadData() }, [loadData])
+
+  useEffect(() => {
+    loadData(filterType || undefined, filterStatus || undefined)
+  }, [filterType, filterStatus, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
     if (query.length < 3) {
@@ -208,7 +215,7 @@ export default function Documents() {
       clearInterval(progressInterval)
       setUploadProgress(100)
       
-      await loadData()
+      await loadData(filterType || undefined, filterStatus || undefined)
       setShowUploadModal(false)
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
@@ -228,8 +235,6 @@ export default function Documents() {
   const getFileIcon = (type: string) => FILE_ICONS[type] || File
 
   const filteredDocuments = documents.filter(doc => {
-    if (filterType && doc.document_type !== filterType) return false
-    if (filterStatus && doc.status !== filterStatus) return false
     if (searchTerm && !searchResults) {
       return doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
              doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase())

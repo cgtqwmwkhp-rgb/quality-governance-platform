@@ -111,8 +111,9 @@ class TestWorkflowEngine:
         sla_service = SLAService(AsyncMock())
         due = sla_service._calculate_due_time(start, 16, config)
 
-        # Should be Wednesday 9 AM (8 hours Monday + 8 hours Tuesday = 16 hours)
-        expected = datetime(2026, 1, 21, 9, 0, 0)
+        # Business-hour accumulation ends at close of the second business day.
+        # 8 hours Monday + 8 hours Tuesday = Tuesday 5 PM.
+        expected = datetime(2026, 1, 20, 17, 0, 0)
         assert due == expected
 
 

@@ -22,6 +22,8 @@ from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # AI Integration
+logger = logging.getLogger(__name__)
+
 try:
     import anthropic
 
@@ -437,9 +439,7 @@ class RecommendationEngine:
             try:
                 return self._get_ai_recommendations(incident_description, category)
             except Exception:
-                logging.getLogger(__name__).warning(
-                    "AI recommendation service unavailable, falling back to rule-based", exc_info=True
-                )
+                logger.warning("AI recommendation service unavailable, falling back to rule-based", exc_info=True)
 
         # Rule-based recommendations
         return self._get_rule_based_recommendations(incident_description, category)

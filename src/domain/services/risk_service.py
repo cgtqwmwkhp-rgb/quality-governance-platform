@@ -164,7 +164,7 @@ class RiskService:
             treatment_plan=data.get("treatment_plan"),
             risk_owner_id=data.get("risk_owner_id"),
             risk_owner_name=data.get("risk_owner_name"),
-            status="identified",
+            status="open",
             review_frequency_days=data.get("review_frequency_days", 90),
             created_by=created_by,
             tenant_id=data.get("tenant_id"),

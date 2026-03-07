@@ -14,11 +14,16 @@ from src.infrastructure.database import Base
 class RiskStatus(str, enum.Enum):
     """Status of a risk."""
 
-    IDENTIFIED = "identified"
-    ASSESSING = "assessing"
-    TREATING = "treating"
-    MONITORING = "monitoring"
+    OPEN = "open"
+    MITIGATING = "mitigating"
+    ACCEPTED = "accepted"
     CLOSED = "closed"
+
+    # Backward-compatible aliases for legacy callers.
+    IDENTIFIED = "open"
+    ASSESSING = "mitigating"
+    TREATING = "mitigating"
+    MONITORING = "accepted"
 
 
 class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -76,7 +81,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     treatment_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[RiskStatus] = mapped_column(CaseInsensitiveEnum(RiskStatus), default=RiskStatus.IDENTIFIED)
+    status: Mapped[RiskStatus] = mapped_column(CaseInsensitiveEnum(RiskStatus), default=RiskStatus.OPEN)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership

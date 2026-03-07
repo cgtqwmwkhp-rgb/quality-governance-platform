@@ -59,7 +59,7 @@ async def search_users(
 @router.get("/", response_model=UserListResponse)
 async def list_users(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,

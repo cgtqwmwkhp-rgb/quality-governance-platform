@@ -342,13 +342,12 @@ class TestSLAService:
             exclude_weekends=True,
         )
 
-        # Start at 3 PM on Tuesday (4 hours left) - 10 hours needed
+        # Start at 3 PM on Tuesday (2 hours left) - 10 hours needed
         start = datetime(2026, 1, 21, 15, 0, 0)  # Tuesday 3 PM
         due = sla_service._calculate_due_time(start, 10, config)
 
-        # Should be Wednesday 3 PM (4 hours Tuesday + 6 hours Wednesday = 10)
-        # Actually: 4h on Tuesday, then 6h on Wednesday starting at 9 AM = 3 PM
-        expected = datetime(2026, 1, 22, 15, 0, 0)
+        # Should be Wednesday 5 PM (2 hours Tuesday + 8 hours Wednesday = 10)
+        expected = datetime(2026, 1, 22, 17, 0, 0)
         assert due == expected
 
 
