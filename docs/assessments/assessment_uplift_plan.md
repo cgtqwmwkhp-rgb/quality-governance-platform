@@ -1,819 +1,705 @@
 # Quality Governance Platform — World-Class Uplift Plan (Round 2)
 
-**Assessment Date**: 2026-03-07
+**Assessment Date**: 2026-03-07 (Re-assessment #2)
 **Target**: WCS 9.5+ across all 32 dimensions
+**Current Average WCS**: 7.1 / 10.0
+**Gap**: 28 of 32 dimensions below 9.5 threshold
 
 ---
 
 ## 6. Quick Wins Engine (Small Effort / High Value)
 
-### QW-01: Fix Tenants Module Auth Guards
-- **Linked CF**: CF1 | **Dimensions**: D06
-- **Why high leverage**: Closes the highest-severity security gap with minimal code change — each endpoint needs one line added.
-- **Exact change locations**: `src/api/routes/tenants.py` — add `current_user: User = Depends(get_current_active_user)` to all endpoint function signatures; add `CurrentSuperuser` to create/delete/modify.
-- **Definition of Done**: All tenant endpoints return 401 without token; admin endpoints return 403 for non-superusers.
-- **Validation**: Integration test `test_tenants_require_auth()`; manual verification via Swagger UI.
+### QW-01: Add Auth to Planet Mark + UVDB Routes
+- **Linked CF**: CF1, CF2 | **Dimensions**: D06
+- **Why high leverage**: Closes last unauthenticated business-data routes; each endpoint needs one parameter added.
+- **Exact change locations**: `src/api/routes/planet_mark.py` — add `current_user: CurrentUser` to all endpoint functions; `src/api/routes/uvdb.py` — same pattern. Add tenant_id filtering to queries.
+- **Definition of Done**: All endpoints return 401 without token; tenant isolation verified.
+- **Validation**: Integration test `test_planet_mark_requires_auth()`; auth enforcement regression test updated.
 - **Rollback**: Revert commit.
-- **Expected WCS lift**: D06 +0.4 to +0.8
+- **Expected WCS lift**: D06 +0.3 to +0.5
+- **Risk reduction**: {SEC}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Refactoring Planet Mark/UVDB business logic.
 
-### QW-02: Fix Compliance Endpoints Auth
-- **Linked CF**: CF1 | **Dimensions**: D06
-- **Why high leverage**: Second P0 security gap; same pattern as QW-01.
-- **Exact change locations**: `src/api/routes/compliance.py` — add `current_user: User = Depends(get_current_active_user)` to unauthenticated endpoints.
-- **Definition of Done**: All compliance endpoints return 401 without token.
-- **Validation**: Integration test `test_compliance_endpoints_require_auth()`.
+### QW-02: Add Auth to SLO Metrics Endpoint
+- **Linked CF**: CF1 | **Dimensions**: D06, D13
+- **Why high leverage**: Single file, single dependency addition; prevents operational metrics disclosure.
+- **Exact change locations**: `src/api/routes/slo.py` — add `current_user: CurrentUser` to metric-reading endpoints; add `CurrentSuperuser` to any reset/admin endpoints.
+- **Definition of Done**: SLO endpoint returns 401 without token.
+- **Validation**: Unit test verifying auth requirement.
 - **Rollback**: Revert commit.
+- **Expected WCS lift**: D06 +0.1 to +0.2
+- **Risk reduction**: {SEC}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Changing SLO metric collection logic.
+
+### QW-03: Add Content-Security-Policy Header (Report-Only)
+- **Linked CF**: CF1 | **Dimensions**: D06
+- **Why high leverage**: One middleware addition completes security header suite; report-only mode is zero-risk.
+- **Exact change locations**: `src/main.py` `SecurityHeadersMiddleware` — add `Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.azurewebsites.net`.
+- **Definition of Done**: CSP-Report-Only header present on all responses; no frontend breakage.
+- **Validation**: Security test for header presence; manual verification in browser DevTools.
+- **Rollback**: Remove header line.
 - **Expected WCS lift**: D06 +0.2 to +0.4
+- **Risk reduction**: {SEC}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Enforcing CSP (move from Report-Only to enforcing is a separate item).
 
-### QW-03: Add Tenant Isolation to Incidents/Complaints
-- **Linked CF**: CF1, CF2 | **Dimensions**: D06, D07
-- **Why high leverage**: Prevents cross-tenant data leakage — GDPR breach risk elimination.
-- **Exact change locations**: `src/api/routes/incidents.py` — add `.filter(Incident.tenant_id == current_user.tenant_id)` to list/get queries; same pattern in `src/api/routes/complaints.py`.
-- **Definition of Done**: Tenant A user cannot see Tenant B incidents/complaints; null tenant_id records handled gracefully.
-- **Validation**: Multi-tenant integration test; backfill null tenant_ids via migration.
-- **Rollback**: Remove tenant filter; data migration is forward-only.
-- **Expected WCS lift**: D06 +0.4, D07 +0.3
-
-### QW-04: Align Coverage Threshold (35 → 50)
-- **Linked CF**: CF5 | **Dimensions**: D15, D17
-- **Why high leverage**: Restores documented quality bar; requires fixing existing skip decorators to pass.
-- **Exact change locations**: `.github/workflows/ci.yml` — change `--cov-fail-under=35` to `--cov-fail-under=50` in unit-tests and integration-tests jobs.
-- **Definition of Done**: CI enforces 50% coverage; all test suites pass at new threshold.
-- **Validation**: CI pipeline runs green at 50% threshold.
-- **Rollback**: Revert to 35 if blocking; write missing tests first.
-- **Expected WCS lift**: D15 +0.6 to +1.0
-
-### QW-05: Create ADR Documents (0001-0003)
+### QW-04: Renumber ADRs to Unique Sequential IDs
 - **Linked CF**: CF5 | **Dimensions**: D29, D22
-- **Why high leverage**: Fills most impactful documentation gap; referenced decisions already exist in code.
-- **Exact change locations**: Create `docs/adr/ADR-0001-production-dependencies.md`, `docs/adr/ADR-0002-config-failfast.md`, `docs/adr/ADR-0003-readiness-probe.md`.
-- **Definition of Done**: Each ADR has Context, Decision, Status, Consequences sections; code references point to valid files.
-- **Validation**: CI check validates ADR references resolve to files.
-- **Rollback**: N/A (additive).
-- **Expected WCS lift**: D29 +0.8 to +1.2, D22 +0.4
+- **Why high leverage**: 10-minute fix resolves C-003 contradiction; creates clean ADR index.
+- **Exact change locations**: Rename `docs/adr/` files to sequential ADR-0001 through ADR-0008; create `docs/adr/INDEX.md` mapping titles to files; update code references.
+- **Definition of Done**: All ADR files have unique sequential IDs; index document exists.
+- **Validation**: No duplicate ADR numbers; all code references resolve.
+- **Rollback**: Revert renames.
+- **Expected WCS lift**: D29 +0.2, D22 +0.1
+- **Risk reduction**: {GOV}
+- **ROI**: {Quality uplift}
+- **Out-of-Scope**: Writing new ADRs.
 
-### QW-06: Fix Postgres Version in Sandbox
-- **Linked CF**: CF5 | **Dimensions**: D31
-- **Why high leverage**: One-line fix eliminates environment parity contradiction.
-- **Exact change locations**: `docker-compose.sandbox.yml` — change `postgres:15-alpine` to `postgres:16-alpine`.
-- **Definition of Done**: All docker-compose files use PostgreSQL 16.
-- **Validation**: `docker-compose -f docker-compose.sandbox.yml up` succeeds; integration tests pass.
-- **Rollback**: Revert to PG15.
-- **Expected WCS lift**: D31 +0.3 to +0.5
+### QW-05: Remove F401/F841 from Flake8 Global Ignores
+- **Linked CF**: CF3 | **Dimensions**: D21
+- **Why high leverage**: Mechanical fix; catches dead code; no behavior change. Removes unused imports and variables from codebase.
+- **Exact change locations**: `.flake8` — remove `F401, F841` from `extend-ignore`; fix all resulting violations (unused imports/variables).
+- **Definition of Done**: Flake8 passes without F401/F841 in global ignores.
+- **Validation**: CI flake8 job passes; no runtime changes.
+- **Rollback**: Re-add ignores.
+- **Expected WCS lift**: D21 +0.3 to +0.5
+- **Risk reduction**: {GOV}
+- **ROI**: {Quality uplift}
+- **Out-of-Scope**: Reducing max-complexity or fixing C901 violations.
 
-### QW-07: Add Skipped Test Count CI Gate
-- **Linked CF**: CF5 | **Dimensions**: D15, D21
-- **Why high leverage**: Prevents test harness drift from worsening; forces fix of broken imports.
-- **Exact change locations**: `.github/workflows/ci.yml` — add step after pytest: `grep -c "SKIPPED" junit-unit.xml | awk '{if ($1 > MAX_SKIPS) exit 1}'`; `scripts/validate_skipped_tests.py`.
-- **Definition of Done**: CI fails if skipped test count exceeds ceiling (start at current count, reduce each sprint).
-- **Validation**: Deliberately skip a test; verify CI fails.
-- **Rollback**: Remove CI step.
-- **Expected WCS lift**: D15 +0.3 to +0.6
+### QW-06: Create Playwright Config + 3 Critical Specs
+- **Linked CF**: CF2 | **Dimensions**: D15, D02
+- **Why high leverage**: Infrastructure already exists (@playwright/test installed); unlocks entire E2E testing capability.
+- **Exact change locations**: `frontend/playwright.config.ts` (new), `frontend/tests/e2e/login.spec.ts`, `frontend/tests/e2e/incident-lifecycle.spec.ts`, `frontend/tests/e2e/audit-execution.spec.ts`.
+- **Definition of Done**: 3 E2E specs run against local dev server; CI job configured (can be advisory initially).
+- **Validation**: `npx playwright test` passes locally; specs cover login, incident CRUD, audit run.
+- **Rollback**: Delete test files.
+- **Expected WCS lift**: D15 +0.4 to +0.8, D02 +0.2 to +0.4
+- **Risk reduction**: {REL}
+- **ROI**: {Quality uplift}
+- **Out-of-Scope**: Full E2E coverage of all 82 routes.
 
-### QW-08: Create CHANGELOG.md
-- **Linked CF**: CF5 | **Dimensions**: D22, D29
-- **Why high leverage**: Standard governance artifact; takes 30 minutes; enables release communication.
-- **Exact change locations**: Create `CHANGELOG.md` at repo root using Keep-a-Changelog format.
-- **Definition of Done**: CHANGELOG has entries for current version; linked from README; PR template includes "update CHANGELOG" checkbox.
-- **Validation**: File exists and follows format.
-- **Rollback**: N/A (additive).
-- **Expected WCS lift**: D22 +0.3, D29 +0.2
-
-### QW-09: Add axe-core to Frontend CI
+### QW-07: Create 5 Accessibility Test Files
 - **Linked CF**: CF2 | **Dimensions**: D03
-- **Why high leverage**: Automated accessibility scanning catches 40-60% of WCAG issues.
-- **Exact change locations**: `frontend/package.json` — add `@axe-core/react` or `vitest-axe`; `ci.yml` frontend-tests job — add axe assertion.
-- **Definition of Done**: CI fails on accessibility violations (initially warning mode, then blocking).
-- **Validation**: Introduce a known violation; verify CI catches it.
-- **Rollback**: Remove axe dependency and CI step.
-- **Expected WCS lift**: D03 +1.0 to +2.0
+- **Why high leverage**: axe-helper.ts and jest-axe already installed; test infrastructure exists; each test is ~20 lines.
+- **Exact change locations**: `frontend/src/pages/__tests__/Dashboard.a11y.test.tsx`, `Login.a11y.test.tsx`, `Incidents.a11y.test.tsx`, `Complaints.a11y.test.tsx`, `AuditTemplateLibrary.a11y.test.tsx`.
+- **Definition of Done**: 5 a11y test files pass `npm run test:a11y`; each renders component and runs `expect(await axe(container)).toHaveNoViolations()`.
+- **Validation**: `npm run test:a11y` exits 0; CI a11y gate passes.
+- **Rollback**: Delete test files.
+- **Expected WCS lift**: D03 +0.5 to +1.0
+- **Risk reduction**: {UX}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Fixing a11y violations found by tests (separate backlog items).
 
-### QW-10: Create Operational Runbook Skeleton
-- **Linked CF**: CF1, CF2, CF5 | **Dimensions**: D23
-- **Why high leverage**: D23 is the highest-PS dimension (13.0); even a skeleton runbook significantly reduces operational risk.
-- **Exact change locations**: Create `docs/runbooks/` with: `incident-response.md`, `deployment.md`, `rollback.md`, `database-recovery.md`, `escalation.md`.
-- **Definition of Done**: Each runbook has: trigger conditions, step-by-step procedures, contacts, verification steps.
-- **Validation**: Peer review by ops team; tabletop exercise.
+### QW-08: Raise Coverage Threshold to 45%
+- **Linked CF**: CF5 | **Dimensions**: D15
+- **Why high leverage**: Forces writing ~30-50 new behavioral tests; prevents further coverage erosion.
+- **Exact change locations**: `pyproject.toml` `fail_under = 45`; `.github/workflows/ci.yml` `--cov-fail-under=45` (2 locations).
+- **Definition of Done**: CI passes at 45% coverage; no skip decorators added.
+- **Validation**: CI green; coverage report shows 45%+.
+- **Rollback**: Revert to 35%.
+- **Expected WCS lift**: D15 +0.3 to +0.6
+- **Risk reduction**: {REL}
+- **ROI**: {Quality uplift}
+- **Out-of-Scope**: Reaching 70%+ coverage (Horizon B/C item).
+
+### QW-09: Document Staging vs Production Env Parity
+- **Linked CF**: CF5 | **Dimensions**: D31
+- **Why high leverage**: Documentation-only; captures existing tribal knowledge.
+- **Exact change locations**: Create `docs/environments/parity-matrix.md` — side-by-side table of all env vars, infrastructure settings, and feature flags across dev/staging/production.
+- **Definition of Done**: Parity matrix documents all env vars; differences are annotated with rationale.
+- **Validation**: Document exists and is linked from README.
 - **Rollback**: N/A (additive).
-- **Expected WCS lift**: D23 +2.0 to +3.0
+- **Expected WCS lift**: D31 +0.3 to +0.6
+- **Risk reduction**: {REL}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Automating parity checks.
 
-### QW-11: Implement 5 Critical Contract Tests
-- **Linked CF**: CF2, CF4 | **Dimensions**: D15, D10
-- **Why high leverage**: Replaces stub contract tests with real validations for top 5 endpoints.
-- **Exact change locations**: `tests/contract/test_api_contracts.py` — implement contract assertions for `/auth/login`, `/incidents`, `/audits/runs`, `/users`, `/complaints`.
-- **Definition of Done**: Each contract test validates response schema, status codes, required fields.
-- **Validation**: Contract tests pass in CI; deliberately break an endpoint and verify test catches it.
-- **Rollback**: Revert to stub tests.
-- **Expected WCS lift**: D15 +0.4 to +0.6, D10 +0.2
+### QW-10: Add Mypy Override Count CI Gate
+- **Linked CF**: CF3 | **Dimensions**: D21
+- **Why high leverage**: Prevents override count from growing; forces progressive type safety improvement.
+- **Exact change locations**: `.github/workflows/ci.yml` code-quality job — add step: `grep -c 'tool.mypy.overrides' pyproject.toml | awk '{if ($1 > 30) exit 1}'`; `scripts/validate_mypy_overrides.py`.
+- **Definition of Done**: CI fails if mypy override count exceeds ceiling (30); ceiling reduced each sprint.
+- **Validation**: Deliberately add override; verify CI fails.
+- **Rollback**: Remove CI step.
+- **Expected WCS lift**: D21 +0.2 to +0.4
+- **Risk reduction**: {GOV}
+- **ROI**: {Quality uplift}
+- **Out-of-Scope**: Fixing all 30 overrides (Horizon B/C item).
 
-### QW-12: Add SLO/SLI Definitions Document
-- **Linked CF**: CF1, CF2 | **Dimensions**: D13, D05
-- **Why high leverage**: Foundation for all observability maturity; takes ~2 hours to define.
-- **Exact change locations**: Create `docs/observability/slo-definitions.md`.
-- **Definition of Done**: SLOs defined for: availability (99.9%), API latency (P95 < 500ms), error rate (< 1%), auth success rate (> 99.5%).
-- **Validation**: SLO targets are measurable with existing Azure Monitor metrics.
+### QW-11: Enforce CSP (Move from Report-Only)
+- **Linked CF**: CF1 | **Dimensions**: D06
+- **Why high leverage**: After QW-03 validates no frontend breakage, switch from report-only to enforcing mode.
+- **Exact change locations**: `src/main.py` `SecurityHeadersMiddleware` — change `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+- **Definition of Done**: CSP enforced; no frontend console errors; no broken functionality.
+- **Validation**: Manual browser test; automated security scan; no CSP violations reported.
+- **Rollback**: Switch back to Report-Only.
+- **Expected WCS lift**: D06 +0.1 to +0.2
+- **Risk reduction**: {SEC}
+- **ROI**: {Risk avoided}
+- **Out-of-Scope**: Adding nonce-based script policies (future hardening).
+- **Dependencies**: QW-03 must be deployed and validated first.
+
+### QW-12: Add Operational Health Dashboard Doc
+- **Linked CF**: CF4 | **Dimensions**: D32, D13
+- **Why high leverage**: Dashboard JSON templates already exist (`docs/observability/dashboards/`); documenting access and usage is low-effort.
+- **Exact change locations**: Create `docs/observability/operations-dashboard-guide.md` — document how to import dashboard templates, configure Azure Monitor, access live metrics.
+- **Definition of Done**: Guide exists; links to 3 dashboard templates; includes screenshots or descriptions.
+- **Validation**: Document exists and is linked from runbooks.
 - **Rollback**: N/A (additive).
-- **Expected WCS lift**: D13 +0.4 to +0.8
+- **Expected WCS lift**: D32 +0.2, D13 +0.2
+- **Risk reduction**: {REL}
+- **ROI**: {Time saved}
+- **Out-of-Scope**: Creating new dashboards.
 
 ---
 
-## 7. Critical Bars Hardening Plan
+## 7. "Critical Bars" Hardening Plan
 
 ### Gate 1: Security Hardening (P0)
 
-**Current State**: Strong scanning posture (6 security tools in CI), but 3 critical auth gaps allow unauthenticated/cross-tenant access.
+**Current state**: 55/61 route modules have auth guards; tenant isolation on 14 modules; rate limiter on auth endpoints; security headers complete except CSP; Bandit, pip-audit, Safety in CI.
 
-**Gap**: F-001 (tenants auth), F-002 (compliance auth), F-003 (cross-tenant incidents/complaints).
+**Gap**: 3 route modules (planet_mark, uvdb, slo) lack authentication; no CSP header; no Semgrep/Trivy/Gitleaks in CI.
 
-**Implementation Steps**:
-1. Fix `src/api/routes/tenants.py`: restore auth guards on all endpoints (QW-01)
-2. Fix `src/api/routes/compliance.py`: add auth to all endpoints (QW-02)
-3. Fix `src/api/routes/incidents.py` and `complaints.py`: add tenant_id filtering (QW-03)
-4. Audit ALL 48 route modules for auth coverage: write script `scripts/validate_auth_coverage.py` that parses route files and verifies every endpoint has auth dependency
-5. Add auth enforcement regression test: `tests/security/test_auth_enforcement.py` — iterate all registered routes and verify 401 without token
-6. Add tenant isolation regression test: `tests/security/test_tenant_isolation.py` — multi-tenant scenario tests
+**Implementation steps**:
+1. Add `CurrentUser` to planet_mark.py, uvdb.py, slo.py (QW-01, QW-02)
+2. Add CSP header in report-only mode (QW-03)
+3. Add auth enforcement regression test covering all 61 route modules
+4. Add SAST (Semgrep is configured via `.semgrep.yml` but not in CI — add CI step)
+5. Add container scanning (Trivy) to CI
 
-**Done Criteria**: Zero unauthenticated endpoints (except explicit public: health, auth/login, auth/token-exchange, auth/password-reset); all list endpoints filter by tenant_id; auth enforcement CI test passes.
+**Done criteria**: All 61 route modules have auth guards verified by CI test; CSP header present; SAST and container scan in CI.
 
-### Gate 2: Data Integrity (P0/P1)
+### Gate 2: Data Integrity (P0)
 
-**Current State**: Idempotency middleware for POST, optimistic locking on investigations, hash-chain audit trail. Good foundation.
+**Current state**: Idempotency middleware (POST); optimistic locking (investigations); reference number service (MAX/COUNT hybrid); 270 FK indexes; audit trail hash-chain.
 
-**Gap**: No idempotency on PUT/PATCH; actions module uses in-memory pagination; no database-level check constraints for enum values.
+**Gap**: No idempotency on PUT/PATCH; no concurrency tests; some write endpoints lack audit trail calls.
 
-**Implementation Steps**:
-1. Extend idempotency middleware to support PUT/PATCH with `Idempotency-Key` header
-2. Refactor actions module: replace in-memory pagination with database-level UNION ALL query with LIMIT/OFFSET
-3. Add database CHECK constraints for critical enum columns (incident_status, audit_status, risk_status)
-4. Add migration to backfill null `tenant_id` values on incidents and complaints
+**Implementation steps**:
+1. Extend idempotency middleware to support PUT/PATCH (conditional on Idempotency-Key header)
+2. Add concurrency test: two concurrent reference number generations must produce unique sequences
+3. Audit all write endpoints for audit trail calls; add missing ones
+4. Add migration test: up/down roundtrip on latest 5 migrations
 
-**Done Criteria**: All write operations support idempotency; actions pagination is database-backed; enum constraints enforced at DB level.
+**Done criteria**: Idempotency on all write methods; concurrency test passes; all write endpoints have audit trail; migration roundtrip passes.
 
-### Gate 3: Release Safety (P1)
+### Gate 3: Release Safety (P0)
 
-**Current State**: Excellent — 5-phase deploy proof, deterministic SHA, release signoff. Minor gaps only.
+**Current state**: Governance sign-off, deterministic SHA verification, DB backup, post-deploy security checks, rollback workflow.
 
-**Gap**: Down migrations not verified in CI; rollback drill not evidence-tracked; alembic.ini has placeholder URL.
+**Gap**: Coverage threshold at 35%; rollback drill not current; no canary deployment.
 
-**Implementation Steps**:
-1. Add CI job: verify `alembic downgrade -1` succeeds for latest migration
-2. Schedule monthly rollback drill; generate evidence artifact
-3. Clean up `alembic.ini` placeholder URL with documented comment
+**Implementation steps**:
+1. Raise coverage to 45% (QW-08) with behavioral tests for critical paths
+2. Execute and document rollback drill; update `docs/runbooks/rollback.md` with evidence
+3. Add coverage trend tracking to quality trend report
+4. Add migration rollback verification to CI (down migration on latest revision)
 
-**Done Criteria**: Down migration test in CI passes; rollback drill evidence from last 30 days exists.
+**Done criteria**: Coverage ≥45%; rollback drill documented within last 30 days; migration rollback verified in CI.
 
 ---
 
 ## 8. World-Class Roadmap (3 Horizons)
 
-### Horizon A: Safety + Determinism + Testability (0-2 weeks)
+### Horizon A: Safety + Determinism + Testability (0–2 weeks)
 
-**Entry Criteria**: Repository access, CI pipeline green.
+**Entry criteria**: All changes from world-class uplift PR #266 deployed to production (DONE).
 
-| Epic | Dimensions | CFs | Tasks |
-|------|-----------|-----|-------|
-| A1: Close P0 Security Gaps | D06 | CF1, CF2 | QW-01, QW-02, QW-03; auth enforcement regression test; tenant isolation test |
-| A2: Test Harness Stabilization | D15, D21 | CF2, CF5 | Fix skipped tests (F-006); align coverage 35→50 (QW-04); implement 5 contract tests (QW-11); add skipped test ceiling (QW-07) |
-| A3: Governance Documentation | D22, D29 | CF5 | Create ADRs (QW-05); create CHANGELOG (QW-08); create runbook skeletons (QW-10) |
-| A4: Environment Parity Fix | D31 | CF5 | Fix sandbox PG version (QW-06); fix alembic.ini placeholder (C-003) |
+| Epic | Objective | Dimensions | CF Coverage | Tasks |
+|------|-----------|------------|-------------|-------|
+| A1: Complete Auth Coverage | All 61 route modules authenticated | D06 | CF1 | QW-01, QW-02, auth enforcement test for all modules |
+| A2: CSP Header | Content-Security-Policy deployed | D06 | CF1 | QW-03, then QW-11 after validation |
+| A3: Coverage Floor | Coverage threshold raised to 45% | D15 | CF5 | QW-08, write ~40 behavioral tests for critical paths |
+| A4: E2E Foundation | Playwright configured with 3 specs | D15, D02 | CF2 | QW-06 |
+| A5: A11y Testing | 5 axe-core test files created | D03 | CF2 | QW-07 |
+| A6: Governance Cleanup | ADRs renumbered; override ceiling set | D29, D21 | CF5 | QW-04, QW-10 |
 
-**Exit Criteria**:
-- Zero P0 findings open
-- Auth enforcement test passes on all 48 route modules
-- Coverage at 50%+ with zero unexplained skips
-- ADR-0001 through ADR-0003 written
-- CHANGELOG.md exists
-- Runbook skeletons created for 5 operational scenarios
+**Exit criteria**: All auth gaps closed; CSP deployed (report-only or enforced); coverage ≥45%; 3 E2E specs pass; 5 a11y tests pass; ADRs sequential; mypy override ceiling in CI.
 
-**Dependencies**: None (all self-contained).
+**Dependencies**: None (all items independent of each other).
 
-**Risks**: Coverage threshold increase may block CI → Mitigation: write tests for critical paths first, then raise threshold.
+**Risks + mitigations**: CSP may break frontend (mitigation: report-only first); coverage raise may block CI (mitigation: write tests before raising threshold).
 
----
+### Horizon B: Core Quality Uplift (2–6 weeks)
 
-### Horizon B: Core Quality Uplift (2-6 weeks)
+**Entry criteria**: Horizon A complete; all quick wins deployed.
 
-**Entry Criteria**: All Horizon A exit criteria met; P0 findings closed.
+| Epic | Objective | Dimensions | CF Coverage | Tasks |
+|------|-----------|------------|-------------|-------|
+| B1: Testing Maturity | Coverage 60%, contract tests real, Playwright 10+ specs | D15, D16 | CF2, CF5 | Write behavioral unit tests; implement contract tests from OpenAPI; expand E2E to 10 critical journeys |
+| B2: Performance Baseline | Load tests documented; Lighthouse CI green | D04, D25 | CF2 | k6/Locust test for top 10 endpoints; document P95 latency; integrate Lighthouse in CI |
+| B3: Security Hardening | Semgrep + Trivy in CI; CSP enforced; PUT/PATCH idempotency | D06, D24 | CF1, CF3 | Add Semgrep CI step; add Trivy container scan; extend idempotency to mutations |
+| B4: Type Safety Sprint | Mypy overrides reduced from 30 to 15 | D21, D09 | CF2, CF3 | Fix type errors in workflow_engine, risk_scoring, audit_service, ai_services |
+| B5: Observability Maturity | APM dashboards live; SLO alerting configured | D13, D28, D32 | CF4 | Deploy dashboard templates to Azure Monitor; configure alerts on SLO breach; document ops procedures |
+| B6: Privacy & Compliance | DSAR workflow; data retention automation | D07, D08 | CF3 | Implement DSAR endpoint; add data retention cron; external audit prep |
+| B7: Documentation Sprint | All runbooks reviewed; env parity documented | D22, D23, D31 | CF5 | Review 25 runbooks for completeness; QW-09; architecture diagrams |
 
-| Epic | Dimensions | CFs | Tasks |
-|------|-----------|-----|-------|
-| B1: Type Safety Remediation (GOVPLAT-004) | D21, D09 | CF2, CF3 | Fix mypy errors in top 10 modules (workflow_engine, risk_scoring, audit_service first); reduce override count from 27 to <15 |
-| B2: Observability Maturity | D13, D05 | CF1-CF5 | Define SLOs (QW-12); create Grafana/Azure dashboard templates; add alerting rules for SLO breaches; instrument DLQ depth alerts |
-| B3: Testing Depth | D15, D16 | CF2 | Write behavioral unit tests for incident/audit/risk services (not just imports); expand factories; add property-based tests for risk scoring; raise coverage to 60% |
-| B4: Accessibility | D03 | CF2 | Add axe-core (QW-09); WCAG 2.1 AA audit; fix top 20 violations; add Playwright a11y assertions |
-| B5: Performance Baseline | D04, D25 | CF2, CF4 | Set up k6/Locust load tests; benchmark top 10 endpoints; fix actions in-memory pagination; add P95 latency SLO checks |
-| B6: Privacy & GDPR | D07 | CF2, CF3 | Write DPIA for incident/complaint data; implement DSAR endpoint; document data classification; add consent tracking if needed |
-| B7: Operational Runbooks | D23 | CF1-CF5 | Flesh out runbook skeletons with tested procedures; conduct tabletop exercise; document on-call rotation |
+**Exit criteria**: Coverage ≥60%; load test baselines established; Semgrep+Trivy in CI; CSP enforced; mypy overrides ≤15; SLO alerts configured; DSAR workflow; all docs reviewed.
 
-**Exit Criteria**:
-- Mypy overrides < 15
-- SLOs defined and dashboards operational
-- Coverage at 60%+ with behavioral tests
-- axe-core in CI (blocking mode)
-- Load test baselines established
-- DPIA completed
-- Runbooks peer-reviewed and tested
+**Dependencies**: B3 depends on A2 (CSP validation); B4 depends on A6 (override ceiling).
 
-**Dependencies**: Horizon A complete; ops team availability for runbook review.
+**Risks + mitigations**: Type fixes may reveal runtime bugs (mitigation: comprehensive test coverage from B1); performance testing may reveal bottlenecks (mitigation: address in B2).
 
-**Risks**: GOVPLAT-004 fixes may reveal runtime bugs → Mitigation: fix behind feature flags, extensive testing.
+### Horizon C: Automation, Resilience, and 5/5 Completion (6–12 weeks)
 
----
+**Entry criteria**: Horizon B complete; average WCS ≥8.0.
 
-### Horizon C: Automation, Resilience, and "5/5" Completion (6-12 weeks)
+| Epic | Objective | Dimensions | CF Coverage | Tasks |
+|------|-----------|------------|-------------|-------|
+| C1: Testing Excellence | Coverage 80%, chaos testing, property-based tests | D15, D16 | CF2, CF5 | Property-based tests for domain logic; chaos tests for circuit breakers; mutation testing |
+| C2: Performance Optimization | P95 < 200ms; auto-scaling configured | D04, D25 | CF2, CF4 | Query optimization; read replicas; CDN for static assets; Azure autoscale rules |
+| C3: Full A11y Compliance | WCAG 2.1 AA certified; screen reader tested | D03 | CF2 | Full a11y audit; remediation sprint; screen reader testing; keyboard navigation audit |
+| C4: Design System Maturity | 23 components; Storybook; design tokens complete | D02 | CF2 | Build missing 11 components; Storybook catalog; design token documentation |
+| C5: Zero Type Debt | Mypy overrides = 0; strict mode | D21, D09 | CF2, CF3 | Fix remaining 15 overrides; enable strict mypy; address all type errors |
+| C6: FinOps + Cost Optimization | Azure spend analysis; right-sizing documented | D26 | CF4 | FinOps report; resource right-sizing; cost optimization recommendations |
+| C7: I18n Completion | 2+ locales; backend i18n | D27 | CF2 | Add backend i18n framework; add 1+ additional locale; locale switching UI |
+| C8: Full E2E Coverage | 30+ Playwright specs; visual regression | D15, D02 | CF2 | Expand E2E to all major journeys; add visual regression with Percy/Playwright |
 
-**Entry Criteria**: All Horizon B exit criteria met.
+**Exit criteria**: Average WCS ≥9.5; all dimensions ≥9.0; coverage ≥80%; zero mypy overrides; WCAG certified; load tests pass SLOs; cost analysis complete.
 
-| Epic | Dimensions | CFs | Tasks |
-|------|-----------|-----|-------|
-| C1: Chaos Engineering | D05, D25 | CF1-CF5 | Implement chaos tests (DB disconnect, Redis failure, Azure AD outage); verify circuit breakers activate; document blast radius |
-| C2: Coverage to 80%+ | D15, D16 | CF2 | Mutation testing (mutmut); expand to 80% line coverage; comprehensive integration tests for all CFs |
-| C3: Full i18n | D27 | CF2 | Backend i18n support; verify all frontend strings translated; RTL support if needed |
-| C4: Cost Optimization | D26 | CF4, CF5 | Azure cost analysis; right-sizing report; implement auto-scaling policies; document FinOps practices |
-| C5: Product Analytics | D28 | CF2 | Implement product analytics (PostHog/Amplitude); A/B testing framework; user behavior tracking (with consent) |
-| C6: UX Design System | D02 | CF2 | Storybook component library; design tokens; UX audit; user testing |
-| C7: Advanced API | D10, D24 | CF2, CF4 | API versioning strategy doc; GraphQL exploration; cursor-based pagination everywhere; comprehensive idempotency |
-| C8: Full Governance | D29, D22 | CF5 | ADR process formalized; monthly architecture review; complete API documentation; developer onboarding guide |
+**Dependencies**: C1 depends on B1; C2 depends on B2; C5 depends on B4.
 
-**Exit Criteria**:
-- Chaos tests pass for all CFs
-- Coverage ≥ 80% with mutation testing
-- All dimensions at WCS ≥ 8.0
-- Cost baseline established with optimization plan
-- Design system published
-
-**Dependencies**: Horizon B complete; design resources for C6; product team for C5.
-
-**Risks**: Scope creep on C6/C7 → Mitigation: strict timeboxing, MVP scope per epic.
+**Risks + mitigations**: I18n may require significant refactoring (mitigation: start with backend framework, add locales incrementally); WCAG certification may reveal significant remediation (mitigation: automated a11y tests catch most issues).
 
 ---
 
 ## 9. PR-Ready Backlog (Sorted by Priority Score desc, then Effort asc)
 
-### P0 Items
+### [P1] (Effort S) (PS=12.3) Raise coverage threshold to 45% with behavioral tests
+  - CF(s): CF5
+  - Dimension(s): D15
+  - Files/Modules: `pyproject.toml`, `.github/workflows/ci.yml`, `tests/unit/` (new test files)
+  - Change Summary: Change `fail_under` to 45 in both files; write ~40 behavioral tests for critical-path functions in `src/domain/services/`, `src/api/routes/auth.py`, `src/core/security.py`.
+  - Definition of Done: CI passes at 45% coverage; no new skip decorators.
+  - Tests/Validation: Coverage report shows ≥45%; all new tests exercise behavior not just imports.
+  - Observability: Coverage trend in quality report.
+  - Rollback: Revert threshold to 35; remove tests if broken.
+  - Risk of Change: MEDIUM — may require writing significant test code first.
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {REL}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Reaching 60%+ (Horizon B).
 
-1. **[P0] (Effort S) (PS=13.0) Create Operational Runbook Skeletons**
-   - CF(s): CF1, CF2, CF5
-   - Dimension(s): D23
-   - Files/Modules: Create `docs/runbooks/` — `incident-response.md`, `deployment.md`, `rollback.md`, `database-recovery.md`, `escalation.md`
-   - Change Summary: Write 5 operational runbooks with trigger conditions, step-by-step procedures, contacts, verification steps
-   - Definition of Done: Each runbook has complete procedure; peer-reviewed by ops team
-   - Tests/Validation: Tabletop walkthrough of incident-response runbook
-   - Observability: N/A (documentation)
-   - Rollback: N/A (additive)
-   - Risk of Change: Low
-   - Dependencies: None
-   - Owner Role: Platform Engineer / SRE
-   - Risk Reduction: {REL}
-   - ROI: {Risk avoided}
-   - Out-of-Scope: Automated runbook execution; PagerDuty integration
+### [P1] (Effort S) (PS=8.2) Add auth guards to planet_mark.py and uvdb.py
+  - CF(s): CF1, CF2
+  - Dimension(s): D06
+  - Files/Modules: `src/api/routes/planet_mark.py`, `src/api/routes/uvdb.py`
+  - Change Summary: Import and add `current_user: CurrentUser` parameter to all endpoint functions; add `tenant_id` filtering to queries.
+  - Definition of Done: All endpoints return 401 without token; tenant isolation verified.
+  - Tests/Validation: `test_planet_mark_requires_auth()`; `test_uvdb_requires_auth()`; auth enforcement test updated.
+  - Observability: Log unauthenticated access attempts.
+  - Rollback: Revert commit.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {SEC}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Refactoring module business logic.
 
-2. **[P0] (Effort S) (PS=6.9) Fix Tenants Module Auth Guards**
-   - CF(s): CF1
-   - Dimension(s): D06
-   - Files/Modules: `src/api/routes/tenants.py`
-   - Change Summary: Add `CurrentActiveUser` dependency to all endpoints; add `CurrentSuperuser` to create/delete/modify
-   - Definition of Done: All tenant endpoints return 401 without token; admin endpoints return 403 for non-superusers
-   - Tests/Validation: `tests/security/test_tenants_auth.py` — 401/403 assertions
-   - Observability: `tenant.auth_bypass_attempt` counter
-   - Rollback: Revert commit
-   - Risk of Change: Low
-   - Dependencies: None
-   - Owner Role: Backend Engineer
-   - Risk Reduction: {SEC}
-   - ROI: {Risk avoided}
-   - Out-of-Scope: ABAC policy changes; tenant provisioning workflow
+### [P1] (Effort S) (PS=8.2) Add auth to SLO metrics endpoint
+  - CF(s): CF1
+  - Dimension(s): D06, D13
+  - Files/Modules: `src/api/routes/slo.py`
+  - Change Summary: Import and add `current_user: CurrentUser` to metric endpoints; add `CurrentSuperuser` to any admin endpoints.
+  - Definition of Done: SLO endpoint returns 401 without token.
+  - Tests/Validation: Unit test verifying auth.
+  - Observability: Alert on unauthenticated SLO access.
+  - Rollback: Revert commit.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {SEC}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Changing metric collection logic.
 
-3. **[P0] (Effort S) (PS=6.9) Fix Compliance Endpoints Auth**
-   - CF(s): CF1
-   - Dimension(s): D06
-   - Files/Modules: `src/api/routes/compliance.py`
-   - Change Summary: Add `CurrentUser` dependency to all unauthenticated endpoints
-   - Definition of Done: All compliance endpoints return 401 without token
-   - Tests/Validation: `tests/security/test_compliance_auth.py`
-   - Observability: Log unauthenticated access attempts
-   - Rollback: Revert commit; verify frontend sends JWT
-   - Risk of Change: Low — may require frontend fix if not sending auth header
-   - Dependencies: Verify frontend sends Authorization header on compliance calls
-   - Owner Role: Backend Engineer
-   - Risk Reduction: {SEC}
-   - ROI: {Risk avoided}
-   - Out-of-Scope: Public API tier design
+### [P1] (Effort S) (PS=8.2) Add Runbook depth review and gap fill
+  - CF(s): CF5
+  - Dimension(s): D23
+  - Files/Modules: `docs/runbooks/` (25 files)
+  - Change Summary: Review each runbook for completeness (trigger conditions, step-by-step actions, rollback, contacts); expand thin runbooks with detailed procedures.
+  - Definition of Done: All 25 runbooks have minimum sections: Trigger, Steps, Verification, Rollback, Contacts.
+  - Tests/Validation: Peer review by second engineer.
+  - Observability: N/A (documentation).
+  - Rollback: N/A (additive).
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: SRE / Platform Engineer
+  - Risk reduction: {REL}
+  - ROI: {Time saved}
+  - Out-of-Scope: Creating new runbooks for uncovered scenarios.
 
-4. **[P0] (Effort M) (PS=6.9) Add Tenant Isolation to Incidents/Complaints**
-   - CF(s): CF1, CF2
-   - Dimension(s): D06, D07
-   - Files/Modules: `src/api/routes/incidents.py`, `src/api/routes/complaints.py`
-   - Change Summary: Add `.filter(Model.tenant_id == current_user.tenant_id)` to all list/get queries; create migration to backfill null tenant_ids
-   - Definition of Done: Multi-tenant test proves isolation; null tenant_ids handled
-   - Tests/Validation: `tests/security/test_tenant_isolation.py` — create data in 2 tenants, verify isolation
-   - Observability: `tenant.cross_tenant_query_blocked` counter
-   - Rollback: Remove filter; keep backfill migration (forward-only)
-   - Risk of Change: Medium — null tenant_id records need backfill
-   - Dependencies: Data migration for existing records
-   - Owner Role: Backend Engineer
-   - Risk Reduction: {SEC, DATA}
-   - ROI: {Risk avoided, Revenue protection}
-   - Out-of-Scope: RLS enforcement at database level (separate epic)
+### [P1] (Effort S) (PS=7.0) Remove F401/F841 from flake8 global ignores
+  - CF(s): CF3
+  - Dimension(s): D21
+  - Files/Modules: `.flake8`, multiple `src/` files with unused imports/variables
+  - Change Summary: Remove `F401, F841` from `extend-ignore`; fix all resulting violations by removing unused imports and variables.
+  - Definition of Done: Flake8 passes without F401/F841 in global ignores.
+  - Tests/Validation: CI flake8 job passes.
+  - Observability: Track violation count.
+  - Rollback: Re-add ignores.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Fixing C901 complexity violations.
 
-5. **[P0] (Effort S) (PS=6.9) Create Auth Enforcement Regression Test**
-   - CF(s): CF1
-   - Dimension(s): D06, D15
-   - Files/Modules: Create `tests/security/test_auth_enforcement.py`; create `scripts/validate_auth_coverage.py`
-   - Change Summary: Iterate all registered FastAPI routes; verify every non-exempt endpoint returns 401 without token
-   - Definition of Done: Test discovers all routes; exempt list is explicit and minimal (/healthz, /readyz, /auth/login, /auth/token-exchange, /auth/password-reset/*)
-   - Tests/Validation: Self-testing — add an unprotected route and verify test catches it
-   - Observability: CI job produces auth coverage report
-   - Rollback: Remove test (but why would you)
-   - Risk of Change: Low
-   - Dependencies: QW-01, QW-02 must be done first
-   - Owner Role: Security Engineer
-   - Risk Reduction: {SEC}
-   - ROI: {Risk avoided}
-   - Out-of-Scope: Authorization (RBAC) testing; only covers authentication
+### [P1] (Effort S) (PS=7.0) Add mypy override count CI gate
+  - CF(s): CF3
+  - Dimension(s): D21
+  - Files/Modules: `.github/workflows/ci.yml`, `scripts/validate_mypy_overrides.py` (new)
+  - Change Summary: Add CI step checking mypy override count ≤ 30; create validation script.
+  - Definition of Done: CI fails if override count exceeds ceiling.
+  - Tests/Validation: Deliberately add override; CI fails.
+  - Observability: Override count in quality trend.
+  - Rollback: Remove CI step.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Platform Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Fixing overrides (separate items).
 
-### P1 Items
+### [P1] (Effort S) (PS=6.4) Add CSP header (report-only)
+  - CF(s): CF1
+  - Dimension(s): D06
+  - Files/Modules: `src/main.py` (`SecurityHeadersMiddleware`)
+  - Change Summary: Add `Content-Security-Policy-Report-Only` header with appropriate directives.
+  - Definition of Done: CSP-RO header on all responses; no frontend breakage.
+  - Tests/Validation: Security test for header; browser DevTools check.
+  - Observability: CSP violation reports.
+  - Rollback: Remove header.
+  - Risk of Change: LOW (report-only).
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {SEC}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Enforcing CSP (QW-11).
 
-6. **[P1] (Effort S) (PS=12.3) Align CI Coverage Threshold to 50%**
-   - CF(s): CF5
-   - Dimension(s): D15
-   - Files/Modules: `.github/workflows/ci.yml` (unit-tests, integration-tests jobs)
-   - Change Summary: Change `--cov-fail-under=35` to `--cov-fail-under=50`
-   - Definition of Done: CI enforces 50% coverage; pipeline passes
-   - Tests/Validation: Lower coverage and verify CI fails
-   - Observability: Coverage % in quality trend report
-   - Rollback: Revert to 35 if blocking
-   - Risk of Change: Medium — may require writing tests to reach 50%
-   - Dependencies: Fix skip_on_import_error tests first (item #8)
-   - Owner Role: QA Engineer
-   - Risk Reduction: {REL}
-   - ROI: {Quality uplift}
-   - Out-of-Scope: Raising to 60%+ (Horizon B)
+### [P1] (Effort S) (PS=6.4) Document staging vs production env parity
+  - CF(s): CF5
+  - Dimension(s): D31
+  - Files/Modules: `docs/environments/parity-matrix.md` (new)
+  - Change Summary: Create side-by-side table of all env vars, infrastructure, and feature flags across dev/staging/production.
+  - Definition of Done: Parity matrix exists; linked from README.
+  - Tests/Validation: Peer review.
+  - Observability: N/A.
+  - Rollback: N/A.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Platform Engineer
+  - Risk reduction: {REL}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Automating parity checks.
 
-7. **[P1] (Effort S) (PS=8.2) Create ADR-0001 through ADR-0003**
-   - CF(s): CF5
-   - Dimension(s): D29, D22
-   - Files/Modules: Create `docs/adr/ADR-0001-production-dependencies.md`, `ADR-0002-config-failfast.md`, `ADR-0003-readiness-probe.md`
-   - Change Summary: Write retrospective ADRs based on code references; use standard ADR template
-   - Definition of Done: Each ADR has Context, Decision, Status, Consequences; all code ADR references resolve
-   - Tests/Validation: CI check: `scripts/validate_adr_references.py`
-   - Observability: N/A
-   - Rollback: N/A
-   - Risk of Change: Low
-   - Dependencies: None
-   - Owner Role: Tech Lead
-   - Risk Reduction: {GOV}
-   - ROI: {Quality uplift, Time saved}
-   - Out-of-Scope: Writing ADRs for all past decisions; only the 3 referenced ones
+### [P1] (Effort S) (PS=4.6) Renumber ADRs to unique sequential IDs
+  - CF(s): CF5
+  - Dimension(s): D29, D22
+  - Files/Modules: `docs/adr/*.md`, code references in `src/main.py`, `tests/`, `scripts/`
+  - Change Summary: Rename 8 ADR files to ADR-0001..ADR-0008; create INDEX.md; update code references.
+  - Definition of Done: All ADRs have unique IDs; index exists; code references resolve.
+  - Tests/Validation: Grep for ADR references; all resolve to valid files.
+  - Observability: N/A.
+  - Rollback: Revert renames.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Any Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Writing new ADRs.
 
-8. **[P1] (Effort M) (PS=8.2) Fix Test Harness Drift (skip_on_import_error)**
-   - CF(s): CF2, CF5
-   - Dimension(s): D15, D21
-   - Files/Modules: `tests/unit/test_models.py`, `tests/unit/test_services.py`, all files using skip decorators
-   - Change Summary: Fix broken import paths; update enum references; remove skip decorators; add CI ceiling for skipped tests
-   - Definition of Done: Zero unexplained skipped tests; skip count ceiling in CI
-   - Tests/Validation: All previously skipped tests now run and pass
-   - Observability: Skipped test count in quality trend
-   - Rollback: Re-add skip decorators for individual tests
-   - Risk of Change: Low — mechanical import fixes
-   - Dependencies: None
-   - Owner Role: QA Engineer
-   - Risk Reduction: {REL}
-   - ROI: {Quality uplift}
-   - Out-of-Scope: Writing new behavioral tests (separate item)
+### [P1] (Effort S) (PS=4.6) Add operational health dashboard guide
+  - CF(s): CF4
+  - Dimension(s): D32, D13
+  - Files/Modules: `docs/observability/operations-dashboard-guide.md` (new)
+  - Change Summary: Document how to import 3 dashboard templates; configure Azure Monitor; access live metrics.
+  - Definition of Done: Guide exists; linked from runbooks.
+  - Tests/Validation: Peer review.
+  - Observability: N/A.
+  - Rollback: N/A.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: SRE
+  - Risk reduction: {REL}
+  - ROI: {Time saved}
+  - Out-of-Scope: Creating new dashboard templates.
 
-9. **[P1] (Effort S) (PS=8.2) Create CHANGELOG.md**
-   - CF(s): CF5
-   - Dimension(s): D22, D29
-   - Files/Modules: Create `CHANGELOG.md` at repo root
-   - Change Summary: Keep-a-Changelog format; retroactive v1.0.0 entry; link from README
-   - Definition of Done: CHANGELOG exists with v1.0.0 entry; PR template updated with "update CHANGELOG" checkbox
-   - Tests/Validation: File format validation
-   - Rollback: N/A
-   - Risk of Change: Low
-   - Dependencies: None
-   - Owner Role: Tech Lead
-   - Risk Reduction: {GOV}
-   - ROI: {Quality uplift}
-   - Out-of-Scope: Automated changelog generation
+### [P1] (Effort M) (PS=8.2) Create Playwright config + 3 E2E specs
+  - CF(s): CF2
+  - Dimension(s): D15, D02
+  - Files/Modules: `frontend/playwright.config.ts` (new), `frontend/tests/e2e/` (3 new spec files)
+  - Change Summary: Configure Playwright with baseURL; create specs for login flow, incident lifecycle, audit execution.
+  - Definition of Done: 3 specs pass locally; CI job configured (advisory).
+  - Tests/Validation: `npx playwright test` exits 0.
+  - Observability: E2E pass rate in CI.
+  - Rollback: Delete files.
+  - Risk of Change: LOW.
+  - Dependencies: Frontend dev server.
+  - Owner Role: Frontend Engineer
+  - Risk reduction: {REL}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Full E2E coverage.
 
-10. **[P1] (Effort S) (PS=8.2) Fix Sandbox Postgres Version (15→16)**
-    - CF(s): CF5
-    - Dimension(s): D31
-    - Files/Modules: `docker-compose.sandbox.yml`
-    - Change Summary: Change `postgres:15-alpine` to `postgres:16-alpine`
-    - Definition of Done: All docker-compose files use PG16; integration tests pass
-    - Tests/Validation: `docker-compose -f docker-compose.sandbox.yml up -d` succeeds
-    - Observability: N/A
-    - Rollback: Revert to PG15
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: DevOps Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: PG16-specific feature adoption
+### [P1] (Effort M) (PS=6.4) Create 5 a11y test files (axe-core)
+  - CF(s): CF2
+  - Dimension(s): D03
+  - Files/Modules: `frontend/src/pages/__tests__/*.a11y.test.tsx` (5 new files)
+  - Change Summary: Create axe-core tests for Dashboard, Login, Incidents, Complaints, AuditTemplateLibrary using axe-helper.ts.
+  - Definition of Done: `npm run test:a11y` passes; 5 files exist.
+  - Tests/Validation: CI a11y gate passes.
+  - Observability: A11y test count in quality report.
+  - Rollback: Delete files.
+  - Risk of Change: LOW.
+  - Dependencies: axe-helper.ts (exists).
+  - Owner Role: Frontend Engineer
+  - Risk reduction: {UX}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Fixing a11y violations found.
 
-11. **[P1] (Effort M) (PS=8.2) Define SLO/SLI Document**
-    - CF(s): CF1, CF2
-    - Dimension(s): D13, D05
-    - Files/Modules: Create `docs/observability/slo-definitions.md`
-    - Change Summary: Define SLOs: availability (99.9%), P95 latency (<500ms), error rate (<1%), auth success (>99.5%); map to Azure Monitor queries
-    - Definition of Done: SLOs documented; measurable with existing metrics; team sign-off
-    - Tests/Validation: Run sample Azure Monitor queries to verify metrics exist
-    - Observability: SLO dashboard in Azure Monitor
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: Azure Monitor access
-    - Owner Role: SRE / Platform Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Quality uplift, Risk avoided}
-    - Out-of-Scope: Error budget policies; SLO-based release gating
+### [P1] (Effort M) (PS=6.4) Privacy: implement DSAR request endpoint
+  - CF(s): CF3
+  - Dimension(s): D07
+  - Files/Modules: `src/api/routes/privacy.py` (new), `src/domain/services/dsar_service.py` (new)
+  - Change Summary: Create DSAR (Data Subject Access Request) endpoint; export user's personal data from all modules; generate report.
+  - Definition of Done: User can request their data export; admin can process DSARs; response includes all PII fields.
+  - Tests/Validation: Integration test: create user data across modules; request DSAR; verify all data returned.
+  - Observability: DSAR request counter metric.
+  - Rollback: Remove new route + service.
+  - Risk of Change: LOW (new endpoint).
+  - Dependencies: Data classification doc (exists).
+  - Owner Role: Backend Engineer
+  - Risk reduction: {DATA}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Automated deletion (right to erasure) — separate item.
 
-12. **[P1] (Effort S) (PS=8.2) Add axe-core to Frontend CI**
-    - CF(s): CF2
-    - Dimension(s): D03
-    - Files/Modules: `frontend/package.json`, `.github/workflows/ci.yml` (frontend-tests job)
-    - Change Summary: Install `vitest-axe` or `@axe-core/react`; add accessibility assertions to existing component tests
-    - Definition of Done: CI runs axe-core; initially warning mode, blocking after 2 weeks
-    - Tests/Validation: Introduce known a11y violation; verify detection
-    - Observability: a11y violation count in CI artifacts
-    - Rollback: Remove package and test assertions
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Frontend Engineer
-    - Risk Reduction: {UX}
-    - ROI: {Risk avoided, Quality uplift}
-    - Out-of-Scope: Full WCAG audit; screen reader testing
+### [P2] (Effort S) (PS=4.6) Add Semgrep to CI pipeline
+  - CF(s): CF1
+  - Dimension(s): D06
+  - Files/Modules: `.github/workflows/ci.yml`, `.semgrep.yml` (exists)
+  - Change Summary: Add Semgrep step to security-scan job; `.semgrep.yml` already configured.
+  - Definition of Done: Semgrep runs in CI; high-severity findings block merge.
+  - Tests/Validation: CI job passes; verify known-safe code doesn't trigger.
+  - Observability: Semgrep finding count in security report.
+  - Rollback: Remove CI step.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Platform Engineer
+  - Risk reduction: {SEC}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Custom Semgrep rules.
 
-13. **[P1] (Effort M) (PS=8.2) Write Privacy Impact Assessment (DPIA)**
-    - CF(s): CF2, CF3
-    - Dimension(s): D07
-    - Files/Modules: Create `docs/privacy/dpia-incidents.md`, `docs/privacy/data-classification.md`
-    - Change Summary: DPIA for incident/complaint data (includes employee PII, health data); data classification policy; DSAR process documentation
-    - Definition of Done: DPIA completed for incident and complaint modules; data classification levels defined; DSAR response timeline documented
-    - Tests/Validation: Legal/DPO review
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: DPO/legal availability
-    - Owner Role: Data Protection Officer / Tech Lead
-    - Risk Reduction: {DATA, SEC}
-    - ROI: {Risk avoided, Revenue protection}
-    - Out-of-Scope: DSAR automation endpoint; consent management platform
+### [P2] (Effort S) (PS=4.6) Add Trivy container scan to CI
+  - CF(s): CF5
+  - Dimension(s): D06, D20
+  - Files/Modules: `.github/workflows/ci.yml`
+  - Change Summary: Add Trivy step after Docker build; scan for OS and library vulnerabilities.
+  - Definition of Done: Trivy runs in CI; critical vulnerabilities block merge.
+  - Tests/Validation: CI job passes on current image.
+  - Observability: Trivy finding count.
+  - Rollback: Remove CI step.
+  - Risk of Change: LOW.
+  - Dependencies: Docker build step.
+  - Owner Role: Platform Engineer
+  - Risk reduction: {SEC}
+  - ROI: {Risk avoided}
+  - Out-of-Scope: Fixing found vulnerabilities (separate items).
 
-14. **[P1] (Effort M) (PS=7.0) Fix Top 10 Mypy Override Modules**
-    - CF(s): CF2, CF3
-    - Dimension(s): D21, D09
-    - Files/Modules: `src/services/workflow_engine.py`, `src/services/risk_scoring.py`, `src/domain/services/ai_predictive_service.py`, `src/domain/services/ai_audit_service.py`, `src/infrastructure/cache/redis_cache.py`, `src/api/routes/uvdb.py`, `src/api/routes/planet_mark.py`, plus 3 others with most error codes suppressed
-    - Change Summary: Fix type annotations; add proper return types; resolve attr-defined and arg-type errors; remove corresponding pyproject.toml overrides
-    - Definition of Done: Mypy override count reduced from 27 to ≤17; fixed modules pass mypy strict
-    - Tests/Validation: `mypy src/` passes with reduced overrides; existing tests still pass
-    - Observability: Override count in quality trend
-    - Rollback: Re-add overrides for specific modules
-    - Risk of Change: Medium — type fixes may reveal runtime bugs
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Full mypy strict mode across all modules
+### [P2] (Effort M) (PS=8.2) Load test baseline (k6/Locust) for top 10 endpoints
+  - CF(s): CF2
+  - Dimension(s): D04, D25
+  - Files/Modules: `tests/performance/` (new directory), `tests/performance/k6/` or `tests/performance/locust/`
+  - Change Summary: Create load test scripts for auth, incidents, audits, risks, complaints, standards, users, actions, compliance, health endpoints. Document P95 latency, throughput, error rates.
+  - Definition of Done: Load test results documented in `docs/performance/baseline.md`; P95 latency known.
+  - Tests/Validation: Tests reproducible; CI job configured (nightly, advisory).
+  - Observability: Performance trend tracking.
+  - Rollback: N/A (additive).
+  - Risk of Change: LOW.
+  - Dependencies: Test environment.
+  - Owner Role: QA Engineer
+  - Risk reduction: {PERF}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Performance optimization (Horizon C).
 
-15. **[P1] (Effort M) (PS=6.9) Implement Auth Coverage Validation Script**
-    - CF(s): CF1
-    - Dimension(s): D06
-    - Files/Modules: Create `scripts/validate_auth_coverage.py`; add CI job in `ci.yml`
-    - Change Summary: Parse all route modules; verify auth dependency in function signatures; maintain explicit exempt list; fail on unprotected endpoints
-    - Definition of Done: Script discovers all routes; reports auth coverage percentage; CI job runs on every PR
-    - Tests/Validation: Add unprotected endpoint; verify script catches it
-    - Observability: Auth coverage % in CI summary
-    - Rollback: Remove CI job
-    - Risk of Change: Low
-    - Dependencies: QW-01, QW-02 complete
-    - Owner Role: Security Engineer
-    - Risk Reduction: {SEC}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: RBAC policy validation
+### [P2] (Effort M) (PS=7.0) Fix 10 mypy overrides in critical-path modules
+  - CF(s): CF2, CF3
+  - Dimension(s): D21, D09
+  - Files/Modules: `src/services/workflow_engine.py`, `src/services/risk_scoring.py`, `src/domain/services/audit_service.py`, `src/domain/services/ai_*.py`, `pyproject.toml`
+  - Change Summary: Fix type errors in 10 highest-priority modules; remove their mypy overrides.
+  - Definition of Done: mypy override count ≤ 20; CI passes.
+  - Tests/Validation: mypy passes on fixed modules; no runtime regressions.
+  - Observability: Override count trend.
+  - Rollback: Re-add specific overrides.
+  - Risk of Change: MEDIUM — may reveal bugs.
+  - Dependencies: QW-10 (override ceiling gate).
+  - Owner Role: Backend Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Reaching zero overrides (Horizon C).
 
-16. **[P1] (Effort M) (PS=5.4) Implement 5 Contract Tests**
-    - CF(s): CF2, CF4
-    - Dimension(s): D15, D10
-    - Files/Modules: `tests/contract/test_api_contracts.py`
-    - Change Summary: Replace stub tests with real contract validations for auth/login, incidents CRUD, audit runs, users list, complaints CRUD
-    - Definition of Done: 5 contract tests validate response schemas, status codes, required fields; tests catch breaking changes
-    - Tests/Validation: Deliberately modify endpoint response; verify contract test fails
-    - Observability: Contract test results in CI artifacts
-    - Rollback: Revert to stubs
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: QA Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Quality uplift, Risk avoided}
-    - Out-of-Scope: Consumer-driven contract testing; Pact framework
+### [P2] (Effort M) (PS=6.4) Implement contract tests from OpenAPI spec
+  - CF(s): CF2, CF4
+  - Dimension(s): D15, D10
+  - Files/Modules: `tests/contract/test_api_contracts.py`
+  - Change Summary: Generate contract schemas from runtime OpenAPI spec; validate top 15 most-used endpoints; test request/response shape.
+  - Definition of Done: 15 contract tests pass; CI contract-tests job is non-advisory.
+  - Tests/Validation: Contract tests fail on incompatible schema change.
+  - Observability: Contract test pass rate.
+  - Rollback: N/A (additive).
+  - Risk of Change: LOW.
+  - Dependencies: OpenAPI spec accuracy.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {REL}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Frontend-side contract verification (Horizon C).
 
-### P2 Items
+### [P2] (Effort M) (PS=5.0) Add backend i18n framework
+  - CF(s): CF2
+  - Dimension(s): D27
+  - Files/Modules: `src/core/i18n.py` (new), `src/locales/` (new), error messages in route handlers
+  - Change Summary: Add i18n framework for backend error messages and validation responses; extract hardcoded strings.
+  - Definition of Done: Backend error messages localizable; framework installed.
+  - Tests/Validation: Unit test: set locale; verify translated error message.
+  - Observability: N/A.
+  - Rollback: Remove i18n framework.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {UX}
+  - ROI: {Revenue protection}
+  - Out-of-Scope: Adding additional locales (separate items).
 
-17. **[P2] (Effort L) (PS=8.2) Establish Load Testing Baseline**
-    - CF(s): CF2, CF4
-    - Dimension(s): D04, D25
-    - Files/Modules: Create `tests/performance/` with k6 scripts; create `docs/performance/baseline.md`
-    - Change Summary: k6 load tests for top 10 endpoints; baseline P95/P99 latency, throughput, error rate; fix actions in-memory pagination
-    - Definition of Done: Load test suite runnable locally and in CI; baseline documented; actions pagination refactored to DB-level
-    - Tests/Validation: Load test passes SLO thresholds
-    - Observability: Performance metrics in Azure Monitor
-    - Rollback: Revert actions pagination changes if regression
-    - Risk of Change: Medium (actions refactoring)
-    - Dependencies: SLO definitions (item #11)
-    - Owner Role: Performance Engineer
-    - Risk Reduction: {PERF, REL}
-    - ROI: {Quality uplift, Risk avoided}
-    - Out-of-Scope: Capacity planning; auto-scaling policies
+### [P2] (Effort M) (PS=4.6) Add architecture diagrams to documentation
+  - CF(s): CF5
+  - Dimension(s): D22, D09
+  - Files/Modules: `docs/architecture/` (new directory)
+  - Change Summary: Create C4 diagrams (context, container, component) for the platform; document key integration points.
+  - Definition of Done: 3 architecture diagrams exist; linked from README.
+  - Tests/Validation: Peer review.
+  - Observability: N/A.
+  - Rollback: N/A.
+  - Risk of Change: LOW.
+  - Dependencies: None.
+  - Owner Role: Architect / Senior Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Time saved}
+  - Out-of-Scope: Detailed sequence diagrams.
 
-18. **[P2] (Effort M) (PS=8.2) Comprehensive Environment Parity Validation**
-    - CF(s): CF5
-    - Dimension(s): D31
-    - Files/Modules: `scripts/verify_env_sync.py`, docker-compose files, deploy workflows
-    - Change Summary: Validate all config keys present across dev/staging/prod; verify PG versions match; add IaC for environment provisioning
-    - Definition of Done: Environment parity script validates 100% config key coverage; all docker-compose files use same versions
-    - Tests/Validation: Environment parity check in CI
-    - Observability: Config drift alerts
-    - Rollback: N/A (additive)
-    - Risk of Change: Low
-    - Dependencies: QW-06 (PG version fix)
-    - Owner Role: DevOps Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: Full Terraform/IaC migration
+### [P2] (Effort M) (PS=4.1) Add SLO alerting configuration
+  - CF(s): CF4
+  - Dimension(s): D13, D28
+  - Files/Modules: `docs/observability/slo-alerting.md` (new), Azure Monitor alert rules
+  - Change Summary: Configure alerts based on SLO definitions; 50% error budget → warning, <20% → critical.
+  - Definition of Done: Alerts configured in Azure Monitor; documented.
+  - Tests/Validation: Trigger test alert; verify notification.
+  - Observability: Alert fire rate.
+  - Rollback: Remove alerts.
+  - Risk of Change: LOW.
+  - Dependencies: SLO definitions (exist).
+  - Owner Role: SRE
+  - Risk reduction: {REL}
+  - ROI: {Time saved}
+  - Out-of-Scope: Custom dashboards.
 
-19. **[P2] (Effort M) (PS=8.2) Flesh Out Operational Runbooks**
-    - CF(s): CF1, CF2, CF5
-    - Dimension(s): D23, D32
-    - Files/Modules: `docs/runbooks/` (expand skeletons)
-    - Change Summary: Add detailed procedures, decision trees, screenshots, verification commands; add troubleshooting guides for common issues
-    - Definition of Done: Each runbook tested via tabletop exercise; feedback incorporated
-    - Tests/Validation: Tabletop exercise with on-call team
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: QW-10 (skeleton creation)
-    - Owner Role: SRE / Platform Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Risk avoided, Time saved}
-    - Out-of-Scope: Automated runbook execution
+### [P2] (Effort M) (PS=4.1) Add data retention automation
+  - CF(s): CF3
+  - Dimension(s): D07, D08
+  - Files/Modules: `src/domain/services/data_retention.py` (new), `src/infrastructure/tasks/retention_tasks.py` (new)
+  - Change Summary: Implement configurable data retention policies per data classification level; automated soft-delete of expired data.
+  - Definition of Done: Retention policies configurable; automated cleanup runs; audit trail preserved.
+  - Tests/Validation: Integration test: create data, advance time, verify cleanup.
+  - Observability: Retention job metrics.
+  - Rollback: Disable retention task.
+  - Risk of Change: MEDIUM (data deletion).
+  - Dependencies: Data classification doc (exists).
+  - Owner Role: Backend Engineer
+  - Risk reduction: {DATA}
+  - ROI: {Cost reduction}
+  - Out-of-Scope: Manual data purge requests.
 
-20. **[P2] (Effort M) (PS=8.2) Add Support Documentation**
-    - CF(s): CF2
-    - Dimension(s): D32
-    - Files/Modules: Create `docs/support/`, `docs/troubleshooting/`
-    - Change Summary: FAQ, common issues, diagnostic queries, log analysis guide
-    - Definition of Done: Support docs cover top 10 support scenarios
-    - Tests/Validation: Support team review
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Tech Lead / Support Engineer
-    - Risk Reduction: {REL}
-    - ROI: {Time saved}
-    - Out-of-Scope: Self-service portal; chatbot
+### [P2] (Effort L) (PS=8.2) Build comprehensive behavioral test suite (coverage 60%)
+  - CF(s): CF2, CF5
+  - Dimension(s): D15, D16
+  - Files/Modules: `tests/unit/`, `tests/integration/` (many new test files)
+  - Change Summary: Write behavioral tests for all domain services, critical route handlers, middleware, and utilities. Target coverage from 45% to 60%.
+  - Definition of Done: Coverage ≥60%; zero skip decorators added; all tests test behavior not imports.
+  - Tests/Validation: CI passes at 60% threshold.
+  - Observability: Coverage trend.
+  - Rollback: N/A.
+  - Risk of Change: LOW (additive).
+  - Dependencies: QW-08 (45% threshold) completed.
+  - Owner Role: Backend Engineer
+  - Risk reduction: {REL}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: 80%+ coverage (Horizon C).
 
-21. **[P2] (Effort S) (PS=6.5) Add WCAG 2.1 AA Checklist**
-    - CF(s): CF2
-    - Dimension(s): D03
-    - Files/Modules: Create `docs/accessibility/wcag-checklist.md`
-    - Change Summary: Document current a11y status against WCAG 2.1 AA criteria; identify gaps; prioritize fixes
-    - Definition of Done: Checklist completed; top 10 violations identified
-    - Tests/Validation: Manual screen reader testing of 3 critical flows
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: QW-09 (axe-core results)
-    - Owner Role: Frontend Engineer / UX Designer
-    - Risk Reduction: {UX}
-    - ROI: {Risk avoided, Quality uplift}
-    - Out-of-Scope: Full WCAG AAA compliance
+### [P2] (Effort L) (PS=6.5) FinOps report and Azure cost optimization
+  - CF(s): CF4
+  - Dimension(s): D26
+  - Files/Modules: `docs/cost/` (new directory)
+  - Change Summary: Analyze Azure spend; document resource utilization; identify right-sizing opportunities; implement cost alerts.
+  - Definition of Done: FinOps report published; cost alerts configured.
+  - Tests/Validation: Monthly cost review process documented.
+  - Observability: Cost alert integration.
+  - Rollback: N/A.
+  - Risk of Change: LOW.
+  - Dependencies: Azure billing access.
+  - Owner Role: Platform Engineer / FinOps
+  - Risk reduction: {COST}
+  - ROI: {Cost reduction}
+  - Out-of-Scope: Infrastructure migration.
 
-22. **[P2] (Effort M) (PS=6.5) Cost Optimization Analysis**
-    - CF(s): CF4, CF5
-    - Dimension(s): D26
-    - Files/Modules: Create `docs/cost/azure-cost-analysis.md`
-    - Change Summary: Azure spend breakdown; right-sizing recommendations; reserved instance analysis; FinOps practices document
-    - Definition of Done: Monthly cost report process; optimization opportunities identified with $ impact
-    - Tests/Validation: Cost alert thresholds validated
-    - Observability: Azure Cost Management dashboard
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: Azure billing access
-    - Owner Role: DevOps / Finance
-    - Risk Reduction: {COST}
-    - ROI: {Cost reduction}
-    - Out-of-Scope: Multi-cloud cost analysis
+### [P2] (Effort L) (PS=5.0) Design system maturity: build 11 missing components
+  - CF(s): CF2
+  - Dimension(s): D02, D03
+  - Files/Modules: `frontend/src/components/ui/` (11 new component files)
+  - Change Summary: Build missing components from component inventory: DataTable, Modal, Select, MultiSelect, Tabs, Accordion, Alert, Badge, Breadcrumb, Pagination, Skeleton.
+  - Definition of Done: 11 new components exist; Radix-based; accessible; dark mode; documented.
+  - Tests/Validation: Unit tests for each component; a11y tests for each.
+  - Observability: N/A.
+  - Rollback: N/A.
+  - Risk of Change: LOW (additive).
+  - Dependencies: design-tokens.css (exists).
+  - Owner Role: Frontend Engineer
+  - Risk reduction: {UX}
+  - ROI: {Time saved}
+  - Out-of-Scope: Storybook setup (separate item).
 
-23. **[P2] (Effort M) (PS=5.4) Implement Backend i18n**
-    - CF(s): CF2
-    - Dimension(s): D27
-    - Files/Modules: `src/core/i18n.py` (create), error messages, email templates
-    - Change Summary: Add python-i18n or gettext; externalize user-facing strings in error responses and email templates
-    - Definition of Done: All user-facing backend strings externalized; English locale file complete
-    - Tests/Validation: Test with different locale settings
-    - Observability: N/A
-    - Rollback: Revert to hardcoded strings
-    - Risk of Change: Medium — touches error handling and email service
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {UX}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Full translation to other languages
+### [P2] (Effort L) (PS=4.1) Expand Playwright E2E to 10+ specs
+  - CF(s): CF2
+  - Dimension(s): D15, D02
+  - Files/Modules: `frontend/tests/e2e/` (7+ new spec files)
+  - Change Summary: Expand E2E to cover all 5 persona journeys from personas doc; add risk management, compliance, document control, user management, analytics flows.
+  - Definition of Done: 10+ E2E specs pass; CI job runs on merge.
+  - Tests/Validation: Full Playwright suite passes.
+  - Observability: E2E pass rate.
+  - Rollback: N/A.
+  - Risk of Change: LOW.
+  - Dependencies: QW-06 (Playwright foundation).
+  - Owner Role: Frontend Engineer / QA
+  - Risk reduction: {REL}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Visual regression testing (Horizon C).
 
-24. **[P2] (Effort L) (PS=5.4) Implement Product Analytics**
-    - CF(s): CF2
-    - Dimension(s): D28
-    - Files/Modules: Frontend analytics integration, backend event tracking
-    - Change Summary: Integrate PostHog or Amplitude; track user journeys, feature usage, funnel completion; with GDPR consent
-    - Definition of Done: Top 5 user journeys instrumented; dashboard available; consent mechanism in place
-    - Tests/Validation: Verify events fire in staging; verify consent flow
-    - Observability: Analytics dashboard
-    - Rollback: Remove analytics SDK
-    - Risk of Change: Low
-    - Dependencies: Product team to define tracked events; legal for consent
-    - Owner Role: Product Engineer
-    - Risk Reduction: {UX}
-    - ROI: {Revenue protection, Quality uplift}
-    - Out-of-Scope: A/B testing framework
-
-25. **[P2] (Effort S) (PS=5.0) UX Information Architecture Audit**
-    - CF(s): CF2
-    - Dimension(s): D02
-    - Files/Modules: `frontend/src/App.tsx`, `frontend/src/components/`
-    - Change Summary: Audit route structure and navigation; identify IA issues; propose improvements; document in `docs/ux/ia-audit.md`
-    - Definition of Done: IA audit document with findings and recommendations
-    - Tests/Validation: User testing with 3 representative users
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low (documentation only)
-    - Dependencies: None
-    - Owner Role: UX Designer
-    - Risk Reduction: {UX}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: UI redesign; component library
-
-26. **[P2] (Effort S) (PS=4.6) Document User Journey Maps**
-    - CF(s): CF2
-    - Dimension(s): D01
-    - Files/Modules: Create `docs/user-journeys/`
-    - Change Summary: Define personas; map top 5 user journeys (incident reporter, auditor, risk manager, admin, portal user)
-    - Definition of Done: Journey maps with steps, touchpoints, pain points, opportunities
-    - Tests/Validation: Stakeholder review
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Product Manager / UX
-    - Risk Reduction: {UX}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Customer research; survey design
-
-27. **[P2] (Effort M) (PS=4.6) Compliance Certification Evidence Pack**
-    - CF(s): CF2
-    - Dimension(s): D08
-    - Files/Modules: Create `docs/compliance/certification-status.md`, `docs/compliance/evidence-pack/`
-    - Change Summary: Document ISO certification status; compile evidence pack; identify gaps for external audit
-    - Definition of Done: Evidence pack ready for external auditor review
-    - Tests/Validation: Internal audit review
-    - Observability: N/A
-    - Rollback: N/A
-    - Risk of Change: Low
-    - Dependencies: Compliance team
-    - Owner Role: Compliance Manager
-    - Risk Reduction: {GOV}
-    - ROI: {Revenue protection}
-    - Out-of-Scope: Actual certification audit
-
-28. **[P2] (Effort M) (PS=4.6) Observability Dashboards**
-    - CF(s): CF1-CF5
-    - Dimension(s): D13
-    - Files/Modules: Create `docs/observability/dashboards/`, Azure Monitor/Grafana templates
-    - Change Summary: Create dashboard templates for: API health, DB performance, auth events, business metrics, SLO tracking
-    - Definition of Done: 5 dashboards deployed and accessible to ops team
-    - Tests/Validation: Dashboards show real data from staging
-    - Observability: Meta-monitoring (dashboard health check)
-    - Rollback: Remove dashboard definitions
-    - Risk of Change: Low
-    - Dependencies: SLO definitions (item #11)
-    - Owner Role: SRE
-    - Risk Reduction: {REL}
-    - ROI: {Time saved, Risk avoided}
-    - Out-of-Scope: Custom alerting rules (separate item)
-
-29. **[P2] (Effort S) (PS=4.5) Add Down Migration CI Check**
-    - CF(s): CF5
-    - Dimension(s): D12, D05
-    - Files/Modules: `.github/workflows/ci.yml` — add step in integration-tests job
-    - Change Summary: After `alembic upgrade head`, run `alembic downgrade -1` and verify success
-    - Definition of Done: CI verifies latest migration is reversible
-    - Tests/Validation: Create non-reversible migration; verify CI catches it
-    - Observability: CI artifacts
-    - Rollback: Remove CI step
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {REL, DATA}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: Full migration chain reversibility testing
-
-30. **[P2] (Effort M) (PS=4.5) Extend Idempotency to PUT/PATCH**
-    - CF(s): CF3
-    - Dimension(s): D24
-    - Files/Modules: `src/api/middleware/idempotency.py`
-    - Change Summary: Support `Idempotency-Key` header on PUT and PATCH methods; same Redis-backed caching and SHA-256 payload comparison
-    - Definition of Done: PUT/PATCH with same Idempotency-Key returns cached response; 409 on payload mismatch
-    - Tests/Validation: Integration tests for PUT/PATCH idempotency
-    - Observability: `idempotency.cache_hit` and `idempotency.conflict` metrics
-    - Rollback: Revert middleware change
-    - Risk of Change: Low — backward compatible (only activates when header present)
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {DATA, REL}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: Distributed idempotency across services
-
-31. **[P2] (Effort M) (PS=4.5) Chaos Test Suite for Circuit Breakers**
-    - CF(s): CF1, CF4
-    - Dimension(s): D05
-    - Files/Modules: Create `tests/chaos/`, `tests/chaos/test_circuit_breakers.py`
-    - Change Summary: Test DB disconnect, Redis failure, Azure AD outage scenarios; verify circuit breakers activate and services degrade gracefully
-    - Definition of Done: Chaos tests for all 5 external integrations; all pass
-    - Tests/Validation: Tests run in CI (optional/manual trigger)
-    - Observability: Circuit breaker state changes logged
-    - Rollback: Remove tests
-    - Risk of Change: Low (test-only)
-    - Dependencies: None
-    - Owner Role: SRE
-    - Risk Reduction: {REL}
-    - ROI: {Risk avoided}
-    - Out-of-Scope: Production chaos engineering; Chaos Monkey
-
-32. **[P2] (Effort S) (PS=4.1) Refactor Actions In-Memory Pagination**
-    - CF(s): CF2, CF3
-    - Dimension(s): D04, D25
-    - Files/Modules: `src/api/routes/actions.py`
-    - Change Summary: Replace in-memory multi-entity fetch-sort-paginate with database-level UNION ALL + ORDER BY + LIMIT/OFFSET
-    - Definition of Done: Actions list endpoint uses DB pagination; response identical to current for small datasets
-    - Tests/Validation: Performance test with 10K actions; compare response time before/after
-    - Observability: `actions.query_time_ms` histogram
-    - Rollback: Revert to in-memory pagination
-    - Risk of Change: Medium — query correctness across 6 entity types
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {PERF, REL}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Cursor-based pagination
-
-33. **[P2] (Effort S) (PS=3.0) API Pagination Audit**
-    - CF(s): CF2
-    - Dimension(s): D10
-    - Files/Modules: All route files in `src/api/routes/`
-    - Change Summary: Audit all list endpoints; ensure consistent pagination (limit/offset with max_limit=100); document in API standards
-    - Definition of Done: All list endpoints have pagination; API standards document updated
-    - Tests/Validation: Contract tests verify pagination parameters
-    - Observability: N/A
-    - Rollback: N/A (additive)
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {PERF}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Cursor-based pagination migration
-
-34. **[P2] (Effort S) (PS=3.0) Clean Up alembic.ini Placeholder**
-    - CF(s): CF5
-    - Dimension(s): D12
-    - Files/Modules: `alembic.ini`
-    - Change Summary: Replace `sqlalchemy.url = driver://user:pass@localhost/dbname` with comment explaining runtime override
-    - Definition of Done: No misleading placeholder; comment documents env.py override mechanism
-    - Tests/Validation: `alembic upgrade head` still works
-    - Observability: N/A
-    - Rollback: Revert
-    - Risk of Change: Low
-    - Dependencies: None
-    - Owner Role: Backend Engineer
-    - Risk Reduction: {GOV}
-    - ROI: {Quality uplift}
-    - Out-of-Scope: Alembic configuration refactoring
-
-35. **[P2] (Effort L) (PS=3.0) Storybook Component Library**
-    - CF(s): CF2
-    - Dimension(s): D02, D09
-    - Files/Modules: `frontend/`, create `.storybook/` config
-    - Change Summary: Set up Storybook; document top 20 reusable components; add visual regression tests
-    - Definition of Done: Storybook published; 20 components documented; visual tests in CI
-    - Tests/Validation: Chromatic or Percy visual regression
-    - Observability: N/A
-    - Rollback: Remove Storybook config
-    - Risk of Change: Low (additive)
-    - Dependencies: Design system decisions
-    - Owner Role: Frontend Engineer
-    - Risk Reduction: {UX}
-    - ROI: {Quality uplift, Time saved}
-    - Out-of-Scope: Design tokens; full design system
+### [P2] (Effort L) (PS=4.1) Reduce flake8 max-complexity to 15
+  - CF(s): CF3
+  - Dimension(s): D21
+  - Files/Modules: `.flake8`, complex functions in `src/api/routes/`, `src/domain/services/`
+  - Change Summary: Lower `max-complexity` from 20 to 15; refactor functions exceeding limit; remove per-file C901 ignores.
+  - Definition of Done: Flake8 passes with max-complexity=15; no C901 per-file ignores.
+  - Tests/Validation: CI passes; refactored functions have equivalent tests.
+  - Observability: Complexity metrics.
+  - Rollback: Raise back to 20.
+  - Risk of Change: MEDIUM — refactoring may introduce bugs.
+  - Dependencies: QW-05 (F401/F841 cleanup).
+  - Owner Role: Backend Engineer
+  - Risk reduction: {GOV}
+  - ROI: {Quality uplift}
+  - Out-of-Scope: Achieving max-complexity=10 (aspirational).
 
 ---
 
@@ -821,80 +707,84 @@
 
 | CF | E2E Tests | Integration Tests | Unit Tests | Chaos/Failure Tests | Observability Checks | Release Checks |
 |----|-----------|-------------------|------------|--------------------|--------------------|----------------|
-| **CF1: Auth** | Login→token→access→refresh→logout; Azure AD SSO flow; password reset E2E | Multi-tenant isolation; role-based access for all 48 route modules; token expiry handling | JWT encode/decode; password hashing; Azure AD JWKS validation; rate limiter logic | Redis down → fallback; Azure AD JWKS unreachable → cached keys; brute-force protection | auth.login_success/failure counters; auth.token_refresh; rate_limit.exceeded | Post-deploy auth enforcement check; security headers validated; CVE fix verification |
-| **CF2: Business Workflows** | Incident lifecycle E2E (report→investigate→action→close); audit lifecycle (template→run→finding→CAPA); risk assessment workflow | Reference number generation with concurrency; investigation optimistic locking; CAPA state machine transitions | Risk scoring engine; workflow engine state transitions; email service templating | DB disconnect during incident save → circuit breaker; blob storage failure → evidence upload retry | business.incident_created; business.audit_completed; business.risk_assessed; API P95 latency | Post-deploy smoke: health, incident create, audit template list |
-| **CF3: Data Writes** | Multi-step write with idempotency key; concurrent investigation edit (409 conflict) | Idempotency middleware with payload hash; optimistic locking with version mismatch; transaction rollback | SHA-256 hash computation; audit trail hash chain; enum constraint validation | Redis down during idempotency check → passthrough; DB transaction timeout → rollback | data.idempotency_hit/conflict; data.optimistic_lock_retry; data.write_duration_ms | Post-deploy: verify idempotency middleware active |
-| **CF4: External Integrations** | Email round-trip (send→receive); blob upload→download | Azure AD token exchange; blob storage upload/download/SAS; email SMTP delivery | Circuit breaker state machine; retry with backoff logic; timeout wrapper | Azure Blob 503 → circuit opens → fallback; Gemini AI timeout → graceful degradation | integration.azure_blob.latency; integration.email.delivery_rate; circuit_breaker.state_change | Post-deploy: Azure AD token exchange functional; blob storage accessible |
-| **CF5: Release/Deploy** | Staging deploy→smoke→E2E→production deploy→verify; rollback drill | Migration up/down; config fail-fast; deterministic build verification | Release signoff validation; security waiver parsing; gate summary generation | Migration failure → deploy abort → rollback; health check timeout → deploy fail | deploy.duration_ms; deploy.health_check_attempts; deploy.rollback_count | 5-phase deploy proof; deterministic SHA (3 matches); post-deploy security checks |
+| **CF1: Auth/AuthZ** | Login flow, role-based access, multi-tenant isolation | Auth endpoint 401/403, token refresh, password reset, tenant isolation | JWT creation/validation, password hashing, Azure AD token exchange | Token expiry during session, JWKS endpoint down, Redis unavailable | Auth success rate SLI >99.5%, failed auth counter, rate limit hit counter | Auth enforcement test in CI; all 61 modules verified |
+| **CF2: Business Workflows** | Incident lifecycle (create→investigate→action→close), audit execution (template→run→response→finding), risk assessment flow | CRUD for all entities, state transitions (CAPA), reference number generation, pagination | Domain service logic, factory validation, schema validation | Concurrent reference number generation, DB connection pool exhaustion | Business metric counters (incidents created, audits completed), API latency P95 | Contract tests for top 15 endpoints; coverage ≥45% |
+| **CF3: Data Writes** | Form submission with validation errors, bulk operations | Idempotency collision (duplicate POST), optimistic lock conflict, tenant-scoped writes | Reference number parsing, update utility, pagination utility | Concurrent writes to same entity, DB transaction rollback, DLQ overflow | Idempotency conflict rate, DLQ depth, write latency | Migration roundtrip test; FK constraint validation |
+| **CF4: External Integrations** | Azure AD SSO login, file upload to blob | Email send (SMTP), Redis connectivity, Azure Blob operations | Circuit breaker state transitions, retry logic, cache TTL | Azure AD JWKS down, Redis down, SMTP down, Blob storage down | Circuit breaker state metric, external service latency, error rate per integration | Health check validates all dependencies; `/readyz` covers DB + Redis |
+| **CF5: Release/Deploy** | Smoke test after deploy (health, version, auth) | Migration up/down roundtrip, config validation | Deploy proof script, lockfile validation, release signoff | Rollback drill (revert to previous version), migration failure recovery | Deploy duration, rollback time, SLO error budget consumption | Governance signoff; deterministic SHA; 21+ CI gates; rollback workflow |
 
 ---
 
-## 11. World-Class Checklist (9.5+ Observable Criteria)
+## 11. World-Class Checklist (9.5+ Criteria per Dimension)
 
 | ID | Dimension | Observable 9.5+ Criteria |
-|----|-----------|------------------------|
-| D01 | Product clarity | Documented personas + top 5 journey maps with measured NPS/CSAT; OpenAPI 100% coverage with examples; user story acceptance criteria in all PRs |
-| D02 | UX quality | Storybook with 80%+ component coverage; design tokens documented; Lighthouse UX score ≥ 90; user testing evidence for all major flows |
-| D03 | Accessibility | WCAG 2.1 AA certified; axe-core zero violations in CI; screen reader testing evidence; keyboard navigation verified on all forms |
-| D04 | Performance | P95 latency < 200ms for top 10 endpoints (load test evidence); Lighthouse perf ≥ 90; zero in-memory pagination; CDN for static assets |
-| D05 | Reliability | Chaos tests pass for all external dependencies; SLO ≥ 99.9% measured over 90 days; automated failover for DB + Redis; DLQ depth always < 10 |
-| D06 | Security | Zero unauthenticated endpoints (proven by regression test); zero cross-tenant queries (proven by isolation test); annual penetration test report; OWASP Top 10 mitigation evidence |
-| D07 | Privacy | DPIA for all PII-processing modules; DSAR endpoint with <72h SLA; data classification applied to all models; consent tracking operational |
-| D08 | Compliance | External audit report with zero major findings; cross-standard gap analysis at 95%+ coverage; management review evidence < 90 days old |
-| D09 | Architecture | Zero mypy overrides (all modules type-safe); all business logic in service layer (zero in route handlers); dependency injection audit clean; module coupling metrics |
-| D10 | API design | OpenAPI spec validated in CI; cursor-based pagination on all list endpoints; 100% idempotency coverage on mutations; versioning strategy documented and enforced |
-| D11 | Data model | Zero JSON columns for structured data (all normalized); all models have audit trail mixin; data dictionary documented; ERD auto-generated and current |
-| D12 | Schema versioning | All migrations reversible (CI-verified); migration naming convention enforced; zero placeholder configs; schema diff report per PR |
-| D13 | Observability | SLOs defined and tracked with dashboards; alerting on SLO breach < 5min; distributed tracing with 100% coverage in staging; log-based metrics for all CFs |
-| D14 | Error handling | Unified error envelope on 100% of endpoints; zero unhandled exceptions in production (tracked via error budget); circuit breaker coverage for all external calls |
-| D15 | Testing | Coverage ≥ 80% with behavioral tests; mutation testing score ≥ 70%; contract tests for all public API endpoints; E2E covering all CFs; zero flaky tests |
-| D16 | Test data | Factory coverage for all 27 domain models; PII-safe test data generation; seed data scripts for all environments; snapshot testing for complex queries |
-| D17 | CI quality | All quality gates blocking; zero allowed-failure jobs; custom validation scripts for all governance rules; CI runtime < 15min | ✅ AT 10.0
-| D18 | CD/release | Blue/green or canary deployment; automated rollback on health check failure; feature flag-gated releases; zero-downtime deploys proven | ✅ AT 10.0
-| D19 | Config management | Dynamic config reload without restart; feature flags with analytics; config versioning with audit trail; environment config drift detection |
-| D20 | Dependency management | Lockfile committed and verified; automated dependency updates with test verification; license compliance check; SBOM published per release |
-| D21 | Code quality | Zero mypy overrides; zero type-ignore pragmas above ceiling; Semgrep zero findings; cognitive complexity limits enforced; code review SLA < 24h |
-| D22 | Documentation | ADR for every architectural decision; API guide with examples; developer onboarding guide < 1 day; runbooks for all operational scenarios; CHANGELOG automated |
-| D23 | Operational runbooks | Runbooks for all CFs; tested via quarterly drills; incident response SLA defined and measured; on-call rotation documented |
-| D24 | Data integrity | Idempotency on all mutations; database-level constraints for all enums; automated data consistency checks; zero orphaned records |
-| D25 | Scalability | Load test evidence for 10x current traffic; horizontal scaling verified; database sharding strategy documented; capacity planning reviewed quarterly |
-| D26 | Cost efficiency | Monthly FinOps review; right-sizing recommendations implemented; cost per transaction tracked; reserved instance coverage > 70% |
-| D27 | I18n/L10n | Backend + frontend i18n; 100% string externalization; RTL support verified; 2+ language support with CI key validation |
-| D28 | Analytics/telemetry | Product analytics on all user journeys; funnel conversion tracked; A/B testing framework operational; data-driven feature prioritization evidence |
-| D29 | Governance | ADR for all decisions; CHANGELOG automated; quarterly architecture review; governance dashboard with compliance metrics |
-| D30 | Build determinism | Lockfile committed; digest-pinned images; SBOM per release; reproducible build verification (bit-for-bit where possible) | ✅ AT 10.0
-| D31 | Environment parity | IaC for all environments; drift detection in CI; identical versions across dev/staging/prod; config key coverage 100% |
-| D32 | Supportability | Support runbooks for top 20 issues; diagnostic API endpoints; log analysis guide; mean-time-to-diagnose tracked |
+|----|-----------|--------------------------|
+| D01 | Product clarity & user journeys | All 5 persona journeys mapped end-to-end; journey tests in E2E suite; OpenAPI tags match user mental model |
+| D02 | UX quality & IA | 23+ reusable components in design system; Storybook catalog; consistent IA validated by user testing; Lighthouse UX score ≥90 |
+| D03 | Accessibility | WCAG 2.1 AA audit report with zero critical violations; automated axe-core tests on all pages; screen reader tested; keyboard navigation complete |
+| D04 | Performance (FE+BE) | P95 API latency <200ms documented; Lighthouse perf ≥90; load test baseline for top 10 endpoints; bundle size within budget |
+| D05 | Reliability & resilience | Circuit breakers tested via chaos tests; DLQ depth consistently <10; 99.9% availability over 30 days; graceful degradation tested |
+| D06 | Security engineering | All route modules authenticated (61/61); CSP enforced; Semgrep + Trivy + Bandit + pip-audit in CI; zero critical/high findings; penetration test report |
+| D07 | Privacy & data protection | DSAR workflow operational; data retention automated; DPIA for all PII-processing modules; data classification enforced in code |
+| D08 | Compliance readiness | External audit report available; ISO certification status documented; compliance automation covers all frameworks; evidence pack auto-generated |
+| D09 | Architecture modularity | Zero domain→api layer violations; mypy overrides = 0; clean dependency graph; ADRs for all significant decisions |
+| D10 | API design quality | OpenAPI spec validated in CI; contract tests for top 20 endpoints; consistent pagination/error/auth patterns; versioning strategy documented |
+| D11 | Data model quality | All FK relationships indexed; migration coverage for all models; data dictionary generated from models; no nullable columns without documented reason |
+| D12 | Schema versioning & migrations | Migration up/down roundtrip tested in CI; zero manual migration steps; migration naming convention enforced; rollback tested for latest 5 |
+| D13 | Observability | APM dashboards with real data; SLO alerting configured and tested; distributed tracing across all services; custom metrics for business KPIs |
+| D14 | Error handling & user-safe failures | No raw exception traces in API responses; all error codes documented; error rate SLI <1%; user-facing error messages tested |
+| D15 | Testing strategy | Coverage ≥80%; E2E suite covers all persona journeys; contract tests for all public APIs; mutation testing score ≥70%; zero skip decorators |
+| D16 | Test data & fixtures | Factories for all domain models; test data builder patterns; database seeding for all environments; no hardcoded test data in source |
+| D17 | CI quality gates | ≥20 CI jobs with final gate; all security scans blocking; <15 min total CI time; flaky test rate <1% |
+| D18 | CD/release pipeline | Blue-green or canary deployment; automated rollback on health check failure; <10 min deploy time; zero-downtime releases |
+| D19 | Configuration management | All config validated at startup; feature flags with gradual rollout; config drift detection between environments; secrets rotation automated |
+| D20 | Dependency management | All deps pinned with hashes; weekly automated updates; zero known vulnerabilities; SBOM generated and published |
+| D21 | Code quality & maintainability | mypy strict mode (zero overrides); max-complexity ≤10; zero linter warnings; consistent code style enforced; technical debt tracked |
+| D22 | Documentation quality | Architecture diagrams (C4); API docs auto-generated; runbook for every critical operation; onboarding guide; all docs reviewed within 90 days |
+| D23 | Operational runbooks | Runbook for every SEV-1/2 scenario; runbooks tested quarterly; incident response time documented; post-incident review process |
+| D24 | Data integrity & consistency | Idempotency on all write operations; optimistic locking on concurrent resources; referential integrity enforced; backup verified daily |
+| D25 | Scalability & capacity | Load test results for 10x current traffic; autoscaling configured; read replicas for reporting; CDN for static assets |
+| D26 | Cost efficiency | FinOps report published monthly; resource utilization >70%; cost per transaction tracked; optimization recommendations implemented |
+| D27 | I18n/L10n readiness | 2+ locales fully translated; backend i18n framework; RTL support; locale switching tested; i18n CI gate for missing keys |
+| D28 | Analytics/telemetry | Business KPI dashboards operational; web-vitals tracked in production; A/B testing framework; analytics data retention policy |
+| D29 | Governance & decision records | Sequential ADR index; all ADRs have status; CHANGELOG updated per release; governance process documented; audit trail queryable |
+| D30 | Build determinism | Identical builds on any CI agent; container digest verified; no floating dependencies; reproducibility tested |
+| D31 | Environment parity | Parity matrix documented; automated drift detection; same versions across all environments; config differences documented |
+| D32 | Supportability & operability | Ops dashboard with real-time metrics; on-call rotation documented; runbook links in alert definitions; incident response SLA met |
 
 ---
 
 ## Appendix B: Risk & ROI Tags Summary
 
-| Risk Reduction Tag | Count | Backlog Items |
-|-------------------|-------|---------------|
-| SEC (Security) | 7 | #2, #3, #4, #5, #13, #15 |
-| REL (Reliability) | 12 | #1, #6, #8, #10, #11, #14, #17, #18, #19, #28, #29, #31 |
-| DATA (Data Integrity) | 3 | #4, #29, #30 |
-| PERF (Performance) | 3 | #17, #32, #33 |
-| GOV (Governance) | 4 | #7, #9, #27, #34 |
-| UX (User Experience) | 6 | #12, #21, #23, #24, #25, #26 |
-| COST (Cost) | 1 | #22 |
+| Tag | Count | Items |
+|-----|-------|-------|
+| {SEC} | 7 | QW-01, QW-02, QW-03, QW-11, Semgrep, Trivy, CSP enforcement |
+| {REL} | 8 | QW-06, QW-08, QW-09, Runbook review, E2E expansion, behavioral tests, SLO alerting, dashboard guide |
+| {GOV} | 5 | QW-04, QW-05, QW-10, mypy fixes, complexity reduction |
+| {UX} | 3 | QW-07, a11y tests, design system |
+| {DATA} | 2 | DSAR endpoint, data retention |
+| {PERF} | 1 | Load test baseline |
+| {COST} | 1 | FinOps report |
 
 | ROI Tag | Count |
 |---------|-------|
-| Risk avoided | 16 |
-| Quality uplift | 14 |
+| Risk avoided | 9 |
+| Quality uplift | 10 |
 | Time saved | 4 |
-| Revenue protection | 3 |
-| Cost reduction | 1 |
+| Cost reduction | 2 |
+| Revenue protection | 1 |
 
 ---
 
 ## Appendix C: No-Scope-Creep Guardrails
 
-Each backlog item includes an explicit "Out-of-Scope" line. Key guardrails:
-- Security fixes (items #2-5) scope to auth enforcement only, NOT RBAC policy redesign
-- Testing items (#6, #8, #16) scope to current test framework, NOT new testing framework adoption
-- Documentation items (#7, #9, #10) scope to specific documents, NOT comprehensive documentation overhaul
-- Infrastructure items (#17, #18) scope to validation, NOT IaC migration
-- Performance items (#17, #32) scope to measurement + specific fixes, NOT architecture redesign
+Every backlog item includes an explicit "Out-of-Scope" line. Key guardrails:
+
+1. **Auth fixes** (QW-01/02): Do NOT refactor module business logic.
+2. **Coverage raises**: Do NOT target 80%+ in Horizon A; step incrementally (35→45→60→80).
+3. **CSP**: Deploy report-only first; do NOT enforce until validated.
+4. **Mypy**: Fix 10 overrides per sprint; do NOT attempt all 30 at once.
+5. **E2E**: Start with 3 specs; do NOT build full suite before Playwright is validated.
+6. **Design system**: Build components; do NOT set up Storybook until components are stable.
+7. **Performance**: Establish baselines first; do NOT optimize until bottlenecks are identified.
+8. **FinOps**: Document and analyze first; do NOT change infrastructure until recommendations reviewed.

@@ -1,256 +1,183 @@
-# Evidence Index
+# Evidence Index — World-Class Assessment (Re-assessment #2)
 
-**Assessment Date**: 2026-03-07
-
-This index lists all files referenced in the assessment, grouped by dimension and critical function. All paths are relative to repository root.
+**Date**: 2026-03-07
 
 ---
 
 ## By Critical Function
 
 ### CF1: Authentication & Authorization
-| File | Relevance |
-|------|-----------|
-| `src/core/security.py` | JWT token creation/validation, password hashing |
-| `src/core/azure_auth.py` | Azure AD JWKS validation |
-| `src/api/routes/auth.py` | Auth endpoints (login, refresh, token-exchange, password reset) |
-| `src/api/dependencies/__init__.py` | CurrentUser, CurrentActiveUser, CurrentSuperuser, require_permission |
-| `src/core/uat_safety.py` | Production write protection middleware |
-| `src/api/routes/tenants.py` | **FINDING F-001**: Auth guards commented out |
-| `src/api/routes/compliance.py` | **FINDING F-002**: Missing authentication |
-| `src/infrastructure/middleware/rate_limiter.py` | Per-endpoint rate limiting |
+| File | Dimensions | Role |
+|------|-----------|------|
+| `src/core/security.py` | D06 | JWT HS256, password hashing (bcrypt), token creation/validation |
+| `src/core/azure_auth.py` | D06 | Azure AD B2C token exchange, JWKS validation |
+| `src/api/routes/auth.py` | D06 | 8 auth endpoints (login, refresh, password reset, etc.) |
+| `src/api/dependencies/__init__.py` | D06 | CurrentUser, CurrentSuperuser, CurrentActiveUser DI guards |
+| `src/core/uat_safety.py` | D06 | UAT write protection middleware |
+| `src/infrastructure/middleware/rate_limiter.py` | D06, D05 | Per-endpoint rate limiting (auth 10rpm, default 60rpm) |
+| `tests/unit/test_security.py` | D15 | 14 tests: password hashing, JWT tokens |
+| `tests/unit/test_rate_limiter.py` | D15 | 11 tests: rate limit config, in-memory limiter |
+| `tests/unit/test_uat_safety.py` | D15 | 20 tests: UAT mode, overrides, admin checks |
+| `tests/unit/test_auth_enforcement.py` | D15, D06 | 113 lines: auth enforcement regression |
+| `tests/security/test_owasp_comprehensive.py` | D06, D15 | 31 OWASP Top 10 tests |
+| `SECURITY.md` | D06, D22 | Security posture documentation |
 
-### CF2: Primary Business Workflows
-| File | Relevance |
-|------|-----------|
-| `src/api/routes/incidents.py` | Incident CRUD + lifecycle; **FINDING F-003**: missing tenant filter |
-| `src/api/routes/complaints.py` | Complaint CRUD; **FINDING F-003**: missing tenant filter |
-| `src/api/routes/audits.py` | Audit template + run lifecycle |
-| `src/api/routes/investigations.py` | Investigation lifecycle with optimistic locking |
-| `src/api/routes/capa.py` | CAPA state machine |
-| `src/api/routes/risk_register.py` | Enterprise risk register |
-| `src/api/routes/actions.py` | Cross-entity action management |
-| `src/domain/models/incident.py` | Incident domain model |
-| `src/domain/models/audit.py` | Audit domain model (template-run pattern) |
-| `src/domain/models/risk_register.py` | Enterprise risk model (ISO 31000) |
-| `src/domain/models/complaint.py` | Complaint domain model |
-| `src/domain/models/investigation.py` | Investigation model (optimistic locking) |
+### CF2: Business Workflows
+| File | Dimensions | Role |
+|------|-----------|------|
+| `src/api/routes/incidents.py` | D06, D07, D10 | Incident CRUD with tenant isolation |
+| `src/api/routes/complaints.py` | D06, D07, D10 | Complaint CRUD with tenant isolation |
+| `src/api/routes/rtas.py` | D06, D10 | RTA CRUD with tenant isolation, reference numbers |
+| `src/api/routes/audits.py` | D10 | Audit lifecycle endpoints |
+| `src/api/routes/capa.py` | D14 | CAPA state transitions with improved error messages |
+| `src/api/routes/risks.py` | D06, D10 | Risk CRUD with tenant isolation + pagination |
+| `src/api/routes/policies.py` | D06, D10 | Policy CRUD with tenant isolation |
+| `src/api/routes/standards.py` | D10 | Standards with fixed pagination |
+| `src/api/routes/actions.py` | D10, D25 | Actions with unbounded query cap |
+| `src/domain/services/reference_number.py` | D24 | Reference number generation (MAX/COUNT hybrid) |
+| `src/domain/services/audit_service.py` | D09 | Audit business logic |
+| `src/domain/services/capa_service.py` | D09 | CAPA service with core pagination |
+| `docs/user-journeys/personas-and-journeys.md` | D01 | 5 personas, 5 journey maps |
 
-### CF3: Data Writes & State Transitions
-| File | Relevance |
-|------|-----------|
-| `src/api/middleware/idempotency.py` | POST idempotency with SHA-256 |
-| `src/infrastructure/database.py` | Transaction management, connection pooling |
-| `src/domain/models/base.py` | Mixins (Timestamp, SoftDelete, AuditTrail) |
-| `src/services/workflow_engine.py` | Workflow state machine |
-| `src/services/risk_scoring.py` | Risk scoring engine |
+### CF3: Data Writes + State Transitions
+| File | Dimensions | Role |
+|------|-----------|------|
+| `src/api/middleware/idempotency.py` | D24 | SHA-256 payload dedup, 409 on mismatch |
+| `src/domain/models/investigation.py` | D24 | Optimistic locking (version column) |
+| `src/core/pagination.py` | D09, D24 | Framework-agnostic pagination utility |
+| `src/core/update.py` | D09 | Framework-agnostic update utility |
+| `src/domain/models/base.py` | D11 | TimestampMixin, ReferenceNumberMixin, SoftDeleteMixin, AuditTrailMixin |
+| `src/domain/models/incident.py` | D11, D04 | FK indexes (index=True) on child relationships |
+| `src/domain/models/complaint.py` | D11, D04 | FK indexes on child relationships |
+| `src/domain/models/risk.py` | D11, D04 | FK indexes on child relationships |
+| `src/domain/models/rta.py` | D11, D04 | FK indexes on child relationships |
+| `src/domain/exceptions.py` | D14 | 15-type domain exception hierarchy |
+| `src/api/middleware/error_handler.py` | D14 | Unified error envelope with request_id |
+| `tests/unit/test_core_utils.py` | D15 | Tests for core pagination and update utilities |
 
 ### CF4: External Integrations
-| File | Relevance |
-|------|-----------|
-| `src/infrastructure/storage.py` | Azure Blob / local FS storage |
-| `src/domain/services/email_service.py` | Email service (SMTP, templates) |
-| `src/infrastructure/cache/redis_cache.py` | Redis cache with fallback |
-| `src/infrastructure/tasks/celery_app.py` | Celery task queue (5 queues, 7 periodic jobs) |
-| `src/infrastructure/resilience/` | Circuit breakers, retry, bulkhead |
-| `src/infrastructure/tasks/dlq.py` | Dead letter queue |
-| `src/infrastructure/tasks/dlq_replay.py` | DLQ replay automation |
+| File | Dimensions | Role |
+|------|-----------|------|
+| `src/infrastructure/cache/redis_cache.py` | D05 | Redis caching with graceful fallback |
+| `src/infrastructure/resilience/circuit_breaker.py` | D05 | Dual circuit breaker implementation |
+| `src/domain/services/email_service.py` | D05 | Email with retry (3x backoff) |
+| `src/infrastructure/monitoring/azure_monitor.py` | D13, D28 | OpenTelemetry, 26+ metrics |
+| `src/api/routes/health.py` | D05, D32 | Health probes with Redis connectivity check |
+| `src/api/routes/slo.py` | D13, D28 | Live SLO/SLI metrics endpoint |
+| `src/api/routes/telemetry.py` | D06, D13 | Telemetry with auth (superuser for reset) |
+| `docs/observability/slo-definitions.md` | D13 | 5 SLOs with targets and error budgets |
+| `docs/observability/dashboards/*.json` | D13, D32 | 3 Azure Monitor dashboard templates |
 
 ### CF5: Release/Deploy + Rollback
-| File | Relevance |
-|------|-----------|
-| `.github/workflows/ci.yml` | 21+ CI jobs |
-| `.github/workflows/deploy-staging.yml` | Staging deployment |
-| `.github/workflows/deploy-production.yml` | Production deployment with 5-phase deploy proof |
-| `.github/workflows/rollback-production.yml` | Rollback workflow |
-| `scripts/verify_deploy_deterministic.sh` | Deterministic SHA verification |
-| `scripts/governance/validate_release_signoff.py` | Release signoff validation |
-| `scripts/governance/rollback_drill.py` | Rollback drill |
-| `docs/evidence/release_signoff.json` | Release signoff evidence |
-| `docs/evidence/environment_endpoints.json` | Environment registry |
+| File | Dimensions | Role |
+|------|-----------|------|
+| `.github/workflows/ci.yml` | D17 | 21+ CI jobs, all-checks gate |
+| `.github/workflows/deploy-staging.yml` | D18 | Staging deployment with health verification |
+| `.github/workflows/deploy-production.yml` | D18 | Production with governance signoff, deploy proof |
+| `scripts/verify_deploy_deterministic.sh` | D30 | Deterministic SHA verification |
+| `scripts/governance/validate_release_signoff.py` | D18, D29 | Release signoff validation |
+| `docs/evidence/release_signoff.json` | D29 | Current release signoff artifact |
+| `Dockerfile` | D30, D20 | Multi-stage build, digest pin, lockfile-first |
+| `.github/dependabot.yml` | D20 | Weekly updates for pip, npm, actions |
+| `requirements.txt` + `requirements.lock` | D20, D30 | Dependency management with hash verification |
+| `CHANGELOG.md` | D22, D29 | Keep-a-Changelog format |
 
 ---
 
 ## By Dimension
 
-### D01 Product Clarity
-- `README.md` — Project overview, modules, tech stack
-- `src/main.py` — 21 OpenAPI tags defining API structure
-- `frontend/src/App.tsx` — 82 lazy-loaded routes across 6 groups
+### D01 Product clarity & user journeys
+- `README.md`, `src/main.py` (21 OpenAPI tags), `frontend/src/App.tsx` (82 routes), `docs/user-journeys/personas-and-journeys.md`
 
-### D02 UX Quality
-- `frontend/package.json` — Radix UI, Framer Motion, TailwindCSS, Lucide icons
-- `frontend/src/App.tsx` — Route groups, error boundaries, PageLoader
+### D02 UX quality & IA
+- `docs/ux/information-architecture.md`, `docs/ux/component-inventory.md`, `docs/ux/analytics-baseline.md`, `frontend/src/styles/design-tokens.css`, `frontend/src/components/ui/`
 
 ### D03 Accessibility
-- `frontend/package.json` — eslint-plugin-jsx-a11y
-- `frontend/src/App.tsx` — AccessibilityProvider
+- `docs/accessibility/wcag-checklist.md`, `frontend/src/test/axe-helper.ts`, `frontend/src/components/ui/LiveAnnouncer.tsx`, `frontend/package.json` (jsx-a11y, jest-axe)
 
-### D04 Performance
-- `src/infrastructure/database.py` — pool_size=10, max_overflow=20, statement timeout 30s
-- `src/main.py` — OpenAPI pre-warming
-- `.github/workflows/ci.yml` — performance-budget job (size-limit)
-- `src/infrastructure/cache/redis_cache.py` — LRU, configurable TTLs
+### D04 Performance (FE+BE)
+- `src/infrastructure/database.py` (pool config), `frontend/.size-limit.json`, `lighthouserc.json`, `frontend/src/lib/webVitals.ts`, `frontend/vite.config.ts` (manual chunks)
 
-### D05 Reliability
-- `src/infrastructure/resilience/` — Circuit breakers, retry, bulkhead
-- `src/infrastructure/tasks/dlq.py` — Dead letter queue
-- `src/infrastructure/tasks/dlq_replay.py` — Automated replay
-- `src/main.py` — /healthz, /readyz probes
-- `Dockerfile` — HEALTHCHECK
+### D05 Reliability & resilience
+- `src/infrastructure/resilience/circuit_breaker.py`, `src/infrastructure/tasks/dlq.py`, `src/api/routes/health.py`, `src/infrastructure/cache/redis_cache.py`
 
-### D06 Security
-- `src/main.py` — SecurityHeadersMiddleware (8 headers), RateLimitMiddleware
-- `src/core/config.py` — Production validation (placeholder key rejection)
-- `.semgrep.yml` — 4 custom rules
-- `SECURITY.md` — Vulnerability disclosure
-- `src/infrastructure/encryption/` — Fernet field-level encryption
-- `src/infrastructure/sanitization.py` — HTML sanitization (nh3)
-- `src/infrastructure/file_validation.py` — Magic number verification
-- `Dockerfile` — Non-root user, digest-pinned image
+### D06 Security engineering
+- `src/core/security.py`, `src/main.py` (SecurityHeadersMiddleware), `src/infrastructure/middleware/rate_limiter.py`, `.semgrep.yml`, `.gitleaksignore`, `SECURITY.md`, `docs/SECURITY_WAIVERS.md`, `tests/security/test_owasp_comprehensive.py`, `tests/unit/test_auth_enforcement.py`
 
-### D07 Privacy
-- `src/core/config.py` — Pseudonymization pepper validation
-- `src/infrastructure/logging/` — PIIFilter (regex scrubbing)
-- `src/infrastructure/encryption/` — AES-128-CBC field encryption
-- `src/domain/models/evidence_asset.py` — PII flagging, redaction
+### D07 Privacy & data protection
+- `src/core/config.py` (pseudonymization_pepper), `docs/privacy/dpia-incidents.md`, `docs/privacy/data-classification.md`
 
-### D08 Compliance
-- `src/domain/models/iso27001.py` — ISO 27001:2022 (93 controls)
-- `src/domain/models/ims_unification.py` — Cross-standard mapping
-- `src/domain/models/planet_mark.py` — GHG Protocol
-- `src/domain/models/uvdb_achilles.py` — UVDB Verify B2
-- `src/domain/models/loler.py` — LOLER 1998
+### D08 Compliance readiness
+- `src/domain/models/iso27001.py`, `src/domain/models/ims_unification.py`, `src/domain/models/planet_mark.py`, `src/domain/models/uvdb_achilles.py`
 
-### D09 Architecture
-- Project structure: `src/api/`, `src/domain/`, `src/services/`, `src/infrastructure/`
-- `src/api/__init__.py` — 48 route modules
-- `pyproject.toml` — 27 mypy overrides (GOVPLAT-004)
+### D09 Architecture modularity
+- `src/` directory structure, `src/api/__init__.py`, `src/core/pagination.py`, `src/core/update.py`, `pyproject.toml` (mypy overrides)
 
-### D10 API Design
-- `src/main.py` — Versioned API (/api/v1/), OpenAPI config
-- `src/api/middleware/idempotency.py` — POST idempotency
-- `scripts/check_api_path_drift.py` — Path drift prevention
-- `.github/workflows/ci.yml` — openapi-contract-check job
+### D10 API design quality
+- `src/main.py` (OpenAPI), `src/api/middleware/idempotency.py`, `scripts/check_api_path_drift.py`, `scripts/check_openapi_compatibility.py`
 
-### D11 Data Model
-- `src/domain/models/` — 27 model files
-- `src/domain/models/base.py` — TimestampMixin, SoftDeleteMixin, AuditTrailMixin, ReferenceNumberMixin
+### D11 Data model quality
+- `src/domain/models/` (27 files), `src/domain/models/base.py` (4 mixins), FK indexes across all child models
 
-### D12 Schema Versioning
-- `alembic.ini` — Configuration (placeholder URL: C-003)
-- `alembic/env.py` — Async-aware migration env
-- `alembic/versions/` — 62 migrations (Jan 4 - Mar 6, 2026)
+### D12 Schema versioning & migrations
+- `alembic.ini`, `alembic/env.py`, `alembic/versions/` (63 migrations)
 
 ### D13 Observability
-- `src/infrastructure/monitoring/azure_monitor.py` — 26+ business metrics, tracing
-- `src/infrastructure/logging/` — Structured JSON, correlation IDs, PII filter
-- `src/core/middleware.py` — Request ID propagation
-- `scripts/infra/monitor_alerts.py` — Azure Monitor alert setup
+- `src/infrastructure/monitoring/azure_monitor.py`, `docs/observability/slo-definitions.md`, `docs/observability/dashboards/`, `src/api/routes/slo.py`
 
-### D14 Error Handling
-- `src/api/middleware/error_handler.py` — Unified error envelope, DomainError handling
-- `src/infrastructure/resilience/` — Circuit breaker fallbacks
-- `src/main.py` — Readiness probe 503
+### D14 Error handling & user-safe failures
+- `src/domain/exceptions.py`, `src/api/middleware/error_handler.py`, `src/infrastructure/resilience/`
 
-### D15 Testing
-- `pyproject.toml` — pytest config, coverage fail_under=50
-- `.github/workflows/ci.yml` — 7 test jobs (unit, integration, smoke, e2e, uat-s1, uat-s2, contract)
-- `tests/conftest.py` — Rich fixture set
-- `tests/contract/test_api_contracts.py` — **FINDING F-005**: stub tests
-- `tests/unit/` — **FINDING F-006**: skip_on_import_error
+### D15 Testing strategy
+- `tests/` (104 files, 1,568 functions), `pyproject.toml` (pytest, coverage), `.github/workflows/ci.yml` (7 test jobs), `tests/contract/test_api_contracts.py` (332 lines)
 
-### D16 Test Data
-- `tests/factories/core.py` — 9 factories (Tenant, User, Incident, Complaint, NearMiss, AuditTemplate, CAPAAction, Risk, Policy)
-- `tests/conftest.py` — Data fixtures
-- `tests/uat/conftest.py` — UAT seed data
+### D16 Test data & fixtures
+- `tests/factories/core.py` (9 factories), `tests/conftest.py`, `tests/integration/conftest.py`
 
-### D17 CI Quality Gates
-- `.github/workflows/ci.yml` — 21+ jobs, all-checks final gate
-- `scripts/validate_type_ignores.py` — Type-ignore ceiling
-- `scripts/validate_ci_security_covenant.py` — CI security rules
-- `scripts/check_api_path_drift.py` — API path enforcement
-- `scripts/check_mock_data.py` — Mock data eradication
+### D17 CI quality gates
+- `.github/workflows/ci.yml` (21+ jobs), `scripts/` (12+ validation scripts)
 
-### D18 CD/Release
-- `.github/workflows/deploy-staging.yml` — Staging pipeline
-- `.github/workflows/deploy-production.yml` — 5-phase deploy proof
-- `.github/workflows/rollback-production.yml` — Rollback workflow
-- `scripts/verify_deploy_deterministic.sh` — SHA verification
-- `scripts/governance/validate_release_signoff.py` — Release signoff
+### D18 CD/release pipeline
+- `.github/workflows/deploy-staging.yml`, `.github/workflows/deploy-production.yml`, `scripts/verify_deploy_deterministic.sh`, `scripts/governance/validate_release_signoff.py`
 
-### D19 Configuration
-- `src/core/config.py` — Pydantic BaseSettings, production validation
-- `.env.example` — Configuration template
-- `src/domain/models/feature_flag.py` — Feature flags
-- `scripts/verify_env_sync.py` — Environment sync validation
+### D19 Configuration management
+- `src/core/config.py`, `.env.example`, `src/domain/models/feature_flag.py`, `src/api/routes/feature_flags.py`
 
-### D20 Dependencies
-- `requirements.txt` — Pinned versions
-- `Dockerfile` — Lockfile-first install
-- `.github/dependabot.yml` — Weekly updates
-- `.github/workflows/ci.yml` — sbom, lockfile-check, pip-audit, dependency-review
+### D20 Dependency management
+- `requirements.txt`, `requirements.lock`, `.github/dependabot.yml`, `Dockerfile`
 
-### D21 Code Quality
-- `pyproject.toml` — Black, isort, mypy, pytest configs; **FINDING F-008**: 27 mypy overrides
-- `.semgrep.yml` — Custom static analysis rules
-- `scripts/validate_type_ignores.py` — Type-ignore ceiling (200)
+### D21 Code quality & maintainability
+- `pyproject.toml` (Black, isort, mypy), `.flake8`, `.semgrep.yml`, `scripts/validate_type_ignores.py`
 
-### D22 Documentation
-- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`
-- `docs/STAGE2_COVENANTS.md` — Stage 2.0 covenants
-- `.github/PULL_REQUEST_TEMPLATE.md` — PR template
-- **FINDING F-007**: ADR documents missing
-- **EVIDENCE GAP EG-07**: CHANGELOG.md missing
+### D22 Documentation quality
+- `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, `docs/adr/` (8 ADRs), `docs/runbooks/` (25 runbooks)
 
-### D23 Operational Runbooks
-- `.github/workflows/rollback-production.yml` — Rollback workflow exists
-- `scripts/governance/rollback_drill.py` — Drill script exists
-- **EVIDENCE GAP EG-06**: No actual runbook documents
+### D23 Operational runbooks
+- `docs/runbooks/` (25 files: incident-response.md, rollback.md, database-recovery.md, deployment.md, escalation.md, + 20 more)
 
-### D24 Data Integrity
-- `src/api/middleware/idempotency.py` — SHA-256 idempotency
-- `src/domain/models/investigation.py` — Optimistic locking (version field)
-- `src/api/routes/audit_trail.py` — Hash-chain verification
+### D24 Data integrity & consistency
+- `src/api/middleware/idempotency.py`, `src/domain/models/investigation.py`, `src/domain/services/reference_number.py`, FK indexes
 
-### D25 Scalability
-- `src/infrastructure/database.py` — Connection pooling
-- `src/infrastructure/cache/redis_cache.py` — Caching with LRU
-- `src/infrastructure/resilience/` — Bulkhead pattern
-- `scripts/infra/autoscaling.py` — Azure auto-scaling
+### D25 Scalability & capacity
+- `src/infrastructure/database.py` (pool config), `src/infrastructure/cache/`, `src/infrastructure/resilience/`
 
-### D26 Cost Efficiency
-- `Dockerfile` — Multi-stage build
-- `docker-compose.yml` — Resource limits
-- `scripts/infra/cost_alerts.py` — Cost monitoring
+### D26 Cost efficiency
+- `Dockerfile` (multi-stage), `docker-compose.yml`, `scripts/infra/cost_alerts.py`
 
-### D27 I18n/L10n
-- `frontend/package.json` — i18next, browser language detector
-- `scripts/i18n-check.mjs` — Key completeness validation
+### D27 I18n/L10n readiness
+- `frontend/src/i18n/i18n.ts`, `frontend/src/i18n/locales/en.json` (2,118 lines), `scripts/i18n-check.mjs`
 
-### D28 Analytics/Telemetry
-- `src/infrastructure/monitoring/azure_monitor.py` — 26+ business metrics
-- `src/api/routes/telemetry.py` — Telemetry endpoints
-- `frontend/package.json` — web-vitals
+### D28 Analytics/telemetry
+- `src/infrastructure/monitoring/azure_monitor.py`, `src/api/routes/telemetry.py`, `frontend/src/lib/webVitals.ts`, `docs/ux/analytics-baseline.md`
 
-### D29 Governance
-- `docs/STAGE2_COVENANTS.md` — 5 non-negotiable covenants
-- `docs/evidence/release_signoff.json` — Release signoff
-- `.github/workflows/ci.yml` — Governance jobs
-- `pyproject.toml` — GOVPLAT-004 tracking
+### D29 Governance & decision records
+- `docs/adr/` (8 files), `CHANGELOG.md`, `docs/evidence/release_signoff.json`, `docs/STAGE2_COVENANTS.md`
 
-### D30 Build Determinism
-- `Dockerfile` — Digest-pinned base image, lockfile-first, PYTHONDONTWRITEBYTECODE
-- `scripts/verify_deploy_deterministic.sh` — 3-match SHA verification
-- `.github/workflows/ci.yml` — sbom, lockfile-check
+### D30 Build determinism
+- `Dockerfile`, `scripts/verify_deploy_deterministic.sh`, `scripts/generate_lockfile.sh`, `requirements.lock`
 
-### D31 Environment Parity
-- `docker-compose.yml` — Dev environment
-- `docker-compose.sandbox.yml` — **CONTRADICTION C-002**: PG15 vs PG16
-- `docs/evidence/environment_endpoints.json` — Environment registry
-- `scripts/verify_env_sync.py` — Config sync validation
+### D31 Environment parity
+- `docker-compose.yml`, `docker-compose.sandbox.yml`, `docs/evidence/environment_endpoints.json`, `frontend/staticwebapp.config.json`
 
-### D32 Supportability
-- `src/main.py` — /healthz, /readyz, /api/v1/meta/version
-- `src/infrastructure/logging/` — Structured logging with correlation
-- `src/api/routes/audit_trail.py` — Audit trail module
+### D32 Supportability & operability
+- `src/api/routes/health.py`, `src/main.py` (`/meta/version`), `src/infrastructure/monitoring/`, `docs/runbooks/`
