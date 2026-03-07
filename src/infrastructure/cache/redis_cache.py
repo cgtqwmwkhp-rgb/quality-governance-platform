@@ -21,8 +21,9 @@ from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar, Union
 
-T = TypeVar("T")
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class CacheType(Enum):
@@ -427,4 +428,4 @@ async def invalidate_tenant_cache(tenant_id: int, namespace: str) -> None:
         pattern = f"tenant:{tenant_id}:{namespace}:*"
         await cache.delete_pattern(pattern)
     except Exception:
-        logger.warning("Cache invalidation failed for tenant=%s ns=%s", tenant_id, namespace, exc_info=True)
+        logger.warning("Cache invalidation failed for pattern", exc_info=True)

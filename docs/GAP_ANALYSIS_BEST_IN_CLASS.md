@@ -509,7 +509,7 @@ This document provides a surgical examination of each module in the Quality Gove
 | ERP integration | ❌ Missing | MEDIUM | Cost center, project codes |
 | Asset management integration | ❌ Missing | HIGH | Equipment, vehicle data sync |
 | LMS integration | ❌ Missing | MEDIUM | Training completion sync |
-| Document storage integration | ⚠️ Partial | MEDIUM | SharePoint, OneDrive, Azure Blob |
+| Document storage integration | ⚠️ Partial | MEDIUM | SharePoint, cloud drive storage, Azure Blob |
 | IoT/sensor data integration | ❌ Missing | LOW | Environmental sensors, safety devices |
 | API rate limiting | ✅ Implemented | - | Already in place |
 | Audit logging of API calls | ✅ Implemented | - | Already in place |

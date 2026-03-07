@@ -265,7 +265,7 @@ class EmailService:
             return True
 
         except Exception as e:
-            logger.error("Failed to send email: %s", str(e), exc_info=True)
+            logger.error("Failed to send email to %s: %s", to[:3] + ["***"], str(e), exc_info=True)
             return False
 
     async def send_incident_notification(

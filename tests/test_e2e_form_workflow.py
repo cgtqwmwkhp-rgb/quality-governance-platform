@@ -10,6 +10,13 @@ import pytest
 from httpx import AsyncClient
 
 
+@pytest.fixture(autouse=True)
+def _require_auth_headers(auth_headers: dict):
+    """Skip E2E form workflow tests when auth is unavailable."""
+    if not auth_headers:
+        pytest.skip("E2E form workflow tests require configured auth credentials")
+
+
 class TestAdminFormBuilderE2E:
     """E2E tests for admin form builder workflow."""
 

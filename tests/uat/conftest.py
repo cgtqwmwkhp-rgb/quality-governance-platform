@@ -30,7 +30,7 @@ def pytest_configure(config):
     )
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 async def _seed_default_data():
     """Seed default tenant and user for UAT tests."""
     from sqlalchemy import select
@@ -79,6 +79,14 @@ async def _seed_default_data():
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
     except Exception:
         pass
+
+
+@pytest.fixture(scope="function", autouse=True)
+def _reset_rate_limiter():
+    """Prevent cross-test rate-limit state bleed in UAT suite."""
+    from src.infrastructure.middleware import rate_limiter as rl
+
+    rl._rate_limiter = None
 
 
 @pytest_asyncio.fixture(scope="function")

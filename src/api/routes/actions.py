@@ -237,7 +237,7 @@ async def list_actions(
                     capa_status = CAPAStatus(status_filter)
                     capa_assess_query = capa_assess_query.where(CAPAAction.status == capa_status)
                 except ValueError:
-                    logger.warning("Unknown status filter '%s' for CAPA, skipping", status_filter)
+                    logger.warning("Unknown status filter '%s' for source type, skipping filter", status_filter)
         if source_type == "assessment" and source_reference:
             capa_assess_query = capa_assess_query.where(CAPAAction.source_reference == source_reference)
 
@@ -261,7 +261,7 @@ async def list_actions(
                     capa_status = CAPAStatus(status_filter)
                     capa_ind_query = capa_ind_query.where(CAPAAction.status == capa_status)
                 except ValueError:
-                    logger.warning("Unknown status filter '%s' for CAPA, skipping", status_filter)
+                    logger.warning("Unknown status filter '%s' for source type, skipping filter", status_filter)
         if source_type == "induction" and source_reference:
             capa_ind_query = capa_ind_query.where(CAPAAction.source_reference == source_reference)
 

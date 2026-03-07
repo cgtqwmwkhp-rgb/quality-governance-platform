@@ -11,7 +11,7 @@ from src.api.dependencies import get_current_user
 from src.main import app
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 async def _seed_default_data():
     """Seed default tenant and user for E2E tests."""
     from sqlalchemy import select

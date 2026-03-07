@@ -71,6 +71,32 @@ def client(app):
     return TestClient(app)
 
 
+@pytest.fixture
+def async_client(client):
+    """Async-style adapter around the shared sync test client."""
+
+    class AsyncClientAdapter:
+        async def get(self, url, **kwargs):
+            return client.get(url, **kwargs)
+
+        async def post(self, url, **kwargs):
+            return client.post(url, **kwargs)
+
+        async def put(self, url, **kwargs):
+            return client.put(url, **kwargs)
+
+        async def patch(self, url, **kwargs):
+            return client.patch(url, **kwargs)
+
+        async def delete(self, url, **kwargs):
+            return client.delete(url, **kwargs)
+
+        async def request(self, method, url, **kwargs):
+            return client.request(method, url, **kwargs)
+
+    return AsyncClientAdapter()
+
+
 @pytest.fixture(scope="module")
 def module_client(app):
     """Module-scoped test client."""
@@ -88,15 +114,16 @@ def module_client(app):
 def auth_token(client, test_config) -> Optional[str]:
     """Get authentication token for test user."""
     try:
-        response = client.post(
-            "/api/auth/login",
-            json={
-                "username": test_config.TEST_USER_EMAIL,
-                "password": test_config.TEST_USER_PASSWORD,
-            },
-        )
-        if response.status_code == 200:
-            return response.json().get("access_token")
+        payloads = [
+            {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
+            {"username": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
+        ]
+        paths = ["/api/v1/auth/login", "/api/auth/login"]
+        for path in paths:
+            for payload in payloads:
+                response = client.post(path, json=payload)
+                if response.status_code == 200:
+                    return response.json().get("access_token")
     except Exception:
         pass
     return None
@@ -114,15 +141,16 @@ def auth_headers(auth_token) -> dict:
 def admin_token(client, test_config) -> Optional[str]:
     """Get authentication token for admin user."""
     try:
-        response = client.post(
-            "/api/auth/login",
-            json={
-                "username": test_config.ADMIN_USER_EMAIL,
-                "password": test_config.ADMIN_USER_PASSWORD,
-            },
-        )
-        if response.status_code == 200:
-            return response.json().get("access_token")
+        payloads = [
+            {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
+            {"username": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
+        ]
+        paths = ["/api/v1/auth/login", "/api/auth/login"]
+        for path in paths:
+            for payload in payloads:
+                response = client.post(path, json=payload)
+                if response.status_code == 200:
+                    return response.json().get("access_token")
     except Exception:
         pass
     return None

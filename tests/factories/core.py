@@ -194,7 +194,7 @@ class RiskFactory(factory.Factory):
     risk_score = 9
     risk_level = "medium"
     treatment_strategy = "mitigate"
-    status = "IDENTIFIED"
+    status = "open"
     is_active = True
     created_at = factory.LazyFunction(_utcnow)
     updated_at = factory.LazyFunction(_utcnow)

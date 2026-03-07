@@ -21,12 +21,62 @@ from src.api.schemas.investigation import (
 )
 from src.domain.models.investigation import (
     AssignedEntityType,
+    InvestigationComment,
+    InvestigationCustomerPack,
+    InvestigationRevisionEvent,
     InvestigationRun,
     InvestigationStatus,
     InvestigationTemplate,
 )
 
 router = APIRouter()
+
+
+class ClosureReasonCode:
+    """Stable reason-code constants for closure validation contracts."""
+
+    TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND"
+    MISSING_REQUIRED_FIELD = "MISSING_REQUIRED_FIELD"
+    MISSING_REQUIRED_SECTION = "MISSING_REQUIRED_SECTION"
+    INVALID_ARRAY_EMPTY = "INVALID_ARRAY_EMPTY"
+    LEVEL_NOT_SET = "LEVEL_NOT_SET"
+    STATUS_NOT_COMPLETE = "STATUS_NOT_COMPLETE"
+
+
+def _user_can_access_investigation(user: Any, investigation: InvestigationRun) -> bool:
+    """Authorization helper for investigation-scoped read endpoints."""
+    if getattr(user, "is_superuser", False):
+        return True
+    has_permission = getattr(user, "has_permission", None)
+    if callable(has_permission) and has_permission("investigations:view_all"):
+        return True
+    user_id = getattr(user, "id", None)
+    return user_id in {
+        getattr(investigation, "assigned_to_user_id", None),
+        getattr(investigation, "reviewer_user_id", None),
+        getattr(investigation, "approved_by_id", None),
+        getattr(investigation, "created_by_id", None),
+    }
+
+
+async def _get_investigation_or_404(
+    investigation_id: int,
+    db: AsyncSession,
+    current_user: Any,
+) -> InvestigationRun:
+    """Load investigation and enforce not-found semantics for unauthorized users."""
+    result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
+    investigation = result.scalar_one_or_none()
+    if not investigation or not _user_can_access_investigation(current_user, investigation):
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error_code": "ENTITY_NOT_FOUND",
+                "message": f"Investigation with ID {investigation_id} not found",
+                "details": {"entity_type": "investigation", "entity_id": investigation_id},
+            },
+        )
+    return investigation
 
 
 async def validate_assigned_entity(
@@ -203,6 +253,154 @@ async def create_investigation(
     return investigation
 
 
+@router.get("/{investigation_id:int}/timeline")
+async def get_investigation_timeline(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    event_type: Optional[str] = Query(None),
+):
+    """List revision events for an investigation (deterministic ordering)."""
+    await _get_investigation_or_404(investigation_id, db, current_user)
+
+    query = select(InvestigationRevisionEvent).where(InvestigationRevisionEvent.investigation_id == investigation_id)
+    if event_type:
+        query = query.where(InvestigationRevisionEvent.event_type == event_type)
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+    query = query.order_by(InvestigationRevisionEvent.created_at.desc(), InvestigationRevisionEvent.id.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": e.id,
+                "event_type": e.event_type,
+                "field_path": e.field_path,
+                "version": e.version,
+                "created_at": e.created_at,
+            }
+            for e in events
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": math.ceil(total / page_size) if total else 0,
+    }
+
+
+@router.get("/{investigation_id:int}/comments")
+async def get_investigation_comments(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    include_deleted: bool = Query(False),
+):
+    """List investigation comments with optional deleted visibility."""
+    await _get_investigation_or_404(investigation_id, db, current_user)
+
+    if include_deleted:
+        has_permission = getattr(current_user, "has_permission", None)
+        can_read_deleted = callable(has_permission) and has_permission("investigations:comments:read_deleted")
+        if not getattr(current_user, "is_superuser", False) and not can_read_deleted:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error_code": "ENTITY_NOT_FOUND",
+                    "message": f"Investigation with ID {investigation_id} not found",
+                    "details": {"entity_type": "investigation", "entity_id": investigation_id},
+                },
+            )
+
+    query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
+    if not include_deleted:
+        query = query.where(InvestigationComment.deleted_at.is_(None))
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+    query = query.order_by(InvestigationComment.created_at.desc(), InvestigationComment.id.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    comments = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": c.id,
+                "content": c.content,
+                "author_id": c.author_id,
+                "created_at": c.created_at,
+                "deleted_at": c.deleted_at,
+            }
+            for c in comments
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": math.ceil(total / page_size) if total else 0,
+    }
+
+
+@router.get("/{investigation_id:int}/packs")
+async def get_investigation_packs(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """List customer pack metadata without exposing full content payloads."""
+    await _get_investigation_or_404(investigation_id, db, current_user)
+
+    query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
+    count_query = select(func.count()).select_from(query.subquery())
+    total = await db.scalar(count_query) or 0
+    query = query.order_by(InvestigationCustomerPack.created_at.desc(), InvestigationCustomerPack.id.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    packs = result.scalars().all()
+
+    return {
+        "items": [
+            {
+                "id": p.id,
+                "pack_uuid": p.pack_uuid,
+                "audience": p.audience.value if hasattr(p.audience, "value") else str(p.audience),
+                "generated_at": p.created_at,
+                "checksum": p.checksum_sha256,
+            }
+            for p in packs
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": math.ceil(total / page_size) if total else 0,
+    }
+
+
+@router.get("/{investigation_id:int}/closure-validation")
+async def get_closure_validation(
+    investigation_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Return closure-validation state for a given investigation."""
+    investigation = await _get_investigation_or_404(investigation_id, db, current_user)
+    reasons: list[str] = []
+    if not investigation.level:
+        reasons.append(ClosureReasonCode.LEVEL_NOT_SET)
+    if investigation.status != InvestigationStatus.COMPLETED:
+        reasons.append(ClosureReasonCode.STATUS_NOT_COMPLETE)
+    return {"can_close": len(reasons) == 0, "reasons": reasons}
+
+
 @router.get("/", response_model=InvestigationRunListResponse)
 async def list_investigations(
     request: Request,
@@ -290,7 +488,7 @@ async def list_investigations(
     )
 
 
-@router.get("/{investigation_id}", response_model=InvestigationRunResponse)
+@router.get("/{investigation_id:int}", response_model=InvestigationRunResponse)
 async def get_investigation(
     request: Request,
     investigation_id: int,
@@ -318,7 +516,7 @@ async def get_investigation(
     return investigation
 
 
-@router.patch("/{investigation_id}", response_model=InvestigationRunResponse)
+@router.patch("/{investigation_id:int}", response_model=InvestigationRunResponse)
 async def update_investigation(
     request: Request,
     investigation_id: int,
@@ -713,7 +911,7 @@ async def list_source_records(
     )
 
 
-@router.patch("/{investigation_id}/autosave", response_model=InvestigationRunResponse)
+@router.patch("/{investigation_id:int}/autosave", response_model=InvestigationRunResponse)
 async def autosave_investigation(
     investigation_id: int,
     data: dict,
@@ -802,7 +1000,7 @@ class AddCommentRequest(BaseModel):
         return data
 
 
-@router.post("/{investigation_id}/comments", status_code=201)
+@router.post("/{investigation_id:int}/comments", status_code=201)
 async def add_comment(
     investigation_id: int,
     payload: AddCommentRequest,
@@ -893,7 +1091,7 @@ async def add_comment(
     }
 
 
-@router.post("/{investigation_id}/approve", response_model=InvestigationRunResponse)
+@router.post("/{investigation_id:int}/approve", response_model=InvestigationRunResponse)
 async def approve_investigation(
     investigation_id: int,
     db: DbSession,
@@ -981,7 +1179,7 @@ async def approve_investigation(
     return investigation
 
 
-@router.post("/{investigation_id}/customer-pack")
+@router.post("/{investigation_id:int}/customer-pack")
 async def generate_customer_pack(
     investigation_id: int,
     audience: str,

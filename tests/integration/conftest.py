@@ -10,6 +10,7 @@ the JWT but skips the database lookup.
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import AsyncGenerator, Generator
 
 import jwt
@@ -165,6 +166,7 @@ def _generate_test_jwt(
     tenant_id: int = 1,
     role: str = "admin",
     is_superuser: bool = False,
+    permissions: str | None = None,
 ) -> str:
     """Generate a valid JWT for integration testing."""
     now = datetime.now(timezone.utc)
@@ -178,6 +180,8 @@ def _generate_test_jwt(
         "role": role,
         "is_superuser": is_superuser,
     }
+    if permissions is not None:
+        payload["permissions"] = permissions
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm=TEST_JWT_ALGORITHM)
 
 
@@ -185,7 +189,13 @@ def _mock_user_from_jwt(payload: dict) -> _MockUser:
     """Build a ``_MockUser`` from decoded JWT claims."""
     role = payload.get("role", "viewer")
     is_superuser = payload.get("is_superuser", False)
-    if is_superuser:
+    custom_perms = payload.get("permissions")
+    if isinstance(custom_perms, list):
+        custom_perms = ",".join(custom_perms)
+
+    if custom_perms:
+        perms = custom_perms
+    elif is_superuser:
         perms = ""
     elif role in ("admin", "superadmin"):
         perms = _ADMIN_PERMS
@@ -564,6 +574,29 @@ def near_miss_factory(admin_client):
         return response.json()
 
     return _create
+
+
+@pytest.fixture
+async def near_miss_with_investigation(admin_client, near_miss_factory):
+    """Create a near-miss and linked investigation for source-record tests."""
+    near_miss_data = await near_miss_factory()
+    source_id = near_miss_data["id"]
+    response = await admin_client.post(
+        "/api/v1/investigations/from-record",
+        json={
+            "source_type": "near_miss",
+            "source_id": source_id,
+            "title": f"Investigation for Near Miss {source_id}",
+        },
+    )
+    assert response.status_code == 201, response.text
+    investigation_data = response.json()
+    near_miss = SimpleNamespace(id=source_id)
+    investigation = SimpleNamespace(
+        id=investigation_data["id"],
+        reference_number=investigation_data.get("reference_number"),
+    )
+    return near_miss, investigation
 
 
 def pytest_configure(config):
