@@ -1,7 +1,9 @@
 aiosmtplib==3.0.1 \
     --hash=sha256:43580604b152152a221598be3037f0ae6359c2817187ac4433bd857bc3fc6513 \
     --hash=sha256:abcceae7e820577307b4cda2041b2c25e5121469c0e186764ddf8e15b12064cd
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   sqlalchemy
 aiosqlite==0.20.0 \
     --hash=sha256:36a1deaca0cac40ebe32aac9977a6e2bbc7f5189f23f4a54d5908986729e5bd6 \
     --hash=sha256:6d35c8c256637f4672f843c31021464090805bf925385ac39473fb16eaaca3d7
