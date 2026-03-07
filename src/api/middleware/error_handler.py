@@ -50,6 +50,40 @@ def _build_envelope(
     }
 
 
+def _normalize_http_detail(
+    detail: object,
+    status_code: int,
+) -> tuple[str, str, dict[str, object]]:
+    """Normalize HTTPException detail into (code, message, details)."""
+    default_code = _STATUS_TO_ERROR_CODE.get(status_code, f"HTTP_{status_code}")
+    default_message = _status_phrase(status_code)
+
+    if isinstance(detail, str):
+        return default_code, detail, {}
+
+    if not isinstance(detail, dict):
+        return default_code, default_message, {}
+
+    # Accept nested envelope-style payloads:
+    # {"error": {"code": "...", "message": "...", "details": {...}}}
+    if isinstance(detail.get("error"), dict):
+        error_obj = detail["error"]
+        code = str(error_obj.get("code") or default_code)
+        message = str(error_obj.get("message") or default_message)
+        details_obj = error_obj.get("details")
+        details_dict = details_obj if isinstance(details_obj, dict) else {}
+        return code, message, details_dict
+
+    # Accept direct payloads:
+    # {"code": "...", "message": "...", "details": {...}}
+    # {"error_code": "...", "message": "...", "details": {...}}
+    code = detail.get("code") or detail.get("error_code") or default_code
+    message = detail.get("message") or default_message
+    details_obj = detail.get("details")
+    details_dict = details_obj if isinstance(details_obj, dict) else detail
+    return str(code), str(message), details_dict
+
+
 def _add_cors_headers(request: Request, response: JSONResponse) -> JSONResponse:
     """Add CORS headers directly to error responses as a safety net."""
     origin = request.headers.get("origin")
@@ -92,9 +126,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
-        code = _STATUS_TO_ERROR_CODE.get(exc.status_code, f"HTTP_{exc.status_code}")
-        details: dict[str, object] = exc.detail if isinstance(exc.detail, dict) else {}
-        message = exc.detail if isinstance(exc.detail, str) else _status_phrase(exc.status_code)
+        code, message, details = _normalize_http_detail(exc.detail, exc.status_code)
         resp = JSONResponse(
             status_code=exc.status_code,
             content=_build_envelope(code, message, request_id, details),

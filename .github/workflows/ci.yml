@@ -174,8 +174,8 @@ jobs:
             echo ""
             echo "[FAIL] Configuration drift detected!"
             echo "Please update the files to use correct values:"
-            echo "  - Staging ACA env: qgp-staging-env"
-            echo "  - Staging domain: ashymushroom-85447e68.uksouth.azurecontainerapps.io"
+            echo "  - Staging platform: azure-app-service"
+            echo "  - Staging API base URL: https://app-qgp-staging.azurewebsites.net"
             exit 1
           fi
           
@@ -278,8 +278,7 @@ jobs:
         working-directory: frontend
         run: npx vitest run --coverage --passWithNoTests
 
-      - name: i18n key check (advisory)
-        continue-on-error: true
+      - name: i18n key check (blocking)
         run: node scripts/i18n-check.mjs
 
   sbom:
@@ -323,6 +322,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -336,18 +337,19 @@ jobs:
 
       - name: Verify lockfile is fresh
         run: |
-          if [ -f requirements.lock ]; then
-            pip-compile requirements.txt -o requirements.lock.check --no-header --strip-extras --allow-unsafe --quiet
-            if ! diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
-              echo "[FAIL] requirements.lock is stale. Run: pip-compile requirements.txt -o requirements.lock --no-header --strip-extras --allow-unsafe --generate-hashes"
-              diff requirements.lock requirements.lock.check || true
-              exit 1
-            fi
-            echo "[OK] requirements.lock is up to date"
-          else
-            echo "[WARN] requirements.lock does not exist yet"
-            echo "[INFO] Push to main or run the lockfile-update workflow to generate it"
+          if [ ! -f requirements.lock ]; then
+            echo "[FAIL] requirements.lock is required and missing."
+            echo "[INFO] Run: ./scripts/generate_lockfile.sh"
+            exit 1
           fi
+
+          pip-compile requirements.txt -o requirements.lock.check --no-header --strip-extras --allow-unsafe --generate-hashes --quiet
+          if ! diff -q requirements.lock requirements.lock.check > /dev/null 2>&1; then
+            echo "[FAIL] requirements.lock is stale. Run: ./scripts/generate_lockfile.sh"
+            diff requirements.lock requirements.lock.check || true
+            exit 1
+          fi
+          echo "[OK] requirements.lock is up to date"
 
   integration-tests:
     name: Integration Tests
@@ -405,7 +407,6 @@ jobs:
           python3 scripts/validate_quarantine.py
 
       - name: Run integration tests
-        continue-on-error: true
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
@@ -1182,7 +1183,7 @@ jobs:
       - name: Run contract tests
         run: |
           echo "=== API Contract Tests ==="
-          pytest tests/contract/ -v --tb=short || echo "Contract tests placeholder — stubs only"
+          pytest tests/contract/ -v --tb=short
           echo ""
           echo "[OK] Contract test gate passed"
 

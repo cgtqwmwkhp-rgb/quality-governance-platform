@@ -16,7 +16,7 @@ on:
       staging_verified:
         description: 'Confirm staging has been verified'
         required: true
-        default: false
+        default: 'false'
       reason:
         description: 'Reason for production deployment'
         required: true
@@ -164,15 +164,8 @@ jobs:
       - name: Validate governance UAT + CAB sign-off
         run: |
           if [ ! -f docs/evidence/release_signoff.json ]; then
-            echo "ℹ️ release_signoff.json missing - generating from workflow context"
-            python3 scripts/governance/create_release_signoff.py \
-              --sha "${{ env.RELEASE_SHA }}" \
-              --governance-lead "${{ github.actor }}" \
-              --cab-chair "${{ github.actor }}" \
-              --uat-report-path "docs/evidence/UAT_CAB_SIGNOFF_REPORT_TEMPLATE.md" \
-              --rollback-report-path "docs/runbooks/AUDIT_ROLLBACK_DRILL.md" \
-              --approved-at-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-              --output "docs/evidence/release_signoff.json"
+            echo "❌ release_signoff.json is required and must be provided before production deployment"
+            exit 1
           fi
           python3 scripts/governance/validate_release_signoff.py \
             --file docs/evidence/release_signoff.json \

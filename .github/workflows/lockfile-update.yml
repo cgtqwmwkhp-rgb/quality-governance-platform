@@ -3,7 +3,7 @@ name: Update Requirements Lockfile
 on:
   push:
     branches: [main]
-    paths: ['requirements.txt']
+    paths: ['requirements.txt', 'scripts/generate_lockfile.sh']
   schedule:
     - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
   workflow_dispatch:
@@ -24,19 +24,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install pip-tools
-        run: python -m pip install --upgrade pip pip-tools
-
       - name: Generate lockfile
         run: |
-          pip-compile requirements.txt \
-            -o requirements.lock \
-            --no-header \
-            --strip-extras \
-            --allow-unsafe \
-            --generate-hashes \
-            --quiet
-          echo "[OK] requirements.lock generated with hashes"
+          chmod +x ./scripts/generate_lockfile.sh
+          ./scripts/generate_lockfile.sh
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
