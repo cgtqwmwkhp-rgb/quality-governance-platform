@@ -570,11 +570,13 @@ class TestComplianceScoreAPI:
         data2 = response2.json()
 
         # Both responses should be identical
-        assert len(data1) == 4
-        assert data1 == data2
+        items1 = data1["items"] if isinstance(data1, dict) and "items" in data1 else data1
+        items2 = data2["items"] if isinstance(data2, dict) and "items" in data2 else data2
+        assert len(items1) == 4
+        assert items1 == items2
 
         # Verify order: clause sort_order, then clause_number, then control_number
-        control_numbers = [c["control_number"] for c in data1]
+        control_numbers = [c["control_number"] for c in items1]
         assert control_numbers == ["4.1.1", "4.1.2", "4.2.1", "4.2.2"]
 
     @pytest.mark.asyncio
@@ -624,11 +626,12 @@ class TestComplianceScoreAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["control_number"] == "7.1.1"
-        assert data[0]["clause_number"] == "7.1"
-        assert data[0]["implementation_status"] == "partial"
-        assert data[0]["is_applicable"] is True
+        items = data["items"] if isinstance(data, dict) and "items" in data else data
+        assert len(items) == 1
+        assert items[0]["control_number"] == "7.1.1"
+        assert items[0]["clause_number"] == "7.1"
+        assert items[0]["implementation_status"] == "partial"
+        assert items[0]["is_applicable"] is True
 
     @pytest.mark.asyncio
     async def test_list_controls_not_found(

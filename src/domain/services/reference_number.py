@@ -36,23 +36,29 @@ class ReferenceNumberService:
         model_class: type[Any],
         pattern: str,
     ) -> int:
-        """Get next sequence number, flushing first to see uncommitted inserts."""
+        """Get next sequence number using both MAX and COUNT for robustness."""
         try:
             await db.flush()
         except Exception:
             pass
 
+        max_seq = 0
         result = await db.execute(
             select(func.max(model_class.reference_number)).where(model_class.reference_number.like(pattern))
         )
         max_ref = result.scalar()
-
         if max_ref:
             try:
-                return int(max_ref.split("-")[-1]) + 1
+                max_seq = int(max_ref.split("-")[-1])
             except (ValueError, IndexError):
-                return 1
-        return 1
+                pass
+
+        count_result = await db.execute(
+            select(func.count()).select_from(model_class).where(model_class.reference_number.like(pattern))
+        )
+        count = count_result.scalar() or 0
+
+        return max(max_seq, count) + 1
 
     @classmethod
     async def generate(
