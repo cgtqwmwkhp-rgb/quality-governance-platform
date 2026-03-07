@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -224,12 +225,7 @@ export default function Actions() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-        <span className="ml-3 text-muted-foreground">{t('loading')}</span>
-      </div>
-    )
+    return <TableSkeleton rows={8} columns={5} />
   }
 
   if (error) {

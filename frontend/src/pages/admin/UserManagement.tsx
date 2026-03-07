@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Users, Search, Loader2, Shield, Mail } from 'lucide-react'
+import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import api, { getApiErrorMessage } from '../../api/client'
 import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
@@ -56,11 +57,7 @@ export default function UserManagement() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
+    return <TableSkeleton rows={8} columns={5} />
   }
 
   return (

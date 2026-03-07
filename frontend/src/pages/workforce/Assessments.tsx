@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
+import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, getApiErrorMessage, type AssessmentRun, type AssetType } from '../../api/client'
 import { Button } from '../../components/ui/Button'
@@ -155,9 +156,7 @@ export default function Assessments() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton rows={6} columns={4} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">

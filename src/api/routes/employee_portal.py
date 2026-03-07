@@ -16,6 +16,9 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
+from src.core.config import settings
+
+DEFAULT_PORTAL_TENANT_ID = getattr(settings, "default_tenant_id", 1)
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
@@ -210,12 +213,11 @@ async def submit_quick_report(
             department=report.department,
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
-            # CRITICAL: Set reporter info for My Reports identity linkage
             reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             reporter_email=report.reporter_email if not report.is_anonymous else None,
-            # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_incident_v1",
             source_type="portal",
+            tenant_id=DEFAULT_PORTAL_TENANT_ID,
         )
 
         db.add(incident)
@@ -251,9 +253,9 @@ async def submit_quick_report(
             complainant_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             complainant_email=(report.reporter_email if not report.is_anonymous else None),
             complainant_phone=(report.reporter_phone if not report.is_anonymous else None),
-            # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_complaint_v1",
             source_type="portal",
+            tenant_id=DEFAULT_PORTAL_TENANT_ID,
         )
 
         db.add(complaint)
@@ -299,8 +301,8 @@ async def submit_quick_report(
             reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
             reporter_email=report.reporter_email if not report.is_anonymous else None,
             driver_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_rta_v1",
+            tenant_id=DEFAULT_PORTAL_TENANT_ID,
         )
 
         db.add(rta)
@@ -345,8 +347,8 @@ async def submit_quick_report(
             potential_severity=report.severity.lower(),
             status="REPORTED",
             priority=priority,
-            # AUDIT: Track portal form source for routing traceability
             source_form_id="portal_near_miss_v1",
+            tenant_id=DEFAULT_PORTAL_TENANT_ID,
         )
 
         db.add(near_miss)

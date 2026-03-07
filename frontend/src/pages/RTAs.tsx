@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { rtasApi, RTA, RTACreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -163,11 +164,7 @@ export default function RTAs() {
   )
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
+    return <TableSkeleton rows={8} columns={5} />
   }
 
   return (

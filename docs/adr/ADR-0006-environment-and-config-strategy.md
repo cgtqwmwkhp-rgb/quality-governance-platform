@@ -1,4 +1,4 @@
-# ADR-0002: Environment Strategy and Configuration Hardening
+# ADR-0006: Environment Strategy and Configuration Hardening
 
 **Date**: 2026-01-04
 

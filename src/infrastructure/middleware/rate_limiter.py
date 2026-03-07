@@ -250,7 +250,7 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     config = get_limit_config(request.url.path)
 
     # Authenticated users get higher limits
-    is_authenticated = client_id.startswith("user:")
+    is_authenticated = client_id.startswith("token:")
     limit = config.requests_per_minute
     if is_authenticated:
         limit = int(limit * config.authenticated_multiplier)

@@ -45,11 +45,11 @@ celery>=5.3.0,<6.0.0
 # Push Notifications
 pywebpush>=1.14.0,<2.0.0
 
-# Monitoring (Azure)
-opencensus>=0.11.0,<1.0.0
+# Monitoring (OpenTelemetry + Azure)
 psutil>=5.9.0,<6.0.0
-opencensus-ext-azure>=1.1.0,<2.0.0
-opencensus-ext-requests>=0.8.0,<1.0.0
+opentelemetry-api>=1.20.0,<2.0.0
+opentelemetry-sdk>=1.20.0,<2.0.0
+opentelemetry-instrumentation-fastapi>=0.41b0
 
 # Logging & Context
 python-json-logger>=2.0.0,<3.0.0

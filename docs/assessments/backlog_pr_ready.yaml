@@ -1,680 +1,400 @@
 backlog:
-  - id: BL-001
-    priority: P1
+  - id: B-001
+    priority: P0
     effort: S
-    priority_score: 9.6
-    title: "Fix rate limiter authenticated multiplier bug"
-    cfs: [CF1]
+    priority_score: 1.5
+    title: Fix rate limiter auth prefix bug
+    cf: [CF1]
     dimensions: [D06, D05]
-    files: ["src/infrastructure/middleware/rate_limiter.py"]
-    change_summary: "Change client_id.startswith('user:') to client_id.startswith('token:') on L253"
-    definition_of_done: "Authenticated users get 2x rate limit multiplier"
-    tests: "Unit test for is_authenticated with token: and ip: prefixes"
-    observability: "Log rate limit hits with is_authenticated flag"
-    rollback: "Revert single line"
+    files: [src/infrastructure/middleware/rate_limiter.py]
+    change_summary: Replace "user:" with "token:" in startswith check at line 253
+    definition_of_done: Authenticated requests receive 2x rate limit multiplier
+    tests: Unit test asserting token-prefixed client_id activates multiplier
+    observability: Log rate_limit.authenticated_multiplier_applied event
+    rollback: Revert one line
     risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
     risk_reduction: [SEC, REL]
-    roi: [Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT change limit values themselves"
-    owner_role: "Backend Engineer"
+    roi: Risk avoided
+    out_of_scope: Changing rate limit values; adding per-user limits
 
-  - id: BL-002
+  - id: B-002
     priority: P1
     effort: S
     priority_score: 9.6
-    title: "Mount SLO router in API"
-    cfs: [CF4]
-    dimensions: [D13, D28]
-    files: ["src/api/__init__.py"]
-    change_summary: "Add slo import and include_router(slo.router, prefix='/slo', tags=['SLO'])"
-    definition_of_done: "GET /api/v1/slo/current returns valid response"
-    tests: "Integration test for SLO endpoints; contract test for response schema"
-    observability: "SLO endpoint response time metric"
-    rollback: "Remove include_router line"
-    risk_of_change: Low
-    risk_reduction: [REL, GOV]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT implement new SLO metrics"
-    owner_role: "Backend Engineer"
-
-  - id: BL-003
-    priority: P1
-    effort: S
-    priority_score: 8.2
-    title: "Add tenant_id to portal-created records"
-    cfs: [CF3]
-    dimensions: [D24, D06]
-    files: ["src/api/routes/employee_portal.py", "src/core/config.py"]
-    change_summary: "Add default_portal_tenant_id to Settings; set on Incident/Complaint creation"
-    definition_of_done: "Portal records have valid tenant_id"
-    tests: "Integration test: POST portal report → record has tenant_id"
-    observability: "Alert on records with null tenant_id"
-    rollback: "Remove tenant_id assignment"
-    risk_of_change: Low
-    risk_reduction: [DATA, SEC]
-    roi: [Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT add auth to portal"
-    owner_role: "Backend Engineer"
-
-  - id: BL-004
-    priority: P1
-    effort: S
-    priority_score: 7.0
-    title: "Remove flake8 F401/F841 global ignores"
-    cfs: [CF2]
-    dimensions: [D21]
-    files: [".flake8", "multiple source files"]
-    change_summary: "Remove F401, F841 from extend-ignore; fix all violations"
-    definition_of_done: "flake8 passes without F401/F841 ignores"
-    tests: "CI code-quality job passes"
-    observability: "Track flake8 violation count"
-    rollback: "Re-add ignores"
-    risk_of_change: Low
-    risk_reduction: [GOV]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT reduce max-complexity"
-    owner_role: "Backend Engineer"
-
-  - id: BL-005
-    priority: P1
-    effort: S
-    priority_score: 4.6
-    title: "Renumber ADRs + create index"
-    cfs: [CF5]
-    dimensions: [D29, D22]
-    files: ["docs/adr/ADR-*.md", "docs/adr/README.md"]
-    change_summary: "Renumber to ADR-0001 through ADR-0009; create index"
-    definition_of_done: "No duplicate ADR numbers; index file complete"
-    tests: "CI script validates no duplicate numbers"
-    observability: "N/A"
-    rollback: "Revert renames"
-    risk_of_change: Low
-    risk_reduction: [GOV]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT create new ADRs"
-    owner_role: "Tech Lead"
-
-  - id: BL-006
-    priority: P1
-    effort: M
-    priority_score: 9.6
-    title: "Raise test coverage to 50%"
-    cfs: [CF2]
+    title: Raise coverage threshold to 50% + add tests
+    cf: [CF2a, CF2b, CF2c]
     dimensions: [D15]
-    files: ["pyproject.toml", "tests/unit/"]
-    change_summary: "Write unit tests for incident_service, audit_service, reference_number; raise fail_under to 50"
-    definition_of_done: "pytest --cov-fail-under=50 passes"
-    tests: "CI unit-tests job at 50% threshold"
-    observability: "Coverage trend via quality_trend"
-    rollback: "Lower threshold temporarily"
-    risk_of_change: Medium
-    risk_reduction: [REL]
-    roi: [Quality uplift, Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT target 80%+"
-    owner_role: "Backend Engineer"
-
-  - id: BL-007
-    priority: P1
-    effort: M
-    priority_score: 8.2
-    title: "Swap OpenCensus → OpenTelemetry dependencies"
-    cfs: [CF4]
-    dimensions: [D13, D20, D28]
-    files: ["requirements.txt", "requirements.lock", "src/infrastructure/monitoring/azure_monitor.py"]
-    change_summary: "Remove opencensus; add opentelemetry packages; regenerate lockfile"
-    definition_of_done: "_HAS_OTEL = True in startup logs; traces in Azure Monitor"
-    tests: "Integration test: opentelemetry imports succeed; trace_id in logs"
-    observability: "Distributed traces visible in Azure Monitor"
-    rollback: "Revert to opencensus deps"
-    risk_of_change: Medium
-    risk_reduction: [REL]
-    roi: [Quality uplift]
-    dependencies: ["Azure Monitor connection string"]
-    out_of_scope: "Does NOT add custom spans"
-    owner_role: "Platform Engineer"
-
-  - id: BL-008
-    priority: P1
-    effort: M
-    priority_score: 7.0
-    title: "Reduce mypy overrides from 30 to 20"
-    cfs: [CF2, CF3]
-    dimensions: [D21, D09]
-    files: ["pyproject.toml", "src/ (10 highest-priority override modules)"]
-    change_summary: "Fix type errors in workflow_engine, risk_scoring, audit_service; remove overrides"
-    definition_of_done: "mypy overrides count <= 20"
-    tests: "mypy passes with fewer overrides; CI enforces count ceiling"
-    observability: "Override count in quality trend"
-    rollback: "Re-add overrides for specific module"
-    risk_of_change: Low-Medium
-    risk_reduction: [REL, GOV]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT target zero overrides"
-    owner_role: "Backend Engineer"
-
-  - id: BL-009
-    priority: P1
-    effort: M
-    priority_score: 6.4
-    title: "Enhance 5 operational runbooks"
-    cfs: [CF5]
-    dimensions: [D23]
-    files: ["docs/runbooks/incident-response.md", "docs/runbooks/deployment.md", "docs/runbooks/rollback.md", "docs/runbooks/database-recovery.md", "docs/runbooks/security-monitoring.md"]
-    change_summary: "Add decision trees, command snippets, verification steps to each"
-    definition_of_done: "Each runbook has trigger criteria, step-by-step commands, verification checks"
-    tests: "Tabletop exercise walkthrough"
-    observability: "N/A"
-    rollback: "N/A (documentation)"
+    files: [pyproject.toml, tests/unit/test_auth_routes.py, tests/unit/test_incident_service.py]
+    change_summary: Change fail_under=35 to 50; add unit tests for auth and service code
+    definition_of_done: pytest --cov --cov-fail-under=50 passes
+    tests: CI unit-tests job green at 50%
+    observability: Coverage trend via quality-trend CI job
+    rollback: Lower threshold back to 35
     risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
     risk_reduction: [REL]
-    roi: [Risk avoided, Time saved]
-    dependencies: []
-    out_of_scope: "Does NOT create new runbooks"
-    owner_role: "Platform Engineer"
+    roi: Quality uplift
+    out_of_scope: Reaching 70%+ in this PR
 
-  - id: BL-010
+  - id: B-003
     priority: P1
-    effort: M
+    effort: S
     priority_score: 6.4
-    title: "Create environment parity documentation"
-    cfs: [CF5]
-    dimensions: [D31]
-    files: ["docs/infrastructure/environment-parity.md"]
-    change_summary: "Table: staging vs prod for compute, DB, Redis, feature flags, env vars"
-    definition_of_done: "All infrastructure components documented; CI drift check added"
-    tests: "CI script compares env var lists"
-    observability: "N/A"
-    rollback: "N/A"
-    risk_of_change: Low
+    title: Fix OpenTelemetry dependencies
+    cf: [CF4]
+    dimensions: [D13, D28]
+    files: [requirements.txt]
+    change_summary: Replace opencensus with opentelemetry-sdk, opentelemetry-instrumentation-fastapi, azure-monitor-opentelemetry-exporter
+    definition_of_done: _HAS_OTEL=True at runtime; Azure Monitor shows distributed traces
+    tests: Import test; smoke test asserting tracing active
+    observability: Traces visible in Azure Monitor
+    rollback: Revert requirements.txt; graceful fallback via try/except
+    risk_of_change: Medium
+    dependencies: None
+    owner_role: Platform engineer
     risk_reduction: [REL]
-    roi: [Risk avoided]
-    dependencies: ["Staging and production env access"]
-    out_of_scope: "Does NOT change infrastructure"
-    owner_role: "Platform Engineer"
+    roi: Quality uplift
+    out_of_scope: Custom span instrumentation; trace sampling tuning
 
-  - id: BL-011
+  - id: B-004
+    priority: P1
+    effort: S
+    priority_score: 6.4
+    title: Assign tenant_id in portal endpoints
+    cf: [CF3]
+    dimensions: [D24, D06]
+    files: [src/api/routes/employee_portal.py]
+    change_summary: Set tenant_id on portal-created records from portal auth context
+    definition_of_done: All portal-created records have non-null tenant_id
+    tests: Integration test asserting tenant_id populated
+    observability: Audit event includes tenant_id
+    rollback: Revert portal route changes
+    risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
+    risk_reduction: [SEC, DATA]
+    roi: Risk avoided
+    out_of_scope: Multi-tenant portal login
+
+  - id: B-005
+    priority: P1
+    effort: S
+    priority_score: 5.0
+    title: Standardize auth errors to api_error()
+    cf: [CF1]
+    dimensions: [D14, D10, D21]
+    files: [src/api/routes/auth.py]
+    change_summary: Replace 7 plain-string HTTPException details with api_error(ErrorCode.*, ...)
+    definition_of_done: All auth error responses contain structured JSON envelope
+    tests: Integration tests asserting 401/403 bodies have code field
+    observability: N/A
+    rollback: Revert auth.py
+    risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
+    risk_reduction: [UX]
+    roi: Quality uplift
+    out_of_scope: Changing auth flow logic
+
+  - id: B-006
     priority: P1
     effort: M
     priority_score: 5.0
-    title: "Write 5 accessibility test files"
-    cfs: [CF2]
+    title: Add 3 accessibility test files
+    cf: [CF2a]
     dimensions: [D03]
-    files: ["frontend/src/pages/__tests__/Dashboard.a11y.test.tsx", "Login.a11y.test.tsx", "Incidents.a11y.test.tsx", "Complaints.a11y.test.tsx", "AuditExecution.a11y.test.tsx"]
-    change_summary: "jest-axe tests for 5 key pages"
-    definition_of_done: "npm run test:a11y passes; zero critical violations"
-    tests: "CI frontend-tests includes a11y check"
-    observability: "A11y violation count in CI output"
-    rollback: "N/A (additive)"
+    files: [frontend/src/pages/Dashboard.a11y.test.tsx, Login.a11y.test.tsx, Incidents.a11y.test.tsx]
+    change_summary: Create axe-core-based a11y tests for 3 key pages
+    definition_of_done: npm run test:a11y passes with 0 violations
+    tests: CI frontend-tests job includes a11y suite
+    observability: Test results in JUnit XML
+    rollback: Delete test files
     risk_of_change: Low
-    risk_reduction: [UX]
-    roi: [Risk avoided, Quality uplift]
-    dependencies: ["jest-axe (already installed)"]
-    out_of_scope: "Does NOT fix a11y violations"
-    owner_role: "Frontend Engineer"
+    dependencies: None
+    owner_role: Frontend engineer
+    risk_reduction: [UX, GOV]
+    roi: Quality uplift
+    out_of_scope: WCAG AAA; fixing violations found
 
-  - id: BL-012
+  - id: B-007
     priority: P1
-    effort: M
-    priority_score: 4.6
-    title: "Add optimistic locking to AuditRun"
-    cfs: [CF2, CF3]
-    dimensions: [D24, D11]
-    files: ["src/domain/models/audit.py", "alembic/versions/", "src/api/routes/audits.py"]
-    change_summary: "Add version column; check on PUT/PATCH; return 409 on stale"
-    definition_of_done: "Concurrent PUT with stale version returns 409"
-    tests: "Integration test: concurrent update → 409 Conflict"
-    observability: "409 Conflict count metric"
-    rollback: "Revert migration + model change"
-    risk_of_change: Low-Medium
-    risk_reduction: [DATA]
-    roi: [Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT add locking to all models"
-    owner_role: "Backend Engineer"
-
-  - id: BL-013
-    priority: P1
-    effort: M
-    priority_score: 4.5
-    title: "Create 3 Playwright E2E specs"
-    cfs: [CF2]
-    dimensions: [D15, D02]
-    files: ["frontend/tests/e2e/login.spec.ts", "incident-crud.spec.ts", "dashboard.spec.ts"]
-    change_summary: "E2E specs for login → dashboard → create incident → verify in list"
-    definition_of_done: "npx playwright test passes; CI job configured"
-    tests: "Screenshots on failure stored as artifacts"
-    observability: "E2E pass rate in CI"
-    rollback: "N/A (additive)"
-    risk_of_change: Low
-    risk_reduction: [UX, REL]
-    roi: [Quality uplift]
-    dependencies: ["Playwright CI job setup"]
-    out_of_scope: "Does NOT cover all 71 pages"
-    owner_role: "Frontend Engineer"
-
-  - id: BL-014
-    priority: P1
-    effort: L
-    priority_score: 8.2
-    title: "Performance baseline (k6 load tests)"
-    cfs: [CF2]
-    dimensions: [D04, D25]
-    files: ["tests/load/", "docs/evidence/load-test-results/"]
-    change_summary: "k6 scripts for top 5 endpoints; run against staging"
-    definition_of_done: "Results documented; P95 < 500ms; zero errors under 100 concurrent"
-    tests: "Results in docs/evidence/load-test-results/"
-    observability: "Performance regression alerts"
-    rollback: "N/A (additive)"
-    risk_of_change: Low
-    risk_reduction: [PERF]
-    roi: [Quality uplift, Risk avoided]
-    dependencies: ["k6 installed", "staging environment"]
-    out_of_scope: "Does NOT optimize; only measures"
-    owner_role: "Platform Engineer"
-
-  - id: BL-015
-    priority: P1
-    effort: L
-    priority_score: 7.0
-    title: "Reduce flake8 max-complexity to 15"
-    cfs: [CF2]
-    dimensions: [D21]
-    files: [".flake8", "complex source files"]
-    change_summary: "Lower max-complexity from 20 to 15; refactor complex functions"
-    definition_of_done: "flake8 passes with max-complexity=15"
-    tests: "CI code-quality job passes"
-    observability: "Complexity violation count"
-    rollback: "Raise back to 20"
-    risk_of_change: Medium
-    risk_reduction: [GOV]
-    roi: [Quality uplift]
-    dependencies: ["BL-004 (F401/F841 fix first)"]
-    out_of_scope: "Does NOT target complexity=10"
-    owner_role: "Backend Engineer"
-
-  - id: BL-016
-    priority: P2
     effort: S
     priority_score: 4.6
-    title: "Add CSP report-uri"
-    cfs: [CF1]
+    title: Renumber ADRs sequentially
+    cf: []
+    dimensions: [D29]
+    files: [docs/adr/]
+    change_summary: Rename 8 ADR files to sequential ADR-0001 through ADR-0008
+    definition_of_done: 8 unique ADR numbers; no collisions; cross-references updated
+    tests: Script to verify no duplicate numbers
+    observability: N/A
+    rollback: Rename back
+    risk_of_change: Low
+    dependencies: None
+    owner_role: Any engineer
+    risk_reduction: [GOV]
+    roi: Quality uplift
+    out_of_scope: Writing new ADRs
+
+  - id: B-008
+    priority: P1
+    effort: S
+    priority_score: 4.6
+    title: Add Gitleaks secret scanning to CI
+    cf: [CF5]
     dimensions: [D06]
-    files: ["src/main.py"]
-    change_summary: "Add report-uri directive to CSP header"
-    definition_of_done: "CSP violations reported to backend endpoint"
-    tests: "Inject script → CSP report received"
-    observability: "CSP violation count metric"
-    rollback: "Remove report-uri directive"
+    files: [.github/workflows/ci.yml, .gitleaks.toml]
+    change_summary: Add Gitleaks GitHub Action step; create allowlist config
+    definition_of_done: CI blocks on detected secrets
+    tests: CI passes with clean scan
+    observability: Gitleaks scan results in CI logs
+    rollback: Remove CI step
     risk_of_change: Low
+    dependencies: None
+    owner_role: Platform engineer
     risk_reduction: [SEC]
-    roi: [Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT remove unsafe-inline yet"
-    owner_role: "Backend Engineer"
+    roi: Risk avoided
+    out_of_scope: Pre-commit hooks
 
-  - id: BL-017
-    priority: P2
+  - id: B-009
+    priority: P1
     effort: S
-    priority_score: 4.6
-    title: "Automate release_signoff.json SHA update"
-    cfs: [CF5]
-    dimensions: [D18]
-    files: [".github/workflows/deploy-production.yml", "release_signoff.json"]
-    change_summary: "Add workflow step to auto-update SHA in signoff before governance check"
-    definition_of_done: "Production deploy without manual SHA override"
-    tests: "Deploy workflow passes governance gate automatically"
-    observability: "Deploy success rate metric"
-    rollback: "Revert workflow change"
+    priority_score: 3.2
+    title: Add health check triage runbook
+    cf: [CF5]
+    dimensions: [D23, D32]
+    files: [docs/runbooks/health-check-triage.md]
+    change_summary: Document /readyz failure triage for DB and Redis
+    definition_of_done: Runbook covers all dependency failures
+    tests: Peer review by ops
+    observability: N/A
+    rollback: N/A
     risk_of_change: Low
+    dependencies: None
+    owner_role: SRE
     risk_reduction: [REL]
-    roi: [Time saved]
-    dependencies: []
-    out_of_scope: "Does NOT change governance process"
-    owner_role: "DevOps Engineer"
+    roi: Time saved
+    out_of_scope: Automated remediation
 
-  - id: BL-018
-    priority: P2
-    effort: S
-    priority_score: 4.1
-    title: "Raise frontend vitest coverage to 20%"
-    cfs: [CF2]
-    dimensions: [D15]
-    files: ["frontend/vitest.config.ts", "frontend/src/**/__tests__/"]
-    change_summary: "Raise threshold from 3% to 20%; write tests for critical components"
-    definition_of_done: "npm run test:coverage passes at 20%"
-    tests: "CI frontend-tests job enforces"
-    observability: "Frontend coverage trend"
-    rollback: "Lower threshold"
+  - id: B-010
+    priority: P1
+    effort: M
+    priority_score: 6.4
+    title: Resolve 15 mypy overrides
+    cf: [CF2]
+    dimensions: [D21]
+    files: [pyproject.toml, affected source modules]
+    change_summary: Fix type errors in 15 most critical modules; remove override blocks
+    definition_of_done: mypy overrides count <= 15
+    tests: mypy src/ passes with fewer overrides
+    observability: N/A
+    rollback: Re-add overrides
     risk_of_change: Medium
+    dependencies: None
+    owner_role: Backend engineer
     risk_reduction: [REL]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT target 80%+"
-    owner_role: "Frontend Engineer"
+    roi: Quality uplift
+    out_of_scope: Zero overrides; third-party stubs
 
-  - id: BL-019
-    priority: P2
-    effort: S
-    priority_score: 3.0
-    title: "Document API versioning strategy in ADR"
-    cfs: [CF4]
-    dimensions: [D10, D29]
-    files: ["docs/adr/ADR-0010-api-versioning-strategy.md"]
-    change_summary: "Document URL-prefix versioning, deprecation policy, breaking change process"
-    definition_of_done: "ADR approved and indexed"
-    tests: "ADR index updated"
-    observability: "N/A"
-    rollback: "N/A"
+  - id: B-011
+    priority: P1
+    effort: M
+    priority_score: 6.4
+    title: Add Playwright login + incident CRUD spec
+    cf: [CF1, CF2a]
+    dimensions: [D15]
+    files: [frontend/e2e/incident-crud.spec.ts]
+    change_summary: Playwright test for login, create incident, verify in list, view detail
+    definition_of_done: Playwright test passes against staging
+    tests: CI e2e-tests job green
+    observability: Playwright trace artifacts
+    rollback: Delete spec
     risk_of_change: Low
-    risk_reduction: [GOV]
-    roi: [Quality uplift]
-    dependencies: ["BL-005 (ADR renumbering)"]
-    out_of_scope: "Does NOT implement v2 API"
-    owner_role: "Tech Lead"
+    dependencies: Staging environment
+    owner_role: QA engineer
+    risk_reduction: [REL]
+    roi: Quality uplift
+    out_of_scope: Full CRUD for all entities
 
-  - id: BL-020
+  - id: B-012
+    priority: P2
+    effort: L
+    priority_score: 6.4
+    title: Run k6 load test + establish baselines
+    cf: [CF2a, CF2b, CF2c]
+    dimensions: [D04, D25]
+    files: [tests/load/k6-scenarios.js, docs/evidence/load-test-results.md]
+    change_summary: Create k6 scenarios; run against staging; document P95/P99 baselines
+    definition_of_done: Load test report published
+    tests: CI performance-budget references baselines
+    observability: Latency percentiles tracked
+    rollback: N/A
+    risk_of_change: Low
+    dependencies: Staging environment
+    owner_role: SRE
+    risk_reduction: [PERF]
+    roi: Quality uplift
+    out_of_scope: Performance optimization
+
+  - id: B-013
+    priority: P2
+    effort: M
+    priority_score: 6.4
+    title: Wire nh3 input sanitization into schemas
+    cf: [CF3]
+    dimensions: [D06, D07]
+    files: [src/api/schemas/incident.py, complaint.py, risk.py]
+    change_summary: Add Pydantic field_validator using nh3.clean() on text fields
+    definition_of_done: HTML tags stripped from user input
+    tests: Unit test with XSS payload
+    observability: Log sanitization events
+    rollback: Remove validators
+    risk_of_change: Low
+    dependencies: nh3 installed
+    owner_role: Backend engineer
+    risk_reduction: [SEC]
+    roi: Risk avoided
+    out_of_scope: Rich text support
+
+  - id: B-014
     priority: P2
     effort: M
     priority_score: 6.5
-    title: "Create FinOps baseline report"
-    cfs: [CF5]
+    title: Cost analysis dashboard
+    cf: []
     dimensions: [D26]
-    files: ["docs/infrastructure/finops-report.md", "src/services/cost_alerts.py"]
-    change_summary: "Document Azure spend; set budget alerts; identify right-sizing"
-    definition_of_done: "Monthly cost report template; budget alerts configured"
-    tests: "Budget alert fires on test threshold"
-    observability: "Cost trend dashboard"
-    rollback: "N/A"
+    files: [docs/operations/cost-analysis.md]
+    change_summary: Document Azure costs; identify 3 optimization opportunities
+    definition_of_done: Monthly cost breakdown published
+    tests: Review with finance/ops
+    observability: Azure Cost Management alerts
+    rollback: N/A
     risk_of_change: Low
+    dependencies: Azure billing access
+    owner_role: Platform engineer
     risk_reduction: [COST]
-    roi: [Cost reduction]
-    dependencies: ["Azure Cost Management access"]
-    out_of_scope: "Does NOT implement cost optimization"
-    owner_role: "Platform Engineer"
+    roi: Cost reduction
+    out_of_scope: Implementing optimizations
 
-  - id: BL-021
-    priority: P2
-    effort: M
-    priority_score: 6.4
-    title: "Add optimistic locking to Risk and Incident"
-    cfs: [CF2, CF3]
-    dimensions: [D24, D11]
-    files: ["src/domain/models/risk.py", "src/domain/models/incident.py", "alembic/versions/"]
-    change_summary: "Add version column; check on PUT/PATCH"
-    definition_of_done: "Concurrent updates return 409"
-    tests: "Integration test: concurrent update → 409"
-    observability: "409 Conflict metric"
-    rollback: "Revert migrations"
-    risk_of_change: Medium
-    risk_reduction: [DATA]
-    roi: [Risk avoided]
-    dependencies: ["BL-012 (AuditRun locking first)"]
-    out_of_scope: "Does NOT add to all models"
-    owner_role: "Backend Engineer"
-
-  - id: BL-022
+  - id: B-015
     priority: P2
     effort: M
     priority_score: 5.0
-    title: "Add backend i18n infrastructure"
-    cfs: [CF2]
+    title: Add backend error message i18n catalog
+    cf: []
     dimensions: [D27]
-    files: ["src/core/i18n.py", "error templates", "email templates"]
-    change_summary: "Add i18n library; externalize error messages"
-    definition_of_done: "Error messages loaded from locale files"
-    tests: "Unit test: switch locale → different error message"
-    observability: "N/A"
-    rollback: "Revert to hardcoded messages"
-    risk_of_change: Medium
-    risk_reduction: [UX]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT add non-English locales"
-    owner_role: "Backend Engineer"
-
-  - id: BL-023
-    priority: P2
-    effort: M
-    priority_score: 4.6
-    title: "Add privacy impact assessment automation"
-    cfs: [CF3]
-    dimensions: [D07]
-    files: ["src/domain/models/", "scripts/pia-checker.py"]
-    change_summary: "Data classification tags on model fields; CI PIA check"
-    definition_of_done: "All PII fields classified; CI check validates"
-    tests: "CI PIA checker passes"
-    observability: "PII field count metric"
-    rollback: "Remove annotations"
+    files: [src/core/i18n.py, src/api/schemas/error_codes.py]
+    change_summary: Create message catalog; wire ErrorCode to locale-aware messages
+    definition_of_done: Error messages retrievable by locale key
+    tests: Unit test with en/fr error messages
+    observability: N/A
+    rollback: Remove i18n module
     risk_of_change: Low
-    risk_reduction: [SEC, GOV]
-    roi: [Risk avoided]
-    dependencies: []
-    out_of_scope: "Does NOT implement encryption on additional fields"
-    owner_role: "Backend Engineer"
+    dependencies: None
+    owner_role: Backend engineer
+    risk_reduction: [UX]
+    roi: Quality uplift
+    out_of_scope: Full backend translation
 
-  - id: BL-024
+  - id: B-016
+    priority: P2
+    effort: L
+    priority_score: 4.1
+    title: Add circuit breaker for external services
+    cf: [CF4]
+    dimensions: [D05, D25]
+    files: [src/infrastructure/circuit_breaker.py, azure_monitor.py]
+    change_summary: Circuit breaker pattern for Azure Blob, email, monitoring
+    definition_of_done: Circuit opens after 5 failures; half-open retry after 30s
+    tests: Unit test simulating failure cascade
+    observability: Circuit state metric
+    rollback: Remove circuit breaker
+    risk_of_change: Medium
+    dependencies: None
+    owner_role: Backend engineer
+    risk_reduction: [REL]
+    roi: Risk avoided
+    out_of_scope: Bulkhead isolation; retry budgets
+
+  - id: B-017
     priority: P2
     effort: M
     priority_score: 4.6
-    title: "Create SLO alerting and error budget tracking"
-    cfs: [CF4]
+    title: Add PagerDuty/OpsGenie alerting integration
+    cf: [CF5]
+    dimensions: [D23, D32]
+    files: [docs/runbooks/, src/infrastructure/alerting.py]
+    change_summary: Integrate SLO burn-rate alerts with PagerDuty
+    definition_of_done: Alerts fire on SLO breach; on-call rotation configured
+    tests: Simulate SLO breach; verify alert delivery
+    observability: Alert fire count metric
+    rollback: Disable integration
+    risk_of_change: Low
+    dependencies: PagerDuty account
+    owner_role: SRE
+    risk_reduction: [REL]
+    roi: Time saved
+    out_of_scope: Custom escalation policies
+
+  - id: B-018
+    priority: P2
+    effort: L
+    priority_score: 3.2
+    title: Add factory-boy factories for all models
+    cf: [CF2]
+    dimensions: [D16]
+    files: [tests/factories/]
+    change_summary: Create factory classes for Incident, Complaint, Risk, Audit, User
+    definition_of_done: Factory.create() works for all 5 core models
+    tests: Factories used in 10+ existing tests
+    observability: N/A
+    rollback: Remove factories
+    risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
+    risk_reduction: [REL]
+    roi: Time saved
+    out_of_scope: Faker locales; complex relationship factories
+
+  - id: B-019
+    priority: P2
+    effort: L
+    priority_score: 3.2
+    title: Add Storybook for UI component library
+    cf: []
+    dimensions: [D02, D22]
+    files: [frontend/.storybook/, frontend/src/components/ui/*.stories.tsx]
+    change_summary: Configure Storybook; add stories for Button, Card, Badge, Input, EmptyState, Breadcrumbs
+    definition_of_done: npm run storybook builds; 6+ component stories
+    tests: Storybook build in CI
+    observability: N/A
+    rollback: Remove .storybook/ config
+    risk_of_change: Low
+    dependencies: None
+    owner_role: Frontend engineer
+    risk_reduction: [UX]
+    roi: Quality uplift
+    out_of_scope: Visual regression testing
+
+  - id: B-020
+    priority: P2
+    effort: M
+    priority_score: 6.4
+    title: Add structured request log correlation (user_id + tenant_id)
+    cf: [CF4]
     dimensions: [D13, D32]
-    files: ["src/api/routes/slo.py", "Azure Monitor alert rules"]
-    change_summary: "Error budget consumption; alert at 50% consumed"
-    definition_of_done: "Alerts configured; SLO dashboard shows burn rate"
-    tests: "Simulate latency spike → alert fires"
-    observability: "Error budget burn rate metric"
-    rollback: "Remove alert rules"
+    files: [src/infrastructure/middleware/request_logger.py]
+    change_summary: Enrich logs with user_id and tenant_id from request.state
+    definition_of_done: All request logs include user_id and tenant_id fields
+    tests: Unit test asserting log extra fields populated
+    observability: Structured log queries by tenant_id
+    rollback: Revert middleware
     risk_of_change: Low
+    dependencies: None
+    owner_role: Backend engineer
     risk_reduction: [REL]
-    roi: [Risk avoided]
-    dependencies: ["BL-002 (SLO router mounted)"]
-    out_of_scope: "Does NOT define new SLOs"
-    owner_role: "Platform Engineer"
-
-  - id: BL-025
-    priority: P2
-    effort: M
-    priority_score: 4.6
-    title: "Expand user journey documentation"
-    cfs: [CF2]
-    dimensions: [D01, D22]
-    files: ["docs/user-journeys/personas-and-journeys.md"]
-    change_summary: "Add journey maps for audit execution, risk assessment, portal reporting"
-    definition_of_done: "8 total journey maps with touchpoints and metrics"
-    tests: "Reviewed with stakeholders"
-    observability: "N/A"
-    rollback: "N/A"
-    risk_of_change: Low
-    risk_reduction: [UX]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT redesign flows"
-    owner_role: "Product Owner"
-
-  - id: BL-026
-    priority: P2
-    effort: M
-    priority_score: 4.1
-    title: "Add capacity planning documentation"
-    cfs: [CF5]
-    dimensions: [D25]
-    files: ["docs/infrastructure/capacity-plan.md"]
-    change_summary: "Document resource usage, growth projections, scaling triggers"
-    definition_of_done: "Capacity plan with scaling triggers for DB, Redis, compute"
-    tests: "Load test results inform plan"
-    observability: "Resource utilization metrics"
-    rollback: "N/A"
-    risk_of_change: Low
-    risk_reduction: [PERF, COST]
-    roi: [Risk avoided]
-    dependencies: ["BL-014 (load tests)"]
-    out_of_scope: "Does NOT implement autoscaling"
-    owner_role: "Platform Engineer"
-
-  - id: BL-027
-    priority: P2
-    effort: M
-    priority_score: 4.1
-    title: "Create analytics/telemetry dashboard"
-    cfs: [CF4]
-    dimensions: [D28]
-    files: ["docs/observability/dashboards/"]
-    change_summary: "Dashboard: web-vitals, SLO metrics, business metrics"
-    definition_of_done: "Dashboard deployed in Azure Monitor"
-    tests: "Dashboard loads; shows last 24h"
-    observability: "Dashboard is the observability"
-    rollback: "Delete dashboard"
-    risk_of_change: Low
-    risk_reduction: [REL]
-    roi: [Quality uplift]
-    dependencies: ["BL-007 (OTel active)", "BL-002 (SLO mounted)"]
-    out_of_scope: "Does NOT implement custom metrics"
-    owner_role: "Platform Engineer"
-
-  - id: BL-028
-    priority: P2
-    effort: L
-    priority_score: 7.0
-    title: "Full frontend component test coverage (40%)"
-    cfs: [CF2]
-    dimensions: [D15, D02]
-    files: ["frontend/src/**/__tests__/"]
-    change_summary: "Vitest tests for all major pages and components"
-    definition_of_done: "Frontend coverage >= 40%; 30+ test files"
-    tests: "CI vitest at 40%"
-    observability: "Frontend coverage trend"
-    rollback: "N/A"
-    risk_of_change: Low
-    risk_reduction: [REL]
-    roi: [Quality uplift]
-    dependencies: []
-    out_of_scope: "Does NOT include E2E tests"
-    owner_role: "Frontend Engineer"
-
-  - id: BL-029
-    priority: P2
-    effort: L
-    priority_score: 4.6
-    title: "Implement compliance evidence automation"
-    cfs: [CF2]
-    dimensions: [D08]
-    files: ["src/api/routes/compliance.py", "src/domain/services/iso_compliance_service.py"]
-    change_summary: "Auto-generate compliance evidence packs from audit trails"
-    definition_of_done: "/api/v1/compliance/evidence-pack returns ISO-ready bundle"
-    tests: "Integration test: generate pack → validate structure"
-    observability: "Pack generation latency"
-    rollback: "Revert endpoint"
-    risk_of_change: Medium
-    risk_reduction: [GOV]
-    roi: [Time saved]
-    dependencies: ["Document management module"]
-    out_of_scope: "Does NOT replace external audit"
-    owner_role: "Backend Engineer"
-
-  - id: BL-030
-    priority: P2
-    effort: L
-    priority_score: 4.5
-    title: "Implement canary deployments"
-    cfs: [CF5]
-    dimensions: [D18, D05]
-    files: [".github/workflows/deploy-production.yml"]
-    change_summary: "10% → 50% → 100% canary with health gate"
-    definition_of_done: "Production deploys through 3-stage canary"
-    tests: "Staging canary dry-run passes"
-    observability: "Canary error rate vs baseline"
-    rollback: "Shift 100% to previous revision"
-    risk_of_change: Medium
-    risk_reduction: [REL]
-    roi: [Risk avoided]
-    dependencies: ["Azure ACA revision splitting"]
-    out_of_scope: "Does NOT implement feature flags for canary"
-    owner_role: "DevOps Engineer"
-
-  - id: BL-031
-    priority: P2
-    effort: L
-    priority_score: 4.1
-    title: "Add OWASP ZAP DAST to CI"
-    cfs: [CF1]
-    dimensions: [D06]
-    files: [".github/workflows/ci.yml", "tests/security/zap-config.yaml"]
-    change_summary: "ZAP baseline scan in CI after staging deploy"
-    definition_of_done: "ZAP completes; zero high-severity findings"
-    tests: "ZAP report as CI artifact"
-    observability: "DAST finding count trend"
-    rollback: "Remove CI job"
-    risk_of_change: Low
-    risk_reduction: [SEC]
-    roi: [Risk avoided]
-    dependencies: ["Staging deploy first"]
-    out_of_scope: "Does NOT replace manual pentest"
-    owner_role: "Security Engineer"
-
-  - id: BL-032
-    priority: P2
-    effort: L
-    priority_score: 4.1
-    title: "Implement autoscaling rules"
-    cfs: [CF5]
-    dimensions: [D25, D26]
-    files: ["Azure ACA config", "docs/infrastructure/capacity-plan.md"]
-    change_summary: "CPU/memory-based autoscaling; 1→4 replicas"
-    definition_of_done: "Scaling triggers at 70% CPU"
-    tests: "Load test triggers scaling"
-    observability: "Instance count; scaling events"
-    rollback: "Set fixed replica count"
-    risk_of_change: Medium
-    risk_reduction: [PERF, COST]
-    roi: [Cost reduction, Risk avoided]
-    dependencies: ["BL-026 (capacity plan)", "BL-014 (load tests)"]
-    out_of_scope: "Does NOT scale database"
-    owner_role: "Platform Engineer"
-
-  - id: BL-033
-    priority: P2
-    effort: L
-    priority_score: 3.0
-    title: "Implement design system component library"
-    cfs: [CF2]
-    dimensions: [D02, D03]
-    files: ["frontend/src/components/ui/", "design-tokens.css"]
-    change_summary: "Fill 11 component gaps (DataTable, FormField, Breadcrumb, Tabs, etc.)"
-    definition_of_done: "23 design system components documented"
-    tests: "Component tests; a11y tests"
-    observability: "N/A"
-    rollback: "Revert additions"
-    risk_of_change: Low
-    risk_reduction: [UX]
-    roi: [Quality uplift, Time saved]
-    dependencies: []
-    out_of_scope: "Does NOT redesign existing"
-    owner_role: "Frontend Engineer"
-
-  - id: BL-034
-    priority: P2
-    effort: L
-    priority_score: 2.3
-    title: "Add second i18n locale"
-    cfs: [CF2]
-    dimensions: [D27]
-    files: ["frontend/src/i18n/locales/", "scripts/i18n-check.mjs"]
-    change_summary: "Translate en.json to second locale; update CI"
-    definition_of_done: "Language switcher works; all keys translated"
-    tests: "i18n-check validates both locales"
-    observability: "Missing translation count"
-    rollback: "Remove locale file"
-    risk_of_change: Low
-    risk_reduction: [UX]
-    roi: [Revenue protection]
-    dependencies: ["BL-022 (backend i18n)"]
-    out_of_scope: "Does NOT add RTL support"
-    owner_role: "Frontend Engineer"
+    roi: Time saved
+    out_of_scope: Distributed tracing correlation (separate OTel work)

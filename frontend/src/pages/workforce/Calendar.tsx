@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap, Loader2 } from 'lucide-react'
+import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, getApiErrorMessage, type AssessmentRun, type InductionRun } from '../../api/client'
 import { cn } from '../../helpers/utils'
@@ -119,9 +120,7 @@ export default function Calendar() {
       </div>
 
       {loading && (
-        <div className="flex items-center justify-center py-4">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-        </div>
+        <CardSkeleton count={3} />
       )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

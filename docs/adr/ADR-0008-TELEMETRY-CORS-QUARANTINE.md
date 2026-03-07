@@ -1,4 +1,4 @@
-# ADR-0004: Telemetry CORS Quarantine Policy
+# ADR-0008: Telemetry CORS Quarantine Policy
 
 ## Status
 **ACCEPTED** - 2026-01-26

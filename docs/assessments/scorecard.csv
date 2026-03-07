@@ -1,33 +1,33 @@
-ID,Dimension,Maturity_0_5,WCS_0_10,CM,Evidence_Strength,Previous,Delta,WCS_Gap_to_9_5,CW,Priority_Score,Effort,Value,Evidence_Pointers
-D01,Product clarity & user journeys,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,M,"README.md; 21 OpenAPI tags; 71+ frontend pages; docs/user-journeys/personas-and-journeys.md (5 personas, 5 journeys)"
-D02,UX quality & IA,4,7.2,0.9,Medium,3.5,+0.5,2.3,1,2.3,L,M,"Dashboard wired to real API (Promise.allSettled); CardSkeleton loading; global toast (ToastContext.tsx); docs/ux/information-architecture.md; component-inventory.md (12 primitives, 11 gaps)"
-D03,Accessibility,3,4.5,0.75,Weak,3,0,5.0,1,5.0,M,H,"docs/accessibility/wcag-checklist.md; jsx-a11y; jest-axe installed; LiveAnnouncer.tsx; no a11y test files"
-D04,Performance (FE+BE),3,5.4,0.9,Medium,3,0,4.1,2,8.2,L,H,"database.py pool_size=10/max_overflow=20/statement_timeout=30s; .size-limit.json; lighthouserc.js; webVitals.ts; CardSkeleton; no load tests"
-D05,Reliability & resilience,4,8.0,1.0,Strong,4,0,1.5,3,4.5,M,H,"circuit breakers (2 impls); retry+backoff; bulkhead (auth=50, biz=100); DLQ+replay; /readyz Redis"
-D06,Security engineering,5,9.0,0.9,Strong,4.5,+0.5,0.5,3,1.5,S,H,"All business endpoints auth-guarded (planet_mark 16, uvdb 13, slo 2, /metrics/resources); CSP header; test_auth_enforcement.py 46+ pairs; rate limiter bug: startswith('user:') should be 'token:'"
-D07,Privacy & data protection,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,H,"pseudonymization pepper; PII logging filter; Fernet encryption; dpia-incidents.md; data-classification.md (C1-C4); nh3"
-D08,Compliance readiness,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,M,"ISO 27001/14001/45001/9001 models; UVDB; Planet Mark; IMS unification; no external audit reports"
-D09,Architecture modularity,4,8.0,1.0,Strong,4,0,1.5,2,3.0,M,M,"layered structure (api/domain/infrastructure/core); domain->api fix; 30 mypy overrides (GOVPLAT-004)"
-D10,API design quality,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M,"OpenAPI auto-gen; idempotency middleware; API path drift CI; paginated responses; error envelope"
-D11,Data model quality,4,8.0,1.0,Strong,4,0,1.5,2,3.0,M,M,"27 model files; 4 base mixins; CaseInsensitiveEnum; 270 FK indexes"
-D12,Schema versioning & migrations,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M,"Alembic 63 migrations; UTC timestamps; CI migration runs; deploy pipeline migrations"
-D13,Observability,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,H,"Azure Monitor 26+ metrics; JSON logging; request_id; SLO defs; SLOMetricsMiddleware; SLO router NOT mounted; OpenCensus/OTel mismatch"
-D14,Error handling & user-safe failures,4,8.0,1.0,Strong,4,0,1.5,3,4.5,S,M,"15-type exception hierarchy; unified error envelope; CORS-aware errors; global toast (frontend)"
-D15,Testing strategy,3.5,6.3,0.9,Medium,3,+0.5,3.2,3,9.6,L,H,"104+ test files; 1582+ functions; test_auth_enforcement +14 pairs; 14 frontend tests; coverage 35%; no Playwright E2E; FE coverage 3%"
-D16,Test data & fixtures,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,M,"9 factory-boy factories (all with tenant_id); conftest fixtures; test_session"
-D17,CI quality gates,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-,"21+ CI jobs; 12+ validators; Trojan source; lockfile; API drift; OpenAPI contract; SBOM; perf budget; all-checks gate"
-D18,CD/release pipeline,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-,"staging+prod deploy; governance signoff; deterministic SHA 3x; DB backup; post-deploy checks; rollback"
-D19,Configuration management,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M,"Pydantic BaseSettings prod validation; .env.example; feature flags DB-backed; env sync"
-D20,Dependency management,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M,"requirements.txt+.lock with hashes; Dependabot weekly; pip-audit strict; CycloneDX SBOM; lockfile gate"
-D21,Code quality & maintainability,3,6.0,1.0,Strong,3,0,3.5,2,7.0,L,H,"Black 120; isort; flake8 F401/F841 global ignore; max-complexity=20; mypy 30 overrides; Semgrep"
-D22,Documentation quality,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,H,"README; CONTRIBUTING; SECURITY; CHANGELOG; 9 ADRs (numbering collision); 25 runbooks; personas; IA; SLO defs"
-D23,Operational runbooks,3.5,6.3,0.9,Medium,3,+0.5,3.2,2,6.4,M,H,"25 runbooks; contacts filled; on-call rotation defined; some runbooks thin/template-level"
-D24,Data integrity & consistency,4.5,9.0,1.0,Strong,4.5,0,0.5,3,1.5,S,H,"idempotency SHA-256+Redis; optimistic locking (InvestigationRun); ref MAX/COUNT; 270 FK; audit trail; portal creates w/o tenant_id"
-D25,Scalability & capacity,3,5.4,0.9,Medium,3,0,4.1,1,4.1,L,M,"DB pool 10+20; Redis; bulkhead; Vite chunks; no load tests; no autoscaling; no capacity plan"
-D26,Cost efficiency,2,3.0,0.75,Weak,2,0,6.5,1,6.5,M,L,"multi-stage Docker; cost_alerts.py; no FinOps; no Azure spend analysis"
-D27,I18n/L10n readiness,3,4.5,0.75,Weak,3,0,5.0,1,5.0,M,L,"i18next+react-i18next; 2118-key en.json; i18n-check.mjs CI gate; no backend i18n; English only"
-D28,Analytics/telemetry,3,5.4,0.9,Medium,3,0,4.1,1,4.1,M,M,"Azure Monitor; SLO endpoint (not mounted); telemetry routes; web-vitals; analytics baseline doc"
-D29,Governance & decision records,4,7.2,0.9,Medium,4,0,2.3,2,4.6,S,H,"9 ADRs (numbering collision 2x0001 3x0003 2x0004); CHANGELOG; release signoff; covenants; CI governance"
-D30,Build determinism,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-,"Docker digest pin; lockfile-first; SBOM; verify_deploy_deterministic.sh; generate_lockfile.sh"
-D31,Environment parity,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,M,"PG 16-alpine all envs; environment_endpoints.json; staging/prod ACA; parity not formally documented"
-D32,Supportability & operability,4,7.2,0.9,Medium,3.5,+0.5,2.3,2,4.6,M,M,"health probes; /meta/version; JSON logging+PII filter; audit trail; on-call rotation defined; no ops dashboard"
+ID,Dimension,Maturity,WCS,CM,Evidence_Strength,Previous,Delta,WCS_Gap,CW,Priority_Score,Effort,Value
+D01,Product clarity & user journeys,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,M
+D02,UX quality & IA,4.5,8.1,0.9,Medium,4,+0.5,1.4,1,1.4,M,M
+D03,Accessibility,3,4.5,0.75,Weak,3,0,5.0,1,5.0,M,H
+D04,Performance (FE+BE),3.5,6.3,0.9,Medium,3,+0.5,3.2,2,6.4,L,H
+D05,Reliability & resilience,4.5,8.1,0.9,Medium,4,+0.5,1.4,3,4.2,M,H
+D06,Security engineering,5,9.0,0.9,Strong,5,0,0.5,3,1.5,S,H
+D07,Privacy & data protection,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,H
+D08,Compliance readiness,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,M
+D09,Architecture modularity,4.5,8.1,0.9,Medium,4,+0.5,1.4,2,2.8,M,M
+D10,API design quality,4.5,9.0,1.0,Strong,4,+0.5,0.5,2,1.0,S,M
+D11,Data model quality,4.5,9.0,1.0,Strong,4,+0.5,0.5,2,1.0,S,M
+D12,Schema versioning & migrations,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M
+D13,Observability,3.5,6.3,0.9,Medium,4,-0.5,3.2,2,6.4,M,H
+D14,Error handling & user-safe failures,4.5,9.0,1.0,Strong,4,+0.5,0.5,3,1.5,S,H
+D15,Testing strategy,3.5,6.3,0.9,Medium,3.5,0,3.2,3,9.6,L,H
+D16,Test data & fixtures,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,M
+D17,CI quality gates,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-
+D18,CD/release pipeline,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-
+D19,Configuration management,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M
+D20,Dependency management,4,8.0,1.0,Strong,4,0,1.5,2,3.0,S,M
+D21,Code quality & maintainability,3.5,7.0,1.0,Strong,3,+0.5,2.5,2,5.0,L,H
+D22,Documentation quality,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,H
+D23,Operational runbooks,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,H
+D24,Data integrity & consistency,4.5,9.0,1.0,Strong,4.5,0,0.5,3,1.5,S,H
+D25,Scalability & capacity,3,5.4,0.9,Medium,3,0,4.1,1,4.1,L,M
+D26,Cost efficiency,2,3.0,0.75,Weak,2,0,6.5,1,6.5,M,L
+D27,I18n/L10n readiness,3,4.5,0.75,Weak,3,0,5.0,1,5.0,M,L
+D28,Analytics/telemetry,3.5,6.3,0.9,Medium,3,+0.5,3.2,1,3.2,M,M
+D29,Governance & decision records,4,7.2,0.9,Medium,4,0,2.3,2,4.6,S,H
+D30,Build determinism,5,10.0,1.0,Strong,5,0,0.0,3,0.0,-,-
+D31,Environment parity,3.5,6.3,0.9,Medium,3.5,0,3.2,2,6.4,M,M
+D32,Supportability & operability,4,7.2,0.9,Medium,4,0,2.3,2,4.6,M,M

@@ -1,4 +1,4 @@
-# ADR-0001: Production Infrastructure Dependencies
+# ADR-0005: Production Infrastructure Dependencies
 
 **Status**: Accepted
 **Date**: 2026-01-20

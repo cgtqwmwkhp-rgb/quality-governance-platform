@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, FileText, Search, Loader2 } from 'lucide-react'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { policiesApi, Policy, PolicyCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -130,11 +131,7 @@ export default function Policies() {
   )
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
+    return <TableSkeleton rows={8} columns={4} />
   }
 
   return (

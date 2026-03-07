@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight, Loader2 } from 'lucide-react'
+import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, getApiErrorMessage, type InductionRun, type AssetType } from '../../api/client'
 import { Button } from '../../components/ui/Button'
@@ -142,9 +143,7 @@ export default function Training() {
             </div>
           )}
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-            </div>
+            <TableSkeleton rows={6} columns={4} />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">

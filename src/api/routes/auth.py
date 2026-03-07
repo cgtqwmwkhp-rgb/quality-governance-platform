@@ -16,7 +16,9 @@ from src.api.schemas.auth import (
     RefreshTokenRequest,
     TokenResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
+from src.api.utils.errors import api_error
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
     create_access_token,
@@ -77,7 +79,7 @@ async def exchange_azure_token(
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired Azure AD token",
+            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Invalid or expired Azure AD token"),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -87,7 +89,7 @@ async def exchange_azure_token(
     if not user_info.get("email"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token does not contain email claim",
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Token does not contain email claim"),
         )
 
     email = user_info["email"].lower()
@@ -155,14 +157,14 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     if user is None or not verify_password(request.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Incorrect email or password"),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is disabled",
+            detail=api_error(ErrorCode.ACCOUNT_LOCKED, "User account is disabled"),
         )
 
     # Update last login
@@ -187,7 +189,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid refresh token"),
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -195,7 +197,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
+            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid refresh token"),
         )
 
     # Verify user still exists and is active
@@ -205,7 +207,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
+            detail=api_error(ErrorCode.AUTHENTICATION_REQUIRED, "User not found or inactive"),
         )
 
     # Generate new tokens
@@ -273,7 +275,7 @@ async def change_password(
     if not verify_password(request.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect current password",
+            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Incorrect current password"),
         )
 
     current_user.hashed_password = get_password_hash(request.new_password)
@@ -349,7 +351,7 @@ async def confirm_password_reset(
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid or expired password reset token"),
         )
 
     # Find user
@@ -359,7 +361,7 @@ async def confirm_password_reset(
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired password reset token",
+            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid or expired password reset token"),
         )
 
     # Update password

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from '../contexts/ToastContext'
 import { Breadcrumbs } from '../components/ui/Breadcrumbs'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -305,11 +306,7 @@ export default function IncidentDetail() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
-      </div>
-    )
+    return <CardSkeleton count={3} />
   }
 
   if (!incident) {

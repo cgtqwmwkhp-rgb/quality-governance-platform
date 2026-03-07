@@ -1223,10 +1223,21 @@ jobs:
         with:
           fail-on-severity: high
 
+  secret-scanning:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
-    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, frontend-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, dependency-review]
+    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, frontend-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, dependency-review, secret-scanning]
     
     steps:
       - name: Checkout code

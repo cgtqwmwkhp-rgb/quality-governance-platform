@@ -1,0 +1,8 @@
+title = "Gitleaks Configuration"
+
+[allowlist]
+  paths = [
+    '''tests/.*''',
+    '''docs/assessments/.*''',
+    '''\.gitleaksignore''',
+  ]

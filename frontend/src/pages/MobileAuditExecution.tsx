@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../contexts/ToastContext';
+import { CardSkeleton } from '../components/ui/SkeletonLoader';
 import {
   ArrowLeft,
   ArrowRight,
@@ -857,8 +858,8 @@ export default function MobileAuditExecution() {
 
   if (!currentQuestion) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+      <div className="min-h-screen bg-slate-950 p-6">
+        <CardSkeleton count={4} />
       </div>
     );
   }

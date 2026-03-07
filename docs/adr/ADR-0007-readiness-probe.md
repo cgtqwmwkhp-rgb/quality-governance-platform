@@ -1,4 +1,4 @@
-# ADR-0003: Readiness Probe Database Check
+# ADR-0007: Readiness Probe Database Check
 
 **Status**: Accepted
 **Date**: 2026-01-25
