@@ -105,3 +105,6 @@ frontend/dist/
 artifacts/
 artifacts-analysis/auth-tokens/
 tests/ux-coverage/results/
+
+# Local backup patch artifacts
+/.pre-align-*.patch
