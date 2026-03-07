@@ -20,10 +20,9 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentUser
-
-from pydantic import BaseModel, Field, validator
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 

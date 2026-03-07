@@ -50,6 +50,7 @@ async def readiness_check():
 
     try:
         import redis.asyncio as aioredis
+
         from src.core.config import settings
 
         if settings.redis_url:

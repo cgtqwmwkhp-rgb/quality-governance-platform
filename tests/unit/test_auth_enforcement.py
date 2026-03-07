@@ -88,8 +88,9 @@ class TestExpiredTokenReturns401:
     """Endpoints must reject expired tokens."""
 
     def test_expired_token_rejected(self, client):
-        import jwt
         from datetime import datetime, timedelta, timezone
+
+        import jwt
 
         expired_payload = {
             "sub": "99999",
