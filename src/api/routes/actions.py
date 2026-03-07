@@ -175,10 +175,13 @@ def _apply_capa_status_filter(query, status_filter: str):
         return query
 
 
-async def _count_for_source(db: "DbSession", source_type: Optional[str],
-                            status_filter: Optional[str],
-                            source_id: Optional[int],
-                            source_reference: Optional[str]) -> int:
+async def _count_for_source(
+    db: "DbSession",
+    source_type: Optional[str],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+) -> int:
     """Compute total count across all applicable source tables using SQL COUNT."""
     total = 0
     if not source_type or source_type == "incident":
@@ -260,9 +263,11 @@ async def list_actions(
     _cross_source_cap = offset + page_size
 
     if not source_type or source_type == "incident":
-        q = (select(IncidentAction)
-             .options(selectinload(IncidentAction.incident))
-             .order_by(IncidentAction.created_at.desc()))
+        q = (
+            select(IncidentAction)
+            .options(selectinload(IncidentAction.incident))
+            .order_by(IncidentAction.created_at.desc())
+        )
         if status_filter:
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -276,9 +281,7 @@ async def list_actions(
             actions_list.append(_action_to_response(a, "incident", a.incident_id))
 
     if not source_type or source_type == "rta":
-        q = (select(RTAAction)
-             .options(selectinload(RTAAction.rta))
-             .order_by(RTAAction.created_at.desc()))
+        q = select(RTAAction).options(selectinload(RTAAction.rta)).order_by(RTAAction.created_at.desc())
         if status_filter:
             q = q.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
@@ -292,9 +295,11 @@ async def list_actions(
             actions_list.append(_action_to_response(a, "rta", a.rta_id))
 
     if not source_type or source_type == "complaint":
-        q = (select(ComplaintAction)
-             .options(selectinload(ComplaintAction.complaint))
-             .order_by(ComplaintAction.created_at.desc()))
+        q = (
+            select(ComplaintAction)
+            .options(selectinload(ComplaintAction.complaint))
+            .order_by(ComplaintAction.created_at.desc())
+        )
         if status_filter:
             q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -308,9 +313,11 @@ async def list_actions(
             actions_list.append(_action_to_response(a, "complaint", a.complaint_id))
 
     if not source_type or source_type == "investigation":
-        q = (select(InvestigationAction)
-             .options(selectinload(InvestigationAction.investigation))
-             .order_by(InvestigationAction.created_at.desc()))
+        q = (
+            select(InvestigationAction)
+            .options(selectinload(InvestigationAction.investigation))
+            .order_by(InvestigationAction.created_at.desc())
+        )
         if status_filter:
             q = q.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
@@ -324,9 +331,11 @@ async def list_actions(
             actions_list.append(_action_to_response(a, "investigation", a.investigation_id))
 
     if not source_type or source_type == "assessment":
-        q = (select(CAPAAction)
-             .where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
-             .order_by(CAPAAction.created_at.desc()))
+        q = (
+            select(CAPAAction)
+            .where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+            .order_by(CAPAAction.created_at.desc())
+        )
         if status_filter:
             q = _apply_capa_status_filter(q, status_filter)
         if source_type == "assessment" and source_reference:
@@ -340,9 +349,11 @@ async def list_actions(
             actions_list.append(_capa_to_response(a, "assessment"))
 
     if not source_type or source_type == "induction":
-        q = (select(CAPAAction)
-             .where(CAPAAction.source_type == CAPASource.INDUCTION)
-             .order_by(CAPAAction.created_at.desc()))
+        q = (
+            select(CAPAAction)
+            .where(CAPAAction.source_type == CAPASource.INDUCTION)
+            .order_by(CAPAAction.created_at.desc())
+        )
         if status_filter:
             q = _apply_capa_status_filter(q, status_filter)
         if source_type == "induction" and source_reference:
@@ -359,7 +370,7 @@ async def list_actions(
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
     if not source_type:
         actions_list.sort(key=lambda x: x.created_at, reverse=True)
-        actions_list = actions_list[offset: offset + page_size]
+        actions_list = actions_list[offset : offset + page_size]
 
     return ActionListResponse(
         items=actions_list,

@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Road Traffic Collisions"])
 
 
-async def _get_rta_or_404(
-    db, rta_id: int, current_user
-) -> RoadTrafficCollision:
+async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision:
     """Load an RTA with tenant isolation enforced."""
     query = select(RoadTrafficCollision).where(RoadTrafficCollision.id == rta_id)
     if not getattr(current_user, "is_superuser", False):

@@ -138,10 +138,7 @@ async def list_policies(
 
     offset = (page - 1) * page_size
     result = await db.execute(
-        base
-        .order_by(Policy.reference_number.desc(), Policy.id.asc())
-        .limit(page_size)
-        .offset(offset)
+        base.order_by(Policy.reference_number.desc(), Policy.id.asc()).limit(page_size).offset(offset)
     )
     policies = result.scalars().all()
 

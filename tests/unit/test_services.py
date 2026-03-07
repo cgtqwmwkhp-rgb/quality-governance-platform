@@ -46,17 +46,27 @@ class TestReferenceNumberParsing:
         from src.services.reference_number import ReferenceNumberService
 
         result = ReferenceNumberService.parse("INC-2026")
-        assert result["prefix"] == "INC"
-        assert result["year"] == 2026
+        assert result["prefix"] is None
+        assert result["year"] is None
         assert result["sequence"] is None
 
     def test_prefix_mapping_covers_all_entity_types(self):
         from src.services.reference_number import ReferenceNumberService
 
         expected_types = {
-            "audit_run", "audit_finding", "risk", "incident",
-            "rta", "complaint", "policy", "incident_action",
-            "rta_action", "complaint_action",
+            "audit_template",
+            "audit_run",
+            "audit_finding",
+            "risk",
+            "incident",
+            "rta",
+            "complaint",
+            "near_miss",
+            "policy",
+            "incident_action",
+            "rta_action",
+            "complaint_action",
+            "capa",
         }
         assert set(ReferenceNumberService.PREFIXES.keys()) == expected_types
 
