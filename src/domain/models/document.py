@@ -116,7 +116,9 @@ class Document(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     )
 
     # Status & workflow
-    status: Mapped[DocumentStatus] = mapped_column(CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.PENDING, index=True)
+    status: Mapped[DocumentStatus] = mapped_column(
+        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.PENDING, index=True
+    )
     reviewed_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

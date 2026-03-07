@@ -80,8 +80,7 @@ class TestBadTokenReturns401:
             headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.e30.ZRrHA1JJJW8opB1Qfp7QDlaSGR49"},
         )
         assert response.status_code in (401, 403), (
-            f"SECURITY REGRESSION: {method} {path} accepted forged JWT "
-            f"(returned {response.status_code})"
+            f"SECURITY REGRESSION: {method} {path} accepted forged JWT " f"(returned {response.status_code})"
         )
 
 
@@ -110,6 +109,4 @@ class TestExpiredTokenReturns401:
             "/api/v1/incidents/",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code in (401, 403), (
-            f"Expired token accepted (status {response.status_code})"
-        )
+        assert response.status_code in (401, 403), f"Expired token accepted (status {response.status_code})"

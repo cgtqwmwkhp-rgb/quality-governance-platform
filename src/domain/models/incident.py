@@ -73,7 +73,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     severity: Mapped[IncidentSeverity] = mapped_column(
         CaseInsensitiveEnum(IncidentSeverity), default=IncidentSeverity.MEDIUM
     )
-    status: Mapped[IncidentStatus] = mapped_column(CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED, index=True)
+    status: Mapped[IncidentStatus] = mapped_column(
+        CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED, index=True
+    )
 
     # When and where
     incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

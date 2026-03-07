@@ -194,7 +194,9 @@ async def link_evidence(request: EvidenceLinkRequest, current_user: CurrentUser)
 
 
 @router.get("/coverage")
-async def get_compliance_coverage(current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")):
+async def get_compliance_coverage(
+    current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")
+):
     """
     Get compliance coverage statistics showing how many clauses
     have evidence linked to them.
@@ -214,7 +216,9 @@ async def get_compliance_coverage(current_user: CurrentUser, standard: Optional[
 
 
 @router.get("/gaps")
-async def get_compliance_gaps(current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")):
+async def get_compliance_gaps(
+    current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")
+):
     """
     Get list of ISO clauses that have no evidence linked to them.
     These represent compliance gaps that need attention.

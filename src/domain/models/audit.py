@@ -366,7 +366,9 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(String(50), default="medium")
     finding_type: Mapped[str] = mapped_column(String(50), default="nonconformity")
-    status: Mapped[FindingStatus] = mapped_column(CaseInsensitiveEnum(FindingStatus), default=FindingStatus.OPEN, index=True)
+    status: Mapped[FindingStatus] = mapped_column(
+        CaseInsensitiveEnum(FindingStatus), default=FindingStatus.OPEN, index=True
+    )
 
     # Standard mapping (JSON arrays)
     # clause_ids_json was renamed to clause_ids_json_legacy by the
