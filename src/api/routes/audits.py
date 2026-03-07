@@ -43,6 +43,8 @@ from src.api.schemas.audit import (
     AuditTemplateUpdate,
     PurgeExpiredTemplatesResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
 from src.domain.models.audit import (
     AuditFinding,
@@ -196,9 +198,13 @@ async def list_templates(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=(
-                        f"Serialization error on template id={getattr(t, 'id', '?')}: "
-                        f"{type(item_exc).__name__}: {item_exc}"
+                    detail=api_error(
+                        ErrorCode.INTERNAL_ERROR,
+                        "Template serialization failed",
+                        details={
+                            "template_id": getattr(t, "id", "?"),
+                            "error_type": type(item_exc).__name__,
+                        },
                     ),
                 ) from item_exc
 
@@ -221,7 +227,11 @@ async def list_templates(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list templates: {type(exc).__name__}: {exc}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Failed to list templates",
+                details={"error_type": type(exc).__name__},
+            ),
         ) from exc
 
 
@@ -267,7 +277,11 @@ async def create_template(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create template: {type(exc).__name__}: {exc}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Failed to create template",
+                details={"error_type": type(exc).__name__},
+            ),
         ) from exc
 
 
@@ -300,9 +314,13 @@ async def list_archived_templates(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=(
-                        f"Serialization error on archived template id={getattr(t, 'id', '?')}: "
-                        f"{type(item_exc).__name__}: {item_exc}"
+                    detail=api_error(
+                        ErrorCode.INTERNAL_ERROR,
+                        "Archived template serialization failed",
+                        details={
+                            "template_id": getattr(t, "id", "?"),
+                            "error_type": type(item_exc).__name__,
+                        },
                     ),
                 ) from item_exc
 
@@ -323,7 +341,11 @@ async def list_archived_templates(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list archived templates: {type(exc).__name__}: {exc}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Failed to list archived templates",
+                details={"error_type": type(exc).__name__},
+            ),
         ) from exc
 
 
@@ -386,7 +408,7 @@ async def update_template(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"),
         )
 
     # Increment version if published template is modified
@@ -587,7 +609,7 @@ async def create_question(
     if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Template not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"),
         )
 
     # Convert options to JSON if provided
@@ -666,7 +688,7 @@ async def update_question(
     if not question:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Question not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Question not found"),
         )
 
     update_data = question_data.model_dump(exclude_unset=True)
@@ -754,9 +776,13 @@ async def list_runs(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=(
-                        f"Serialization error on run id={getattr(run, 'id', '?')}: "
-                        f"{type(item_exc).__name__}: {item_exc}"
+                    detail=api_error(
+                        ErrorCode.INTERNAL_ERROR,
+                        "Run serialization failed",
+                        details={
+                            "run_id": getattr(run, "id", "?"),
+                            "error_type": type(item_exc).__name__,
+                        },
                     ),
                 ) from item_exc
 
@@ -777,7 +803,11 @@ async def list_runs(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list runs: {type(exc).__name__}: {exc}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Failed to list runs",
+                details={"error_type": type(exc).__name__},
+            ),
         ) from exc
 
 
@@ -814,7 +844,7 @@ async def create_run(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Published template not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Published template not found"),
         )
 
     run = AuditRun(
@@ -912,7 +942,7 @@ async def complete_run(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
         )
 
     if run.status != AuditStatus.IN_PROGRESS:
@@ -924,7 +954,10 @@ async def complete_run(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Audit run must be in progress to complete",
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Audit run must be in progress to complete",
+            ),
         )
 
     scored_responses = [r for r in run.responses if not getattr(r, "is_na", False)]
@@ -994,7 +1027,7 @@ async def create_response(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
         )
 
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
@@ -1006,7 +1039,10 @@ async def create_response(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot submit responses to a completed audit",
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Cannot submit responses to a completed audit",
+            ),
         )
 
     # Auto-start if scheduled
@@ -1032,7 +1068,10 @@ async def create_response(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Response already exists for this question. Use PATCH to update.",
+            detail=api_error(
+                ErrorCode.DUPLICATE_ENTITY,
+                "Response already exists for this question. Use PATCH to update.",
+            ),
         )
 
     response = AuditResponse(
@@ -1108,9 +1147,13 @@ async def list_findings(
                 )
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=(
-                        f"Serialization error on finding id={getattr(f, 'id', '?')}: "
-                        f"{type(item_exc).__name__}: {item_exc}"
+                    detail=api_error(
+                        ErrorCode.INTERNAL_ERROR,
+                        "Finding serialization failed",
+                        details={
+                            "finding_id": getattr(f, "id", "?"),
+                            "error_type": type(item_exc).__name__,
+                        },
                     ),
                 ) from item_exc
 
@@ -1131,7 +1174,11 @@ async def list_findings(
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list findings: {type(exc).__name__}: {exc}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Failed to list findings",
+                details={"error_type": type(exc).__name__},
+            ),
         ) from exc
 
 
@@ -1169,7 +1216,7 @@ async def create_finding(
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit run not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
         )
 
     finding_dict = finding_data.model_dump()

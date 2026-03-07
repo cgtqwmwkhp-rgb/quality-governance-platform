@@ -18,7 +18,7 @@ Exit Codes:
 import re
 import sys
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
 # Allowlist for pull_request_target (empty by default)
 # To allow pull_request_target, create .github/workflows/pull_request_target_allowlist.txt
@@ -90,6 +90,37 @@ def check_unsafe_secret_usage(workflow_path: Path) -> List[str]:
     return errors
 
 
+def check_critical_gate_softening(workflow_path: Path) -> List[str]:
+    """
+    Enforce Stage 2.0 covenant: no soft-pass patterns in critical CI jobs.
+
+    This check is intentionally conservative and targeted at known critical jobs.
+    """
+    errors = []
+    content = workflow_path.read_text()
+
+    # Only enforce this on the main CI workflow.
+    if workflow_path.name != "ci.yml":
+        return errors
+
+    # Hard-fail if known critical jobs use continue-on-error.
+    critical_jobs = ["integration-tests", "contract-tests", "security-scan", "smoke-tests"]
+    for job in critical_jobs:
+        job_block = re.search(rf"(?ms)^\s{{2}}{re.escape(job)}:\n(.*?)(?=^\s{{2}}\w[\w-]*:|\Z)", content)
+        if job_block and re.search(r"^\s{8}continue-on-error:\s*true\s*$", job_block.group(1), re.MULTILINE):
+            errors.append(
+                f"  ❌ {workflow_path.name}: Critical job '{job}' uses continue-on-error=true (forbidden)"
+            )
+
+    # Block known placeholder pass-through pattern in contract tests.
+    if re.search(r"pytest\s+tests/contract/.*\|\|\s*echo\s+\"Contract tests placeholder", content):
+        errors.append(
+            f"  ❌ {workflow_path.name}: Contract tests use placeholder pass-through (forbidden)"
+        )
+
+    return errors
+
+
 def main() -> int:
     """Main validation logic."""
     print("=" * 80)
@@ -122,6 +153,7 @@ def main() -> int:
         errors = []
         errors.extend(check_pull_request_target(workflow_path, allowlist))
         errors.extend(check_unsafe_secret_usage(workflow_path))
+        errors.extend(check_critical_gate_softening(workflow_path))
 
         if errors:
             all_errors.extend(errors)

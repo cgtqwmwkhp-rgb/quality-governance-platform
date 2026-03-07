@@ -1,0 +1,513 @@
+backlog_items:
+  - priority: P0
+    effort: M
+    ps: 15.0
+    title: Privacy baseline and retention enforcement
+    cfs: [CF3]
+    dimensions: [D07, D24]
+    files_modules: ["docs/privacy/*", "src/api/routes/employee_portal.py", "retention scheduler module"]
+    change_summary: "Add privacy governance pack and enforce retention/purge controls on portal PII."
+    definition_of_done: "Privacy docs approved, purge policy implemented, portal responses minimize PII."
+    tests_validation: "Retention integration tests and PII leakage regression tests pass."
+    observability: "privacy_purge_count, pii_exposure_violation_count"
+    rollback: "Disable purge scheduler and retain current data lifecycle path."
+    risk_of_change: Med
+    dependencies: ["Legal/privacy owner signoff"]
+    owner_role: "Security + Backend"
+    risk_reduction_tag: DATA
+    roi_tag: "Risk avoided"
+    out_of_scope: "Full enterprise DLP implementation."
+
+  - priority: P0
+    effort: M
+    ps: 11.1
+    title: Environment parity source-of-truth alignment
+    cfs: [CF5]
+    dimensions: [D31, D19]
+    files_modules: ["docs/evidence/environment_endpoints.json", ".github/workflows/deploy-staging.yml", "parity drift scripts"]
+    change_summary: "Reconcile declared staging platform with actual deployment implementation and enforce parity gate."
+    definition_of_done: "Parity check blocks mismatch and all environment metadata matches deployed target."
+    tests_validation: "Parity CI check passes for main and PR."
+    observability: "env_parity_mismatch_detected"
+    rollback: "Revert parity guard and restore previous metadata artifact."
+    risk_of_change: Low
+    dependencies: ["DevOps owner approval"]
+    owner_role: "DevOps"
+    risk_reduction_tag: REL
+    roi_tag: "Risk avoided"
+    out_of_scope: "Changing runtime platform architecture."
+
+  - priority: P0
+    effort: M
+    ps: 10.8
+    title: Remove critical CI soft-pass behavior
+    cfs: [CF5]
+    dimensions: [D17, D30]
+    files_modules: [".github/workflows/ci.yml"]
+    change_summary: "Eliminate continue-on-error and placeholder success pass-through in critical jobs."
+    definition_of_done: "Critical CI jobs hard-fail on test regressions."
+    tests_validation: "Deliberately failing test causes all-checks failure."
+    observability: "ci_gate_softpass_count"
+    rollback: "Workflow revert commit."
+    risk_of_change: Med
+    dependencies: ["QA and platform agreement on strict gating"]
+    owner_role: "DevOps + QA"
+    risk_reduction_tag: REL
+    roi_tag: "Quality uplift"
+    out_of_scope: "Adding net-new test suites."
+
+  - priority: P0
+    effort: M
+    ps: 10.2
+    title: Migration safety test suite
+    cfs: [CF3, CF5]
+    dimensions: [D12, D24]
+    files_modules: ["tests/migrations/*", "alembic/versions/*", ".github/workflows/ci.yml"]
+    change_summary: "Introduce upgrade, downgrade, idempotency, and data-preservation migration tests."
+    definition_of_done: "Migration safety suite is blocking in CI."
+    tests_validation: "Migration fixtures validate reversible and non-reversible paths."
+    observability: "migration_safety_failures"
+    rollback: "Downgrade checks temporary advisory with explicit waiver."
+    risk_of_change: Med
+    dependencies: ["Database model owners"]
+    owner_role: "Backend"
+    risk_reduction_tag: DATA
+    roi_tag: "Risk avoided"
+    out_of_scope: "Warehouse and ETL migration strategy."
+
+  - priority: P1
+    effort: L
+    ps: 10.2
+    title: Capacity and SLO baseline for critical journeys
+    cfs: [CF2, CF3]
+    dimensions: [D25, D13]
+    files_modules: ["docs/ops/slo.md", "dashboard definitions", "route instrumentation modules"]
+    change_summary: "Define and operationalize SLI/SLOs for portal, audits, and risk workflows."
+    definition_of_done: "SLOs documented; alerting and dashboards active."
+    tests_validation: "Staging load tests validate latency/error targets."
+    observability: "journey_p95_ms, journey_error_rate, saturation_pct"
+    rollback: "Disable noisy alert rules while preserving metrics collection."
+    risk_of_change: Low
+    dependencies: ["Monitoring workspace access"]
+    owner_role: "SRE"
+    risk_reduction_tag: PERF
+    roi_tag: "Revenue protection"
+    out_of_scope: "Global multi-region scaling redesign."
+
+  - priority: P1
+    effort: M
+    ps: 9.6
+    title: Canonicalize risk API legacy field writes
+    cfs: [CF3]
+    dimensions: [D11, D21]
+    files_modules: ["src/api/routes/risks.py", "risk model and migrations", "contract tests"]
+    change_summary: "Stop new writes to legacy JSON fields and route all writes to canonical schema."
+    definition_of_done: "No new legacy writes; backward reads preserved."
+    tests_validation: "Compatibility and migration tests pass."
+    observability: "legacy_field_write_count"
+    rollback: "Temporary dual-write adapter for one release window."
+    risk_of_change: Med
+    dependencies: ["Migration safety suite"]
+    owner_role: "Backend"
+    risk_reduction_tag: DATA
+    roi_tag: "Quality uplift"
+    out_of_scope: "Backfill of archival historical records."
+
+  - priority: P1
+    effort: S
+    ps: 9.0
+    title: Enforce independent release signoff approvers
+    cfs: [CF5]
+    dimensions: [D18, D29, D06]
+    files_modules: [".github/workflows/deploy-production.yml", "scripts/governance/validate_release_signoff.py"]
+    change_summary: "Fail deployment if signoff missing or if governance and CAB approvers are not independent."
+    definition_of_done: "Invalid signoff scenarios always block deployment."
+    tests_validation: "Workflow test fixtures for invalid signoff cases pass."
+    observability: "release_signoff_rejection_count"
+    rollback: "Time-boxed emergency override with mandatory incident ticket."
+    risk_of_change: Med
+    dependencies: ["Governance policy approval"]
+    owner_role: "DevOps + Governance"
+    risk_reduction_tag: GOV
+    roi_tag: "Risk avoided"
+    out_of_scope: "External PKI signing infrastructure."
+
+  - priority: P1
+    effort: M
+    ps: 9.0
+    title: Standardize API error envelope across core routes
+    cfs: [CF1, CF2]
+    dimensions: [D10, D14]
+    files_modules: ["src/api/routes/users.py", "src/api/routes/risks.py", "src/api/routes/audits.py", "integration contract tests"]
+    change_summary: "Normalize error responses to canonical envelope shape."
+    definition_of_done: "Core endpoints return stable error code/message/details/request_id."
+    tests_validation: "Envelope contract tests pass for representative 4xx/5xx cases."
+    observability: "error_envelope_noncompliant_count"
+    rollback: "Middleware fallback adapter enabled."
+    risk_of_change: Med
+    dependencies: ["API client consumer alignment"]
+    owner_role: "Backend/API"
+    risk_reduction_tag: REL
+    roi_tag: "Time saved"
+    out_of_scope: "Breaking API version increment."
+
+  - priority: P1
+    effort: M
+    ps: 9.0
+    title: Concurrency guardrails for critical write endpoints
+    cfs: [CF3]
+    dimensions: [D24, D05]
+    files_modules: ["audit and risk write endpoints", "domain models", "integration tests"]
+    change_summary: "Apply optimistic lock and deterministic conflict handling for selected high-contention entities."
+    definition_of_done: "Conflict-safe writes return deterministic 409 behavior."
+    tests_validation: "Parallel update/race condition tests pass."
+    observability: "write_conflict_rate"
+    rollback: "Feature flag per endpoint."
+    risk_of_change: Med
+    dependencies: ["Schema update windows"]
+    owner_role: "Backend"
+    risk_reduction_tag: DATA
+    roi_tag: "Risk avoided"
+    out_of_scope: "Distributed transaction manager."
+
+  - priority: P1
+    effort: M
+    ps: 9.0
+    title: Automate rollback drill evidence capture
+    cfs: [CF5]
+    dimensions: [D23, D32]
+    files_modules: ["docs/runbooks/AUDIT_ROLLBACK_DRILL.md", "scripts/governance/*", "docs/evidence/*"]
+    change_summary: "Schedule and automate rollback drill execution evidence generation."
+    definition_of_done: "Monthly drill artifact generated and reviewed."
+    tests_validation: "Staging dry-run drill completes."
+    observability: "drill_success_rate"
+    rollback: "Manual drill process fallback."
+    risk_of_change: Low
+    dependencies: ["On-call schedule ownership"]
+    owner_role: "SRE"
+    risk_reduction_tag: REL
+    roi_tag: "Risk avoided"
+    out_of_scope: "Full chaos engineering platform rollout."
+
+  - priority: P1
+    effort: S
+    ps: 8.4
+    title: Add CI gate-softening detector policy
+    cfs: [CF5]
+    dimensions: [D17, D29]
+    files_modules: ["scripts/validate_ci_security_covenant.py", ".github/workflows/ci.yml"]
+    change_summary: "Add policy check that blocks forbidden soft-pass gate patterns."
+    definition_of_done: "Forbidden gate relaxations fail CI policy check."
+    tests_validation: "Injected policy violation in test workflow fails as expected."
+    observability: "ci_policy_violation_count"
+    rollback: "Temporary allowlist with expiry."
+    risk_of_change: Low
+    dependencies: ["None"]
+    owner_role: "DevOps"
+    risk_reduction_tag: GOV
+    roi_tag: "Quality uplift"
+    out_of_scope: "Non-critical workflow style linting."
+
+  - priority: P1
+    effort: M
+    ps: 8.4
+    title: Expand journey-level telemetry
+    cfs: [CF2, CF3]
+    dimensions: [D13, D28]
+    files_modules: ["src/api/routes/audits.py", "src/api/routes/employee_portal.py", "src/api/routes/risks.py", "runbook dashboards"]
+    change_summary: "Instrument p50/p95/error throughput telemetry for top three business journeys."
+    definition_of_done: "Journey telemetry visible with actionable alert thresholds."
+    tests_validation: "Synthetic traffic validation in staging."
+    observability: "journey_latency_p95, journey_error_rate, journey_throughput"
+    rollback: "Disable high-noise alert thresholds only."
+    risk_of_change: Low
+    dependencies: ["Observability dashboard access"]
+    owner_role: "Backend + SRE"
+    risk_reduction_tag: REL
+    roi_tag: "Quality uplift"
+    out_of_scope: "Full distributed tracing replatform."
+
+  - priority: P1
+    effort: S
+    ps: 8.2
+    title: Make i18n key check blocking for frontend changes
+    cfs: [CF2]
+    dimensions: [D27, D17]
+    files_modules: [".github/workflows/ci.yml", "scripts/i18n-check.mjs"]
+    change_summary: "Enforce missing i18n key failures when frontend source files change."
+    definition_of_done: "Missing key blocks FE PR."
+    tests_validation: "Intentional missing key test fails CI."
+    observability: "i18n_missing_key_count"
+    rollback: "Advisory mode with tracked waiver."
+    risk_of_change: Low
+    dependencies: ["Frontend owner signoff"]
+    owner_role: "Frontend"
+    risk_reduction_tag: UX
+    roi_tag: "Quality uplift"
+    out_of_scope: "Multi-language translation content rollout."
+
+  - priority: P1
+    effort: M
+    ps: 8.1
+    title: Harden public portal intake against duplicate and abuse writes
+    cfs: [CF2, CF3]
+    dimensions: [D05, D24]
+    files_modules: ["src/api/routes/employee_portal.py", "rate limiter configuration", "idempotency policies"]
+    change_summary: "Tighten throttling and idempotency behavior for anonymous/public intake."
+    definition_of_done: "Duplicate and abuse simulations are blocked deterministically."
+    tests_validation: "Security and idempotency integration tests."
+    observability: "portal_duplicate_submission_rate, portal_abuse_block_count"
+    rollback: "Revert throttle profile and idempotency strict mode."
+    risk_of_change: Med
+    dependencies: ["Security approval of thresholds"]
+    owner_role: "Backend + Security"
+    risk_reduction_tag: SEC
+    roi_tag: "Risk avoided"
+    out_of_scope: "CAPTCHA or external bot management integration."
+
+  - priority: P1
+    effort: M
+    ps: 8.1
+    title: Expand deterministic API contract coverage
+    cfs: [CF1, CF2]
+    dimensions: [D10, D15]
+    files_modules: ["tests/contract/*", "tests/integration/*contract*", ".github/workflows/ci.yml"]
+    change_summary: "Replace placeholder contract checks with deterministic runtime assertions."
+    definition_of_done: "Contract suite is non-placeholder and blocks regressions."
+    tests_validation: "Schema and behavior contract tests pass."
+    observability: "api_contract_regression_count"
+    rollback: "Revert newly added strict assertions with issue references."
+    risk_of_change: Low
+    dependencies: ["API owner review"]
+    owner_role: "QA + Backend"
+    risk_reduction_tag: REL
+    roi_tag: "Time saved"
+    out_of_scope: "OpenAPI redesign and endpoint renaming."
+
+  - priority: P1
+    effort: S
+    ps: 7.4
+    title: Promote critical accessibility rules to blocking
+    cfs: [CF2]
+    dimensions: [D03]
+    files_modules: ["frontend/eslint.config.cjs", ".github/workflows/ci.yml"]
+    change_summary: "Set selected jsx-a11y rules to error for changed files."
+    definition_of_done: "Critical a11y violations fail frontend CI."
+    tests_validation: "Injected a11y violation fails."
+    observability: "a11y_ci_block_count"
+    rollback: "Rule severity rollback with waiver."
+    risk_of_change: Low
+    dependencies: ["Frontend lint rule agreement"]
+    owner_role: "Frontend"
+    risk_reduction_tag: UX
+    roi_tag: "Quality uplift"
+    out_of_scope: "Complete WCAG certification pass."
+
+  - priority: P1
+    effort: M
+    ps: 7.4
+    title: Remove fixture exception masking and enforce fail-fast setup
+    cfs: [CF5]
+    dimensions: [D16, D30]
+    files_modules: ["tests/conftest.py", "tests/integration/conftest.py", "tests/e2e/conftest.py"]
+    change_summary: "Replace broad exception swallowing in fixtures with explicit error handling."
+    definition_of_done: "Fixture setup failures are explicit and actionable."
+    tests_validation: "Failure injection in fixture setup."
+    observability: "fixture_setup_failure_rate"
+    rollback: "Selective temporary catch for known transient infrastructure only."
+    risk_of_change: Med
+    dependencies: ["QA ownership"]
+    owner_role: "QA"
+    risk_reduction_tag: REL
+    roi_tag: "Time saved"
+    out_of_scope: "Full test framework migration."
+
+  - priority: P1
+    effort: M
+    ps: 7.4
+    title: Tighten frontend performance budget thresholds
+    cfs: [CF2]
+    dimensions: [D04]
+    files_modules: ["frontend/.size-limit.json", "frontend/package.json", ".github/workflows/ci.yml"]
+    change_summary: "Tighten bundle limits and enforce route-level payload budget checks."
+    definition_of_done: "Regression in bundle sizes fails performance budget gate."
+    tests_validation: "Controlled bundle size regression test."
+    observability: "bundle_size_delta_kb"
+    rollback: "Restore previous budget threshold file."
+    risk_of_change: Low
+    dependencies: ["Frontend dependency management"]
+    owner_role: "Frontend"
+    risk_reduction_tag: PERF
+    roi_tag: "Cost reduction"
+    out_of_scope: "SSR architecture migration."
+
+  - priority: P1
+    effort: M
+    ps: 7.2
+    title: Enforce lockfile hash integrity in CI
+    cfs: [CF5]
+    dimensions: [D20, D30]
+    files_modules: [".github/workflows/ci.yml", ".github/workflows/lockfile-update.yml", "requirements.lock"]
+    change_summary: "Require hash-verified lockfile generation and block stale or missing hash data."
+    definition_of_done: "Hash mismatch or missing lockfile fails pipeline."
+    tests_validation: "Tampered lockfile test in CI."
+    observability: "lock_hash_mismatch_count"
+    rollback: "Temporary warning mode with incident reference."
+    risk_of_change: Low
+    dependencies: ["pip-tools process alignment"]
+    owner_role: "DevOps"
+    risk_reduction_tag: SEC
+    roi_tag: "Risk avoided"
+    out_of_scope: "Migration to alternative dependency manager."
+
+  - priority: P2
+    effort: M
+    ps: 6.9
+    title: Tighten type-check gate policy incrementally
+    cfs: [CF5]
+    dimensions: [D21]
+    files_modules: ["pyproject.toml", ".github/workflows/ci.yml", "module-level typing backlog"]
+    change_summary: "Remove global mypy soft-pass and apply phased module gating with expiry waivers."
+    definition_of_done: "Type regressions in scoped modules are blocking."
+    tests_validation: "Intentional type regression in gated module fails."
+    observability: "mypy_violation_count_by_module"
+    rollback: "Scoped waiver with expiration."
+    risk_of_change: Med
+    dependencies: ["Module owners available for fixes"]
+    owner_role: "Backend"
+    risk_reduction_tag: REL
+    roi_tag: "Quality uplift"
+    out_of_scope: "Immediate strict typing across all modules."
+
+  - priority: P2
+    effort: M
+    ps: 6.9
+    title: Harden post-deploy production E2E to conditional blocking
+    cfs: [CF5]
+    dimensions: [D18, D32]
+    files_modules: [".github/workflows/deploy-production.yml", "scripts/smoke/audit_lifecycle_e2e.py"]
+    change_summary: "When credentials are configured, post-deploy E2E failures should block release completion."
+    definition_of_done: "Configured production E2E acts as blocking release gate."
+    tests_validation: "Staging rehearsal with same policy."
+    observability: "post_deploy_e2e_status"
+    rollback: "Fallback to advisory mode under emergency waiver."
+    risk_of_change: Med
+    dependencies: ["Secure test credentials availability"]
+    owner_role: "DevOps + QA"
+    risk_reduction_tag: REL
+    roi_tag: "Risk avoided"
+    out_of_scope: "Comprehensive browser matrix execution."
+
+  - priority: P2
+    effort: M
+    ps: 6.8
+    title: Add route-level error contract lint policy
+    cfs: [CF1, CF2]
+    dimensions: [D10, D14, D21]
+    files_modules: ["new script under scripts/governance", "src/api/routes/*", ".github/workflows/ci.yml"]
+    change_summary: "Detect and block introduction of non-canonical error detail shapes in routes."
+    definition_of_done: "Lint policy blocks newly introduced non-compliant error patterns."
+    tests_validation: "Sample route violation triggers policy failure."
+    observability: "error_contract_lint_violations"
+    rollback: "Advisory mode with waiver tracking."
+    risk_of_change: Low
+    dependencies: ["Lint policy adoption"]
+    owner_role: "Backend"
+    risk_reduction_tag: REL
+    roi_tag: "Time saved"
+    out_of_scope: "Automatic refactor of all legacy endpoints."
+
+  - priority: P2
+    effort: M
+    ps: 6.4
+    title: Codify top-3 journey UX acceptance checks
+    cfs: [CF2]
+    dimensions: [D01, D02]
+    files_modules: ["tests/e2e/*", "frontend/tests/e2e/*", "journey acceptance docs"]
+    change_summary: "Add deterministic E2E acceptance tests for portal, audit, and risk critical journeys."
+    definition_of_done: "All top-3 journey tests are blocking and stable."
+    tests_validation: "Repeat-run E2E stability checks."
+    observability: "journey_acceptance_pass_rate"
+    rollback: "Temporary quarantine with expiry and owner."
+    risk_of_change: Low
+    dependencies: ["Stable test environment"]
+    owner_role: "QA + Frontend"
+    risk_reduction_tag: UX
+    roi_tag: "Quality uplift"
+    out_of_scope: "Comprehensive visual regression program."
+
+  - priority: P2
+    effort: L
+    ps: 5.7
+    title: Create FinOps baseline and cost alerts
+    cfs: [CF5]
+    dimensions: [D26]
+    files_modules: ["docs/ops/cost-governance.md", "infra alert definitions", "cost dashboard scripts"]
+    change_summary: "Define monthly budgets and activate cost-overrun alerts."
+    definition_of_done: "Budget controls and alerting are active with owner response runbook."
+    tests_validation: "Alert threshold simulation."
+    observability: "monthly_spend_vs_budget_pct"
+    rollback: "Disable budget alerts while preserving cost telemetry."
+    risk_of_change: Low
+    dependencies: ["Cloud billing permissions"]
+    owner_role: "FinOps + DevOps"
+    risk_reduction_tag: COST
+    roi_tag: "Cost reduction"
+    out_of_scope: "Chargeback model design."
+
+  - priority: P2
+    effort: M
+    ps: 5.6
+    title: Add documentation freshness policy checks
+    cfs: [CF5]
+    dimensions: [D22, D29]
+    files_modules: ["docs/runbooks/*", "docs/adr/*", "governance docs lint script", ".github/workflows/ci.yml"]
+    change_summary: "Detect stale/ownerless governance docs and block after grace period."
+    definition_of_done: "Freshness and ownership policy check enforced in CI."
+    tests_validation: "Stale document fixture test."
+    observability: "doc_staleness_violation_count"
+    rollback: "Warning-only mode during transition period."
+    risk_of_change: Low
+    dependencies: ["Doc owner mapping completion"]
+    owner_role: "Platform + Governance"
+    risk_reduction_tag: GOV
+    roi_tag: "Time saved"
+    out_of_scope: "Rewriting all historical documentation."
+
+  - priority: P2
+    effort: M
+    ps: 5.4
+    title: Build compliance control-to-evidence matrix
+    cfs: [CF5]
+    dimensions: [D08]
+    files_modules: ["docs/compliance/control-matrix.md", "docs/evidence/*"]
+    change_summary: "Map controls to owners, validation cadence, and evidence pointers."
+    definition_of_done: "Critical controls are fully mapped with current evidence links."
+    tests_validation: "Governance review against matrix checklist."
+    observability: "control_evidence_coverage_pct"
+    rollback: "Manual matrix update process fallback."
+    risk_of_change: Low
+    dependencies: ["Compliance owner inputs"]
+    owner_role: "Governance/Compliance"
+    risk_reduction_tag: GOV
+    roi_tag: "Risk avoided"
+    out_of_scope: "External certification submission package."
+
+  - priority: P2
+    effort: S
+    ps: 4.6
+    title: Enforce ADR reference for architecture-impacting PRs
+    cfs: [CF5]
+    dimensions: [D29]
+    files_modules: [".github/PULL_REQUEST_TEMPLATE.md", "PR governance checks", ".github/workflows/ci.yml"]
+    change_summary: "Require ADR reference when architecture-impacting labels are present."
+    definition_of_done: "PR check fails if ADR reference missing for tagged architectural changes."
+    tests_validation: "Label-driven PR check simulation."
+    observability: "adr_missing_for_arch_change_count"
+    rollback: "Label-based exception with expiry."
+    risk_of_change: Low
+    dependencies: ["Label taxonomy agreement"]
+    owner_role: "Tech Lead + Governance"
+    risk_reduction_tag: GOV
+    roi_tag: "Quality uplift"
+    out_of_scope: "ADR tooling platform migration."

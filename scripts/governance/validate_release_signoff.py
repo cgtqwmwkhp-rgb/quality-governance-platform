@@ -61,6 +61,12 @@ def main() -> int:
         print("ERROR: cab_approved must be true")
         return 1
 
+    governance_lead = data["governance_lead"].strip().lower()
+    cab_chair = data["cab_chair"].strip().lower()
+    if governance_lead == cab_chair:
+        print("ERROR: governance_lead and cab_chair must be different approvers")
+        return 1
+
     print("OK: release sign-off artifact valid")
     return 0
 

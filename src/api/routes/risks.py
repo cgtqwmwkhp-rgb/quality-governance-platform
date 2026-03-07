@@ -8,6 +8,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
@@ -23,6 +24,7 @@ from src.api.schemas.risk import (
     RiskStatistics,
     RiskUpdate,
 )
+from src.api.utils.errors import api_error
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
@@ -312,7 +314,7 @@ async def get_risk(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
         )
 
     response = RiskDetailResponse.model_validate(risk)
@@ -338,7 +340,7 @@ async def update_risk(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
         )
 
     update_data = risk_data.model_dump(exclude_unset=True)
@@ -385,7 +387,7 @@ async def delete_risk(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
         )
 
     risk.is_active = False
@@ -415,7 +417,7 @@ async def create_control(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
         )
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
@@ -474,7 +476,7 @@ async def update_control(
     if not control:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Control not found"),
         )
 
     update_data = control_data.model_dump(exclude_unset=True)
@@ -507,7 +509,7 @@ async def delete_control(
     if not control:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Control not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Control not found"),
         )
 
     control.is_active = False
@@ -536,7 +538,7 @@ async def create_assessment(
     if not risk:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
         )
 
     # Calculate scores and levels

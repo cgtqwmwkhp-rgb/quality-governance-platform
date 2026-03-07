@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import (
     RoleCreate,
     RoleResponse,
@@ -16,6 +17,7 @@ from src.api.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
 
@@ -115,7 +117,7 @@ async def create_user(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+            detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Email already registered"),
         )
 
     # Create user
@@ -155,7 +157,7 @@ async def get_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "User not found"),
         )
 
     return UserResponse.model_validate(user)
@@ -175,7 +177,7 @@ async def update_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "User not found"),
         )
 
     # Update fields
@@ -211,13 +213,13 @@ async def delete_user(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "User not found"),
         )
 
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete your own account",
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Cannot delete your own account"),
         )
 
     user.is_active = False
@@ -250,7 +252,7 @@ async def create_role(
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Role name already exists",
+            detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Role name already exists"),
         )
 
     role = Role(**role_data.model_dump())
@@ -275,13 +277,13 @@ async def update_role(
     if not role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Role not found"),
         )
 
     if role.is_system_role:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot modify system roles",
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "Cannot modify system roles"),
         )
 
     update_data = role_data.model_dump(exclude_unset=True)

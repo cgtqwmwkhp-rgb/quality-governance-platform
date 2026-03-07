@@ -1,17 +1,18 @@
 {
   "$schema": "./environment_endpoints.schema.json",
   "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
-  "_last_updated": "2026-01-30T23:05:00Z",
-  "_updated_by": "config-drift-elimination",
-  "_platform": "Azure Container Apps (ACA)",
+  "_last_updated": "2026-03-06T00:00:00Z",
+  "_updated_by": "world-class-parity-hardening",
+  "_platform": "Azure App Service",
   
   "environments": {
     "staging": {
-      "platform": "azure-container-apps",
-      "container_app_name": "qgp-staging",
-      "container_environment": "qgp-staging-env",
+      "platform": "azure-app-service",
+      "_note": "Staging deployment uses Azure Web App target in deploy-staging workflow",
+      "container_app_name": null,
+      "container_environment": null,
       "region": "uksouth",
-      "api_base_url": "https://qgp-staging.ashymushroom-85447e68.uksouth.azurecontainerapps.io",
+      "api_base_url": "https://app-qgp-staging.azurewebsites.net",
       "swa_url": "https://purple-water-03205fa03-staging.uksouth.azurestaticapps.net",
       "health_endpoints": {
         "health": "/healthz",
