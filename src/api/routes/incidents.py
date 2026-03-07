@@ -12,6 +12,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 
@@ -50,13 +51,7 @@ async def create_incident(
                 detail=f"Incident with reference number {reference_number} already exists",
             )
     else:
-        # Generate reference number (format: INC-YYYY-NNNN)
-        year = datetime.now(timezone.utc).year
-
-        # Get the count of incidents created this year
-        count_result = await db.execute(select(sa_func.count()).select_from(Incident))
-        count = count_result.scalar_one()
-        reference_number = f"INC-{year}-{count + 1:04d}"
+        reference_number = await ReferenceNumberService.generate(db, "incident", Incident)
 
     # Create new incident
     incident = Incident(
@@ -75,6 +70,7 @@ async def create_incident(
         reporter_name=incident_data.reporter_name,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(incident)
@@ -108,7 +104,10 @@ async def get_incident(
 
     Requires authentication.
     """
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    query = select(Incident).where(Incident.id == incident_id)
+    if not current_user.is_superuser:
+        query = query.where(Incident.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     incident = result.scalar_one_or_none()
 
     if not incident:
@@ -181,9 +180,13 @@ async def list_incidents(
     logger = logging.getLogger(__name__)
 
     try:
-        # Build base query
+        # Build base query with tenant isolation
         query = select(Incident)
         count_query = select(sa_func.count()).select_from(Incident)
+
+        if not current_user.is_superuser:
+            query = query.where(Incident.tenant_id == current_user.tenant_id)
+            count_query = count_query.where(Incident.tenant_id == current_user.tenant_id)
 
         # Filter by reporter_email if provided
         if reporter_email:
@@ -260,8 +263,10 @@ async def list_incident_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify incident exists
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    query = select(Incident).where(Incident.id == incident_id)
+    if not current_user.is_superuser:
+        query = query.where(Incident.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     incident = result.scalar_one_or_none()
 
     if not incident:
@@ -321,7 +326,10 @@ async def update_incident(
 
     Requires authentication.
     """
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    query = select(Incident).where(Incident.id == incident_id)
+    if not current_user.is_superuser:
+        query = query.where(Incident.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     incident = result.scalar_one_or_none()
 
     if not incident:
@@ -367,7 +375,10 @@ async def delete_incident(
 
     Requires authentication.
     """
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    query = select(Incident).where(Incident.id == incident_id)
+    if not current_user.is_superuser:
+        query = query.where(Incident.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     incident = result.scalar_one_or_none()
 
     if not incident:

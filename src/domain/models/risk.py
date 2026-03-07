@@ -81,7 +81,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     treatment_due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[RiskStatus] = mapped_column(CaseInsensitiveEnum(RiskStatus), default=RiskStatus.OPEN)
+    status: Mapped[RiskStatus] = mapped_column(CaseInsensitiveEnum(RiskStatus), default=RiskStatus.OPEN, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Ownership
@@ -110,7 +110,7 @@ class OperationalRiskControl(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "risk_controls"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False)
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Control details
     title: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -147,7 +147,7 @@ class RiskAssessment(Base, TimestampMixin):
     __tablename__ = "risk_assessments"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False)
+    risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Assessment details
     assessment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -1,6 +1,7 @@
 """Road Traffic Collision API routes."""
 
-from datetime import datetime, timezone
+import logging
+from math import ceil
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -20,8 +21,25 @@ from src.api.schemas.rta import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Road Traffic Collisions"])
+
+
+async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision:
+    """Load an RTA with tenant isolation enforced."""
+    query = select(RoadTrafficCollision).where(RoadTrafficCollision.id == rta_id)
+    if not getattr(current_user, "is_superuser", False):
+        query = query.where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
+    rta = result.scalar_one_or_none()
+    if not rta:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"RTA with id {rta_id} not found",
+        )
+    return rta
 
 
 @router.post("/", response_model=RTAResponse, status_code=status.HTTP_201_CREATED)
@@ -32,18 +50,12 @@ async def create_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new Road Traffic Collision (RTA)."""
-    # Generate reference number (format: RTA-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-
-    # Count existing RTAs for this year to generate sequence
-    query = select(func.count()).select_from(RoadTrafficCollision)
-    result = await db.execute(query)
-    count = result.scalar() or 0
-    ref_number = f"RTA-{year}-{count + 1:04d}"
+    ref_number = await ReferenceNumberService.generate(db, "rta", RoadTrafficCollision)
 
     rta = RoadTrafficCollision(
         **rta_in.model_dump(),
         reference_number=ref_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -82,10 +94,6 @@ async def list_rtas(
     Requires authentication. Users can only filter by their own email
     unless they have admin permissions.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     # SECURITY FIX: If filtering by email, enforce that users can only access their own data
     # unless they have admin/view-all permissions
     if reporter_email:
@@ -123,7 +131,9 @@ async def list_rtas(
     try:
         query = select(RoadTrafficCollision)
 
-        # Apply filters
+        if not getattr(current_user, "is_superuser", False):
+            query = query.where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
+
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
         if status_filter:
@@ -187,12 +197,7 @@ async def get_rta(
     current_user: CurrentUser,
 ):
     """Get an RTA by ID."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await _get_rta_or_404(db, rta_id, current_user)
     return rta
 
 
@@ -205,12 +210,7 @@ async def update_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
     update_data = rta_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -243,12 +243,7 @@ async def delete_rta(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
     await record_audit_event(
         db=db,
@@ -281,20 +276,9 @@ async def create_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
-    # Generate reference number (format: RTAACT-YYYY-NNNN)
-    year = datetime.now(timezone.utc).year
-    query = select(func.count()).select_from(RTAAction)
-    result = await db.execute(query)
-    count = result.scalar() or 0
-    ref_number = f"RTAACT-{year}-{count + 1:04d}"
+    ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
     action = RTAAction(
         **action_in.model_dump(),
@@ -331,13 +315,7 @@ async def list_rta_actions(
     page_size: int = Query(10, ge=1, le=100),
 ):
     """List actions for an RTA with deterministic ordering and pagination."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    await _get_rta_or_404(db, rta_id, current_user)
 
     query = select(RTAAction).where(RTAAction.rta_id == rta_id)
 
@@ -376,13 +354,7 @@ async def update_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Update an RTA action."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    await _get_rta_or_404(db, rta_id, current_user)
 
     # Get action
     action = await db.get(RTAAction, action_id)
@@ -424,13 +396,7 @@ async def delete_rta_action(
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
-        )
+    await _get_rta_or_404(db, rta_id, current_user)
 
     # Get action
     action = await db.get(RTAAction, action_id)
@@ -470,18 +436,10 @@ async def list_rta_investigations(
     Returns investigations assigned to this RTA with pagination.
     Deterministic ordering: created_at DESC, id ASC.
     """
-    from math import ceil
-
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify RTA exists
-    rta = await db.get(RoadTrafficCollision, rta_id)
-    if not rta:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with ID {rta_id} not found",
-        )
+    await _get_rta_or_404(db, rta_id, current_user)
 
     # Get total count
     count_query = (

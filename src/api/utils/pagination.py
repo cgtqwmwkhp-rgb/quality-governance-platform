@@ -1,58 +1,22 @@
-"""Shared pagination utilities for API routes."""
+"""API-layer pagination utilities.
 
-from typing import Any, Generic, TypeVar
+Re-exports core pagination and adds FastAPI-specific PaginationParams
+(uses Query() defaults).
+"""
 
 from fastapi import Query
-from pydantic import BaseModel
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 
-T = TypeVar("T")
+from src.core.pagination import PaginatedResponse, PaginationInput, paginate
+
+__all__ = ["PaginatedResponse", "PaginationParams", "paginate"]
 
 
-class PaginationParams:
-    """Standard pagination parameters as a FastAPI dependency."""
+class PaginationParams(PaginationInput):
+    """FastAPI dependency that binds page/page_size from query-string."""
 
     def __init__(
         self,
         page: int = Query(1, ge=1, description="Page number"),
         page_size: int = Query(20, ge=1, le=500, description="Items per page"),
     ):
-        self.page = page
-        self.page_size = page_size
-        self.offset = (page - 1) * page_size
-
-
-class PaginatedResponse(BaseModel):
-    """Standard paginated response envelope."""
-
-    items: list[Any]
-    total: int
-    page: int
-    page_size: int
-    pages: int
-
-
-async def paginate(
-    db: AsyncSession,
-    query: Select,
-    params: PaginationParams,
-) -> PaginatedResponse:
-    """Execute a query with pagination and return a PaginatedResponse."""
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar_one()
-
-    result = await db.execute(query.offset(params.offset).limit(params.page_size))
-    items = result.scalars().all()
-
-    pages = (total + params.page_size - 1) // params.page_size if total > 0 else 0
-
-    return PaginatedResponse(
-        items=list(items),
-        total=total,
-        page=params.page,
-        page_size=params.page_size,
-        pages=pages,
-    )
+        super().__init__(page=page, page_size=page_size)

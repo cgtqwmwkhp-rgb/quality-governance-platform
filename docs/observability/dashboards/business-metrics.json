@@ -1,0 +1,103 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Business Metrics Dashboard — Quality Governance Platform",
+    "version": "1.0.0",
+    "created": "2026-03-07"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Portal/dashboards",
+      "apiVersion": "2020-09-01-preview",
+      "name": "govplat-business-metrics",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "lenses": {
+          "0": {
+            "order": 0,
+            "parts": {
+              "0": {
+                "position": { "x": 0, "y": 0, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Incidents Created / Resolved (weekly)",
+                    "query": "customMetrics | where name in ('incidents.created', 'incidents.resolved') | summarize Value=sum(value) by bin(timestamp, 7d), name | order by timestamp desc",
+                    "visualization": "barchart"
+                  }
+                }
+              },
+              "1": {
+                "position": { "x": 4, "y": 0, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Complaints SLA Compliance",
+                    "query": "customMetrics | where name == 'complaints.sla_met' or name == 'complaints.sla_breached' | summarize Value=sum(value) by bin(timestamp, 7d), name | order by timestamp desc",
+                    "visualization": "barchart"
+                  }
+                }
+              },
+              "2": {
+                "position": { "x": 8, "y": 0, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Audit Completion Rate",
+                    "query": "customMetrics | where name in ('audits.completed', 'audits.total') | summarize Value=sum(value) by bin(timestamp, 7d), name | order by timestamp desc",
+                    "visualization": "linechart"
+                  }
+                }
+              },
+              "3": {
+                "position": { "x": 0, "y": 4, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "DLQ Depth (failed background tasks)",
+                    "query": "customMetrics | where name == 'dlq.size' | summarize Depth=max(value) by bin(timestamp, 1h) | order by timestamp desc | take 168",
+                    "visualization": "linechart"
+                  }
+                }
+              },
+              "4": {
+                "position": { "x": 6, "y": 4, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Circuit Breaker State",
+                    "query": "customMetrics | where name startswith 'circuit_breaker.' | summarize Value=max(value) by bin(timestamp, 5m), name | order by timestamp desc",
+                    "visualization": "linechart"
+                  }
+                }
+              },
+              "5": {
+                "position": { "x": 0, "y": 8, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Risk Register Activity",
+                    "query": "customMetrics | where name in ('risks.created', 'risks.closed', 'risks.escalated') | summarize Value=sum(value) by bin(timestamp, 7d), name | order by timestamp desc",
+                    "visualization": "barchart"
+                  }
+                }
+              },
+              "6": {
+                "position": { "x": 6, "y": 8, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Active Users (DAU / WAU)",
+                    "query": "requests | where isnotempty(user_AuthenticatedId) | summarize DAU=dcount(user_AuthenticatedId) by bin(timestamp, 1d) | order by timestamp desc | take 30",
+                    "visualization": "linechart"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

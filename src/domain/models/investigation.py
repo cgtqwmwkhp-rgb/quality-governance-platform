@@ -141,6 +141,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
         CaseInsensitiveEnum(InvestigationStatus),
         nullable=False,
         default=InvestigationStatus.DRAFT,
+        index=True,
     )
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

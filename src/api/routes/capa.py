@@ -160,7 +160,7 @@ async def get_capa_action(
     try:
         return await service.get_capa_action(capa_id, current_user.tenant_id)
     except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(f"CAPA action with id {capa_id} not found", code=ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.patch("/{capa_id}", response_model=CAPAResponse)
@@ -174,7 +174,7 @@ async def update_capa_action(
     try:
         return await service.update_capa_action(capa_id, data, tenant_id=current_user.tenant_id)
     except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(f"CAPA action with id {capa_id} not found", code=ErrorCode.ENTITY_NOT_FOUND)
 
 
 @router.post("/{capa_id}/transition", response_model=CAPAResponse)
@@ -194,7 +194,7 @@ async def transition_capa_status(
             comment=data.comment,
         )
     except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(f"CAPA action with id {capa_id} not found", code=ErrorCode.ENTITY_NOT_FOUND)
     except ValueError:
         raise ValidationError(ErrorCode.INVALID_STATE_TRANSITION)
 
@@ -213,4 +213,4 @@ async def delete_capa_action(
             tenant_id=current_user.tenant_id,
         )
     except LookupError:
-        raise NotFoundError(ErrorCode.ENTITY_NOT_FOUND)
+        raise NotFoundError(f"CAPA action with id {capa_id} not found", code=ErrorCode.ENTITY_NOT_FOUND)

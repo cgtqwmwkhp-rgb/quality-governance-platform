@@ -68,27 +68,31 @@ class RiskScoringService:
             return None
 
         # Get linked risks
-        linked_risk_ids = []
-        if incident.linked_risk_ids:
+        linked_risk_ids: List[int] = []
+        raw_linked = getattr(incident, "linked_risk_ids", None)
+        if raw_linked:
             try:
-                linked_risk_ids = [int(x.strip()) for x in incident.linked_risk_ids.split(",") if x.strip()]
+                linked_risk_ids = [int(x.strip()) for x in str(raw_linked).split(",") if x.strip()]
             except ValueError:
                 pass
 
         if not linked_risk_ids:
-            # Try to find related risks by category/department
-            result = await self.db.execute(
-                select(Risk).where(
-                    and_(
-                        Risk.department == incident.department,
-                        Risk.is_active == True,
+            department = getattr(incident, "department", None)
+            if department:
+                result = await self.db.execute(
+                    select(Risk).where(
+                        and_(
+                            Risk.department == department,
+                            Risk.is_active == True,
+                        )
                     )
                 )
-            )
-            risks = result.scalars().all()
-            linked_risk_ids = [r.id for r in risks]
+                risks = result.scalars().all()
+                linked_risk_ids = [r.id for r in risks]
 
         updated_risks = []
+
+        incident_severity: Optional[IncidentSeverity] = getattr(incident, "severity", None)
 
         for risk_id in linked_risk_ids:
             update_result = await self._update_risk_score(
@@ -96,7 +100,7 @@ class RiskScoringService:
                 trigger_type=trigger_type,
                 trigger_entity_type="incident",
                 trigger_entity_id=incident_id,
-                severity=incident.severity,
+                severity=incident_severity,
             )
             if update_result:
                 updated_risks.append(update_result)
@@ -122,10 +126,11 @@ class RiskScoringService:
             return None
 
         # Get linked risks
-        linked_risk_ids = []
-        if near_miss.linked_risk_ids:
+        linked_risk_ids: List[int] = []
+        raw_linked = getattr(near_miss, "linked_risk_ids", None)
+        if raw_linked:
             try:
-                linked_risk_ids = [int(x.strip()) for x in near_miss.linked_risk_ids.split(",") if x.strip()]
+                linked_risk_ids = [int(x.strip()) for x in str(raw_linked).split(",") if x.strip()]
             except ValueError:
                 pass
 

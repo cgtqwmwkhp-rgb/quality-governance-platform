@@ -117,16 +117,38 @@ class CircuitBreaker:
                 logger.error(f"Circuit breaker '{self.name}' OPENED after {self._failure_count} failures")
 
     def _record_transition(self, from_state: CircuitState, to_state: CircuitState) -> None:
-        self._transitions.append(
-            {
-                "from": from_state.value,
-                "to": to_state.value,
-                "timestamp": time.time(),
-            }
-        )
-        # Keep last 100 transitions
+        transition = {
+            "from": from_state.value,
+            "to": to_state.value,
+            "timestamp": time.time(),
+        }
+        self._transitions.append(transition)
         if len(self._transitions) > 100:
             self._transitions = self._transitions[-100:]
+
+        self._emit_transition_metric(from_state, to_state)
+
+    def _emit_transition_metric(self, from_state: CircuitState, to_state: CircuitState) -> None:
+        """Emit metrics for circuit breaker state transitions via Azure Monitor."""
+        try:
+            from src.infrastructure.monitoring.azure_monitor import track_metric
+
+            track_metric(
+                f"circuit_breaker.{self.name}.transition",
+                1,
+                {"from_state": from_state.value, "to_state": to_state.value},
+            )
+            state_value = {"closed": 0, "half_open": 1, "open": 2}
+            track_metric(
+                f"circuit_breaker.{self.name}.state",
+                state_value.get(to_state.value, -1),
+            )
+            track_metric(
+                f"circuit_breaker.{self.name}.total_failures",
+                self._total_failures,
+            )
+        except Exception:
+            logger.debug("Failed to emit circuit breaker metric (monitor unavailable)")
 
     def get_health(self) -> dict:
         return {

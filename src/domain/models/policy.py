@@ -51,7 +51,9 @@ class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     document_type: Mapped[DocumentType] = mapped_column(CaseInsensitiveEnum(DocumentType), default=DocumentType.POLICY)
-    status: Mapped[DocumentStatus] = mapped_column(CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.DRAFT)
+    status: Mapped[DocumentStatus] = mapped_column(
+        CaseInsensitiveEnum(DocumentStatus), default=DocumentStatus.DRAFT, index=True
+    )
 
     # Classification
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

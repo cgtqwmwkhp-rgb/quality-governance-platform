@@ -73,7 +73,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     severity: Mapped[IncidentSeverity] = mapped_column(
         CaseInsensitiveEnum(IncidentSeverity), default=IncidentSeverity.MEDIUM
     )
-    status: Mapped[IncidentStatus] = mapped_column(CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED)
+    status: Mapped[IncidentStatus] = mapped_column(
+        CaseInsensitiveEnum(IncidentStatus), default=IncidentStatus.REPORTED, index=True
+    )
 
     # When and where
     incident_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -153,7 +155,7 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
     __tablename__ = "incident_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False)
+    incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)

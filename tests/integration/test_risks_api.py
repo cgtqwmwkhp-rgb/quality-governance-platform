@@ -56,6 +56,7 @@ class TestRisksAPI:
         """Test listing risks with pagination."""
         risks = [
             RiskFactory.build(
+                tenant_id=1,
                 title=f"Risk {i}",
                 description=f"Description {i}",
                 category="operational",
@@ -92,6 +93,7 @@ class TestRisksAPI:
     ):
         """Test getting risk details."""
         risk = RiskFactory.build(
+            tenant_id=1,
             title="Supply Chain Disruption",
             description="Supplier failure causing production delays",
             category="operational",
@@ -126,6 +128,7 @@ class TestRisksAPI:
     ):
         """Test updating a risk."""
         risk = RiskFactory.build(
+            tenant_id=1,
             title="Original Title",
             description="Original description",
             category="operational",
@@ -169,6 +172,7 @@ class TestRisksAPI:
     ):
         """Test adding a control to a risk."""
         risk = RiskFactory.build(
+            tenant_id=1,
             title="Cybersecurity Risk",
             description="Malware infection",
             category="information_security",
@@ -212,6 +216,7 @@ class TestRisksAPI:
     ):
         """Test listing controls for a risk."""
         risk = RiskFactory.build(
+            tenant_id=1,
             title="Test Risk",
             description="For control testing",
             category="operational",
@@ -247,7 +252,10 @@ class TestRisksAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 3
+        if isinstance(data, dict) and "items" in data:
+            assert len(data["items"]) == 3
+        else:
+            assert len(data) == 3
 
     @pytest.mark.asyncio
     async def test_get_risk_statistics(
@@ -260,6 +268,7 @@ class TestRisksAPI:
         """Test getting risk statistics."""
         risks = [
             RiskFactory.build(
+                tenant_id=1,
                 title="Risk 1",
                 category="operational",
                 likelihood=5,
@@ -270,6 +279,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="Risk 2",
                 category="operational",
                 likelihood=4,
@@ -280,6 +290,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="Risk 3",
                 category="financial",
                 likelihood=2,
@@ -316,6 +327,7 @@ class TestRisksAPI:
         """Test getting risk matrix with counts."""
         risks = [
             RiskFactory.build(
+                tenant_id=1,
                 title="R1",
                 category="operational",
                 likelihood=1,
@@ -326,6 +338,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="R2",
                 category="operational",
                 likelihood=3,
@@ -336,6 +349,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="R3",
                 category="operational",
                 likelihood=5,
@@ -371,6 +385,7 @@ class TestRisksAPI:
         """Test filtering risks by risk level."""
         risks = [
             RiskFactory.build(
+                tenant_id=1,
                 title="High Risk 1",
                 category="operational",
                 likelihood=4,
@@ -381,6 +396,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="High Risk 2",
                 category="operational",
                 likelihood=5,
@@ -391,6 +407,7 @@ class TestRisksAPI:
                 reference_number=generate_test_reference("RSK"),
             ),
             RiskFactory.build(
+                tenant_id=1,
                 title="Low Risk",
                 category="operational",
                 likelihood=1,

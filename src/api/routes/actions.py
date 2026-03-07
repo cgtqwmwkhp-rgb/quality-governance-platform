@@ -158,6 +158,83 @@ def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
 # ============== Endpoints ==============
 
 
+def _apply_capa_status_filter(query, status_filter: str):
+    """Map a unified status string to the CAPA enum and apply the filter."""
+    capa_status_map = {
+        "completed": CAPAStatus.CLOSED,
+        "pending_verification": CAPAStatus.VERIFICATION,
+    }
+    capa_status = capa_status_map.get(status_filter)
+    if capa_status is not None:
+        return query.where(CAPAAction.status == capa_status)
+    try:
+        capa_status = CAPAStatus(status_filter)
+        return query.where(CAPAAction.status == capa_status)
+    except ValueError:
+        logger.warning("Unknown status filter '%s' for CAPA, skipping", status_filter)
+        return query
+
+
+async def _count_for_source(
+    db: "DbSession",
+    source_type: Optional[str],
+    status_filter: Optional[str],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+) -> int:
+    """Compute total count across all applicable source tables using SQL COUNT."""
+    total = 0
+    if not source_type or source_type == "incident":
+        q = select(func.count()).select_from(IncidentAction)
+        if status_filter:
+            q = q.where(IncidentAction.status == status_filter)
+        if source_type == "incident" and source_id:
+            q = q.where(IncidentAction.incident_id == source_id)
+        total += (await db.execute(q)).scalar() or 0
+
+    if not source_type or source_type == "rta":
+        q = select(func.count()).select_from(RTAAction)
+        if status_filter:
+            q = q.where(RTAAction.status == status_filter)
+        if source_type == "rta" and source_id:
+            q = q.where(RTAAction.rta_id == source_id)
+        total += (await db.execute(q)).scalar() or 0
+
+    if not source_type or source_type == "complaint":
+        q = select(func.count()).select_from(ComplaintAction)
+        if status_filter:
+            q = q.where(ComplaintAction.status == status_filter)
+        if source_type == "complaint" and source_id:
+            q = q.where(ComplaintAction.complaint_id == source_id)
+        total += (await db.execute(q)).scalar() or 0
+
+    if not source_type or source_type == "investigation":
+        q = select(func.count()).select_from(InvestigationAction)
+        if status_filter:
+            q = q.where(InvestigationAction.status == status_filter)
+        if source_type == "investigation" and source_id:
+            q = q.where(InvestigationAction.investigation_id == source_id)
+        total += (await db.execute(q)).scalar() or 0
+
+    if not source_type or source_type == "assessment":
+        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+        if status_filter:
+            q = _apply_capa_status_filter(q, status_filter)
+        if source_type == "assessment" and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        total += (await db.execute(q)).scalar() or 0
+
+    if not source_type or source_type == "induction":
+        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.INDUCTION)
+        if status_filter:
+            q = _apply_capa_status_filter(q, status_filter)
+        if source_type == "induction" and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        total += (await db.execute(q)).scalar() or 0
+
+    return total
+
+
 @router.get("/", response_model=ActionListResponse)
 async def list_actions(
     db: DbSession,
@@ -169,117 +246,134 @@ async def list_actions(
     source_id: Optional[int] = Query(None),
     source_reference: Optional[str] = Query(None, description="UUID ref for assessment_run_id or induction_run_id"),
 ) -> ActionListResponse:
-    """List all actions across incidents, RTAs, and complaints with pagination."""
+    """List actions across all source types with SQL-level pagination.
+
+    When *source_type* is specified, LIMIT/OFFSET is pushed to the database.
+    When listing across all source types, individual queries are capped and
+    merged client-side to honour the requested page window.
+    """
+    total = await _count_for_source(db, source_type, status_filter, source_id, source_reference)
+
+    if total == 0:
+        return ActionListResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
+
+    offset = (page - 1) * page_size
     actions_list: list[ActionResponse] = []
+    # When listing across all sources, cap each sub-query to avoid full table scans
+    _cross_source_cap = offset + page_size
 
-    # Only query if source_type not specified or matches "incident"
     if not source_type or source_type == "incident":
-        incident_query = select(IncidentAction).options(selectinload(IncidentAction.incident))
+        q = (
+            select(IncidentAction)
+            .options(selectinload(IncidentAction.incident))
+            .order_by(IncidentAction.created_at.desc())
+        )
         if status_filter:
-            incident_query = incident_query.where(IncidentAction.status == status_filter)
+            q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
-            incident_query = incident_query.where(IncidentAction.incident_id == source_id)
+            q = q.where(IncidentAction.incident_id == source_id)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_action_to_response(a, "incident", a.incident_id))
 
-        incident_result = await db.execute(incident_query)
-        for inc_action in incident_result.scalars().all():
-            actions_list.append(_action_to_response(inc_action, "incident", inc_action.incident_id))
-
-    # Only query if source_type not specified or matches "rta"
     if not source_type or source_type == "rta":
-        rta_query = select(RTAAction).options(selectinload(RTAAction.rta))
+        q = select(RTAAction).options(selectinload(RTAAction.rta)).order_by(RTAAction.created_at.desc())
         if status_filter:
-            rta_query = rta_query.where(RTAAction.status == status_filter)
+            q = q.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
-            rta_query = rta_query.where(RTAAction.rta_id == source_id)
+            q = q.where(RTAAction.rta_id == source_id)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_action_to_response(a, "rta", a.rta_id))
 
-        rta_result = await db.execute(rta_query)
-        for rta_action in rta_result.scalars().all():
-            actions_list.append(_action_to_response(rta_action, "rta", rta_action.rta_id))
-
-    # Only query if source_type not specified or matches "complaint"
     if not source_type or source_type == "complaint":
-        complaint_query = select(ComplaintAction).options(selectinload(ComplaintAction.complaint))
+        q = (
+            select(ComplaintAction)
+            .options(selectinload(ComplaintAction.complaint))
+            .order_by(ComplaintAction.created_at.desc())
+        )
         if status_filter:
-            complaint_query = complaint_query.where(ComplaintAction.status == status_filter)
+            q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
-            complaint_query = complaint_query.where(ComplaintAction.complaint_id == source_id)
+            q = q.where(ComplaintAction.complaint_id == source_id)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_action_to_response(a, "complaint", a.complaint_id))
 
-        complaint_result = await db.execute(complaint_query)
-        for comp_action in complaint_result.scalars().all():
-            actions_list.append(_action_to_response(comp_action, "complaint", comp_action.complaint_id))
-
-    # Only query if source_type not specified or matches "investigation"
-    # This fixes the "Cannot add action" defect by including investigation actions
     if not source_type or source_type == "investigation":
-        investigation_query = select(InvestigationAction).options(selectinload(InvestigationAction.investigation))
+        q = (
+            select(InvestigationAction)
+            .options(selectinload(InvestigationAction.investigation))
+            .order_by(InvestigationAction.created_at.desc())
+        )
         if status_filter:
-            investigation_query = investigation_query.where(InvestigationAction.status == status_filter)
+            q = q.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
-            investigation_query = investigation_query.where(InvestigationAction.investigation_id == source_id)
+            q = q.where(InvestigationAction.investigation_id == source_id)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_action_to_response(a, "investigation", a.investigation_id))
 
-        investigation_result = await db.execute(investigation_query)
-        for inv_action in investigation_result.scalars().all():
-            actions_list.append(_action_to_response(inv_action, "investigation", inv_action.investigation_id))
-
-    # CAPAs from job assessments (assessment source)
     if not source_type or source_type == "assessment":
-        capa_assess_query = select(CAPAAction).where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+        q = (
+            select(CAPAAction)
+            .where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+            .order_by(CAPAAction.created_at.desc())
+        )
         if status_filter:
-            capa_status_map = {
-                "completed": CAPAStatus.CLOSED,
-                "pending_verification": CAPAStatus.VERIFICATION,
-            }
-            capa_status = capa_status_map.get(status_filter)
-            if capa_status is not None:
-                capa_assess_query = capa_assess_query.where(CAPAAction.status == capa_status)
-            else:
-                try:
-                    capa_status = CAPAStatus(status_filter)
-                    capa_assess_query = capa_assess_query.where(CAPAAction.status == capa_status)
-                except ValueError:
-                    logger.warning("Unknown status filter '%s' for source type, skipping filter", status_filter)
+            q = _apply_capa_status_filter(q, status_filter)
         if source_type == "assessment" and source_reference:
-            capa_assess_query = capa_assess_query.where(CAPAAction.source_reference == source_reference)
+            q = q.where(CAPAAction.source_reference == source_reference)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_capa_to_response(a, "assessment"))
 
-        capa_assess_result = await db.execute(capa_assess_query)
-        for capa_action in capa_assess_result.scalars().all():
-            actions_list.append(_capa_to_response(capa_action, "assessment"))
-
-    # CAPAs from inductions (induction source)
     if not source_type or source_type == "induction":
-        capa_ind_query = select(CAPAAction).where(CAPAAction.source_type == CAPASource.INDUCTION)
+        q = (
+            select(CAPAAction)
+            .where(CAPAAction.source_type == CAPASource.INDUCTION)
+            .order_by(CAPAAction.created_at.desc())
+        )
         if status_filter:
-            capa_status_map = {
-                "completed": CAPAStatus.CLOSED,
-                "pending_verification": CAPAStatus.VERIFICATION,
-            }
-            capa_status = capa_status_map.get(status_filter)
-            if capa_status is not None:
-                capa_ind_query = capa_ind_query.where(CAPAAction.status == capa_status)
-            else:
-                try:
-                    capa_status = CAPAStatus(status_filter)
-                    capa_ind_query = capa_ind_query.where(CAPAAction.status == capa_status)
-                except ValueError:
-                    logger.warning("Unknown status filter '%s' for source type, skipping filter", status_filter)
+            q = _apply_capa_status_filter(q, status_filter)
         if source_type == "induction" and source_reference:
-            capa_ind_query = capa_ind_query.where(CAPAAction.source_reference == source_reference)
+            q = q.where(CAPAAction.source_reference == source_reference)
+        if source_type:
+            q = q.offset(offset).limit(page_size)
+        else:
+            q = q.limit(_cross_source_cap)
+        result = await db.execute(q)
+        for a in result.scalars().all():
+            actions_list.append(_capa_to_response(a, "induction"))
 
-        capa_ind_result = await db.execute(capa_ind_query)
-        for capa_action in capa_ind_result.scalars().all():
-            actions_list.append(_capa_to_response(capa_action, "induction"))
-
-    # Sort by created_at descending
-    actions_list.sort(key=lambda x: x.created_at, reverse=True)
-
-    # Apply pagination
-    total = len(actions_list)
-    start = (page - 1) * page_size
-    end = start + page_size
-    paginated = actions_list[start:end]
+    # When listing across ALL source types, merge-sort and slice in Python
+    # (cross-table UNION ALL with heterogeneous schemas is impractical here).
+    if not source_type:
+        actions_list.sort(key=lambda x: x.created_at, reverse=True)
+        actions_list = actions_list[offset : offset + page_size]
 
     return ActionListResponse(
-        items=paginated,
+        items=actions_list,
         total=total,
         page=page,
         page_size=page_size,

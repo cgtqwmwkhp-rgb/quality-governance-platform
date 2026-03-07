@@ -72,7 +72,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         CaseInsensitiveEnum(ComplaintPriority), default=ComplaintPriority.MEDIUM
     )
     status: Mapped[ComplaintStatus] = mapped_column(
-        CaseInsensitiveEnum(ComplaintStatus), default=ComplaintStatus.RECEIVED
+        CaseInsensitiveEnum(ComplaintStatus), default=ComplaintStatus.RECEIVED, index=True
     )
 
     # Dates
@@ -142,7 +142,9 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
     __tablename__ = "complaint_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    complaint_id: Mapped[int] = mapped_column(ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False)
+    complaint_id: Mapped[int] = mapped_column(
+        ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # Action details
     title: Mapped[str] = mapped_column(String(300), nullable=False)

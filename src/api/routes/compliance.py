@@ -14,6 +14,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from src.api.dependencies import CurrentUser
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 
 router = APIRouter()
@@ -80,6 +81,7 @@ class GapClause(BaseModel):
 
 @router.get("/clauses", response_model=List[ClauseResponse])
 async def list_clauses(
+    current_user: CurrentUser,
     standard: Optional[str] = Query(None, description="Filter by ISO standard (iso9001, iso14001, iso45001)"),
     level: Optional[int] = Query(None, description="Filter by clause level (1=main, 2=sub)"),
     search: Optional[str] = Query(None, description="Search by keyword or clause number"),
@@ -118,7 +120,7 @@ async def list_clauses(
 
 
 @router.get("/clauses/{clause_id}", response_model=ClauseResponse)
-async def get_clause(clause_id: str):
+async def get_clause(clause_id: str, current_user: CurrentUser):
     """Get a specific ISO clause by ID."""
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
@@ -137,7 +139,7 @@ async def get_clause(clause_id: str):
 
 
 @router.post("/auto-tag", response_model=List[AutoTagResponse])
-async def auto_tag_content(request: AutoTagRequest):
+async def auto_tag_content(request: AutoTagRequest, current_user: CurrentUser):
     """
     Automatically detect ISO clauses that relate to the given content.
 
@@ -157,7 +159,7 @@ async def auto_tag_content(request: AutoTagRequest):
 
 
 @router.post("/evidence/link")
-async def link_evidence(request: EvidenceLinkRequest):
+async def link_evidence(request: EvidenceLinkRequest, current_user: CurrentUser):
     """
     Link an entity (document, audit, incident, etc.) to ISO clauses.
 
@@ -192,7 +194,9 @@ async def link_evidence(request: EvidenceLinkRequest):
 
 
 @router.get("/coverage")
-async def get_compliance_coverage(standard: Optional[str] = Query(None, description="Filter by ISO standard")):
+async def get_compliance_coverage(
+    current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")
+):
     """
     Get compliance coverage statistics showing how many clauses
     have evidence linked to them.
@@ -212,7 +216,9 @@ async def get_compliance_coverage(standard: Optional[str] = Query(None, descript
 
 
 @router.get("/gaps")
-async def get_compliance_gaps(standard: Optional[str] = Query(None, description="Filter by ISO standard")):
+async def get_compliance_gaps(
+    current_user: CurrentUser, standard: Optional[str] = Query(None, description="Filter by ISO standard")
+):
     """
     Get list of ISO clauses that have no evidence linked to them.
     These represent compliance gaps that need attention.
@@ -234,6 +240,7 @@ async def get_compliance_gaps(standard: Optional[str] = Query(None, description=
 
 @router.get("/report")
 async def generate_compliance_report(
+    current_user: CurrentUser,
     standard: Optional[str] = Query(None, description="Filter by ISO standard"),
     include_evidence: bool = Query(True, description="Include evidence details in report"),
 ):
@@ -256,7 +263,7 @@ async def generate_compliance_report(
 
 
 @router.get("/standards")
-async def list_standards():
+async def list_standards(current_user: CurrentUser):
     """List all supported ISO standards."""
     return [
         {

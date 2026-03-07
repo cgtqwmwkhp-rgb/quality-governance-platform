@@ -22,6 +22,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, validator
 
+from src.api.dependencies import CurrentUser
+
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 logger = logging.getLogger(__name__)
@@ -312,11 +314,12 @@ async def receive_events_batch(batch: TelemetryBatch):
 
 
 @router.get("/metrics/{experiment_id}")
-async def get_metrics(experiment_id: str):
+async def get_metrics(
+    experiment_id: str,
+    current_user: CurrentUser,
+):
     """
-    Get aggregated metrics for an experiment.
-
-    Used by the evaluator to check current sample count and metrics.
+    Get aggregated metrics for an experiment. Requires authentication.
     """
     if experiment_id != "EXP_001":
         raise HTTPException(status_code=404, detail="Experiment not found")
@@ -326,10 +329,16 @@ async def get_metrics(experiment_id: str):
 
 
 @router.delete("/metrics/{experiment_id}")
-async def reset_metrics(experiment_id: str):
+async def reset_metrics(
+    experiment_id: str,
+    current_user: CurrentUser,
+):
     """
-    Reset metrics for an experiment (staging only, for testing).
+    Reset metrics for an experiment. Requires authentication (admin only).
     """
+    if not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     if experiment_id != "EXP_001":
         raise HTTPException(status_code=404, detail="Experiment not found")
 

@@ -6,6 +6,8 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import { LiveAnnouncerProvider } from './components/ui/LiveAnnouncer'
 import { TooltipProvider } from './components/ui/Tooltip'
 import { initErrorTracking } from './services/errorTracker'
+import { reportWebVitals } from './lib/webVitals'
+import './styles/design-tokens.css'
 import './index.css'
 
 // Build version stamp for deployment verification
@@ -20,6 +22,7 @@ const BUILD_TIME = import.meta.env.VITE_BUILD_TIME || new Date().toISOString()
 console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`)
 
 initErrorTracking()
+reportWebVitals()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

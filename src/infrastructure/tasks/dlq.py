@@ -54,8 +54,25 @@ def _persist_failed_task(
             session.add(record)
             session.commit()
 
-            count = session.query(func.count(FailedTask.id)).scalar()
+            count = session.query(func.count(FailedTask.id)).scalar() or 0
             track_metric("dlq.size", count)
+
+            DLQ_WARN_THRESHOLD = 10
+            DLQ_CRITICAL_THRESHOLD = 50
+            if count >= DLQ_CRITICAL_THRESHOLD:
+                logger.critical(
+                    "DLQ depth CRITICAL: %d failed tasks pending review",
+                    count,
+                    extra={"dlq_depth": count, "threshold": DLQ_CRITICAL_THRESHOLD},
+                )
+                track_metric("dlq.alert", 1, {"severity": "critical"})
+            elif count >= DLQ_WARN_THRESHOLD:
+                logger.warning(
+                    "DLQ depth WARNING: %d failed tasks pending review",
+                    count,
+                    extra={"dlq_depth": count, "threshold": DLQ_WARN_THRESHOLD},
+                )
+                track_metric("dlq.alert", 1, {"severity": "warning"})
     except Exception:
         logger.exception("Failed to persist task to DLQ table")
 

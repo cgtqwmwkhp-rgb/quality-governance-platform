@@ -237,7 +237,8 @@ class RedisCache:
 
     async def clear(self) -> bool:
         """Clear all cache entries with prefix."""
-        return await self.delete_pattern("*") > 0
+        count = await self.delete_pattern("*")
+        return count > 0
 
     async def get_stats(self) -> dict:
         """Get cache statistics."""
@@ -295,7 +296,7 @@ def cached(
     ttl: int = 300,
     key_prefix: Optional[str] = None,
     cache_type: Optional[CacheType] = None,
-):
+) -> Callable:
     """
     Decorator for caching function results.
 
@@ -309,40 +310,35 @@ def cached(
             ...
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             cache = get_cache()
 
-            # Build cache key
             prefix = key_prefix or f"{func.__module__}.{func.__name__}"
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
 
-            # Check cache
             cached_value = await cache.get(cache_key)
             if cached_value is not None:
                 return cached_value
 
-            # Call function
             result = await func(*args, **kwargs)
 
-            # Cache result
             cache_ttl = cache_type.value if cache_type else ttl
             await cache.set(cache_key, result, cache_ttl)
 
             return result
 
-        # Add cache invalidation helper
-        async def invalidate(*args, **kwargs):
+        async def _invalidate(*args: Any, **kwargs: Any) -> None:
             cache = get_cache()
             prefix = key_prefix or f"{func.__module__}.{func.__name__}"
             arg_key = make_cache_key(*args, **kwargs)
             cache_key = f"{prefix}:{arg_key}"
             await cache.delete(cache_key)
 
-        wrapper.invalidate = invalidate
-        wrapper.invalidate_all = lambda: get_cache().delete_pattern(
+        wrapper.invalidate = _invalidate  # type: ignore[attr-defined]
+        wrapper.invalidate_all = lambda: get_cache().delete_pattern(  # type: ignore[attr-defined]
             f"{key_prefix or func.__module__}.{func.__name__}:*"
         )
 
@@ -351,7 +347,7 @@ def cached(
     return decorator
 
 
-def invalidate_cache(pattern: str):
+def invalidate_cache(pattern: str) -> Callable:
     """
     Decorator to invalidate cache after function execution.
 
@@ -361,9 +357,9 @@ def invalidate_cache(pattern: str):
             ...
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        async def wrapper(*args, **kwargs) -> T:
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             result = await func(*args, **kwargs)
             cache = get_cache()
             await cache.delete_pattern(pattern)
