@@ -1,0 +1,92 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Auth & Security Dashboard — Quality Governance Platform",
+    "version": "1.0.0",
+    "created": "2026-03-07"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Portal/dashboards",
+      "apiVersion": "2020-09-01-preview",
+      "name": "govplat-auth-security",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "lenses": {
+          "0": {
+            "order": 0,
+            "parts": {
+              "0": {
+                "position": { "x": 0, "y": 0, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Login Success vs Failure Rate",
+                    "query": "requests | where name contains '/auth/login' | summarize Success=countif(resultCode == 200), Failure=countif(resultCode == 401 or resultCode == 403) by bin(timestamp, 5m) | order by timestamp desc | take 60",
+                    "visualization": "linechart"
+                  }
+                }
+              },
+              "1": {
+                "position": { "x": 6, "y": 0, "colSpan": 6, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Rate Limit Hits (429 responses)",
+                    "query": "requests | where resultCode == 429 | summarize Count=count() by bin(timestamp, 5m), name | order by timestamp desc",
+                    "visualization": "barchart"
+                  }
+                }
+              },
+              "2": {
+                "position": { "x": 0, "y": 4, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "401 Unauthorized by Endpoint",
+                    "query": "requests | where resultCode == 401 | summarize Count=count() by name | order by Count desc | take 15",
+                    "visualization": "table"
+                  }
+                }
+              },
+              "3": {
+                "position": { "x": 4, "y": 4, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "403 Forbidden by Endpoint",
+                    "query": "requests | where resultCode == 403 | summarize Count=count() by name | order by Count desc | take 15",
+                    "visualization": "table"
+                  }
+                }
+              },
+              "4": {
+                "position": { "x": 8, "y": 4, "colSpan": 4, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Failed Login IPs (Top 20)",
+                    "query": "requests | where name contains '/auth/login' and resultCode == 401 | summarize Count=count() by client_IP | order by Count desc | take 20",
+                    "visualization": "table"
+                  }
+                }
+              },
+              "5": {
+                "position": { "x": 0, "y": 8, "colSpan": 12, "rowSpan": 4 },
+                "metadata": {
+                  "type": "Extension/Microsoft_OperationsManagementSuite_Workspace/PartType/LogsDashboardPart",
+                  "settings": {
+                    "title": "Token Refresh Activity",
+                    "query": "requests | where name contains '/auth/refresh' | summarize Success=countif(resultCode == 200), Failure=countif(resultCode != 200) by bin(timestamp, 15m) | order by timestamp desc",
+                    "visualization": "linechart"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

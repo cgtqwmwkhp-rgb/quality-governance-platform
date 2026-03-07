@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
-from src.api.dependencies import DbSession
+from src.api.dependencies import CurrentActiveUser, CurrentSuperuser, DbSession
 from src.domain.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -87,7 +87,7 @@ class TenantResponse(BaseModel):
 async def create_tenant(
     data: TenantCreate,
     db: DbSession,
-    # current_user = Depends(get_current_superuser),  # Only superusers can create tenants
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Create a new tenant."""
     service = TenantService(db)
@@ -97,7 +97,7 @@ async def create_tenant(
             name=data.name,
             slug=data.slug,
             admin_email=data.admin_email,
-            admin_user_id=1,  # Should be current_user.id
+            admin_user_id=current_user.id,
             subscription_tier=data.subscription_tier,
             domain=data.domain,
         )
@@ -109,6 +109,7 @@ async def create_tenant(
 @router.get("/", response_model=list[TenantResponse])
 async def list_tenants(
     db: DbSession,
+    current_user: CurrentSuperuser,
     skip: int = 0,
     limit: int = 100,
 ) -> Any:
@@ -123,11 +124,11 @@ async def list_tenants(
 @router.get("/current", response_model=TenantResponse)
 async def get_current_tenant(
     db: DbSession,
-    # tenant_id: int = Depends(get_current_tenant_id),
+    current_user: CurrentActiveUser,
 ) -> Any:
     """Get the current tenant context."""
     service = TenantService(db)
-    tenant = await service.get_tenant(1)  # Should use tenant_id from context
+    tenant = await service.get_tenant(current_user.tenant_id)
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
@@ -139,6 +140,7 @@ async def get_current_tenant(
 async def get_tenant(
     tenant_id: int,
     db: DbSession,
+    current_user: CurrentActiveUser,
 ) -> Any:
     """Get tenant by ID."""
     service = TenantService(db)
@@ -155,6 +157,7 @@ async def update_tenant(
     tenant_id: int,
     data: TenantUpdate,
     db: DbSession,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Update tenant settings."""
     service = TenantService(db)
@@ -177,6 +180,7 @@ async def update_branding(
     tenant_id: int,
     data: TenantBranding,
     db: DbSession,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Update tenant branding."""
     service = TenantService(db)
@@ -197,6 +201,7 @@ async def update_branding(
 async def list_tenant_users(
     tenant_id: int,
     db: DbSession,
+    current_user: CurrentActiveUser,
 ) -> Any:
     """List all users in a tenant."""
     service = TenantService(db)
@@ -221,6 +226,7 @@ async def add_user_to_tenant(
     tenant_id: int,
     data: TenantUserAdd,
     db: DbSession,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Add a user to a tenant."""
     service = TenantService(db)
@@ -244,6 +250,7 @@ async def remove_user_from_tenant(
     tenant_id: int,
     user_id: int,
     db: DbSession,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Remove a user from a tenant."""
     service = TenantService(db)
@@ -265,6 +272,7 @@ async def create_invitation(
     tenant_id: int,
     data: TenantInvite,
     db: DbSession,
+    current_user: CurrentSuperuser,
 ) -> Any:
     """Create an invitation to join a tenant."""
     service = TenantService(db)
@@ -272,7 +280,7 @@ async def create_invitation(
     invitation = await service.create_invitation(
         tenant_id=tenant_id,
         email=data.email,
-        invited_by_id=1,  # Should be current_user.id
+        invited_by_id=current_user.id,
         role=data.role,
     )
 
@@ -288,12 +296,13 @@ async def create_invitation(
 async def accept_invitation(
     token: str,
     db: DbSession,
+    current_user: CurrentActiveUser,
 ) -> Any:
     """Accept a tenant invitation."""
     service = TenantService(db)
 
     try:
-        tenant_user = await service.accept_invitation(token, user_id=1)  # Should be current_user.id
+        tenant_user = await service.accept_invitation(token, user_id=current_user.id)
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -308,6 +317,7 @@ async def accept_invitation(
 async def get_features(
     tenant_id: int,
     db: DbSession,
+    current_user: CurrentActiveUser,
 ) -> Any:
     """Get enabled features for a tenant."""
     service = TenantService(db)
@@ -324,6 +334,7 @@ async def toggle_feature(
     tenant_id: int,
     feature: str,
     db: DbSession,
+    current_user: CurrentSuperuser,
     enabled: bool = True,
 ) -> Any:
     """Enable or disable a feature for a tenant."""
@@ -346,6 +357,7 @@ async def toggle_feature(
 async def get_limits(
     tenant_id: int,
     db: DbSession,
+    current_user: CurrentActiveUser,
 ) -> Any:
     """Get usage limits for a tenant."""
     service = TenantService(db)

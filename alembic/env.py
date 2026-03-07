@@ -9,30 +9,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from src.core.config import settings
-from src.domain.models import (
-    AuditFinding,
-    AuditQuestion,
-    AuditRun,
-    AuditTemplate,
-    Clause,
-    Complaint,
-    ComplaintAction,
-    Control,
-    Incident,
-    IncidentAction,
-    OperationalRiskControl,
-    Policy,
-    PolicyVersion,
-    Risk,
-    RiskAssessment,
-    RoadTrafficCollision,
-    Role,
-    RTAAction,
-    Standard,
-    User,
-)
 
-# Import all models to ensure they are registered with Base.metadata
+# Import ALL models so autogenerate sees the complete schema.
+# The package __init__.py re-exports every model via __all__.
+from src.domain.models import *  # noqa: F401,F403
 from src.infrastructure.database import Base
 
 # this is the Alembic Config object

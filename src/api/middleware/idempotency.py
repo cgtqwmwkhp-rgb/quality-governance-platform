@@ -74,22 +74,24 @@ def _make_key(idempotency_key: str) -> str:
     return f"idem:{idempotency_key}"
 
 
+_IDEMPOTENT_METHODS = {"POST", "PUT", "PATCH"}
+
+
 class IdempotencyMiddleware(BaseHTTPMiddleware):
     """
-    Middleware to handle idempotency keys for POST requests.
+    Middleware to handle idempotency keys for mutating requests.
 
-    Intercepts POST requests with Idempotency-Key header:
+    Intercepts POST/PUT/PATCH requests with Idempotency-Key header:
     - Checks Redis for existing cached response
     - If found and payload hash matches, returns cached response
     - If found but payload hash differs, returns 409 Conflict
     - If not found, executes request and caches response with 24h TTL
-    - Skips non-POST requests
+    - Skips GET/DELETE/OPTIONS/HEAD requests
     - Falls back gracefully if Redis is unavailable
     """
 
     async def dispatch(self, request: Request, call_next):
-        # Skip non-POST requests
-        if request.method != "POST":
+        if request.method not in _IDEMPOTENT_METHODS:
             return await call_next(request)
 
         # Check for Idempotency-Key header
@@ -133,8 +135,11 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                     return JSONResponse(
                         status_code=409,
                         content={
-                            "detail": "Idempotency key conflict: request payload differs from original request",
-                            "error_code": "IDEMPOTENCY_CONFLICT",
+                            "error": {
+                                "code": "IDEMPOTENCY_CONFLICT",
+                                "message": "Idempotency key conflict: request payload differs from original request",
+                                "details": {"idempotency_key": idempotency_key},
+                            }
                         },
                     )
 

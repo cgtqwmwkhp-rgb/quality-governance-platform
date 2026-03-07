@@ -11,6 +11,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.policy import PolicyCreate, PolicyListResponse, PolicyResponse, PolicyUpdate
 from src.domain.models.policy import Policy
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
 
@@ -50,19 +51,15 @@ async def create_policy(
                 detail=f"Policy with reference number {reference_number} already exists",
             )
     else:
-        # Generate reference number (format: POL-YYYY-NNNN)
-        year = datetime.now(timezone.utc).year
-        count_result = await db.execute(select(sa_func.count()).select_from(Policy))
-        count = count_result.scalar_one()
-        reference_number = f"POL-{year}-{count + 1:04d}"
+        reference_number = await ReferenceNumberService.generate(db, "policy", Policy)
 
-    # Create new policy
     policy = Policy(
         title=policy_data.title,
         description=policy_data.description,
         document_type=policy_data.document_type,
         status=policy_data.status,
         reference_number=reference_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -101,7 +98,10 @@ async def get_policy(
 
     Requires authentication.
     """
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    query = select(Policy).where(Policy.id == policy_id)
+    if not getattr(current_user, "is_superuser", False):
+        query = query.where(Policy.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -127,21 +127,19 @@ async def list_policies(
     """
     List all policies with deterministic ordering.
 
-    Policies are ordered by:
-    1. reference_number DESC (newest first)
-    2. id ASC (stable secondary sort)
-
-    Requires authentication.
+    Requires authentication. Scoped to current user's tenant.
     """
-    # Count total
-    count_result = await db.execute(select(sa_func.count()).select_from(Policy))
+    base = select(Policy)
+    if not getattr(current_user, "is_superuser", False):
+        base = base.where(Policy.tenant_id == current_user.tenant_id)
+
+    count_result = await db.execute(select(sa_func.count()).select_from(base.subquery()))
     total = count_result.scalar_one()
 
-    # Get paginated results with deterministic ordering
     offset = (page - 1) * page_size
     result = await db.execute(
-        select(Policy)
-        .order_by(Policy.reference_number.desc(), Policy.id.asc())  # Deterministic ordering
+        base
+        .order_by(Policy.reference_number.desc(), Policy.id.asc())
         .limit(page_size)
         .offset(offset)
     )

@@ -46,7 +46,7 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[RTASeverity] = mapped_column(CaseInsensitiveEnum(RTASeverity), default=RTASeverity.DAMAGE_ONLY)
-    status: Mapped[RTAStatus] = mapped_column(CaseInsensitiveEnum(RTAStatus), default=RTAStatus.REPORTED)
+    status: Mapped[RTAStatus] = mapped_column(CaseInsensitiveEnum(RTAStatus), default=RTAStatus.REPORTED, index=True)
 
     # When and where
     collision_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -154,7 +154,7 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __tablename__ = "rta_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    rta_id: Mapped[int] = mapped_column(ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False)
+    rta_id: Mapped[int] = mapped_column(ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Multi-tenancy
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

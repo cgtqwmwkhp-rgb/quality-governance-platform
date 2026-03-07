@@ -38,17 +38,22 @@ module.exports = [
       '@typescript-eslint/no-empty-function': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
 
-      'jsx-a11y/anchor-is-valid': 'warn',
-      'jsx-a11y/click-events-have-key-events': 'warn',
-      'jsx-a11y/no-static-element-interactions': 'warn',
+      'jsx-a11y/anchor-is-valid': 'error',
+      'jsx-a11y/click-events-have-key-events': 'error',
+      'jsx-a11y/no-static-element-interactions': 'error',
       'jsx-a11y/no-noninteractive-element-interactions': 'warn',
-      'jsx-a11y/alt-text': 'warn',
-      'jsx-a11y/label-has-associated-control': ['warn', {
+      'jsx-a11y/alt-text': 'error',
+      'jsx-a11y/label-has-associated-control': ['error', {
         controlComponents: ['Input', 'Textarea', 'Select', 'SelectTrigger'],
         assert: 'either',
         depth: 3,
       }],
-      'jsx-a11y/heading-has-content': 'warn',
+      'jsx-a11y/heading-has-content': 'error',
+      'jsx-a11y/aria-props': 'error',
+      'jsx-a11y/aria-role': 'error',
+      'jsx-a11y/role-has-required-aria-props': 'error',
+      'jsx-a11y/no-redundant-roles': 'warn',
+      'jsx-a11y/tabindex-no-positive': 'error',
     },
   },
   {

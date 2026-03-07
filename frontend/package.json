@@ -15,6 +15,7 @@
     "size-check": "npx size-limit",
     "lighthouse": "lhci autorun",
     "test:coverage": "vitest run --coverage",
+    "test:a11y": "vitest run --reporter=verbose src/**/*.a11y.test.{ts,tsx}",
     "i18n:check": "node ../scripts/i18n-check.mjs"
   },
   "dependencies": {
@@ -58,6 +59,7 @@
     "eslint-plugin-jsx-a11y": "^6.8.0",
     "eslint-plugin-react": "^7.33.0",
     "eslint-plugin-react-hooks": "^4.6.0",
+    "jest-axe": "^9.0.0",
     "jsdom": "^28.1.0",
     "postcss": "^8.5.8",
     "size-limit": "^12.0.0",

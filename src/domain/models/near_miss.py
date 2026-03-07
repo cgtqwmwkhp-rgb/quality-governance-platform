@@ -64,7 +64,7 @@ class NearMiss(Base):
     source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_near_miss_v1
 
     # Status workflow
-    status: Mapped[str] = mapped_column(String(50), default="REPORTED", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="REPORTED", nullable=False, index=True)
     # REPORTED -> UNDER_REVIEW -> ACTION_REQUIRED -> IN_PROGRESS -> CLOSED
 
     priority: Mapped[str] = mapped_column(String(20), default="MEDIUM", nullable=False)

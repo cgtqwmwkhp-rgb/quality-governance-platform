@@ -11,6 +11,7 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Complaints"])
 
@@ -48,16 +49,12 @@ async def create_complaint(
                 },
             )
 
-    # Generate reference number: COMP-YYYY-NNNN
-    year = datetime.now().year
-    count_query = select(func.count()).select_from(Complaint)
-    result = await db.execute(count_query)
-    count = result.scalar() or 0
-    ref_num = f"COMP-{year}-{count + 1:04d}"
+    ref_num = await ReferenceNumberService.generate(db, "complaint", Complaint)
 
     complaint = Complaint(
         **complaint_in.model_dump(),
         reference_number=ref_num,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(complaint)
@@ -90,7 +87,10 @@ async def get_complaint(
 
     Requires authentication.
     """
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
+    query = select(Complaint).where(Complaint.id == complaint_id)
+    if not current_user.is_superuser:
+        query = query.where(Complaint.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     complaint = result.scalar_one_or_none()
 
     if not complaint:
@@ -164,6 +164,9 @@ async def list_complaints(
     try:
         query = select(Complaint)
 
+        if not current_user.is_superuser:
+            query = query.where(Complaint.tenant_id == current_user.tenant_id)
+
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
         if status_filter:
@@ -228,7 +231,10 @@ async def update_complaint(
 
     Requires authentication.
     """
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
+    query = select(Complaint).where(Complaint.id == complaint_id)
+    if not current_user.is_superuser:
+        query = query.where(Complaint.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     complaint = result.scalar_one_or_none()
 
     if not complaint:
@@ -285,8 +291,10 @@ async def list_complaint_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    # Verify complaint exists
-    result = await db.execute(select(Complaint).where(Complaint.id == complaint_id))
+    query = select(Complaint).where(Complaint.id == complaint_id)
+    if not current_user.is_superuser:
+        query = query.where(Complaint.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     complaint = result.scalar_one_or_none()
 
     if not complaint:

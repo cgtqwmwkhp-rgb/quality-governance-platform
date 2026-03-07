@@ -27,6 +27,7 @@ from src.api.routes import (
     engineers,
     evidence_assets,
     executive_dashboard,
+    feature_flags,
     form_config,
     governance,
     incidents,
@@ -148,5 +149,7 @@ if _os.getenv("APP_ENV", "production") != "production":
     router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
 router.include_router(telemetry.router, tags=["Telemetry"])
+# Feature Flags (DB-backed, toggleable without redeploy)
+router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feature Flags"])
 
 __all__ = ["router"]

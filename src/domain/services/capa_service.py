@@ -12,8 +12,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginatedResponse, PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -66,7 +66,7 @@ class CAPAService:
             )
 
         query = query.order_by(CAPAAction.created_at.desc())
-        params = PaginationParams(page=page, page_size=page_size)  # type: ignore[call-arg]  # TYPE-IGNORE: MYPY-OVERRIDE
+        params = PaginationInput(page=page, page_size=page_size)
         return await paginate(self.db, query, params)
 
     async def create_capa_action(

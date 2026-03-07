@@ -68,7 +68,7 @@ async def list_standards(
         total=total or 0,
         page=page,
         page_size=page_size,
-        pages=(total or 0 + page_size - 1) // page_size,
+        pages=((total or 0) + page_size - 1) // page_size,
     )
 
 
@@ -216,19 +216,15 @@ async def get_compliance_score(
     )
 
 
-@router.get("/{standard_id}/controls", response_model=list[ControlListItem])
+@router.get("/{standard_id}/controls", response_model=dict)
 async def list_standard_controls(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[ControlListItem]:
-    """
-    List all controls for a standard (flat view).
-
-    Returns controls with clause reference, ordered deterministically by:
-    clause.sort_order, clause.clause_number, control.control_number, control.id
-    """
-    # Verify standard exists
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+) -> dict:
+    """List controls for a standard (flat view) with pagination."""
     result = await db.execute(select(Standard).where(Standard.id == standard_id))
     if not result.scalar_one_or_none():
         raise HTTPException(
@@ -236,23 +232,27 @@ async def list_standard_controls(
             detail="Standard not found",
         )
 
-    # Get all controls with clause info, deterministically ordered
-    query = (
+    base = (
         select(Control, Clause.clause_number, Clause.sort_order)
         .join(Clause, Control.clause_id == Clause.id)
         .where(Clause.standard_id == standard_id)
         .where(Control.is_active == True)
-        .order_by(
-            Clause.sort_order,
-            Clause.clause_number,
-            Control.control_number,
-            Control.id,  # Tie-breaker for determinism
-        )
+        .order_by(Clause.sort_order, Clause.clause_number, Control.control_number, Control.id)
     )
-    result = await db.execute(query)
+    count_q = (
+        select(func.count())
+        .select_from(Control)
+        .join(Clause, Control.clause_id == Clause.id)
+        .where(Clause.standard_id == standard_id)
+        .where(Control.is_active == True)
+    )
+    total = (await db.execute(count_q)).scalar_one()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(base.offset(offset).limit(page_size))
     rows = result.all()
 
-    return [
+    items = [
         ControlListItem(
             id=control.id,
             clause_id=control.clause_id,
@@ -265,20 +265,28 @@ async def list_standard_controls(
         )
         for control, clause_number, _ in rows
     ]
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total > 0 else 0,
+    }
 
 
 # ============== Clause Endpoints ==============
 
 
-@router.get("/{standard_id}/clauses", response_model=list[ClauseResponse])
+@router.get("/{standard_id}/clauses", response_model=dict)
 async def list_clauses(
     standard_id: int,
     db: DbSession,
     current_user: CurrentUser,
     parent_clause_id: Optional[int] = None,
-) -> list[ClauseResponse]:
-    """List clauses for a standard."""
-    # Verify standard exists
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
+) -> dict:
+    """List clauses for a standard with pagination."""
     result = await db.execute(select(Standard).where(Standard.id == standard_id))
     if not result.scalar_one_or_none():
         raise HTTPException(
@@ -286,7 +294,7 @@ async def list_clauses(
             detail="Standard not found",
         )
 
-    query = (
+    base = (
         select(Clause)
         .options(selectinload(Clause.controls))
         .where(Clause.standard_id == standard_id)
@@ -294,16 +302,26 @@ async def list_clauses(
     )
 
     if parent_clause_id is not None:
-        query = query.where(Clause.parent_clause_id == parent_clause_id)
+        base = base.where(Clause.parent_clause_id == parent_clause_id)
     else:
-        query = query.where(Clause.parent_clause_id.is_(None))
+        base = base.where(Clause.parent_clause_id.is_(None))
 
-    query = query.order_by(Clause.sort_order, Clause.clause_number)
+    base = base.order_by(Clause.sort_order, Clause.clause_number)
 
-    result = await db.execute(query)
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+
+    offset = (page - 1) * page_size
+    result = await db.execute(base.offset(offset).limit(page_size))
     clauses = result.scalars().all()
 
-    return [ClauseResponse.model_validate(c) for c in clauses]
+    return {
+        "items": [ClauseResponse.model_validate(c) for c in clauses],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total > 0 else 0,
+    }
 
 
 @router.post(

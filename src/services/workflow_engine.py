@@ -194,21 +194,21 @@ class ActionExecutor:
 
     async def _execute_assign_to_user(
         self,
-        config: Dict,
+        config: Dict[str, Any],
         entity_type: EntityType,
         entity_id: int,
-        entity_data: Dict,
-    ) -> Dict:
+        entity_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """Assign entity to a specific user."""
         user_id = config.get("user_id")
 
-        # Update the entity's assigned_to field
-        # This requires getting the appropriate model
         model = self._get_model_for_entity(entity_type)
-        if model:
+        if model is not None:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(assigned_to_id=user_id))
+            await self.db.execute(
+                update(model).where(model.id == entity_id).values(assigned_to_id=user_id)  # type: ignore[attr-defined]
+            )
             await self.db.commit()
 
         return {
@@ -241,19 +241,21 @@ class ActionExecutor:
 
     async def _execute_change_status(
         self,
-        config: Dict,
+        config: Dict[str, Any],
         entity_type: EntityType,
         entity_id: int,
-        entity_data: Dict,
-    ) -> Dict:
+        entity_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """Change entity status."""
         new_status = config.get("new_status")
 
         model = self._get_model_for_entity(entity_type)
-        if model:
+        if model is not None:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(status=new_status))
+            await self.db.execute(
+                update(model).where(model.id == entity_id).values(status=new_status)  # type: ignore[attr-defined]
+            )
             await self.db.commit()
 
         return {
@@ -264,19 +266,21 @@ class ActionExecutor:
 
     async def _execute_change_priority(
         self,
-        config: Dict,
+        config: Dict[str, Any],
         entity_type: EntityType,
         entity_id: int,
-        entity_data: Dict,
-    ) -> Dict:
+        entity_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """Change entity priority."""
         new_priority = config.get("new_priority")
 
         model = self._get_model_for_entity(entity_type)
-        if model:
+        if model is not None:
             from sqlalchemy import update
 
-            await self.db.execute(update(model).where(model.id == entity_id).values(priority=new_priority))
+            await self.db.execute(
+                update(model).where(model.id == entity_id).values(priority=new_priority)  # type: ignore[attr-defined]
+            )
             await self.db.commit()
 
         return {
@@ -310,12 +314,12 @@ class ActionExecutor:
 
         if escalation:
             model = self._get_model_for_entity(entity_type)
-            if model:
+            if model is not None:
                 from sqlalchemy import update
 
                 await self.db.execute(
                     update(model)
-                    .where(model.id == entity_id)
+                    .where(model.id == entity_id)  # type: ignore[attr-defined]
                     .values(
                         escalation_level=new_level,
                         status="escalated",
@@ -431,20 +435,18 @@ class ActionExecutor:
             "queued": True,
         }
 
-    def _get_model_for_entity(self, entity_type: EntityType):
+    def _get_model_for_entity(self, entity_type: EntityType) -> Optional[Type[Any]]:
         """Get SQLAlchemy model for entity type."""
-        # Import models here to avoid circular imports
         from src.domain.models.complaint import Complaint
         from src.domain.models.incident import Incident
         from src.domain.models.near_miss import NearMiss
         from src.domain.models.rta import RTA
 
-        models = {
+        models: Dict[EntityType, Type[Any]] = {
             EntityType.INCIDENT: Incident,
             EntityType.NEAR_MISS: NearMiss,
             EntityType.COMPLAINT: Complaint,
             EntityType.RTA: RTA,
-            # Add more as needed
         }
         return models.get(entity_type)
 
@@ -587,8 +589,7 @@ class WorkflowEngine:
             if not model:
                 continue
 
-            # Calculate threshold time
-            threshold = datetime.utcnow() - timedelta(hours=rule.delay_hours)
+            threshold = datetime.utcnow() - timedelta(hours=float(rule.delay_hours or 0))
             delay_field = rule.delay_from_field or "created_at"
 
             # This is a simplified example - real implementation would be more sophisticated
@@ -772,9 +773,9 @@ class SLAService:
     async def resume_tracking(self, entity_type: EntityType, entity_id: int) -> Optional[SLATracking]:
         """Resume SLA tracking."""
         tracking = await self._get_tracking(entity_type, entity_id)
-        if tracking and tracking.is_paused:
+        if tracking and tracking.is_paused and tracking.paused_at is not None:
             paused_duration = (datetime.utcnow() - tracking.paused_at).total_seconds() / 3600
-            tracking.total_paused_hours += paused_duration
+            tracking.total_paused_hours = (tracking.total_paused_hours or 0) + paused_duration
             tracking.is_paused = False
             tracking.paused_at = None
 

@@ -115,7 +115,23 @@ Proprietary - All rights reserved.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 
-## Stage 2.0 Covenants
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+## Governance
 
 - [Stage 2.0 Covenants](./docs/STAGE2_COVENANTS.md)
 - [Pull Request Template](./.github/PULL_REQUEST_TEMPLATE.md)
+- [Architecture Decision Records](./docs/adr/)
+- [Operational Runbooks](./docs/runbooks/)
+- [SLO Definitions](./docs/observability/slo-definitions.md)
+- [Assessment & Uplift Plan](./docs/assessments/)
+- [WCAG 2.1 AA Accessibility Checklist](./docs/accessibility/wcag-checklist.md)
+- [User Personas & Journeys](./docs/user-journeys/personas-and-journeys.md)
+- [DPIA — Incident & Complaint Modules](./docs/privacy/dpia-incidents.md)
+- [Data Classification Policy](./docs/privacy/data-classification.md)
+- [Information Architecture Audit](./docs/ux/information-architecture.md)
+- [Component Inventory](./docs/ux/component-inventory.md)
+- [Analytics Baseline](./docs/ux/analytics-baseline.md)
+- [Azure Monitor Dashboards](./docs/observability/dashboards/)

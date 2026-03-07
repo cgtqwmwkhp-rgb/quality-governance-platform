@@ -28,6 +28,21 @@ from src.api.utils.errors import api_error
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
 
+
+async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
+    """Load a risk with tenant isolation."""
+    query = select(Risk).where(Risk.id == risk_id)
+    if not getattr(current_user, "is_superuser", False):
+        query = query.where(Risk.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
+        )
+    return risk
+
 router = APIRouter()
 
 
@@ -97,6 +112,9 @@ async def list_risks(
     """List all risks with pagination and filtering."""
     query = select(Risk).where(Risk.is_active == True)
 
+    if not current_user.is_superuser:
+        query = query.where(Risk.tenant_id == current_user.tenant_id)
+
     if search:
         search_filter = f"%{search}%"
         query = query.where((Risk.title.ilike(search_filter)) | (Risk.description.ilike(search_filter)))
@@ -155,6 +173,7 @@ async def create_risk(
         risk_level=level,
         status=RiskStatus.OPEN,
         created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     # Handle JSON array fields (clause/control/audit/incident columns were
@@ -301,7 +320,7 @@ async def get_risk(
     current_user: CurrentUser,
 ) -> RiskDetailResponse:
     """Get a specific risk with controls and assessments."""
-    result = await db.execute(
+    query = (
         select(Risk)
         .options(
             selectinload(Risk.controls),
@@ -309,6 +328,9 @@ async def get_risk(
         )
         .where(Risk.id == risk_id)
     )
+    if not current_user.is_superuser:
+        query = query.where(Risk.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     risk = result.scalar_one_or_none()
 
     if not risk:
@@ -334,7 +356,10 @@ async def update_risk(
     current_user: CurrentUser,
 ) -> RiskResponse:
     """Update a risk."""
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    query = select(Risk).where(Risk.id == risk_id)
+    if not current_user.is_superuser:
+        query = query.where(Risk.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     risk = result.scalar_one_or_none()
 
     if not risk:
@@ -410,15 +435,7 @@ async def create_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Create a new control for a risk."""
-    # Verify risk exists
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
-        )
+    await _get_risk_tenant_checked(db, risk_id, current_user)
 
     control_dict = control_data.model_dump(exclude={"clause_ids", "control_ids"})
 
@@ -440,14 +457,17 @@ async def create_control(
     return RiskControlResponse.model_validate(control)
 
 
-@router.get("/{risk_id}/controls", response_model=list[RiskControlResponse])
+@router.get("/{risk_id}/controls", response_model=dict)
 async def list_controls(
     risk_id: int,
     db: DbSession,
     current_user: CurrentUser,
-) -> list[RiskControlResponse]:
-    """List all controls for a risk."""
-    result = await db.execute(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+) -> dict:
+    """List controls for a risk with pagination."""
+    await _get_risk_tenant_checked(db, risk_id, current_user)
+    base = (
         select(OperationalRiskControl)
         .where(
             and_(
@@ -457,9 +477,17 @@ async def list_controls(
         )
         .order_by(OperationalRiskControl.created_at)
     )
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(base.offset((page - 1) * page_size).limit(page_size))
     controls = result.scalars().all()
-
-    return [RiskControlResponse.model_validate(c) for c in controls]
+    return {
+        "items": [RiskControlResponse.model_validate(c) for c in controls],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size if total > 0 else 0,
+    }
 
 
 @router.patch("/controls/{control_id}", response_model=RiskControlResponse)
@@ -531,15 +559,7 @@ async def create_assessment(
     current_user: CurrentUser,
 ) -> RiskAssessmentResponse:
     """Create a new assessment for a risk."""
-    # Verify risk exists
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
-    risk = result.scalar_one_or_none()
-
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found"),
-        )
+    risk = await _get_risk_tenant_checked(db, risk_id, current_user)
 
     # Calculate scores and levels
     inherent_score, inherent_level, _ = calculate_risk_level(
@@ -588,10 +608,12 @@ async def list_assessments(
     db: DbSession,
     current_user: CurrentUser,
 ) -> list[RiskAssessmentResponse]:
-    """List all assessments for a risk (history)."""
-    result = await db.execute(
-        select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
-    )
+    """List assessments for a risk with pagination."""
+    await _get_risk_tenant_checked(db, risk_id, current_user)
+    base = select(RiskAssessment).where(RiskAssessment.risk_id == risk_id).order_by(RiskAssessment.assessment_date.desc())
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(base.limit(100))
     assessments = result.scalars().all()
 
     return [RiskAssessmentResponse.model_validate(a) for a in assessments]
