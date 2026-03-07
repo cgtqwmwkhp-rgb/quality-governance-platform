@@ -55,6 +55,7 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, auth_header
     rtas = []
     for i in range(3):
         rta = RoadTrafficCollision(
+            tenant_id=1,
             title=f"RTA {i}",
             description="Test",
             collision_date=now,
@@ -96,6 +97,7 @@ async def test_update_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     """Test updating an RTA and verify audit log."""
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="Original Title",
         description="Original description",
         collision_date=datetime.now(timezone.utc),
@@ -124,6 +126,7 @@ async def test_delete_rta_with_audit(client: AsyncClient, auth_headers: dict, te
     """Test deleting an RTA and verify audit log."""
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="To Delete",
         description="Will be deleted",
         collision_date=datetime.now(timezone.utc),
@@ -163,6 +166,7 @@ async def test_create_rta_action_with_audit(client: AsyncClient, auth_headers: d
     """Test creating an RTA action and verify audit log."""
     # Create RTA first
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Actions",
         description="Test",
         collision_date=datetime.now(timezone.utc),
@@ -196,6 +200,7 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
 
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Action Ordering",
         description="Test",
         collision_date=now,
@@ -246,6 +251,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Investigations",
         description="Test",
         collision_date=now,
@@ -373,6 +379,7 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
     # Create 15 RTAs
     for i in range(15):
         rta = RoadTrafficCollision(
+            tenant_id=1,
             title=f"Pagination RTA {i}",
             description="Test",
             collision_date=now,
@@ -406,6 +413,7 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
 
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Pagination Test",
         description="Test",
         collision_date=now,
@@ -479,6 +487,7 @@ async def test_rta_investigations_invalid_page_param(client: AsyncClient, auth_h
 
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Validation Test",
         description="Test",
         collision_date=now,
@@ -506,6 +515,7 @@ async def test_rta_investigations_invalid_page_size_param(client: AsyncClient, a
 
     # Create RTA
     rta = RoadTrafficCollision(
+        tenant_id=1,
         title="RTA for Page Size Validation Test",
         description="Test",
         collision_date=now,

@@ -1,16 +1,18 @@
 """Reference number generation service."""
 
+import logging
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 
 class ReferenceNumberService:
     """Service for generating unique reference numbers."""
 
-    # Prefix mapping for different record types
     PREFIXES = {
         "audit_template": "TPL",
         "audit_run": "AUD",
@@ -28,30 +30,17 @@ class ReferenceNumberService:
     }
 
     @classmethod
-    async def generate(
+    async def _next_sequence(
         cls,
         db: AsyncSession,
-        record_type: str,
-        model_class: type[Any],  # type: ignore[misc]  # TYPE-IGNORE: MYPY-001
-        year: Optional[int] = None,
-    ) -> str:
-        """
-        Generate a unique reference number in format: PREFIX-YYYY-####
-
-        Args:
-            db: Database session
-            record_type: Type of record (e.g., "audit_run", "incident")
-            model_class: SQLAlchemy model class to query
-            year: Optional year override (defaults to current year)
-
-        Returns:
-            Unique reference number string
-        """
-        prefix = cls.PREFIXES.get(record_type, "REF")
-        current_year = year or datetime.now().year
-
-        # Find the highest sequence number for this prefix and year
-        pattern = f"{prefix}-{current_year}-%"
+        model_class: type[Any],
+        pattern: str,
+    ) -> int:
+        """Get next sequence number, flushing first to see uncommitted inserts."""
+        try:
+            await db.flush()
+        except Exception:
+            pass
 
         result = await db.execute(
             select(func.max(model_class.reference_number)).where(model_class.reference_number.like(pattern))
@@ -59,13 +48,26 @@ class ReferenceNumberService:
         max_ref = result.scalar()
 
         if max_ref:
-            # Extract sequence number and increment
             try:
-                sequence = int(max_ref.split("-")[-1]) + 1
+                return int(max_ref.split("-")[-1]) + 1
             except (ValueError, IndexError):
-                sequence = 1
-        else:
-            sequence = 1
+                return 1
+        return 1
+
+    @classmethod
+    async def generate(
+        cls,
+        db: AsyncSession,
+        record_type: str,
+        model_class: type[Any],  # type: ignore[misc]  # TYPE-IGNORE: MYPY-001
+        year: Optional[int] = None,
+    ) -> str:
+        """Generate a unique reference number in format: PREFIX-YYYY-####."""
+        prefix = cls.PREFIXES.get(record_type, "REF")
+        current_year = year or datetime.now().year
+        pattern = f"{prefix}-{current_year}-%"
+
+        sequence = await cls._next_sequence(db, model_class, pattern)
 
         return f"{prefix}-{current_year}-{sequence:04d}"
 
