@@ -176,8 +176,10 @@ describe('AuditTemplateLibrary', () => {
       expect(screen.getByRole('tab', { name: 'All Categories' })).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('tab', { name: /Vehicles/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Plant & Machinery/ })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /Vehicles/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /Plant & Machinery/i })).toBeInTheDocument();
+    });
   });
 
   it('filters templates when typing in search input', async () => {
