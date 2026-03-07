@@ -46,6 +46,31 @@ async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
 
 router = APIRouter()
 
+_RISK_TRANSITIONS: dict[RiskStatus, set[RiskStatus]] = {
+    RiskStatus.OPEN: {RiskStatus.MITIGATING, RiskStatus.ACCEPTED, RiskStatus.CLOSED},
+    RiskStatus.MITIGATING: {RiskStatus.ACCEPTED, RiskStatus.CLOSED, RiskStatus.OPEN},
+    RiskStatus.ACCEPTED: {RiskStatus.MITIGATING, RiskStatus.CLOSED},
+    RiskStatus.CLOSED: set(),
+}
+
+
+def _validate_risk_transition(current: str, target: str) -> None:
+    try:
+        current_status = RiskStatus(current)
+        target_status = RiskStatus(target)
+    except ValueError:
+        return
+    allowed = _RISK_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                f"Cannot transition from '{current}' to '{target}'",
+                details={"allowed": sorted(s.value for s in allowed)},
+            ),
+        )
+
 
 # ============== Risk Matrix Configuration ==============
 
@@ -371,17 +396,20 @@ async def update_risk(
 
     update_data = risk_data.model_dump(exclude_unset=True)
 
-    # Handle JSON array fields
-    json_fields = [
-        "clause_ids",
-        "control_ids",
-        "linked_audit_ids",
-        "linked_incident_ids",
-        "linked_policy_ids",
-    ]
-    for field in json_fields:
-        if field in update_data:
-            setattr(risk, f"{field}_json", update_data.pop(field))
+    if "status" in update_data:
+        _validate_risk_transition(risk.status, update_data["status"])
+
+    # Handle JSON array fields — map schema names to actual model columns
+    JSON_FIELD_MAP = {
+        "clause_ids": "clause_ids_json_legacy",
+        "control_ids": "control_ids_json_legacy",
+        "linked_audit_ids": "linked_audit_ids_json_legacy",
+        "linked_incident_ids": "linked_incident_ids_json_legacy",
+        "linked_policy_ids": "linked_policy_ids_json",
+    }
+    for schema_key, model_col in JSON_FIELD_MAP.items():
+        if schema_key in update_data:
+            setattr(risk, model_col, update_data.pop(schema_key))
 
     # Recalculate risk score if likelihood or impact changed
     likelihood = update_data.get("likelihood", risk.likelihood)

@@ -7,6 +7,7 @@ import {
   setPortalToken,
 } from "../utils/auth";
 import { API_BASE_URL } from "../config/apiBase";
+import { toast } from "../contexts/ToastContext";
 import { useAppStore } from "../stores/useAppStore";
 
 // Use centralized API base URL from config (environment-aware)
@@ -393,6 +394,13 @@ api.interceptors.response.use(
         (error as ClassifiedAxiosError).classifiedMessage =
           "This environment is in read-only mode. Contact your administrator to enable writes.";
       }
+    } else if (status === 429) {
+      const retryAfter = error.response?.headers?.["retry-after"];
+      const waitSec = retryAfter ? parseInt(retryAfter, 10) : undefined;
+      (error as ClassifiedAxiosError).classifiedMessage =
+        waitSec
+          ? `Too many requests. Please wait ${waitSec} seconds and try again.`
+          : "Too many requests. Please slow down and try again.";
     } else if (status === 422) {
       const data = error.response?.data as Record<string, unknown> | undefined;
       const errorEnvelope = data?.["error"] as Record<string, unknown> | undefined;
@@ -426,6 +434,11 @@ api.interceptors.response.use(
     } else if (!error.response) {
       (error as ClassifiedAxiosError).classifiedMessage =
         "Network error. Please check your connection and try again.";
+    }
+
+    const msg = (error as ClassifiedAxiosError).classifiedMessage;
+    if (msg && status !== 401) {
+      toast.error(msg);
     }
 
     return Promise.reject(error);

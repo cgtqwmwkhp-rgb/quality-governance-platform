@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
+import { toast } from '../contexts/ToastContext'
+import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import { trackError } from '../utils/errorTracker'
 import {
   ArrowLeft,
@@ -229,7 +231,7 @@ export default function RTADetail() {
       loadActions()
     } catch (err: unknown) {
       trackError(err, { component: 'RTADetail', action: 'createAction' })
-      alert(`Failed to create action: ${getApiErrorMessage(err)}`)
+      toast.error(`Failed to create action: ${getApiErrorMessage(err)}`)
     } finally {
       setCreating(false)
     }
@@ -337,6 +339,11 @@ export default function RTADetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Breadcrumbs items={[
+        { label: t('rtas.title', 'Road Traffic Collisions'), href: '/rtas' },
+        { label: rta?.reference_number || `#${id}` },
+      ]} />
+
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>

@@ -9,12 +9,41 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
-from src.domain.models.incident import Incident
+from src.api.utils.errors import api_error
+from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
+
+_INCIDENT_TRANSITIONS: dict[IncidentStatus, set[IncidentStatus]] = {
+    IncidentStatus.REPORTED: {IncidentStatus.UNDER_INVESTIGATION, IncidentStatus.CLOSED},
+    IncidentStatus.UNDER_INVESTIGATION: {IncidentStatus.PENDING_ACTIONS, IncidentStatus.CLOSED},
+    IncidentStatus.PENDING_ACTIONS: {IncidentStatus.ACTIONS_IN_PROGRESS, IncidentStatus.CLOSED},
+    IncidentStatus.ACTIONS_IN_PROGRESS: {IncidentStatus.PENDING_REVIEW, IncidentStatus.PENDING_ACTIONS},
+    IncidentStatus.PENDING_REVIEW: {IncidentStatus.CLOSED, IncidentStatus.ACTIONS_IN_PROGRESS},
+    IncidentStatus.CLOSED: set(),
+}
+
+
+def _validate_incident_transition(current: str, target: str) -> None:
+    try:
+        current_status = IncidentStatus(current)
+        target_status = IncidentStatus(target)
+    except ValueError:
+        return
+    allowed = _INCIDENT_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                f"Cannot transition from '{current}' to '{target}'",
+                details={"allowed": sorted(s.value for s in allowed)},
+            ),
+        )
 
 
 @router.post(
@@ -39,7 +68,7 @@ async def create_incident(
         if not current_user.has_permission("incident:set_reference_number"):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Permission 'incident:set_reference_number' required to set explicit reference number",
+                detail=api_error(ErrorCode.PERMISSION_DENIED, "Permission 'incident:set_reference_number' required"),
             )
 
         reference_number = incident_data.reference_number
@@ -48,7 +77,9 @@ async def create_incident(
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Incident with reference number {reference_number} already exists",
+                detail=api_error(
+                    ErrorCode.DUPLICATE_ENTITY, f"Incident with reference number {reference_number} already exists"
+                ),
             )
     else:
         reference_number = await ReferenceNumberService.generate(db, "incident", Incident)
@@ -113,7 +144,7 @@ async def get_incident(
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Incident with ID {incident_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
     return incident
@@ -272,10 +303,9 @@ async def list_incident_investigations(
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Incident with ID {incident_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
-    # Get total count
     count_query = (
         select(sa_func.count())
         .select_from(InvestigationRun)
@@ -309,7 +339,7 @@ async def list_incident_investigations(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": total_pages,
+        "pages": total_pages,
     }
 
 
@@ -335,11 +365,14 @@ async def update_incident(
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Incident with ID {incident_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
-    # Update fields
+    # Status transition validation
     update_dict = incident_data.model_dump(exclude_unset=True)
+    if "status" in update_dict:
+        _validate_incident_transition(incident.status, update_dict["status"])
+
     for key, value in update_dict.items():
         setattr(incident, key, value)
 
@@ -384,10 +417,9 @@ async def delete_incident(
     if not incident:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Incident with ID {incident_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
-    # Record audit event
     await record_audit_event(
         db=db,
         event_type="incident.deleted",

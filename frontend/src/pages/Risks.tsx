@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, Shield, Search, Loader2 } from 'lucide-react'
+import { Plus, Shield, Search } from 'lucide-react'
 import { risksApi, Risk, RiskCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -127,8 +129,14 @@ export default function Risks() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t('risks.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('risks.subtitle')}</p>
+          </div>
+        </div>
+        <CardSkeleton count={6} />
       </div>
     )
   }
@@ -207,10 +215,17 @@ export default function Risks() {
             <tbody className="divide-y divide-border">
               {risks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                    <Shield className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                    <p>{t('risks.empty.title')}</p>
-                    <p className="text-sm mt-1">{t('risks.empty.subtitle')}</p>
+                  <td colSpan={6}>
+                    <EmptyState
+                      icon={<Shield className="w-6 h-6 text-muted-foreground" />}
+                      title={t('risks.empty.title', 'No risks found')}
+                      description={t('risks.empty.subtitle', 'Create your first risk to get started.')}
+                      action={
+                        <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                          <Plus size={16} /> {t('risks.new', 'New Risk')}
+                        </Button>
+                      }
+                    />
                   </td>
                 </tr>
               ) : (

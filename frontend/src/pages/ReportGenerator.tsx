@@ -10,6 +10,7 @@
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from '../contexts/ToastContext';
 import {
   FileText,
   Download,
@@ -164,7 +165,7 @@ export default function ReportGenerator() {
     setGenerating(true);
     await new Promise(resolve => setTimeout(resolve, 2000));
     setGenerating(false);
-    alert('Report generated! Download starting...');
+    toast.success('Report generated! Download starting...');
   };
 
   const toggleReportStatus = (id: number) => {

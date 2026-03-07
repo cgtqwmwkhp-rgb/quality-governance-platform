@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from '../contexts/ToastContext';
 import { usePortalAuth } from '../contexts/PortalAuthContext';
 import { API_BASE_URL } from '../config/apiBase';
 
@@ -260,7 +261,7 @@ export default function PortalRTAForm() {
         },
         () => {
           setGeolocating(false);
-          alert('Could not detect location');
+          toast.warning('Could not detect location');
         }
       );
     }

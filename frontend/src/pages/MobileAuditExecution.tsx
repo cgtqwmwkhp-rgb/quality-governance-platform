@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from '../contexts/ToastContext';
 import {
   ArrowLeft,
   ArrowRight,
@@ -312,7 +313,7 @@ const VoiceRecorder = ({
       triggerHaptic('medium');
     } catch (err) {
       console.error('Error accessing microphone:', err);
-      alert('Could not access microphone. Please check permissions.');
+      toast.warning('Could not access microphone. Please check permissions.');
     }
   };
 
@@ -433,7 +434,7 @@ const LocationCapture = ({
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by this device.');
+      toast.warning('Geolocation is not supported by this device.');
       return;
     }
 
@@ -449,7 +450,7 @@ const LocationCapture = ({
       },
       (error) => {
         console.error('Geolocation error:', error);
-        alert('Could not get location. Please check permissions.');
+        toast.warning('Could not get location. Please check permissions.');
         setIsCapturing(false);
       },
       { enableHighAccuracy: true }

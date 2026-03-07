@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useNavigate } from 'react-router-dom'
+import { toast } from '../contexts/ToastContext'
+import { Breadcrumbs } from '../components/ui/Breadcrumbs'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -232,7 +234,7 @@ export default function IncidentDetail() {
       loadActions()
     } catch (err: unknown) {
       trackError(err, { component: 'IncidentDetail', action: 'createAction' })
-      alert(t('incidents.detail.failed_to_create_action', { error: getApiErrorMessage(err) }))
+      toast.error(t('incidents.detail.failed_to_create_action', { error: getApiErrorMessage(err) }))
     } finally {
       setCreating(false)
     }
@@ -325,6 +327,11 @@ export default function IncidentDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      <Breadcrumbs items={[
+        { label: t('incidents.title', 'Incidents'), href: '/incidents' },
+        { label: incident?.reference_number || `#${id}` },
+      ]} />
+
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>

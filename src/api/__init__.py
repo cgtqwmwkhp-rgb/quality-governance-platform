@@ -30,6 +30,7 @@ from src.api.routes import (
     feature_flags,
     form_config,
     governance,
+    health,
     incidents,
     inductions,
     investigation_templates,
@@ -47,6 +48,7 @@ from src.api.routes import (
     risks,
     rtas,
     signatures,
+    slo,
     standards,
     telemetry,
     tenants,
@@ -151,5 +153,9 @@ if _os.getenv("APP_ENV", "production") != "production":
 router.include_router(telemetry.router, tags=["Telemetry"])
 # Feature Flags (DB-backed, toggleable without redeploy)
 router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feature Flags"])
+# SLO/SLI Metrics
+router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
+# Health & Resource Monitoring
+router.include_router(health.router, prefix="/health", tags=["Health"])
 
 __all__ = ["router"]

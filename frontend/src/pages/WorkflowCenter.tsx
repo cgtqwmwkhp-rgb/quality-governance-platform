@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from '../contexts/ToastContext';
 import {
   GitBranch,
   CheckCircle,
@@ -224,7 +225,7 @@ export default function WorkflowCenter() {
   };
 
   const handleBulkApprove = () => {
-    alert(`Approving ${selectedApprovals.size} items...`);
+    toast.success(`Approving ${selectedApprovals.size} items...`);
     setSelectedApprovals(new Set());
   };
 

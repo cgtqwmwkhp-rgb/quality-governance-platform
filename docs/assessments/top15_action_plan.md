@@ -1,332 +1,282 @@
-# Top 15 Focus Areas — World-Class Uplift Action Plan
+# Top 15 Enhancement Action Plan
 
-**Date**: 2026-03-07
-**Current Average WCS**: 7.1 / 10.0
-**Target**: 9.5+
-
----
-
-## Tier 1: Low Effort / High Value (execute immediately)
-
-### 1. Close the last 3 unauthenticated route modules (D06 → +0.5 WCS)
-
-**Gap**: `planet_mark.py` (16 endpoints), `uvdb.py` (12 endpoints), and `slo.py` (2 endpoints) have zero auth guards. Business-sensitive carbon, UVDB audit, and SLO metrics data exposed to anyone.
-
-**What to change**:
-- `src/api/routes/planet_mark.py` — add `from src.api.dependencies import CurrentUser` and add `current_user: CurrentUser` parameter to all 16 endpoint functions. Add `tenant_id` filtering to all DB queries.
-- `src/api/routes/uvdb.py` — same pattern for all 12 endpoints.
-- `src/api/routes/slo.py` — add `CurrentUser` to `/slo/current` and `/slo/metrics`.
-- Update `tests/unit/test_auth_enforcement.py` to verify these 3 modules.
-
-**Definition of Done**: All 61 route modules return 401 without token. Auth enforcement test covers 61/61.
-**Effort**: S | **Value**: H | **Expected lift**: D06 8.0 → 8.5
+**Date:** 2026-03-07 (Post Week-1 Uplift, Post Re-Assessment)
+**Method:** 3-round deep-dive across codebase, APIs, backend, frontend, workflows, structure, database
+**Goal:** Move WCS from 7.1 → 8.5+ via low-effort, high-impact enhancements
 
 ---
 
-### 2. Add Content-Security-Policy header (D06 → +0.3 WCS)
+## Assessment Rounds Summary
 
-**Gap**: `SecurityHeadersMiddleware` in `src/main.py` sets 8 security headers but no CSP. XSS mitigation incomplete.
-
-**What to change**:
-- `src/main.py` lines 22-43 — add to the `SecurityHeadersMiddleware`:
-  ```python
-  response.headers["Content-Security-Policy"] = (
-      "default-src 'self'; "
-      "script-src 'self'; "
-      "style-src 'self' 'unsafe-inline'; "
-      "img-src 'self' data: https:; "
-      "font-src 'self'; "
-      "connect-src 'self' https://*.azurewebsites.net https://*.azurestaticapps.net; "
-      "frame-ancestors 'none'; "
-      "base-uri 'self'; "
-      "form-action 'self'"
-  )
-  ```
-
-**Definition of Done**: CSP header present on all API responses; frontend loads without CSP violations.
-**Effort**: S | **Value**: H | **Expected lift**: D06 8.0 → 8.3
+| Round | Focus | Key Findings |
+|-------|-------|-------------|
+| **Round 1** | Backend, APIs, codebase structure | Risk JSON column bug (data loss); routes bypass service layer; inconsistent pagination; no GZip; inconsistent errors |
+| **Round 2** | Frontend UX, workflows, database | No breadcrumbs; `alert()` used for errors; no 429 handling; missing composite indexes; no state transition enforcement |
+| **Round 3** | Cross-cutting integration | Global toast not wired to interceptor; health router not mounted; SoftDelete only on User; missing request logging |
 
 ---
 
-### 3. Add toast notification system (D02, D14 → +0.8 WCS)
+## Tier 1 — Low Effort / High Value (Items 1–5)
 
-**Gap**: No toast/notification system for mutation feedback. Users get no visible confirmation when creating incidents, saving audits, or updating risks. Errors are caught but never shown.
+### 1. Fix Risk Update JSON Column Name Bug — DATA LOSS BUG
 
-**What to change**:
-- `npm install sonner` in `frontend/`
-- `frontend/src/App.tsx` — add `<Toaster />` component at root
-- `frontend/src/api/client.ts` — add `toast.error(classifiedMessage)` in error interceptor; add `toast.success()` helper
-- Wrap mutation calls in key pages (incidents, complaints, audits, risks) with `toast.success("Incident created")` on success
+| Field | Detail |
+|-------|--------|
+| **Impact** | **CRITICAL** — Updates to `clause_ids`, `control_ids`, `linked_audit_ids`, `linked_incident_ids` silently fail. Data is lost on every risk update. |
+| **Evidence** | `src/api/routes/risks.py` L375-384: `setattr(risk, f"{field}_json", ...)` writes to `clause_ids_json`, `control_ids_json` etc. But `src/domain/models/risk.py` L66-74 defines the actual columns as `clause_ids_json_legacy`, `control_ids_json_legacy`, `linked_audit_ids_json_legacy`, `linked_incident_ids_json_legacy`. The `_json` suffix doesn't match the `_json_legacy` columns. Risk create (L182-185) correctly uses `_json_legacy`, so this bug is isolated to the update path. |
+| **Effort** | **S** (10-minute fix) |
+| **Fix** | Add a mapping dict in `risks.py` update handler to map schema field names to the correct `_legacy` column names. |
+| **Dimensions** | D24 Data Integrity (+0.3), D10 API Quality (+0.2) |
+| **Tests** | Integration test: `PATCH /api/v1/risks/{id}` with `clause_ids=[1,2]` → verify `clause_ids_json_legacy` column has `[1,2]` |
+| **Rollback** | Revert mapping dict |
 
-**Definition of Done**: All create/update/delete operations show toast feedback; errors show descriptive toast.
-**Effort**: S | **Value**: H | **Expected lift**: D02 5.4 → 6.2, D14 8.0 → 8.3
+### 2. Add GZip Compression Middleware
 
----
+| Field | Detail |
+|-------|--------|
+| **Impact** | JSON API responses for list endpoints (incidents, complaints, audits, risks) can be 50-200KB. GZip typically achieves 80-90% compression on JSON, reducing transfer time and bandwidth. |
+| **Evidence** | `src/main.py` middleware chain (L231-274): no compression middleware. Starlette provides `GZipMiddleware` built-in. |
+| **Effort** | **S** (5 lines) |
+| **Fix** | Add `from starlette.middleware.gzip import GZipMiddleware` and `app.add_middleware(GZipMiddleware, minimum_size=1000)` to `src/main.py`. |
+| **Dimensions** | D04 Performance (+0.3) |
+| **Tests** | Integration test: response with `Accept-Encoding: gzip` returns `Content-Encoding: gzip` |
+| **Rollback** | Remove middleware line |
 
-### 4. Add Skeleton loading component + replace spinners (D02, D04 → +0.6 WCS)
+### 3. Standardize Error Responses to Use `api_error()`
 
-**Gap**: All loading states show a plain `Loader2` spinner. No content-shaped skeletons. Perceived performance is poor. Component inventory identifies Skeleton as high-priority missing component.
+| Field | Detail |
+|-------|--------|
+| **Impact** | Frontend client receives mixed error shapes: plain strings from incidents/complaints, structured `{code, message, details}` from risks. Clients need different parsing logic per endpoint. |
+| **Evidence** | `src/api/routes/incidents.py` L114-116: `detail=f"Incident with ID {incident_id} not found"` (plain string). `src/api/routes/risks.py` L40-42: `detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Risk not found")` (structured). Same pattern in complaints and other routes. |
+| **Effort** | **S** (search-and-replace across route files) |
+| **Fix** | Replace all `detail="string"` patterns with `detail=api_error(ErrorCode.*, "message")` across all route files. The `api_error` function and `ErrorCode` enum already exist in `src/api/schemas/error_codes.py`. |
+| **Dimensions** | D10 API Quality (+0.3), D14 Error Handling (+0.2) |
+| **Tests** | Contract test: all 404/409/403 responses have `{code, message}` structure |
+| **Rollback** | Revert to plain strings |
 
-**What to change**:
-- Create `frontend/src/components/ui/Skeleton.tsx` — simple div with `animate-pulse bg-muted rounded` styling
-- Create `frontend/src/components/ui/TableSkeleton.tsx` — skeleton rows for list views
-- Replace `<Loader2>` with skeleton in `Dashboard.tsx`, `Incidents.tsx`, `Complaints.tsx`, `Risks.tsx`, `Audits.tsx`
+### 4. Mount Health Router + Extend `/readyz` to Check Redis
 
-**Definition of Done**: 5 key pages show content-shaped skeletons during load instead of spinners.
-**Effort**: S | **Value**: H | **Expected lift**: D02 5.4 → 6.0, D04 5.4 → 5.7
+| Field | Detail |
+|-------|--------|
+| **Impact** | The root `/readyz` in `main.py` (L364-381) only checks database. A richer implementation in `src/api/routes/health.py` (L31-77) checks both DB and Redis, but it's never mounted. Kubernetes may route traffic to instances with broken Redis — rate limiting, caching, and idempotency all fail silently. |
+| **Evidence** | `src/main.py` L364-381: `/readyz` does `SELECT 1` only. `src/api/routes/health.py` has DB + Redis checks but is NOT in `src/api/__init__.py` (confirmed by grep). |
+| **Effort** | **S** (add include_router or copy Redis check to main.py) |
+| **Fix** | Option A: Add `from src.api.routes import health` and `api_router.include_router(health.router, tags=["Health"])` to `src/api/__init__.py`, then update `/readyz` in `main.py` to delegate to the health router. Option B: Copy the Redis check from `health.py` into the `/readyz` handler in `main.py`. |
+| **Dimensions** | D05 Reliability (+0.3), D13 Observability (+0.2) |
+| **Tests** | Integration test: `/readyz` returns Redis status; test with Redis unavailable → 503 |
+| **Rollback** | Remove Redis check from readyz |
 
----
+### 5. Add 429 Rate-Limit Handling to Frontend API Interceptor
 
-### 5. Wire Dashboard to real API data (D01, D02, D28 → +1.2 WCS)
-
-**Gap**: Dashboard shows hardcoded 0 for RTAs, complaints, audits, actions, risks, compliance, carbon. Notification badge hardcoded to 5. Activity feed and upcoming events are empty arrays. Only `incidentsApi.list()` is connected.
-
-**What to change**:
-- `frontend/src/pages/Dashboard.tsx` — add parallel API calls:
-  ```typescript
-  const [incidents, rtas, complaints, audits, risks] = await Promise.all([
-    incidentsApi.list(), rtasApi.list(), complaintsApi.list(),
-    auditsApi.list(), risksApi.list()
-  ]);
-  ```
-- Wire StatCard values to real counts
-- Wire notification badge to `useNotificationStore.unreadCount`
-- Wire recent activity to audit trail API
-- Add error handling per card (independent failures)
-
-**Definition of Done**: All 8 StatCards show real counts; activity feed populated; notification badge dynamic.
-**Effort**: M | **Value**: H | **Expected lift**: D01 7.2 → 7.8, D02 5.4 → 6.4, D28 5.4 → 5.8
-
----
-
-### 6. Guard `/metrics/resources` endpoint + consolidate health routes (D06, D32 → +0.3 WCS)
-
-**Gap**: `src/api/routes/health.py` exposes `/metrics/resources` (memory, CPU, disk, threads, open files) without auth. Infrastructure fingerprinting risk. Additionally, health routes exist in both `main.py` and `health.py` — potential confusion.
-
-**What to change**:
-- `src/api/routes/health.py` — add `current_user: CurrentUser` to the `get_resource_metrics` endpoint. Keep `/healthz` and `/readyz` unauthenticated (required for probes).
-- `src/api/routes/testing.py` — remove `environment` field from `/health` response.
-
-**Definition of Done**: `/metrics/resources` returns 401 without auth; testing health doesn't leak env name.
-**Effort**: S | **Value**: H | **Expected lift**: D06 8.0 → 8.1, D32 6.3 → 6.5
-
----
-
-### 7. Complete runbook contacts and on-call rotation (D23, D05 → +0.5 WCS)
-
-**Gap**: `incident-response.md` contact table has "TBD" entries. `escalation.md` on-call rotation says "TBD: PagerDuty / OpsGenie". Several runbooks are thin on step-by-step detail.
-
-**What to change**:
-- `docs/runbooks/incident-response.md` — fill in contact names, emails, phone numbers for each role
-- `docs/runbooks/escalation.md` — define on-call rotation, tool (PagerDuty/OpsGenie), schedule
-- Review all 25 runbooks — ensure each has: Trigger, Steps, Verification, Rollback, Contacts
-
-**Definition of Done**: Zero "TBD" entries in any runbook; all 25 have minimum 5 sections.
-**Effort**: S | **Value**: H | **Expected lift**: D23 5.4 → 6.0, D05 8.0 → 8.2
+| Field | Detail |
+|-------|--------|
+| **Impact** | The Axios interceptor in `frontend/src/api/client.ts` handles 401, 403, 409, 422, 500 — but NOT 429 (Too Many Requests). When rate-limited, users see a generic error instead of a helpful "slow down" message. No automatic retry with backoff. |
+| **Evidence** | `frontend/src/api/client.ts` L322-432: response interceptor. No case for `status === 429`. Rate limiter returns 429 per `src/infrastructure/middleware/rate_limiter.py`. |
+| **Effort** | **S** (add 429 case to interceptor + optional retry logic) |
+| **Fix** | Add `else if (status === 429) { classifiedMessage = "Too many requests. Please wait a moment and try again."; }` to interceptor. Optionally: extract `Retry-After` header and auto-retry after delay. |
+| **Dimensions** | D14 Error Handling (+0.2), D02 UX Quality (+0.2) |
+| **Tests** | Unit test: mock 429 response → verify classifiedMessage set correctly |
+| **Rollback** | Remove 429 case |
 
 ---
 
-## Tier 2: Critical Workflow Improvements
+## Tier 2 — Critical Workflows (Items 6–10)
 
-### 8. Create 5 accessibility test files with axe-core (D03 → +1.0 WCS)
+### 6. Enforce Status Transition Validation on Incident/Audit/Risk Updates
 
-**Gap**: `jest-axe` installed, `axe-helper.ts` exists, `test:a11y` script configured — but zero `.a11y.test.tsx` files exist. All the infrastructure is there with no tests using it.
+| Field | Detail |
+|-------|--------|
+| **Impact** | No server-side validation of status transitions. Any status can be set to any other status via PATCH — e.g., "Closed" → "Reported" on incidents, "completed" → "draft" on audit runs. This bypasses workflow integrity and corrupts audit trails. |
+| **Evidence** | `src/api/routes/incidents.py`: PATCH handler accepts any `status` value without checking current state. `src/domain/models/incident.py` L37: defines `IncidentStatus` enum but no `VALID_TRANSITIONS` map. Same pattern in complaints, risks, audit runs. No `StateTransitionError` raised anywhere in route handlers (the exception class exists in `src/domain/exceptions.py` but is unused in routes). |
+| **Effort** | **M** |
+| **Fix** | Add a `VALID_TRANSITIONS: dict[Status, set[Status]]` to each status enum. Create a `validate_transition(current, new)` helper that raises `StateTransitionError`. Call it in each PATCH handler before setting status. |
+| **Dimensions** | D24 Data Integrity (+0.3), D21 Code Quality (+0.2) |
+| **Tests** | Unit test per module: valid transition → 200; invalid transition → 409 with `StateTransitionError` |
+| **Rollback** | Remove transition check |
 
-**What to change**:
-- Create 5 files in `frontend/src/pages/__tests__/`:
-  - `Dashboard.a11y.test.tsx`
-  - `Login.a11y.test.tsx`
-  - `Incidents.a11y.test.tsx`
-  - `Complaints.a11y.test.tsx`
-  - `AuditTemplateLibrary.a11y.test.tsx`
-- Each file: render component, run `expect(await axe(container)).toHaveNoViolations()`
+### 7. Wire Incident/Complaint Routes Through Service Layer
 
-**Definition of Done**: `npm run test:a11y` runs 5 tests and exits 0.
-**Effort**: M | **Value**: H | **Expected lift**: D03 4.5 → 5.5
+| Field | Detail |
+|-------|--------|
+| **Impact** | `IncidentService` exists with cache invalidation, business event tracking, eager loading (selectinload), and pagination — but incident routes do raw SQLAlchemy queries directly. Duplicated logic, no cache invalidation on writes, possible N+1 queries, harder to test. Same issue with complaints. |
+| **Evidence** | `src/api/routes/incidents.py` L109-122: raw `select(Incident).where(...)` instead of `IncidentService.get()`. `src/domain/services/incident_service.py` has full CRUD with `selectinload(Incident.actions)` and `invalidate_tenant_cache()`. |
+| **Effort** | **M** (refactor 2 route files to call existing services) |
+| **Fix** | Refactor `incidents.py` and `complaints.py` to instantiate `IncidentService(db)` / `ComplaintService(db)` and call service methods instead of raw queries. Map domain exceptions to HTTP responses. Create `ComplaintService` if it doesn't exist. |
+| **Dimensions** | D09 Architecture (+0.3), D21 Code Quality (+0.3), D04 Performance (+0.2) |
+| **Tests** | Existing integration tests should continue to pass; add service-level unit tests |
+| **Rollback** | Revert to direct queries |
 
----
+### 8. Standardize Pagination Response Shape Across All Endpoints
 
-### 9. Add Label, Alert, and Breadcrumb components (D02, D03 → +0.8 WCS)
+| Field | Detail |
+|-------|--------|
+| **Impact** | Frontend `PaginatedResponse<T>` expects `{items, total, page, page_size, pages}`. But backend returns `total_pages` (not `pages`) from investigation routes, and some endpoints like `list_assessments` return unbounded lists with no pagination at all. |
+| **Evidence** | `src/api/routes/incidents.py` L305-313: returns `total_pages` key. `frontend/src/api/client.ts` L482-488: `PaginatedResponse` interface uses `pages`. `src/api/routes/risks.py` L449-458: `list_assessments` returns a raw list with `limit(100)`, no pagination. |
+| **Effort** | **M** |
+| **Fix** | Define a shared `PaginatedResponse[T]` Pydantic schema in `src/api/schemas/common.py` with `items`, `total`, `page`, `page_size`, `pages`. Use it as `response_model` for ALL list endpoints. Rename `total_pages` → `pages` everywhere. Add pagination to `list_assessments`. |
+| **Dimensions** | D10 API Quality (+0.4), D02 UX Quality (+0.2) |
+| **Tests** | Contract test: all list endpoints return identical pagination shape |
+| **Rollback** | Revert schema, keep existing shapes as aliases |
 
-**Gap**: Component inventory identifies Label (WCAG requirement), Alert (inline feedback), and Breadcrumb (navigation context) as high/medium priority missing components. No shared `<label>` component breaks form accessibility.
+### 9. Add Composite Database Indexes for Common Query Patterns
 
-**What to change**:
-- Create `frontend/src/components/ui/Label.tsx` — Radix `@radix-ui/react-label` wrapper with `htmlFor`, error state, required indicator
-- Create `frontend/src/components/ui/Alert.tsx` — variants: info, success, warning, destructive; icon, title, description
-- Create `frontend/src/components/ui/Breadcrumb.tsx` — auto-generate from React Router location; `Section > Module > Record`
-- Add `<Breadcrumb />` to `Layout.tsx` below the top bar
-- Use `<Label>` in all form inputs across pages
+| Field | Detail |
+|-------|--------|
+| **Impact** | Individual indexes exist on `tenant_id`, `status`, `created_at` — but queries always filter by `tenant_id` AND `status` or `tenant_id` ORDER BY `created_at`. Without composite indexes, PostgreSQL scans more rows than necessary, especially as data grows. |
+| **Evidence** | `src/domain/models/incident.py` L67: `tenant_id` index. L77: `status` index. No composite. Same in `risk.py`, `complaint.py`, `audit.py`. List queries filter `WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC`. |
+| **Effort** | **S** (Alembic migration + `__table_args__` on models) |
+| **Fix** | Add `__table_args__` with composite indexes: `Index('ix_incidents_tenant_status', 'tenant_id', 'status')`, `Index('ix_incidents_tenant_created', 'tenant_id', 'created_at')` to Incident, Complaint, Risk, AuditRun models. Create Alembic migration. |
+| **Dimensions** | D04 Performance (+0.3), D11 Data Model (+0.2) |
+| **Tests** | Query plan test: `EXPLAIN` shows index scan, not sequential scan |
+| **Rollback** | Revert migration (drop indexes) |
 
-**Definition of Done**: 3 new components exist with unit tests; Breadcrumb shows on all pages; Labels on all form fields.
-**Effort**: M | **Value**: H | **Expected lift**: D02 5.4 → 6.2, D03 4.5 → 5.0
+### 10. Add Request Logging Middleware
 
----
-
-### 10. Improve empty states across all list pages (D02, D01 → +0.5 WCS)
-
-**Gap**: Empty states are plain text ("No incidents found", "No recent activity"). No illustrations, no CTAs, no guidance. Dashboard upcoming events is an empty `[]` that renders nothing.
-
-**What to change**:
-- Create `frontend/src/components/ui/EmptyState.tsx` — icon, title, description, primary action button
-- Replace all plain-text empty states in: `Dashboard.tsx`, `Incidents.tsx`, `Complaints.tsx`, `RTAs.tsx`, `Risks.tsx`, `Audits.tsx`, `Actions.tsx`, `Policies.tsx`
-- Each empty state should have: relevant Lucide icon, descriptive text, "Create new [entity]" CTA button
-
-**Definition of Done**: All 8 key list pages show rich empty states with icon + CTA.
-**Effort**: M | **Value**: H | **Expected lift**: D02 5.4 → 5.8, D01 7.2 → 7.5
-
----
-
-### 11. Create Playwright E2E config + 3 critical-path specs (D15, D02 → +0.8 WCS)
-
-**Gap**: `@playwright/test` is installed but no config, no specs, no CI job. Frontend user journeys are completely untested end-to-end.
-
-**What to change**:
-- Create `frontend/playwright.config.ts` — baseURL, webServer config, 3 projects (chromium, firefox, webkit)
-- Create `frontend/tests/e2e/login.spec.ts` — login, verify dashboard, logout
-- Create `frontend/tests/e2e/incident-lifecycle.spec.ts` — create incident, verify in list, view detail, update status
-- Create `frontend/tests/e2e/audit-execution.spec.ts` — start audit run, answer questions, complete, view findings
-- Add CI job (advisory initially): `npx playwright test --project=chromium`
-
-**Definition of Done**: 3 specs pass against local dev; CI job configured.
-**Effort**: M | **Value**: H | **Expected lift**: D15 5.4 → 6.2, D02 5.4 → 5.8
+| Field | Detail |
+|-------|--------|
+| **Impact** | No structured request/response logging. When investigating production issues, there's no log of which endpoints were called, by whom, with what response codes and latencies. The `request_id` is generated but not logged in a request log entry. |
+| **Evidence** | `src/main.py` middleware chain: `RequestStateMiddleware` sets `request_id` but doesn't log it. No access log middleware. JSON logging is configured (`pythonjsonlogger`) but only captures application-level logs, not request flow. |
+| **Effort** | **S** (add middleware that logs method, path, status, duration, request_id) |
+| **Fix** | Add a `RequestLoggingMiddleware` that logs: `method`, `path`, `status_code`, `duration_ms`, `request_id`, `user_id` (if available), `content_length`. Skip logging for `/health*`, `/docs`, `/redoc`. Avoid logging request bodies (PII risk). |
+| **Dimensions** | D13 Observability (+0.3), D32 Supportability (+0.3) |
+| **Tests** | Integration test: make request → verify structured log entry exists with correct fields |
+| **Rollback** | Remove middleware |
 
 ---
 
-### 12. Raise test coverage threshold 35% → 50% with targeted tests (D15 → +0.8 WCS)
+## Tier 3 — UI/UX Focus (Items 11–15)
 
-**Gap**: Coverage at 35% — below industry standard (70-80%). Both `pyproject.toml` and `ci.yml` aligned at 35%. 1,568 test functions exist but many test imports not behavior.
+### 11. Wire Global Toast to API Error Interceptor
 
-**What to change**:
-- Write behavioral tests for the highest-value untested code:
-  - `tests/unit/test_reference_number.py` — test `ReferenceNumberService.generate()` (race condition, prefix mapping, sequence)
-  - `tests/unit/test_auth_routes.py` — test login, token refresh, password reset flows
-  - `tests/unit/test_incident_routes.py` — test tenant isolation, CRUD, validation
-  - `tests/unit/test_pagination.py` — test `paginate()` with edge cases
-  - `tests/unit/test_idempotency.py` — test dedup, hash mismatch, cache expiry
-- Raise threshold: `pyproject.toml` `fail_under = 50`; `ci.yml` `--cov-fail-under=50`
+| Field | Detail |
+|-------|--------|
+| **Impact** | The global toast system (`ToastContext.tsx`) exists but isn't connected to the API interceptor. Pages individually manage error state with `useState` and `getApiErrorMessage()`. Some pages use `alert()` for errors (9 instances found). This creates inconsistent error UX. |
+| **Evidence** | `frontend/src/pages/ComplaintDetail.tsx` L232: `alert(\`Failed to create action: ${getApiErrorMessage(err)}\`)`. `IncidentDetail.tsx` L235: same pattern. `MobileAuditExecution.tsx` L315,436,452: `alert()` for device permission errors. `RTADetail.tsx` L232: `alert()`. `WorkflowCenter.tsx` L227: `alert()`. Meanwhile `ToastContext.tsx` exports a standalone `toast` API designed for exactly this use case. |
+| **Effort** | **M** |
+| **Fix** | Import `toast` from `ToastContext.tsx` in `client.ts` interceptor. In the response error handler, call `toast.error(classifiedMessage)` for 403, 422, 429, 500 errors (NOT 401, which redirects). Then replace all `alert()` calls in pages with `toast.error()` / `toast.warning()`. |
+| **Dimensions** | D02 UX Quality (+0.3), D14 Error Handling (+0.2) |
+| **Tests** | E2E test: trigger error → verify toast appears (not alert); unit test: mock 500 → toast.error called |
+| **Rollback** | Remove toast calls from interceptor; revert alert→toast changes |
 
-**Definition of Done**: CI passes at 50% coverage; 5+ new test files with behavioral tests.
-**Effort**: L | **Value**: H | **Expected lift**: D15 5.4 → 6.2
+### 12. Replace `alert()` with Toast in All Pages
 
----
+| Field | Detail |
+|-------|--------|
+| **Impact** | 9 `alert()` calls across pages create jarring, unstyled, browser-native dialogs that block the UI thread. Modern apps use non-blocking toast/snackbar notifications. |
+| **Evidence** | Files: `ComplaintDetail.tsx` L232, `IncidentDetail.tsx` L235, `RTADetail.tsx` L232, `MobileAuditExecution.tsx` L315/436/452, `ReportGenerator.tsx` L167, `WorkflowCenter.tsx` L227, `PortalRTAForm.tsx` L263. |
+| **Effort** | **S** (replace 9 instances) |
+| **Fix** | Import `toast` from `ToastContext.tsx`. Replace `alert(msg)` with `toast.error(msg)` for errors or `toast.success(msg)` for confirmations. For device permission errors, use `toast.warning(msg)`. |
+| **Dimensions** | D02 UX Quality (+0.2), D14 Error Handling (+0.1) |
+| **Tests** | Verify no `alert(` calls remain in `frontend/src/pages/` (grep check) |
+| **Rollback** | Revert to `alert()` |
 
-## Tier 3: UI and UX Focus
+### 13. Add Breadcrumb Navigation to Detail Pages
 
-### 13. Add DataTable + Pagination component (D02, D10 → +0.8 WCS)
+| Field | Detail |
+|-------|--------|
+| **Impact** | No breadcrumb component exists anywhere in the frontend. Users on detail pages (e.g., `/incidents/42`) have no visual path indicator and must use the browser back button or sidebar to navigate. This violates WCAG 2.1 SC 2.4.8 (Location) and hurts UX. |
+| **Evidence** | `grep -rn breadcrumb frontend/src/` returns zero results. 71+ pages, many with nested detail views. |
+| **Effort** | **M** |
+| **Fix** | Create `frontend/src/components/ui/Breadcrumb.tsx` using Radix UI or a simple component. Add `useBreadcrumbs()` hook that derives crumbs from `react-router-dom` `useLocation()`. Integrate into `Layout.tsx` or individual detail pages. Initial rollout: Dashboard → Module List → Detail. |
+| **Dimensions** | D02 UX Quality (+0.3), D03 Accessibility (+0.2) |
+| **Tests** | a11y test: breadcrumb has `nav` element with `aria-label="Breadcrumb"` |
+| **Rollback** | Remove breadcrumb component |
 
-**Gap**: Every list page has its own ad-hoc table implementation. No shared sortable, filterable, paginated table. Component inventory identifies DataTable as high priority.
+### 14. Add Empty States to List Pages
 
-**What to change**:
-- Create `frontend/src/components/ui/DataTable.tsx` — props: columns, data, loading, emptyState, onSort, onFilter, onPageChange
-- Create `frontend/src/components/ui/Pagination.tsx` — page numbers, prev/next, page size selector
-- Refactor `Incidents.tsx` to use `<DataTable>` as proof-of-concept
-- Progressive adoption: refactor remaining list pages (RTAs, Complaints, Risks, Audits, Users, Actions, Policies)
+| Field | Detail |
+|-------|--------|
+| **Impact** | Some list pages show empty tables when no data exists. Incidents page has empty states (`incidents.empty.title`), but not all modules follow this pattern. Empty states should guide users on what to do next. |
+| **Evidence** | `frontend/src/pages/Incidents.tsx` L202-203: has i18n empty state. Need to verify coverage across all list pages (complaints, risks, audits, policies, RTAs, actions, etc.). |
+| **Effort** | **S-M** |
+| **Fix** | Create a reusable `EmptyState` component: icon, title, description, optional CTA button. Apply to all list pages: Complaints, Risks, Policies, RTAs, Actions, AuditRuns, Standards, Documents, Notifications. Use i18n keys for text. |
+| **Dimensions** | D02 UX Quality (+0.2), D01 Product Clarity (+0.1) |
+| **Tests** | Visual test: render list with empty data → EmptyState component visible |
+| **Rollback** | Revert to empty table |
 
-**Definition of Done**: DataTable + Pagination components exist; Incidents page uses DataTable; 2+ other pages migrated.
-**Effort**: M | **Value**: H | **Expected lift**: D02 5.4 → 6.4, D10 8.0 → 8.3
+### 15. Add Skeleton Loading to Key List Pages
 
----
-
-### 14. Align design tokens with Tailwind + fix font mismatch (D02 → +0.4 WCS)
-
-**Gap**: `design-tokens.css` uses `Inter` font and hex colors. `tailwind.config.js` uses `Plus Jakarta Sans` and HSL colors. Tokens exist but aren't wired into Tailwind. Two competing systems.
-
-**What to change**:
-- `frontend/src/styles/design-tokens.css` — change `--font-sans` from `Inter` to `Plus Jakarta Sans` to match Tailwind
-- Add focus-ring tokens: `--ring-width`, `--ring-color`, `--ring-offset`
-- Wire key tokens into `tailwind.config.js` via `theme.extend` referencing CSS custom properties
-- Add `--input-border`, `--input-focus-border`, `--input-bg` tokens for form consistency
-- Document the design token system in `docs/ux/design-tokens.md`
-
-**Definition of Done**: Font consistent across tokens and Tailwind; tokens document covers usage; no competing color systems.
-**Effort**: S | **Value**: M | **Expected lift**: D02 5.4 → 5.8
-
----
-
-### 15. Restructure sidebar navigation per IA recommendations (D01, D02 → +0.6 WCS)
-
-**Gap**: Sidebar has 8 sections with 30+ items, duplicate icons, duplicate routes (`/workforce/calendar` vs `/calendar`), and no collapsible sections. IA audit recommends consolidating to 7 groups with clearer hierarchy.
-
-**What to change**:
-- `frontend/src/components/Layout.tsx` — restructure nav sections:
-  1. **Dashboard** (single item)
-  2. **Incidents & Safety** (incidents, RTAs, near misses, complaints, investigations, CAPA)
-  3. **Audits & Inspections** (audits, templates, trail, competence)
-  4. **Risk & Compliance** (risks, risk register, compliance, ISO 27001, standards, policies)
-  5. **Workforce** (engineers, assessments, inductions, training, calendar)
-  6. **Documents & Evidence** (documents, document control, evidence, signatures)
-  7. **Analytics & Reports** (analytics, dashboards, reports, exports, AI intelligence)
-  8. **Admin** (users, workflows, settings, notifications, feature flags)
-- Add collapsible sections (click section header to expand/collapse)
-- Remove duplicate routes
-- Use unique icons per section
-
-**Definition of Done**: 8 logical nav groups; collapsible; no duplicate routes; no duplicate icons.
-**Effort**: M | **Value**: H | **Expected lift**: D01 7.2 → 7.8, D02 5.4 → 6.0
+| Field | Detail |
+|-------|--------|
+| **Impact** | Dashboard has `CardSkeleton` loading states (added in Week-1), but other list pages (Incidents, Complaints, Risks, Audits, Policies) use a simple spinner or nothing during load. Skeleton loading provides better perceived performance and prevents layout shift. |
+| **Evidence** | Dashboard uses `CardSkeleton` from Week-1 uplift. Other pages: `Incidents.tsx` uses `Loader2` spinner. `Complaints.tsx`, `Risks.tsx` similar pattern. |
+| **Effort** | **M** |
+| **Fix** | Create a `TableSkeleton` component (animated rows with placeholder cells). Apply to the 6 most-used list pages: Incidents, Complaints, Risks, Audits, Policies, RTAs. Replace `Loader2` spinner with `TableSkeleton` in loading state. |
+| **Dimensions** | D04 Performance (perceived) (+0.2), D02 UX Quality (+0.2) |
+| **Tests** | Visual test: loading state renders skeleton rows; E2E: loading → content transition is smooth |
+| **Rollback** | Revert to spinner |
 
 ---
 
-## Impact Summary
+## Implementation Schedule
 
-| # | Focus Area | Dimensions | Effort | Category | Estimated Total WCS Lift |
-|---|-----------|------------|--------|----------|--------------------------|
-| 1 | Auth on 3 remaining modules | D06 | S | Low Effort / High Value | +0.5 |
-| 2 | CSP header | D06 | S | Low Effort / High Value | +0.3 |
-| 3 | Toast notification system | D02, D14 | S | Low Effort / High Value | +0.8 |
-| 4 | Skeleton loading component | D02, D04 | S | Low Effort / High Value | +0.6 |
-| 5 | Wire Dashboard to real APIs | D01, D02, D28 | M | Low Effort / High Value | +1.2 |
-| 6 | Guard /metrics/resources | D06, D32 | S | Low Effort / High Value | +0.3 |
-| 7 | Complete runbook contacts | D23, D05 | S | Low Effort / High Value | +0.5 |
-| 8 | 5 accessibility tests | D03 | M | Critical Workflows | +1.0 |
-| 9 | Label + Alert + Breadcrumb | D02, D03 | M | Critical Workflows | +0.8 |
-| 10 | Rich empty states | D02, D01 | M | Critical Workflows | +0.5 |
-| 11 | Playwright E2E (3 specs) | D15, D02 | M | Critical Workflows | +0.8 |
-| 12 | Coverage 35% → 50% | D15 | L | Critical Workflows | +0.8 |
-| 13 | DataTable + Pagination | D02, D10 | M | UI and UX | +0.8 |
-| 14 | Design token alignment | D02 | S | UI and UX | +0.4 |
-| 15 | Sidebar restructure | D01, D02 | M | UI and UX | +0.6 |
-| | | | | **Total estimated lift** | **+9.9** |
+### Week 1 — Low Effort / High Value (Items 1–5)
 
-### Projected WCS After Completion
+| # | Item | Effort | Files | WCS Impact |
+|---|------|--------|-------|-----------|
+| 1 | Fix risk JSON column bug | S | `src/api/routes/risks.py` | D24 +0.3 |
+| 2 | Add GZip middleware | S | `src/main.py` | D04 +0.3 |
+| 3 | Standardize error responses | S | All route files | D10 +0.3 |
+| 4 | Mount health router / readyz Redis | S | `src/main.py`, `src/api/__init__.py` | D05 +0.3 |
+| 5 | Add 429 handling to interceptor | S | `frontend/src/api/client.ts` | D14 +0.2 |
 
-If all 15 items are executed, the projected average WCS moves from **7.1 → ~8.1**, with the following dimension-level improvements:
+### Week 2 — Critical Workflows (Items 6–10)
 
-| Dimension | Current WCS | Projected WCS | Change |
-|-----------|------------|---------------|--------|
-| D01 Product clarity | 7.2 | 8.1 | +0.9 |
-| D02 UX quality | 5.4 | 7.2 | +1.8 |
-| D03 Accessibility | 4.5 | 6.5 | +2.0 |
-| D04 Performance | 5.4 | 5.7 | +0.3 |
-| D05 Reliability | 8.0 | 8.2 | +0.2 |
-| D06 Security | 8.0 | 9.1 | +1.1 |
-| D10 API design | 8.0 | 8.3 | +0.3 |
-| D14 Error handling | 8.0 | 8.3 | +0.3 |
-| D15 Testing | 5.4 | 7.0 | +1.6 |
-| D23 Runbooks | 5.4 | 6.0 | +0.6 |
-| D28 Analytics | 5.4 | 5.8 | +0.4 |
-| D32 Supportability | 6.3 | 6.5 | +0.2 |
+| # | Item | Effort | Files | WCS Impact |
+|---|------|--------|-------|-----------|
+| 6 | Status transition validation | M | Models + route handlers | D24 +0.3 |
+| 7 | Wire routes through service layer | M | `incidents.py`, `complaints.py` | D09 +0.3 |
+| 8 | Standardize pagination shape | M | All list endpoints + schema | D10 +0.4 |
+| 9 | Composite database indexes | S | Models + Alembic migration | D04 +0.3 |
+| 10 | Request logging middleware | S | `src/main.py` or new middleware file | D13 +0.3 |
+
+### Week 3 — UI/UX Focus (Items 11–15)
+
+| # | Item | Effort | Files | WCS Impact |
+|---|------|--------|-------|-----------|
+| 11 | Wire toast to API interceptor | M | `client.ts` | D02 +0.3 |
+| 12 | Replace alert() with toast | S | 6 page files | D02 +0.2 |
+| 13 | Add breadcrumb navigation | M | New component + Layout | D02 +0.3 |
+| 14 | Add empty states to list pages | S-M | 8 list page files | D02 +0.2 |
+| 15 | Skeleton loading on list pages | M | 6 list page files + new component | D04 +0.2 |
 
 ---
 
-## Execution Order (Recommended)
+## Expected Aggregate Impact
 
-**Week 1 — Low Effort / High Value (items 1-4, 6-7)**:
-1. Auth on planet_mark, uvdb, slo (item 1)
-2. CSP header (item 2)
-3. Guard /metrics/resources (item 6)
-4. Toast system (item 3)
-5. Skeleton component (item 4)
-6. Runbook contacts (item 7)
+| Dimension | Current WCS | Expected After All 15 | Lift |
+|-----------|-----------|----------------------|------|
+| D02 UX Quality | 7.2 | 8.4 | +1.2 |
+| D04 Performance | 5.4 | 6.5 | +1.1 |
+| D05 Reliability | 8.0 | 8.6 | +0.6 |
+| D09 Architecture | 8.0 | 8.6 | +0.6 |
+| D10 API Quality | 8.0 | 8.9 | +0.9 |
+| D11 Data Model | 8.0 | 8.4 | +0.4 |
+| D13 Observability | 7.2 | 8.0 | +0.8 |
+| D14 Error Handling | 8.0 | 8.5 | +0.5 |
+| D21 Code Quality | 6.0 | 6.8 | +0.8 |
+| D24 Data Integrity | 9.0 | 9.6 | +0.6 |
+| D32 Supportability | 7.2 | 7.8 | +0.6 |
+| **Average WCS** | **7.1** | **~7.6** | **+0.5** |
 
-**Week 2 — Critical Workflows + UX foundation (items 5, 8-10, 14)**:
-7. Wire Dashboard APIs (item 5)
-8. A11y test files (item 8)
-9. Label + Alert + Breadcrumb (item 9)
-10. Design token alignment (item 14)
-11. Empty states (item 10)
+---
 
-**Week 3 — Testing + UI maturity (items 11-13, 15)**:
-12. Playwright E2E setup (item 11)
-13. DataTable + Pagination (item 13)
-14. Sidebar restructure (item 15)
-15. Coverage raise to 50% (item 12)
+## Validation Checklist
+
+After all 15 items are complete:
+
+- [ ] Zero `alert()` calls in `frontend/src/pages/`
+- [ ] All list endpoints return `{items, total, page, page_size, pages}` shape
+- [ ] All 404/409/403 errors use `api_error()` envelope
+- [ ] `/readyz` checks DB + Redis
+- [ ] Status transitions validated server-side for incidents, complaints, risks, audit runs
+- [ ] Composite indexes on `(tenant_id, status)` and `(tenant_id, created_at)` for 4 core models
+- [ ] Risk update correctly writes to `_json_legacy` columns
+- [ ] GZip responses for payloads > 1KB
+- [ ] Request logging captures method, path, status, duration, request_id
+- [ ] Breadcrumb navigation on all detail pages
+- [ ] Global toast shown on API errors (not local state or alert)
+- [ ] Empty states on all list pages
+- [ ] Skeleton loading on 6 key list pages
+- [ ] 429 rate-limit errors show user-friendly message
+- [ ] CI passes all existing tests

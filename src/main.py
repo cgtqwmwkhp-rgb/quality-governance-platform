@@ -8,6 +8,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -18,6 +19,7 @@ from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
+from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -230,6 +232,9 @@ def create_application() -> FastAPI:
         ],
     )
 
+    # GZip compression — outermost so all responses are compressed
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+
     # Add Request State Middleware (must be first for request_id propagation)
     app.add_middleware(RequestStateMiddleware)
 
@@ -239,6 +244,9 @@ def create_application() -> FastAPI:
 
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
+
+    # Request logging (method, path, status, latency)
+    app.add_middleware(RequestLoggerMiddleware)
 
     # Add Rate Limiting Middleware (uses per-endpoint configurable limits)
     app.add_middleware(RateLimitMiddleware)
@@ -454,11 +462,13 @@ async def liveness_check(request: Request) -> dict:
 async def readiness_check(request: Request):
     """Readiness probe: Check if application is ready to accept traffic.
 
-    Checks database connectivity. Returns 200 OK if ready, 503 if not ready.
+    Checks database and Redis connectivity. Returns 200 OK if ready, 503 if not.
     Used by load balancers to determine if traffic should be routed to this instance.
 
     Per ADR-0003: Readiness Probe Database Check
     """
+    import asyncio
+
     from fastapi.responses import JSONResponse
     from sqlalchemy import text
 
@@ -467,28 +477,41 @@ async def readiness_check(request: Request):
     request_id = getattr(request.state, "request_id", "N/A")
     logger = logging.getLogger(__name__)
 
-    try:
-        # Ping database with a simple query
-        async with async_session_maker() as session:
-            await session.execute(text("SELECT 1"))
+    db_status = "connected"
+    redis_status = "connected"
+    status_code = 200
 
-        logger.info("Readiness check passed", extra={"request_id": request_id})
-        return {
-            "status": "ready",
-            "database": "connected",
-            "request_id": request_id,
-        }
+    # Database check
+    try:
+        async with async_session_maker() as session:
+            await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=3.0)
     except Exception as e:
-        logger.error(
-            f"Readiness check failed: {e}",
-            extra={"request_id": request_id, "error": str(e)},
-        )
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "not_ready",
-                "database": "disconnected",
-                "error": str(e),
-                "request_id": request_id,
-            },
-        )
+        logger.error("Readiness: DB check failed: %s", e, extra={"request_id": request_id})
+        db_status = "disconnected"
+        status_code = 503
+
+    # Redis check
+    try:
+        import redis.asyncio as aioredis
+
+        if settings.redis_url:
+            r = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
+            await asyncio.wait_for(r.ping(), timeout=2.0)
+            await r.aclose()
+        else:
+            redis_status = "not_configured"
+    except Exception as e:
+        logger.warning("Readiness: Redis check failed: %s", e, extra={"request_id": request_id})
+        redis_status = "degraded"
+
+    overall = "ready" if status_code == 200 else "not_ready"
+    if status_code == 200:
+        logger.info("Readiness check passed", extra={"request_id": request_id})
+
+    payload = {
+        "status": overall,
+        "database": db_status,
+        "redis": redis_status,
+        "request_id": request_id,
+    }
+    return JSONResponse(content=payload, status_code=status_code)

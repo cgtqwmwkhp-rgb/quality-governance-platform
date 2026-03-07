@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from src.api.dependencies import CurrentUser
 from src.infrastructure.database import engine
 
 logger = logging.getLogger(__name__)

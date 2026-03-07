@@ -162,7 +162,7 @@ async def list_rtas(
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": total_pages,
+            "pages": total_pages,
         }
     except Exception as e:
         error_str = str(e).lower()
@@ -340,7 +340,7 @@ async def list_rta_actions(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": total_pages,
+        "pages": total_pages,
     }
 
 
@@ -475,5 +475,5 @@ async def list_rta_investigations(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": total_pages,
+        "pages": total_pages,
     }

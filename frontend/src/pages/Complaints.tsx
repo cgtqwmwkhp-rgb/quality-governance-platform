@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
+import { Plus, MessageSquare, Search } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -154,8 +156,14 @@ export default function Complaints() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t('complaints.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
+          </div>
+        </div>
+        <Card><CardContent className="p-6"><TableSkeleton rows={6} columns={6} /></CardContent></Card>
       </div>
     )
   }
@@ -207,10 +215,17 @@ export default function Complaints() {
               <tbody className="divide-y divide-border">
                 {filteredComplaints.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                      <MessageSquare className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>{t('complaints.empty.title')}</p>
-                      <p className="text-sm mt-1">{t('complaints.empty.subtitle')}</p>
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
+                        title={t('complaints.empty.title', 'No complaints found')}
+                        description={t('complaints.empty.subtitle', 'Create your first complaint to get started.')}
+                        action={
+                          <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                            <Plus size={16} /> {t('complaints.new', 'New Complaint')}
+                          </Button>
+                        }
+                      />
                     </td>
                   </tr>
                 ) : (

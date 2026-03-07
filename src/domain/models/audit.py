@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -266,6 +266,10 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Audit run model for actual audit executions."""
 
     __tablename__ = "audit_runs"
+    __table_args__ = (
+        Index("ix_audit_runs_tenant_status", "tenant_id", "status"),
+        Index("ix_audit_runs_tenant_created", "tenant_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id"), nullable=False)

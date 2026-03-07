@@ -289,5 +289,5 @@ async def list_near_miss_investigations(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": ceil(total / page_size) if total > 0 else 1,
+        "pages": ceil(total / page_size) if total > 0 else 1,
     }

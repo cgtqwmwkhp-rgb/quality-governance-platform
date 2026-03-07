@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
+import { Plus, AlertTriangle, Search } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
+import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -142,8 +144,14 @@ export default function Incidents() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">{t('incidents.title')}</h1>
+            <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
+          </div>
+        </div>
+        <Card><CardContent className="p-6"><TableSkeleton rows={6} columns={6} /></CardContent></Card>
       </div>
     )
   }
@@ -197,10 +205,17 @@ export default function Incidents() {
               <tbody className="divide-y divide-border">
                 {filteredIncidents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                      <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>{t('incidents.empty.title')}</p>
-                      <p className="text-sm mt-1">{t('incidents.empty.subtitle')}</p>
+                    <td colSpan={6}>
+                      <EmptyState
+                        icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
+                        title={t('incidents.empty.title', 'No incidents found')}
+                        description={t('incidents.empty.subtitle', 'Create your first incident report to get started.')}
+                        action={
+                          <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
+                            <Plus size={16} /> {t('incidents.new', 'Report Incident')}
+                          </Button>
+                        }
+                      />
                     </td>
                   </tr>
                 ) : (
