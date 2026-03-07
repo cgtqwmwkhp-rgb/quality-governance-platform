@@ -159,9 +159,10 @@ async def test_etl_user_cannot_access_user_management(client: AsyncClient, etl_u
 
     # Least-privilege contract: ETL role has no user:* read/write scope.
     # Accept 404 as a non-enumerating "not found" posture.
-    assert response.status_code in [403, 404], (
-        f"Expected ETL denial for user management read access, got {response.status_code}: {response.text}"
-    )
+    assert response.status_code in [
+        403,
+        404,
+    ], f"Expected ETL denial for user management read access, got {response.status_code}: {response.text}"
 
 
 @pytest.mark.asyncio
