@@ -17,6 +17,9 @@ on:
         description: 'Confirm staging has been verified'
         required: true
         default: 'false'
+      release_sha:
+        description: 'Release commit SHA to promote (optional; defaults to current SHA)'
+        required: false
       reason:
         description: 'Reason for production deployment'
         required: true
@@ -154,6 +157,8 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             RELEASE_SHA="${{ github.event.workflow_run.head_sha }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.release_sha }}" ]]; then
+            RELEASE_SHA="${{ github.event.inputs.release_sha }}"
           else
             RELEASE_SHA="${{ github.sha }}"
           fi
