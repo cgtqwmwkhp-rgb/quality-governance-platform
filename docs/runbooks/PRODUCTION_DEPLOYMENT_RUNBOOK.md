@@ -1,7 +1,7 @@
 # Production Deployment Runbook
 
 **Status**: READY FOR EXECUTION  
-**Last Updated**: 2026-01-19  
+**Last Updated**: 2026-03-07  
 **Estimated Time**: 2-3 hours (first-time setup)
 
 ---
@@ -329,6 +329,40 @@ STAGING_URL="https://<staging-app-name>.azurewebsites.net" \
 
 ---
 
+## Phase 4.5: Governance Sign-Off + SHA Pinning (Required)
+
+Before production promotion, ensure `release_signoff.json` is aligned to the exact SHA being promoted.
+
+### Step 4.5.1: Identify target SHA
+
+- Use the latest successful staging deployment SHA.
+- Treat this SHA as the single source of truth for parity promotion.
+
+### Step 4.5.2: Create/update sign-off artifact
+
+```bash
+TARGET_SHA="<staging-success-sha>"
+python3 scripts/governance/create_release_signoff.py \
+  --sha "$TARGET_SHA" \
+  --governance-lead "<governance lead full name>" \
+  --cab-chair "<cab chair full name>" \
+  --uat-report-path "docs/evidence/uat_summary_${TARGET_SHA:0:8}.md" \
+  --rollback-report-path "docs/evidence/rollback_drill_${TARGET_SHA:0:8}.md" \
+  --approved-at-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
+
+### Step 4.5.3: Validate sign-off artifact
+
+```bash
+python3 scripts/governance/validate_release_signoff.py \
+  --file docs/evidence/release_signoff.json \
+  --sha "$TARGET_SHA"
+```
+
+If this fails, production deployment is expected to fail by design.
+
+---
+
 ## Phase 5: Production Deployment (15 min)
 
 ### Option A: Manual Dispatch (Recommended for First Deploy)
@@ -337,9 +371,21 @@ STAGING_URL="https://<staging-app-name>.azurewebsites.net" \
 2. Click **Run workflow**
 3. Select branch: `main`
 4. Check: `✓ Confirm staging has been verified`
-5. Enter reason: `Initial production deployment after staging verification`
-6. Click **Run workflow**
-7. Wait for reviewer approval (if configured)
+5. Set `release_sha` to the exact staging-verified SHA
+6. Enter reason: `Parity promotion for staging-verified SHA`
+7. Click **Run workflow**
+8. Wait for reviewer approval (if configured)
+
+### Option A (CLI equivalent)
+
+```bash
+TARGET_SHA="<staging-success-sha>"
+gh workflow run deploy-production.yml \
+  --ref main \
+  -f staging_verified=true \
+  -f release_sha="$TARGET_SHA" \
+  -f reason="Parity promotion for staging-verified SHA"
+```
 
 ### Option B: Release Tag
 
