@@ -290,7 +290,7 @@ async def get_investigation_timeline(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": math.ceil(total / page_size) if total else 0,
+        "total_pages": math.ceil(total / page_size) if total else 1,
     }
 
 
@@ -344,7 +344,7 @@ async def get_investigation_comments(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": math.ceil(total / page_size) if total else 0,
+        "total_pages": math.ceil(total / page_size) if total else 1,
     }
 
 
@@ -381,7 +381,7 @@ async def get_investigation_packs(
         "total": total,
         "page": page,
         "page_size": page_size,
-        "total_pages": math.ceil(total / page_size) if total else 0,
+        "total_pages": math.ceil(total / page_size) if total else 1,
     }
 
 

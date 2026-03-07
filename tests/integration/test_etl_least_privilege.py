@@ -157,13 +157,11 @@ async def test_etl_user_cannot_access_user_management(client: AsyncClient, etl_u
     # Attempt to list users (should fail for non-admin)
     response = await client.get("/api/v1/users/", headers=etl_user_token)
 
-    # Contract drift: endpoint may allow read access while still blocking writes.
-    # We only enforce that ETL users cannot perform privileged modifications.
-    assert response.status_code in [
-        200,
-        403,
-        404,
-    ], f"Expected controlled access response, got {response.status_code}: {response.text}"
+    # Least-privilege contract: ETL role has no user:* read/write scope.
+    # Accept 404 as a non-enumerating "not found" posture.
+    assert response.status_code in [403, 404], (
+        f"Expected ETL denial for user management read access, got {response.status_code}: {response.text}"
+    )
 
 
 @pytest.mark.asyncio
