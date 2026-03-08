@@ -195,19 +195,25 @@ TABLES = [
 def upgrade() -> None:
     for table in TABLES:
         op.execute(
+            f"DO $$ BEGIN "
+            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
+            f"WHERE table_schema='public' AND table_name='{table}') THEN "
             f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
-            f"tenant_id INTEGER REFERENCES tenants(id)"
-        )
-        op.execute(
-            f"UPDATE {table} SET tenant_id = 1 WHERE tenant_id IS NULL"
-        )
-        op.execute(
+            f"tenant_id INTEGER REFERENCES tenants(id); "
+            f"UPDATE {table} SET tenant_id = 1 WHERE tenant_id IS NULL; "
             f"CREATE INDEX IF NOT EXISTS ix_{table}_tenant_id "
-            f"ON {table} (tenant_id)"
+            f"ON {table} (tenant_id); "
+            f"END IF; END $$;"
         )
 
 
 def downgrade() -> None:
     for table in reversed(TABLES):
-        op.execute(f"DROP INDEX IF EXISTS ix_{table}_tenant_id")
-        op.execute(f"ALTER TABLE {table} DROP COLUMN IF EXISTS tenant_id")
+        op.execute(
+            f"DO $$ BEGIN "
+            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
+            f"WHERE table_schema='public' AND table_name='{table}') THEN "
+            f"DROP INDEX IF EXISTS ix_{table}_tenant_id; "
+            f"ALTER TABLE {table} DROP COLUMN IF EXISTS tenant_id; "
+            f"END IF; END $$;"
+        )

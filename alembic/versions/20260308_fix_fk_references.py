@@ -60,24 +60,28 @@ FK_FIXES = [
 def upgrade() -> None:
     for fix in FK_FIXES:
         op.execute(
+            f"DO $$ BEGIN "
+            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
+            f"WHERE table_schema='public' AND table_name='{fix['table']}') THEN "
             f"ALTER TABLE {fix['table']} "
-            f"DROP CONSTRAINT IF EXISTS {fix['old_constraint']}"
-        )
-        op.execute(
+            f"DROP CONSTRAINT IF EXISTS {fix['old_constraint']}; "
             f"ALTER TABLE {fix['table']} "
             f"ADD CONSTRAINT {fix['old_constraint']} "
-            f"FOREIGN KEY ({fix['column']}) REFERENCES {fix['new_ref']}(id)"
+            f"FOREIGN KEY ({fix['column']}) REFERENCES {fix['new_ref']}(id); "
+            f"END IF; END $$;"
         )
 
 
 def downgrade() -> None:
     for fix in reversed(FK_FIXES):
         op.execute(
+            f"DO $$ BEGIN "
+            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
+            f"WHERE table_schema='public' AND table_name='{fix['table']}') THEN "
             f"ALTER TABLE {fix['table']} "
-            f"DROP CONSTRAINT IF EXISTS {fix['old_constraint']}"
-        )
-        op.execute(
+            f"DROP CONSTRAINT IF EXISTS {fix['old_constraint']}; "
             f"ALTER TABLE {fix['table']} "
             f"ADD CONSTRAINT {fix['old_constraint']} "
-            f"FOREIGN KEY ({fix['column']}) REFERENCES {fix['old_ref']}(id)"
+            f"FOREIGN KEY ({fix['column']}) REFERENCES {fix['old_ref']}(id); "
+            f"END IF; END $$;"
         )
