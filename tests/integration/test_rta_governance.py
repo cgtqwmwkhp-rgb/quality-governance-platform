@@ -76,7 +76,7 @@ async def test_list_rtas_deterministic_ordering(client: AsyncClient, auth_header
     assert "total" in data
     assert "page" in data
     assert "page_size" in data
-    assert "total_pages" in data
+    assert "pages" in data
 
     # Verify deterministic ordering: newest first (created_at DESC)
     items = data["items"]
@@ -211,11 +211,12 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
     test_session.add(rta)
     await test_session.commit()
     await test_session.refresh(rta)
+    rta_id = rta.id
 
     # Create 3 actions with different created_at times
     for i in range(3):
         action = RTAAction(
-            rta_id=rta.id,
+            rta_id=rta_id,
             title=f"Action {i}",
             description="Test",
             reference_number=f"RTAACT-{uuid.uuid4().hex[:8]}{i}",
@@ -225,14 +226,14 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
 
     await test_session.commit()
 
-    response = await client.get(f"/api/v1/rtas/{rta.id}/actions", headers=auth_headers)
+    response = await client.get(f"/api/v1/rtas/{rta_id}/actions", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert "items" in data
     assert "total" in data
     assert "page" in data
     assert "page_size" in data
-    assert "total_pages" in data
+    assert "pages" in data
 
     # Verify deterministic ordering: newest first
     items = data["items"]
@@ -262,6 +263,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     test_session.add(rta)
     await test_session.commit()
     await test_session.refresh(rta)
+    rta_id = rta.id
 
     # Create investigation template
     template = InvestigationTemplate(
@@ -280,7 +282,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
         title="Investigation 0",
         description="Test",
         assigned_entity_type=AssignedEntityType.ROAD_TRAFFIC_COLLISION,
-        assigned_entity_id=rta.id,
+        assigned_entity_id=rta_id,
         reference_number=f"INV-RTA-{uuid.uuid4().hex[:7]}",
         created_at=now,
     )
@@ -289,7 +291,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     await test_session.commit()
 
     # Get investigations for RTA
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
+    response = await client.get(f"/api/v1/rtas/{rta_id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -298,7 +300,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     assert "total" in data
     assert "page" in data
     assert "page_size" in data
-    assert "total_pages" in data
+    assert "pages" in data
 
     items = data["items"]
     assert len(items) == 1
@@ -308,7 +310,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
 
 
 @pytest.mark.asyncio
@@ -328,6 +330,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     test_session.add(complaint)
     await test_session.commit()
     await test_session.refresh(complaint)
+    complaint_id = complaint.id
 
     template = InvestigationTemplate(
         name="Test Template",
@@ -344,7 +347,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
         title="Complaint Investigation 0",
         description="Test",
         assigned_entity_type=AssignedEntityType.COMPLAINT,
-        assigned_entity_id=complaint.id,
+        assigned_entity_id=complaint_id,
         reference_number=f"INV-CMP-{uuid.uuid4().hex[:7]}",
         created_at=now,
     )
@@ -352,7 +355,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
 
     await test_session.commit()
 
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
+    response = await client.get(f"/api/v1/complaints/{complaint_id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -360,7 +363,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     assert "total" in data
     assert "page" in data
     assert "page_size" in data
-    assert "total_pages" in data
+    assert "pages" in data
 
     items = data["items"]
     assert len(items) == 1
@@ -368,12 +371,12 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
 
 
 @pytest.mark.asyncio
 async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dict, test_session):
-    """Test that RTA pagination is consistent and total_pages is calculated correctly."""
+    """Test that RTA pagination is consistent and pages is calculated correctly."""
     now = datetime.now(timezone.utc)
 
     # Create 15 RTAs
@@ -399,9 +402,9 @@ async def test_rta_pagination_consistency(client: AsyncClient, auth_headers: dic
     assert data["page_size"] == 5
     assert len(data["items"]) <= 5
     assert data["total"] >= 15
-    # total_pages should be ceil(total / page_size)
+    # pages should be ceil(total / page_size)
     expected_pages = (data["total"] + 4) // 5  # ceiling division
-    assert data["total_pages"] == expected_pages
+    assert data["pages"] == expected_pages
 
 
 @pytest.mark.asyncio
@@ -424,6 +427,7 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     test_session.add(rta)
     await test_session.commit()
     await test_session.refresh(rta)
+    rta_id = rta.id
 
     # Create investigation template
     template = InvestigationTemplate(
@@ -441,7 +445,7 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
         title="Investigation 0",
         description="Test",
         assigned_entity_type=AssignedEntityType.ROAD_TRAFFIC_COLLISION,
-        assigned_entity_id=rta.id,
+        assigned_entity_id=rta_id,
         reference_number=f"INV-PG-{uuid.uuid4().hex[:7]}",
         created_at=now,
     )
@@ -450,33 +454,33 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     await test_session.commit()
 
     # Test page 1 (default page_size=25)
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations", headers=auth_headers)
+    response = await client.get(f"/api/v1/rtas/{rta_id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 1
 
     # Test page 2
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page=2", headers=auth_headers)
+    response = await client.get(f"/api/v1/rtas/{rta_id}/investigations?page=2", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert data["page"] == 2
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 0
 
     # Test custom page_size
-    response = await client.get(f"/api/v1/rtas/{rta.id}/investigations?page_size=10", headers=auth_headers)
+    response = await client.get(f"/api/v1/rtas/{rta_id}/investigations?page_size=10", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 10
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 1
 
 
@@ -557,6 +561,7 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     test_session.add(complaint)
     await test_session.commit()
     await test_session.refresh(complaint)
+    complaint_id = complaint.id
 
     # Create investigation template
     template = InvestigationTemplate(
@@ -574,7 +579,7 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
         title="Complaint Investigation 0",
         description="Test",
         assigned_entity_type=AssignedEntityType.COMPLAINT,
-        assigned_entity_id=complaint.id,
+        assigned_entity_id=complaint_id,
         reference_number=f"INV-CP-{uuid.uuid4().hex[:7]}",
         created_at=now,
     )
@@ -583,28 +588,28 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     await test_session.commit()
 
     # Test page 1 (default page_size=25)
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations", headers=auth_headers)
+    response = await client.get(f"/api/v1/complaints/{complaint_id}/investigations", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 1
 
     # Test page 2
-    response = await client.get(f"/api/v1/complaints/{complaint.id}/investigations?page=2", headers=auth_headers)
+    response = await client.get(f"/api/v1/complaints/{complaint_id}/investigations?page=2", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
     assert data["page"] == 2
     assert data["page_size"] == 25
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 0
 
     # Test custom page_size
     response = await client.get(
-        f"/api/v1/complaints/{complaint.id}/investigations?page_size=10",
+        f"/api/v1/complaints/{complaint_id}/investigations?page_size=10",
         headers=auth_headers,
     )
     assert response.status_code == 200
@@ -612,5 +617,5 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     assert data["total"] == 1
     assert data["page"] == 1
     assert data["page_size"] == 10
-    assert data["total_pages"] == 1
+    assert data["pages"] == 1
     assert len(data["items"]) == 1

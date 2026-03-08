@@ -484,7 +484,7 @@ async def list_investigations(
         total=total or 0,
         page=page,
         page_size=page_size,
-        total_pages=total_pages,
+        pages=total_pages,
     )
 
 
@@ -560,11 +560,11 @@ async def update_investigation(
     # Update status timestamps
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
-            setattr(investigation, "started_at", datetime.now(timezone.utc))
+            setattr(investigation, "started_at", datetime.utcnow())
         elif investigation_data.status == "completed" and not investigation.completed_at:
-            setattr(investigation, "completed_at", datetime.now(timezone.utc))
+            setattr(investigation, "completed_at", datetime.utcnow())
         elif investigation_data.status == "closed" and not investigation.closed_at:
-            setattr(investigation, "closed_at", datetime.now(timezone.utc))
+            setattr(investigation, "closed_at", datetime.utcnow())
 
     await db.commit()
     await db.refresh(investigation)
@@ -906,7 +906,7 @@ async def list_source_records(
         total=total,
         page=page,
         page_size=page_size,
-        total_pages=total_pages,
+        pages=total_pages,
         source_type=source_type,
     )
 

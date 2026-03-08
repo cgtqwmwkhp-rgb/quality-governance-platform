@@ -96,7 +96,7 @@ async def test_update_complaint_status(client: AsyncClient, auth_headers: dict, 
         description="Package lost.",
         complainant_name="Alice Green",
         reference_number=f"COMP-2026-{uuid.uuid4().hex[:8]}",
-        status=ComplaintStatus.RECEIVED,
+        status=ComplaintStatus.PENDING_RESPONSE,
     )
     test_session.add(complaint)
     await test_session.commit()

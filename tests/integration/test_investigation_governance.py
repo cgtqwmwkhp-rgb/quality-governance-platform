@@ -175,7 +175,7 @@ class TestInvestigationDeterminism:
         assert body["page_size"] == 2
         assert len(body["items"]) == 2
         assert body["total"] >= 5
-        assert body["total_pages"] >= 3
+        assert body["pages"] >= 3
 
 
 @pytest.mark.asyncio
@@ -235,7 +235,7 @@ class TestIncidentsInvestigationLinkage:
         assert "total" in data1
         assert "page" in data1
         assert "page_size" in data1
-        assert "total_pages" in data1
+        assert "pages" in data1
 
         items1 = data1["items"]
         items2 = data2["items"]
@@ -252,7 +252,7 @@ class TestIncidentsInvestigationLinkage:
         assert data1["total"] == 1
         assert data1["page"] == 1
         assert data1["page_size"] == 25
-        assert data1["total_pages"] == 1
+        assert data1["pages"] == 1
 
     async def test_get_incident_investigations_empty_list(
         self, client: AsyncClient, auth_headers, test_session, test_incident
@@ -267,7 +267,7 @@ class TestIncidentsInvestigationLinkage:
         assert data["total"] == 0
         assert data["page"] == 1
         assert data["page_size"] == 25
-        assert data["total_pages"] == 1
+        assert data["pages"] == 1
 
     async def test_create_template_inactive_user_403(self, client: AsyncClient, test_session):
         """Test that an inactive user cannot create a template (403 Forbidden)."""
@@ -382,7 +382,7 @@ class TestIncidentsInvestigationLinkage:
         assert data["total"] == 1
         assert data["page"] == 1
         assert data["page_size"] == 25
-        assert data["total_pages"] == 1
+        assert data["pages"] == 1
         assert len(data["items"]) == 1
 
         # Test page 2
@@ -395,7 +395,7 @@ class TestIncidentsInvestigationLinkage:
         assert data["total"] == 1
         assert data["page"] == 2
         assert data["page_size"] == 25
-        assert data["total_pages"] == 1
+        assert data["pages"] == 1
         assert len(data["items"]) == 0
 
         # Test custom page_size
@@ -408,7 +408,7 @@ class TestIncidentsInvestigationLinkage:
         assert data["total"] == 1
         assert data["page"] == 1
         assert data["page_size"] == 10
-        assert data["total_pages"] == 1
+        assert data["pages"] == 1
         assert len(data["items"]) == 1
 
     async def test_incident_investigations_invalid_page_param(
