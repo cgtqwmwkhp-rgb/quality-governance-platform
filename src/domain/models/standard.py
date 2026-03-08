@@ -14,6 +14,7 @@ class Standard(Base, TimestampMixin):
 
     __tablename__ = "standards"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)  # e.g., "ISO9001"
     name: Mapped[str] = mapped_column(String(200), nullable=False)  # e.g., "ISO 9001:2015"
@@ -39,6 +40,7 @@ class Clause(Base, TimestampMixin):
 
     __tablename__ = "clauses"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     standard_id: Mapped[int] = mapped_column(ForeignKey("standards.id", ondelete="CASCADE"), nullable=False)
     clause_number: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # e.g., "4.1", "7.2.1"
@@ -79,6 +81,7 @@ class Control(Base, TimestampMixin):
 
     __tablename__ = "controls"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     clause_id: Mapped[int] = mapped_column(ForeignKey("clauses.id", ondelete="CASCADE"), nullable=False)
     control_number: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # e.g., "A.5.1.1"

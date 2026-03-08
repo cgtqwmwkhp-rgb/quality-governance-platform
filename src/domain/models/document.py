@@ -12,38 +12,12 @@ from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, Stri
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.enums import DocumentStatus, DocumentType
 from src.infrastructure.database import Base
 
 # =============================================================================
 # ENUMS
 # =============================================================================
-
-
-class DocumentType(str, enum.Enum):
-    """Type of document."""
-
-    POLICY = "policy"
-    PROCEDURE = "procedure"
-    SOP = "sop"
-    FORM = "form"
-    MANUAL = "manual"
-    GUIDELINE = "guideline"
-    FAQ = "faq"
-    TEMPLATE = "template"
-    RECORD = "record"
-    OTHER = "other"
-
-
-class DocumentStatus(str, enum.Enum):
-    """Document processing and approval status."""
-
-    PENDING = "pending"
-    PROCESSING = "processing"
-    INDEXED = "indexed"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    ARCHIVED = "archived"
-    FAILED = "failed"
 
 
 class FileType(str, enum.Enum):
@@ -202,6 +176,7 @@ class DocumentChunk(Base, TimestampMixin):
 
     __tablename__ = "document_chunks"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
 
@@ -241,6 +216,7 @@ class DocumentAnnotation(Base, TimestampMixin):
 
     __tablename__ = "document_annotations"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -282,6 +258,7 @@ class DocumentVersion(Base, TimestampMixin):
 
     __tablename__ = "document_versions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
 
@@ -314,6 +291,7 @@ class IndexJob(Base, TimestampMixin):
 
     __tablename__ = "index_jobs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Job info
@@ -354,6 +332,7 @@ class DocumentSearchLog(Base, TimestampMixin):
 
     __tablename__ = "document_search_logs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Query

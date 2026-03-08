@@ -57,6 +57,7 @@ class WorkflowTemplate(Base):
 
     __tablename__ = "workflow_templates"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Template info
@@ -109,6 +110,7 @@ class WorkflowInstance(Base):
 
     __tablename__ = "workflow_instances"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Template reference
@@ -157,6 +159,7 @@ class WorkflowStep(Base):
 
     __tablename__ = "workflow_steps"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Instance reference
@@ -203,6 +206,7 @@ class ApprovalRequest(Base):
 
     __tablename__ = "approval_requests"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Step reference
@@ -246,6 +250,7 @@ class EscalationRule(Base):
 
     __tablename__ = "escalation_rules"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Template reference (can be global or template-specific)
@@ -291,6 +296,7 @@ class EscalationLog(Base):
 
     __tablename__ = "escalation_logs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # References
@@ -324,6 +330,7 @@ class UserDelegation(Base):
 
     __tablename__ = "user_delegations"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # User who is delegating

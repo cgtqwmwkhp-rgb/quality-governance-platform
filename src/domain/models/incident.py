@@ -158,6 +158,7 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
 
     __tablename__ = "incident_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
 

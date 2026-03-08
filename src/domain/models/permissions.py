@@ -27,6 +27,7 @@ class Permission(Base):
 
     __tablename__ = "permissions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Permission identity
@@ -112,6 +113,7 @@ class RolePermission(Base):
 
     __tablename__ = "abac_role_permissions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     role_id: Mapped[int] = mapped_column(Integer, ForeignKey("abac_roles.id"), nullable=False)

@@ -44,6 +44,7 @@ class AuditorProfile(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "auditor_profiles"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -113,6 +114,7 @@ class AuditorCertification(Base, TimestampMixin):
     __tablename__ = "auditor_certifications"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
         ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
@@ -184,6 +186,7 @@ class AuditorTraining(Base, TimestampMixin):
     __tablename__ = "auditor_training"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
         ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
@@ -236,6 +239,7 @@ class CompetencyArea(Base, TimestampMixin):
     __tablename__ = "competency_areas"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Area identification
@@ -276,6 +280,7 @@ class AuditorCompetency(Base, TimestampMixin):
     __tablename__ = "auditor_competencies"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     profile_id: Mapped[int] = mapped_column(
         ForeignKey("auditor_profiles.id", ondelete="CASCADE"),
@@ -322,6 +327,7 @@ class AuditAssignmentCriteria(Base, TimestampMixin):
     __tablename__ = "audit_assignment_criteria"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # What this criteria applies to

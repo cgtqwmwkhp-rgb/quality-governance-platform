@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database import Base
@@ -10,6 +10,7 @@ from src.infrastructure.database import Base
 class FailedTask(Base):
     __tablename__ = "failed_tasks"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     task_name: Mapped[str] = mapped_column(String(255), nullable=False)
     task_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)

@@ -108,6 +108,7 @@ class FormStep(Base, TimestampMixin):
 
     __tablename__ = "form_steps"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("form_templates.id", ondelete="CASCADE"), nullable=False)
 
@@ -140,6 +141,7 @@ class FormField(Base, TimestampMixin):
 
     __tablename__ = "form_fields"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     step_id: Mapped[int] = mapped_column(ForeignKey("form_steps.id", ondelete="CASCADE"), nullable=False)
 

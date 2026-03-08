@@ -11,6 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.domain.models.assessment import AssessmentRun
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
@@ -397,7 +399,11 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if not source_ref:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"For source_type '{src_type}', source_reference (assessment/induction run ID) is required",
+                detail=api_error(
+                    ErrorCode.VALIDATION_ERROR,
+                    "source_reference is required for this source type",
+                    details={"source_type": src_type},
+                ),
             )
     else:
         src_id = action_data.source_id or 0
@@ -405,7 +411,11 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if src_id == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"For source_type '{src_type}', source_id is required",
+                detail=api_error(
+                    ErrorCode.VALIDATION_ERROR,
+                    "source_id is required for this source type",
+                    details={"source_type": src_type},
+                ),
             )
 
     # Diagnostic logging for 500 error investigation
@@ -421,35 +431,55 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Assessment run with id {source_ref} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Assessment run not found",
+                    details={"entity": "assessment_run", "id": source_ref},
+                ),
             )
     elif src_type == "induction":
         result = await db.execute(select(InductionRun).where(InductionRun.id == source_ref))
         if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Induction run with id {source_ref} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Induction run not found",
+                    details={"entity": "induction_run", "id": source_ref},
+                ),
             )
     elif src_type == "incident":
         result = await db.execute(select(Incident).where(Incident.id == src_id))
         if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Incident with id {src_id} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Incident not found",
+                    details={"entity": "incident", "id": src_id},
+                ),
             )
     elif src_type == "rta":
         result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == src_id))
         if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"RTA with id {src_id} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "RTA not found",
+                    details={"entity": "rta", "id": src_id},
+                ),
             )
     elif src_type == "complaint":
         result = await db.execute(select(Complaint).where(Complaint.id == src_id))
         if not result.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Complaint with id {src_id} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Complaint not found",
+                    details={"entity": "complaint", "id": src_id},
+                ),
             )
     elif src_type == "investigation":
         logger.info(f"Validating investigation exists: id={src_id}")
@@ -459,14 +489,24 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             logger.warning(f"Investigation not found: id={src_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Investigation with id {src_id} not found",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Investigation not found",
+                    details={"entity": "investigation", "id": src_id},
+                ),
             )
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', "
-            "'investigation', 'assessment', or 'induction'",
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid source_type",
+                details={
+                    "source_type": src_type,
+                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                },
+            ),
         )
 
     # Find owner by email if provided
@@ -618,7 +658,14 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', or 'investigation'",
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid source_type",
+                details={
+                    "source_type": src_type,
+                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                },
+            ),
         )
 
     try:
@@ -636,25 +683,29 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Source entity {src_type} with id {src_id} not found or was deleted",
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Source entity not found or was deleted",
+                    details={"entity": src_type, "id": src_id},
+                ),
             )
         elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="An action with this reference number already exists",
+                detail=api_error(ErrorCode.DUPLICATE_ENTITY, "An action with this reference number already exists"),
             )
         else:
             logger.error("Database error creating action: %s", error_msg[:500])
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Database error while creating action. Please try again.",
+                detail=api_error(ErrorCode.DATABASE_ERROR, "Database error while creating action"),
             )
     except Exception as e:
         await db.rollback()
         logger.exception("Unexpected exception creating action: type=%s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while creating the action.",
+            detail=api_error(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred while creating the action"),
         )
 
     if isinstance(action, CAPAAction):
@@ -739,7 +790,7 @@ async def get_action(
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail="Action not found",
+        detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Action not found"),
     )
 
 
@@ -772,8 +823,14 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid source_type: {src_type}. Must be 'incident', 'rta', 'complaint', "
-            "'investigation', 'assessment', or 'induction'",
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid source_type",
+                details={
+                    "source_type": src_type,
+                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                },
+            ),
         )
 
     # Bounded error class: validate status if provided
@@ -790,7 +847,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if action_data.status and action_data.status.lower() not in valid_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid status: {action_data.status}. Must be one of: {', '.join(sorted(valid_statuses))}",
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid status value",
+                details={"status": action_data.status, "allowed": sorted(valid_statuses)},
+            ),
         )
 
     # Bounded error class: validate priority if provided
@@ -798,7 +859,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if action_data.priority and action_data.priority.lower() not in valid_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid priority: {action_data.priority}. Must be one of: {', '.join(sorted(valid_priorities))}",
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Invalid priority value",
+                details={"priority": action_data.priority, "allowed": sorted(valid_priorities)},
+            ),
         )
 
     # Find the action by type
@@ -849,7 +914,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     if not action:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Action not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Action not found"),
         )
 
     # Apply updates - only update fields that were provided

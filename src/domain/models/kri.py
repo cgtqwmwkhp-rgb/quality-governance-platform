@@ -133,6 +133,7 @@ class KRIMeasurement(Base, TimestampMixin):
     __tablename__ = "kri_measurements"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kri_id: Mapped[int] = mapped_column(
         ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
@@ -217,6 +218,7 @@ class RiskScoreHistory(Base, TimestampMixin):
     __tablename__ = "risk_score_history"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 

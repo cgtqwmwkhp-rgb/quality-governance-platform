@@ -84,6 +84,7 @@ class CollaborativeSession(Base):
 
     __table_args__ = (Index("ix_collab_session_active", "is_active", "last_seen_at"),)
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     document_id: Mapped[int] = mapped_column(Integer, ForeignKey("collaborative_documents.id"), nullable=False)
@@ -141,6 +142,7 @@ class CollaborativeChange(Base):
 
     __table_args__ = (Index("ix_collab_change_doc", "document_id", "created_at"),)
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     document_id: Mapped[int] = mapped_column(Integer, ForeignKey("collaborative_documents.id"), nullable=False)

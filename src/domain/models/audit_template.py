@@ -106,6 +106,7 @@ class AuditTemplate(Base):
 
     __tablename__ = "audit_builder_templates"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
 
     # Basic Info
@@ -177,6 +178,7 @@ class AuditTemplateSection(Base):
 
     __tablename__ = "audit_template_sections"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     template_id = Column(String(36), ForeignKey("audit_templates.id"), nullable=False)
 
@@ -216,6 +218,7 @@ class AuditTemplateQuestion(Base):
 
     __tablename__ = "audit_template_questions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     section_id = Column(String(36), ForeignKey("audit_template_sections.id"), nullable=False)
 
@@ -274,6 +277,7 @@ class AuditTemplateVersion(Base):
 
     __tablename__ = "audit_template_versions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     template_id = Column(String(36), ForeignKey("audit_templates.id"), nullable=False)
 
@@ -300,6 +304,7 @@ class AuditRun(Base):
 
     __tablename__ = "audit_builder_runs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     template_id = Column(String(36), ForeignKey("audit_builder_templates.id"), nullable=False)
 
@@ -358,6 +363,7 @@ class AuditResponse(Base):
 
     __tablename__ = "audit_builder_responses"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
     question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=False)
@@ -401,6 +407,7 @@ class AuditFinding(Base):
 
     __tablename__ = "audit_builder_findings"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(String(36), primary_key=True, default=generate_uuid)
     audit_run_id = Column(String(36), ForeignKey("audit_builder_runs.id"), nullable=False)
     question_id = Column(String(36), ForeignKey("audit_template_questions.id"), nullable=True)

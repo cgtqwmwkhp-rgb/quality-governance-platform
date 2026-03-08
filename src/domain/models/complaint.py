@@ -145,6 +145,7 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
 
     __tablename__ = "complaint_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     complaint_id: Mapped[int] = mapped_column(
         ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, index=True

@@ -89,6 +89,7 @@ class Dashboard(Base):
 
     __tablename__ = "dashboards"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Ownership
@@ -130,6 +131,7 @@ class DashboardWidget(Base):
 
     __tablename__ = "dashboard_widgets"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     dashboard_id: Mapped[int] = mapped_column(
         ForeignKey("dashboards.id", ondelete="CASCADE"), nullable=False, index=True
@@ -176,6 +178,7 @@ class SavedReport(Base):
 
     __tablename__ = "saved_reports"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Ownership
@@ -226,6 +229,7 @@ class BenchmarkData(Base):
 
     __tablename__ = "benchmark_data"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Benchmark identification
@@ -263,6 +267,7 @@ class CostRecord(Base):
 
     __tablename__ = "cost_records"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Entity reference
@@ -301,6 +306,7 @@ class ROIInvestment(Base):
 
     __tablename__ = "roi_investments"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Investment info

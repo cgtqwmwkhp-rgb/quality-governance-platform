@@ -36,6 +36,7 @@ class IMSRequirement(Base):
 
     __tablename__ = "ims_requirements"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Clause identification
@@ -71,6 +72,7 @@ class CrossStandardMapping(Base):
 
     __tablename__ = "cross_standard_mappings"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Primary clause
@@ -105,6 +107,7 @@ class IMSControl(Base):
 
     __tablename__ = "ims_controls"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Control identification
@@ -152,6 +155,7 @@ class IMSControlRequirementMapping(Base):
 
     __tablename__ = "ims_control_requirement_mappings"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     control_id: Mapped[int] = mapped_column(ForeignKey("ims_controls.id", ondelete="CASCADE"), nullable=False)
@@ -172,6 +176,7 @@ class UnifiedAuditPlan(Base):
 
     __tablename__ = "unified_audit_plans"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Plan identification
@@ -231,6 +236,7 @@ class ManagementReviewInput(Base):
 
     __tablename__ = "management_review_inputs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Review identification
@@ -277,6 +283,7 @@ class ManagementReview(Base):
 
     __tablename__ = "management_reviews"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Review identification
@@ -333,6 +340,7 @@ class IMSProcessMap(Base):
 
     __tablename__ = "ims_process_maps"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Process identification
@@ -392,6 +400,7 @@ class IMSObjective(Base):
 
     __tablename__ = "ims_objectives"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Objective identification

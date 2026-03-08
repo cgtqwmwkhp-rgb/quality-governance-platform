@@ -1,6 +1,5 @@
 """Policy and Document Library models."""
 
-import enum
 from datetime import datetime
 from typing import List, Optional
 
@@ -8,33 +7,8 @@ from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Tex
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.enums import DocumentStatus, DocumentType
 from src.infrastructure.database import Base
-
-
-class DocumentType(str, enum.Enum):
-    """Type of document."""
-
-    POLICY = "policy"
-    PROCEDURE = "procedure"
-    WORK_INSTRUCTION = "work_instruction"
-    SOP = "sop"
-    FORM = "form"
-    TEMPLATE = "template"
-    GUIDELINE = "guideline"
-    MANUAL = "manual"
-    RECORD = "record"
-    OTHER = "other"
-
-
-class DocumentStatus(str, enum.Enum):
-    """Status of document."""
-
-    DRAFT = "draft"
-    UNDER_REVIEW = "under_review"
-    APPROVED = "approved"
-    PUBLISHED = "published"
-    SUPERSEDED = "superseded"
-    RETIRED = "retired"
 
 
 class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -101,6 +75,7 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "policy_versions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id", ondelete="CASCADE"), nullable=False)
 

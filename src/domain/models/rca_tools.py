@@ -49,6 +49,7 @@ class FiveWhysAnalysis(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "five_whys_analyses"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Link to investigation or entity
@@ -129,6 +130,7 @@ class FishboneDiagram(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "fishbone_diagrams"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Link to investigation or entity
@@ -234,6 +236,7 @@ class BarrierAnalysis(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "barrier_analyses"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Link to investigation or entity
@@ -315,6 +318,7 @@ class CAPAItem(Base, TimestampMixin, AuditTrailMixin):
     __tablename__ = "capa_items"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Source linkage (one of these should be set)

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.feature_flag import (
     FeatureFlagCreate,
     FeatureFlagEvaluateRequest,
@@ -11,6 +12,7 @@ from src.api.schemas.feature_flag import (
     FeatureFlagResponse,
     FeatureFlagUpdate,
 )
+from src.api.utils.errors import api_error
 from src.domain.services.feature_flag_service import FeatureFlagService
 
 router = APIRouter()
@@ -47,7 +49,7 @@ async def create_feature_flag(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Feature flag with key '{data.key}' already exists",
+            detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Feature flag with this key already exists"),
         )
 
     flag = await service.create_flag(
@@ -80,7 +82,7 @@ async def get_feature_flag(
     if not flag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Feature flag '{key}' not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
         )
     return FeatureFlagResponse.model_validate(flag)
 
@@ -100,7 +102,7 @@ async def update_feature_flag(
     if not flag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Feature flag '{key}' not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
         )
     return FeatureFlagResponse.model_validate(flag)
 
@@ -117,7 +119,7 @@ async def delete_feature_flag(
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Feature flag '{key}' not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
         )
 
 
@@ -134,7 +136,7 @@ async def evaluate_feature_flag(
     if not flag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Feature flag '{key}' not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Feature flag not found"),
         )
     enabled = await service.is_enabled(key, tenant_id=data.tenant_id, user_id=data.user_id)
     return FeatureFlagEvaluateResponse(key=key, enabled=enabled)

@@ -89,6 +89,7 @@ class Notification(Base):
 
     __tablename__ = "notifications"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Recipient
@@ -157,6 +158,7 @@ class Mention(Base):
 
     __tablename__ = "mentions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Content reference
@@ -193,6 +195,7 @@ class Assignment(Base):
 
     __tablename__ = "assignments"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Entity reference
@@ -236,6 +239,7 @@ class NotificationPreference(Base):
 
     __tablename__ = "notification_preferences"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True)
 

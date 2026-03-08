@@ -22,6 +22,8 @@ from src.api.schemas.assessment import (
     AssessmentRunResponse,
     AssessmentRunUpdate,
 )
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.assessment import (
     AssessmentOutcome,
@@ -111,11 +113,15 @@ async def create_assessment_run(
         db, user.id, data.engineer_id, tenant_id=user.tenant_id
     )
     if not supervisor_check["valid"]:
-        raise HTTPException(status_code=400, detail=supervisor_check["reason"])
+        raise HTTPException(
+            status_code=400, detail=api_error(ErrorCode.VALIDATION_ERROR, "Supervisor validation failed")
+        )
 
     template_check = await GovernanceService.check_template_approval(db, data.template_id, tenant_id=user.tenant_id)
     if not template_check["approved"]:
-        raise HTTPException(status_code=400, detail=template_check["reason"])
+        raise HTTPException(
+            status_code=400, detail=api_error(ErrorCode.VALIDATION_ERROR, "Template approval check failed")
+        )
 
     reference_number = await _generate_assessment_reference_number(db)
     run = AssessmentRun(
@@ -150,7 +156,7 @@ async def get_assessment_run(
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
     return AssessmentRunResponse.model_validate(run)
 
 
@@ -167,7 +173,7 @@ async def update_assessment_run(
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
 
     updates = data.model_dump(exclude_unset=True)
     if "status" in updates:
@@ -191,9 +197,12 @@ async def start_assessment(
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
     if run.status != AssessmentStatus.DRAFT:
-        raise HTTPException(status_code=400, detail="Assessment can only be started from draft status")
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "Assessment can only be started from draft status"),
+        )
     run.status = AssessmentStatus.IN_PROGRESS
     run.started_at = datetime.now(timezone.utc)
     await db.commit()
@@ -213,12 +222,16 @@ async def complete_assessment(
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
 
     if run.status not in (AssessmentStatus.DRAFT, AssessmentStatus.IN_PROGRESS):
         raise HTTPException(
             status_code=400,
-            detail=f"Assessment cannot be completed from status '{run.status.value}'",
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Assessment cannot be completed from current status",
+                details={"current_status": run.status.value},
+            ),
         )
 
     template_result = await db.execute(
@@ -226,7 +239,7 @@ async def complete_assessment(
     )
     template = template_result.scalar_one_or_none()
     if template is None:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"))
 
     score_result = CompetencyScoringService.score_assessment(run.responses, template.questions)
     run.status = AssessmentStatus.COMPLETED
@@ -321,12 +334,14 @@ async def create_assessment_response(
     result = await db.execute(query)
     run = result.scalar_one_or_none()
     if run is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
 
     if run.status == AssessmentStatus.COMPLETED or run.status == AssessmentStatus.CANCELLED:
         raise HTTPException(
             status_code=400,
-            detail="Cannot add responses to a completed or cancelled assessment",
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION, "Cannot add responses to a completed or cancelled assessment"
+            ),
         )
 
     verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
@@ -359,13 +374,15 @@ async def update_assessment_response(
     result = await db.execute(query)
     response = result.scalar_one_or_none()
     if response is None:
-        raise HTTPException(status_code=404, detail="Assessment response not found")
+        raise HTTPException(
+            status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment response not found")
+        )
 
     query_run = select(AssessmentRun).where(AssessmentRun.id == response.run_id)
     query_run = apply_tenant_filter(query_run, AssessmentRun, user.tenant_id)
     run_result = await db.execute(query_run)
     if run_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Assessment run not found")
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
 
     updates = data.model_dump(exclude_unset=True)
     if "verdict" in updates and updates["verdict"] is not None:

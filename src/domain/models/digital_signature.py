@@ -107,6 +107,7 @@ class SignatureRequestSigner(Base):
 
     __table_args__ = (Index("ix_signer_request", "request_id", "order"),)
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     request_id: Mapped[int] = mapped_column(Integer, ForeignKey("signature_requests.id"), nullable=False)

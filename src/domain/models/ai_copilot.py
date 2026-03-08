@@ -71,6 +71,7 @@ class CopilotMessage(Base):
 
     __table_args__ = (Index("ix_copilot_msg_session", "session_id", "created_at"),)
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     session_id: Mapped[int] = mapped_column(Integer, ForeignKey("copilot_sessions.id"), nullable=False)
@@ -114,6 +115,7 @@ class CopilotAction(Base):
 
     __tablename__ = "copilot_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
     # Action identity

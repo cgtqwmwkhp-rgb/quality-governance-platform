@@ -11,45 +11,13 @@ Features:
 """
 
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Optional
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from src.domain.models.enums import DocumentStatus, DocumentType
 from src.infrastructure.database import Base
-
-
-class DocumentType(str, Enum):
-    """Document types in the management system"""
-
-    POLICY = "policy"
-    PROCEDURE = "procedure"
-    WORK_INSTRUCTION = "work_instruction"
-    FORM = "form"
-    RECORD = "record"
-    MANUAL = "manual"
-    STANDARD = "standard"
-    SPECIFICATION = "specification"
-    DRAWING = "drawing"
-    TEMPLATE = "template"
-    REGISTER = "register"
-    PLAN = "plan"
-    REPORT = "report"
-    EXTERNAL = "external"
-
-
-class DocumentStatus(str, Enum):
-    """Document lifecycle status"""
-
-    DRAFT = "draft"
-    PENDING_REVIEW = "pending_review"
-    PENDING_APPROVAL = "pending_approval"
-    APPROVED = "approved"
-    ACTIVE = "active"
-    UNDER_REVISION = "under_revision"
-    OBSOLETE = "obsolete"
-    ARCHIVED = "archived"
 
 
 class ControlledDocument(Base):
@@ -57,6 +25,7 @@ class ControlledDocument(Base):
 
     __tablename__ = "controlled_documents"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Identification
@@ -151,6 +120,7 @@ class ControlledDocumentVersion(Base):
 
     __tablename__ = "controlled_document_versions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(
@@ -201,6 +171,7 @@ class DocumentApprovalWorkflow(Base):
 
     __tablename__ = "document_approval_workflows"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Workflow identification
@@ -239,11 +210,12 @@ class DocumentApprovalInstance(Base):
 
     __tablename__ = "document_approval_instances"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
     workflow_id: Mapped[int] = mapped_column(ForeignKey("document_approval_workflows.id"), nullable=False)
-    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_document_versions.id"), nullable=True)
 
     # Current state
     current_step: Mapped[int] = mapped_column(Integer, default=1)
@@ -279,6 +251,7 @@ class DocumentApprovalAction(Base):
 
     __tablename__ = "document_approval_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     instance_id: Mapped[int] = mapped_column(
@@ -311,10 +284,11 @@ class DocumentDistribution(Base):
 
     __tablename__ = "document_distributions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
-    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_document_versions.id"), nullable=True)
 
     # Recipient
     recipient_type: Mapped[str] = mapped_column(String(50), nullable=False)  # user, department, role, external
@@ -356,6 +330,7 @@ class DocumentTrainingLink(Base):
 
     __tablename__ = "document_training_links"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
@@ -389,6 +364,7 @@ class DocumentAccessLog(Base):
 
     __tablename__ = "document_access_logs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(
@@ -396,7 +372,7 @@ class DocumentAccessLog(Base):
         nullable=False,
         index=True,
     )
-    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("document_versions.id"), nullable=True)
+    version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_document_versions.id"), nullable=True)
 
     # User
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -422,6 +398,7 @@ class ObsoleteDocumentRecord(Base):
 
     __tablename__ = "obsolete_document_records"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)

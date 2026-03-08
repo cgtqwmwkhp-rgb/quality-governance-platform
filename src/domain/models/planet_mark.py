@@ -69,6 +69,7 @@ class CarbonReportingYear(Base):
 
     __tablename__ = "carbon_reporting_year"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Reporting period
@@ -140,6 +141,7 @@ class EmissionSource(Base):
 
     __tablename__ = "emission_source"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -206,6 +208,7 @@ class Scope3CategoryData(Base):
 
     __tablename__ = "scope3_category_data"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -255,6 +258,7 @@ class ImprovementAction(Base):
 
     __tablename__ = "carbon_improvement_action"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -319,6 +323,7 @@ class DataQualityAssessment(Base):
 
     __tablename__ = "data_quality_assessment"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -372,6 +377,7 @@ class CarbonEvidence(Base):
 
     __tablename__ = "carbon_evidence"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -431,6 +437,7 @@ class FleetEmissionRecord(Base):
 
     __tablename__ = "fleet_emission_record"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -478,6 +485,7 @@ class UtilityMeterReading(Base):
 
     __tablename__ = "utility_meter_reading"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -526,6 +534,7 @@ class SupplierEmissionData(Base):
 
     __tablename__ = "supplier_emission_data"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     reporting_year_id: Mapped[int] = mapped_column(
         Integer,
@@ -574,6 +583,7 @@ class ISO14001CrossMapping(Base):
 
     __tablename__ = "planet_mark_iso14001_mapping"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     # Planet Mark reference

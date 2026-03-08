@@ -68,6 +68,7 @@ class InvestigationTemplate(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "investigation_templates"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
@@ -220,6 +221,7 @@ class InvestigationComment(Base, TimestampMixin):
 
     __tablename__ = "investigation_comments"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
@@ -270,6 +272,7 @@ class InvestigationRevisionEvent(Base, TimestampMixin):
 
     __tablename__ = "investigation_revision_events"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
@@ -312,6 +315,7 @@ class InvestigationCustomerPack(Base, TimestampMixin):
 
     __tablename__ = "investigation_customer_packs"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
@@ -375,6 +379,7 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
 
     __tablename__ = "investigation_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,

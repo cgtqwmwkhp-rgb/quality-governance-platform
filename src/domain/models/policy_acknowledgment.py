@@ -39,6 +39,7 @@ class PolicyAcknowledgmentRequirement(Base, TimestampMixin):
     __tablename__ = "policy_acknowledgment_requirements"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Link to policy
@@ -90,6 +91,7 @@ class PolicyAcknowledgment(Base, TimestampMixin):
     __tablename__ = "policy_acknowledgments"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Links
@@ -156,6 +158,7 @@ class DocumentReadLog(Base, TimestampMixin):
     __tablename__ = "document_read_logs"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # What was read

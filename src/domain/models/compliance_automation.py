@@ -55,6 +55,7 @@ class RegulatoryUpdate(Base):
 
     __tablename__ = "regulatory_updates"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Source info
@@ -102,6 +103,7 @@ class GapAnalysis(Base):
 
     __tablename__ = "gap_analyses"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Reference
@@ -143,6 +145,7 @@ class Certificate(Base):
 
     __tablename__ = "certificates"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Certificate info
@@ -196,6 +199,7 @@ class ScheduledAudit(Base):
 
     __tablename__ = "scheduled_audits"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Audit info
@@ -241,6 +245,7 @@ class ComplianceScore(Base):
 
     __tablename__ = "compliance_scores"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Scope
@@ -278,6 +283,7 @@ class RIDDORSubmission(Base):
 
     __tablename__ = "riddor_submissions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Incident reference

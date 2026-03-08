@@ -45,6 +45,7 @@ class UVDBSection(Base):
 
     __tablename__ = "uvdb_section"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     section_number: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
     section_title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -79,6 +80,7 @@ class UVDBQuestion(Base):
 
     __tablename__ = "uvdb_question"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     section_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_section.id"), nullable=False)
     question_number: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., "1.1", "2.3.1"
@@ -125,6 +127,7 @@ class UVDBAudit(Base):
 
     __tablename__ = "uvdb_audit"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     audit_reference: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
 
@@ -197,6 +200,7 @@ class UVDBAuditResponse(Base):
 
     __tablename__ = "uvdb_audit_response"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     audit_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False)
     question_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_question.id"), nullable=False)
@@ -240,6 +244,7 @@ class UVDBKPIRecord(Base):
 
     __tablename__ = "uvdb_kpi_record"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     audit_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_audit.id", ondelete="CASCADE"), nullable=False)
 
@@ -287,6 +292,7 @@ class UVDBISOCrossMapping(Base):
 
     __tablename__ = "uvdb_iso_cross_mapping"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     uvdb_question_id: Mapped[int] = mapped_column(Integer, ForeignKey("uvdb_question.id"), nullable=False)
 

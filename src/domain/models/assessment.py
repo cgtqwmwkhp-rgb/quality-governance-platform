@@ -106,6 +106,7 @@ class AssessmentResponse(Base, TimestampMixin):
 
     __tablename__ = "assessment_responses"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     run_id: Mapped[str] = mapped_column(
         ForeignKey("assessment_runs.id", ondelete="CASCADE"), nullable=False, index=True

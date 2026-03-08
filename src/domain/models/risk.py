@@ -1,6 +1,5 @@
 """Risk models for risk register and controls."""
 
-import enum
 from datetime import datetime
 from typing import List, Optional
 
@@ -8,22 +7,8 @@ from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, Stri
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.enums import RiskStatus
 from src.infrastructure.database import Base
-
-
-class RiskStatus(str, enum.Enum):
-    """Status of a risk."""
-
-    OPEN = "open"
-    MITIGATING = "mitigating"
-    ACCEPTED = "accepted"
-    CLOSED = "closed"
-
-    # Backward-compatible aliases for legacy callers.
-    IDENTIFIED = "open"
-    ASSESSING = "mitigating"
-    TREATING = "mitigating"
-    MONITORING = "accepted"
 
 
 class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -109,6 +94,7 @@ class OperationalRiskControl(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "risk_controls"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 
@@ -146,6 +132,7 @@ class RiskAssessment(Base, TimestampMixin):
 
     __tablename__ = "risk_assessments"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 

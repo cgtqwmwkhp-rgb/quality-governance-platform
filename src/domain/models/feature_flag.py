@@ -2,9 +2,11 @@
 
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from src.infrastructure.database import Base
 

@@ -2,10 +2,10 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any
+from typing import Any, Optional
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from src.infrastructure.database import Base
@@ -46,6 +46,7 @@ class CAPASource(str, PyEnum):
 class CAPAAction(Base):
     __tablename__ = "capa_actions"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id = Column(Integer, primary_key=True, autoincrement=True)
     reference_number = Column(String(50), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)

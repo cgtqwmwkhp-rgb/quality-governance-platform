@@ -22,19 +22,8 @@ from typing import Optional
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from src.domain.models.enums import InformationAssetType
 from src.infrastructure.database import Base
-
-
-class AssetType(str, Enum):
-    """Information asset types"""
-
-    HARDWARE = "hardware"
-    SOFTWARE = "software"
-    DATA = "data"
-    SERVICE = "service"
-    PEOPLE = "people"
-    INTANGIBLE = "intangible"
-    PHYSICAL = "physical"
 
 
 class AssetClassification(str, Enum):
@@ -131,6 +120,7 @@ class ISO27001Control(Base):
 
     __tablename__ = "iso27001_controls"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Control identification
@@ -190,6 +180,7 @@ class StatementOfApplicability(Base):
 
     __tablename__ = "statement_of_applicability"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # SoA Version
@@ -231,6 +222,7 @@ class SoAControlEntry(Base):
 
     __tablename__ = "soa_control_entries"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     soa_id: Mapped[int] = mapped_column(ForeignKey("statement_of_applicability.id", ondelete="CASCADE"), nullable=False)
@@ -398,6 +390,7 @@ class AccessControlRecord(Base):
 
     __tablename__ = "access_control_records"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # User
@@ -450,6 +443,7 @@ class BusinessContinuityPlan(Base):
 
     __tablename__ = "business_continuity_plans"
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Identification

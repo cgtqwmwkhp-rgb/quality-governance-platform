@@ -143,6 +143,7 @@ class RuleExecution(Base, TimestampMixin):
     __tablename__ = "rule_executions"
     __table_args__ = {"extend_existing": True}
 
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rule_id: Mapped[int] = mapped_column(
         ForeignKey("workflow_rules.id", ondelete="CASCADE"), nullable=False, index=True
