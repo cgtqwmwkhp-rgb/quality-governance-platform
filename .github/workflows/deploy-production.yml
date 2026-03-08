@@ -160,7 +160,7 @@ jobs:
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.release_sha }}" ]]; then
             RELEASE_SHA="${{ github.event.inputs.release_sha }}"
           else
-            RELEASE_SHA="${{ github.sha }}"
+            RELEASE_SHA=$(python3 -c "import json; print(json.load(open('docs/evidence/release_signoff.json'))['release_sha'])" 2>/dev/null || echo "${{ github.sha }}")
           fi
           echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
           echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
