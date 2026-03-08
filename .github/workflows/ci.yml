@@ -1074,9 +1074,9 @@ jobs:
             fi
           }
 
-          read UNIT_P UNIT_S UNIT_F <<< $(parse_junit junit-unit.xml 2>/dev/null || echo "0 0 0")
-          read INT_P INT_S INT_F <<< $(parse_junit junit-integration.xml 2>/dev/null || echo "0 0 0")
-          read E2E_P E2E_S E2E_F <<< $(parse_junit junit-e2e.xml 2>/dev/null || echo "0 0 0")
+          read -r UNIT_P UNIT_S UNIT_F <<< "$(parse_junit junit-unit.xml 2>/dev/null || echo "0 0 0")"
+          read -r INT_P INT_S INT_F <<< "$(parse_junit junit-integration.xml 2>/dev/null || echo "0 0 0")"
+          read -r E2E_P E2E_S E2E_F <<< "$(parse_junit junit-e2e.xml 2>/dev/null || echo "0 0 0")"
 
           python3 scripts/generate_quality_trend.py \
             --e2e-passed "${E2E_P:-0}" \
