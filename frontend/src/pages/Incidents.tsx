@@ -46,18 +46,6 @@ export default function Incidents() {
     reported_date: new Date().toISOString().slice(0, 16),
   })
 
-  const loadIncidents = async () => {
-    try {
-      const response = await incidentsApi.list(1, 50)
-      setIncidents(response.data.items ?? [])
-    } catch (err) {
-      trackError(err, { component: 'Incidents', action: 'load' })
-      setLoadError(getApiErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     let cancelled = false
     const load = async () => {

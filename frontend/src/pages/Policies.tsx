@@ -43,18 +43,6 @@ export default function Policies() {
     review_frequency_months: 12,
   })
 
-  const loadPolicies = async () => {
-    try {
-      const response = await policiesApi.list(1, 50)
-      setPolicies(response.data.items ?? [])
-    } catch (err) {
-      trackError(err, { component: 'Policies', action: 'load' })
-      setLoadError(getApiErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -177,7 +165,7 @@ export default function Policies() {
               icon={<FileText className="w-8 h-8 text-muted-foreground" />}
               title={t('policies.empty.title')}
               description={t('policies.empty.subtitle')}
-              action={<Button onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4 mr-2" />{t('policies.create')}</Button>}
+              action={<Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4 mr-2" />{t('policies.create')}</Button>}
             />
           </div>
         ) : (

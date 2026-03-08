@@ -332,12 +332,12 @@ export default function Dashboard() {
       const incidentTotal = incidentsData?.total ?? 0
       setIncidents(incidentItems.slice(0, 5))
 
-      const rtaData = getData(results[1] as PromiseSettledResult<{ data: PaginatedResponse<RTA> }>, { items: [], total: 0 } as PaginatedResponse<RTA>)
+      const rtaData = getData(results[1] as PromiseSettledResult<{ data: PaginatedResponse<RTA> }>, { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<RTA>)
       const rtaItems = rtaData?.items ?? []
       const rtaTotal = rtaData?.total ?? 0
       const rtaOpen = rtaItems.filter((r) => r.status !== 'closed').length
 
-      const complaintData = getData(results[2] as PromiseSettledResult<{ data: PaginatedResponse<Complaint> }>, { items: [], total: 0 } as PaginatedResponse<Complaint>)
+      const complaintData = getData(results[2] as PromiseSettledResult<{ data: PaginatedResponse<Complaint> }>, { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<Complaint>)
       const complaintItems = complaintData?.items ?? []
       const complaintTotal = complaintData?.total ?? 0
       const complaintOpen = complaintItems.filter((c) => c.status !== 'closed' && c.status !== 'resolved').length
@@ -345,12 +345,12 @@ export default function Dashboard() {
         (c) => c.due_date && c.due_date < today() && c.status !== 'closed' && c.status !== 'resolved'
       ).length
 
-      const riskData = getData(results[3] as PromiseSettledResult<{ data: PaginatedResponse<Risk> }>, { items: [], total: 0 } as PaginatedResponse<Risk>)
+      const riskData = getData(results[3] as PromiseSettledResult<{ data: PaginatedResponse<Risk> }>, { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<Risk>)
       const riskItems = riskData?.items ?? []
       const riskTotal = riskData?.total ?? 0
       const riskHigh = riskItems.filter((r) => r.risk_level === 'high' || r.risk_level === 'critical').length
 
-      const actionData = getData(results[4] as PromiseSettledResult<{ data: PaginatedResponse<Action> }>, { items: [], total: 0 } as PaginatedResponse<Action>)
+      const actionData = getData(results[4] as PromiseSettledResult<{ data: PaginatedResponse<Action> }>, { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<Action>)
       const actionItems = actionData?.items ?? []
       const actionTotal = actionData?.total ?? 0
       const openStatuses = ['open', 'in_progress', 'pending_verification']
@@ -361,7 +361,7 @@ export default function Dashboard() {
         (a) => a.due_date && a.due_date >= today() && a.due_date <= daysFromNow(7) && openStatuses.includes(a.status)
       ).length
 
-      const auditData = getData(results[5] as PromiseSettledResult<{ data: PaginatedResponse<AuditRun> }>, { items: [], total: 0 } as PaginatedResponse<AuditRun>)
+      const auditData = getData(results[5] as PromiseSettledResult<{ data: PaginatedResponse<AuditRun> }>, { items: [], total: 0, page: 1, page_size: 50, pages: 0 } as PaginatedResponse<AuditRun>)
       const auditItems = auditData?.items ?? []
       const auditScheduled = auditItems.filter((a) => a.status === 'scheduled').length
       const auditCompleted = auditItems.filter((a) => a.status === 'completed').length

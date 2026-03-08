@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
-import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, getApiErrorMessage, type AssessmentRun, type InductionRun } from '../../api/client'

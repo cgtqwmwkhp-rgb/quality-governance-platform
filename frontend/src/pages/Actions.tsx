@@ -150,7 +150,7 @@ export default function Actions() {
 
       const response = await actionsApi.create(payload)
       if (response.data) {
-        setActions(prev => [response.data, ...prev])
+        setActions(prev => [transformAction(response.data), ...prev])
       }
       setSubmitSuccess(true)
       

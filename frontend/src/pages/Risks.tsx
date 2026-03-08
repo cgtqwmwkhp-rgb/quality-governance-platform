@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, Shield, Search } from 'lucide-react'
+import { Plus, Shield, Search, Loader2 } from 'lucide-react'
 import { risksApi, Risk, RiskCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'

@@ -47,18 +47,6 @@ export default function Complaints() {
     complainant_phone: '',
   })
 
-  const loadComplaints = async () => {
-    try {
-      const response = await complaintsApi.list(1, 50)
-      setComplaints(response.data.items ?? [])
-    } catch (err) {
-      trackError(err, { component: 'Complaints', action: 'load' })
-      setFormError(getApiErrorMessage(err))
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     let cancelled = false
     const load = async () => {

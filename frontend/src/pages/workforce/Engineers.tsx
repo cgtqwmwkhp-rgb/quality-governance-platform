@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, Users, MapPin, Building2, ChevronRight, Loader2 } from 'lucide-react'
+import { Search, Users, MapPin, Building2, ChevronRight } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi, type EngineerProfile } from '../../api/client'

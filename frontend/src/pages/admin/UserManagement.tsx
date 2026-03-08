@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Users, Search, Loader2, Shield, Mail } from 'lucide-react'
+import { Users, Search, Shield, Mail } from 'lucide-react'
 import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import api, { getApiErrorMessage } from '../../api/client'
 import { Input } from '../../components/ui/Input'
