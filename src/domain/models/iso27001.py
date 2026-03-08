@@ -116,9 +116,13 @@ class InformationAsset(Base):
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -171,9 +175,13 @@ class ISO27001Control(Base):
     # Mapping to other standards
     mapped_standards: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ISO 9001, NIST, etc.
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -208,9 +216,13 @@ class StatementOfApplicability(Base):
     # Document
     document_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -235,7 +247,9 @@ class SoAControlEntry(Base):
     # Risk treatment
     risk_treatment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class InformationSecurityRisk(Base):
@@ -292,9 +306,13 @@ class InformationSecurityRisk(Base):
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="open")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -331,7 +349,9 @@ class SecurityIncident(Base):
     # Dates
     detected_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     occurred_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    reported_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    reported_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     contained_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     resolved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -363,9 +383,13 @@ class SecurityIncident(Base):
     status: Mapped[str] = mapped_column(String(50), default="open")
     # open, investigating, contained, eradicating, recovering, closed
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -411,9 +435,13 @@ class AccessControlRecord(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -468,9 +496,13 @@ class BusinessContinuityPlan(Base):
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -525,7 +557,11 @@ class SupplierSecurityAssessment(Base):
     # Status
     status: Mapped[str] = mapped_column(String(50), default="active")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )

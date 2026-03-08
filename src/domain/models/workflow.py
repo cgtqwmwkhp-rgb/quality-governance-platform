@@ -90,9 +90,13 @@ class WorkflowTemplate(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
@@ -134,10 +138,14 @@ class WorkflowInstance(Base):
     context: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -181,7 +189,9 @@ class WorkflowStep(Base):
     outcome_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Timestamps
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
@@ -223,7 +233,9 @@ class ApprovalRequest(Base):
     reminder_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<ApprovalRequest(id={self.id}, status={self.status})>"
@@ -266,7 +278,9 @@ class EscalationRule(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<EscalationRule(id={self.id}, name={self.name})>"
@@ -297,7 +311,9 @@ class EscalationLog(Base):
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamp
-    escalated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    escalated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<EscalationLog(id={self.id}, trigger={self.trigger})>"
@@ -331,7 +347,9 @@ class UserDelegation(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<UserDelegation(user={self.user_id}, delegate={self.delegate_id})>"

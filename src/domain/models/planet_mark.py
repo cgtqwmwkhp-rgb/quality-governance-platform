@@ -120,9 +120,13 @@ class CarbonReportingYear(Base):
     reduction_target_percent: Mapped[float] = mapped_column(Float, default=5.0)  # 5% default
     target_emissions_per_fte: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -184,9 +188,13 @@ class EmissionSource(Base):
     sub_sources: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     # e.g., [{"vehicle": "LD24VLP", "litres": 5000, "co2e": 12.5}, ...]
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -232,9 +240,13 @@ class Scope3CategoryData(Base):
     improvement_priority: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -289,9 +301,13 @@ class ImprovementAction(Base):
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     overdue_notified: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -336,12 +352,18 @@ class DataQualityAssessment(Base):
     priority_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     target_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    assessed_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    assessed_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     assessed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -387,11 +409,17 @@ class CarbonEvidence(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     uploaded_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -435,9 +463,13 @@ class FleetEmissionRecord(Base):
     # Driver (for eco-driving tracking)
     driver_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -479,9 +511,13 @@ class UtilityMeterReading(Base):
     is_renewable: Mapped[bool] = mapped_column(Boolean, default=False)
     rego_certificate: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -523,9 +559,13 @@ class SupplierEmissionData(Base):
     engagement_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     last_contact_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -552,4 +592,6 @@ class ISO14001CrossMapping(Base):
     # Evidence sharing
     shared_evidence_types: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

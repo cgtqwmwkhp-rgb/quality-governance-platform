@@ -166,10 +166,16 @@ class EnterpriseRisk(Base):
     linked_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Timestamps
-    identified_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    identified_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
@@ -218,9 +224,13 @@ class EnterpriseRiskControl(Base):
     implementation_status: Mapped[str] = mapped_column(String(50), default="implemented")
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -244,7 +254,9 @@ class RiskControlMapping(Base):
     reduces_impact: Mapped[bool] = mapped_column(Boolean, default=False)
     reduction_value: Mapped[int] = mapped_column(Integer, default=1)  # How much it reduces score
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class BowTieElement(Base):
@@ -277,7 +289,9 @@ class BowTieElement(Base):
     # Escalation factors
     is_escalation_factor: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class EnterpriseKeyRiskIndicator(Base):
@@ -321,7 +335,9 @@ class EnterpriseKeyRiskIndicator(Base):
     owner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class RiskAssessmentHistory(Base):
@@ -333,7 +349,9 @@ class RiskAssessmentHistory(Base):
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Assessment snapshot
-    assessment_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    assessment_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     assessed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Scores at time of assessment
@@ -384,7 +402,11 @@ class RiskAppetiteStatement(Base):
     next_review_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )

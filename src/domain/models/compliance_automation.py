@@ -80,7 +80,9 @@ class RegulatoryUpdate(Base):
     # Dates
     published_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     effective_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    detected_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # Status
     is_reviewed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -127,7 +129,9 @@ class GapAnalysis(Base):
     assigned_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
@@ -174,9 +178,13 @@ class Certificate(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -219,7 +227,9 @@ class ScheduledAudit(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
     def __repr__(self) -> str:
@@ -255,7 +265,9 @@ class ComplianceScore(Base):
     score_change: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # Timestamp
-    calculated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<ComplianceScore(scope={self.scope_type}, score={self.percentage}%)>"
@@ -293,7 +305,9 @@ class RIDDORSubmission(Base):
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<RIDDORSubmission(incident={self.incident_id}, status={self.submission_status})>"

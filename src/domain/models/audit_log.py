@@ -143,7 +143,9 @@ class AuditLogEntry(Base):
     entry_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Timestamp (UTC)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+    )
 
     # Compliance flags
     is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False)  # PII or sensitive data
@@ -216,7 +218,9 @@ class AuditLogVerification(Base):
     verification_method: Mapped[str] = mapped_column(String(50), default="hash_chain")
 
     # Timestamps
-    verified_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    verified_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<AuditLogVerification {self.id} valid={self.is_valid}>"
@@ -251,4 +255,6 @@ class AuditLogExport(Base):
     exported_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    exported_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    exported_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

@@ -22,7 +22,7 @@ from src.domain.models.user import User
 
 
 def _utcnow():
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _ref(prefix: str):

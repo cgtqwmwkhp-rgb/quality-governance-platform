@@ -49,7 +49,9 @@ class Permission(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)  # System permissions cannot be deleted
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<Permission {self.code}>"
@@ -87,9 +89,13 @@ class Role(Base):
     color: Mapped[Optional[str]] = mapped_column(String(7), nullable=True)  # Hex color for UI
     icon: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # Icon name
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -117,7 +123,9 @@ class RolePermission(Base):
     # Relationships
     role = relationship("Role", back_populates="role_permissions")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class UserRole(Base):
@@ -137,7 +145,9 @@ class UserRole(Base):
     scope: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # e.g., {"departments": ["HR", "IT"]}
 
     # Validity period
-    valid_from: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    valid_from: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     valid_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Status
@@ -146,7 +156,9 @@ class UserRole(Base):
     # Granted by
     granted_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<UserRole user={self.user_id} role={self.role_id}>"
@@ -211,9 +223,13 @@ class ABACPolicy(Base):
 
     # Metadata
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -251,7 +267,9 @@ class FieldLevelPermission(Base):
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<FieldLevelPermission {self.resource_type}.{self.field_name}>"
@@ -289,7 +307,9 @@ class PermissionAudit(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     request_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+    )
 
     def __repr__(self) -> str:
         return f"<PermissionAudit {self.decision} {self.resource_type}:{self.action}>"

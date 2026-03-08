@@ -82,9 +82,13 @@ class SignatureRequest(Base):
     request_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -214,7 +218,9 @@ class Signature(Base):
     signature_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # Hash of signature data + document
 
     # Timestamp
-    signed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    signed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<Signature {self.id} by {self.signer_email}>"
@@ -255,9 +261,13 @@ class SignatureTemplate(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -295,7 +305,9 @@ class SignatureAuditLog(Base):
     ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<SignatureAuditLog {self.action} request={self.request_id}>"

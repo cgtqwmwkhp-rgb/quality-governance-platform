@@ -16,6 +16,8 @@ class FailedTask(Base):
     exception: Mapped[str] = mapped_column(Text, nullable=False)
     args: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     kwargs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    failed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    failed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     retried: Mapped[bool] = mapped_column(Boolean, default=False)
     retried_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

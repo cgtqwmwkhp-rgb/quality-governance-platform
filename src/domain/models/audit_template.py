@@ -140,9 +140,11 @@ class AuditTemplate(Base):
     organization_id = Column(String(36), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     published_at = Column(DateTime, nullable=True)
 
@@ -189,9 +191,11 @@ class AuditTemplateSection(Base):
     weight = Column(Float, nullable=False, default=1.0)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -251,9 +255,11 @@ class AuditTemplateQuestion(Base):
     order = Column(Integer, nullable=False, default=0)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -280,7 +286,7 @@ class AuditTemplateVersion(Base):
 
     # Metadata
     created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="versions")
@@ -332,9 +338,11 @@ class AuditRun(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -375,9 +383,11 @@ class AuditResponse(Base):
     duration_seconds = Column(Integer, nullable=True)  # Time spent on question
 
     # Timestamps
-    answered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    answered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -420,9 +430,11 @@ class AuditFinding(Base):
     evidence = Column(JSON, nullable=True, default=list)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     closed_at = Column(DateTime, nullable=True)
 

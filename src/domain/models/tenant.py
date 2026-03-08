@@ -72,9 +72,13 @@ class Tenant(Base):
     max_storage_gb: Mapped[int] = mapped_column(Integer, default=10)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -110,7 +114,9 @@ class TenantUser(Base):
     custom_permissions: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Timestamps
-    joined_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     last_accessed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -143,4 +149,6 @@ class TenantInvitation(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

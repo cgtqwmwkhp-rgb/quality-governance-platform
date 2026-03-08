@@ -43,7 +43,7 @@ class PushSubscription(Base):
     auth_key = Column(String(255), nullable=False)
     user_agent = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     last_used_at = Column(DateTime, nullable=True)
 
 
@@ -72,9 +72,11 @@ class NotificationPreference(Base):
     quiet_hours_start = Column(String(5), nullable=True)  # "22:00"
     quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at = Column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -100,7 +102,7 @@ class NotificationLog(Base):
     delivered_at = Column(DateTime, nullable=True)
     read_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 # ============================================================================

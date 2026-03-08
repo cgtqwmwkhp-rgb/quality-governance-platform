@@ -133,9 +133,13 @@ class ControlledDocument(Base):
     download_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     def __repr__(self) -> str:
@@ -187,7 +191,9 @@ class ControlledDocumentVersion(Base):
     approved_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     effective_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class DocumentApprovalWorkflow(Base):
@@ -218,9 +224,13 @@ class DocumentApprovalWorkflow(Base):
     notify_on_rejection: Mapped[bool] = mapped_column(Boolean, default=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -241,7 +251,9 @@ class DocumentApprovalInstance(Base):
 
     # Initiation
     initiated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    initiated_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    initiated_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     # Completion
     completed_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -252,9 +264,13 @@ class DocumentApprovalInstance(Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     is_overdue: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
 
@@ -285,7 +301,9 @@ class DocumentApprovalAction(Base):
     delegated_to: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     delegation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    action_date: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    action_date: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class DocumentDistribution(Base):
@@ -328,7 +346,9 @@ class DocumentDistribution(Base):
     return_confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     return_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class DocumentTrainingLink(Base):
@@ -359,7 +379,9 @@ class DocumentTrainingLink(Base):
     trigger_on_new_distribution: Mapped[bool] = mapped_column(Boolean, default=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class DocumentAccessLog(Base):
@@ -390,7 +412,9 @@ class DocumentAccessLog(Base):
     user_agent: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
-    timestamp: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), index=True
+    )
 
 
 class ObsoleteDocumentRecord(Base):
@@ -427,4 +451,6 @@ class ObsoleteDocumentRecord(Base):
     # Archive location
     archive_location: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

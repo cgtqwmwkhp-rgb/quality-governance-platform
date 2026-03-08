@@ -57,9 +57,13 @@ class CollaborativeDocument(Base):
     lock_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Relationships
@@ -111,8 +115,12 @@ class CollaborativeSession(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Timestamps
-    joined_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     left_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -152,7 +160,9 @@ class CollaborativeChange(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
     def __repr__(self) -> str:
         return f"<CollaborativeChange {self.id} {self.change_type}>"
@@ -206,9 +216,13 @@ class Comment(Base):
     reactions: Mapped[dict] = mapped_column(JSON, default=dict)  # {"👍": [user_ids], "❤️": [user_ids]}
 
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
     # Soft delete
@@ -250,7 +264,9 @@ class Presence(Base):
     connection_count: Mapped[int] = mapped_column(Integer, default=1)  # Number of active connections
 
     # Timestamps
-    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     went_away_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     def __repr__(self) -> str:
