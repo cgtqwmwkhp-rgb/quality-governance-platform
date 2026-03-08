@@ -46407,9 +46407,9 @@
             "type": "integer",
             "title": "Page Size"
           },
-          "total_pages": {
+          "pages": {
             "type": "integer",
-            "title": "Total Pages"
+            "title": "Pages"
           }
         },
         "type": "object",
@@ -46418,7 +46418,7 @@
           "total",
           "page",
           "page_size",
-          "total_pages"
+          "pages"
         ],
         "title": "InvestigationRunListResponse",
         "description": "Schema for paginated investigation run list."
@@ -46742,9 +46742,9 @@
             "type": "integer",
             "title": "Page Size"
           },
-          "total_pages": {
+          "pages": {
             "type": "integer",
-            "title": "Total Pages"
+            "title": "Pages"
           }
         },
         "type": "object",
@@ -46753,7 +46753,7 @@
           "total",
           "page",
           "page_size",
-          "total_pages"
+          "pages"
         ],
         "title": "InvestigationTemplateListResponse",
         "description": "Schema for paginated investigation template list."
@@ -50176,9 +50176,9 @@
             "type": "integer",
             "title": "Page Size"
           },
-          "total_pages": {
+          "pages": {
             "type": "integer",
-            "title": "Total Pages"
+            "title": "Pages"
           }
         },
         "type": "object",
@@ -50187,7 +50187,7 @@
           "total",
           "page",
           "page_size",
-          "total_pages"
+          "pages"
         ],
         "title": "RTAActionListResponse",
         "description": "Schema for paginated RTA Action list response."
@@ -50925,9 +50925,9 @@
             "type": "integer",
             "title": "Page Size"
           },
-          "total_pages": {
+          "pages": {
             "type": "integer",
-            "title": "Total Pages"
+            "title": "Pages"
           }
         },
         "type": "object",
@@ -50936,7 +50936,7 @@
           "total",
           "page",
           "page_size",
-          "total_pages"
+          "pages"
         ],
         "title": "RTAListResponse",
         "description": "Schema for paginated RTA list response."
@@ -55820,9 +55820,9 @@
             "type": "integer",
             "title": "Page Size"
           },
-          "total_pages": {
+          "pages": {
             "type": "integer",
-            "title": "Total Pages"
+            "title": "Pages"
           },
           "source_type": {
             "type": "string",
@@ -55835,7 +55835,7 @@
           "total",
           "page",
           "page_size",
-          "total_pages",
+          "pages",
           "source_type"
         ],
         "title": "SourceRecordsResponse",
