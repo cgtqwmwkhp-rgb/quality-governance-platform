@@ -1,12 +1,19 @@
 """Celery application configuration."""
 
+import logging
+
 from celery import Celery  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
 from celery.schedules import crontab  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
 
 from src.core.config import settings
 
-broker_url = settings.celery_broker_url
-result_backend = settings.celery_result_backend
+logger = logging.getLogger(__name__)
+
+broker_url = settings.celery_broker_url or "redis://localhost:6379/0"
+result_backend = settings.celery_result_backend or "redis://localhost:6379/1"
+
+if not settings.celery_broker_url:
+    logger.warning("CELERY_BROKER_URL not configured — using default redis://localhost:6379/0")
 
 celery_app = Celery(
     "quality_governance",

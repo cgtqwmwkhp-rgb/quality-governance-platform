@@ -97,7 +97,7 @@ jobs:
         run: python3 scripts/validate_type_ignores.py
 
       - name: Type check with mypy
-        run: mypy src/ --config-file pyproject.toml || true
+        run: mypy src/ --config-file pyproject.toml
 
       - name: Mock Data Eradication Gate
         run: python3 scripts/check_mock_data.py --repo-root .
@@ -1055,16 +1055,39 @@ jobs:
           echo "=== Generating Quality Trend Report ==="
           mkdir -p quality-reports
           
+          # Parse real counts from JUnit XML (fallback to 0 if file missing)
+          parse_junit() {
+            if [ -f "$1" ]; then
+              python3 -c "
+          import xml.etree.ElementTree as ET, sys
+          tree = ET.parse(sys.argv[1])
+          root = tree.getroot()
+          t=f=e=s=0
+          for ts in root.iter('testsuite'):
+              t+=int(ts.get('tests',0)); f+=int(ts.get('failures',0))
+              e+=int(ts.get('errors',0)); s+=int(ts.get('skipped',0))
+          p=t-f-e-s
+          print(f'{p} {s} {f+e}')
+          " "$1"
+            else
+              echo "0 0 0"
+            fi
+          }
+
+          read UNIT_P UNIT_S UNIT_F <<< $(parse_junit junit-unit.xml 2>/dev/null || echo "0 0 0")
+          read INT_P INT_S INT_F <<< $(parse_junit junit-integration.xml 2>/dev/null || echo "0 0 0")
+          read E2E_P E2E_S E2E_F <<< $(parse_junit junit-e2e.xml 2>/dev/null || echo "0 0 0")
+
           python3 scripts/generate_quality_trend.py \
-            --e2e-passed 127 \
-            --e2e-skipped 20 \
-            --e2e-failed 0 \
-            --integration-passed 45 \
-            --integration-skipped 0 \
-            --integration-failed 0 \
-            --unit-passed 120 \
-            --unit-skipped 5 \
-            --unit-failed 0 \
+            --e2e-passed "${E2E_P:-0}" \
+            --e2e-skipped "${E2E_S:-0}" \
+            --e2e-failed "${E2E_F:-0}" \
+            --integration-passed "${INT_P:-0}" \
+            --integration-skipped "${INT_S:-0}" \
+            --integration-failed "${INT_F:-0}" \
+            --unit-passed "${UNIT_P:-0}" \
+            --unit-skipped "${UNIT_S:-0}" \
+            --unit-failed "${UNIT_F:-0}" \
             --quarantine-count 0 \
             --ci-run-id "${{ github.run_id }}" \
             --commit-sha "${{ github.sha }}" \

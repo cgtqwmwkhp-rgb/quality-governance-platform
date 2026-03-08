@@ -20,6 +20,7 @@ from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
+from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -231,6 +232,8 @@ def create_application() -> FastAPI:
             {"name": "Meta", "description": "Build version and deployment metadata"},
         ],
     )
+
+    setup_telemetry(app=app)
 
     # GZip compression — outermost so all responses are compressed
     app.add_middleware(GZipMiddleware, minimum_size=500)

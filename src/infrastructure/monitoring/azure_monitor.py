@@ -86,6 +86,10 @@ _auth_failures: Counter | None = None
 
 def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
     """Initialize OpenTelemetry with tracing and metrics."""
+    if not _HAS_OTEL:
+        logger.warning("OpenTelemetry SDK not installed — telemetry disabled")
+        return
+
     global _tracer, _meter
     global _incidents_created, _incidents_resolved
     global _audits_completed, _audit_findings
