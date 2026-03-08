@@ -13,6 +13,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.complaint_service import ComplaintService
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Complaints"])
@@ -65,53 +66,34 @@ async def create_complaint(
     """
     Create a new complaint.
 
-    Requires authentication.
-
-    Idempotency:
-    - If external_ref is provided and already exists, returns 409 Conflict
-    - This enables ETL/external systems to safely retry imports
+    Requires authentication. Delegates to ComplaintService for audit trail,
+    cache invalidation, and telemetry.
     """
-    # Check for duplicate external_ref (idempotency check)
-    external_ref = complaint_in.external_ref
-    if external_ref:
-        existing_query = select(Complaint).where(Complaint.external_ref == external_ref)
-        existing_result = await db.execute(existing_query)
-        existing = existing_result.scalar_one_or_none()
-        if existing:
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.create_complaint(
+            complaint_data=complaint_in,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+        )
+        return complaint
+    except ValueError as e:
+        msg = str(e)
+        if "DUPLICATE_EXTERNAL_REF" in msg:
+            parts = msg.split(":")
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=api_error(
                     ErrorCode.DUPLICATE_ENTITY,
-                    f"Complaint with external_ref '{external_ref}' already exists",
-                    details={"existing_reference_number": existing.reference_number},
+                    f"Complaint with external_ref already exists",
+                    details={"existing_reference_number": parts[2] if len(parts) > 2 else ""},
                 ),
             )
-
-    ref_num = await ReferenceNumberService.generate(db, "complaint", Complaint)
-
-    complaint = Complaint(
-        **complaint_in.model_dump(),
-        reference_number=ref_num,
-        tenant_id=current_user.tenant_id,
-    )
-
-    db.add(complaint)
-    await db.commit()
-    await db.refresh(complaint)
-
-    # Record audit event
-    await record_audit_event(
-        db=db,
-        event_type="complaint.created",
-        entity_type="complaint",
-        entity_id=str(complaint.id),
-        action="create",
-        payload=complaint_in.model_dump(mode="json"),
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    return complaint
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, msg),
+        )
 
 
 @router.get("/{complaint_id}", response_model=ComplaintResponse)

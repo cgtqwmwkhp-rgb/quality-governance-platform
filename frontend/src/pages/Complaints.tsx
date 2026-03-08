@@ -87,10 +87,13 @@ export default function Complaints() {
     setFormError(null)
     setCreating(true)
     try {
-      await complaintsApi.create({
+      const response = await complaintsApi.create({
         ...formData,
         received_date: new Date(formData.received_date).toISOString(),
       })
+      if (response.data) {
+        setComplaints(prev => [response.data, ...prev])
+      }
       setShowModal(false)
       setFormData({
         title: '',
@@ -102,7 +105,6 @@ export default function Complaints() {
         complainant_email: '',
         complainant_phone: '',
       })
-      loadComplaints()
     } catch (err) {
       trackError(err, { component: 'Complaints', action: 'create' })
       setFormError(getApiErrorMessage(err))
@@ -286,7 +288,7 @@ export default function Complaints() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.title')}</label>
+              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.title')} <span className="text-destructive">*</span></label>
               <Input id="complaints-field-0"
                 type="text"
                 required
@@ -297,7 +299,7 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.description')}</label>
+              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.description')} <span className="text-destructive">*</span></label>
               <Textarea id="complaints-field-1"
                 required
                 rows={3}
@@ -351,7 +353,7 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.complainant_name')}</label>
+              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.complainant_name')} <span className="text-destructive">*</span></label>
               <Input id="complaints-field-4"
                 type="text"
                 required
@@ -383,7 +385,7 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.received_date')}</label>
+              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.received_date')} <span className="text-destructive">*</span></label>
               <Input id="complaints-field-7"
                 type="datetime-local"
                 required

@@ -14,6 +14,7 @@ from src.api.schemas.incident import IncidentCreate, IncidentListResponse, Incid
 from src.api.utils.errors import api_error
 from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.incident_service import IncidentService
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
@@ -60,68 +61,30 @@ async def create_incident(
     """
     Report a new incident.
 
-    Requires authentication.
+    Requires authentication. Delegates to IncidentService for audit trail,
+    cache invalidation, and telemetry.
     """
-    # Generate or use provided reference number
-    if incident_data.reference_number:
-        # Guard: Only authorized users can set explicit reference numbers
-        if not current_user.has_permission("incident:set_reference_number"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=api_error(ErrorCode.PERMISSION_DENIED, "Permission 'incident:set_reference_number' required"),
-            )
-
-        reference_number = incident_data.reference_number
-        # Check for duplicate reference number
-        existing = await db.execute(select(Incident).where(Incident.reference_number == reference_number))
-        if existing.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=api_error(
-                    ErrorCode.DUPLICATE_ENTITY, f"Incident with reference number {reference_number} already exists"
-                ),
-            )
-    else:
-        reference_number = await ReferenceNumberService.generate(db, "incident", Incident)
-
-    # Create new incident
-    incident = Incident(
-        title=incident_data.title,
-        description=incident_data.description,
-        incident_type=incident_data.incident_type,
-        severity=incident_data.severity,
-        status=incident_data.status,
-        incident_date=incident_data.incident_date,
-        reported_date=datetime.now(timezone.utc),
-        location=incident_data.location,
-        department=incident_data.department,
-        reference_number=reference_number,
-        reporter_id=current_user.id,
-        reporter_email=incident_data.reporter_email,
-        reporter_name=incident_data.reporter_name,
-        created_by_id=current_user.id,
-        updated_by_id=current_user.id,
-        tenant_id=current_user.tenant_id,
-    )
-
-    db.add(incident)
-    await db.flush()  # Get ID before recording event
-
-    await record_audit_event(
-        db=db,
-        event_type="incident.created",
-        entity_type="incident",
-        entity_id=str(incident.id),
-        action="create",
-        description=f"Incident {incident.reference_number} created",
-        payload=incident_data.model_dump(mode="json"),
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    await db.commit()
-    await db.refresh(incident)
-    return incident
+    svc = IncidentService(db)
+    try:
+        has_set_ref = current_user.has_permission("incident:set_reference_number")
+        incident = await svc.create_incident(
+            incident_data=incident_data,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            has_set_ref_permission=has_set_ref,
+            request_id=request_id,
+        )
+        return incident
+    except PermissionError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=api_error(ErrorCode.PERMISSION_DENIED, str(e)),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=api_error(ErrorCode.DUPLICATE_ENTITY, str(e)),
+        )
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

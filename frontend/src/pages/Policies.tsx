@@ -79,7 +79,10 @@ export default function Policies() {
     setCreating(true)
     setCreateError(null)
     try {
-      await policiesApi.create(formData)
+      const response = await policiesApi.create(formData)
+      if (response.data) {
+        setPolicies(prev => [response.data, ...prev])
+      }
       setShowModal(false)
       setFormData({
         title: '',
@@ -89,7 +92,6 @@ export default function Policies() {
         department: '',
         review_frequency_months: 12,
       })
-      loadPolicies()
     } catch (err) {
       trackError(err, { component: 'Policies', action: 'create' })
       setCreateError(getApiErrorMessage(err))

@@ -148,12 +148,14 @@ export default function Actions() {
         due_date: formData.due_date || undefined,
       }
 
-      await actionsApi.create(payload)
+      const response = await actionsApi.create(payload)
+      if (response.data) {
+        setActions(prev => [response.data, ...prev])
+      }
       setSubmitSuccess(true)
       
       // STATIC_UI_CONFIG_OK - UX delay to show success state before closing modal
       setTimeout(() => {
-        loadActions()
         setShowModal(false)
         setFormData(INITIAL_FORM)
         setSubmitSuccess(false)

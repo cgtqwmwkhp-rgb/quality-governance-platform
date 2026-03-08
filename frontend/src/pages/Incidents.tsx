@@ -82,11 +82,14 @@ export default function Incidents() {
     setCreating(true)
     setCreateError(null)
     try {
-      await incidentsApi.create({
+      const response = await incidentsApi.create({
         ...formData,
         incident_date: new Date(formData.incident_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
       })
+      if (response.data) {
+        setIncidents(prev => [response.data, ...prev])
+      }
       setShowModal(false)
       setFormData({
         title: '',
@@ -96,7 +99,6 @@ export default function Incidents() {
         incident_date: new Date().toISOString().slice(0, 16),
         reported_date: new Date().toISOString().slice(0, 16),
       })
-      loadIncidents()
     } catch (err) {
       trackError(err, { component: 'Incidents', action: 'create' })
       setCreateError(getApiErrorMessage(err))
@@ -277,24 +279,26 @@ export default function Incidents() {
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
             )}
             <div>
-              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.title')}</label>
+              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.title')} <span className="text-destructive">*</span></label>
               <Input id="incidents-field-0"
                 type="text"
                 required
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder={t('incidents.form.title_placeholder')}
+                aria-required="true"
               />
             </div>
 
             <div>
-              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.description')}</label>
+              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.description')} <span className="text-destructive">*</span></label>
               <Textarea id="incidents-field-1"
                 required
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder={t('incidents.form.description_placeholder')}
+                aria-required="true"
               />
             </div>
 
@@ -342,10 +346,11 @@ export default function Incidents() {
             </div>
 
             <div>
-              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.incident_date')}</label>
+              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.incident_date')} <span className="text-destructive">*</span></label>
               <Input id="incidents-field-4"
                 type="datetime-local"
                 required
+                aria-required="true"
                 value={formData.incident_date}
                 onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
               />

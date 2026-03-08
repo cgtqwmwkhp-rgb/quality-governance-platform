@@ -283,10 +283,11 @@ export default function Risks() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.title')}</label>
+              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.title')} <span className="text-destructive">*</span></label>
               <Input id="risks-field-0"
                 type="text"
                 required
+                aria-required="true"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 placeholder={t('risks.form.title_placeholder')}
@@ -294,9 +295,10 @@ export default function Risks() {
             </div>
 
             <div>
-              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.description')}</label>
+              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.description')} <span className="text-destructive">*</span></label>
               <Textarea id="risks-field-1"
                 required
+                aria-required="true"
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
