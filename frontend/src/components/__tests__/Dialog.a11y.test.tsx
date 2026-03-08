@@ -1,13 +1,7 @@
-import { render } from '@testing-library/react';
-import { expectNoA11yViolations } from '../../test/axe-helper';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '../ui/Dialog';
-import { Button } from '../ui/Button';
+import { render } from '@testing-library/react'
+import { expectNoA11yViolations } from '../../test/axe-helper'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog'
+import { Button } from '../ui/Button'
 
 describe('Dialog accessibility', () => {
   it('has no a11y violations when open', async () => {
@@ -22,8 +16,8 @@ describe('Dialog accessibility', () => {
             <Button>Confirm</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    );
-    await expectNoA11yViolations(container);
-  });
-});
+      </Dialog>,
+    )
+    await expectNoA11yViolations(container)
+  })
+})

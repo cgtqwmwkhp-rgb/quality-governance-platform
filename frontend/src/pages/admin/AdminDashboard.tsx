@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   Building,
@@ -14,24 +14,24 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { cn } from '../../helpers/utils';
+} from 'lucide-react'
+import { Card } from '../../components/ui/Card'
+import { cn } from '../../helpers/utils'
 
 interface QuickAction {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  href: string;
-  color: string;
+  title: string
+  description: string
+  icon: React.ReactNode
+  href: string
+  color: string
 }
 
 interface StatCard {
-  label: string;
-  value: string;
-  change: string;
-  trend: 'up' | 'down' | 'neutral';
-  icon: React.ReactNode;
+  label: string
+  value: string
+  change: string
+  trend: 'up' | 'down' | 'neutral'
+  icon: React.ReactNode
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
@@ -77,7 +77,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: '/admin/notifications',
     color: 'bg-pink-100 text-pink-600',
   },
-];
+]
 
 const STATS: StatCard[] = [
   {
@@ -108,12 +108,12 @@ const STATS: StatCard[] = [
     trend: 'neutral',
     icon: <Clock className="w-5 h-5" />,
   },
-];
+]
 
-const RECENT_ACTIVITY: { action: string; user: string; time: string; type: string }[] = [];
+const RECENT_ACTIVITY: { action: string; user: string; time: string; type: string }[] = []
 
 export default function AdminDashboard() {
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   return (
     <div className="min-h-screen bg-surface">
@@ -151,7 +151,7 @@ export default function AdminDashboard() {
                       'text-xs mt-1 flex items-center gap-1',
                       stat.trend === 'up' && 'text-green-600',
                       stat.trend === 'down' && 'text-destructive',
-                      stat.trend === 'neutral' && 'text-muted-foreground'
+                      stat.trend === 'neutral' && 'text-muted-foreground',
                     )}
                   >
                     {stat.trend === 'up' && <TrendingUp className="w-3 h-3" />}
@@ -159,9 +159,7 @@ export default function AdminDashboard() {
                     {stat.change}
                   </p>
                 </div>
-                <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                  {stat.icon}
-                </div>
+                <div className="p-2 bg-primary/10 text-primary rounded-lg">{stat.icon}</div>
               </div>
             </Card>
           ))}
@@ -178,16 +176,12 @@ export default function AdminDashboard() {
                 onClick={() => navigate(action.href)}
               >
                 <div className="flex items-start gap-4">
-                  <div className={cn('p-3 rounded-xl', action.color)}>
-                    {action.icon}
-                  </div>
+                  <div className={cn('p-3 rounded-xl', action.color)}>{action.icon}</div>
                   <div className="flex-1">
                     <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
                       {action.title}
                     </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {action.description}
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">{action.description}</p>
                   </div>
                   <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
                 </div>
@@ -219,7 +213,7 @@ export default function AdminDashboard() {
                       activity.type === 'edit' && 'bg-blue-100 text-blue-600',
                       activity.type === 'add' && 'bg-green-100 text-green-600',
                       activity.type === 'settings' && 'bg-purple-100 text-purple-600',
-                      activity.type === 'publish' && 'bg-primary/10 text-primary'
+                      activity.type === 'publish' && 'bg-primary/10 text-primary',
                     )}
                   >
                     {activity.type === 'edit' && <FileText className="w-4 h-4" />}
@@ -290,5 +284,5 @@ export default function AdminDashboard() {
         </div>
       </main>
     </div>
-  );
+  )
 }

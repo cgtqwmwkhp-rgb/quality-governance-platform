@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   History,
   Search,
@@ -15,68 +15,118 @@ import {
   CheckCircle2,
   Clock,
   ArrowRight,
-  RefreshCw
-} from 'lucide-react';
+  RefreshCw,
+} from 'lucide-react'
 
 interface AuditEntry {
-  id: string;
-  timestamp: string;
+  id: string
+  timestamp: string
   user: {
-    name: string;
-    email: string;
-    avatar?: string;
-  };
-  action: 'create' | 'update' | 'delete' | 'view' | 'login' | 'logout' | 'approve' | 'reject' | 'export';
-  module: string;
-  resource: string;
-  resourceId: string;
-  details: string;
-  ipAddress: string;
+    name: string
+    email: string
+    avatar?: string
+  }
+  action:
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'view'
+    | 'login'
+    | 'logout'
+    | 'approve'
+    | 'reject'
+    | 'export'
+  module: string
+  resource: string
+  resourceId: string
+  details: string
+  ipAddress: string
   changes?: {
-    field: string;
-    oldValue: string;
-    newValue: string;
-  }[];
+    field: string
+    oldValue: string
+    newValue: string
+  }[]
 }
 
 export default function AuditTrail() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAction, setSelectedAction] = useState<string>('all');
-  const [selectedModule, setSelectedModule] = useState<string>('all');
-  const [dateRange, setDateRange] = useState<string>('today');
-  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAction, setSelectedAction] = useState<string>('all')
+  const [selectedModule, setSelectedModule] = useState<string>('all')
+  const [dateRange, setDateRange] = useState<string>('today')
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const auditEntries: AuditEntry[] = [];
+  const auditEntries: AuditEntry[] = []
 
   const actionIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
     create: { icon: <Plus className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
     update: { icon: <Edit className="w-4 h-4" />, color: 'text-info', bg: 'bg-info/20' },
-    delete: { icon: <Trash2 className="w-4 h-4" />, color: 'text-destructive', bg: 'bg-destructive/20' },
+    delete: {
+      icon: <Trash2 className="w-4 h-4" />,
+      color: 'text-destructive',
+      bg: 'bg-destructive/20',
+    },
     view: { icon: <Eye className="w-4 h-4" />, color: 'text-muted-foreground', bg: 'bg-muted' },
     login: { icon: <LogIn className="w-4 h-4" />, color: 'text-info', bg: 'bg-info/20' },
-    logout: { icon: <LogOut className="w-4 h-4" />, color: 'text-muted-foreground', bg: 'bg-muted' },
-    approve: { icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-success', bg: 'bg-success/20' },
-    reject: { icon: <AlertTriangle className="w-4 h-4" />, color: 'text-warning', bg: 'bg-warning/20' },
-    export: { icon: <Download className="w-4 h-4" />, color: 'text-purple-400', bg: 'bg-purple-500/20' }
-  };
+    logout: {
+      icon: <LogOut className="w-4 h-4" />,
+      color: 'text-muted-foreground',
+      bg: 'bg-muted',
+    },
+    approve: {
+      icon: <CheckCircle2 className="w-4 h-4" />,
+      color: 'text-success',
+      bg: 'bg-success/20',
+    },
+    reject: {
+      icon: <AlertTriangle className="w-4 h-4" />,
+      color: 'text-warning',
+      bg: 'bg-warning/20',
+    },
+    export: {
+      icon: <Download className="w-4 h-4" />,
+      color: 'text-purple-400',
+      bg: 'bg-purple-500/20',
+    },
+  }
 
-  const modules = ['Incidents', 'RTAs', 'Complaints', 'Risks', 'Audits', 'Actions', 'Documents', 'Reports', 'System'];
-  const actions = ['create', 'update', 'delete', 'view', 'login', 'logout', 'approve', 'reject', 'export'];
+  const modules = [
+    'Incidents',
+    'RTAs',
+    'Complaints',
+    'Risks',
+    'Audits',
+    'Actions',
+    'Documents',
+    'Reports',
+    'System',
+  ]
+  const actions = [
+    'create',
+    'update',
+    'delete',
+    'view',
+    'login',
+    'logout',
+    'approve',
+    'reject',
+    'export',
+  ]
 
-  const filteredEntries = auditEntries.filter(entry => {
-    const matchesSearch = entry.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          entry.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          entry.resourceId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesAction = selectedAction === 'all' || entry.action === selectedAction;
-    const matchesModule = selectedModule === 'all' || entry.module === selectedModule;
-    return matchesSearch && matchesAction && matchesModule;
-  });
+  const filteredEntries = auditEntries.filter((entry) => {
+    const matchesSearch =
+      entry.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.resourceId.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesAction = selectedAction === 'all' || entry.action === selectedAction
+    const matchesModule = selectedModule === 'all' || entry.module === selectedModule
+    return matchesSearch && matchesAction && matchesModule
+  })
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1000);
-  };
+    setIsLoading(true)
+    setTimeout(() => setIsLoading(false), 1000)
+  }
 
   return (
     <div className="space-y-6">
@@ -91,7 +141,7 @@ export default function AuditTrail() {
           </h1>
           <p className="text-muted-foreground mt-1">Complete history of system activities</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <button
             onClick={handleRefresh}
@@ -101,7 +151,7 @@ export default function AuditTrail() {
           >
             <RefreshCw className="w-5 h-5" />
           </button>
-          
+
           <button className="px-4 py-2 bg-secondary border border-border text-foreground font-medium rounded-xl hover:bg-surface transition-all flex items-center gap-2">
             <Download className="w-5 h-5" />
             Export Log
@@ -124,7 +174,7 @@ export default function AuditTrail() {
               className="w-full pl-10 pr-4 py-2.5 bg-background border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
-          
+
           {/* Action Filter */}
           <div className="relative">
             <select
@@ -134,12 +184,14 @@ export default function AuditTrail() {
             >
               <option value="all">All Actions</option>
               {actions.map((action) => (
-                <option key={action} value={action}>{action.charAt(0).toUpperCase() + action.slice(1)}</option>
+                <option key={action} value={action}>
+                  {action.charAt(0).toUpperCase() + action.slice(1)}
+                </option>
               ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
-          
+
           {/* Module Filter */}
           <div className="relative">
             <select
@@ -149,12 +201,14 @@ export default function AuditTrail() {
             >
               <option value="all">All Modules</option>
               {modules.map((module) => (
-                <option key={module} value={module}>{module}</option>
+                <option key={module} value={module}>
+                  {module}
+                </option>
               ))}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
-          
+
           {/* Date Range */}
           <div className="relative">
             <select
@@ -176,22 +230,21 @@ export default function AuditTrail() {
       {/* Timeline */}
       <div className="space-y-4">
         {filteredEntries.map((entry, index) => (
-          <div
-            key={entry.id}
-            className="relative pl-8"
-          >
+          <div key={entry.id} className="relative pl-8">
             {/* Timeline Line */}
             {index < filteredEntries.length - 1 && (
               <div className="absolute left-3 top-10 bottom-0 w-0.5 bg-border" />
             )}
-            
+
             {/* Timeline Dot */}
-            <div className={`absolute left-0 top-3 w-6 h-6 rounded-full flex items-center justify-center ${actionIcons[entry.action].bg}`}>
+            <div
+              className={`absolute left-0 top-3 w-6 h-6 rounded-full flex items-center justify-center ${actionIcons[entry.action].bg}`}
+            >
               <div className={actionIcons[entry.action].color}>
                 {actionIcons[entry.action].icon}
               </div>
             </div>
-            
+
             {/* Entry Card */}
             <div
               role="button"
@@ -202,26 +255,34 @@ export default function AuditTrail() {
                   : 'border-border hover:border-border-strong'
               }`}
               onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedEntry(expandedEntry === entry.id ? null : entry.id); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ')
+                  setExpandedEntry(expandedEntry === entry.id ? null : entry.id)
+              }}
             >
               <div className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary-hover flex items-center justify-center text-primary-foreground text-sm font-semibold">
-                        {entry.user.name.split(' ').map(n => n[0]).join('')}
+                        {entry.user.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')}
                       </div>
                       <div>
                         <span className="font-medium text-foreground">{entry.user.name}</span>
                         <span className="text-muted-foreground mx-2">•</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionIcons[entry.action].bg} ${actionIcons[entry.action].color}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionIcons[entry.action].bg} ${actionIcons[entry.action].color}`}
+                        >
                           {entry.action}
                         </span>
                       </div>
                     </div>
-                    
+
                     <p className="text-muted-foreground">{entry.details}</p>
-                    
+
                     <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
@@ -236,12 +297,14 @@ export default function AuditTrail() {
                       </span>
                     </div>
                   </div>
-                  
-                  <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${
-                    expandedEntry === entry.id ? 'rotate-180' : ''
-                  }`} />
+
+                  <ChevronDown
+                    className={`w-5 h-5 text-slate-400 transition-transform ${
+                      expandedEntry === entry.id ? 'rotate-180' : ''
+                    }`}
+                  />
                 </div>
-                
+
                 {/* Expanded Details */}
                 {expandedEntry === entry.id && (
                   <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-4 animate-in slide-in-from-top duration-200">
@@ -255,7 +318,7 @@ export default function AuditTrail() {
                         <p className="text-slate-300">{entry.ipAddress}</p>
                       </div>
                     </div>
-                    
+
                     {entry.changes && entry.changes.length > 0 && (
                       <div>
                         <span className="text-sm text-slate-500 block mb-2">Changes Made</span>
@@ -272,9 +335,7 @@ export default function AuditTrail() {
                                 {change.oldValue || '(empty)'}
                               </span>
                               <ArrowRight className="w-4 h-4 text-slate-600" />
-                              <span className="text-emerald-400">
-                                {change.newValue}
-                              </span>
+                              <span className="text-emerald-400">{change.newValue}</span>
                             </div>
                           ))}
                         </div>
@@ -308,5 +369,5 @@ export default function AuditTrail() {
         </div>
       )}
     </div>
-  );
+  )
 }

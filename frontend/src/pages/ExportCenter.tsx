@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Download,
   FileText,
@@ -15,43 +15,43 @@ import {
   Play,
   Settings,
   History,
-  Zap
-} from 'lucide-react';
-import { cn } from "../helpers/utils";
-import { Button } from '../components/ui/Button';
-import { Card, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+  Zap,
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 
 interface ExportJob {
-  id: string;
-  name: string;
-  format: 'pdf' | 'excel' | 'csv' | 'json';
-  modules: string[];
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  progress?: number;
-  createdAt: string;
-  completedAt?: string;
-  fileSize?: string;
-  downloadUrl?: string;
+  id: string
+  name: string
+  format: 'pdf' | 'excel' | 'csv' | 'json'
+  modules: string[]
+  status: 'pending' | 'processing' | 'completed' | 'failed'
+  progress?: number
+  createdAt: string
+  completedAt?: string
+  fileSize?: string
+  downloadUrl?: string
 }
 
 interface ExportTemplate {
-  id: string;
-  name: string;
-  description: string;
-  modules: string[];
-  format: 'pdf' | 'excel' | 'csv' | 'json';
-  schedule?: string;
-  lastRun?: string;
+  id: string
+  name: string
+  description: string
+  modules: string[]
+  format: 'pdf' | 'excel' | 'csv' | 'json'
+  schedule?: string
+  lastRun?: string
 }
 
 export default function ExportCenter() {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'new' | 'history' | 'templates'>('new');
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
-  const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'excel' | 'csv' | 'json'>('excel');
-  const [dateRange, setDateRange] = useState<string>('all');
-  const [isExporting, setIsExporting] = useState(false);
+  const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<'new' | 'history' | 'templates'>('new')
+  const [selectedModules, setSelectedModules] = useState<string[]>([])
+  const [selectedFormat, setSelectedFormat] = useState<'pdf' | 'excel' | 'csv' | 'json'>('excel')
+  const [dateRange, setDateRange] = useState<string>('all')
+  const [isExporting, setIsExporting] = useState(false)
 
   const modules = [
     { id: 'incidents', name: 'Incidents', count: 847 },
@@ -60,8 +60,8 @@ export default function ExportCenter() {
     { id: 'risks', name: 'Risks', count: 189 },
     { id: 'audits', name: 'Audits', count: 156 },
     { id: 'actions', name: 'Actions', count: 523 },
-    { id: 'documents', name: 'Documents', count: 312 }
-  ];
+    { id: 'documents', name: 'Documents', count: 312 },
+  ]
 
   const exportJobs: ExportJob[] = [
     {
@@ -73,7 +73,7 @@ export default function ExportCenter() {
       createdAt: '2024-01-19 10:30',
       completedAt: '2024-01-19 10:32',
       fileSize: '2.4 MB',
-      downloadUrl: '#'
+      downloadUrl: '#',
     },
     {
       id: 'EXP002',
@@ -82,7 +82,7 @@ export default function ExportCenter() {
       modules: ['incidents', 'rtas', 'complaints', 'risks'],
       status: 'processing',
       progress: 65,
-      createdAt: '2024-01-19 10:45'
+      createdAt: '2024-01-19 10:45',
     },
     {
       id: 'EXP003',
@@ -93,7 +93,7 @@ export default function ExportCenter() {
       createdAt: '2024-01-18 14:00',
       completedAt: '2024-01-18 14:05',
       fileSize: '8.7 MB',
-      downloadUrl: '#'
+      downloadUrl: '#',
     },
     {
       id: 'EXP004',
@@ -101,9 +101,9 @@ export default function ExportCenter() {
       format: 'json',
       modules: ['risks'],
       status: 'failed',
-      createdAt: '2024-01-17 09:00'
-    }
-  ];
+      createdAt: '2024-01-17 09:00',
+    },
+  ]
 
   const templates: ExportTemplate[] = [
     {
@@ -113,7 +113,7 @@ export default function ExportCenter() {
       modules: ['incidents', 'rtas'],
       format: 'pdf',
       schedule: 'Every Monday 6:00 AM',
-      lastRun: '2024-01-15 06:00'
+      lastRun: '2024-01-15 06:00',
     },
     {
       id: 'TPL002',
@@ -122,7 +122,7 @@ export default function ExportCenter() {
       modules: ['audits', 'risks', 'actions'],
       format: 'excel',
       schedule: 'First day of month',
-      lastRun: '2024-01-01 08:00'
+      lastRun: '2024-01-01 08:00',
     },
     {
       id: 'TPL003',
@@ -130,40 +130,46 @@ export default function ExportCenter() {
       description: 'Quarterly complaints analysis',
       modules: ['complaints'],
       format: 'pdf',
-      schedule: 'Quarterly'
-    }
-  ];
+      schedule: 'Quarterly',
+    },
+  ]
 
   const formatIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-    pdf: { icon: <FileText className="w-5 h-5" />, color: 'text-destructive', bg: 'bg-destructive/20' },
-    excel: { icon: <FileSpreadsheet className="w-5 h-5" />, color: 'text-success', bg: 'bg-success/20' },
+    pdf: {
+      icon: <FileText className="w-5 h-5" />,
+      color: 'text-destructive',
+      bg: 'bg-destructive/20',
+    },
+    excel: {
+      icon: <FileSpreadsheet className="w-5 h-5" />,
+      color: 'text-success',
+      bg: 'bg-success/20',
+    },
     csv: { icon: <File className="w-5 h-5" />, color: 'text-info', bg: 'bg-info/20' },
-    json: { icon: <FileJson className="w-5 h-5" />, color: 'text-warning', bg: 'bg-warning/20' }
-  };
+    json: { icon: <FileJson className="w-5 h-5" />, color: 'text-warning', bg: 'bg-warning/20' },
+  }
 
   const statusVariants: Record<string, 'default' | 'in-progress' | 'resolved' | 'destructive'> = {
     pending: 'default',
     processing: 'in-progress',
     completed: 'resolved',
-    failed: 'destructive'
-  };
+    failed: 'destructive',
+  }
 
   const toggleModule = (moduleId: string) => {
-    setSelectedModules(prev =>
-      prev.includes(moduleId)
-        ? prev.filter(m => m !== moduleId)
-        : [...prev, moduleId]
-    );
-  };
+    setSelectedModules((prev) =>
+      prev.includes(moduleId) ? prev.filter((m) => m !== moduleId) : [...prev, moduleId],
+    )
+  }
 
   const handleExport = () => {
-    if (selectedModules.length === 0) return;
-    setIsExporting(true);
+    if (selectedModules.length === 0) return
+    setIsExporting(true)
     setTimeout(() => {
-      setIsExporting(false);
-      setActiveTab('history');
-    }, 2000);
-  };
+      setIsExporting(false)
+      setActiveTab('history')
+    }, 2000)
+  }
 
   return (
     <div className="space-y-6">
@@ -185,10 +191,10 @@ export default function ExportCenter() {
         <button
           onClick={() => setActiveTab('new')}
           className={cn(
-            "px-6 py-3 font-medium transition-all border-b-2",
+            'px-6 py-3 font-medium transition-all border-b-2',
             activeTab === 'new'
               ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+              : 'text-muted-foreground border-transparent hover:text-foreground',
           )}
         >
           <span className="flex items-center gap-2">
@@ -199,10 +205,10 @@ export default function ExportCenter() {
         <button
           onClick={() => setActiveTab('history')}
           className={cn(
-            "px-6 py-3 font-medium transition-all border-b-2",
+            'px-6 py-3 font-medium transition-all border-b-2',
             activeTab === 'history'
               ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+              : 'text-muted-foreground border-transparent hover:text-foreground',
           )}
         >
           <span className="flex items-center gap-2">
@@ -213,10 +219,10 @@ export default function ExportCenter() {
         <button
           onClick={() => setActiveTab('templates')}
           className={cn(
-            "px-6 py-3 font-medium transition-all border-b-2",
+            'px-6 py-3 font-medium transition-all border-b-2',
             activeTab === 'templates'
               ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+              : 'text-muted-foreground border-transparent hover:text-foreground',
           )}
         >
           <span className="flex items-center gap-2">
@@ -237,17 +243,17 @@ export default function ExportCenter() {
                   <Filter className="w-5 h-5 text-primary" />
                   {t('exports.select_modules')}
                 </h2>
-                
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {modules.map((module) => (
                     <button
                       key={module.id}
                       onClick={() => toggleModule(module.id)}
                       className={cn(
-                        "p-4 rounded-xl border transition-all",
+                        'p-4 rounded-xl border transition-all',
                         selectedModules.includes(module.id)
                           ? 'bg-primary/20 border-primary text-foreground'
-                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50',
                       )}
                     >
                       <div className="flex items-center justify-between mb-2">
@@ -260,10 +266,10 @@ export default function ExportCenter() {
                     </button>
                   ))}
                 </div>
-                
+
                 <div className="flex items-center gap-4 mt-4">
                   <button
-                    onClick={() => setSelectedModules(modules.map(m => m.id))}
+                    onClick={() => setSelectedModules(modules.map((m) => m.id))}
                     className="text-sm text-primary hover:text-primary-hover"
                   >
                     {t('exports.select_all')}
@@ -285,7 +291,7 @@ export default function ExportCenter() {
                   <Calendar className="w-5 h-5 text-primary" />
                   {t('exports.date_range')}
                 </h2>
-                
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
                     { value: 'today', label: 'Today' },
@@ -293,16 +299,16 @@ export default function ExportCenter() {
                     { value: 'month', label: 'This Month' },
                     { value: 'quarter', label: 'This Quarter' },
                     { value: 'year', label: 'This Year' },
-                    { value: 'all', label: 'All Time' }
+                    { value: 'all', label: 'All Time' },
                   ].map((option) => (
                     <button
                       key={option.value}
                       onClick={() => setDateRange(option.value)}
                       className={cn(
-                        "p-3 rounded-xl border transition-all",
+                        'p-3 rounded-xl border transition-all',
                         dateRange === option.value
                           ? 'bg-primary/20 border-primary text-foreground'
-                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50'
+                          : 'bg-muted/30 border-border text-muted-foreground hover:border-primary/50',
                       )}
                     >
                       {option.label}
@@ -318,21 +324,23 @@ export default function ExportCenter() {
             {/* Format Selection */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-foreground mb-4">{t('exports.export_format')}</h2>
-                
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  {t('exports.export_format')}
+                </h2>
+
                 <div className="space-y-2">
                   {Object.entries(formatIcons).map(([format, { icon, color, bg }]) => (
                     <button
                       key={format}
                       onClick={() => setSelectedFormat(format as 'pdf' | 'excel' | 'csv' | 'json')}
                       className={cn(
-                        "w-full p-3 rounded-xl border flex items-center gap-3 transition-all",
+                        'w-full p-3 rounded-xl border flex items-center gap-3 transition-all',
                         selectedFormat === format
                           ? 'bg-primary/20 border-primary'
-                          : 'bg-muted/30 border-border hover:border-primary/50'
+                          : 'bg-muted/30 border-border hover:border-primary/50',
                       )}
                     >
-                      <div className={cn("p-2 rounded-lg", bg)}>
+                      <div className={cn('p-2 rounded-lg', bg)}>
                         <div className={color}>{icon}</div>
                       </div>
                       <div className="text-left">
@@ -353,12 +361,16 @@ export default function ExportCenter() {
             {/* Export Summary */}
             <Card>
               <CardContent className="p-6">
-                <h2 className="text-lg font-semibold text-foreground mb-4">{t('exports.summary')}</h2>
-                
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  {t('exports.summary')}
+                </h2>
+
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Modules</span>
-                    <span className="text-foreground font-medium">{selectedModules.length} selected</span>
+                    <span className="text-foreground font-medium">
+                      {selectedModules.length} selected
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date Range</span>
@@ -371,14 +383,16 @@ export default function ExportCenter() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Est. Records</span>
                     <span className="text-foreground font-medium">
-                      {selectedModules.reduce((acc, id) => {
-                        const mod = modules.find(m => m.id === id);
-                        return acc + (mod?.count || 0);
-                      }, 0).toLocaleString()}
+                      {selectedModules
+                        .reduce((acc, id) => {
+                          const mod = modules.find((m) => m.id === id)
+                          return acc + (mod?.count || 0)
+                        }, 0)
+                        .toLocaleString()}
                     </span>
                   </div>
                 </div>
-                
+
                 <Button
                   onClick={handleExport}
                   disabled={selectedModules.length === 0 || isExporting}
@@ -409,12 +423,24 @@ export default function ExportCenter() {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_export')}</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_format')}</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_modules')}</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_status')}</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">{t('exports.col_created')}</th>
-                  <th className="text-center p-4 text-sm font-medium text-muted-foreground">{t('exports.col_actions')}</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_export')}
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_format')}
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_modules')}
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_status')}
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_created')}
+                  </th>
+                  <th className="text-center p-4 text-sm font-medium text-muted-foreground">
+                    {t('exports.col_actions')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -429,7 +455,7 @@ export default function ExportCenter() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <div className={cn("p-1.5 rounded-lg", formatIcons[job.format].bg)}>
+                        <div className={cn('p-1.5 rounded-lg', formatIcons[job.format].bg)}>
                           <div className={formatIcons[job.format].color}>
                             {formatIcons[job.format].icon}
                           </div>
@@ -451,9 +477,7 @@ export default function ExportCenter() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <Badge variant={statusVariants[job.status]}>
-                          {job.status}
-                        </Badge>
+                        <Badge variant={statusVariants[job.status]}>{job.status}</Badge>
                         {job.status === 'processing' && job.progress && (
                           <span className="text-xs text-muted-foreground">{job.progress}%</span>
                         )}
@@ -476,13 +500,23 @@ export default function ExportCenter() {
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-2">
                         {job.status === 'completed' && job.downloadUrl && (
-                          <Button variant="ghost" size="sm" className="text-success hover:text-success" asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-success hover:text-success"
+                            asChild
+                          >
                             <a href={job.downloadUrl} title="Download">
                               <Download className="w-4 h-4" />
                             </a>
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" title="Delete">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          title="Delete"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -499,13 +533,10 @@ export default function ExportCenter() {
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map((template) => (
-            <Card
-              key={template.id}
-              className="hover:border-primary/50 transition-all"
-            >
+            <Card key={template.id} className="hover:border-primary/50 transition-all">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
-                  <div className={cn("p-3 rounded-xl", formatIcons[template.format].bg)}>
+                  <div className={cn('p-3 rounded-xl', formatIcons[template.format].bg)}>
                     <div className={formatIcons[template.format].color}>
                       {formatIcons[template.format].icon}
                     </div>
@@ -514,10 +545,10 @@ export default function ExportCenter() {
                     <Settings className="w-5 h-5" />
                   </Button>
                 </div>
-                
+
                 <h3 className="text-lg font-semibold text-foreground mb-1">{template.name}</h3>
                 <p className="text-sm text-muted-foreground mb-4">{template.description}</p>
-                
+
                 <div className="flex flex-wrap gap-1 mb-4">
                   {template.modules.map((mod, i) => (
                     <span
@@ -528,7 +559,7 @@ export default function ExportCenter() {
                     </span>
                   ))}
                 </div>
-                
+
                 <div className="pt-4 border-t border-border space-y-2 text-sm">
                   {template.schedule && (
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -543,7 +574,7 @@ export default function ExportCenter() {
                     </div>
                   )}
                 </div>
-                
+
                 <Button variant="outline" className="w-full mt-4">
                   <Play className="w-4 h-4" />
                   {t('exports.run_now')}
@@ -551,16 +582,18 @@ export default function ExportCenter() {
               </CardContent>
             </Card>
           ))}
-          
+
           {/* Add Template Card */}
           <button className="bg-card/30 rounded-xl border border-dashed border-border p-6 flex flex-col items-center justify-center gap-3 hover:border-primary/50 hover:bg-card/50 transition-all min-h-[280px]">
             <div className="p-3 rounded-xl bg-muted">
               <Settings className="w-6 h-6 text-muted-foreground" />
             </div>
-            <span className="text-muted-foreground font-medium">{t('exports.create_template')}</span>
+            <span className="text-muted-foreground font-medium">
+              {t('exports.create_template')}
+            </span>
           </button>
         </div>
       )}
     </div>
-  );
+  )
 }

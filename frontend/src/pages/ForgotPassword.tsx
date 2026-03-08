@@ -8,9 +8,9 @@ import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { API_BASE_URL } from '../config/apiBase'
 
-const API_BASE = API_BASE_URL;
+const API_BASE = API_BASE_URL
 
-type FormState = 'idle' | 'submitting' | 'success' | 'error';
+type FormState = 'idle' | 'submitting' | 'success' | 'error'
 
 export default function ForgotPassword() {
   const { t } = useTranslation()
@@ -36,7 +36,7 @@ export default function ForgotPassword() {
 
       setFormState('success')
     } catch (err) {
-      console.error('Password reset request failed:', err)
+      if (import.meta.env.DEV) console.error('Password reset request failed:', err)
       // Still show success message to prevent email enumeration
       setFormState('success')
     }
@@ -62,9 +62,7 @@ export default function ForgotPassword() {
             <Shield className="w-8 h-8 text-primary-foreground" />
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">{t('forgot_password.title')}</h1>
-          <p className="text-muted-foreground">
-            {t('forgot_password.subtitle')}
-          </p>
+          <p className="text-muted-foreground">{t('forgot_password.subtitle')}</p>
         </div>
 
         <Card className="p-8">
@@ -73,7 +71,9 @@ export default function ForgotPassword() {
               <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-success" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">{t('forgot_password.success_title')}</h2>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                {t('forgot_password.success_title')}
+              </h2>
               <p className="text-muted-foreground mb-6">
                 {t('forgot_password.success_message', { email })}
               </p>
@@ -91,7 +91,7 @@ export default function ForgotPassword() {
             <form onSubmit={handleSubmit}>
               {/* Error display */}
               {formState === 'error' && errorMessage && (
-                <div 
+                <div
                   className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
                   data-testid="error-message"
                 >
@@ -104,10 +104,16 @@ export default function ForgotPassword() {
 
               <div className="space-y-5">
                 <div>
-                  <label htmlFor="forgotpassword-field-0" className="block text-sm font-medium text-foreground mb-2">{t('forgot_password.email_label')}</label>
+                  <label
+                    htmlFor="forgotpassword-field-0"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('forgot_password.email_label')}
+                  </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="forgotpassword-field-0"
+                    <Input
+                      id="forgotpassword-field-0"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -136,8 +142,8 @@ export default function ForgotPassword() {
               </Button>
 
               <div className="mt-6 text-center">
-                <Link 
-                  to="/login" 
+                <Link
+                  to="/login"
                   className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                   data-testid="back-to-login"
                 >

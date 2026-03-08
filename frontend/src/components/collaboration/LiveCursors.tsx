@@ -1,39 +1,39 @@
 /**
  * Live Cursors Component
- * 
+ *
  * Shows real-time cursor positions of other users editing the same document.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'
 
 interface CursorPosition {
-  userId: string;
-  userName: string;
-  userColor: string;
-  userAvatar?: string;
-  position: { x: number; y: number };
-  field?: string;
-  isTyping?: boolean;
-  lastUpdate: number;
+  userId: string
+  userName: string
+  userColor: string
+  userAvatar?: string
+  position: { x: number; y: number }
+  field?: string
+  isTyping?: boolean
+  lastUpdate: number
 }
 
 interface LiveCursorsProps {
-  documentId: string;
-  containerRef: React.RefObject<HTMLElement>;
+  documentId: string
+  containerRef: React.RefObject<HTMLElement>
 }
 
 export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCursorsProps) {
-  const [cursors, setCursors] = useState<CursorPosition[]>([]);
+  const [cursors, setCursors] = useState<CursorPosition[]>([])
 
   useEffect(() => {
     // Future: connect to WebSocket for real-time cursor position updates
     // Cursors will be populated via WebSocket events from other collaborators
-    setCursors([]);
-  }, [documentId]);
+    setCursors([])
+  }, [documentId])
 
   return (
     <>
-      {cursors.map(cursor => (
+      {cursors.map((cursor) => (
         <div
           key={cursor.userId}
           className="pointer-events-none absolute z-50 transition-all duration-75"
@@ -67,16 +67,22 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
             {cursor.userName}
             {cursor.isTyping && (
               <span className="ml-1 inline-flex gap-0.5">
-                <span className="animate-bounce" style={{ animationDelay: '0ms' }}>.</span>
-                <span className="animate-bounce" style={{ animationDelay: '150ms' }}>.</span>
-                <span className="animate-bounce" style={{ animationDelay: '300ms' }}>.</span>
+                <span className="animate-bounce" style={{ animationDelay: '0ms' }}>
+                  .
+                </span>
+                <span className="animate-bounce" style={{ animationDelay: '150ms' }}>
+                  .
+                </span>
+                <span className="animate-bounce" style={{ animationDelay: '300ms' }}>
+                  .
+                </span>
               </span>
             )}
           </div>
         </div>
       ))}
     </>
-  );
+  )
 }
 
 // ============================================================================
@@ -85,27 +91,23 @@ export function LiveCursors({ documentId, containerRef: _containerRef }: LiveCur
 
 interface PresenceAvatarsProps {
   users: Array<{
-    id: string;
-    name: string;
-    avatar?: string;
-    color: string;
-    isEditing?: boolean;
-  }>;
-  max?: number;
+    id: string
+    name: string
+    avatar?: string
+    color: string
+    isEditing?: boolean
+  }>
+  max?: number
 }
 
 export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
-  const visibleUsers = users.slice(0, max);
-  const hiddenCount = users.length - max;
+  const visibleUsers = users.slice(0, max)
+  const hiddenCount = users.length - max
 
   return (
     <div className="flex items-center -space-x-2">
       {visibleUsers.map((user, index) => (
-        <div
-          key={user.id}
-          className="relative"
-          style={{ zIndex: visibleUsers.length - index }}
-        >
+        <div key={user.id} className="relative" style={{ zIndex: visibleUsers.length - index }}>
           <div
             className={`
               flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-800 
@@ -116,12 +118,21 @@ export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
             title={user.name}
           >
             {user.avatar ? (
-              <img src={user.avatar} alt={user.name} className="h-full w-full rounded-full object-cover" />
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="h-full w-full rounded-full object-cover"
+              />
             ) : (
-              user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+              user.name
+                .split(' ')
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()
             )}
           </div>
-          
+
           {/* Online indicator */}
           <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-slate-800 bg-emerald-500" />
         </div>
@@ -133,7 +144,7 @@ export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 // ============================================================================
@@ -141,26 +152,26 @@ export function PresenceAvatars({ users, max = 5 }: PresenceAvatarsProps) {
 // ============================================================================
 
 interface TypingIndicatorProps {
-  users: Array<{ name: string; color: string }>;
+  users: Array<{ name: string; color: string }>
 }
 
 export function TypingIndicator({ users }: TypingIndicatorProps) {
-  if (users.length === 0) return null;
+  if (users.length === 0) return null
 
   const getMessage = () => {
     if (users.length === 1) {
-      return `${users[0].name} is typing`;
+      return `${users[0].name} is typing`
     } else if (users.length === 2) {
-      return `${users[0].name} and ${users[1].name} are typing`;
+      return `${users[0].name} and ${users[1].name} are typing`
     } else {
-      return `${users[0].name} and ${users.length - 1} others are typing`;
+      return `${users[0].name} and ${users.length - 1} others are typing`
     }
-  };
+  }
 
   return (
     <div className="flex items-center gap-2 text-sm text-slate-400">
       <div className="flex gap-1">
-        {[0, 1, 2].map(i => (
+        {[0, 1, 2].map((i) => (
           <div
             key={i}
             className="h-2 w-2 rounded-full bg-slate-400 animate-bounce"
@@ -173,7 +184,7 @@ export function TypingIndicator({ users }: TypingIndicatorProps) {
       </div>
       <span>{getMessage()}</span>
     </div>
-  );
+  )
 }
 
 // ============================================================================
@@ -182,18 +193,18 @@ export function TypingIndicator({ users }: TypingIndicatorProps) {
 
 interface CollaborationBannerProps {
   users: Array<{
-    id: string;
-    name: string;
-    avatar?: string;
-    color: string;
-    isEditing?: boolean;
-    field?: string;
-  }>;
-  onStartCollaboration?: () => void;
+    id: string
+    name: string
+    avatar?: string
+    color: string
+    isEditing?: boolean
+    field?: string
+  }>
+  onStartCollaboration?: () => void
 }
 
 export function CollaborationBanner({ users, onStartCollaboration }: CollaborationBannerProps) {
-  const editingUsers = users.filter(u => u.isEditing);
+  const editingUsers = users.filter((u) => u.isEditing)
 
   if (users.length === 0) {
     return (
@@ -208,7 +219,7 @@ export function CollaborationBanner({ users, onStartCollaboration }: Collaborati
           </button>
         )}
       </div>
-    );
+    )
   }
 
   return (
@@ -221,7 +232,8 @@ export function CollaborationBanner({ users, onStartCollaboration }: Collaborati
           </p>
           {editingUsers.length > 0 && (
             <p className="text-xs text-slate-400">
-              {editingUsers.map(u => u.name).join(', ')} {editingUsers.length === 1 ? 'is' : 'are'} editing
+              {editingUsers.map((u) => u.name).join(', ')}{' '}
+              {editingUsers.length === 1 ? 'is' : 'are'} editing
             </p>
           )}
         </div>
@@ -234,5 +246,5 @@ export function CollaborationBanner({ users, onStartCollaboration }: Collaborati
         <span className="text-xs text-emerald-400">Live</span>
       </div>
     </div>
-  );
+  )
 }

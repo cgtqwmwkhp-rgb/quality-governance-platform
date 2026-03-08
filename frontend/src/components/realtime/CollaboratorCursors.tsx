@@ -1,27 +1,27 @@
 /**
  * CollaboratorCursors - Shows remote collaborator cursors
- * 
+ *
  * Features:
  * - Colored cursor indicators per collaborator
  * - Name labels on hover
  * - Animated transitions
  */
 
-import React from 'react';
+import React from 'react'
 
 interface Collaborator {
-  id: string;
-  name: string;
-  color: string;
+  id: string
+  name: string
+  color: string
   cursor?: {
-    index: number;
-    length: number;
-  };
+    index: number
+    length: number
+  }
 }
 
 interface CollaboratorCursorsProps {
-  collaborators: Collaborator[];
-  containerRef?: React.RefObject<HTMLElement>;
+  collaborators: Collaborator[]
+  containerRef?: React.RefObject<HTMLElement>
 }
 
 const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
@@ -32,7 +32,7 @@ const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
   // Full cursor positioning requires DOM measurements
 
   if (collaborators.length === 0) {
-    return null;
+    return null
   }
 
   return (
@@ -52,9 +52,7 @@ const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
           {/* Name tooltip */}
           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-800 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             {collaborator.name}
-            <div
-              className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"
-            />
+            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800" />
           </div>
         </div>
       ))}
@@ -66,7 +64,7 @@ const CollaboratorCursors: React.FC<CollaboratorCursorsProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default CollaboratorCursors;
+export default CollaboratorCursors

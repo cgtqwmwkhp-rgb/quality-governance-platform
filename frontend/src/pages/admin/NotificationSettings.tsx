@@ -46,9 +46,7 @@ export default function NotificationSettings() {
   ])
 
   const toggleChannel = (key: string) => {
-    setChannels((prev) =>
-      prev.map((ch) => (ch.key === key ? { ...ch, enabled: !ch.enabled } : ch)),
-    )
+    setChannels((prev) => prev.map((ch) => (ch.key === key ? { ...ch, enabled: !ch.enabled } : ch)))
   }
 
   return (
@@ -107,7 +105,10 @@ export default function NotificationSettings() {
             'Policy due for review',
             'Complaint received',
           ].map((event) => (
-            <div key={event} className="flex items-center justify-between py-2 border-b last:border-0">
+            <div
+              key={event}
+              className="flex items-center justify-between py-2 border-b last:border-0"
+            >
               <span className="text-sm">{event}</span>
               <input
                 type="checkbox"

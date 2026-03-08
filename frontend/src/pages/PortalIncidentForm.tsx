@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -24,47 +24,47 @@ import {
   X,
   AlertCircle as AlertIcon,
   Save,
-} from 'lucide-react';
-import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
-import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector';
-import DraftRecoveryDialog from '../components/DraftRecoveryDialog';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { useGeolocation } from '../hooks/useGeolocation';
-import { useVoiceToText } from '../hooks/useVoiceToText';
-import { useFormAutosave } from '../hooks/useFormAutosave';
-import { useFeatureFlag } from '../hooks/useFeatureFlag';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Textarea } from '../components/ui/Textarea';
-import { cn } from '../helpers/utils';
-import { API_BASE_URL } from '../config/apiBase';
-import { 
-  trackExp001FormOpened, 
+} from 'lucide-react'
+import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import BodyInjurySelector, { InjurySelection } from '../components/BodyInjurySelector'
+import DraftRecoveryDialog from '../components/DraftRecoveryDialog'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { useGeolocation } from '../hooks/useGeolocation'
+import { useVoiceToText } from '../hooks/useVoiceToText'
+import { useFormAutosave } from '../hooks/useFormAutosave'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { cn } from '../helpers/utils'
+import { API_BASE_URL } from '../config/apiBase'
+import {
+  trackExp001FormOpened,
   trackExp001FormSubmitted,
-  trackExp001FormAbandoned 
-} from '../services/telemetry';
+  trackExp001FormAbandoned,
+} from '../services/telemetry'
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: 'incident' | 'complaint';
-  title: string;
-  description: string;
-  location?: string;
-  severity: string;
-  reporter_name?: string;
-  reporter_email?: string;
-  reporter_phone?: string;
-  department?: string;
-  is_anonymous: boolean;
+  report_type: 'incident' | 'complaint'
+  title: string
+  description: string
+  location?: string
+  severity: string
+  reporter_name?: string
+  reporter_email?: string
+  reporter_phone?: string
+  department?: string
+  is_anonymous: boolean
 }
 
 interface PortalReportResponse {
-  success: boolean;
-  reference_number: string;
-  tracking_code: string;
-  message: string;
-  estimated_response: string;
+  success: boolean
+  reference_number: string
+  tracking_code: string
+  message: string
+  estimated_response: string
 }
 
 async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
@@ -72,26 +72,26 @@ async function submitPortalReport(payload: PortalReportPayload): Promise<PortalR
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
-  
+  })
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.message || `Submission failed: ${response.status}`)
   }
-  
-  return response.json();
+
+  return response.json()
 }
 
 // Determine report type from URL path
 const getReportTypeFromPath = (pathname: string) => {
-  if (pathname.includes('near-miss')) return 'near-miss';
-  if (pathname.includes('complaint')) return 'complaint';
-  return 'incident';
-};
+  if (pathname.includes('near-miss')) return 'near-miss'
+  if (pathname.includes('complaint')) return 'complaint'
+  return 'incident'
+}
 
 // Report type configurations
 const REPORT_CONFIGS = {
-  'incident': {
+  incident: {
     title: 'Incident Report',
     subtitle: 'Injury or Accident',
     icon: AlertTriangle,
@@ -109,7 +109,7 @@ const REPORT_CONFIGS = {
     gradientFrom: 'from-warning',
     gradientTo: 'to-amber-500',
   },
-  'complaint': {
+  complaint: {
     title: 'Customer Complaint',
     subtitle: 'Customer Concern',
     icon: MessageSquare,
@@ -118,7 +118,7 @@ const REPORT_CONFIGS = {
     gradientFrom: 'from-info',
     gradientTo: 'to-cyan-500',
   },
-};
+}
 
 // Contract options
 const CONTRACT_OPTIONS = [
@@ -133,7 +133,7 @@ const CONTRACT_OPTIONS = [
   { value: 'novuna', label: 'Novuna', sublabel: 'Scottish Power' },
   { value: 'enterprise', label: 'Enterprise', sublabel: 'Fleet Solutions' },
   { value: 'other', label: 'Other', sublabel: 'Specify below' },
-];
+]
 
 // Role options
 const ROLE_OPTIONS = [
@@ -144,7 +144,7 @@ const ROLE_OPTIONS = [
   { value: 'trainee', label: 'Trainee/Apprentice' },
   { value: 'non-pe', label: 'Non-Plantexpand Employee' },
   { value: 'other', label: 'Other' },
-];
+]
 
 // Medical assistance options
 const MEDICAL_OPTIONS = [
@@ -153,62 +153,67 @@ const MEDICAL_OPTIONS = [
   { value: 'first-aider', label: 'First aider on site' },
   { value: 'ambulance', label: 'Ambulance / A&E' },
   { value: 'gp', label: 'GP / Hospital' },
-];
+]
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4
 
 interface FormData {
-  contract: string;
-  contractOther: string;
-  wasInvolved: boolean | null;
-  personName: string;
-  personRole: string;
-  personContact: string;
-  location: string;
-  incidentDate: string;
-  incidentTime: string;
-  description: string;
-  assetNumber: string;
-  hasWitnesses: boolean | null;
-  witnessNames: string;
-  hasInjuries: boolean | null;
-  injuries: InjurySelection[];
-  medicalAssistance: string;
-  complainantName: string;
-  complainantRole: string;
-  complainantContact: string;
-  photos: File[];
+  contract: string
+  contractOther: string
+  wasInvolved: boolean | null
+  personName: string
+  personRole: string
+  personContact: string
+  location: string
+  incidentDate: string
+  incidentTime: string
+  description: string
+  assetNumber: string
+  hasWitnesses: boolean | null
+  witnessNames: string
+  hasInjuries: boolean | null
+  injuries: InjurySelection[]
+  medicalAssistance: string
+  complainantName: string
+  complainantRole: string
+  complainantContact: string
+  photos: File[]
 }
 
 export default function PortalIncidentForm() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = usePortalAuth();
-  const reportType = getReportTypeFromPath(location.pathname);
-  const config = REPORT_CONFIGS[reportType];
-  
-  const [step, setStep] = useState<Step>(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { user } = usePortalAuth()
+  const reportType = getReportTypeFromPath(location.pathname)
+  const config = REPORT_CONFIGS[reportType]
+
+  const [step, setStep] = useState<Step>(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submittedRef, setSubmittedRef] = useState<string | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   // Feature flag for autosave (EXP-001)
-  const autosaveEnabled = useFeatureFlag('portal_form_autosave');
+  const autosaveEnabled = useFeatureFlag('portal_form_autosave')
 
   // Geolocation hook
-  const { isLoading: geolocating, error: geoError, getLocationString } = useGeolocation();
+  const { isLoading: geolocating, error: geoError, getLocationString } = useGeolocation()
 
   // Voice-to-text hook
-  const { isListening: isRecording, isSupported: voiceSupported, toggleListening, error: voiceError } = useVoiceToText({
+  const {
+    isListening: isRecording,
+    isSupported: voiceSupported,
+    toggleListening,
+    error: voiceError,
+  } = useVoiceToText({
     onResult: (transcript) => {
       setFormData((prev) => ({
         ...prev,
         description: prev.description + (prev.description ? ' ' : '') + transcript,
-      }));
+      }))
     },
-  });
+  })
 
   const initialFormData: FormData = {
     contract: '',
@@ -231,14 +236,14 @@ export default function PortalIncidentForm() {
     complainantRole: '',
     complainantContact: '',
     photos: [],
-  };
+  }
 
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [formData, setFormData] = useState<FormData>(initialFormData)
 
   // Autosave hook (EXP-001: portal_form_autosave)
   // Excludes photos from autosave (can't serialize File objects)
-  type AutosaveData = Omit<FormData, 'photos'> & { step: number };
-  
+  type AutosaveData = Omit<FormData, 'photos'> & { step: number }
+
   const {
     isRecoveryPromptOpen,
     draftData,
@@ -250,38 +255,38 @@ export default function PortalIncidentForm() {
   } = useFormAutosave<AutosaveData>({
     formType: reportType,
     enabled: autosaveEnabled,
-  });
+  })
 
   // Handle draft recovery
   const handleRecoverDraft = useCallback(() => {
-    const recovered = recoverDraft();
+    const recovered = recoverDraft()
     if (recovered) {
       // Restore form data (photos excluded)
       setFormData((prev) => ({
         ...prev,
         ...recovered,
         photos: [], // Photos can't be recovered
-      }));
+      }))
       // Restore step
       if (recovered.step) {
-        setStep(recovered.step as Step);
+        setStep(recovered.step as Step)
       }
     }
-  }, [recoverDraft]);
+  }, [recoverDraft])
 
   // Autosave on form data changes
   useEffect(() => {
     if (autosaveEnabled && !isSubmitting && !submittedRef) {
       // Create autosave data (exclude photos, include step)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { photos, ...dataWithoutPhotos } = formData;
+      const { photos, ...dataWithoutPhotos } = formData
       const autosaveData: AutosaveData = {
         ...dataWithoutPhotos,
         step,
-      };
-      saveDraft(autosaveData, step);
+      }
+      saveDraft(autosaveData, step)
     }
-  }, [formData, step, autosaveEnabled, isSubmitting, submittedRef, saveDraft]);
+  }, [formData, step, autosaveEnabled, isSubmitting, submittedRef, saveDraft])
 
   // Pre-fill user details from SSO
   useEffect(() => {
@@ -291,76 +296,82 @@ export default function PortalIncidentForm() {
         personName: user.name || '',
         personRole: user.jobTitle || '',
         personContact: user.email || '',
-      }));
+      }))
     }
-  }, [user]);
+  }, [user])
 
   // Track form opened event (EXP-001 telemetry)
-  const [hadDraftOnOpen] = useState(() => !!draftData);
+  const [hadDraftOnOpen] = useState(() => !!draftData)
   useEffect(() => {
-    trackExp001FormOpened(reportType, autosaveEnabled, hadDraftOnOpen);
-    
+    trackExp001FormOpened(reportType, autosaveEnabled, hadDraftOnOpen)
+
     // Track abandonment on unmount (if not submitted)
     return () => {
       if (!submittedRef) {
-        trackExp001FormAbandoned(reportType, autosaveEnabled, step, hadDraftOnOpen);
+        trackExp001FormAbandoned(reportType, autosaveEnabled, step, hadDraftOnOpen)
       }
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount, cleanup on unmount
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Run once on mount, cleanup on unmount
 
-  const totalSteps = reportType === 'complaint' ? 3 : 4;
+  const totalSteps = reportType === 'complaint' ? 3 : 4
 
   // GPS location detection using hook
   const detectLocation = async () => {
-    setLocationError(null);
-    const locationString = await getLocationString();
+    setLocationError(null)
+    const locationString = await getLocationString()
     if (locationString) {
-      setFormData((prev) => ({ ...prev, location: locationString }));
+      setFormData((prev) => ({ ...prev, location: locationString }))
     } else if (geoError) {
-      setLocationError(geoError);
+      setLocationError(geoError)
     }
-  };
+  }
 
   // Voice recording using Web Speech API hook
   const toggleVoiceRecording = () => {
     if (voiceSupported) {
-      toggleListening();
+      toggleListening()
     }
-  };
+  }
 
   // Photo handling
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newPhotos = Array.from(e.target.files);
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...newPhotos] }));
+      const newPhotos = Array.from(e.target.files)
+      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...newPhotos] }))
     }
-  };
+  }
 
   const removePhoto = (index: number) => {
     setFormData((prev) => ({
       ...prev,
       photos: prev.photos.filter((_, i) => i !== index),
-    }));
-  };
+    }))
+  }
 
   // Form submission - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
-    setIsSubmitting(true);
-    setError(null);
-    
+    setIsSubmitting(true)
+    setError(null)
+
     try {
       // Determine severity based on form data
-      const severity = formData.hasInjuries && formData.medicalAssistance === 'ambulance' ? 'critical' :
-        formData.hasInjuries ? 'high' : 
-        reportType === 'near-miss' ? 'low' : 'medium';
-      
+      const severity =
+        formData.hasInjuries && formData.medicalAssistance === 'ambulance'
+          ? 'critical'
+          : formData.hasInjuries
+            ? 'high'
+            : reportType === 'near-miss'
+              ? 'low'
+              : 'medium'
+
       // Build portal report payload
       const payload: PortalReportPayload = {
         report_type: reportType === 'complaint' ? 'complaint' : 'incident',
-        title: reportType === 'complaint' 
-          ? `Complaint - ${formData.contract} - ${formData.location}`
-          : `${reportType === 'near-miss' ? 'Near Miss' : 'Incident'} - ${formData.contract} - ${formData.location}`,
+        title:
+          reportType === 'complaint'
+            ? `Complaint - ${formData.contract} - ${formData.location}`
+            : `${reportType === 'near-miss' ? 'Near Miss' : 'Incident'} - ${formData.contract} - ${formData.location}`,
         description: formData.description,
         location: formData.location || undefined,
         severity: severity,
@@ -369,47 +380,49 @@ export default function PortalIncidentForm() {
         reporter_phone: formData.complainantContact || undefined,
         department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
         is_anonymous: false, // Portal users are identified
-      };
-      
-      const response = await submitPortalReport(payload);
-      setSubmittedRef(response.reference_number);
+      }
+
+      const response = await submitPortalReport(payload)
+      setSubmittedRef(response.reference_number)
       // Store tracking code for anonymous access if needed
       if (response.tracking_code) {
-        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
+        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code)
       }
       // Track successful submission (EXP-001 telemetry - PRIMARY SAMPLE)
-      trackExp001FormSubmitted(reportType, autosaveEnabled, hadDraftOnOpen, totalSteps, false);
+      trackExp001FormSubmitted(reportType, autosaveEnabled, hadDraftOnOpen, totalSteps, false)
       // Clear draft on successful submission (EXP-001)
       if (autosaveEnabled) {
-        clearDraft();
+        clearDraft()
       }
     } catch (error) {
-      console.error('Submission error:', error);
+      console.error('Submission error:', error)
       // Show real error - do NOT generate fake reference numbers
-      setError(error instanceof Error ? error.message : 'Failed to submit report. Please try again.');
+      setError(
+        error instanceof Error ? error.message : 'Failed to submit report. Please try again.',
+      )
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   // Step validation
   const canProceed = (): boolean => {
     switch (step) {
       case 1:
-        return !!formData.contract;
+        return !!formData.contract
       case 2:
         if (reportType === 'complaint') {
-          return !!formData.complainantName && !!formData.location;
+          return !!formData.complainantName && !!formData.location
         }
-        return formData.wasInvolved !== null && !!formData.personName && !!formData.location;
+        return formData.wasInvolved !== null && !!formData.personName && !!formData.location
       case 3:
-        return !!formData.description;
+        return !!formData.description
       case 4:
-        return true;
+        return true
       default:
-        return false;
+        return false
     }
-  };
+  }
 
   // Success screen
   if (submittedRef) {
@@ -419,29 +432,24 @@ export default function PortalIncidentForm() {
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.report_submitted_title')}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {t('portal.report_submitted_title')}
+          </h1>
           <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
             <span className="text-2xl font-mono font-bold text-primary">{submittedRef}</span>
           </div>
           <div className="flex gap-3">
-            <Button
-              onClick={() => navigate('/portal/track/' + submittedRef)}
-              className="flex-1"
-            >
+            <Button onClick={() => navigate('/portal/track/' + submittedRef)} className="flex-1">
               {t('portal.track_status')}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/portal')}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
               {t('portal.done')}
             </Button>
           </div>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -463,7 +471,9 @@ export default function PortalIncidentForm() {
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
-            onClick={() => step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)}
+            onClick={() =>
+              step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)
+            }
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -485,11 +495,15 @@ export default function PortalIncidentForm() {
             </div>
           </div>
         </div>
-        
+
         {/* Progress bar */}
         <div className="h-1 bg-border">
           <div
-            className={cn('h-full transition-all duration-300 bg-gradient-to-r', config.gradientFrom, config.gradientTo)}
+            className={cn(
+              'h-full transition-all duration-300 bg-gradient-to-r',
+              config.gradientFrom,
+              config.gradientTo,
+            )}
             style={{ width: `${(step / totalSteps) * 100}%` }}
           />
         </div>
@@ -500,7 +514,9 @@ export default function PortalIncidentForm() {
         {step === 1 && (
           <div className="space-y-6">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.contract_details')}</h1>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.contract_details')}
+              </h1>
               <p className="text-muted-foreground text-sm">{t('portal.contract_question')}</p>
             </div>
 
@@ -516,7 +532,9 @@ export default function PortalIncidentForm() {
             {formData.contract === 'other' && (
               <Input
                 value={formData.contractOther}
-                onChange={(e) => setFormData((prev) => ({ ...prev, contractOther: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, contractOther: e.target.value }))
+                }
                 placeholder={t('portal.specify_contract')}
               />
             )}
@@ -528,10 +546,14 @@ export default function PortalIncidentForm() {
           <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-foreground mb-1">
-                {reportType === 'complaint' ? t('portal.complainant_details') : t('portal.people_location')}
+                {reportType === 'complaint'
+                  ? t('portal.complainant_details')
+                  : t('portal.people_location')}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {reportType === 'complaint' ? t('portal.who_raised_complaint') : t('portal.who_involved_where')}
+                {reportType === 'complaint'
+                  ? t('portal.who_raised_complaint')
+                  : t('portal.who_involved_where')}
               </p>
             </div>
 
@@ -552,7 +574,7 @@ export default function PortalIncidentForm() {
                           'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                           formData.wasInvolved === val
                             ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-card border-border text-foreground hover:border-border-strong'
+                            : 'bg-card border-border text-foreground hover:border-border-strong',
                         )}
                       >
                         {val ? 'Yes' : 'No'}
@@ -563,14 +585,23 @@ export default function PortalIncidentForm() {
 
                 {/* Person Name */}
                 <div>
-                  <label htmlFor="portalincidentform-field-0" className="block text-sm font-medium text-foreground mb-2">
-                    {formData.wasInvolved ? t('portal.your_name') : t('portal.person_involved_name')} *
+                  <label
+                    htmlFor="portalincidentform-field-0"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {formData.wasInvolved
+                      ? t('portal.your_name')
+                      : t('portal.person_involved_name')}{' '}
+                    *
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="portalincidentform-field-0"
+                    <Input
+                      id="portalincidentform-field-0"
                       value={formData.personName}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, personName: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, personName: e.target.value }))
+                      }
                       placeholder={t('portal.full_name_placeholder')}
                       className="pl-10"
                     />
@@ -592,12 +623,20 @@ export default function PortalIncidentForm() {
               <>
                 {/* Complainant Name */}
                 <div>
-                  <label htmlFor="portalincidentform-field-1" className="block text-sm font-medium text-foreground mb-2">{t('portal.complainant_name')} *</label>
+                  <label
+                    htmlFor="portalincidentform-field-1"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('portal.complainant_name')} *
+                  </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="portalincidentform-field-1"
+                    <Input
+                      id="portalincidentform-field-1"
                       value={formData.complainantName}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, complainantName: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, complainantName: e.target.value }))
+                      }
                       placeholder={t('portal.full_name_placeholder')}
                       className="pl-10"
                     />
@@ -606,12 +645,20 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Role */}
                 <div>
-                  <label htmlFor="portalincidentform-field-2" className="block text-sm font-medium text-foreground mb-2">{t('portal.role_title_label')}</label>
+                  <label
+                    htmlFor="portalincidentform-field-2"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('portal.role_title_label')}
+                  </label>
                   <div className="relative">
                     <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="portalincidentform-field-2"
+                    <Input
+                      id="portalincidentform-field-2"
                       value={formData.complainantRole}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, complainantRole: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, complainantRole: e.target.value }))
+                      }
                       placeholder={t('portal.site_manager_placeholder')}
                       className="pl-10"
                     />
@@ -620,12 +667,20 @@ export default function PortalIncidentForm() {
 
                 {/* Complainant Contact */}
                 <div>
-                  <label htmlFor="portalincidentform-field-3" className="block text-sm font-medium text-foreground mb-2">{t('portal.contact_details')}</label>
+                  <label
+                    htmlFor="portalincidentform-field-3"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('portal.contact_details')}
+                  </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="portalincidentform-field-3"
+                    <Input
+                      id="portalincidentform-field-3"
                       value={formData.complainantContact}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, complainantContact: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, complainantContact: e.target.value }))
+                      }
                       placeholder={t('portal.phone_email_placeholder')}
                       className="pl-10"
                     />
@@ -636,14 +691,20 @@ export default function PortalIncidentForm() {
 
             {/* Location */}
             <div>
-              <label htmlFor="portalincidentform-field-4" className="block text-sm font-medium text-foreground mb-2">{t('portal.location_label')} *</label>
+              <label
+                htmlFor="portalincidentform-field-4"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.location_label')} *
+              </label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="portalincidentform-field-4"
+                <Input
+                  id="portalincidentform-field-4"
                   value={formData.location}
                   onChange={(e) => {
-                    setFormData((prev) => ({ ...prev, location: e.target.value }));
-                    setLocationError(null);
+                    setFormData((prev) => ({ ...prev, location: e.target.value }))
+                    setLocationError(null)
                   }}
                   placeholder={t('portal.where_did_occur')}
                   className="pl-10 pr-16"
@@ -663,33 +724,47 @@ export default function PortalIncidentForm() {
                   <span>{locationError || geoError}</span>
                 </div>
               )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('portal.gps_hint')}
-              </p>
+              <p className="mt-1 text-xs text-muted-foreground">{t('portal.gps_hint')}</p>
             </div>
 
             {/* Date & Time */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalincidentform-field-5" className="block text-sm font-medium text-foreground mb-2">{t('portal.date_label')}</label>
+                <label
+                  htmlFor="portalincidentform-field-5"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.date_label')}
+                </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="portalincidentform-field-5"
+                  <Input
+                    id="portalincidentform-field-5"
                     type="date"
                     value={formData.incidentDate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, incidentDate: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, incidentDate: e.target.value }))
+                    }
                     className="pl-10"
                   />
                 </div>
               </div>
               <div>
-                <label htmlFor="portalincidentform-field-6" className="block text-sm font-medium text-foreground mb-2">{t('portal.time_label')}</label>
+                <label
+                  htmlFor="portalincidentform-field-6"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.time_label')}
+                </label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="portalincidentform-field-6"
+                  <Input
+                    id="portalincidentform-field-6"
                     type="time"
                     value={formData.incidentTime}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, incidentTime: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, incidentTime: e.target.value }))
+                    }
                     className="pl-10"
                   />
                 </div>
@@ -702,17 +777,31 @@ export default function PortalIncidentForm() {
         {step === 3 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.what_happened')}</h1>
-              <p className="text-muted-foreground text-sm">{t('portal.describe_type', { type: reportType === 'complaint' ? 'complaint' : 'incident' })}</p>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.what_happened')}
+              </h1>
+              <p className="text-muted-foreground text-sm">
+                {t('portal.describe_type', {
+                  type: reportType === 'complaint' ? 'complaint' : 'incident',
+                })}
+              </p>
             </div>
 
             {/* Description */}
             <div>
-              <label htmlFor="portalincidentform-field-7" className="block text-sm font-medium text-foreground mb-2">{t('portal.description_label')} *</label>
+              <label
+                htmlFor="portalincidentform-field-7"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.description_label')} *
+              </label>
               <div className="relative">
-                <Textarea id="portalincidentform-field-7"
+                <Textarea
+                  id="portalincidentform-field-7"
                   value={formData.description}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   placeholder={t('portal.what_happened_placeholder')}
                   rows={5}
                 />
@@ -723,7 +812,9 @@ export default function PortalIncidentForm() {
                     title={isRecording ? 'Stop recording' : 'Start voice input'}
                     className={cn(
                       'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
-                      isRecording ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                      isRecording
+                        ? 'bg-destructive text-destructive-foreground animate-pulse'
+                        : 'bg-primary/10 text-primary hover:bg-primary/20',
                     )}
                   >
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -749,12 +840,20 @@ export default function PortalIncidentForm() {
 
             {/* Asset Number */}
             <div>
-              <label htmlFor="portalincidentform-field-8" className="block text-sm font-medium text-foreground mb-2">{t('portal.asset_vehicle')}</label>
+              <label
+                htmlFor="portalincidentform-field-8"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.asset_vehicle')}
+              </label>
               <div className="relative">
                 <Truck className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="portalincidentform-field-8"
+                <Input
+                  id="portalincidentform-field-8"
                   value={formData.assetNumber}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, assetNumber: e.target.value.toUpperCase() }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, assetNumber: e.target.value.toUpperCase() }))
+                  }
                   placeholder={t('portal.asset_placeholder')}
                   className="pl-10 uppercase"
                 />
@@ -763,7 +862,9 @@ export default function PortalIncidentForm() {
 
             {/* Witnesses */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_witnesses')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.any_witnesses')}
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -774,7 +875,7 @@ export default function PortalIncidentForm() {
                       'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasWitnesses === val
                         ? 'bg-primary/10 border-primary text-primary'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -785,12 +886,20 @@ export default function PortalIncidentForm() {
 
             {formData.hasWitnesses && (
               <div>
-                <label htmlFor="portalincidentform-field-9" className="block text-sm font-medium text-foreground mb-2">{t('portal.witness_names')}</label>
+                <label
+                  htmlFor="portalincidentform-field-9"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.witness_names')}
+                </label>
                 <div className="relative">
                   <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input id="portalincidentform-field-9"
+                  <Input
+                    id="portalincidentform-field-9"
                     value={formData.witnessNames}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, witnessNames: e.target.value }))
+                    }
                     placeholder={t('portal.witness_placeholder')}
                     className="pl-10"
                   />
@@ -804,13 +913,17 @@ export default function PortalIncidentForm() {
         {step === 4 && reportType !== 'complaint' && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.injuries_evidence')}</h1>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.injuries_evidence')}
+              </h1>
               <p className="text-muted-foreground text-sm">{t('portal.injuries_subtitle')}</p>
             </div>
 
             {/* Injuries */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_injuries')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.any_injuries')}
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -820,8 +933,10 @@ export default function PortalIncidentForm() {
                     className={cn(
                       'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasInjuries === val
-                        ? val ? 'bg-destructive/10 border-destructive text-destructive' : 'bg-success/10 border-success text-success'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        ? val
+                          ? 'bg-destructive/10 border-destructive text-destructive'
+                          : 'bg-success/10 border-success text-success'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -851,7 +966,9 @@ export default function PortalIncidentForm() {
 
             {/* Photos */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.photos')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.photos')}
+              </span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
@@ -870,10 +987,14 @@ export default function PortalIncidentForm() {
                     </button>
                   </div>
                 ))}
-                <label htmlFor="portalincidentform-field-10" className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
+                <label
+                  htmlFor="portalincidentform-field-10"
+                  className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors"
+                >
                   <Camera className="w-6 h-6 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground mt-1">Add</span>
-                  <input id="portalincidentform-field-10"
+                  <input
+                    id="portalincidentform-field-10"
                     type="file"
                     accept="image/*"
                     capture="environment"
@@ -896,11 +1017,13 @@ export default function PortalIncidentForm() {
             <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
               <AlertIcon className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">{t('portal.submission_failed')}</p>
+                <p className="text-sm font-medium text-destructive">
+                  {t('portal.submission_failed')}
+                </p>
                 <p className="text-sm text-destructive/80">{error}</p>
               </div>
-              <button 
-                onClick={() => setError(null)} 
+              <button
+                onClick={() => setError(null)}
                 className="ml-auto text-destructive/60 hover:text-destructive"
               >
                 <X className="w-4 h-4" />
@@ -910,15 +1033,12 @@ export default function PortalIncidentForm() {
         </div>
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
-            <Button
-              variant="outline"
-              onClick={() => setStep((s) => (s - 1) as Step)}
-            >
+            <Button variant="outline" onClick={() => setStep((s) => (s - 1) as Step)}>
               <ChevronLeft className="w-5 h-5" />
               {t('back')}
             </Button>
           )}
-          
+
           {step < totalSteps ? (
             <Button
               onClick={() => setStep((s) => (s + 1) as Step)}
@@ -950,5 +1070,5 @@ export default function PortalIncidentForm() {
         </div>
       </div>
     </div>
-  );
+  )
 }

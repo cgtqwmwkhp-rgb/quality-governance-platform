@@ -1,6 +1,6 @@
 /**
  * NotificationCenter - Real-time notification dropdown
- * 
+ *
  * Features:
  * - Real-time notification updates via WebSocket
  * - Unread badge count
@@ -9,9 +9,9 @@
  * - Quick actions per notification
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { trackError } from '../../utils/errorTracker';
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { trackError } from '../../utils/errorTracker'
 import {
   Bell,
   CheckCheck,
@@ -26,62 +26,62 @@ import {
   User,
   ChevronRight,
   Settings,
-} from 'lucide-react';
+} from 'lucide-react'
 
 interface Notification {
-  id: number;
-  type: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  title: string;
-  message: string;
-  entity_type?: string;
-  entity_id?: string;
-  action_url?: string;
-  sender_id?: number;
-  sender_name?: string;
-  is_read: boolean;
-  created_at: string;
+  id: number
+  type: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  message: string
+  entity_type?: string
+  entity_id?: string
+  action_url?: string
+  sender_id?: number
+  sender_name?: string
+  is_read: boolean
+  created_at: string
 }
 
 interface NotificationCenterProps {
-  className?: string;
+  className?: string
 }
 
 const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   // Fetch notifications from API
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
-        const response = await fetch('/api/v1/notifications/');
+        const response = await fetch('/api/v1/notifications/')
         if (response.ok) {
-          const data: Notification[] = await response.json();
-          setNotifications(data);
-          setUnreadCount(data.filter(n => !n.is_read).length);
+          const data: Notification[] = await response.json()
+          setNotifications(data)
+          setUnreadCount(data.filter((n) => !n.is_read).length)
         }
       } catch (err) {
-        trackError(err, { component: 'NotificationCenter', action: 'fetchNotifications' });
+        trackError(err, { component: 'NotificationCenter', action: 'fetchNotifications' })
       }
-    };
-    fetchNotifications();
-  }, []);
+    }
+    fetchNotifications()
+  }, [])
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+        setIsOpen(false)
       }
-    };
+    }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -96,88 +96,89 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
     //   }
     // };
     // return () => ws.close();
-  }, []);
+  }, [])
 
   const getNotificationIcon = (type: string, priority: string) => {
-    const iconClass = priority === 'critical' 
-      ? 'text-red-500 animate-pulse' 
-      : priority === 'high' 
-        ? 'text-orange-500' 
-        : 'text-gray-400';
+    const iconClass =
+      priority === 'critical'
+        ? 'text-red-500 animate-pulse'
+        : priority === 'high'
+          ? 'text-orange-500'
+          : 'text-gray-400'
 
     switch (type) {
       case 'sos_alert':
-        return <Siren className={`w-5 h-5 ${iconClass}`} />;
+        return <Siren className={`w-5 h-5 ${iconClass}`} />
       case 'riddor_incident':
-        return <AlertTriangle className={`w-5 h-5 ${iconClass}`} />;
+        return <AlertTriangle className={`w-5 h-5 ${iconClass}`} />
       case 'mention':
-        return <MessageSquare className={`w-5 h-5 ${iconClass}`} />;
+        return <MessageSquare className={`w-5 h-5 ${iconClass}`} />
       case 'assignment':
-        return <ClipboardList className={`w-5 h-5 ${iconClass}`} />;
+        return <ClipboardList className={`w-5 h-5 ${iconClass}`} />
       case 'action_due_soon':
       case 'action_overdue':
-        return <Calendar className={`w-5 h-5 ${iconClass}`} />;
+        return <Calendar className={`w-5 h-5 ${iconClass}`} />
       case 'audit_completed':
-        return <Shield className={`w-5 h-5 ${iconClass}`} />;
+        return <Shield className={`w-5 h-5 ${iconClass}`} />
       case 'approval_requested':
-        return <FileText className={`w-5 h-5 ${iconClass}`} />;
+        return <FileText className={`w-5 h-5 ${iconClass}`} />
       default:
-        return <Bell className={`w-5 h-5 ${iconClass}`} />;
+        return <Bell className={`w-5 h-5 ${iconClass}`} />
     }
-  };
+  }
 
   const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+    const date = new Date(dateString)
+    const now = new Date()
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-    if (seconds < 60) return 'Just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 172800) return 'Yesterday';
-    return date.toLocaleDateString();
-  };
+    if (seconds < 60) return 'Just now'
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+    if (seconds < 172800) return 'Yesterday'
+    return date.toLocaleDateString()
+  }
 
   const handleNotificationClick = (notification: Notification) => {
     // Mark as read
-    setNotifications(prev =>
-      prev.map(n => (n.id === notification.id ? { ...n, is_read: true } : n))
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n)),
+    )
+    setUnreadCount((prev) => Math.max(0, prev - 1))
 
     // Navigate to action URL
     if (notification.action_url) {
-      navigate(notification.action_url);
-      setIsOpen(false);
+      navigate(notification.action_url)
+      setIsOpen(false)
     }
-  };
+  }
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    setUnreadCount(0);
-  };
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+    setUnreadCount(0)
+  }
 
   const deleteNotification = (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    const notification = notifications.find(n => n.id === id);
+    e.stopPropagation()
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+    const notification = notifications.find((n) => n.id === id)
     if (notification && !notification.is_read) {
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setUnreadCount((prev) => Math.max(0, prev - 1))
     }
-  };
+  }
 
   const getPriorityBorder = (priority: string) => {
     switch (priority) {
       case 'critical':
-        return 'border-l-4 border-l-red-500';
+        return 'border-l-4 border-l-red-500'
       case 'high':
-        return 'border-l-4 border-l-orange-500';
+        return 'border-l-4 border-l-orange-500'
       case 'medium':
-        return 'border-l-4 border-l-yellow-500';
+        return 'border-l-4 border-l-yellow-500'
       default:
-        return 'border-l-4 border-l-gray-500';
+        return 'border-l-4 border-l-gray-500'
     }
-  };
+  }
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -244,7 +245,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                     role="button"
                     tabIndex={0}
                     onClick={() => handleNotificationClick(notification)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(notification); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(notification)
+                    }}
                     className={`
                       p-4 cursor-pointer transition-all duration-200 
                       hover:bg-slate-700/50 group
@@ -261,7 +264,9 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
                       {/* Content */}
                       <div className="flex-grow min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className={`text-sm font-medium truncate ${!notification.is_read ? 'text-white' : 'text-gray-300'}`}>
+                          <h4
+                            className={`text-sm font-medium truncate ${!notification.is_read ? 'text-white' : 'text-gray-300'}`}
+                          >
                             {notification.title}
                           </h4>
                           <span className="text-xs text-gray-500 whitespace-nowrap">
@@ -303,8 +308,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
           <div className="px-4 py-3 bg-slate-900 border-t border-slate-700">
             <button
               onClick={() => {
-                navigate('/notifications');
-                setIsOpen(false);
+                navigate('/notifications')
+                setIsOpen(false)
               }}
               className="w-full text-center text-sm text-emerald-400 hover:text-emerald-300 flex items-center justify-center gap-1"
             >
@@ -315,7 +320,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({ className = '' 
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default NotificationCenter;
+export default NotificationCenter

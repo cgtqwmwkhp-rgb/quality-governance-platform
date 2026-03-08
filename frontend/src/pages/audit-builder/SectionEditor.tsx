@@ -1,23 +1,16 @@
-import { useTranslation } from 'react-i18next';
-import {
-  GripVertical,
-  ChevronDown,
-  ChevronRight,
-  ListChecks,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-import type { Section, Question } from './types';
-import QuestionEditor from './QuestionEditor';
+import { useTranslation } from 'react-i18next'
+import { GripVertical, ChevronDown, ChevronRight, ListChecks, Plus, Trash2 } from 'lucide-react'
+import type { Section, Question } from './types'
+import QuestionEditor from './QuestionEditor'
 
 export interface SectionEditorProps {
-  section: Section;
-  onUpdate: (updates: Partial<Section>) => void;
-  onDelete: () => void;
-  onAddQuestion: () => void;
-  onUpdateQuestion: (questionId: string, updates: Partial<Question>) => void;
-  onDeleteQuestion: (questionId: string) => void;
-  onDuplicateQuestion: (questionId: string) => void;
+  section: Section
+  onUpdate: (updates: Partial<Section>) => void
+  onDelete: () => void
+  onAddQuestion: () => void
+  onUpdateQuestion: (questionId: string, updates: Partial<Question>) => void
+  onDeleteQuestion: (questionId: string) => void
+  onDuplicateQuestion: (questionId: string) => void
 }
 
 export default function SectionEditor({
@@ -29,13 +22,11 @@ export default function SectionEditor({
   onDeleteQuestion,
   onDuplicateQuestion,
 }: SectionEditorProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   return (
     <div className="bg-card/50 border border-border rounded-2xl overflow-hidden">
-      <div
-        className={`bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}
-      >
+      <div className={`bg-gradient-to-r ${section.color || 'from-blue-500 to-cyan-500'} p-0.5`}>
         <div className="bg-card p-4">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-secondary rounded cursor-grab hover:bg-muted">
@@ -138,5 +129,5 @@ export default function SectionEditor({
         </div>
       )}
     </div>
-  );
+  )
 }

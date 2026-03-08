@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
 import { trackError } from '../utils/errorTracker'
+import { queueForSync } from '../lib/syncService'
+import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
@@ -62,13 +64,29 @@ export default function Incidents() {
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
     setCreateError(null)
+
+    if (!navigator.onLine) {
+      const payload = {
+        ...formData,
+        incident_date: new Date(formData.incident_date).toISOString(),
+        reported_date: new Date(formData.reported_date).toISOString(),
+      }
+      await queueForSync('/api/v1/incidents', 'POST', payload)
+      toast.success(t('incidents.saved_offline', 'Saved for sync when back online'))
+      setShowModal(false)
+      setCreating(false)
+      return
+    }
+
     try {
       const response = await incidentsApi.create({
         ...formData,
@@ -76,7 +94,7 @@ export default function Incidents() {
         reported_date: new Date(formData.reported_date).toISOString(),
       })
       if (response.data) {
-        setIncidents(prev => [response.data, ...prev])
+        setIncidents((prev) => [response.data, ...prev])
       }
       setShowModal(false)
       setFormData({
@@ -97,40 +115,58 @@ export default function Incidents() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'injury': return '🩹'
-      case 'near_miss': return '⚠️'
-      case 'hazard': return '☢️'
-      case 'quality': return '✓'
-      case 'security': return '🔒'
-      case 'environmental': return '🌿'
-      default: return '📋'
+      case 'injury':
+        return '🩹'
+      case 'near_miss':
+        return '⚠️'
+      case 'hazard':
+        return '☢️'
+      case 'quality':
+        return '✓'
+      case 'security':
+        return '🔒'
+      case 'environmental':
+        return '🌿'
+      default:
+        return '📋'
     }
   }
 
   const getSeverityVariant = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'critical'
-      case 'high': return 'high'
-      case 'medium': return 'medium'
-      case 'low': return 'low'
-      default: return 'secondary'
+      case 'critical':
+        return 'critical'
+      case 'high':
+        return 'high'
+      case 'medium':
+        return 'medium'
+      case 'low':
+        return 'low'
+      default:
+        return 'secondary'
     }
   }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'closed': return 'resolved'
-      case 'reported': return 'submitted'
-      case 'under_investigation': return 'in-progress'
-      case 'pending_actions': return 'acknowledged'
-      default: return 'secondary'
+      case 'closed':
+        return 'resolved'
+      case 'reported':
+        return 'submitted'
+      case 'under_investigation':
+        return 'in-progress'
+      case 'pending_actions':
+        return 'acknowledged'
+      default:
+        return 'secondary'
     }
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
   const filteredIncidents = incidents.filter(
-    i => i.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-         i.reference_number.toLowerCase().includes(deferredSearch.toLowerCase())
+    (i) =>
+      i.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      i.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()),
   )
 
   if (loading) {
@@ -142,7 +178,11 @@ export default function Incidents() {
             <p className="text-muted-foreground mt-1">{t('incidents.subtitle')}</p>
           </div>
         </div>
-        <Card><CardContent className="p-6"><TableSkeleton rows={6} columns={6} /></CardContent></Card>
+        <Card>
+          <CardContent className="p-6">
+            <TableSkeleton rows={6} columns={6} />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -185,12 +225,24 @@ export default function Incidents() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.reference')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.title')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.type')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.severity')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.status')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('incidents.table.date')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.reference')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.title')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.type')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.severity')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.status')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('incidents.table.date')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -200,7 +252,10 @@ export default function Incidents() {
                       <EmptyState
                         icon={<AlertTriangle className="w-6 h-6 text-muted-foreground" />}
                         title={t('incidents.empty.title', 'No incidents found')}
-                        description={t('incidents.empty.subtitle', 'Create your first incident report to get started.')}
+                        description={t(
+                          'incidents.empty.subtitle',
+                          'Create your first incident report to get started.',
+                        )}
                         action={
                           <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
                             <Plus size={16} /> {t('incidents.new', 'Report Incident')}
@@ -219,13 +274,22 @@ export default function Incidents() {
                       onClick={() => navigate(`/incidents/${incident.id}`)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/incidents/${incident.id}`); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/incidents/${incident.id}`)
+                        }
+                      }}
                     >
                       <td className="px-6 py-4">
-                        <span className="font-mono text-sm text-primary">{incident.reference_number}</span>
+                        <span className="font-mono text-sm text-primary">
+                          {incident.reference_number}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-foreground truncate max-w-xs">{incident.title}</p>
+                        <p className="text-sm font-medium text-foreground truncate max-w-xs">
+                          {incident.title}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
@@ -264,11 +328,19 @@ export default function Incidents() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             {createError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
+                {createError}
+              </div>
             )}
             <div>
-              <label htmlFor="incidents-field-0" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.title')} <span className="text-destructive">*</span></label>
-              <Input id="incidents-field-0"
+              <label
+                htmlFor="incidents-field-0"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('incidents.form.title')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="incidents-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -279,8 +351,14 @@ export default function Incidents() {
             </div>
 
             <div>
-              <label htmlFor="incidents-field-1" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.description')} <span className="text-destructive">*</span></label>
-              <Textarea id="incidents-field-1"
+              <label
+                htmlFor="incidents-field-1"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('incidents.form.description')} <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                id="incidents-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -292,7 +370,12 @@ export default function Incidents() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="incidents-field-2" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.type')}</label>
+                <label
+                  htmlFor="incidents-field-2"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('incidents.form.type')}
+                </label>
                 <Select
                   value={formData.incident_type}
                   onValueChange={(value) => setFormData({ ...formData, incident_type: value })}
@@ -304,8 +387,12 @@ export default function Incidents() {
                     <SelectItem value="injury">{t('incidents.type.injury')}</SelectItem>
                     <SelectItem value="near_miss">{t('incidents.type.near_miss')}</SelectItem>
                     <SelectItem value="hazard">{t('incidents.type.hazard')}</SelectItem>
-                    <SelectItem value="property_damage">{t('incidents.type.property_damage')}</SelectItem>
-                    <SelectItem value="environmental">{t('incidents.type.environmental')}</SelectItem>
+                    <SelectItem value="property_damage">
+                      {t('incidents.type.property_damage')}
+                    </SelectItem>
+                    <SelectItem value="environmental">
+                      {t('incidents.type.environmental')}
+                    </SelectItem>
                     <SelectItem value="security">{t('incidents.type.security')}</SelectItem>
                     <SelectItem value="quality">{t('incidents.type.quality')}</SelectItem>
                     <SelectItem value="other">{t('incidents.type.other')}</SelectItem>
@@ -314,7 +401,12 @@ export default function Incidents() {
               </div>
 
               <div>
-                <label htmlFor="incidents-field-3" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.severity')}</label>
+                <label
+                  htmlFor="incidents-field-3"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('incidents.form.severity')}
+                </label>
                 <Select
                   value={formData.severity}
                   onValueChange={(value) => setFormData({ ...formData, severity: value })}
@@ -334,8 +426,14 @@ export default function Incidents() {
             </div>
 
             <div>
-              <label htmlFor="incidents-field-4" className="block text-sm font-medium text-foreground mb-2">{t('incidents.form.incident_date')} <span className="text-destructive">*</span></label>
-              <Input id="incidents-field-4"
+              <label
+                htmlFor="incidents-field-4"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('incidents.form.incident_date')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="incidents-field-4"
                 type="datetime-local"
                 required
                 aria-required="true"
@@ -345,17 +443,10 @@ export default function Incidents() {
             </div>
 
             <DialogFooter className="gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowModal(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                 {t('cancel')}
               </Button>
-              <Button
-                type="submit"
-                disabled={creating}
-              >
+              <Button type="submit" disabled={creating}>
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

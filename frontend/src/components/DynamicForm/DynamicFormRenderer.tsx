@@ -10,9 +10,9 @@
  * - Offline-capable with sync
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { trackError } from '../../utils/errorTracker';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { trackError } from '../../utils/errorTracker'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ChevronRight,
   ChevronLeft,
@@ -26,108 +26,123 @@ import {
   AlertCircle,
   Info,
   Upload,
-} from 'lucide-react';
-import { Card } from '../ui/Card';
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Textarea } from '../ui/Textarea';
-import { cn } from '../../helpers/utils';
-import { useVoiceToText } from '../../hooks/useVoiceToText';
-import { useGeolocation } from '../../hooks/useGeolocation';
-import type { FormTemplate, FormField } from '../../services/api';
-import FuzzySearchDropdown from '../FuzzySearchDropdown';
-import BodyInjurySelector, { InjurySelection } from '../BodyInjurySelector';
+} from 'lucide-react'
+import { Card } from '../ui/Card'
+import { Button } from '../ui/Button'
+import { Input } from '../ui/Input'
+import { Textarea } from '../ui/Textarea'
+import { cn } from '../../helpers/utils'
+import { useVoiceToText } from '../../hooks/useVoiceToText'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import type { FormTemplate, FormField } from '../../services/api'
+import FuzzySearchDropdown from '../FuzzySearchDropdown'
+import BodyInjurySelector, { InjurySelection } from '../BodyInjurySelector'
 
 // ==================== Types ====================
 
 export interface DynamicFormData {
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 interface DynamicFormRendererProps {
-  template: FormTemplate;
-  initialData?: DynamicFormData;
-  onSubmit: (data: DynamicFormData) => Promise<{ reference_number: string }>;
-  onCancel?: () => void;
-  contractOptions?: Array<{ value: string; label: string; sublabel?: string }>;
-  roleOptions?: Array<{ value: string; label: string }>;
+  template: FormTemplate
+  initialData?: DynamicFormData
+  onSubmit: (data: DynamicFormData) => Promise<{ reference_number: string }>
+  onCancel?: () => void
+  contractOptions?: Array<{ value: string; label: string; sublabel?: string }>
+  roleOptions?: Array<{ value: string; label: string }>
 }
 
 // ==================== Auto-save Hook ====================
 
 function useAutoSave(formSlug: string, data: DynamicFormData, enabled: boolean) {
-  const storageKey = `draft_${formSlug}`;
+  const storageKey = `draft_${formSlug}`
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) return
 
     const timer = setTimeout(() => {
-      localStorage.setItem(storageKey, JSON.stringify({
-        data,
-        savedAt: new Date().toISOString(),
-      }));
-    }, 2000); // Debounce 2 seconds
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          data,
+          savedAt: new Date().toISOString(),
+        }),
+      )
+    }, 2000) // Debounce 2 seconds
 
-    return () => clearTimeout(timer);
-  }, [data, storageKey, enabled]);
+    return () => clearTimeout(timer)
+  }, [data, storageKey, enabled])
 
   const loadDraft = useCallback((): DynamicFormData | null => {
     try {
-      const saved = localStorage.getItem(storageKey);
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
-        const { data } = JSON.parse(saved);
-        return data;
+        const { data } = JSON.parse(saved)
+        return data
       }
     } catch {
       // Ignore parse errors
     }
-    return null;
-  }, [storageKey]);
+    return null
+  }, [storageKey])
 
   const clearDraft = useCallback(() => {
-    localStorage.removeItem(storageKey);
-  }, [storageKey]);
+    localStorage.removeItem(storageKey)
+  }, [storageKey])
 
   const hasDraft = useCallback((): boolean => {
-    return !!localStorage.getItem(storageKey);
-  }, [storageKey]);
+    return !!localStorage.getItem(storageKey)
+  }, [storageKey])
 
-  return { loadDraft, clearDraft, hasDraft };
+  return { loadDraft, clearDraft, hasDraft }
 }
 
 // ==================== Field Renderer ====================
 
 interface FieldRendererProps {
-  field: FormField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-  error?: string;
-  contractOptions?: Array<{ value: string; label: string; sublabel?: string }>;
-  roleOptions?: Array<{ value: string; label: string }>;
+  field: FormField
+  value: unknown
+  onChange: (value: unknown) => void
+  error?: string
+  contractOptions?: Array<{ value: string; label: string; sublabel?: string }>
+  roleOptions?: Array<{ value: string; label: string }>
 }
 
-function FieldRenderer({ field, value, onChange, error, contractOptions, roleOptions }: FieldRendererProps) {
-  const { isListening, isSupported: voiceSupported, toggleListening } = useVoiceToText({
+function FieldRenderer({
+  field,
+  value,
+  onChange,
+  error,
+  contractOptions,
+  roleOptions,
+}: FieldRendererProps) {
+  const {
+    isListening,
+    isSupported: voiceSupported,
+    toggleListening,
+  } = useVoiceToText({
     onResult: (transcript) => {
-      const currentValue = (value as string) || '';
-      onChange(currentValue + (currentValue ? ' ' : '') + transcript);
+      const currentValue = (value as string) || ''
+      onChange(currentValue + (currentValue ? ' ' : '') + transcript)
     },
-  });
+  })
 
-  const { isLoading: geoLoading, getLocationString, error: geoError } = useGeolocation();
+  const { isLoading: geoLoading, getLocationString, error: geoError } = useGeolocation()
 
   const handleLocationDetect = async () => {
-    const location = await getLocationString();
+    const location = await getLocationString()
     if (location) {
-      onChange(location);
+      onChange(location)
     }
-  };
+  }
 
-  const widthClass = {
-    full: 'col-span-2',
-    half: 'col-span-1',
-    third: 'col-span-1 md:col-span-1',
-  }[field.width] || 'col-span-2';
+  const widthClass =
+    {
+      full: 'col-span-2',
+      half: 'col-span-1',
+      third: 'col-span-1 md:col-span-1',
+    }[field.width] || 'col-span-2'
 
   // Handle different field types
   switch (field.field_type) {
@@ -155,7 +170,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                 onClick={toggleListening}
                 className={cn(
                   'absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full transition-colors',
-                  isListening ? 'bg-destructive text-white animate-pulse' : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                  isListening
+                    ? 'bg-destructive text-white animate-pulse'
+                    : 'bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary',
                 )}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -175,7 +192,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             </p>
           )}
         </div>
-      );
+      )
 
     case 'textarea':
     case 'rich_text':
@@ -199,7 +216,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                 onClick={toggleListening}
                 className={cn(
                   'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
-                  isListening ? 'bg-destructive text-white animate-pulse' : 'bg-primary/10 text-primary hover:bg-primary/20'
+                  isListening
+                    ? 'bg-destructive text-white animate-pulse'
+                    : 'bg-primary/10 text-primary hover:bg-primary/20',
                 )}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -222,7 +241,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             </p>
           )}
         </div>
-      );
+      )
 
     case 'date':
       return (
@@ -237,11 +256,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
           />
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'time':
       return (
@@ -256,11 +273,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
           />
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'datetime':
       return (
@@ -275,19 +290,18 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             onChange={(e) => onChange(e.target.value)}
             className={cn(error && 'border-destructive')}
           />
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'select':
       // Use contract options if field name contains 'contract'
       const selectOptions = field.name.toLowerCase().includes('contract')
-        ? contractOptions?.map(c => ({ value: c.value, label: c.label, sublabel: c.sublabel })) || []
+        ? contractOptions?.map((c) => ({ value: c.value, label: c.label, sublabel: c.sublabel })) ||
+          []
         : field.name.toLowerCase().includes('role')
-        ? roleOptions?.map(r => ({ value: r.value, label: r.label })) || []
-        : field.options || [];
+          ? roleOptions?.map((r) => ({ value: r.value, label: r.label })) || []
+          : field.options || []
 
       return (
         <div className={widthClass}>
@@ -298,11 +312,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             onChange={(v) => onChange(v)}
             placeholder={field.placeholder || 'Select...'}
           />
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'radio':
     case 'toggle':
@@ -313,7 +325,12 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             {field.is_required && <span className="text-destructive ml-1">*</span>}
           </label>
           <div className="flex gap-3">
-            {(field.options || [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]).map((option) => (
+            {(
+              field.options || [
+                { value: 'yes', label: 'Yes' },
+                { value: 'no', label: 'No' },
+              ]
+            ).map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -322,22 +339,20 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                   'flex-1 py-3 px-4 rounded-xl border-2 font-medium transition-all',
                   value === option.value
                     ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                    : 'border-border bg-card text-muted-foreground hover:border-primary/50',
                 )}
               >
                 {option.label}
               </button>
             ))}
           </div>
-          {error && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'checkbox':
     case 'multi_select':
-      const selectedValues = (value as string[]) || [];
+      const selectedValues = (value as string[]) || []
       return (
         <div className={widthClass}>
           <label className="block text-sm font-medium text-foreground mb-3">
@@ -352,7 +367,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                   'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
                   selectedValues.includes(option.value)
                     ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-primary/50'
+                    : 'border-border hover:border-primary/50',
                 )}
               >
                 <input
@@ -360,9 +375,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                   checked={selectedValues.includes(option.value)}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      onChange([...selectedValues, option.value]);
+                      onChange([...selectedValues, option.value])
                     } else {
-                      onChange(selectedValues.filter((v) => v !== option.value));
+                      onChange(selectedValues.filter((v) => v !== option.value))
                     }
                   }}
                   className="rounded border-border text-primary focus:ring-primary"
@@ -371,11 +386,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
               </label>
             ))}
           </div>
-          {error && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'location':
       return (
@@ -401,17 +414,13 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
               {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'GPS'}
             </button>
           </div>
-          {geoError && (
-            <p className="mt-1 text-xs text-destructive">{geoError}</p>
-          )}
+          {geoError && <p className="mt-1 text-xs text-destructive">{geoError}</p>}
           {field.help_text && !geoError && (
             <p className="mt-1 text-xs text-muted-foreground">{field.help_text}</p>
           )}
-          {error && (
-            <p className="mt-1 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'body_map':
       return (
@@ -424,15 +433,13 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             injuries={(value as InjurySelection[]) || []}
             onChange={(injuries) => onChange(injuries)}
           />
-          {error && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'file':
     case 'image':
-      const files = (value as File[]) || [];
+      const files = (value as File[]) || []
       return (
         <div className={widthClass}>
           <label className="block text-sm font-medium text-foreground mb-2">
@@ -451,7 +458,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                 multiple
                 onChange={(e) => {
                   if (e.target.files) {
-                    onChange([...files, ...Array.from(e.target.files)]);
+                    onChange([...files, ...Array.from(e.target.files)])
                   }
                 }}
                 className="hidden"
@@ -479,11 +486,9 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
               </div>
             )}
           </div>
-          {error && (
-            <p className="mt-2 text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
         </div>
-      );
+      )
 
     case 'signature':
       // Simplified signature - in production would use a canvas
@@ -497,10 +502,10 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             <p className="text-sm text-muted-foreground">Signature capture coming soon</p>
           </div>
         </div>
-      );
+      )
 
     case 'rating':
-      const rating = (value as number) || 0;
+      const rating = (value as number) || 0
       return (
         <div className={widthClass}>
           <label className="block text-sm font-medium text-foreground mb-2">
@@ -515,7 +520,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
                 onClick={() => onChange(star)}
                 className={cn(
                   'w-10 h-10 text-2xl transition-transform hover:scale-110',
-                  star <= rating ? 'text-yellow-500' : 'text-muted'
+                  star <= rating ? 'text-yellow-500' : 'text-muted',
                 )}
               >
                 ★
@@ -523,7 +528,7 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             ))}
           </div>
         </div>
-      );
+      )
 
     case 'heading':
       return (
@@ -533,35 +538,33 @@ function FieldRenderer({ field, value, onChange, error, contractOptions, roleOpt
             <p className="text-sm text-muted-foreground mt-1">{field.help_text}</p>
           )}
         </div>
-      );
+      )
 
     case 'paragraph':
       return (
         <div className="col-span-2">
           <p className="text-sm text-muted-foreground">{field.label}</p>
         </div>
-      );
+      )
 
     case 'divider':
       return (
         <div className="col-span-2">
           <hr className="border-border" />
         </div>
-      );
+      )
 
     default:
       return (
         <div className={widthClass}>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            {field.label}
-          </label>
+          <label className="block text-sm font-medium text-foreground mb-2">{field.label}</label>
           <Input
             value={(value as string) || ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder}
           />
         </div>
-      );
+      )
   }
 }
 
@@ -575,130 +578,137 @@ export default function DynamicFormRenderer({
   contractOptions = [],
   roleOptions = [],
 }: DynamicFormRendererProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState<DynamicFormData>(initialData);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-  const [showDraftPrompt, setShowDraftPrompt] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0)
+  const [formData, setFormData] = useState<DynamicFormData>(initialData)
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submittedRef, setSubmittedRef] = useState<string | null>(null)
+  const [showDraftPrompt, setShowDraftPrompt] = useState(false)
 
   const { loadDraft, clearDraft, hasDraft } = useAutoSave(
     template.slug,
     formData,
-    template.allow_drafts
-  );
+    template.allow_drafts,
+  )
 
-  const steps = useMemo(() => template.steps.sort((a, b) => a.order - b.order), [template.steps]);
-  const currentStepData = steps[currentStep];
-  const isLastStep = currentStep === steps.length - 1;
-  const progress = ((currentStep + 1) / steps.length) * 100;
+  const steps = useMemo(() => template.steps.sort((a, b) => a.order - b.order), [template.steps])
+  const currentStepData = steps[currentStep]
+  const isLastStep = currentStep === steps.length - 1
+  const progress = ((currentStep + 1) / steps.length) * 100
 
   // Check for draft on mount
   useEffect(() => {
     if (template.allow_drafts && hasDraft() && Object.keys(initialData).length === 0) {
-      setShowDraftPrompt(true);
+      setShowDraftPrompt(true)
     }
-  }, [template.allow_drafts, hasDraft, initialData]);
+  }, [template.allow_drafts, hasDraft, initialData])
 
   const handleLoadDraft = () => {
-    const draft = loadDraft();
+    const draft = loadDraft()
     if (draft) {
-      setFormData(draft);
+      setFormData(draft)
     }
-    setShowDraftPrompt(false);
-  };
+    setShowDraftPrompt(false)
+  }
 
   const handleDiscardDraft = () => {
-    clearDraft();
-    setShowDraftPrompt(false);
-  };
+    clearDraft()
+    setShowDraftPrompt(false)
+  }
 
-  const updateField = useCallback((name: string, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    // Clear error when field is updated
-    if (errors[name]) {
-      setErrors((prev) => {
-        const next = { ...prev };
-        delete next[name];
-        return next;
-      });
-    }
-  }, [errors]);
+  const updateField = useCallback(
+    (name: string, value: unknown) => {
+      setFormData((prev) => ({ ...prev, [name]: value }))
+      // Clear error when field is updated
+      if (errors[name]) {
+        setErrors((prev) => {
+          const next = { ...prev }
+          delete next[name]
+          return next
+        })
+      }
+    },
+    [errors],
+  )
 
   const validateStep = useCallback((): boolean => {
-    const stepErrors: Record<string, string> = {};
+    const stepErrors: Record<string, string> = {}
 
     for (const field of currentStepData.fields) {
-      const value = formData[field.name];
+      const value = formData[field.name]
 
       // Required validation
       if (field.is_required) {
-        if (value === undefined || value === null || value === '' || 
-            (Array.isArray(value) && value.length === 0)) {
-          stepErrors[field.name] = `${field.label} is required`;
-          continue;
+        if (
+          value === undefined ||
+          value === null ||
+          value === '' ||
+          (Array.isArray(value) && value.length === 0)
+        ) {
+          stepErrors[field.name] = `${field.label} is required`
+          continue
         }
       }
 
       // Skip other validations if field is empty and not required
-      if (!value) continue;
+      if (!value) continue
 
       // Min/max length for strings
       if (typeof value === 'string') {
         if (field.min_length && value.length < field.min_length) {
-          stepErrors[field.name] = `Minimum ${field.min_length} characters required`;
+          stepErrors[field.name] = `Minimum ${field.min_length} characters required`
         }
         if (field.max_length && value.length > field.max_length) {
-          stepErrors[field.name] = `Maximum ${field.max_length} characters allowed`;
+          stepErrors[field.name] = `Maximum ${field.max_length} characters allowed`
         }
       }
 
       // Pattern validation
       if (field.pattern && typeof value === 'string') {
-        const regex = new RegExp(field.pattern);
+        const regex = new RegExp(field.pattern)
         if (!regex.test(value)) {
-          stepErrors[field.name] = `Invalid format`;
+          stepErrors[field.name] = `Invalid format`
         }
       }
 
       // Email validation
       if (field.field_type === 'email' && typeof value === 'string') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(value)) {
-          stepErrors[field.name] = 'Please enter a valid email address';
+          stepErrors[field.name] = 'Please enter a valid email address'
         }
       }
     }
 
-    setErrors(stepErrors);
-    return Object.keys(stepErrors).length === 0;
-  }, [currentStepData, formData]);
+    setErrors(stepErrors)
+    return Object.keys(stepErrors).length === 0
+  }, [currentStepData, formData])
 
   const handleNext = () => {
     if (validateStep()) {
-      setCurrentStep((prev) => prev + 1);
+      setCurrentStep((prev) => prev + 1)
     }
-  };
+  }
 
   const handleBack = () => {
-    setCurrentStep((prev) => prev - 1);
-  };
+    setCurrentStep((prev) => prev - 1)
+  }
 
   const handleSubmit = async () => {
-    if (!validateStep()) return;
+    if (!validateStep()) return
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
-      const result = await onSubmit(formData);
-      clearDraft();
-      setSubmittedRef(result.reference_number);
+      const result = await onSubmit(formData)
+      clearDraft()
+      setSubmittedRef(result.reference_number)
     } catch (error) {
-      trackError(error, { component: 'DynamicFormRenderer', action: 'handleSubmit' });
-      setErrors({ _form: 'Submission failed. Please try again.' });
+      trackError(error, { component: 'DynamicFormRenderer', action: 'handleSubmit' })
+      setErrors({ _form: 'Submission failed. Please try again.' })
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   // Success screen
   if (submittedRef) {
@@ -723,7 +733,7 @@ export default function DynamicFormRenderer({
           </Button>
         )}
       </motion.div>
-    );
+    )
   }
 
   return (
@@ -781,7 +791,7 @@ export default function DynamicFormRenderer({
                 'flex items-center gap-2 text-xs font-medium transition-colors',
                 index === currentStep && 'text-primary',
                 index < currentStep && 'text-primary cursor-pointer hover:text-primary/80',
-                index > currentStep && 'text-muted-foreground cursor-not-allowed'
+                index > currentStep && 'text-muted-foreground cursor-not-allowed',
               )}
             >
               <span
@@ -789,7 +799,7 @@ export default function DynamicFormRenderer({
                   'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold',
                   index === currentStep && 'bg-primary text-primary-foreground',
                   index < currentStep && 'bg-primary/20 text-primary',
-                  index > currentStep && 'bg-muted text-muted-foreground'
+                  index > currentStep && 'bg-muted text-muted-foreground',
                 )}
               >
                 {index < currentStep ? <Check className="w-3 h-3" /> : index + 1}
@@ -885,5 +895,5 @@ export default function DynamicFormRenderer({
         </div>
       </div>
     </div>
-  );
+  )
 }

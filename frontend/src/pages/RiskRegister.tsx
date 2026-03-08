@@ -115,9 +115,16 @@ export default function RiskRegister() {
         const inherent = r.inherent_score ?? r.risk_score ?? 0
         let riskLevel = 'low'
         let riskColor = 'hsl(var(--success))'
-        if (residual > 16) { riskLevel = 'critical'; riskColor = 'hsl(var(--destructive))' }
-        else if (residual > 9) { riskLevel = 'high'; riskColor = 'hsl(var(--warning))' }
-        else if (residual > 4) { riskLevel = 'medium'; riskColor = 'hsl(var(--info))' }
+        if (residual > 16) {
+          riskLevel = 'critical'
+          riskColor = 'hsl(var(--destructive))'
+        } else if (residual > 9) {
+          riskLevel = 'high'
+          riskColor = 'hsl(var(--warning))'
+        } else if (residual > 4) {
+          riskLevel = 'medium'
+          riskColor = 'hsl(var(--info))'
+        }
 
         return {
           id: r.id,
@@ -160,11 +167,29 @@ export default function RiskRegister() {
           critical_risks: s?.critical ?? 0,
           high_risks: s?.high ?? 0,
           outside_appetite: 0,
-          average_inherent_score: mappedRisks.length > 0 ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length : 0,
-          average_residual_score: mappedRisks.length > 0 ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length : 0,
+          average_inherent_score:
+            mappedRisks.length > 0
+              ? mappedRisks.reduce((a, r) => a + r.inherent_score, 0) / mappedRisks.length
+              : 0,
+          average_residual_score:
+            mappedRisks.length > 0
+              ? mappedRisks.reduce((a, r) => a + r.residual_score, 0) / mappedRisks.length
+              : 0,
         },
-        likelihood_labels: { 1: 'Rare', 2: 'Unlikely', 3: 'Possible', 4: 'Likely', 5: 'Almost Certain' },
-        impact_labels: { 1: 'Insignificant', 2: 'Minor', 3: 'Moderate', 4: 'Major', 5: 'Catastrophic' },
+        likelihood_labels: {
+          1: 'Rare',
+          2: 'Unlikely',
+          3: 'Possible',
+          4: 'Likely',
+          5: 'Almost Certain',
+        },
+        impact_labels: {
+          1: 'Insignificant',
+          2: 'Minor',
+          3: 'Moderate',
+          4: 'Major',
+          5: 'Catastrophic',
+        },
       }
 
       const heatmapCells = heatmap?.cells ?? []
@@ -174,11 +199,20 @@ export default function RiskRegister() {
           const score = likelihood * impact
           let level = 'low'
           let color = 'hsl(var(--success))'
-          if (score > 16) { level = 'critical'; color = 'hsl(var(--destructive))' }
-          else if (score > 9) { level = 'high'; color = 'hsl(var(--warning))' }
-          else if (score > 4) { level = 'medium'; color = 'hsl(var(--info))' }
+          if (score > 16) {
+            level = 'critical'
+            color = 'hsl(var(--destructive))'
+          } else if (score > 9) {
+            level = 'high'
+            color = 'hsl(var(--warning))'
+          } else if (score > 4) {
+            level = 'medium'
+            color = 'hsl(var(--info))'
+          }
 
-          const apiCell = heatmapCells.find((c: any) => c.likelihood === likelihood && c.impact === impact)
+          const apiCell = heatmapCells.find(
+            (c: any) => c.likelihood === likelihood && c.impact === impact,
+          )
           row.push({
             likelihood,
             impact,
@@ -275,7 +309,9 @@ export default function RiskRegister() {
               <div className="p-2 bg-destructive/20 rounded-lg">
                 <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
-              <span className="text-2xl font-bold text-destructive">{summary.by_level.critical}</span>
+              <span className="text-2xl font-bold text-destructive">
+                {summary.by_level.critical}
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">Critical</p>
           </CardContent>
@@ -411,7 +447,10 @@ export default function RiskRegister() {
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
                         {!risk.is_within_appetite && (
-                          <span className="w-2 h-2 bg-destructive rounded-full animate-pulse" title="Outside Risk Appetite"></span>
+                          <span
+                            className="w-2 h-2 bg-destructive rounded-full animate-pulse"
+                            title="Outside Risk Appetite"
+                          ></span>
                         )}
                         <span className="text-foreground">{risk.title}</span>
                       </div>
@@ -422,16 +461,14 @@ export default function RiskRegister() {
                       </Badge>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="text-xl font-bold text-muted-foreground">{risk.inherent_score}</span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="text-xl font-bold text-primary">
-                        {risk.residual_score}
+                      <span className="text-xl font-bold text-muted-foreground">
+                        {risk.inherent_score}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      {getRiskLevelBadge(risk.risk_level)}
+                      <span className="text-xl font-bold text-primary">{risk.residual_score}</span>
                     </td>
+                    <td className="px-4 py-4 text-center">{getRiskLevelBadge(risk.risk_level)}</td>
                     <td className="px-4 py-4">{getTreatmentBadge(risk.treatment_strategy)}</td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
@@ -461,7 +498,9 @@ export default function RiskRegister() {
       {view === 'heatmap' && heatMapData && (
         <Card>
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold mb-6 text-foreground">5×5 Risk Heat Map (Residual Risk)</h2>
+            <h2 className="text-xl font-bold mb-6 text-foreground">
+              5×5 Risk Heat Map (Residual Risk)
+            </h2>
 
             <div className="flex gap-8">
               {/* Matrix */}
@@ -557,7 +596,9 @@ export default function RiskRegister() {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Total Risks</span>
-                        <span className="font-bold text-foreground">{heatMapData.summary.total_risks}</span>
+                        <span className="font-bold text-foreground">
+                          {heatMapData.summary.total_risks}
+                        </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Avg Inherent</span>
@@ -574,13 +615,12 @@ export default function RiskRegister() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Risk Reduction</span>
                         <span className="font-bold text-success">
-                          {(
-                            heatMapData.summary?.average_inherent_score
-                              ? ((heatMapData.summary.average_inherent_score -
-                                  (heatMapData.summary.average_residual_score ?? 0)) /
-                                  heatMapData.summary.average_inherent_score) *
-                                100
-                              : 0
+                          {(heatMapData.summary?.average_inherent_score
+                            ? ((heatMapData.summary.average_inherent_score -
+                                (heatMapData.summary.average_residual_score ?? 0)) /
+                                heatMapData.summary.average_inherent_score) *
+                              100
+                            : 0
                           ).toFixed(0)}
                           %
                         </span>
@@ -622,7 +662,10 @@ export default function RiskRegister() {
                   {/* Prevention Barriers */}
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-destructive to-warning"></div>
-                    <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
+                    <div
+                      className="my-2 text-xs text-muted-foreground text-center"
+                      style={{ writingMode: 'vertical-rl' }}
+                    >
                       Prevention
                     </div>
                   </div>
@@ -631,11 +674,11 @@ export default function RiskRegister() {
                   <div className="w-1/5">
                     <div className="rounded-full p-8 text-center border-4 border-warning bg-warning/20">
                       <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning" />
-                      <span className="font-bold text-foreground text-sm">{selectedRisk.title.substring(0, 50)}...</span>
+                      <span className="font-bold text-foreground text-sm">
+                        {selectedRisk.title.substring(0, 50)}...
+                      </span>
                       <div className="mt-2">
-                        <Badge variant="warning">
-                          Score: {selectedRisk.residual_score}
-                        </Badge>
+                        <Badge variant="warning">Score: {selectedRisk.residual_score}</Badge>
                       </div>
                     </div>
                   </div>
@@ -643,7 +686,10 @@ export default function RiskRegister() {
                   {/* Mitigation Barriers */}
                   <div className="w-16 flex flex-col items-center justify-center">
                     <div className="h-full w-1 bg-gradient-to-b from-warning to-info"></div>
-                    <div className="my-2 text-xs text-muted-foreground text-center" style={{ writingMode: 'vertical-rl' }}>
+                    <div
+                      className="my-2 text-xs text-muted-foreground text-center"
+                      style={{ writingMode: 'vertical-rl' }}
+                    >
                       Mitigation
                     </div>
                   </div>
@@ -652,14 +698,16 @@ export default function RiskRegister() {
                   <div className="w-1/4">
                     <h3 className="text-center font-semibold text-info mb-4">CONSEQUENCES</h3>
                     <div className="space-y-2">
-                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map((consequence, i) => (
-                        <div
-                          key={i}
-                          className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
-                        >
-                          {consequence}
-                        </div>
-                      ))}
+                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map(
+                        (consequence, i) => (
+                          <div
+                            key={i}
+                            className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
+                          >
+                            {consequence}
+                          </div>
+                        ),
+                      )}
                     </div>
                   </div>
                 </div>
@@ -675,11 +723,15 @@ export default function RiskRegister() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Preventive maintenance program</span>
+                          <span className="text-sm text-foreground">
+                            Preventive maintenance program
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Training and competency assessments</span>
+                          <span className="text-sm text-foreground">
+                            Training and competency assessments
+                          </span>
                         </div>
                         <div className="flex items-center gap-2 p-2 bg-muted rounded">
                           <div className="w-2 h-2 bg-warning rounded-full"></div>

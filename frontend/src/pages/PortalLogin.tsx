@@ -1,31 +1,25 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Shield, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { ThemeToggle } from '../components/ui/ThemeToggle';
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Shield, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
 
 export default function PortalLogin() {
-  const navigate = useNavigate();
-  const { 
-    isAuthenticated, 
-    isLoading, 
-    login, 
-    error, 
-    isAzureADAvailable 
-  } = usePortalAuth();
+  const navigate = useNavigate()
+  const { isAuthenticated, isLoading, login, error, isAzureADAvailable } = usePortalAuth()
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      navigate('/portal');
+      navigate('/portal')
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate])
 
   const handleMicrosoftLogin = async () => {
-    await login();
-  };
+    await login()
+  }
 
   if (isLoading) {
     return (
@@ -35,7 +29,7 @@ export default function PortalLogin() {
           <p className="text-muted-foreground">Checking authentication...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -148,5 +142,5 @@ export default function PortalLogin() {
         </div>
       </div>
     </div>
-  );
+  )
 }

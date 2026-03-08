@@ -1,9 +1,9 @@
 /**
  * ISO Tag Selector Component
- * 
+ *
  * Reusable component for tagging any content with ISO clause references.
  * Can be embedded in any form across the platform (documents, audits, incidents, etc.)
- * 
+ *
  * Features:
  * - Manual clause selection with search
  * - AI auto-tagging from content
@@ -11,7 +11,7 @@
  * - Visual clause badges
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react'
 import {
   Award,
   Leaf,
@@ -23,29 +23,35 @@ import {
   Sparkles,
   CheckCircle2,
   AlertCircle,
-} from 'lucide-react';
-import { ISO_STANDARDS, ISOClause, getAllClauses, autoTagContent, searchClauses } from '../data/isoStandards';
+} from 'lucide-react'
+import {
+  ISO_STANDARDS,
+  ISOClause,
+  getAllClauses,
+  autoTagContent,
+  searchClauses,
+} from '../data/isoStandards'
 
 interface ISOTagSelectorProps {
-  selectedClauses: string[];
-  onChange: (clauses: string[]) => void;
-  contentForAutoTag?: string;
-  compact?: boolean;
-  label?: string;
-  showAutoTag?: boolean;
+  selectedClauses: string[]
+  onChange: (clauses: string[]) => void
+  contentForAutoTag?: string
+  compact?: boolean
+  label?: string
+  showAutoTag?: boolean
 }
 
 const standardIcons: Record<string, React.ElementType> = {
   iso9001: Award,
   iso14001: Leaf,
   iso45001: HardHat,
-};
+}
 
 const standardColors: Record<string, { bg: string; text: string; border: string }> = {
   iso9001: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
   iso14001: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500' },
   iso45001: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500' },
-};
+}
 
 export default function ISOTagSelector({
   selectedClauses,
@@ -55,57 +61,61 @@ export default function ISOTagSelector({
   label = 'ISO Clause Tags',
   showAutoTag = true,
 }: ISOTagSelectorProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStandard, setSelectedStandard] = useState<string>('all');
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [autoTagSuggestions, setAutoTagSuggestions] = useState<ISOClause[]>([]);
+  const [isOpen, setIsOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedStandard, setSelectedStandard] = useState<string>('all')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [autoTagSuggestions, setAutoTagSuggestions] = useState<ISOClause[]>([])
 
   // Get clause objects for selected IDs
   const selectedClauseObjects = useMemo(() => {
-    return selectedClauses.map(id => getAllClauses().find(c => c.id === id)).filter(Boolean) as ISOClause[];
-  }, [selectedClauses]);
+    return selectedClauses
+      .map((id) => getAllClauses().find((c) => c.id === id))
+      .filter(Boolean) as ISOClause[]
+  }, [selectedClauses])
 
   // Filter clauses based on search
   const filteredClauses = useMemo(() => {
-    let clauses = searchQuery ? searchClauses(searchQuery) : getAllClauses().filter(c => c.level === 2);
-    
+    let clauses = searchQuery
+      ? searchClauses(searchQuery)
+      : getAllClauses().filter((c) => c.level === 2)
+
     if (selectedStandard !== 'all') {
-      clauses = clauses.filter(c => c.standard === selectedStandard);
+      clauses = clauses.filter((c) => c.standard === selectedStandard)
     }
 
-    return clauses.slice(0, 20);
-  }, [searchQuery, selectedStandard]);
+    return clauses.slice(0, 20)
+  }, [searchQuery, selectedStandard])
 
   // Handle auto-tagging
   const handleAutoTag = () => {
     if (contentForAutoTag) {
-      const suggestions = autoTagContent(contentForAutoTag);
-      setAutoTagSuggestions(suggestions);
-      setShowSuggestions(true);
+      const suggestions = autoTagContent(contentForAutoTag)
+      setAutoTagSuggestions(suggestions)
+      setShowSuggestions(true)
     }
-  };
+  }
 
   // Toggle clause selection
   const toggleClause = (clauseId: string) => {
     if (selectedClauses.includes(clauseId)) {
-      onChange(selectedClauses.filter(id => id !== clauseId));
+      onChange(selectedClauses.filter((id) => id !== clauseId))
     } else {
-      onChange([...selectedClauses, clauseId]);
+      onChange([...selectedClauses, clauseId])
     }
-  };
+  }
 
   // Apply all suggestions
   const applyAllSuggestions = () => {
-    const newClauses = [...new Set([...selectedClauses, ...autoTagSuggestions.map(c => c.id)])];
-    onChange(newClauses);
-    setShowSuggestions(false);
-  };
+    const newClauses = [...new Set([...selectedClauses, ...autoTagSuggestions.map((c) => c.id)])]
+    onChange(newClauses)
+    setShowSuggestions(false)
+  }
 
   // Render a clause badge
   const renderClauseBadge = (clause: ISOClause, removable = true) => {
-    const Icon = standardIcons[clause.standard];
-    const colors = standardColors[clause.standard];
+    const Icon = standardIcons[clause.standard]
+    const colors = standardColors[clause.standard]
 
     return (
       <span
@@ -117,24 +127,32 @@ export default function ISOTagSelector({
         {removable && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); toggleClause(clause.id); }}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleClause(clause.id)
+            }}
             className="ml-1 hover:bg-white/20 rounded-full p-0.5"
           >
             <X className="w-3 h-3" />
           </button>
         )}
       </span>
-    );
-  };
+    )
+  }
 
   if (compact) {
     return (
       <div className="space-y-2">
         {label && <label className="block text-sm font-medium text-gray-300">{label}</label>}
-        
-        <div 
+
+        <div
           onClick={() => setIsOpen(!isOpen)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(!isOpen); } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setIsOpen(!isOpen)
+            }
+          }}
           role="button"
           tabIndex={0}
           className="p-3 bg-slate-700 border border-slate-600 rounded-lg cursor-pointer hover:border-slate-500 transition-all"
@@ -142,15 +160,19 @@ export default function ISOTagSelector({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
               {selectedClauseObjects.length > 0 ? (
-                selectedClauseObjects.slice(0, 3).map(clause => renderClauseBadge(clause))
+                selectedClauseObjects.slice(0, 3).map((clause) => renderClauseBadge(clause))
               ) : (
                 <span className="text-gray-400 text-sm">Click to add ISO tags...</span>
               )}
               {selectedClauseObjects.length > 3 && (
-                <span className="text-xs text-gray-400">+{selectedClauseObjects.length - 3} more</span>
+                <span className="text-xs text-gray-400">
+                  +{selectedClauseObjects.length - 3} more
+                </span>
               )}
             </div>
-            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown
+              className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            />
           </div>
         </div>
 
@@ -168,20 +190,27 @@ export default function ISOTagSelector({
             </div>
 
             <div className="max-h-40 overflow-y-auto space-y-1">
-              {filteredClauses.map(clause => {
-                const isSelected = selectedClauses.includes(clause.id);
-                const Icon = standardIcons[clause.standard];
-                const colors = standardColors[clause.standard];
+              {filteredClauses.map((clause) => {
+                const isSelected = selectedClauses.includes(clause.id)
+                const Icon = standardIcons[clause.standard]
+                const colors = standardColors[clause.standard]
 
                 return (
                   <div
                     key={clause.id}
                     onClick={() => toggleClause(clause.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleClause(clause.id); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleClause(clause.id)
+                      }
+                    }}
                     role="button"
                     tabIndex={0}
                     className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all ${
-                      isSelected ? 'bg-emerald-600/20 border border-emerald-500/50' : 'bg-slate-700/50 hover:bg-slate-700'
+                      isSelected
+                        ? 'bg-emerald-600/20 border border-emerald-500/50'
+                        : 'bg-slate-700/50 hover:bg-slate-700'
                     }`}
                   >
                     <Icon className={`w-4 h-4 ${colors.text}`} />
@@ -189,13 +218,13 @@ export default function ISOTagSelector({
                     <span className="text-sm text-white truncate flex-grow">{clause.title}</span>
                     {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                   </div>
-                );
+                )
               })}
             </div>
           </div>
         )}
       </div>
-    );
+    )
   }
 
   // Full version
@@ -219,7 +248,7 @@ export default function ISOTagSelector({
 
       {/* Selected Tags */}
       <div className="flex flex-wrap gap-2 min-h-[32px]">
-        {selectedClauseObjects.map(clause => renderClauseBadge(clause))}
+        {selectedClauseObjects.map((clause) => renderClauseBadge(clause))}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
@@ -256,12 +285,12 @@ export default function ISOTagSelector({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {autoTagSuggestions.map(clause => {
-              const isAlreadySelected = selectedClauses.includes(clause.id);
-              if (isAlreadySelected) return null;
+            {autoTagSuggestions.map((clause) => {
+              const isAlreadySelected = selectedClauses.includes(clause.id)
+              if (isAlreadySelected) return null
 
-              const Icon = standardIcons[clause.standard];
-              const colors = standardColors[clause.standard];
+              const Icon = standardIcons[clause.standard]
+              const colors = standardColors[clause.standard]
 
               return (
                 <button
@@ -274,7 +303,7 @@ export default function ISOTagSelector({
                   {clause.clauseNumber}
                   <Plus className="w-3 h-3" />
                 </button>
-              );
+              )
             })}
           </div>
         </div>
@@ -303,8 +332,10 @@ export default function ISOTagSelector({
               className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-emerald-500"
             >
               <option value="all">All Standards</option>
-              {ISO_STANDARDS.map(s => (
-                <option key={s.id} value={s.id}>{s.code}</option>
+              {ISO_STANDARDS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.code}
+                </option>
               ))}
             </select>
           </div>
@@ -312,21 +343,26 @@ export default function ISOTagSelector({
           {/* Clause List */}
           <div className="max-h-60 overflow-y-auto space-y-2 custom-scrollbar">
             {filteredClauses.length > 0 ? (
-              filteredClauses.map(clause => {
-                const isSelected = selectedClauses.includes(clause.id);
-                const Icon = standardIcons[clause.standard];
-                const colors = standardColors[clause.standard];
+              filteredClauses.map((clause) => {
+                const isSelected = selectedClauses.includes(clause.id)
+                const Icon = standardIcons[clause.standard]
+                const colors = standardColors[clause.standard]
 
                 return (
                   <div
                     key={clause.id}
                     onClick={() => toggleClause(clause.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleClause(clause.id); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleClause(clause.id)
+                      }
+                    }}
                     role="button"
                     tabIndex={0}
                     className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer transition-all ${
-                      isSelected 
-                        ? 'bg-emerald-600/20 border border-emerald-500/50' 
+                      isSelected
+                        ? 'bg-emerald-600/20 border border-emerald-500/50'
                         : 'bg-slate-700/50 hover:bg-slate-700 border border-transparent'
                     }`}
                   >
@@ -335,21 +371,28 @@ export default function ISOTagSelector({
                     </div>
                     <div className="flex-grow">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-400">{clause.clauseNumber}</span>
+                        <span className="text-sm font-medium text-gray-400">
+                          {clause.clauseNumber}
+                        </span>
                         <span className="text-sm text-white">{clause.title}</span>
                       </div>
                       <p className="text-xs text-gray-500 mt-1">{clause.description}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
                         {clause.keywords.slice(0, 4).map((keyword, i) => (
-                          <span key={i} className="text-xs bg-slate-600 text-gray-400 px-1.5 py-0.5 rounded">
+                          <span
+                            key={i}
+                            className="text-xs bg-slate-600 text-gray-400 px-1.5 py-0.5 rounded"
+                          >
                             {keyword}
                           </span>
                         ))}
                       </div>
                     </div>
-                    {isSelected && <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />}
+                    {isSelected && (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                    )}
                   </div>
-                );
+                )
               })
             ) : (
               <div className="text-center py-8 text-gray-400">
@@ -375,5 +418,5 @@ export default function ISOTagSelector({
         </div>
       )}
     </div>
-  );
+  )
 }

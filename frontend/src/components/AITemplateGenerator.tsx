@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { trackError } from '../utils/errorTracker';
+import { useState } from 'react'
+import { trackError } from '../utils/errorTracker'
 import {
   Sparkles,
   Wand2,
@@ -16,34 +16,34 @@ import {
   X,
   GraduationCap,
   UserCheck,
-} from 'lucide-react';
+} from 'lucide-react'
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 interface GeneratedQuestion {
-  id: string;
-  text: string;
-  type: string;
-  required: boolean;
-  weight: number;
-  riskLevel?: string;
-  evidenceRequired: boolean;
-  isoClause?: string;
-  guidance?: string;
+  id: string
+  text: string
+  type: string
+  required: boolean
+  weight: number
+  riskLevel?: string
+  evidenceRequired: boolean
+  isoClause?: string
+  guidance?: string
 }
 
 interface GeneratedSection {
-  id: string;
-  title: string;
-  description: string;
-  questions: GeneratedQuestion[];
+  id: string
+  title: string
+  description: string
+  questions: GeneratedQuestion[]
 }
 
 interface AITemplateGeneratorProps {
-  onApply: (sections: GeneratedSection[]) => void;
-  onClose: () => void;
+  onApply: (sections: GeneratedSection[]) => void
+  onClose: () => void
 }
 
 // ============================================================================
@@ -56,58 +56,66 @@ const PRESET_PROMPTS = [
     label: 'ISO 9001 Quality',
     icon: Award,
     description: 'Generate ISO 9001:2015 compliance questions',
-    prompt: 'Generate a comprehensive ISO 9001:2015 Quality Management System audit checklist covering context, leadership, planning, support, operation, performance evaluation, and improvement clauses.',
+    prompt:
+      'Generate a comprehensive ISO 9001:2015 Quality Management System audit checklist covering context, leadership, planning, support, operation, performance evaluation, and improvement clauses.',
   },
   {
     id: 'iso14001',
     label: 'ISO 14001 Environmental',
     icon: Leaf,
     description: 'Environmental management audit',
-    prompt: 'Generate an ISO 14001:2015 Environmental Management System audit checklist covering environmental aspects, legal requirements, objectives, operational controls, emergency preparedness, and performance monitoring.',
+    prompt:
+      'Generate an ISO 14001:2015 Environmental Management System audit checklist covering environmental aspects, legal requirements, objectives, operational controls, emergency preparedness, and performance monitoring.',
   },
   {
     id: 'iso45001',
     label: 'ISO 45001 H&S',
     icon: HardHat,
     description: 'Health & safety management audit',
-    prompt: 'Generate an ISO 45001:2018 Occupational Health and Safety audit checklist covering hazard identification, risk assessment, legal compliance, worker participation, competence, emergency response, and incident investigation.',
+    prompt:
+      'Generate an ISO 45001:2018 Occupational Health and Safety audit checklist covering hazard identification, risk assessment, legal compliance, worker participation, competence, emergency response, and incident investigation.',
   },
   {
     id: 'vehicle',
     label: 'Vehicle Inspection',
     icon: Truck,
     description: 'Pre-departure vehicle check',
-    prompt: 'Generate a comprehensive vehicle pre-departure safety inspection checklist covering exterior, interior, mechanical, safety equipment, and documentation checks.',
+    prompt:
+      'Generate a comprehensive vehicle pre-departure safety inspection checklist covering exterior, interior, mechanical, safety equipment, and documentation checks.',
   },
   {
     id: '5s',
     label: '5S Workplace',
     icon: ClipboardCheck,
     description: 'Sort, Set, Shine, Standardize, Sustain',
-    prompt: 'Generate a 5S workplace organization audit checklist with sections for Sort (Seiri), Set in Order (Seiton), Shine (Seiso), Standardize (Seiketsu), and Sustain (Shitsuke).',
+    prompt:
+      'Generate a 5S workplace organization audit checklist with sections for Sort (Seiri), Set in Order (Seiton), Shine (Seiso), Standardize (Seiketsu), and Sustain (Shitsuke).',
   },
   {
     id: 'supplier',
     label: 'Supplier Assessment',
     icon: Building2,
     description: 'Vendor qualification audit',
-    prompt: 'Generate a supplier qualification assessment checklist covering quality systems, capacity, financial stability, delivery performance, sustainability practices, and compliance certifications.',
+    prompt:
+      'Generate a supplier qualification assessment checklist covering quality systems, capacity, financial stability, delivery performance, sustainability practices, and compliance certifications.',
   },
   {
     id: 'staff-induction',
     label: 'Staff Induction',
     icon: GraduationCap,
     description: 'New starter onboarding checklist',
-    prompt: 'Generate a comprehensive staff induction checklist for new starters covering company policies, health and safety essentials, site orientation, emergency procedures, PPE requirements, reporting lines, and role-specific training sign-off.',
+    prompt:
+      'Generate a comprehensive staff induction checklist for new starters covering company policies, health and safety essentials, site orientation, emergency procedures, PPE requirements, reporting lines, and role-specific training sign-off.',
   },
   {
     id: 'supervisor-assessment',
     label: 'Technical Assessment',
     icon: UserCheck,
     description: 'Supervisor competency evaluation',
-    prompt: 'Generate a supervisor technical competency assessment template covering technical knowledge, risk assessment and method statements, safe systems of work, team supervision, equipment operation and safety, regulatory compliance awareness, problem solving, and incident reporting procedures.',
+    prompt:
+      'Generate a supervisor technical competency assessment template covering technical knowledge, risk assessment and method statements, safe systems of work, team supervision, equipment operation and safety, regulatory compliance awareness, problem solving, and incident reporting procedures.',
   },
-];
+]
 
 // ============================================================================
 // AI TEMPLATE GENERATION (calls backend API)
@@ -118,75 +126,84 @@ const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),
-  });
+  })
 
   if (!response.ok) {
-    throw new Error(`AI generation failed: ${response.statusText}`);
+    throw new Error(`AI generation failed: ${response.statusText}`)
   }
 
-  const data: GeneratedSection[] = await response.json();
-  return data;
-};
+  const data: GeneratedSection[] = await response.json()
+  return data
+}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export default function AITemplateGenerator({ onApply, onClose }: AITemplateGeneratorProps) {
-  const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null);
-  const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedSections, setGeneratedSections] = useState<GeneratedSection[] | null>(null)
+  const [selectedSections, setSelectedSections] = useState<Set<string>>(new Set())
+  const [error, setError] = useState<string | null>(null)
 
   const handleGenerate = async (customPrompt?: string) => {
-    const promptToUse = customPrompt || prompt;
+    const promptToUse = customPrompt || prompt
     if (!promptToUse.trim()) {
-      setError('Please enter a description or select a preset');
-      return;
+      setError('Please enter a description or select a preset')
+      return
     }
 
-    setIsGenerating(true);
-    setError(null);
-    setGeneratedSections(null);
+    setIsGenerating(true)
+    setError(null)
+    setGeneratedSections(null)
 
     try {
-      const sections = await generateTemplateWithAI(promptToUse);
-      setGeneratedSections(sections);
-      setSelectedSections(new Set(sections.map(s => s.id)));
+      const sections = await generateTemplateWithAI(promptToUse)
+      setGeneratedSections(sections)
+      setSelectedSections(new Set(sections.map((s) => s.id)))
     } catch (err) {
-      setError('Failed to generate template. Please try again.');
-      trackError(err, { component: 'AITemplateGenerator', action: 'handleGenerate' });
+      setError('Failed to generate template. Please try again.')
+      trackError(err, { component: 'AITemplateGenerator', action: 'handleGenerate' })
     } finally {
-      setIsGenerating(false);
+      setIsGenerating(false)
     }
-  };
+  }
 
   const handleApply = () => {
-    if (!generatedSections) return;
-    
-    const sectionsToApply = generatedSections.filter(s => selectedSections.has(s.id));
-    onApply(sectionsToApply);
-  };
+    if (!generatedSections) return
+
+    const sectionsToApply = generatedSections.filter((s) => selectedSections.has(s.id))
+    onApply(sectionsToApply)
+  }
 
   const toggleSection = (sectionId: string) => {
-    const newSelected = new Set(selectedSections);
+    const newSelected = new Set(selectedSections)
     if (newSelected.has(sectionId)) {
-      newSelected.delete(sectionId);
+      newSelected.delete(sectionId)
     } else {
-      newSelected.add(sectionId);
+      newSelected.add(sectionId)
     }
-    setSelectedSections(newSelected);
-  };
+    setSelectedSections(newSelected)
+  }
 
-  const totalQuestions = generatedSections
-    ?.filter(s => selectedSections.has(s.id))
-    .reduce((sum, s) => sum + s.questions.length, 0) || 0;
+  const totalQuestions =
+    generatedSections
+      ?.filter((s) => selectedSections.has(s.id))
+      .reduce((sum, s) => sum + s.questions.length, 0) || 0
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" role="button" tabIndex={0} onClick={onClose} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClose(); }} />
-      
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        role="button"
+        tabIndex={0}
+        onClick={onClose}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') onClose()
+        }}
+      />
+
       <div className="relative w-full max-w-2xl max-h-[90vh] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-border">
@@ -196,7 +213,9 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
             </div>
             <div>
               <h2 className="text-lg font-semibold text-foreground">AI Template Generator</h2>
-              <p className="text-sm text-muted-foreground">Generate audit questions from standards or descriptions</p>
+              <p className="text-sm text-muted-foreground">
+                Generate audit questions from standards or descriptions
+              </p>
             </div>
           </div>
           <button
@@ -219,8 +238,8 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                     <button
                       key={preset.id}
                       onClick={() => {
-                        setPrompt(preset.prompt);
-                        handleGenerate(preset.prompt);
+                        setPrompt(preset.prompt)
+                        handleGenerate(preset.prompt)
                       }}
                       disabled={isGenerating}
                       className="flex items-start gap-3 p-3 bg-secondary border border-border rounded-xl text-left hover:border-primary/50 hover:bg-secondary/80 transition-colors disabled:opacity-50"
@@ -248,7 +267,7 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                   disabled={isGenerating}
                   className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
                 />
-                
+
                 {error && (
                   <div className="flex items-center gap-2 mt-2 text-destructive text-sm">
                     <AlertTriangle className="w-4 h-4" />
@@ -283,12 +302,14 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-success" />
-                  <span className="text-foreground font-medium">Generated {generatedSections.length} sections</span>
+                  <span className="text-foreground font-medium">
+                    Generated {generatedSections.length} sections
+                  </span>
                 </div>
                 <button
                   onClick={() => {
-                    setGeneratedSections(null);
-                    setPrompt('');
+                    setGeneratedSections(null)
+                    setPrompt('')
                   }}
                   className="text-sm text-primary hover:text-primary"
                 >
@@ -310,21 +331,25 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
                       onClick={() => toggleSection(section.id)}
                       className="w-full flex items-center gap-3 p-4 text-left"
                     >
-                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                        selectedSections.has(section.id)
-                          ? 'bg-primary border-primary'
-                          : 'border-input'
-                      }`}>
+                      <div
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedSections.has(section.id)
+                            ? 'bg-primary border-primary'
+                            : 'border-input'
+                        }`}
+                      >
                         {selectedSections.has(section.id) && (
                           <CheckCircle2 className="w-3 h-3 text-primary-foreground" />
                         )}
                       </div>
                       <div className="flex-1">
                         <p className="font-medium text-foreground">{section.title}</p>
-                        <p className="text-sm text-muted-foreground">{section.questions.length} questions</p>
+                        <p className="text-sm text-muted-foreground">
+                          {section.questions.length} questions
+                        </p>
                       </div>
                     </button>
-                    
+
                     {selectedSections.has(section.id) && (
                       <div className="px-4 pb-4 space-y-2 border-t border-border/50 pt-3">
                         {section.questions.slice(0, 3).map((q) => (
@@ -373,5 +398,5 @@ export default function AITemplateGenerator({ onApply, onClose }: AITemplateGene
         )}
       </div>
     </div>
-  );
+  )
 }

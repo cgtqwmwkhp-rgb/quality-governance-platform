@@ -1,11 +1,27 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { 
-  Plus, Search, Upload, FileText, FileSpreadsheet, Image, File, 
-  Eye, Download, Tag, Calendar, Sparkles, 
-  CheckCircle2, Loader2, Grid3X3, List, 
-  ChevronRight, ExternalLink, Brain, Zap
+import {
+  Plus,
+  Search,
+  Upload,
+  FileText,
+  FileSpreadsheet,
+  Image,
+  File,
+  Eye,
+  Download,
+  Tag,
+  Calendar,
+  Sparkles,
+  CheckCircle2,
+  Loader2,
+  Grid3X3,
+  List,
+  ChevronRight,
+  ExternalLink,
+  Brain,
+  Zap,
 } from 'lucide-react'
 import api, { getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -13,12 +29,7 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/Dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog'
 import {
   Select,
   SelectContent,
@@ -26,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 
 interface Document {
   id: number
@@ -90,12 +101,18 @@ const FILE_ICONS: Record<string, typeof FileText> = {
 
 const getStatusVariant = (status: string) => {
   switch (status) {
-    case 'indexed': return 'resolved'
-    case 'approved': return 'success'
-    case 'processing': return 'in-progress'
-    case 'pending': return 'submitted'
-    case 'failed': return 'destructive'
-    default: return 'secondary'
+    case 'indexed':
+      return 'resolved'
+    case 'approved':
+      return 'success'
+    case 'processing':
+      return 'in-progress'
+    case 'pending':
+      return 'submitted'
+    case 'failed':
+      return 'destructive'
+    default:
+      return 'secondary'
   }
 }
 
@@ -139,7 +156,9 @@ export default function Documents() {
     }
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   useEffect(() => {
     loadData(filterType || undefined, filterStatus || undefined)
@@ -153,7 +172,9 @@ export default function Documents() {
 
     setIsSearching(true)
     try {
-      const response = await api.get(`/api/v1/documents/search/semantic?q=${encodeURIComponent(query)}&top_k=10`)
+      const response = await api.get(
+        `/api/v1/documents/search/semantic?q=${encodeURIComponent(query)}&top_k=10`,
+      )
       setSearchResults(response.data.results)
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'search' })
@@ -188,7 +209,7 @@ export default function Documents() {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       await handleFileUpload(e.dataTransfer.files[0])
     }
@@ -197,25 +218,25 @@ export default function Documents() {
   const handleFileUpload = async (file: File) => {
     setUploading(true)
     setUploadProgress(0)
-    
+
     const formData = new FormData()
     formData.append('file', file)
     formData.append('title', file.name.replace(/\.[^/.]+$/, ''))
     formData.append('document_type', 'other')
     formData.append('sensitivity', 'internal')
-    
+
     try {
       const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90))
+        setUploadProgress((prev) => Math.min(prev + 10, 90))
       }, 200)
-      
+
       await api.post('/api/v1/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      
+
       clearInterval(progressInterval)
       setUploadProgress(100)
-      
+
       await loadData(filterType || undefined, filterStatus || undefined)
       setShowUploadModal(false)
     } catch (err) {
@@ -235,10 +256,12 @@ export default function Documents() {
 
   const getFileIcon = (type: string) => FILE_ICONS[type] || File
 
-  const filteredDocuments = documents.filter(doc => {
+  const filteredDocuments = documents.filter((doc) => {
     if (searchTerm && !searchResults) {
-      return doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
+      return (
+        doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     }
     return true
   })
@@ -253,7 +276,12 @@ export default function Documents() {
 
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- drag-and-drop is mouse-only; upload button provides keyboard access
-    <div className="space-y-6 animate-fade-in" onDragEnter={handleDrag} role="region" aria-label="Document library">
+    <div
+      className="space-y-6 animate-fade-in"
+      onDragEnter={handleDrag}
+      role="region"
+      aria-label="Document library"
+    >
       {loadError && (
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{loadError}</div>
       )}
@@ -276,19 +304,41 @@ export default function Documents() {
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: t('documents.stats.total'), value: stats.total_documents, icon: FileText, variant: 'primary' as const },
-            { label: t('documents.stats.indexed'), value: stats.indexed_documents, icon: Brain, variant: 'info' as const },
-            { label: t('documents.stats.chunks'), value: stats.total_chunks.toLocaleString(), icon: Zap, variant: 'warning' as const },
-            { label: t('documents.stats.processing'), value: stats.by_status?.processing || 0, icon: Loader2, variant: 'success' as const },
+            {
+              label: t('documents.stats.total'),
+              value: stats.total_documents,
+              icon: FileText,
+              variant: 'primary' as const,
+            },
+            {
+              label: t('documents.stats.indexed'),
+              value: stats.indexed_documents,
+              icon: Brain,
+              variant: 'info' as const,
+            },
+            {
+              label: t('documents.stats.chunks'),
+              value: stats.total_chunks.toLocaleString(),
+              icon: Zap,
+              variant: 'warning' as const,
+            },
+            {
+              label: t('documents.stats.processing'),
+              value: stats.by_status?.processing || 0,
+              icon: Loader2,
+              variant: 'success' as const,
+            },
           ].map((stat) => (
             <Card key={stat.label} hoverable className="p-5">
-              <div className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-                stat.variant === 'primary' && "bg-primary/10 text-primary",
-                stat.variant === 'info' && "bg-info/10 text-info",
-                stat.variant === 'warning' && "bg-warning/10 text-warning",
-                stat.variant === 'success' && "bg-success/10 text-success",
-              )}>
+              <div
+                className={cn(
+                  'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                  stat.variant === 'primary' && 'bg-primary/10 text-primary',
+                  stat.variant === 'info' && 'bg-info/10 text-info',
+                  stat.variant === 'warning' && 'bg-warning/10 text-warning',
+                  stat.variant === 'success' && 'bg-success/10 text-success',
+                )}
+              >
                 <stat.icon className="w-5 h-5" />
               </div>
               <p className="text-2xl font-bold text-foreground">{stat.value}</p>
@@ -352,8 +402,10 @@ export default function Documents() {
             <button
               onClick={() => setViewMode('grid')}
               className={cn(
-                "p-2 rounded-lg transition-all",
-                viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                'p-2 rounded-lg transition-all',
+                viewMode === 'grid'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <Grid3X3 size={20} />
@@ -361,8 +413,10 @@ export default function Documents() {
             <button
               onClick={() => setViewMode('list')}
               className={cn(
-                "p-2 rounded-lg transition-all",
-                viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                'p-2 rounded-lg transition-all',
+                viewMode === 'list'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               <List size={20} />
@@ -384,23 +438,35 @@ export default function Documents() {
               <div
                 key={result.document_id}
                 onClick={() => {
-                  const doc = documents.find(d => d.id === result.document_id)
+                  const doc = documents.find((d) => d.id === result.document_id)
                   if (doc) setSelectedDocument(doc)
                 }}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const doc = documents.find(d => d.id === result.document_id); if (doc) setSelectedDocument(doc); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    const doc = documents.find((d) => d.id === result.document_id)
+                    if (doc) setSelectedDocument(doc)
+                  }
+                }}
                 role="button"
                 tabIndex={0}
                 className="flex items-center gap-4 p-3 bg-surface rounded-xl hover:bg-surface-hover cursor-pointer transition-colors"
               >
                 <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary">{((result.score ?? 0) * 100).toFixed(0)}%</span>
+                  <span className="text-sm font-bold text-primary">
+                    {((result.score ?? 0) * 100).toFixed(0)}%
+                  </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-primary">{result.reference_number}</span>
+                    <span className="font-mono text-xs text-primary">
+                      {result.reference_number}
+                    </span>
                     <h4 className="text-sm font-medium text-foreground truncate">{result.title}</h4>
                   </div>
-                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{result.chunk_preview}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                    {result.chunk_preview}
+                  </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
@@ -440,18 +506,21 @@ export default function Documents() {
                       {doc.status}
                     </Badge>
                   </div>
-                  <h3 className="font-semibold text-foreground truncate mb-1">
-                    {doc.title}
-                  </h3>
-                  
+                  <h3 className="font-semibold text-foreground truncate mb-1">{doc.title}</h3>
+
                   {doc.ai_summary && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{doc.ai_summary}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                      {doc.ai_summary}
+                    </p>
                   )}
 
                   {doc.ai_tags && doc.ai_tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-3">
-                      {doc.ai_tags.slice(0, 3).map(tag => (
-                        <span key={tag} className="px-2 py-0.5 text-[10px] bg-primary/10 text-primary rounded-full">
+                      {doc.ai_tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 text-[10px] bg-primary/10 text-primary rounded-full"
+                        >
                           {tag}
                         </span>
                       ))}
@@ -471,7 +540,9 @@ export default function Documents() {
                         {doc.view_count}
                       </span>
                       {doc.indexed_at && (
-                        <span title="AI Indexed"><Sparkles className="w-3 h-3 text-primary" /></span>
+                        <span title="AI Indexed">
+                          <Sparkles className="w-3 h-3 text-primary" />
+                        </span>
                       )}
                     </div>
                   </div>
@@ -485,11 +556,21 @@ export default function Documents() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.document')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('common.type')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('common.status')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.size')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">{t('documents.table.views')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  {t('documents.table.document')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  {t('common.type')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  {t('common.status')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  {t('documents.table.size')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase">
+                  {t('documents.table.views')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -508,17 +589,21 @@ export default function Documents() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{doc.title}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{doc.reference_number}</p>
+                          <p className="text-xs text-muted-foreground font-mono">
+                            {doc.reference_number}
+                          </p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-foreground capitalize">{doc.document_type}</td>
-                    <td className="px-6 py-4">
-                      <Badge variant={getStatusVariant(doc.status) as any}>
-                        {doc.status}
-                      </Badge>
+                    <td className="px-6 py-4 text-sm text-foreground capitalize">
+                      {doc.document_type}
                     </td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">{formatFileSize(doc.file_size)}</td>
+                    <td className="px-6 py-4">
+                      <Badge variant={getStatusVariant(doc.status) as any}>{doc.status}</Badge>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                      {formatFileSize(doc.file_size)}
+                    </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{doc.view_count}</td>
                   </tr>
                 )
@@ -529,9 +614,12 @@ export default function Documents() {
       )}
 
       {/* Upload Modal */}
-      <Dialog open={showUploadModal} onOpenChange={(open) => !uploading && setShowUploadModal(open)}>
+      <Dialog
+        open={showUploadModal}
+        onOpenChange={(open) => !uploading && setShowUploadModal(open)}
+      >
         <DialogContent
-          className={cn(dragActive && "border-primary bg-primary/5")}
+          className={cn(dragActive && 'border-primary bg-primary/5')}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
@@ -540,30 +628,36 @@ export default function Documents() {
           <DialogHeader>
             <DialogTitle>{t('documents.upload')}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="py-4">
             {uploading ? (
               <div className="text-center py-8">
                 <Loader2 className="w-12 h-12 mx-auto mb-4 text-primary animate-spin" />
                 <p className="text-foreground mb-2">{t('documents.processing')}</p>
                 <div className="w-full h-2 bg-surface rounded-full overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-gradient-brand transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">Extracting metadata, generating embeddings...</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Extracting metadata, generating embeddings...
+                </p>
               </div>
             ) : (
-              <div 
+              <div
                 className={cn(
-                  "border-2 border-dashed rounded-2xl p-12 text-center transition-colors",
-                  dragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground'
+                  'border-2 border-dashed rounded-2xl p-12 text-center transition-colors',
+                  dragActive
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground',
                 )}
               >
                 <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-foreground mb-2">{t('documents.drag_drop')}</p>
-                <p className="text-sm text-muted-foreground mb-4">PDF, Word, Excel, Markdown, or Text files</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  PDF, Word, Excel, Markdown, or Text files
+                </p>
                 <label>
                   <Button asChild>
                     <span className="cursor-pointer">
@@ -571,9 +665,9 @@ export default function Documents() {
                       {t('documents.browse_files')}
                     </span>
                   </Button>
-                  <input 
-                    type="file" 
-                    className="hidden" 
+                  <input
+                    type="file"
+                    className="hidden"
                     accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.md,.txt,.png,.jpg,.jpeg"
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   />
@@ -592,11 +686,16 @@ export default function Documents() {
               <DialogHeader>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                    {(() => { const Icon = getFileIcon(selectedDocument.file_type); return <Icon className="w-6 h-6 text-primary" /> })()}
+                    {(() => {
+                      const Icon = getFileIcon(selectedDocument.file_type)
+                      return <Icon className="w-6 h-6 text-primary" />
+                    })()}
                   </div>
                   <div>
                     <DialogTitle>{selectedDocument.title}</DialogTitle>
-                    <p className="text-sm text-muted-foreground font-mono">{selectedDocument.reference_number}</p>
+                    <p className="text-sm text-muted-foreground font-mono">
+                      {selectedDocument.reference_number}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
@@ -610,7 +709,7 @@ export default function Documents() {
                   </Button>
                 </div>
               </DialogHeader>
-              
+
               <div className="overflow-y-auto max-h-[calc(90vh-160px)] space-y-6 py-4">
                 {selectedDocument.ai_summary && (
                   <Card className="p-4 border-primary/20 bg-primary/5">
@@ -650,8 +749,11 @@ export default function Documents() {
                       AI-Generated Tags
                     </h3>
                     <div className="flex flex-wrap gap-2">
-                      {selectedDocument.ai_tags.map(tag => (
-                        <span key={tag} className="px-3 py-1 text-sm bg-primary/10 text-primary rounded-full border border-primary/20">
+                      {selectedDocument.ai_tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-3 py-1 text-sm bg-primary/10 text-primary rounded-full border border-primary/20"
+                        >
                           {tag}
                         </span>
                       ))}
@@ -663,8 +765,11 @@ export default function Documents() {
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-2">Keywords</h3>
                     <div className="flex flex-wrap gap-2">
-                      {selectedDocument.ai_keywords.map(keyword => (
-                        <span key={keyword} className="px-2 py-0.5 text-xs bg-surface text-muted-foreground rounded">
+                      {selectedDocument.ai_keywords.map((keyword) => (
+                        <span
+                          key={keyword}
+                          className="px-2 py-0.5 text-xs bg-surface text-muted-foreground rounded"
+                        >
                           {keyword}
                         </span>
                       ))}

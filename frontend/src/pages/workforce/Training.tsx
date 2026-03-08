@@ -3,14 +3,23 @@ import { useTranslation } from 'react-i18next'
 import { Plus, Search, Filter, ChevronRight } from 'lucide-react'
 import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, getApiErrorMessage, type InductionRun, type AssetType } from '../../api/client'
+import {
+  workforceApi,
+  auditsApi,
+  getApiErrorMessage,
+  type InductionRun,
+  type AssetType,
+} from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
 
-const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
+const STATUS_VARIANTS: Record<
+  string,
+  'success' | 'warning' | 'info' | 'destructive' | 'secondary'
+> = {
   completed: 'success',
   in_progress: 'warning',
   draft: 'info',
@@ -37,7 +46,8 @@ export default function Training() {
   }, [searchTerm])
 
   useEffect(() => {
-    workforceApi.listEngineers({ page: '1', page_size: '500' })
+    workforceApi
+      .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
         const map: Record<number, string> = {}
         for (const e of res.data?.items || []) {
@@ -46,7 +56,8 @@ export default function Training() {
         setEngineerMap(map)
       })
       .catch(() => {})
-    auditsApi.listTemplates(1, 500, { is_published: true })
+    auditsApi
+      .listTemplates(1, 500, { is_published: true })
       .then((res) => {
         const map: Record<number, string> = {}
         for (const t of res.data?.items || []) {
@@ -55,7 +66,8 @@ export default function Training() {
         setTemplateMap(map)
       })
       .catch(() => {})
-    workforceApi.listAssetTypes()
+    workforceApi
+      .listAssetTypes()
       .then((res) => setAssetTypes(res.data?.items || []))
       .catch(() => {})
   }, [])
@@ -86,9 +98,7 @@ export default function Training() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('workforce.training.title')}</h1>
-          <p className="text-muted-foreground mt-1">
-            {t('workforce.training.subtitle')}
-          </p>
+          <p className="text-muted-foreground mt-1">{t('workforce.training.subtitle')}</p>
         </div>
         <Button onClick={() => navigate('/workforce/training/new')} className="gap-2">
           <Plus className="w-4 h-4" />
@@ -149,13 +159,27 @@ export default function Training() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.reference')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.engineer')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.template')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.stage')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.status')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.date')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.reference')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.engineer')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.template')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.asset_type')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.stage')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('common.status')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('common.date')}
+                    </th>
                     <th className="w-10" />
                   </tr>
                 </thead>
@@ -171,15 +195,28 @@ export default function Training() {
                       <tr
                         key={i.id}
                         className={cn(
-                          "border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer",
+                          'border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer',
                         )}
                         onClick={() => navigate(`/workforce/training/${i.id}/execute`)}
                       >
-                        <td className="py-3 px-4 text-sm font-medium text-foreground">{i.reference_number}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">{engineerMap[i.engineer_id] ?? `#${i.engineer_id}`}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">{templateMap[i.template_id] ?? `#${i.template_id}`}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{i.asset_type_id ? (assetTypes.find(at => at.id === i.asset_type_id)?.name ?? `#${i.asset_type_id}`) : '—'}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{i.stage?.replace(/_/g, ' ') ?? '—'}</td>
+                        <td className="py-3 px-4 text-sm font-medium text-foreground">
+                          {i.reference_number}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {engineerMap[i.engineer_id] ?? `#${i.engineer_id}`}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {templateMap[i.template_id] ?? `#${i.template_id}`}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {i.asset_type_id
+                            ? (assetTypes.find((at) => at.id === i.asset_type_id)?.name ??
+                              `#${i.asset_type_id}`)
+                            : '—'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {i.stage?.replace(/_/g, ' ') ?? '—'}
+                        </td>
                         <td className="py-3 px-4">
                           <Badge variant={STATUS_VARIANTS[i.status] || 'secondary'}>
                             {i.status?.replace(/_/g, ' ') ?? '—'}

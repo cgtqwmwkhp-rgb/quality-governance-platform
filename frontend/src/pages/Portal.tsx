@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FileText,
   Search,
@@ -9,26 +9,26 @@ import {
   Smartphone,
   LogOut,
   User,
-} from 'lucide-react';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer';
-import { Card } from '../components/ui/Card';
-import { ThemeToggle } from '../components/ui/ThemeToggle';
-import { cn } from '../helpers/utils';
+} from 'lucide-react'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
+import { Card } from '../components/ui/Card'
+import { ThemeToggle } from '../components/ui/ThemeToggle'
+import { cn } from '../helpers/utils'
 
 export default function Portal() {
-  const navigate = useNavigate();
-  const { user, logout } = usePortalAuth();
-  const { announce } = useLiveAnnouncer();
+  const navigate = useNavigate()
+  const { user, logout } = usePortalAuth()
+  const { announce } = useLiveAnnouncer()
 
   useEffect(() => {
-    announce('Employee portal loaded');
-  }, [announce]);
+    announce('Employee portal loaded')
+  }, [announce])
 
   const handleLogout = () => {
-    logout();
-    navigate('/portal/login');
-  };
+    logout()
+    navigate('/portal/login')
+  }
 
   return (
     <div data-testid="portal-home" className="min-h-screen bg-surface">
@@ -75,7 +75,9 @@ export default function Portal() {
 
         {/* Welcome Message */}
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">What would you like to do?</h2>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">
+            What would you like to do?
+          </h2>
           <p className="text-muted-foreground">Select an option below</p>
         </div>
 
@@ -86,8 +88,8 @@ export default function Portal() {
             data-testid="portal-report-btn"
             onClick={() => navigate('/portal/report')}
             className={cn(
-              "w-full flex items-center gap-4 p-5 rounded-2xl transition-all group",
-              "bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 hover:border-primary/40"
+              'w-full flex items-center gap-4 p-5 rounded-2xl transition-all group',
+              'bg-primary/5 hover:bg-primary/10 border-2 border-primary/20 hover:border-primary/40',
             )}
           >
             <div className="w-14 h-14 rounded-xl gradient-brand flex items-center justify-center shadow-glow">
@@ -97,7 +99,9 @@ export default function Portal() {
               <h3 className="text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
                 Submit a Report
               </h3>
-              <p className="text-sm text-muted-foreground">Incident, Near Miss, Complaint, or RTA</p>
+              <p className="text-sm text-muted-foreground">
+                Incident, Near Miss, Complaint, or RTA
+              </p>
             </div>
             <ChevronRight className="w-6 h-6 text-primary group-hover:translate-x-1 transition-transform" />
           </button>
@@ -161,5 +165,5 @@ export default function Portal() {
         </button>
       </footer>
     </div>
-  );
+  )
 }

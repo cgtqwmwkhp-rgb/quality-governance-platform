@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Bell,
   BellOff,
@@ -15,50 +15,51 @@ import {
   Mail,
   MessageSquare,
   Smartphone,
-  Volume2
-} from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Switch } from '../components/ui/Switch';
-import { cn } from "../helpers/utils";
+  Volume2,
+} from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { Switch } from '../components/ui/Switch'
+import { cn } from '../helpers/utils'
 
 interface Notification {
-  id: string;
-  type: 'alert' | 'info' | 'success' | 'warning' | 'reminder';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
-  module?: string;
-  actionUrl?: string;
-  actionLabel?: string;
+  id: string
+  type: 'alert' | 'info' | 'success' | 'warning' | 'reminder'
+  title: string
+  message: string
+  timestamp: string
+  read: boolean
+  module?: string
+  actionUrl?: string
+  actionLabel?: string
 }
 
 interface NotificationPreference {
-  id: string;
-  label: string;
-  description: string;
-  email: boolean;
-  push: boolean;
-  inApp: boolean;
+  id: string
+  label: string
+  description: string
+  email: boolean
+  push: boolean
+  inApp: boolean
 }
 
 export default function Notifications() {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications');
-  const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all');
+  const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<'notifications' | 'settings'>('notifications')
+  const [filter, setFilter] = useState<'all' | 'unread' | 'alerts'>('all')
   const [notifications, setNotifications] = useState<Notification[]>([
     {
       id: 'NOT001',
       type: 'alert',
       title: 'High Priority Incident Reported',
-      message: 'A new high-priority incident (INC-2024-0847) has been reported and requires immediate attention.',
+      message:
+        'A new high-priority incident (INC-2024-0847) has been reported and requires immediate attention.',
       timestamp: '5 minutes ago',
       read: false,
       module: 'Incidents',
       actionUrl: '/incidents/INC-2024-0847',
-      actionLabel: 'View Incident'
+      actionLabel: 'View Incident',
     },
     {
       id: 'NOT002',
@@ -69,18 +70,19 @@ export default function Notifications() {
       read: false,
       module: 'Actions',
       actionUrl: '/actions/ACT-2024-0523',
-      actionLabel: 'View Action'
+      actionLabel: 'View Action',
     },
     {
       id: 'NOT003',
       type: 'reminder',
       title: 'Upcoming Audit Reminder',
-      message: 'ISO 9001:2015 Internal Audit is scheduled for January 22, 2024. Prepare documentation.',
+      message:
+        'ISO 9001:2015 Internal Audit is scheduled for January 22, 2024. Prepare documentation.',
       timestamp: '2 hours ago',
       read: false,
       module: 'Audits',
       actionUrl: '/audits/AUD-2024-0156',
-      actionLabel: 'View Audit'
+      actionLabel: 'View Audit',
     },
     {
       id: 'NOT004',
@@ -89,7 +91,7 @@ export default function Notifications() {
       message: 'Risk RSK-2024-0089 has been reviewed and approved by Sarah Johnson.',
       timestamp: '3 hours ago',
       read: true,
-      module: 'Risks'
+      module: 'Risks',
     },
     {
       id: 'NOT005',
@@ -98,7 +100,7 @@ export default function Notifications() {
       message: 'A new document "Safety Protocol v2.1" has been uploaded to the Document Library.',
       timestamp: 'Yesterday',
       read: true,
-      module: 'Documents'
+      module: 'Documents',
     },
     {
       id: 'NOT006',
@@ -108,54 +110,96 @@ export default function Notifications() {
       timestamp: 'Yesterday',
       read: true,
       actionUrl: '/reports',
-      actionLabel: 'View Report'
-    }
-  ]);
+      actionLabel: 'View Report',
+    },
+  ])
 
   const [preferences, setPreferences] = useState<NotificationPreference[]>([
-    { id: 'PREF001', label: t('notifications.pref.high_priority_alerts'), description: t('notifications.pref.high_priority_alerts_desc'), email: true, push: true, inApp: true },
-    { id: 'PREF002', label: t('notifications.pref.action_reminders'), description: t('notifications.pref.action_reminders_desc'), email: true, push: true, inApp: true },
-    { id: 'PREF003', label: t('notifications.pref.audit_notifications'), description: t('notifications.pref.audit_notifications_desc'), email: true, push: false, inApp: true },
-    { id: 'PREF004', label: t('notifications.pref.document_updates'), description: t('notifications.pref.document_updates_desc'), email: false, push: false, inApp: true },
-    { id: 'PREF005', label: t('notifications.pref.weekly_summaries'), description: t('notifications.pref.weekly_summaries_desc'), email: true, push: false, inApp: false },
-    { id: 'PREF006', label: t('notifications.pref.assignment_notifications'), description: t('notifications.pref.assignment_notifications_desc'), email: true, push: true, inApp: true },
-  ]);
+    {
+      id: 'PREF001',
+      label: t('notifications.pref.high_priority_alerts'),
+      description: t('notifications.pref.high_priority_alerts_desc'),
+      email: true,
+      push: true,
+      inApp: true,
+    },
+    {
+      id: 'PREF002',
+      label: t('notifications.pref.action_reminders'),
+      description: t('notifications.pref.action_reminders_desc'),
+      email: true,
+      push: true,
+      inApp: true,
+    },
+    {
+      id: 'PREF003',
+      label: t('notifications.pref.audit_notifications'),
+      description: t('notifications.pref.audit_notifications_desc'),
+      email: true,
+      push: false,
+      inApp: true,
+    },
+    {
+      id: 'PREF004',
+      label: t('notifications.pref.document_updates'),
+      description: t('notifications.pref.document_updates_desc'),
+      email: false,
+      push: false,
+      inApp: true,
+    },
+    {
+      id: 'PREF005',
+      label: t('notifications.pref.weekly_summaries'),
+      description: t('notifications.pref.weekly_summaries_desc'),
+      email: true,
+      push: false,
+      inApp: false,
+    },
+    {
+      id: 'PREF006',
+      label: t('notifications.pref.assignment_notifications'),
+      description: t('notifications.pref.assignment_notifications_desc'),
+      email: true,
+      push: true,
+      inApp: true,
+    },
+  ])
 
   const typeStyles: Record<string, { icon: React.ReactNode; variant: string }> = {
     alert: { icon: <AlertTriangle className="w-5 h-5" />, variant: 'destructive' },
     warning: { icon: <Clock className="w-5 h-5" />, variant: 'warning' },
     success: { icon: <CheckCircle2 className="w-5 h-5" />, variant: 'success' },
     info: { icon: <Info className="w-5 h-5" />, variant: 'info' },
-    reminder: { icon: <Bell className="w-5 h-5" />, variant: 'primary' }
-  };
+    reminder: { icon: <Bell className="w-5 h-5" />, variant: 'primary' },
+  }
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length
 
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
-    if (filter === 'alerts') return n.type === 'alert' || n.type === 'warning';
-    return true;
-  });
+  const filteredNotifications = notifications.filter((n) => {
+    if (filter === 'unread') return !n.read
+    if (filter === 'alerts') return n.type === 'alert' || n.type === 'warning'
+    return true
+  })
 
   const markAsRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+  }
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  }
 
   const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }
 
   const clearAll = () => {
-    setNotifications([]);
-  };
+    setNotifications([])
+  }
 
   const togglePreference = (id: string, channel: 'email' | 'push' | 'inApp') => {
-    setPreferences(prev => prev.map(p => p.id === id ? { ...p, [channel]: !p[channel] } : p));
-  };
+    setPreferences((prev) => prev.map((p) => (p.id === id ? { ...p, [channel]: !p[channel] } : p)))
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -182,27 +226,25 @@ export default function Notifications() {
         <button
           onClick={() => setActiveTab('notifications')}
           className={cn(
-            "px-6 py-3 font-medium transition-all border-b-2",
+            'px-6 py-3 font-medium transition-all border-b-2',
             activeTab === 'notifications'
               ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+              : 'text-muted-foreground border-transparent hover:text-foreground',
           )}
         >
           <span className="flex items-center gap-2">
             <Bell className="w-5 h-5" />
             {t('notifications.title')}
-            {unreadCount > 0 && (
-              <Badge variant="destructive">{unreadCount}</Badge>
-            )}
+            {unreadCount > 0 && <Badge variant="destructive">{unreadCount}</Badge>}
           </span>
         </button>
         <button
           onClick={() => setActiveTab('settings')}
           className={cn(
-            "px-6 py-3 font-medium transition-all border-b-2",
+            'px-6 py-3 font-medium transition-all border-b-2',
             activeTab === 'settings'
               ? 'text-primary border-primary'
-              : 'text-muted-foreground border-transparent hover:text-foreground'
+              : 'text-muted-foreground border-transparent hover:text-foreground',
           )}
         >
           <span className="flex items-center gap-2">
@@ -225,17 +267,31 @@ export default function Notifications() {
                   size="sm"
                   onClick={() => setFilter(f as any)}
                 >
-                  {f === 'all' ? t('common.all') : f === 'unread' ? t('notifications.filter.unread', { count: unreadCount }) : t('notifications.filter.alerts')}
+                  {f === 'all'
+                    ? t('common.all')
+                    : f === 'unread'
+                      ? t('notifications.filter.unread', { count: unreadCount })
+                      : t('notifications.filter.alerts')}
                 </Button>
               ))}
             </div>
-            
+
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={markAllAsRead}
+                disabled={unreadCount === 0}
+              >
                 <CheckCheck className="w-4 h-4" />
                 {t('notifications.mark_all_read')}
               </Button>
-              <Button variant="ghost" size="sm" onClick={clearAll} className="text-destructive hover:text-destructive">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAll}
+                className="text-destructive hover:text-destructive"
+              >
                 <Trash2 className="w-4 h-4" />
                 {t('notifications.clear_all')}
               </Button>
@@ -247,30 +303,35 @@ export default function Notifications() {
             {filteredNotifications.map((notification) => (
               <Card
                 key={notification.id}
-                className={cn(
-                  "p-4",
-                  !notification.read && "border-primary/30 bg-primary/5"
-                )}
+                className={cn('p-4', !notification.read && 'border-primary/30 bg-primary/5')}
               >
                 <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "p-2.5 rounded-xl",
-                    typeStyles[notification.type].variant === 'destructive' && "bg-destructive/10 text-destructive",
-                    typeStyles[notification.type].variant === 'warning' && "bg-warning/10 text-warning",
-                    typeStyles[notification.type].variant === 'success' && "bg-success/10 text-success",
-                    typeStyles[notification.type].variant === 'info' && "bg-info/10 text-info",
-                    typeStyles[notification.type].variant === 'primary' && "bg-primary/10 text-primary",
-                  )}>
+                  <div
+                    className={cn(
+                      'p-2.5 rounded-xl',
+                      typeStyles[notification.type].variant === 'destructive' &&
+                        'bg-destructive/10 text-destructive',
+                      typeStyles[notification.type].variant === 'warning' &&
+                        'bg-warning/10 text-warning',
+                      typeStyles[notification.type].variant === 'success' &&
+                        'bg-success/10 text-success',
+                      typeStyles[notification.type].variant === 'info' && 'bg-info/10 text-info',
+                      typeStyles[notification.type].variant === 'primary' &&
+                        'bg-primary/10 text-primary',
+                    )}
+                  >
                     {typeStyles[notification.type].icon}
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h3 className={cn(
-                          "font-semibold",
-                          notification.read ? 'text-muted-foreground' : 'text-foreground'
-                        )}>
+                        <h3
+                          className={cn(
+                            'font-semibold',
+                            notification.read ? 'text-muted-foreground' : 'text-foreground',
+                          )}
+                        >
                           {notification.title}
                         </h3>
                         {notification.module && (
@@ -279,35 +340,43 @@ export default function Notifications() {
                           </span>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {notification.timestamp}
                         </span>
-                        {!notification.read && (
-                          <span className="w-2 h-2 bg-primary rounded-full" />
-                        )}
+                        {!notification.read && <span className="w-2 h-2 bg-primary rounded-full" />}
                       </div>
                     </div>
-                    
-                    <p className="text-muted-foreground mt-2 text-sm">
-                      {notification.message}
-                    </p>
-                    
+
+                    <p className="text-muted-foreground mt-2 text-sm">{notification.message}</p>
+
                     <div className="flex items-center gap-3 mt-3">
                       {notification.actionUrl && (
-                        <a href={notification.actionUrl} className="text-sm text-primary hover:underline font-medium">
+                        <a
+                          href={notification.actionUrl}
+                          className="text-sm text-primary hover:underline font-medium"
+                        >
                           {notification.actionLabel} →
                         </a>
                       )}
-                      
+
                       <div className="flex items-center gap-2 ml-auto">
                         {!notification.read && (
-                          <Button variant="ghost" size="sm" onClick={() => markAsRead(notification.id)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => markAsRead(notification.id)}
+                          >
                             <Check className="w-4 h-4" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => deleteNotification(notification.id)} className="text-muted-foreground hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deleteNotification(notification.id)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
@@ -324,9 +393,13 @@ export default function Notifications() {
               <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
                 <BellOff className="w-10 h-10 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">{t('notifications.empty')}</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                {t('notifications.empty')}
+              </h3>
               <p className="text-muted-foreground">
-                {filter === 'unread' ? t('notifications.all_caught_up') : t('notifications.nothing_to_show')}
+                {filter === 'unread'
+                  ? t('notifications.all_caught_up')
+                  : t('notifications.nothing_to_show')}
               </p>
             </div>
           )}
@@ -337,15 +410,19 @@ export default function Notifications() {
       {activeTab === 'settings' && (
         <Card className="overflow-hidden">
           <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold text-foreground">{t('notifications.preferences_title')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('notifications.preferences_title')}
+            </h2>
             <p className="text-sm text-muted-foreground mt-1">
               {t('notifications.preferences_description')}
             </p>
           </div>
-          
+
           {/* Channel Headers */}
           <div className="grid grid-cols-[1fr,80px,80px,80px] gap-4 px-6 py-3 bg-surface border-b border-border">
-            <div className="text-sm font-medium text-muted-foreground">{t('notifications.settings.notification_type')}</div>
+            <div className="text-sm font-medium text-muted-foreground">
+              {t('notifications.settings.notification_type')}
+            </div>
             <div className="text-sm font-medium text-muted-foreground text-center flex items-center justify-center gap-1">
               <Mail className="w-4 h-4" />
               {t('notifications.settings.email')}
@@ -359,7 +436,7 @@ export default function Notifications() {
               {t('notifications.settings.in_app')}
             </div>
           </div>
-          
+
           {/* Preference Rows */}
           {preferences.map((pref) => (
             <div
@@ -370,42 +447,61 @@ export default function Notifications() {
                 <p className="font-medium text-foreground">{pref.label}</p>
                 <p className="text-sm text-muted-foreground mt-0.5">{pref.description}</p>
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.email} onCheckedChange={() => togglePreference(pref.id, 'email')} />
+                <Switch
+                  checked={pref.email}
+                  onCheckedChange={() => togglePreference(pref.id, 'email')}
+                />
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.push} onCheckedChange={() => togglePreference(pref.id, 'push')} />
+                <Switch
+                  checked={pref.push}
+                  onCheckedChange={() => togglePreference(pref.id, 'push')}
+                />
               </div>
-              
+
               <div className="flex items-center justify-center">
-                <Switch checked={pref.inApp} onCheckedChange={() => togglePreference(pref.id, 'inApp')} />
+                <Switch
+                  checked={pref.inApp}
+                  onCheckedChange={() => togglePreference(pref.id, 'inApp')}
+                />
               </div>
             </div>
           ))}
-          
+
           {/* Sound Settings */}
           <div className="p-6 border-t border-border">
-            <h3 className="text-lg font-semibold text-foreground mb-4">{t('notifications.settings.sound_alerts')}</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              {t('notifications.settings.sound_alerts')}
+            </h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Volume2 className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">{t('notifications.settings.notification_sounds')}</p>
-                    <p className="text-sm text-muted-foreground">{t('notifications.settings.notification_sounds_description')}</p>
+                    <p className="font-medium text-foreground">
+                      {t('notifications.settings.notification_sounds')}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('notifications.settings.notification_sounds_description')}
+                    </p>
                   </div>
                 </div>
                 <Switch defaultChecked />
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium text-foreground">{t('notifications.settings.desktop_notifications')}</p>
-                    <p className="text-sm text-muted-foreground">{t('notifications.settings.desktop_notifications_description')}</p>
+                    <p className="font-medium text-foreground">
+                      {t('notifications.settings.desktop_notifications')}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('notifications.settings.desktop_notifications_description')}
+                    </p>
                   </div>
                 </div>
                 <Switch />
@@ -415,5 +511,5 @@ export default function Notifications() {
         </Card>
       )}
     </div>
-  );
+  )
 }

@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
-import { workforceApi, getApiErrorMessage, type EngineerProfile as EngineerProfileType, type CompetencyRecord } from '../../api/client'
+import {
+  workforceApi,
+  getApiErrorMessage,
+  type EngineerProfile as EngineerProfileType,
+  type CompetencyRecord,
+} from '../../api/client'
 
 const stateColors: Record<string, string> = {
   active: 'bg-success/10 text-success',
@@ -22,7 +27,8 @@ export default function EngineerProfile() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    workforceApi.listAssetTypes()
+    workforceApi
+      .listAssetTypes()
       .then((res) => {
         const map: Record<number, string> = {}
         for (const at of res.data?.items || []) map[at.id] = at.name
@@ -75,9 +81,9 @@ export default function EngineerProfile() {
     )
   }
 
-  const activeCount = competencies.filter(c => c.state === 'active').length
-  const dueCount = competencies.filter(c => c.state === 'due').length
-  const expiredCount = competencies.filter(c => c.state === 'expired').length
+  const activeCount = competencies.filter((c) => c.state === 'active').length
+  const dueCount = competencies.filter((c) => c.state === 'due').length
+  const expiredCount = competencies.filter((c) => c.state === 'expired').length
 
   return (
     <div className="space-y-6 p-6">
@@ -105,27 +111,39 @@ export default function EngineerProfile() {
               </div>
             </div>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${engineer.is_active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}>
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium ${engineer.is_active ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'}`}
+          >
             {engineer.is_active ? t('common.active') : t('common.inactive')}
           </span>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.engineers.employee_no')}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              {t('workforce.engineers.employee_no')}
+            </p>
             <p className="text-foreground font-medium mt-1">{engineer.employee_number || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.common.department')}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              {t('workforce.common.department')}
+            </p>
             <p className="text-foreground font-medium mt-1">{engineer.department || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.common.site')}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              {t('workforce.common.site')}
+            </p>
             <p className="text-foreground font-medium mt-1">{engineer.site || '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">{t('workforce.engineers.external_id')}</p>
-            <p className="text-foreground font-mono text-sm mt-1">{engineer.external_id?.slice(0, 8)}...</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              {t('workforce.engineers.external_id')}
+            </p>
+            <p className="text-foreground font-mono text-sm mt-1">
+              {engineer.external_id?.slice(0, 8)}...
+            </p>
           </div>
         </div>
       </div>
@@ -133,11 +151,15 @@ export default function EngineerProfile() {
       {/* Competency Summary KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground">{t('workforce.competency.active_competencies')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('workforce.competency.active_competencies')}
+          </p>
           <p className="text-3xl font-bold text-success mt-1">{activeCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground">{t('workforce.competency.due_reassessment')}</p>
+          <p className="text-sm text-muted-foreground">
+            {t('workforce.competency.due_reassessment')}
+          </p>
           <p className="text-3xl font-bold text-warning mt-1">{dueCount}</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5">
@@ -149,7 +171,9 @@ export default function EngineerProfile() {
       {/* Competency Records Table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.records')}</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            {t('workforce.competency.records')}
+          </h2>
         </div>
         {competencies.length === 0 ? (
           <div className="px-6 py-12 text-center text-muted-foreground">
@@ -160,18 +184,35 @@ export default function EngineerProfile() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.source')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.assessments.outcome')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.state')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.assessed')}</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{t('workforce.competency.expires')}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.common.asset_type')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.competency.source')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.assessments.outcome')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.competency.state')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.competency.assessed')}
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                    {t('workforce.competency.expires')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {competencies.map((rec) => (
-                  <tr key={rec.id} className="border-b border-border hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3 text-foreground">{assetTypeMap[rec.asset_type_id] ?? `Asset Type #${rec.asset_type_id}`}</td>
+                  <tr
+                    key={rec.id}
+                    className="border-b border-border hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-foreground">
+                      {assetTypeMap[rec.asset_type_id] ?? `Asset Type #${rec.asset_type_id}`}
+                    </td>
                     <td className="px-4 py-3">
                       <span className="capitalize text-foreground">{rec.source_type}</span>
                     </td>
@@ -179,7 +220,9 @@ export default function EngineerProfile() {
                       <span className="capitalize text-foreground">{rec.outcome || '—'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${stateColors[rec.state] || stateColors.not_assessed}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${stateColors[rec.state] || stateColors.not_assessed}`}
+                      >
                         {rec.state.replace(/_/g, ' ')}
                       </span>
                     </td>
@@ -200,8 +243,12 @@ export default function EngineerProfile() {
       {/* Skills Matrix */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.skills_matrix')}</h2>
-          <p className="text-sm text-muted-foreground mt-1">{t('workforce.competency.skills_matrix_subtitle')}</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            {t('workforce.competency.skills_matrix')}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {t('workforce.competency.skills_matrix_subtitle')}
+          </p>
         </div>
         <div className="p-6">
           {competencies.length === 0 ? (
@@ -217,14 +264,18 @@ export default function EngineerProfile() {
                     rec.state === 'active'
                       ? 'border-success/50 bg-success/10'
                       : rec.state === 'due'
-                      ? 'border-warning/50 bg-warning/10'
-                      : rec.state === 'expired' || rec.state === 'failed'
-                      ? 'border-destructive/50 bg-destructive/10'
-                      : 'border-border bg-muted/30'
+                        ? 'border-warning/50 bg-warning/10'
+                        : rec.state === 'expired' || rec.state === 'failed'
+                          ? 'border-destructive/50 bg-destructive/10'
+                          : 'border-border bg-muted/30'
                   }`}
                 >
-                  <p className="text-xs text-muted-foreground">{assetTypeMap[rec.asset_type_id] ?? `#${rec.asset_type_id}`}</p>
-                  <p className="text-xs font-medium mt-1 capitalize">{rec.state.replace(/_/g, ' ')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {assetTypeMap[rec.asset_type_id] ?? `#${rec.asset_type_id}`}
+                  </p>
+                  <p className="text-xs font-medium mt-1 capitalize">
+                    {rec.state.replace(/_/g, ' ')}
+                  </p>
                 </div>
               ))}
             </div>

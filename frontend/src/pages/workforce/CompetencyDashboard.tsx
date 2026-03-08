@@ -1,16 +1,44 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Users, Award, Clock, AlertTriangle, TrendingUp, ClipboardCheck, BookOpen } from 'lucide-react'
+import {
+  Users,
+  Award,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  ClipboardCheck,
+  BookOpen,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { workforceApi } from '../../api/client'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
 
 const KPI_CARDS = [
-  { key: 'engineers', labelKey: 'workforce.competency.total_engineers', icon: Users, color: 'text-primary' },
-  { key: 'active', labelKey: 'workforce.competency.active_competencies', icon: Award, color: 'text-success' },
-  { key: 'expiring', labelKey: 'workforce.competency.expiring_soon', icon: Clock, color: 'text-warning' },
-  { key: 'overdue', labelKey: 'workforce.competency.overdue', icon: AlertTriangle, color: 'text-destructive' },
+  {
+    key: 'engineers',
+    labelKey: 'workforce.competency.total_engineers',
+    icon: Users,
+    color: 'text-primary',
+  },
+  {
+    key: 'active',
+    labelKey: 'workforce.competency.active_competencies',
+    icon: Award,
+    color: 'text-success',
+  },
+  {
+    key: 'expiring',
+    labelKey: 'workforce.competency.expiring_soon',
+    icon: Clock,
+    color: 'text-warning',
+  },
+  {
+    key: 'overdue',
+    labelKey: 'workforce.competency.overdue',
+    icon: AlertTriangle,
+    color: 'text-destructive',
+  },
 ]
 
 const STATUS_COLORS: Record<string, string> = {
@@ -37,7 +65,9 @@ export default function CompetencyDashboard() {
   const [loading, setLoading] = useState(true)
   const [kpis, setKpis] = useState({ engineers: 0, active: 0, expiring: 0, overdue: 0 })
   const [competencyBreakdown, setCompetencyBreakdown] = useState<Record<string, number>>({})
-  const [assessments, setAssessments] = useState<{ id: string; reference_number: string; status: string; title?: string }[]>([])
+  const [assessments, setAssessments] = useState<
+    { id: string; reference_number: string; status: string; title?: string }[]
+  >([])
   const [trends, setTrends] = useState<TrendMonth[]>([])
 
   useEffect(() => {
@@ -73,21 +103,18 @@ export default function CompetencyDashboard() {
 
   const compTotal = useMemo(
     () => Object.values(competencyBreakdown).reduce((a, b) => a + b, 0),
-    [competencyBreakdown]
+    [competencyBreakdown],
   )
 
-  const trendMax = useMemo(
-    () => Math.max(1, ...trends.map((t) => t.total)),
-    [trends]
-  )
+  const trendMax = useMemo(() => Math.max(1, ...trends.map((t) => t.total)), [trends])
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{t('workforce.competency_dashboard.title')}</h1>
-        <p className="text-muted-foreground mt-1">
-          {t('workforce.competency_dashboard.subtitle')}
-        </p>
+        <h1 className="text-2xl font-bold text-foreground">
+          {t('workforce.competency_dashboard.title')}
+        </h1>
+        <p className="text-muted-foreground mt-1">{t('workforce.competency_dashboard.subtitle')}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -101,7 +128,7 @@ export default function CompetencyDashboard() {
                     {kpis[k.key as keyof typeof kpis] ?? 0}
                   </p>
                 </div>
-                <div className={cn("p-3 rounded-lg bg-muted", k.color)}>
+                <div className={cn('p-3 rounded-lg bg-muted', k.color)}>
                   <k.icon className="w-6 h-6" />
                 </div>
               </div>
@@ -139,13 +166,20 @@ export default function CompetencyDashboard() {
                       <div key={state} className="space-y-1">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-medium text-foreground">
-                            {STATUS_LABEL_KEYS[state] ? t(STATUS_LABEL_KEYS[state]) : state.replace(/_/g, ' ')}
+                            {STATUS_LABEL_KEYS[state]
+                              ? t(STATUS_LABEL_KEYS[state])
+                              : state.replace(/_/g, ' ')}
                           </span>
-                          <span className="text-muted-foreground">{count} ({pct}%)</span>
+                          <span className="text-muted-foreground">
+                            {count} ({pct}%)
+                          </span>
                         </div>
                         <div className="h-3 rounded-full bg-muted overflow-hidden">
                           <div
-                            className={cn("h-full rounded-full transition-all", STATUS_COLORS[state] ?? 'bg-primary')}
+                            className={cn(
+                              'h-full rounded-full transition-all',
+                              STATUS_COLORS[state] ?? 'bg-primary',
+                            )}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
@@ -157,7 +191,7 @@ export default function CompetencyDashboard() {
             <div className="mt-4 flex flex-wrap gap-4 text-sm">
               {Object.entries(STATUS_LABEL_KEYS).map(([key, labelKey]) => (
                 <span key={key} className="flex items-center gap-2">
-                  <span className={cn("w-3 h-3 rounded-full", STATUS_COLORS[key])} />
+                  <span className={cn('w-3 h-3 rounded-full', STATUS_COLORS[key])} />
                   {t(labelKey)}
                 </span>
               ))}
@@ -170,8 +204,12 @@ export default function CompetencyDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.assessment_trends')}</h2>
-                <p className="text-sm text-muted-foreground">{t('workforce.competency.assessment_trends_subtitle')}</p>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {t('workforce.competency.assessment_trends')}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {t('workforce.competency.assessment_trends_subtitle')}
+                </p>
               </div>
               <TrendingUp className="w-5 h-5 text-muted-foreground" />
             </div>
@@ -193,8 +231,15 @@ export default function CompetencyDashboard() {
                       ? new Date(tr.month).toLocaleDateString('en-GB', { month: 'short' })
                       : ''
                     return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${monthLabel}: ${tr.total} total, ${tr.passed} passed, ${tr.failed} failed`}>
-                        <div className="w-full flex flex-col items-center justify-end" style={{ height: '120px' }}>
+                      <div
+                        key={i}
+                        className="flex-1 flex flex-col items-center gap-0.5"
+                        title={`${monthLabel}: ${tr.total} total, ${tr.passed} passed, ${tr.failed} failed`}
+                      >
+                        <div
+                          className="w-full flex flex-col items-center justify-end"
+                          style={{ height: '120px' }}
+                        >
                           {failH > 0 && (
                             <div
                               className="w-full max-w-[20px] rounded-t bg-destructive"
@@ -203,7 +248,10 @@ export default function CompetencyDashboard() {
                           )}
                           {passH > 0 && (
                             <div
-                              className={cn("w-full max-w-[20px] bg-success", failH === 0 ? 'rounded-t' : '')}
+                              className={cn(
+                                'w-full max-w-[20px] bg-success',
+                                failH === 0 ? 'rounded-t' : '',
+                              )}
                               style={{ height: `${passH}%`, minHeight: passH > 0 ? '2px' : 0 }}
                             />
                           )}
@@ -215,10 +263,12 @@ export default function CompetencyDashboard() {
                 </div>
                 <div className="mt-3 flex gap-4 text-sm">
                   <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-success" /> {t('workforce.competency.passed')}
+                    <span className="w-3 h-3 rounded-full bg-success" />{' '}
+                    {t('workforce.competency.passed')}
                   </span>
                   <span className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-destructive" /> {t('workforce.competency.failed')}
+                    <span className="w-3 h-3 rounded-full bg-destructive" />{' '}
+                    {t('workforce.competency.failed')}
                   </span>
                 </div>
               </>
@@ -255,11 +305,16 @@ export default function CompetencyDashboard() {
                   <li
                     key={a.id}
                     className={cn(
-                      "flex items-center gap-3 p-3 rounded-lg border border-border",
-                      "hover:bg-muted/30 cursor-pointer transition-colors"
+                      'flex items-center gap-3 p-3 rounded-lg border border-border',
+                      'hover:bg-muted/30 cursor-pointer transition-colors',
                     )}
                     onClick={() => navigate(`/workforce/assessments/${a.id}/execute`)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/workforce/assessments/${a.id}/execute`); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/workforce/assessments/${a.id}/execute`)
+                      }
+                    }}
                     role="button"
                     tabIndex={0}
                   >
@@ -282,8 +337,12 @@ export default function CompetencyDashboard() {
         {/* Quick actions */}
         <Card>
           <CardHeader>
-            <h2 className="text-lg font-semibold text-foreground">{t('workforce.competency.quick_actions')}</h2>
-            <p className="text-sm text-muted-foreground">{t('workforce.competency.common_actions')}</p>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('workforce.competency.quick_actions')}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {t('workforce.competency.common_actions')}
+            </p>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3">
@@ -292,28 +351,36 @@ export default function CompetencyDashboard() {
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <ClipboardCheck className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">{t('workforce.assessments.new')}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t('workforce.assessments.new')}
+                </span>
               </button>
               <button
                 onClick={() => navigate('/workforce/training/new')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <BookOpen className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">{t('workforce.induction.new')}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t('workforce.induction.new')}
+                </span>
               </button>
               <button
                 onClick={() => navigate('/workforce/engineers')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <Users className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">{t('workforce.competency.engineer_directory')}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t('workforce.competency.engineer_directory')}
+                </span>
               </button>
               <button
                 onClick={() => navigate('/workforce/calendar')}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
               >
                 <Clock className="w-6 h-6 text-primary" />
-                <span className="text-sm font-medium text-foreground">{t('workforce.competency.schedule')}</span>
+                <span className="text-sm font-medium text-foreground">
+                  {t('workforce.competency.schedule')}
+                </span>
               </button>
             </div>
           </CardContent>

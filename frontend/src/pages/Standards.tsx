@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, AlertCircle, Shield, Award, Loader2 } from 'lucide-react'
+import {
+  Search,
+  BookOpen,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+  Shield,
+  Award,
+  Loader2,
+} from 'lucide-react'
 import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Badge } from '../components/ui/Badge'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 
 interface ExpandedState {
   [key: number]: boolean
 }
 
 const ISO_ICONS: Record<string, string> = {
-  'ISO9001': '🏆',
-  'ISO14001': '🌍',
-  'ISO27001': '🔐',
-  'ISO45001': '⛑️',
-  'ISO22000': '🍽️',
+  ISO9001: '🏆',
+  ISO14001: '🌍',
+  ISO27001: '🔐',
+  ISO45001: '⛑️',
+  ISO22000: '🍽️',
 }
 
 export default function Standards() {
@@ -35,7 +46,7 @@ export default function Standards() {
 
   useEffect(() => {
     loadStandards()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadStandards = async () => {
@@ -44,7 +55,7 @@ export default function Standards() {
       const response = await standardsApi.list(1, 50)
       const loadedStandards = response.data.items || []
       setStandards(loadedStandards)
-      
+
       // Load compliance scores for all standards
       const scores: Record<number, ComplianceScore> = {}
       await Promise.all(
@@ -65,7 +76,7 @@ export default function Standards() {
               setup_required: true,
             }
           }
-        })
+        }),
       )
       setComplianceScores(scores)
     } catch (err) {
@@ -97,31 +108,35 @@ export default function Standards() {
   }
 
   const toggleExpanded = (id: number) => {
-    setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
+    setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   // Helper to get clause status from controls
   const getClauseStatus = (clauseId: number): string => {
-    const clauseControls = controls.filter(c => c.clause_id === clauseId)
+    const clauseControls = controls.filter((c) => c.clause_id === clauseId)
     if (clauseControls.length === 0) return 'not_implemented'
-    
+
     const hasNotImplemented = clauseControls.some(
-      c => !c.implementation_status || c.implementation_status === 'not_implemented' || c.implementation_status === 'planned'
+      (c) =>
+        !c.implementation_status ||
+        c.implementation_status === 'not_implemented' ||
+        c.implementation_status === 'planned',
     )
-    const hasPartial = clauseControls.some(c => c.implementation_status === 'partial')
-    
+    const hasPartial = clauseControls.some((c) => c.implementation_status === 'partial')
+
     if (hasNotImplemented) return 'not_implemented'
     if (hasPartial) return 'partial'
     return 'implemented'
   }
 
   const filteredStandards = standards.filter(
-    s => s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         s.code.toLowerCase().includes(searchTerm.toLowerCase())
+    (s) =>
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.code.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   // Group clauses by level
-  const topLevelClauses = clauses.filter(c => c.level === 1)
+  const topLevelClauses = clauses.filter((c) => c.level === 1)
 
   if (loading) {
     return (
@@ -136,7 +151,13 @@ export default function Standards() {
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={() => { setError(null); loadStandards(); }} className="text-sm font-medium text-destructive hover:underline">
+          <button
+            onClick={() => {
+              setError(null)
+              loadStandards()
+            }}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
             {t('retry')}
           </button>
         </div>
@@ -178,7 +199,7 @@ export default function Standards() {
                 const compliance = scoreData?.compliance_percentage ?? 0
                 const setupRequired = scoreData?.setup_required ?? true
                 const isSelected = selectedStandard?.id === standard.id
-                
+
                 return (
                   <Card
                     key={standard.id}
@@ -186,11 +207,13 @@ export default function Standards() {
                     onClick={() => loadClauses(standard)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadClauses(standard); } }}
-                    className={cn(
-                      "p-5 cursor-pointer",
-                      isSelected && "border-primary shadow-lg"
-                    )}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        loadClauses(standard)
+                      }
+                    }}
+                    className={cn('p-5 cursor-pointer', isSelected && 'border-primary shadow-lg')}
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl flex-shrink-0">
@@ -206,7 +229,9 @@ export default function Standards() {
                           )}
                         </div>
                         <h3 className="font-semibold text-foreground truncate">{standard.name}</h3>
-                        <p className="text-xs text-muted-foreground mt-1">{t('standards.version', { version: standard.version })}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {t('standards.version', { version: standard.version })}
+                        </p>
                       </div>
                     </div>
 
@@ -215,24 +240,35 @@ export default function Standards() {
                       <div className="flex items-center justify-between text-xs mb-2">
                         <span className="text-muted-foreground">{t('standards.compliance')}</span>
                         {setupRequired ? (
-                          <span className="text-muted-foreground italic">{t('standards.setup_required')}</span>
+                          <span className="text-muted-foreground italic">
+                            {t('standards.setup_required')}
+                          </span>
                         ) : (
-                          <span className={cn(
-                            "font-bold",
-                            compliance >= 90 ? "text-success" :
-                            compliance >= 70 ? "text-warning" : "text-destructive"
-                          )}>
+                          <span
+                            className={cn(
+                              'font-bold',
+                              compliance >= 90
+                                ? 'text-success'
+                                : compliance >= 70
+                                  ? 'text-warning'
+                                  : 'text-destructive',
+                            )}
+                          >
                             {compliance}%
                           </span>
                         )}
                       </div>
                       <div className="h-2 bg-surface rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={cn(
-                            "h-full transition-all duration-500 rounded-full",
-                            setupRequired ? "bg-muted" :
-                            compliance >= 90 ? "bg-success" :
-                            compliance >= 70 ? "bg-warning" : "bg-destructive"
+                            'h-full transition-all duration-500 rounded-full',
+                            setupRequired
+                              ? 'bg-muted'
+                              : compliance >= 90
+                                ? 'bg-success'
+                                : compliance >= 70
+                                  ? 'bg-warning'
+                                  : 'bg-destructive',
                           )}
                           style={{ width: setupRequired ? '0%' : `${compliance}%` }}
                         />
@@ -252,7 +288,9 @@ export default function Standards() {
               <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
                 <Award className="w-10 h-10 text-primary" />
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-2">{t('standards.select_standard')}</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-2">
+                {t('standards.select_standard')}
+              </h3>
               <p className="text-muted-foreground max-w-md">
                 {t('standards.select_standard_description')}
               </p>
@@ -288,24 +326,33 @@ export default function Standards() {
                     {topLevelClauses.map((clause) => {
                       const isExpanded = expanded[clause.id]
                       // Fix: Filter sub-clauses by parent_clause_id, not just level
-                      const subClauses = clauses.filter(c => c.parent_clause_id === clause.id)
-                      const clauseControls = controls.filter(c => c.clause_id === clause.id)
+                      const subClauses = clauses.filter((c) => c.parent_clause_id === clause.id)
+                      const clauseControls = controls.filter((c) => c.clause_id === clause.id)
                       const hasChildren = subClauses.length > 0 || clauseControls.length > 0
-                      
+
                       // Real implementation status computed from controls
                       const clauseStatus = getClauseStatus(clause.id)
-                      
+
                       return (
                         <div key={clause.id}>
                           {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions -- role/tabIndex/handlers are conditionally applied when hasChildren is true */}
-                          <div 
+                          <div
                             onClick={hasChildren ? () => toggleExpanded(clause.id) : undefined}
-                            role={hasChildren ? "button" : undefined}
+                            role={hasChildren ? 'button' : undefined}
                             tabIndex={hasChildren ? 0 : undefined}
-                            onKeyDown={hasChildren ? (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpanded(clause.id); } } : undefined}
+                            onKeyDown={
+                              hasChildren
+                                ? (e: React.KeyboardEvent) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault()
+                                      toggleExpanded(clause.id)
+                                    }
+                                  }
+                                : undefined
+                            }
                             className={cn(
-                              "flex items-center gap-3 p-4 rounded-xl transition-all duration-200",
-                              hasChildren && "cursor-pointer hover:bg-surface"
+                              'flex items-center gap-3 p-4 rounded-xl transition-all duration-200',
+                              hasChildren && 'cursor-pointer hover:bg-surface',
                             )}
                           >
                             {hasChildren ? (
@@ -317,12 +364,17 @@ export default function Standards() {
                             ) : (
                               <div className="w-5" />
                             )}
-                            
-                            <div className={cn(
-                              "w-8 h-8 rounded-lg flex items-center justify-center",
-                              clauseStatus === 'implemented' ? 'bg-success/10' :
-                              clauseStatus === 'partial' ? 'bg-warning/10' : 'bg-destructive/10'
-                            )}>
+
+                            <div
+                              className={cn(
+                                'w-8 h-8 rounded-lg flex items-center justify-center',
+                                clauseStatus === 'implemented'
+                                  ? 'bg-success/10'
+                                  : clauseStatus === 'partial'
+                                    ? 'bg-warning/10'
+                                    : 'bg-destructive/10',
+                              )}
+                            >
                               {clauseStatus === 'implemented' ? (
                                 <CheckCircle2 className="w-4 h-4 text-success" />
                               ) : clauseStatus === 'partial' ? (
@@ -334,15 +386,24 @@ export default function Standards() {
 
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm text-primary">{clause.clause_number}</span>
-                                <h4 className="font-medium text-foreground truncate">{clause.title}</h4>
+                                <span className="font-mono text-sm text-primary">
+                                  {clause.clause_number}
+                                </span>
+                                <h4 className="font-medium text-foreground truncate">
+                                  {clause.title}
+                                </h4>
                               </div>
                             </div>
 
-                            <Badge variant={
-                              clauseStatus === 'implemented' ? 'resolved' :
-                              clauseStatus === 'partial' ? 'in-progress' : 'destructive'
-                            }>
+                            <Badge
+                              variant={
+                                clauseStatus === 'implemented'
+                                  ? 'resolved'
+                                  : clauseStatus === 'partial'
+                                    ? 'in-progress'
+                                    : 'destructive'
+                              }
+                            >
                               {t(`standards.status.${clauseStatus}`)}
                             </Badge>
                           </div>
@@ -352,36 +413,54 @@ export default function Standards() {
                             <div className="ml-8 pl-4 border-l-2 border-border space-y-1 mt-2">
                               {/* Sub-clauses */}
                               {subClauses.map((subClause) => (
-                                <div 
+                                <div
                                   key={`clause-${subClause.id}`}
                                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
                                   <BookOpen className="w-4 h-4 text-muted-foreground" />
-                                  <span className="font-mono text-xs text-primary">{subClause.clause_number}</span>
-                                  <span className="text-sm text-foreground truncate">{subClause.title}</span>
+                                  <span className="font-mono text-xs text-primary">
+                                    {subClause.clause_number}
+                                  </span>
+                                  <span className="text-sm text-foreground truncate">
+                                    {subClause.title}
+                                  </span>
                                 </div>
                               ))}
                               {/* Controls */}
                               {clauseControls.map((control) => (
-                                <div 
+                                <div
                                   key={`control-${control.id}`}
                                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-surface transition-colors"
                                 >
-                                  <Shield className={cn(
-                                    "w-4 h-4",
-                                    control.implementation_status === 'implemented' ? 'text-success' :
-                                    control.implementation_status === 'partial' ? 'text-warning' : 'text-muted-foreground'
-                                  )} />
-                                  <span className="font-mono text-xs text-primary">{control.control_number}</span>
-                                  <span className="text-sm text-foreground truncate flex-1">{control.title}</span>
-                                  <Badge 
+                                  <Shield
+                                    className={cn(
+                                      'w-4 h-4',
+                                      control.implementation_status === 'implemented'
+                                        ? 'text-success'
+                                        : control.implementation_status === 'partial'
+                                          ? 'text-warning'
+                                          : 'text-muted-foreground',
+                                    )}
+                                  />
+                                  <span className="font-mono text-xs text-primary">
+                                    {control.control_number}
+                                  </span>
+                                  <span className="text-sm text-foreground truncate flex-1">
+                                    {control.title}
+                                  </span>
+                                  <Badge
                                     variant={
-                                      control.implementation_status === 'implemented' ? 'resolved' :
-                                      control.implementation_status === 'partial' ? 'in-progress' : 'destructive'
+                                      control.implementation_status === 'implemented'
+                                        ? 'resolved'
+                                        : control.implementation_status === 'partial'
+                                          ? 'in-progress'
+                                          : 'destructive'
                                     }
                                     className="text-[10px]"
                                   >
-                                    {control.implementation_status ? t(`standards.status.${control.implementation_status}`) : t('standards.not_set')}
+                                    {control.implementation_status
+                                      ? t(`standards.status.${control.implementation_status}`)
+                                      : t('standards.not_set')}
                                   </Badge>
                                 </div>
                               ))}

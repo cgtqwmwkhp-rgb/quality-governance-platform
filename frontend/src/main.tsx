@@ -27,14 +27,14 @@ reportWebVitals()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-        <ThemeProvider>
-          <LiveAnnouncerProvider>
-            <TooltipProvider>
-              <ToastProvider>
-                <App />
-              </ToastProvider>
-            </TooltipProvider>
-          </LiveAnnouncerProvider>
-        </ThemeProvider>
+    <ThemeProvider>
+      <LiveAnnouncerProvider>
+        <TooltipProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </TooltipProvider>
+      </LiveAnnouncerProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 )

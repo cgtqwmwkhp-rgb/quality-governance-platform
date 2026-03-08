@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Plus,
   Search,
@@ -15,37 +15,34 @@ import {
   Eye,
   Check,
   X,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+} from 'lucide-react'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '../../components/ui/Dialog';
-import { cn } from '../../helpers/utils';
+} from '../../components/ui/Dialog'
+import { cn } from '../../helpers/utils'
 
 interface FormTemplate {
-  id: number;
-  name: string;
-  slug: string;
-  form_type: string;
-  description?: string;
-  is_active: boolean;
-  is_published: boolean;
-  version: number;
-  steps_count: number;
-  fields_count: number;
-  updated_at: string;
+  id: number
+  name: string
+  slug: string
+  form_type: string
+  description?: string
+  is_active: boolean
+  is_published: boolean
+  version: number
+  steps_count: number
+  fields_count: number
+  updated_at: string
 }
 
-const FORM_TYPE_CONFIG: Record<
-  string,
-  { label: string; icon: React.ReactNode; color: string }
-> = {
+const FORM_TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   incident: {
     label: 'Incident',
     icon: <AlertTriangle className="w-4 h-4" />,
@@ -76,37 +73,37 @@ const FORM_TYPE_CONFIG: Record<
     icon: <FileText className="w-4 h-4" />,
     color: 'text-muted-foreground bg-muted',
   },
-};
+}
 
-const MOCK_FORMS: FormTemplate[] = [];
+const MOCK_FORMS: FormTemplate[] = []
 
 export default function FormsList() {
-  const navigate = useNavigate();
-  const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string | null>(null);
-  const [activeMenu, setActiveMenu] = useState<number | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const navigate = useNavigate()
+  const [forms, setForms] = useState<FormTemplate[]>(MOCK_FORMS)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState<string | null>(null)
+  const [activeMenu, setActiveMenu] = useState<number | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
 
   const filteredForms = forms.filter((form) => {
     const matchesSearch =
       form.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      form.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = !filterType || form.form_type === filterType;
-    return matchesSearch && matchesType;
-  });
+      form.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesType = !filterType || form.form_type === filterType
+    return matchesSearch && matchesType
+  })
 
   const handleDelete = (id: number) => {
-    setDeleteTarget(id);
-    setActiveMenu(null);
-  };
+    setDeleteTarget(id)
+    setActiveMenu(null)
+  }
 
   const confirmDelete = () => {
     if (deleteTarget !== null) {
-      setForms((prev) => prev.filter((f) => f.id !== deleteTarget));
+      setForms((prev) => prev.filter((f) => f.id !== deleteTarget))
     }
-    setDeleteTarget(null);
-  };
+    setDeleteTarget(null)
+  }
 
   const handleDuplicate = (form: FormTemplate) => {
     const duplicate: FormTemplate = {
@@ -116,19 +113,15 @@ export default function FormsList() {
       slug: `${form.slug}-copy`,
       is_published: false,
       version: 1,
-    };
-    setForms((prev) => [...prev, duplicate]);
-    setActiveMenu(null);
-  };
+    }
+    setForms((prev) => [...prev, duplicate])
+    setActiveMenu(null)
+  }
 
   const togglePublish = (id: number) => {
-    setForms((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, is_published: !f.is_published } : f
-      )
-    );
-    setActiveMenu(null);
-  };
+    setForms((prev) => prev.map((f) => (f.id === id ? { ...f, is_published: !f.is_published } : f)))
+    setActiveMenu(null)
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -167,7 +160,7 @@ export default function FormsList() {
                   'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
                   !filterType
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground',
                 )}
               >
                 All
@@ -180,7 +173,7 @@ export default function FormsList() {
                     'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5',
                     filterType === type
                       ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {config.icon}
@@ -211,7 +204,7 @@ export default function FormsList() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredForms.map((form) => {
-              const typeConfig = FORM_TYPE_CONFIG[form.form_type] || FORM_TYPE_CONFIG.custom;
+              const typeConfig = FORM_TYPE_CONFIG[form.form_type] || FORM_TYPE_CONFIG.custom
 
               return (
                 <Card
@@ -224,7 +217,7 @@ export default function FormsList() {
                     <span
                       className={cn(
                         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-                        typeConfig.color
+                        typeConfig.color,
                       )}
                     >
                       {typeConfig.icon}
@@ -265,8 +258,8 @@ export default function FormsList() {
                   <div className="absolute top-4 right-4">
                     <button
                       onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(activeMenu === form.id ? null : form.id);
+                        e.stopPropagation()
+                        setActiveMenu(activeMenu === form.id ? null : form.id)
                       }}
                       className="p-2 hover:bg-muted rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                     >
@@ -279,7 +272,9 @@ export default function FormsList() {
                         role="button"
                         tabIndex={0}
                         onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation(); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+                        }}
                       >
                         <button
                           onClick={() => navigate(`/admin/forms/${form.id}`)}
@@ -330,7 +325,7 @@ export default function FormsList() {
                     )}
                   </div>
                 </Card>
-              );
+              )
             })}
           </div>
         )}
@@ -341,13 +336,19 @@ export default function FormsList() {
           <DialogHeader>
             <DialogTitle>Delete Form</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Are you sure you want to delete this form? This action cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete this form? This action cannot be undone.
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

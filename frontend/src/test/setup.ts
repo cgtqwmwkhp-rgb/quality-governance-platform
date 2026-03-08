@@ -1,4 +1,4 @@
-import '@testing-library/jest-dom/vitest';
+import '@testing-library/jest-dom/vitest'
 
 // Mock window.matchMedia for components that use it
 Object.defineProperty(window, 'matchMedia', {
@@ -13,7 +13,7 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: () => {},
     dispatchEvent: () => false,
   }),
-});
+})
 
 // Mock IntersectionObserver
 class MockIntersectionObserver {
@@ -24,10 +24,10 @@ class MockIntersectionObserver {
 Object.defineProperty(window, 'IntersectionObserver', {
   writable: true,
   value: MockIntersectionObserver,
-});
+})
 
 // Mock navigator.sendBeacon
 Object.defineProperty(navigator, 'sendBeacon', {
   writable: true,
   value: () => true,
-});
+})

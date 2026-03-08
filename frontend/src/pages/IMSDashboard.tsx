@@ -55,7 +55,12 @@ interface CrossMapping {
 
 interface ISMSDashboardData {
   assets: { total: number; critical: number }
-  controls: { total: number; applicable: number; implemented: number; implementation_percentage: number }
+  controls: {
+    total: number
+    applicable: number
+    implemented: number
+    implementation_percentage: number
+  }
   risks: { open: number; high_critical: number }
   incidents: { open: number; last_30_days: number }
   suppliers: { high_risk: number }
@@ -63,7 +68,9 @@ interface ISMSDashboardData {
 }
 
 export default function IMSDashboard() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review' | 'isms'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review' | 'isms'>(
+    'overview',
+  )
   const [selectedStandard, setSelectedStandard] = useState<string | null>(null)
   const [ismsData, setIsmsData] = useState<ISMSDashboardData | null>(null)
   const [ismsLoading, setIsmsLoading] = useState(false)
@@ -229,31 +236,69 @@ export default function IMSDashboard() {
     },
   ]
 
-  const auditSchedule: { id: number; type: string; scope: string; date: string; lead: string; status: string }[] = []
+  const auditSchedule: {
+    id: number
+    type: string
+    scope: string
+    date: string
+    lead: string
+    status: string
+  }[] = []
 
   const managementReviewInputs = [
     { category: 'Audit Results', status: 'Complete', source: 'All Standards', trend: 'improving' },
     { category: 'Customer Feedback', status: 'Complete', source: 'ISO 9001', trend: 'stable' },
-    { category: 'Process Performance', status: 'In Progress', source: 'All Standards', trend: 'improving' },
-    { category: 'Environmental Performance', status: 'Complete', source: 'ISO 14001', trend: 'improving' },
+    {
+      category: 'Process Performance',
+      status: 'In Progress',
+      source: 'All Standards',
+      trend: 'improving',
+    },
+    {
+      category: 'Environmental Performance',
+      status: 'Complete',
+      source: 'ISO 14001',
+      trend: 'improving',
+    },
     { category: 'OH&S Performance', status: 'Complete', source: 'ISO 45001', trend: 'stable' },
-    { category: 'Information Security', status: 'Complete', source: 'ISO 27001', trend: 'improving' },
+    {
+      category: 'Information Security',
+      status: 'Complete',
+      source: 'ISO 27001',
+      trend: 'improving',
+    },
     { category: 'Carbon Footprint', status: 'Complete', source: 'Planet Mark', trend: 'improving' },
-    { category: 'UVDB Qualification', status: 'Complete', source: 'UVDB Achilles', trend: 'stable' },
-    { category: 'Objectives Achievement', status: 'Pending', source: 'All Standards', trend: 'stable' },
-    { category: 'Risks & Opportunities', status: 'In Progress', source: 'All Standards', trend: 'stable' },
+    {
+      category: 'UVDB Qualification',
+      status: 'Complete',
+      source: 'UVDB Achilles',
+      trend: 'stable',
+    },
+    {
+      category: 'Objectives Achievement',
+      status: 'Pending',
+      source: 'All Standards',
+      trend: 'stable',
+    },
+    {
+      category: 'Risks & Opportunities',
+      status: 'In Progress',
+      source: 'All Standards',
+      trend: 'stable',
+    },
     { category: 'Resource Adequacy', status: 'Pending', source: 'All Standards', trend: 'stable' },
   ]
 
   const overallCompliance = Math.round(
-    standards.reduce((sum, s) => sum + s.compliance, 0) / standards.length
+    standards.reduce((sum, s) => sum + s.compliance, 0) / standards.length,
   )
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
         <span className="text-lg">🚧</span>
-        <span className="font-medium">Preview</span> — IMS Dashboard data is illustrative. Full integration is under development.
+        <span className="font-medium">Preview</span> — IMS Dashboard data is illustrative. Full
+        integration is under development.
       </div>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
@@ -280,7 +325,9 @@ export default function IMSDashboard() {
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-primary-foreground mb-1">Overall IMS Compliance</h2>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">
+              Overall IMS Compliance
+            </h2>
             <p className="text-primary-foreground/80">Across all management system standards</p>
           </div>
           <div className="text-right">
@@ -306,7 +353,9 @@ export default function IMSDashboard() {
                 selectedStandard === standard.id ? 'ring-2 ring-primary' : ''
               }`}
               onClick={() => setSelectedStandard(standard.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedStandard(standard.id); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') setSelectedStandard(standard.id)
+              }}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className={`p-3 rounded-xl ${standard.color}`}>
@@ -341,7 +390,9 @@ export default function IMSDashboard() {
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="w-2 h-2 bg-info rounded-full"></span>
-                  <span className="text-muted-foreground">Obs: {standard.findings.observations}</span>
+                  <span className="text-muted-foreground">
+                    Obs: {standard.findings.observations}
+                  </span>
                 </div>
               </div>
 
@@ -376,10 +427,10 @@ export default function IMSDashboard() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors",
+                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
                 activeTab === tab.id
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <Icon className="w-4 h-4" />
@@ -399,7 +450,13 @@ export default function IMSDashboard() {
               {[
                 { label: 'Open Actions', value: 12, target: 0, unit: '', status: 'warning' },
                 { label: 'Overdue Actions', value: 2, target: 0, unit: '', status: 'critical' },
-                { label: 'Document Review Compliance', value: 94, target: 100, unit: '%', status: 'good' },
+                {
+                  label: 'Document Review Compliance',
+                  value: 94,
+                  target: 100,
+                  unit: '%',
+                  status: 'good',
+                },
                 { label: 'Training Completion', value: 98, target: 100, unit: '%', status: 'good' },
                 { label: 'Audit Completion', value: 75, target: 100, unit: '%', status: 'warning' },
               ].map((metric, i) => (
@@ -411,14 +468,17 @@ export default function IMSDashboard() {
                         metric.status === 'good'
                           ? 'text-success'
                           : metric.status === 'warning'
-                          ? 'text-warning'
-                          : 'text-destructive'
+                            ? 'text-warning'
+                            : 'text-destructive'
                       }`}
                     >
                       {metric.value}
                       {metric.unit}
                     </span>
-                    <span className="text-muted-foreground text-sm">/ {metric.target}{metric.unit}</span>
+                    <span className="text-muted-foreground text-sm">
+                      / {metric.target}
+                      {metric.unit}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -430,15 +490,48 @@ export default function IMSDashboard() {
             <h3 className="text-lg font-bold text-foreground mb-4">Recent Activity</h3>
             <div className="space-y-3">
               {[
-                { action: 'Audit Finding Closed', detail: 'Minor NC #2024-015', time: '2 hours ago', icon: CheckCircle2, color: 'text-success' },
-                { action: 'Document Updated', detail: 'Environmental Aspects Register', time: '4 hours ago', icon: FileText, color: 'text-info' },
-                { action: 'Risk Assessment Completed', detail: 'New Contractor Activity', time: '1 day ago', icon: Shield, color: 'text-purple-500' },
-                { action: 'Training Completed', detail: 'ISO 45001 Awareness - 15 staff', time: '2 days ago', icon: Users, color: 'text-warning' },
-                { action: 'Objective Updated', detail: 'Q4 Recycling Target Achieved', time: '3 days ago', icon: Target, color: 'text-success' },
+                {
+                  action: 'Audit Finding Closed',
+                  detail: 'Minor NC #2024-015',
+                  time: '2 hours ago',
+                  icon: CheckCircle2,
+                  color: 'text-success',
+                },
+                {
+                  action: 'Document Updated',
+                  detail: 'Environmental Aspects Register',
+                  time: '4 hours ago',
+                  icon: FileText,
+                  color: 'text-info',
+                },
+                {
+                  action: 'Risk Assessment Completed',
+                  detail: 'New Contractor Activity',
+                  time: '1 day ago',
+                  icon: Shield,
+                  color: 'text-purple-500',
+                },
+                {
+                  action: 'Training Completed',
+                  detail: 'ISO 45001 Awareness - 15 staff',
+                  time: '2 days ago',
+                  icon: Users,
+                  color: 'text-warning',
+                },
+                {
+                  action: 'Objective Updated',
+                  detail: 'Q4 Recycling Target Achieved',
+                  time: '3 days ago',
+                  icon: Target,
+                  color: 'text-success',
+                },
               ].map((activity, i) => {
                 const Icon = activity.icon
                 return (
-                  <div key={i} className="flex items-start gap-3 p-2 hover:bg-surface rounded-lg transition-colors">
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 p-2 hover:bg-surface rounded-lg transition-colors"
+                  >
                     <Icon className={`w-5 h-5 mt-0.5 ${activity.color}`} />
                     <div className="flex-grow">
                       <div className="text-foreground text-sm">{activity.action}</div>
@@ -457,19 +550,35 @@ export default function IMSDashboard() {
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
           <div className="p-4 bg-slate-700 border-b border-slate-600">
             <h3 className="font-bold text-white">Annex SL Cross-Standard Mapping</h3>
-            <p className="text-sm text-gray-400">Common requirements across ISO 9001, 14001, 45001 & 27001</p>
+            <p className="text-sm text-gray-400">
+              Common requirements across ISO 9001, 14001, 45001 & 27001
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-700/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Common Clause</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 9001</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 14001</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 45001</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 27001</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Unified Control</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">Evidence</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                    Common Clause
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                    ISO 9001
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                    ISO 14001
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                    ISO 45001
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                    ISO 27001
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                    Unified Control
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                    Evidence
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -504,7 +613,9 @@ export default function IMSDashboard() {
           <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-white">Unified Audit Schedule</h3>
-              <p className="text-sm text-gray-400">Integrated audit program covering all standards</p>
+              <p className="text-sm text-gray-400">
+                Integrated audit program covering all standards
+              </p>
             </div>
             <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors">
               Plan New Audit
@@ -535,8 +646,8 @@ export default function IMSDashboard() {
                       audit.status === 'Confirmed'
                         ? 'bg-emerald-500/20 text-emerald-400'
                         : audit.status === 'Planned'
-                        ? 'bg-blue-500/20 text-blue-400'
-                        : 'bg-gray-500/20 text-gray-400'
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-gray-500/20 text-gray-400'
                     }`}
                   >
                     {audit.status}
@@ -577,9 +688,11 @@ export default function IMSDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className={`flex items-center gap-1 text-sm ${
-                      input.trend === 'improving' ? 'text-emerald-400' : 'text-gray-400'
-                    }`}>
+                    <div
+                      className={`flex items-center gap-1 text-sm ${
+                        input.trend === 'improving' ? 'text-emerald-400' : 'text-gray-400'
+                      }`}
+                    >
                       {input.trend === 'improving' ? (
                         <TrendingUp className="w-4 h-4" />
                       ) : (
@@ -591,8 +704,8 @@ export default function IMSDashboard() {
                         input.status === 'Complete'
                           ? 'bg-emerald-500/20 text-emerald-400'
                           : input.status === 'In Progress'
-                          ? 'bg-yellow-500/20 text-yellow-400'
-                          : 'bg-gray-500/20 text-gray-400'
+                            ? 'bg-yellow-500/20 text-yellow-400'
+                            : 'bg-gray-500/20 text-gray-400'
                       }`}
                     >
                       {input.status}
@@ -606,7 +719,7 @@ export default function IMSDashboard() {
           {/* Review Summary */}
           <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
             <h3 className="font-bold text-white mb-4">Review Readiness</h3>
-            
+
             <div className="relative w-40 h-40 mx-auto mb-6">
               <svg className="w-full h-full transform -rotate-90">
                 <circle
@@ -670,11 +783,15 @@ export default function IMSDashboard() {
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-white mb-1">ISO 27001:2022 ISMS Compliance</h2>
+                    <h2 className="text-2xl font-bold text-white mb-1">
+                      ISO 27001:2022 ISMS Compliance
+                    </h2>
                     <p className="text-purple-100">Information Security Management System</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-5xl font-bold text-white">{ismsData.compliance_score}%</div>
+                    <div className="text-5xl font-bold text-white">
+                      {ismsData.compliance_score}%
+                    </div>
                     <div className="flex items-center gap-1 text-purple-100 mt-1">
                       <ShieldCheck className="w-4 h-4" />
                       <span>Annex A Controls Implemented</span>
@@ -693,7 +810,9 @@ export default function IMSDashboard() {
                     <span className="text-gray-400 text-sm">Information Assets</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.assets.total}</div>
-                  <div className="text-sm text-yellow-400 mt-1">{ismsData.assets.critical} Critical</div>
+                  <div className="text-sm text-yellow-400 mt-1">
+                    {ismsData.assets.critical} Critical
+                  </div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -703,8 +822,12 @@ export default function IMSDashboard() {
                     </div>
                     <span className="text-gray-400 text-sm">Annex A Controls</span>
                   </div>
-                  <div className="text-3xl font-bold text-white">{ismsData.controls.implemented}/{ismsData.controls.applicable}</div>
-                  <div className="text-sm text-emerald-400 mt-1">{ismsData.controls.implementation_percentage}% Implemented</div>
+                  <div className="text-3xl font-bold text-white">
+                    {ismsData.controls.implemented}/{ismsData.controls.applicable}
+                  </div>
+                  <div className="text-sm text-emerald-400 mt-1">
+                    {ismsData.controls.implementation_percentage}% Implemented
+                  </div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -715,7 +838,9 @@ export default function IMSDashboard() {
                     <span className="text-gray-400 text-sm">Security Risks</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.risks.open}</div>
-                  <div className="text-sm text-red-400 mt-1">{ismsData.risks.high_critical} High/Critical</div>
+                  <div className="text-sm text-red-400 mt-1">
+                    {ismsData.risks.high_critical} High/Critical
+                  </div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -726,7 +851,9 @@ export default function IMSDashboard() {
                     <span className="text-gray-400 text-sm">Security Incidents</span>
                   </div>
                   <div className="text-3xl font-bold text-white">{ismsData.incidents.open}</div>
-                  <div className="text-sm text-gray-400 mt-1">{ismsData.incidents.last_30_days} in last 30 days</div>
+                  <div className="text-sm text-gray-400 mt-1">
+                    {ismsData.incidents.last_30_days} in last 30 days
+                  </div>
                 </div>
 
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
@@ -736,7 +863,9 @@ export default function IMSDashboard() {
                     </div>
                     <span className="text-gray-400 text-sm">Supplier Risk</span>
                   </div>
-                  <div className="text-3xl font-bold text-white">{ismsData.suppliers.high_risk}</div>
+                  <div className="text-3xl font-bold text-white">
+                    {ismsData.suppliers.high_risk}
+                  </div>
                   <div className="text-sm text-yellow-400 mt-1">High Risk Suppliers</div>
                 </div>
               </div>
@@ -749,10 +878,34 @@ export default function IMSDashboard() {
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
-                    { domain: 'Organizational', count: 37, implemented: 31, icon: Building2, color: 'bg-blue-500' },
-                    { domain: 'People', count: 8, implemented: 7, icon: UserCheck, color: 'bg-green-500' },
-                    { domain: 'Physical', count: 14, implemented: 11, icon: Key, color: 'bg-orange-500' },
-                    { domain: 'Technological', count: 34, implemented: 23, icon: Laptop, color: 'bg-purple-500' },
+                    {
+                      domain: 'Organizational',
+                      count: 37,
+                      implemented: 31,
+                      icon: Building2,
+                      color: 'bg-blue-500',
+                    },
+                    {
+                      domain: 'People',
+                      count: 8,
+                      implemented: 7,
+                      icon: UserCheck,
+                      color: 'bg-green-500',
+                    },
+                    {
+                      domain: 'Physical',
+                      count: 14,
+                      implemented: 11,
+                      icon: Key,
+                      color: 'bg-orange-500',
+                    },
+                    {
+                      domain: 'Technological',
+                      count: 34,
+                      implemented: 23,
+                      icon: Laptop,
+                      color: 'bg-purple-500',
+                    },
                   ].map((domain, i) => {
                     const Icon = domain.icon
                     const percentage = Math.round((domain.implemented / domain.count) * 100)
@@ -769,7 +922,9 @@ export default function IMSDashboard() {
                         </div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-400">Implemented</span>
-                          <span className="text-white font-medium">{domain.implemented}/{domain.count}</span>
+                          <span className="text-white font-medium">
+                            {domain.implemented}/{domain.count}
+                          </span>
                         </div>
                         <div className="w-full bg-slate-600 rounded-full h-2">
                           <div
@@ -802,7 +957,10 @@ export default function IMSDashboard() {
                     ].map((cat, i) => {
                       const Icon = cat.icon
                       return (
-                        <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer">
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
+                        >
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-slate-600 rounded-lg">
                               <Icon className="w-4 h-4 text-gray-300" />
@@ -837,27 +995,69 @@ export default function IMSDashboard() {
                   </div>
                   <div className="p-4 space-y-3">
                     {[
-                      { id: 'SEC-00042', title: 'Phishing Attempt Detected', type: 'phishing', severity: 'medium', status: 'investigating', date: '2026-01-18' },
-                      { id: 'SEC-00041', title: 'Unauthorized Access Attempt', type: 'unauthorized_access', severity: 'high', status: 'contained', date: '2026-01-15' },
-                      { id: 'SEC-00040', title: 'Data Loss Prevention Alert', type: 'data_leak', severity: 'low', status: 'closed', date: '2026-01-12' },
-                      { id: 'SEC-00039', title: 'Malware Detection on Endpoint', type: 'malware', severity: 'medium', status: 'closed', date: '2026-01-10' },
+                      {
+                        id: 'SEC-00042',
+                        title: 'Phishing Attempt Detected',
+                        type: 'phishing',
+                        severity: 'medium',
+                        status: 'investigating',
+                        date: '2026-01-18',
+                      },
+                      {
+                        id: 'SEC-00041',
+                        title: 'Unauthorized Access Attempt',
+                        type: 'unauthorized_access',
+                        severity: 'high',
+                        status: 'contained',
+                        date: '2026-01-15',
+                      },
+                      {
+                        id: 'SEC-00040',
+                        title: 'Data Loss Prevention Alert',
+                        type: 'data_leak',
+                        severity: 'low',
+                        status: 'closed',
+                        date: '2026-01-12',
+                      },
+                      {
+                        id: 'SEC-00039',
+                        title: 'Malware Detection on Endpoint',
+                        type: 'malware',
+                        severity: 'medium',
+                        status: 'closed',
+                        date: '2026-01-10',
+                      },
                     ].map((incident, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg"
+                      >
                         <div className="flex items-center gap-3">
-                          <Bug className={`w-5 h-5 ${
-                            incident.severity === 'high' ? 'text-red-400' :
-                            incident.severity === 'medium' ? 'text-yellow-400' : 'text-blue-400'
-                          }`} />
+                          <Bug
+                            className={`w-5 h-5 ${
+                              incident.severity === 'high'
+                                ? 'text-red-400'
+                                : incident.severity === 'medium'
+                                  ? 'text-yellow-400'
+                                  : 'text-blue-400'
+                            }`}
+                          />
                           <div>
                             <div className="font-medium text-white text-sm">{incident.title}</div>
-                            <div className="text-xs text-gray-400">{incident.id} • {incident.date}</div>
+                            <div className="text-xs text-gray-400">
+                              {incident.id} • {incident.date}
+                            </div>
                           </div>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          incident.status === 'investigating' ? 'bg-yellow-500/20 text-yellow-400' :
-                          incident.status === 'contained' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-emerald-500/20 text-emerald-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            incident.status === 'investigating'
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : incident.status === 'contained'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
                           {incident.status}
                         </span>
                       </div>
@@ -871,7 +1071,9 @@ export default function IMSDashboard() {
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
                   <div>
                     <h3 className="font-bold text-white">Statement of Applicability (SoA)</h3>
-                    <p className="text-sm text-gray-400">Version 2.1 - Last Updated: January 2026</p>
+                    <p className="text-sm text-gray-400">
+                      Version 2.1 - Last Updated: January 2026
+                    </p>
                   </div>
                   <button className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <FileText className="w-4 h-4" />
@@ -885,22 +1087,29 @@ export default function IMSDashboard() {
                       <div className="text-sm text-gray-400">Total Controls</div>
                     </div>
                     <div className="text-center p-4 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-                      <div className="text-3xl font-bold text-emerald-400">{ismsData.controls.applicable}</div>
+                      <div className="text-3xl font-bold text-emerald-400">
+                        {ismsData.controls.applicable}
+                      </div>
                       <div className="text-sm text-gray-400">Applicable</div>
                     </div>
                     <div className="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                      <div className="text-3xl font-bold text-blue-400">{ismsData.controls.implemented}</div>
+                      <div className="text-3xl font-bold text-blue-400">
+                        {ismsData.controls.implemented}
+                      </div>
                       <div className="text-sm text-gray-400">Implemented</div>
                     </div>
                     <div className="text-center p-4 bg-gray-500/10 rounded-lg border border-gray-500/30">
-                      <div className="text-3xl font-bold text-gray-400">{ismsData.controls.total - ismsData.controls.applicable}</div>
+                      <div className="text-3xl font-bold text-gray-400">
+                        {ismsData.controls.total - ismsData.controls.applicable}
+                      </div>
                       <div className="text-sm text-gray-400">Excluded</div>
                     </div>
                   </div>
                   <div className="text-center">
                     <p className="text-gray-400 text-sm">
-                      The Statement of Applicability documents all 93 Annex A controls from ISO 27001:2022,
-                      their applicability status, implementation status, and justification for exclusions.
+                      The Statement of Applicability documents all 93 Annex A controls from ISO
+                      27001:2022, their applicability status, implementation status, and
+                      justification for exclusions.
                     </p>
                   </div>
                 </div>

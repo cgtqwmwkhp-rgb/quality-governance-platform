@@ -1,4 +1,4 @@
-import { useTranslation } from "react-i18next";
+import { useTranslation } from 'react-i18next'
 import {
   Upload,
   RefreshCw,
@@ -10,30 +10,30 @@ import {
   File,
   Download,
   Trash2,
-} from "lucide-react";
-import { type EvidenceAsset, evidenceAssetsApi } from "../../api/client";
-import { trackError } from "../../utils/errorTracker";
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Badge } from "../../components/ui/Badge";
+} from 'lucide-react'
+import { type EvidenceAsset, evidenceAssetsApi } from '../../api/client'
+import { trackError } from '../../utils/errorTracker'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { Badge } from '../../components/ui/Badge'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "../../components/ui/Tooltip";
-import { cn } from "../../helpers/utils";
+} from '../../components/ui/Tooltip'
+import { cn } from '../../helpers/utils'
 
 interface InvestigationEvidenceProps {
-  evidenceAssets: EvidenceAsset[];
-  evidenceLoading: boolean;
-  evidenceError: string | null;
-  uploadingEvidence: boolean;
-  deletingEvidenceId: number | null;
-  onUploadEvidence: (file: File) => void;
-  onDeleteEvidence: (assetId: number) => void;
-  onRefresh: () => void;
-  onSetEvidenceError: (error: string | null) => void;
+  evidenceAssets: EvidenceAsset[]
+  evidenceLoading: boolean
+  evidenceError: string | null
+  uploadingEvidence: boolean
+  deletingEvidenceId: number | null
+  onUploadEvidence: (file: File) => void
+  onDeleteEvidence: (assetId: number) => void
+  onRefresh: () => void
+  onSetEvidenceError: (error: string | null) => void
 }
 
 export default function InvestigationEvidence({
@@ -47,7 +47,7 @@ export default function InvestigationEvidence({
   onRefresh,
   onSetEvidenceError,
 }: InvestigationEvidenceProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   return (
     <div className="space-y-6">
@@ -55,7 +55,7 @@ export default function InvestigationEvidence({
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-foreground">
-            {t("investigations.evidence_register")}
+            {t('investigations.evidence_register')}
           </h3>
           <div className="flex items-center gap-2">
             <input
@@ -65,16 +65,16 @@ export default function InvestigationEvidence({
                 if (el)
                   (
                     window as unknown as {
-                      __evidenceFileInput?: HTMLInputElement;
+                      __evidenceFileInput?: HTMLInputElement
                     }
-                  ).__evidenceFileInput = el;
+                  ).__evidenceFileInput = el
               }}
               className="hidden"
               accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) onUploadEvidence(file);
-                e.target.value = "";
+                const file = e.target.files?.[0]
+                if (file) onUploadEvidence(file)
+                e.target.value = ''
               }}
               disabled={uploadingEvidence}
             />
@@ -82,10 +82,8 @@ export default function InvestigationEvidence({
               variant="default"
               disabled={uploadingEvidence}
               onClick={() => {
-                const fileInput = document.getElementById(
-                  "evidence-upload",
-                ) as HTMLInputElement;
-                if (fileInput) fileInput.click();
+                const fileInput = document.getElementById('evidence-upload') as HTMLInputElement
+                if (fileInput) fileInput.click()
               }}
             >
               {uploadingEvidence ? (
@@ -93,25 +91,16 @@ export default function InvestigationEvidence({
               ) : (
                 <Upload className="w-4 h-4 mr-2" />
               )}
-              {t("investigations.upload_evidence")}
+              {t('investigations.upload_evidence')}
             </Button>
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              disabled={evidenceLoading}
-            >
-              <RefreshCw
-                className={cn(
-                  "w-4 h-4",
-                  evidenceLoading && "animate-spin",
-                )}
-              />
+            <Button variant="outline" onClick={onRefresh} disabled={evidenceLoading}>
+              <RefreshCw className={cn('w-4 h-4', evidenceLoading && 'animate-spin')} />
             </Button>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Upload photos, videos, PDFs, or documents as evidence for this
-          investigation. Maximum file size: 50MB.
+          Upload photos, videos, PDFs, or documents as evidence for this investigation. Maximum file
+          size: 50MB.
         </p>
       </Card>
 
@@ -134,12 +123,9 @@ export default function InvestigationEvidence({
       ) : evidenceAssets.length === 0 ? (
         <Card className="p-12 text-center">
           <FileQuestion className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            No Evidence Uploaded
-          </h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Evidence Uploaded</h3>
           <p className="text-muted-foreground max-w-md mx-auto">
-            Upload photos, documents, or other files to document evidence for
-            this investigation.
+            Upload photos, documents, or other files to document evidence for this investigation.
           </p>
         </Card>
       ) : (
@@ -148,9 +134,9 @@ export default function InvestigationEvidence({
             <Card key={asset.id} className="p-4">
               <div className="flex items-start gap-3">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  {asset.asset_type === "photo" ? (
+                  {asset.asset_type === 'photo' ? (
                     <Eye className="w-6 h-6 text-primary" />
-                  ) : asset.asset_type === "pdf" ? (
+                  ) : asset.asset_type === 'pdf' ? (
                     <FileText className="w-6 h-6 text-primary" />
                   ) : (
                     <File className="w-6 h-6 text-primary" />
@@ -158,13 +144,13 @@ export default function InvestigationEvidence({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">
-                    {asset.title || asset.original_filename || "Untitled"}
+                    {asset.title || asset.original_filename || 'Untitled'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {asset.asset_type} &bull;{" "}
+                    {asset.asset_type} &bull;{' '}
                     {asset.file_size_bytes
                       ? `${Math.round(asset.file_size_bytes / 1024)}KB`
-                      : "Unknown size"}
+                      : 'Unknown size'}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(asset.created_at).toLocaleDateString()}
@@ -179,20 +165,14 @@ export default function InvestigationEvidence({
                           size="sm"
                           onClick={async () => {
                             try {
-                              const response =
-                                await evidenceAssetsApi.getSignedUrl(asset.id);
-                              window.open(
-                                response.data.signed_url,
-                                "_blank",
-                              );
+                              const response = await evidenceAssetsApi.getSignedUrl(asset.id)
+                              window.open(response.data.signed_url, '_blank')
                             } catch (err) {
                               trackError(err, {
-                                component: "InvestigationEvidence",
-                                action: "downloadEvidence",
-                              });
-                              onSetEvidenceError(
-                                "Failed to get download URL",
-                              );
+                                component: 'InvestigationEvidence',
+                                action: 'downloadEvidence',
+                              })
+                              onSetEvidenceError('Failed to get download URL')
                             }
                           }}
                         >
@@ -231,7 +211,7 @@ export default function InvestigationEvidence({
               )}
               <div className="flex items-center gap-2 mt-2">
                 <Badge variant="outline" className="text-xs">
-                  {asset.visibility.replace(/_/g, " ")}
+                  {asset.visibility.replace(/_/g, ' ')}
                 </Badge>
                 {asset.contains_pii && (
                   <Badge variant="destructive" className="text-xs">
@@ -244,5 +224,5 @@ export default function InvestigationEvidence({
         </div>
       )}
     </div>
-  );
+  )
 }

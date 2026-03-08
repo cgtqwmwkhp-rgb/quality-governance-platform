@@ -43,7 +43,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Determine which theme to apply
     const effectiveTheme = theme === 'system' ? getSystemTheme() : theme
-    
+
     // Apply the theme class
     root.classList.add(effectiveTheme)
     setResolvedTheme(effectiveTheme)
@@ -58,7 +58,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Listen for system theme changes
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    
+
     const handleChange = (e: MediaQueryListEvent) => {
       if (theme === 'system') {
         const root = window.document.documentElement

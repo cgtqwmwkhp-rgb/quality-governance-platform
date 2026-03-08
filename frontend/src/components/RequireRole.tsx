@@ -7,7 +7,11 @@ interface RequireRoleProps {
   fallback?: string
 }
 
-export default function RequireRole({ allowed, children, fallback = '/dashboard' }: RequireRoleProps) {
+export default function RequireRole({
+  allowed,
+  children,
+  fallback = '/dashboard',
+}: RequireRoleProps) {
   if (!hasRole(...allowed)) {
     return <Navigate to={fallback} replace />
   }

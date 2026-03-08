@@ -96,12 +96,24 @@ function RouteErrorFallback() {
     <div className="flex items-center justify-center h-64">
       <div className="max-w-md w-full text-center space-y-4">
         <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-          <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          <svg
+            className="w-6 h-6 text-destructive"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+            />
           </svg>
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-foreground">This section encountered an error</h3>
+          <h3 className="text-lg font-semibold text-foreground">
+            This section encountered an error
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             The rest of the application is still working. Try navigating to a different page.
           </p>
@@ -198,17 +210,17 @@ function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Portal Login - Public */}
-            <Route 
-              path="/portal/login" 
+            <Route
+              path="/portal/login"
               element={
                 <PortalAuthProvider>
                   <PortalLogin />
                 </PortalAuthProvider>
-              } 
+              }
             />
-            
+
             {/* Protected Employee Portal Routes - Requires SSO */}
-            <Route 
+            <Route
               path="/portal"
               element={
                 <PortalAuthProvider>
@@ -218,9 +230,18 @@ function App() {
             >
               <Route index element={<Portal />} />
               <Route path="report" element={<PortalReport />} />
-              <Route path="report/incident" element={<PortalDynamicForm key="incident" formType="incident" />} />
-              <Route path="report/near-miss" element={<PortalDynamicForm key="near-miss" formType="near-miss" />} />
-              <Route path="report/complaint" element={<PortalDynamicForm key="complaint" formType="complaint" />} />
+              <Route
+                path="report/incident"
+                element={<PortalDynamicForm key="incident" formType="incident" />}
+              />
+              <Route
+                path="report/near-miss"
+                element={<PortalDynamicForm key="near-miss" formType="near-miss" />}
+              />
+              <Route
+                path="report/complaint"
+                element={<PortalDynamicForm key="complaint" formType="complaint" />}
+              />
               <Route path="report/rta" element={<PortalRTAForm />} />
               <Route path="report/incident-legacy" element={<PortalIncidentForm />} />
               <Route path="report/near-miss-static" element={<PortalNearMissForm />} />
@@ -228,7 +249,7 @@ function App() {
               <Route path="track/:referenceNumber" element={<PortalTrack />} />
               <Route path="help" element={<PortalHelp />} />
             </Route>
-            
+
             {/* Auth Routes */}
             <Route
               path="/login"
@@ -240,10 +261,10 @@ function App() {
                 )
               }
             />
-            
+
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
-            
+
             {/* Protected Admin Routes */}
             <Route
               path="/"
@@ -305,10 +326,16 @@ function App() {
               <Route element={<RouteErrorBoundary />}>
                 <Route path="workforce/assessments" element={<WorkforceAssessments />} />
                 <Route path="workforce/assessments/new" element={<WorkforceAssessmentCreate />} />
-                <Route path="workforce/assessments/:id/execute" element={<WorkforceAssessmentExecution />} />
+                <Route
+                  path="workforce/assessments/:id/execute"
+                  element={<WorkforceAssessmentExecution />}
+                />
                 <Route path="workforce/training" element={<WorkforceTraining />} />
                 <Route path="workforce/training/new" element={<WorkforceInductionCreate />} />
-                <Route path="workforce/training/:id/execute" element={<WorkforceTrainingExecution />} />
+                <Route
+                  path="workforce/training/:id/execute"
+                  element={<WorkforceTrainingExecution />}
+                />
                 <Route path="workforce/engineers" element={<WorkforceEngineers />} />
                 <Route path="workforce/engineers/:id" element={<WorkforceEngineerProfile />} />
                 <Route path="workforce/calendar" element={<WorkforceCalendar />} />
@@ -324,15 +351,78 @@ function App() {
                 <Route path="risk-register" element={<RiskRegister />} />
                 <Route path="ims" element={<IMSDashboard />} />
                 <Route path="ai-intelligence" element={<AIIntelligence />} />
-                <Route path="admin" element={<RequireRole allowed={['admin', 'manager']}><AdminDashboard /></RequireRole>} />
-                <Route path="admin/forms" element={<RequireRole allowed={['admin', 'manager']}><FormsList /></RequireRole>} />
-                <Route path="admin/forms/new" element={<RequireRole allowed={['admin', 'manager']}><FormBuilder /></RequireRole>} />
-                <Route path="admin/forms/:templateId" element={<RequireRole allowed={['admin', 'manager']}><FormBuilder /></RequireRole>} />
-                <Route path="admin/contracts" element={<RequireRole allowed={['admin', 'manager']}><ContractsManagement /></RequireRole>} />
-                <Route path="admin/settings" element={<RequireRole allowed={['admin']}><SystemSettings /></RequireRole>} />
-                <Route path="admin/users" element={<RequireRole allowed={['admin']}><AdminUserManagement /></RequireRole>} />
-                <Route path="admin/lookups" element={<RequireRole allowed={['admin', 'manager']}><LookupTables /></RequireRole>} />
-                <Route path="admin/notifications" element={<RequireRole allowed={['admin']}><NotificationSettings /></RequireRole>} />
+                <Route
+                  path="admin"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <AdminDashboard />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/forms"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <FormsList />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/forms/new"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <FormBuilder />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/forms/:templateId"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <FormBuilder />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/contracts"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <ContractsManagement />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/settings"
+                  element={
+                    <RequireRole allowed={['admin']}>
+                      <SystemSettings />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/users"
+                  element={
+                    <RequireRole allowed={['admin']}>
+                      <AdminUserManagement />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/lookups"
+                  element={
+                    <RequireRole allowed={['admin', 'manager']}>
+                      <LookupTables />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="admin/notifications"
+                  element={
+                    <RequireRole allowed={['admin']}>
+                      <NotificationSettings />
+                    </RequireRole>
+                  }
+                />
               </Route>
 
               {/* Catch-all 404 */}

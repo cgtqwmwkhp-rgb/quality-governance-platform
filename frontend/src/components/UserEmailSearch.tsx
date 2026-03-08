@@ -47,7 +47,7 @@ export function UserEmailSearch({
       setResults([])
       return
     }
-    
+
     setLoading(true)
     try {
       const response = await usersApi.search(searchQuery)
@@ -58,8 +58,9 @@ export function UserEmailSearch({
       try {
         const listResponse = await usersApi.list(1, 50)
         const filtered = (listResponse.data.items || []).filter(
-          u => u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               u.full_name.toLowerCase().includes(searchQuery.toLowerCase())
+          (u) =>
+            u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            u.full_name.toLowerCase().includes(searchQuery.toLowerCase()),
         )
         setResults(filtered)
       } catch {

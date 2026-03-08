@@ -1,5 +1,5 @@
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   AlertTriangle,
@@ -8,9 +8,9 @@ import {
   Car,
   ChevronRight,
   Shield,
-} from 'lucide-react';
-import { Card } from '../components/ui/Card';
-import { cn } from '../helpers/utils';
+} from 'lucide-react'
+import { Card } from '../components/ui/Card'
+import { cn } from '../helpers/utils'
 
 // Report type options
 const REPORT_TYPES = [
@@ -54,11 +54,11 @@ const REPORT_TYPES = [
     subtitle: 'Vehicle incident',
     description: 'Report an RTC involving a company vehicle',
   },
-];
+]
 
 export default function PortalReport() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { t } = useTranslation()
+  const navigate = useNavigate()
 
   return (
     <div className="min-h-screen bg-surface">
@@ -97,7 +97,12 @@ export default function PortalReport() {
             >
               <div className="flex items-center gap-4">
                 {/* Icon */}
-                <div className={cn('w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0', type.iconBg)}>
+                <div
+                  className={cn(
+                    'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0',
+                    type.iconBg,
+                  )}
+                >
                   <type.icon className={cn('w-7 h-7', type.iconColor)} />
                 </div>
 
@@ -120,10 +125,8 @@ export default function PortalReport() {
         </div>
 
         {/* Help text */}
-        <p className="mt-8 text-center text-sm text-muted-foreground">
-          {t('portal.not_sure')}
-        </p>
+        <p className="mt-8 text-center text-sm text-muted-foreground">{t('portal.not_sure')}</p>
       </main>
     </div>
-  );
+  )
 }

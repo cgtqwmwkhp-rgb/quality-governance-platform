@@ -71,9 +71,7 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>
-      )}
+      {error && <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>}
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -106,7 +104,11 @@ export default function UserManagement() {
                   <Shield className="w-3 h-3 mr-1" />
                   {user.role}
                 </Badge>
-                <Badge className={user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}>
+                <Badge
+                  className={
+                    user.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
+                  }
+                >
                   {user.is_active ? 'Active' : 'Inactive'}
                 </Badge>
               </div>

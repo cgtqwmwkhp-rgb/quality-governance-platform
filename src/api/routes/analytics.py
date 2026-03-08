@@ -404,21 +404,25 @@ async def get_executive_summary(
     return analytics_service.generate_executive_summary(time_range)
 
 
+class ReportRequest(BaseModel):
+    report_type: str
+    output_format: str = "pdf"
+    time_range: str = "last_month"
+
+
 @router.post("/reports/generate")
 async def generate_report(
-    report_type: str,
+    body: ReportRequest,
     current_user: CurrentUser,
-    format: str = Query("pdf"),
-    time_range: str = Query("last_month"),
 ):
     """Generate and queue a report for download."""
     return {
         "report_id": "RPT-001",
-        "report_type": report_type,
-        "format": format,
+        "report_type": body.report_type,
+        "format": body.output_format,
         "status": "generating",
         "estimated_completion": datetime.now(timezone.utc).isoformat(),
-        "download_url": None,  # Will be available when complete
+        "download_url": None,
     }
 
 

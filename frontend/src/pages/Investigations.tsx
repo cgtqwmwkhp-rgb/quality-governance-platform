@@ -1,15 +1,43 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
-import { Plus, Search, FlaskConical, ArrowRight, FileQuestion, GitBranch, CheckCircle, Clock, AlertTriangle, Car, MessageSquare, Loader2, ExternalLink, RefreshCw } from 'lucide-react'
+import {
+  Plus,
+  Search,
+  FlaskConical,
+  ArrowRight,
+  FileQuestion,
+  GitBranch,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Car,
+  MessageSquare,
+  Loader2,
+  ExternalLink,
+  RefreshCw,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { investigationsApi, actionsApi, Investigation, getApiErrorMessage, SourceRecordItem, CreateFromRecordError } from '../api/client'
+import {
+  investigationsApi,
+  actionsApi,
+  Investigation,
+  getApiErrorMessage,
+  SourceRecordItem,
+  CreateFromRecordError,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/Select'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +46,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '../components/ui/Dialog'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
 const STATUS_STEPS = [
@@ -55,7 +83,11 @@ interface ActionItem {
 const ACTION_STATUS_OPTIONS = [
   { value: 'open', label: 'Open', className: 'bg-warning/10 text-warning' },
   { value: 'in_progress', label: 'In Progress', className: 'bg-info/10 text-info' },
-  { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800' },
+  {
+    value: 'pending_verification',
+    label: 'Pending Verification',
+    className: 'bg-purple-100 text-purple-800',
+  },
   { value: 'completed', label: 'Completed', className: 'bg-success/10 text-success' },
   { value: 'cancelled', label: 'Cancelled', className: 'bg-muted text-muted-foreground' },
 ]
@@ -92,7 +124,10 @@ function CreateInvestigationModal({
   const [title, setTitle] = useState('')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+  const [existingInvestigation, setExistingInvestigation] = useState<{
+    id: number
+    reference: string
+  } | null>(null)
 
   // Source records state
   const [sourceRecords, setSourceRecords] = useState<SourceRecordItem[]>([])
@@ -155,7 +190,7 @@ function CreateInvestigationModal({
     setSearchDebounce(
       setTimeout(() => {
         loadSourceRecords(sourceType, query)
-      }, 300)
+      }, 300),
     )
   }
 
@@ -200,10 +235,15 @@ function CreateInvestigationModal({
       // Safe error handling - check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
         const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
-        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+        if (
+          errorData?.error_code === 'INV_ALREADY_EXISTS' &&
+          errorData.details?.existing_investigation_id
+        ) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
-            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
+            reference:
+              errorData.details.existing_reference_number ||
+              `INV-${errorData.details.existing_investigation_id}`,
           })
           setError('An investigation already exists for this record.')
           return
@@ -224,10 +264,13 @@ function CreateInvestigationModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-      if (!isOpen) resetForm()
-      onOpenChange(isOpen)
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) resetForm()
+        onOpenChange(isOpen)
+      }}
+    >
       <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -235,7 +278,8 @@ function CreateInvestigationModal({
             Create Investigation from Record
           </DialogTitle>
           <DialogDescription>
-            Create a new investigation by selecting an existing record. Records that already have an investigation are marked.
+            Create a new investigation by selecting an existing record. Records that already have an
+            investigation are marked.
           </DialogDescription>
         </DialogHeader>
 
@@ -257,7 +301,7 @@ function CreateInvestigationModal({
                       'flex items-center gap-2 p-3 rounded-lg border text-left transition-colors',
                       sourceType === type.value
                         ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border hover:border-primary/50'
+                        : 'border-border hover:border-primary/50',
                     )}
                   >
                     <Icon className="w-4 h-4" />
@@ -271,12 +315,16 @@ function CreateInvestigationModal({
           {/* Source Record Selector (replaces free-text ID) */}
           {sourceType && (
             <div>
-              <label htmlFor="investigations-field-0" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-0"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Select Source Record *
               </label>
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input id="investigations-field-0"
+                <Input
+                  id="investigations-field-0"
                   value={searchQuery}
                   onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder="Search by reference or title..."
@@ -324,7 +372,7 @@ function CreateInvestigationModal({
                           isSelected && 'bg-primary/5 border-primary',
                           isAlreadyInvestigated
                             ? 'bg-muted/50 cursor-not-allowed opacity-70'
-                            : 'hover:bg-surface'
+                            : 'hover:bg-surface',
                         )}
                       >
                         <div className="flex-1 min-w-0">
@@ -332,10 +380,14 @@ function CreateInvestigationModal({
                             <span className="font-mono text-xs text-primary">
                               {record.reference_number}
                             </span>
-                            <span className={cn(
-                              'px-1.5 py-0.5 text-xs rounded',
-                              record.status === 'closed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                            )}>
+                            <span
+                              className={cn(
+                                'px-1.5 py-0.5 text-xs rounded',
+                                record.status === 'closed'
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-blue-100 text-blue-800',
+                              )}
+                            >
                               {record.status}
                             </span>
                           </div>
@@ -372,10 +424,14 @@ function CreateInvestigationModal({
           {/* Investigation Title */}
           {selectedRecord && (
             <div>
-              <label htmlFor="investigations-field-1" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-1"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Investigation Title *
               </label>
-              <Input id="investigations-field-1"
+              <Input
+                id="investigations-field-1"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Investigation into vehicle collision on A1"
@@ -388,8 +444,9 @@ function CreateInvestigationModal({
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <h4 className="text-sm font-medium text-blue-900 mb-1">Deterministic Prefill</h4>
               <p className="text-xs text-blue-700">
-                The investigation will be pre-populated with data from the source record using Mapping Contract v1.
-                The investigation level (LOW/MEDIUM/HIGH) will be determined by the source severity.
+                The investigation will be pre-populated with data from the source record using
+                Mapping Contract v1. The investigation level (LOW/MEDIUM/HIGH) will be determined by
+                the source severity.
               </p>
             </div>
           )}
@@ -446,11 +503,11 @@ export default function Investigations() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [selectedInvestigation, setSelectedInvestigation] = useState<Investigation | null>(null)
-  
+
   // Actions for selected investigation
   const [investigationActions, setInvestigationActions] = useState<ActionItem[]>([])
   const [loadingActions, setLoadingActions] = useState(false)
-  
+
   // Action modal state
   const [showActionModal, setShowActionModal] = useState(false)
   const [creatingAction, setCreatingAction] = useState(false)
@@ -462,7 +519,7 @@ export default function Investigations() {
     due_date: '',
     assigned_to: '',
   })
-  
+
   // Action detail modal state
   const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null)
   const [showActionDetailModal, setShowActionDetailModal] = useState(false)
@@ -509,13 +566,13 @@ export default function Investigations() {
   }
 
   const getStatusIndex = (status: string) => {
-    return STATUS_STEPS.findIndex(s => s.id === status)
+    return STATUS_STEPS.findIndex((s) => s.id === status)
   }
 
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedInvestigation) return
-    
+
     // Use 'investigation' as source_type and investigation.id as source_id
     // This creates actions directly on the investigation (InvestigationAction),
     // not on the underlying entity (IncidentAction/RTAAction/ComplaintAction)
@@ -524,7 +581,9 @@ export default function Investigations() {
     try {
       await actionsApi.create({
         title: actionForm.title,
-        description: actionForm.description || `Corrective action from investigation ${selectedInvestigation.reference_number}`,
+        description:
+          actionForm.description ||
+          `Corrective action from investigation ${selectedInvestigation.reference_number}`,
         priority: actionForm.priority,
         due_date: actionForm.due_date || undefined,
         action_type: 'corrective',
@@ -566,7 +625,7 @@ export default function Investigations() {
   // Update action status
   const handleUpdateActionStatus = async (newStatus: string, completionNotes?: string) => {
     if (!selectedAction || !selectedInvestigation) return
-    
+
     setUpdatingAction(true)
     setActionUpdateError(null)
     try {
@@ -577,7 +636,9 @@ export default function Investigations() {
       // Reload actions to show updated status
       await loadActionsForInvestigation(selectedInvestigation)
       // Update selected action locally
-      setSelectedAction(prev => prev ? { ...prev, status: newStatus, completion_notes: completionNotes } : null)
+      setSelectedAction((prev) =>
+        prev ? { ...prev, status: newStatus, completion_notes: completionNotes } : null,
+      )
     } catch (err: any) {
       trackError(err, { component: 'Investigations', action: 'updateAction' })
       const errorMessage = getApiErrorMessage(err)
@@ -597,15 +658,16 @@ export default function Investigations() {
   }
 
   const filteredInvestigations = investigations.filter(
-    i => i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         i.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
+    (i) =>
+      i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.reference_number.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   const stats = {
     total: investigations.length,
-    inProgress: investigations.filter(i => i.status === 'in_progress').length,
-    underReview: investigations.filter(i => i.status === 'under_review').length,
-    completed: investigations.filter(i => i.status === 'completed').length,
+    inProgress: investigations.filter((i) => i.status === 'in_progress').length,
+    underReview: investigations.filter((i) => i.status === 'under_review').length,
+    completed: investigations.filter((i) => i.status === 'completed').length,
   }
 
   if (loading) {
@@ -633,26 +695,38 @@ export default function Investigations() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: t('investigations.stats.total'), value: stats.total, variant: 'primary' as const },
+          {
+            label: t('investigations.stats.total'),
+            value: stats.total,
+            variant: 'primary' as const,
+          },
           { label: t('status.in_progress'), value: stats.inProgress, variant: 'warning' as const },
           { label: t('status.under_review'), value: stats.underReview, variant: 'info' as const },
-          { label: t('investigations.stats.completed'), value: stats.completed, variant: 'success' as const },
+          {
+            label: t('investigations.stats.completed'),
+            value: stats.completed,
+            variant: 'success' as const,
+          },
         ].map((stat) => (
           <Card key={stat.label} className="p-5">
-            <div className={cn(
-              "w-12 h-12 rounded-xl flex items-center justify-center mb-3",
-              stat.variant === 'primary' && "bg-primary/10",
-              stat.variant === 'warning' && "bg-warning/10",
-              stat.variant === 'info' && "bg-info/10",
-              stat.variant === 'success' && "bg-success/10",
-            )}>
-              <span className={cn(
-                "text-xl font-bold",
-                stat.variant === 'primary' && "text-primary",
-                stat.variant === 'warning' && "text-warning",
-                stat.variant === 'info' && "text-info",
-                stat.variant === 'success' && "text-success",
-              )}>
+            <div
+              className={cn(
+                'w-12 h-12 rounded-xl flex items-center justify-center mb-3',
+                stat.variant === 'primary' && 'bg-primary/10',
+                stat.variant === 'warning' && 'bg-warning/10',
+                stat.variant === 'info' && 'bg-info/10',
+                stat.variant === 'success' && 'bg-success/10',
+              )}
+            >
+              <span
+                className={cn(
+                  'text-xl font-bold',
+                  stat.variant === 'primary' && 'text-primary',
+                  stat.variant === 'warning' && 'text-warning',
+                  stat.variant === 'info' && 'text-info',
+                  stat.variant === 'success' && 'text-success',
+                )}
+              >
                 {stat.value}
               </span>
             </div>
@@ -685,7 +759,7 @@ export default function Investigations() {
           filteredInvestigations.map((investigation) => {
             const EntityIcon = getEntityIcon(investigation.assigned_entity_type)
             const statusIndex = getStatusIndex(investigation.status)
-            
+
             return (
               <Card
                 key={investigation.id}
@@ -693,7 +767,12 @@ export default function Investigations() {
                 onClick={() => setSelectedInvestigation(investigation)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedInvestigation(investigation); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setSelectedInvestigation(investigation)
+                  }
+                }}
                 className="p-6 cursor-pointer"
               >
                 <div className="flex flex-col lg:flex-row lg:items-center gap-6">
@@ -705,7 +784,9 @@ export default function Investigations() {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="font-mono text-sm text-primary">{investigation.reference_number}</span>
+                      <span className="font-mono text-sm text-primary">
+                        {investigation.reference_number}
+                      </span>
                       <span className="px-2 py-0.5 text-xs font-medium rounded bg-surface text-muted-foreground capitalize">
                         {investigation.assigned_entity_type.replace(/_/g, ' ')}
                       </span>
@@ -714,7 +795,9 @@ export default function Investigations() {
                       {investigation.title}
                     </h3>
                     {investigation.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{investigation.description}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">
+                        {investigation.description}
+                      </p>
                     )}
                   </div>
 
@@ -725,27 +808,33 @@ export default function Investigations() {
                       const isCurrent = stepIndex === statusIndex
                       return (
                         <div key={step.id} className="flex items-center">
-                          <div className={cn(
-                            "relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300",
-                            isCurrent 
-                              ? 'bg-primary shadow-lg' 
-                              : isActive 
-                                ? 'bg-primary/20' 
-                                : 'bg-surface'
-                          )}>
-                            <step.icon className={cn(
-                              "w-5 h-5",
-                              isActive ? 'text-primary-foreground' : 'text-muted-foreground'
-                            )} />
+                          <div
+                            className={cn(
+                              'relative flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-300',
+                              isCurrent
+                                ? 'bg-primary shadow-lg'
+                                : isActive
+                                  ? 'bg-primary/20'
+                                  : 'bg-surface',
+                            )}
+                          >
+                            <step.icon
+                              className={cn(
+                                'w-5 h-5',
+                                isActive ? 'text-primary-foreground' : 'text-muted-foreground',
+                              )}
+                            />
                             {isCurrent && (
                               <div className="absolute inset-0 rounded-xl animate-pulse bg-primary/30" />
                             )}
                           </div>
                           {stepIndex < STATUS_STEPS.length - 1 && (
-                            <ArrowRight className={cn(
-                              "w-4 h-4 mx-1",
-                              isActive ? 'text-primary' : 'text-muted-foreground/30'
-                            )} />
+                            <ArrowRight
+                              className={cn(
+                                'w-4 h-4 mx-1',
+                                isActive ? 'text-primary' : 'text-muted-foreground/30',
+                              )}
+                            />
                           )}
                         </div>
                       )
@@ -765,8 +854,10 @@ export default function Investigations() {
                         <Card key={i} className="p-3">
                           <span className="text-xs text-muted-foreground">{why}</span>
                           <p className="text-sm text-foreground mt-1">
-                            {typeof investigation.data === 'object' && 
-                              (investigation.data as Record<string, unknown>)[`why_${i + 1}`] as string || 
+                            {(typeof investigation.data === 'object' &&
+                              ((investigation.data as Record<string, unknown>)[
+                                `why_${i + 1}`
+                              ] as string)) ||
                               'Not documented'}
                           </p>
                         </Card>
@@ -786,11 +877,14 @@ export default function Investigations() {
           {selectedInvestigation && (
             <>
               <DialogHeader>
-                <span className="font-mono text-sm text-primary">{selectedInvestigation.reference_number}</span>
+                <span className="font-mono text-sm text-primary">
+                  {selectedInvestigation.reference_number}
+                </span>
                 <DialogTitle>{selectedInvestigation.title}</DialogTitle>
                 <DialogDescription>
-                  Root cause investigation for {selectedInvestigation.assigned_entity_type.replace(/_/g, ' ')} record.
-                  Status: {selectedInvestigation.status.replace(/_/g, ' ')}.
+                  Root cause investigation for{' '}
+                  {selectedInvestigation.assigned_entity_type.replace(/_/g, ' ')} record. Status:{' '}
+                  {selectedInvestigation.status.replace(/_/g, ' ')}.
                 </DialogDescription>
               </DialogHeader>
               <div className="overflow-y-auto max-h-[calc(90vh-120px)] space-y-6 py-4">
@@ -807,10 +901,14 @@ export default function Investigations() {
                           {num}
                         </div>
                         <div className="flex-1">
-                          <label htmlFor="investigations-field-2" className="block text-sm font-medium text-foreground mb-2">
+                          <label
+                            htmlFor="investigations-field-2"
+                            className="block text-sm font-medium text-foreground mb-2"
+                          >
                             Why {num}?
                           </label>
-                          <Textarea id="investigations-field-2"
+                          <Textarea
+                            id="investigations-field-2"
                             rows={2}
                             placeholder={`Enter the ${num === 1 ? 'initial' : 'deeper'} cause...`}
                           />
@@ -822,7 +920,9 @@ export default function Investigations() {
 
                 {/* Root Cause */}
                 <Card className="p-6 border-primary/20 bg-primary/5">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">{t('investigations.root_cause')}</h3>
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
+                    {t('investigations.root_cause')}
+                  </h3>
                   <Textarea
                     rows={3}
                     placeholder="Document the root cause based on your 5 Whys analysis..."
@@ -831,8 +931,10 @@ export default function Investigations() {
 
                 {/* Corrective Actions */}
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-4">{t('investigations.corrective_actions')}</h3>
-                  
+                  <h3 className="text-lg font-semibold text-foreground mb-4">
+                    {t('investigations.corrective_actions')}
+                  </h3>
+
                   {/* Existing Actions */}
                   {loadingActions ? (
                     <div className="flex items-center justify-center py-4">
@@ -841,8 +943,8 @@ export default function Investigations() {
                   ) : investigationActions.length > 0 ? (
                     <div className="space-y-3 mb-4">
                       {investigationActions.map((action) => (
-                        <Card 
-                          key={action.id} 
+                        <Card
+                          key={action.id}
                           className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
                           onClick={() => handleOpenAction(action)}
                         >
@@ -852,31 +954,40 @@ export default function Investigations() {
                                 <h4 className="font-medium text-foreground">{action.title}</h4>
                                 <ArrowRight className="w-4 h-4 text-muted-foreground" />
                               </div>
-                              <p className="text-sm text-muted-foreground line-clamp-2">{action.description}</p>
+                              <p className="text-sm text-muted-foreground line-clamp-2">
+                                {action.description}
+                              </p>
                               {action.owner_email && (
                                 <p className="text-xs text-muted-foreground mt-1">
-                                  Assigned to: <span className="text-foreground">{action.owner_email}</span>
+                                  Assigned to:{' '}
+                                  <span className="text-foreground">{action.owner_email}</span>
                                 </p>
                               )}
                             </div>
                             <div className="flex flex-col items-end gap-1">
-                              <span className={cn(
-                                "px-2 py-0.5 text-xs font-medium rounded",
-                                action.status === 'open' && "bg-warning/10 text-warning",
-                                action.status === 'in_progress' && "bg-info/10 text-info",
-                                action.status === 'pending_verification' && "bg-purple-100 text-purple-800",
-                                action.status === 'completed' && "bg-success/10 text-success",
-                                action.status === 'cancelled' && "bg-muted text-muted-foreground",
-                              )}>
+                              <span
+                                className={cn(
+                                  'px-2 py-0.5 text-xs font-medium rounded',
+                                  action.status === 'open' && 'bg-warning/10 text-warning',
+                                  action.status === 'in_progress' && 'bg-info/10 text-info',
+                                  action.status === 'pending_verification' &&
+                                    'bg-purple-100 text-purple-800',
+                                  action.status === 'completed' && 'bg-success/10 text-success',
+                                  action.status === 'cancelled' && 'bg-muted text-muted-foreground',
+                                )}
+                              >
                                 {action.status.replace(/_/g, ' ')}
                               </span>
-                              <span className={cn(
-                                "px-2 py-0.5 text-xs font-medium rounded",
-                                action.priority === 'critical' && "bg-destructive/10 text-destructive",
-                                action.priority === 'high' && "bg-warning/10 text-warning",
-                                action.priority === 'medium' && "bg-info/10 text-info",
-                                action.priority === 'low' && "bg-muted text-muted-foreground",
-                              )}>
+                              <span
+                                className={cn(
+                                  'px-2 py-0.5 text-xs font-medium rounded',
+                                  action.priority === 'critical' &&
+                                    'bg-destructive/10 text-destructive',
+                                  action.priority === 'high' && 'bg-warning/10 text-warning',
+                                  action.priority === 'medium' && 'bg-info/10 text-info',
+                                  action.priority === 'low' && 'bg-muted text-muted-foreground',
+                                )}
+                              >
                                 {action.priority}
                               </span>
                               {action.due_date && (
@@ -894,8 +1005,12 @@ export default function Investigations() {
                       No corrective actions yet
                     </p>
                   )}
-                  
-                  <Button variant="outline" className="w-full" onClick={() => setShowActionModal(true)}>
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setShowActionModal(true)}
+                  >
                     <Plus className="w-5 h-5" />
                     {t('investigations.add_action')}
                   </Button>
@@ -921,16 +1036,18 @@ export default function Investigations() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('investigations.add_action')}</DialogTitle>
-            <DialogDescription>
-              {t('investigations.add_action_desc')}
-            </DialogDescription>
+            <DialogDescription>{t('investigations.add_action_desc')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label htmlFor="investigations-field-3" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-3"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Action Title *
               </label>
-              <Input id="investigations-field-3"
+              <Input
+                id="investigations-field-3"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder="e.g., Implement additional safety controls"
@@ -944,7 +1061,10 @@ export default function Investigations() {
               placeholder="Search by email..."
             />
             <div>
-              <label htmlFor="investigations-field-4" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-4"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Priority
               </label>
               <Select
@@ -963,20 +1083,28 @@ export default function Investigations() {
               </Select>
             </div>
             <div>
-              <label htmlFor="investigations-field-5" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-5"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Due Date
               </label>
-              <Input id="investigations-field-5"
+              <Input
+                id="investigations-field-5"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label htmlFor="investigations-field-6" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="investigations-field-6"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 Description
               </label>
-              <Textarea id="investigations-field-6"
+              <Textarea
+                id="investigations-field-6"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder="Describe the corrective action to be taken..."
@@ -989,7 +1117,14 @@ export default function Investigations() {
               </div>
             )}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { setShowActionModal(false); setActionError(null); }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowActionModal(false)
+                  setActionError(null)
+                }}
+              >
                 Cancel
               </Button>
               <Button type="submit" disabled={creatingAction || !actionForm.title}>
@@ -1009,7 +1144,7 @@ export default function Investigations() {
               {selectedAction?.reference_number || `Action #${selectedAction?.id}`}
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedAction && (
             <div className="space-y-4">
               {/* Title and Description */}
@@ -1021,27 +1156,37 @@ export default function Investigations() {
               {/* Status and Priority */}
               <div className="flex gap-4">
                 <div className="flex-1">
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">Status</span>
-                  <span className={cn(
-                    "inline-block px-3 py-1 text-sm font-medium rounded",
-                    selectedAction.status === 'open' && "bg-warning/10 text-warning",
-                    selectedAction.status === 'in_progress' && "bg-info/10 text-info",
-                    selectedAction.status === 'pending_verification' && "bg-purple-100 text-purple-800",
-                    selectedAction.status === 'completed' && "bg-success/10 text-success",
-                    selectedAction.status === 'cancelled' && "bg-muted text-muted-foreground",
-                  )}>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">
+                    Status
+                  </span>
+                  <span
+                    className={cn(
+                      'inline-block px-3 py-1 text-sm font-medium rounded',
+                      selectedAction.status === 'open' && 'bg-warning/10 text-warning',
+                      selectedAction.status === 'in_progress' && 'bg-info/10 text-info',
+                      selectedAction.status === 'pending_verification' &&
+                        'bg-purple-100 text-purple-800',
+                      selectedAction.status === 'completed' && 'bg-success/10 text-success',
+                      selectedAction.status === 'cancelled' && 'bg-muted text-muted-foreground',
+                    )}
+                  >
                     {selectedAction.status.replace(/_/g, ' ')}
                   </span>
                 </div>
                 <div className="flex-1">
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">Priority</span>
-                  <span className={cn(
-                    "inline-block px-3 py-1 text-sm font-medium rounded",
-                    selectedAction.priority === 'critical' && "bg-destructive/10 text-destructive",
-                    selectedAction.priority === 'high' && "bg-warning/10 text-warning",
-                    selectedAction.priority === 'medium' && "bg-info/10 text-info",
-                    selectedAction.priority === 'low' && "bg-muted text-muted-foreground",
-                  )}>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">
+                    Priority
+                  </span>
+                  <span
+                    className={cn(
+                      'inline-block px-3 py-1 text-sm font-medium rounded',
+                      selectedAction.priority === 'critical' &&
+                        'bg-destructive/10 text-destructive',
+                      selectedAction.priority === 'high' && 'bg-warning/10 text-warning',
+                      selectedAction.priority === 'medium' && 'bg-info/10 text-info',
+                      selectedAction.priority === 'low' && 'bg-muted text-muted-foreground',
+                    )}
+                  >
                     {selectedAction.priority}
                   </span>
                 </div>
@@ -1051,14 +1196,20 @@ export default function Investigations() {
               <div className="flex gap-4">
                 {selectedAction.owner_email && (
                   <div className="flex-1">
-                    <span className="block text-sm font-medium text-muted-foreground mb-1">Assigned To</span>
+                    <span className="block text-sm font-medium text-muted-foreground mb-1">
+                      Assigned To
+                    </span>
                     <span className="text-sm text-foreground">{selectedAction.owner_email}</span>
                   </div>
                 )}
                 {selectedAction.due_date && (
                   <div className="flex-1">
-                    <span className="block text-sm font-medium text-muted-foreground mb-1">Due Date</span>
-                    <span className="text-sm text-foreground">{new Date(selectedAction.due_date).toLocaleDateString()}</span>
+                    <span className="block text-sm font-medium text-muted-foreground mb-1">
+                      Due Date
+                    </span>
+                    <span className="text-sm text-foreground">
+                      {new Date(selectedAction.due_date).toLocaleDateString()}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1066,20 +1217,26 @@ export default function Investigations() {
               {/* Completion Notes */}
               {selectedAction.completion_notes && (
                 <div>
-                  <span className="block text-sm font-medium text-muted-foreground mb-1">Completion Notes</span>
-                  <p className="text-sm text-foreground bg-muted/50 p-2 rounded">{selectedAction.completion_notes}</p>
+                  <span className="block text-sm font-medium text-muted-foreground mb-1">
+                    Completion Notes
+                  </span>
+                  <p className="text-sm text-foreground bg-muted/50 p-2 rounded">
+                    {selectedAction.completion_notes}
+                  </p>
                 </div>
               )}
 
               {/* Status Update Section */}
               <div className="border-t pt-4">
-                <span className="block text-sm font-medium text-foreground mb-2">Update Status</span>
+                <span className="block text-sm font-medium text-foreground mb-2">
+                  Update Status
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {ACTION_STATUS_OPTIONS.map((option) => (
                     <Button
                       key={option.value}
                       type="button"
-                      variant={selectedAction.status === option.value ? "default" : "outline"}
+                      variant={selectedAction.status === option.value ? 'default' : 'outline'}
                       size="sm"
                       disabled={updatingAction || selectedAction.status === option.value}
                       onClick={() => {

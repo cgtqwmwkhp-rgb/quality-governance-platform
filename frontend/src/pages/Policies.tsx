@@ -59,7 +59,9 @@ export default function Policies() {
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -69,7 +71,7 @@ export default function Policies() {
     try {
       const response = await policiesApi.create(formData)
       if (response.data) {
-        setPolicies(prev => [response.data, ...prev])
+        setPolicies((prev) => [response.data, ...prev])
       }
       setShowModal(false)
       setFormData({
@@ -90,36 +92,54 @@ export default function Policies() {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'policy': return '📜'
-      case 'procedure': return '📋'
-      case 'work_instruction': return '📝'
-      case 'sop': return '📘'
-      case 'form': return '📄'
-      case 'template': return '📑'
-      case 'guideline': return '📖'
-      case 'manual': return '📚'
-      case 'record': return '🗂️'
-      default: return '📎'
+      case 'policy':
+        return '📜'
+      case 'procedure':
+        return '📋'
+      case 'work_instruction':
+        return '📝'
+      case 'sop':
+        return '📘'
+      case 'form':
+        return '📄'
+      case 'template':
+        return '📑'
+      case 'guideline':
+        return '📖'
+      case 'manual':
+        return '📚'
+      case 'record':
+        return '🗂️'
+      default:
+        return '📎'
     }
   }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'published': return 'resolved'
-      case 'approved': return 'success'
-      case 'under_review': return 'in-progress'
-      case 'draft': return 'submitted'
-      case 'superseded': return 'closed'
-      case 'retired': return 'destructive'
-      default: return 'secondary'
+      case 'published':
+        return 'resolved'
+      case 'approved':
+        return 'success'
+      case 'under_review':
+        return 'in-progress'
+      case 'draft':
+        return 'submitted'
+      case 'superseded':
+        return 'closed'
+      case 'retired':
+        return 'destructive'
+      default:
+        return 'secondary'
     }
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
   const filteredPolicies = policies.filter(
-    p => p.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-         p.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-         (p.category || '').toLowerCase().includes(deferredSearch.toLowerCase())
+    (p) =>
+      p.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      p.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      (p.category || '').toLowerCase().includes(deferredSearch.toLowerCase()),
   )
 
   if (loading) {
@@ -165,16 +185,17 @@ export default function Policies() {
               icon={<FileText className="w-8 h-8 text-muted-foreground" />}
               title={t('policies.empty.title')}
               description={t('policies.empty.subtitle')}
-              action={<Button onClick={() => setShowModal(true)}><Plus className="w-4 h-4 mr-2" />{t('policies.create')}</Button>}
+              action={
+                <Button onClick={() => setShowModal(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('policies.create')}
+                </Button>
+              }
             />
           </div>
         ) : (
           filteredPolicies.map((policy) => (
-            <Card
-              key={policy.id}
-              hoverable
-              className="p-5 cursor-pointer"
-            >
+            <Card key={policy.id} hoverable className="p-5 cursor-pointer">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-2xl">
                   {getTypeIcon(policy.document_type)}
@@ -183,7 +204,9 @@ export default function Policies() {
                   <p className="font-mono text-xs text-primary mb-1">{policy.reference_number}</p>
                   <h3 className="font-semibold text-foreground truncate">{policy.title}</h3>
                   {policy.description && (
-                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{policy.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                      {policy.description}
+                    </p>
                   )}
                 </div>
               </div>
@@ -198,7 +221,8 @@ export default function Policies() {
               {policy.next_review_date && (
                 <div className="mt-3 pt-3 border-t border-border">
                   <p className="text-xs text-muted-foreground">
-                    {t('policies.review_due')} {new Date(policy.next_review_date).toLocaleDateString()}
+                    {t('policies.review_due')}{' '}
+                    {new Date(policy.next_review_date).toLocaleDateString()}
                   </p>
                 </div>
               )}
@@ -215,11 +239,19 @@ export default function Policies() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             {createError && (
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">{createError}</div>
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-lg">
+                {createError}
+              </div>
             )}
             <div>
-              <label htmlFor="policies-field-0" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.title')}</label>
-              <Input id="policies-field-0"
+              <label
+                htmlFor="policies-field-0"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('policies.form.title')}
+              </label>
+              <Input
+                id="policies-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -229,8 +261,14 @@ export default function Policies() {
             </div>
 
             <div>
-              <label htmlFor="policies-field-1" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.description')}</label>
-              <Textarea id="policies-field-1"
+              <label
+                htmlFor="policies-field-1"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('policies.form.description')}
+              </label>
+              <Textarea
+                id="policies-field-1"
                 rows={3}
                 value={formData.description || ''}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -240,7 +278,12 @@ export default function Policies() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="policies-field-2" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.type')}</label>
+                <label
+                  htmlFor="policies-field-2"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('policies.form.type')}
+                </label>
                 <Select
                   value={formData.document_type}
                   onValueChange={(value) => setFormData({ ...formData, document_type: value })}
@@ -251,7 +294,9 @@ export default function Policies() {
                   <SelectContent>
                     <SelectItem value="policy">{t('policies.type.policy')}</SelectItem>
                     <SelectItem value="procedure">{t('policies.type.procedure')}</SelectItem>
-                    <SelectItem value="work_instruction">{t('policies.type.work_instruction')}</SelectItem>
+                    <SelectItem value="work_instruction">
+                      {t('policies.type.work_instruction')}
+                    </SelectItem>
                     <SelectItem value="sop">{t('policies.type.sop')}</SelectItem>
                     <SelectItem value="form">{t('policies.type.form')}</SelectItem>
                     <SelectItem value="template">{t('policies.type.template')}</SelectItem>
@@ -264,10 +309,17 @@ export default function Policies() {
               </div>
 
               <div>
-                <label htmlFor="policies-field-3" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.review_frequency')}</label>
+                <label
+                  htmlFor="policies-field-3"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('policies.form.review_frequency')}
+                </label>
                 <Select
                   value={String(formData.review_frequency_months)}
-                  onValueChange={(value) => setFormData({ ...formData, review_frequency_months: parseInt(value) })}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, review_frequency_months: parseInt(value) })
+                  }
                 >
                   <SelectTrigger id="policies-field-3">
                     <SelectValue placeholder={t('policies.form.select_frequency')} />
@@ -284,8 +336,14 @@ export default function Policies() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="policies-field-4" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.category')}</label>
-                <Input id="policies-field-4"
+                <label
+                  htmlFor="policies-field-4"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('policies.form.category')}
+                </label>
+                <Input
+                  id="policies-field-4"
                   type="text"
                   value={formData.category || ''}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
@@ -293,8 +351,14 @@ export default function Policies() {
                 />
               </div>
               <div>
-                <label htmlFor="policies-field-5" className="block text-sm font-medium text-foreground mb-2">{t('policies.form.department')}</label>
-                <Input id="policies-field-5"
+                <label
+                  htmlFor="policies-field-5"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('policies.form.department')}
+                </label>
+                <Input
+                  id="policies-field-5"
                   type="text"
                   value={formData.department || ''}
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}

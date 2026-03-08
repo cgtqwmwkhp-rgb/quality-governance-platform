@@ -1,7 +1,7 @@
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import LanguageDetector from 'i18next-browser-languagedetector';
-import en from './locales/en.json';
+import i18n from 'i18next'
+import { initReactI18next } from 'react-i18next'
+import LanguageDetector from 'i18next-browser-languagedetector'
+import en from './locales/en.json'
 
 i18n
   .use(LanguageDetector)
@@ -18,11 +18,11 @@ i18n
     saveMissing: import.meta.env.DEV,
     missingKeyHandler: (_lngs: readonly string[], _ns: string, key: string) => {
       if (import.meta.env.DEV) {
-        console.warn(`[i18n] Missing key: "${key}"`);
+        console.warn(`[i18n] Missing key: "${key}"`)
       }
     },
     pluralSeparator: '_',
     returnNull: false,
-  });
+  })
 
-export default i18n;
+export default i18n

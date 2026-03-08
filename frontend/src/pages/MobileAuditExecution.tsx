@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from '../contexts/ToastContext';
-import { CardSkeleton } from '../components/ui/SkeletonLoader';
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from '../contexts/ToastContext'
+import { CardSkeleton } from '../components/ui/SkeletonLoader'
 import {
   ArrowLeft,
   ArrowRight,
@@ -33,68 +33,60 @@ import {
   ThumbsDown,
   Send,
   ClipboardCheck,
-} from 'lucide-react';
+} from 'lucide-react'
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type ResponseType = 
-  | 'yes' 
-  | 'no' 
-  | 'na' 
-  | 'pass' 
-  | 'fail' 
-  | number 
-  | string 
-  | null;
+type ResponseType = 'yes' | 'no' | 'na' | 'pass' | 'fail' | number | string | null
 
 interface QuestionResponse {
-  questionId: string;
-  response: ResponseType;
-  notes?: string;
-  photos?: string[];
-  voiceNote?: string;
-  signature?: string;
-  flagged?: boolean;
-  timestamp: string;
-  location?: { lat: number; lng: number };
-  aiSuggestion?: string;
-  aiAccepted?: boolean;
+  questionId: string
+  response: ResponseType
+  notes?: string
+  photos?: string[]
+  voiceNote?: string
+  signature?: string
+  flagged?: boolean
+  timestamp: string
+  location?: { lat: number; lng: number }
+  aiSuggestion?: string
+  aiAccepted?: boolean
 }
 
 interface AuditQuestion {
-  id: string;
-  text: string;
-  description?: string;
-  type: string;
-  required: boolean;
-  weight: number;
-  evidenceRequired: boolean;
-  guidance?: string;
-  riskLevel?: string;
-  isoClause?: string;
+  id: string
+  text: string
+  description?: string
+  type: string
+  required: boolean
+  weight: number
+  evidenceRequired: boolean
+  guidance?: string
+  riskLevel?: string
+  isoClause?: string
 }
 
 interface AuditSection {
-  id: string;
-  title: string;
-  description?: string;
-  color: string;
-  questions: AuditQuestion[];
+  id: string
+  title: string
+  description?: string
+  color: string
+  questions: AuditQuestion[]
 }
 
 interface AuditData {
-  id: string;
-  templateName: string;
-  location: string;
-  asset: string;
-  sections: AuditSection[];
+  id: string
+  templateName: string
+  location: string
+  asset: string
+  sections: AuditSection[]
 }
 
-const MOCK_AUDIT: AuditData | null = null;
+const MOCK_AUDIT: AuditData | null = null
 
-const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }> = {};
+const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }> = {}
 
 // ============================================================================
 // COMPONENTS
@@ -103,20 +95,20 @@ const AI_SUGGESTIONS: Record<string, { suggestion: string; confidence: number }>
 // Haptic feedback simulation
 const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
   if ('vibrate' in navigator) {
-    const patterns = { light: [10], medium: [20], heavy: [30, 10, 30] };
-    navigator.vibrate(patterns[type]);
+    const patterns = { light: [10], medium: [20], heavy: [30, 10, 30] }
+    navigator.vibrate(patterns[type])
   }
-};
+}
 
 // Status Bar Component
-const StatusBar = ({ 
-  isOnline, 
-  isSynced, 
-  batteryLevel 
-}: { 
-  isOnline: boolean; 
-  isSynced: boolean; 
-  batteryLevel: number;
+const StatusBar = ({
+  isOnline,
+  isSynced,
+  batteryLevel,
+}: {
+  isOnline: boolean
+  isSynced: boolean
+  batteryLevel: number
 }) => (
   <div className="flex items-center gap-3 px-4 py-2 bg-slate-900/80 text-xs">
     <div className={`flex items-center gap-1 ${isOnline ? 'text-green-400' : 'text-red-400'}`}>
@@ -132,7 +124,7 @@ const StatusBar = ({
       <span>{batteryLevel}%</span>
     </div>
   </div>
-);
+)
 
 // AI Suggestion Component
 const AISuggestion = ({
@@ -142,11 +134,11 @@ const AISuggestion = ({
   onDismiss,
   isLoading,
 }: {
-  suggestion?: string;
-  confidence?: number;
-  onAccept: () => void;
-  onDismiss: () => void;
-  isLoading: boolean;
+  suggestion?: string
+  confidence?: number
+  onAccept: () => void
+  onDismiss: () => void
+  isLoading: boolean
 }) => {
   if (isLoading) {
     return (
@@ -154,10 +146,10 @@ const AISuggestion = ({
         <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
         <span className="text-sm text-purple-300">AI analyzing...</span>
       </div>
-    );
+    )
   }
 
-  if (!suggestion) return null;
+  if (!suggestion) return null
 
   return (
     <div className="p-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-xl">
@@ -166,28 +158,36 @@ const AISuggestion = ({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-medium text-purple-400">AI Insight</span>
-            <span className="text-xs text-purple-400/60">{Math.round((confidence || 0) * 100)}% confidence</span>
+            <span className="text-xs text-purple-400/60">
+              {Math.round((confidence || 0) * 100)}% confidence
+            </span>
           </div>
           <p className="text-sm text-purple-200">{suggestion}</p>
         </div>
       </div>
       <div className="flex gap-2 mt-3">
         <button
-          onClick={() => { onAccept(); triggerHaptic('light'); }}
+          onClick={() => {
+            onAccept()
+            triggerHaptic('light')
+          }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-500/20 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-500/30"
         >
           <ThumbsUp className="w-3 h-3" /> Helpful
         </button>
         <button
-          onClick={() => { onDismiss(); triggerHaptic('light'); }}
+          onClick={() => {
+            onDismiss()
+            triggerHaptic('light')
+          }}
           className="flex-1 flex items-center justify-center gap-1 py-2 bg-slate-700/50 text-slate-400 rounded-lg text-xs font-medium hover:bg-slate-700"
         >
           <ThumbsDown className="w-3 h-3" /> Dismiss
         </button>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // Large Touch-Friendly Response Button
 const TouchResponseButton = ({
@@ -197,32 +197,32 @@ const TouchResponseButton = ({
   children,
   icon: Icon,
 }: {
-  selected: boolean;
-  onClick: () => void;
-  variant: 'success' | 'danger' | 'warning' | 'neutral';
-  children: React.ReactNode;
-  icon?: React.ElementType;
+  selected: boolean
+  onClick: () => void
+  variant: 'success' | 'danger' | 'warning' | 'neutral'
+  children: React.ReactNode
+  icon?: React.ElementType
 }) => {
   const variantStyles = {
     success: 'border-green-500 bg-green-500/30 text-green-300 shadow-lg shadow-green-500/20',
     danger: 'border-red-500 bg-red-500/30 text-red-300 shadow-lg shadow-red-500/20',
     warning: 'border-amber-500 bg-amber-500/30 text-amber-300 shadow-lg shadow-amber-500/20',
     neutral: 'border-slate-500 bg-slate-500/30 text-slate-300 shadow-lg shadow-slate-500/20',
-  };
+  }
 
   const hoverStyles = {
     success: 'active:bg-green-500/40 active:scale-95',
     danger: 'active:bg-red-500/40 active:scale-95',
     warning: 'active:bg-amber-500/40 active:scale-95',
     neutral: 'active:bg-slate-500/40 active:scale-95',
-  };
+  }
 
   return (
     <button
       type="button"
       onClick={() => {
-        onClick();
-        triggerHaptic(selected ? 'light' : 'medium');
+        onClick()
+        triggerHaptic(selected ? 'light' : 'medium')
       }}
       className={`flex-1 flex flex-col items-center justify-center gap-2 py-6 px-4 rounded-2xl border-2 font-bold transition-all duration-150 min-h-[100px]
         ${selected ? variantStyles[variant] : `border-slate-700 bg-slate-800/80 text-slate-400 ${hoverStyles[variant]}`}`}
@@ -230,8 +230,8 @@ const TouchResponseButton = ({
       {Icon && <Icon className={`w-8 h-8 ${selected ? '' : 'opacity-60'}`} />}
       <span className="text-lg">{children}</span>
     </button>
-  );
-};
+  )
+}
 
 // Scale Input with Touch Optimization
 const TouchScaleInput = ({
@@ -239,9 +239,9 @@ const TouchScaleInput = ({
   onChange,
   max = 5,
 }: {
-  value: number | null;
-  onChange: (val: number) => void;
-  max?: number;
+  value: number | null
+  onChange: (val: number) => void
+  max?: number
 }) => {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -250,8 +250,8 @@ const TouchScaleInput = ({
           key={num}
           type="button"
           onClick={() => {
-            onChange(num);
-            triggerHaptic('light');
+            onChange(num)
+            triggerHaptic('light')
           }}
           className={`flex-1 h-16 rounded-xl font-bold text-xl transition-all duration-150 active:scale-95 ${
             value === num
@@ -263,68 +263,68 @@ const TouchScaleInput = ({
         </button>
       ))}
     </div>
-  );
-};
+  )
+}
 
 // Voice Recording Component
 const VoiceRecorder = ({
   onRecordingComplete,
 }: {
-  onRecordingComplete: (audioBlob: string) => void;
+  onRecordingComplete: (audioBlob: string) => void
 }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
+    let interval: ReturnType<typeof setInterval>
     if (isRecording) {
       interval = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
+        setRecordingTime((prev) => prev + 1)
+      }, 1000)
     }
-    return () => clearInterval(interval);
-  }, [isRecording]);
+    return () => clearInterval(interval)
+  }, [isRecording])
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      chunksRef.current = []
 
       mediaRecorder.ondataavailable = (e) => {
-        chunksRef.current.push(e.data);
-      };
+        chunksRef.current.push(e.data)
+      }
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        const reader = new FileReader();
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const reader = new FileReader()
         reader.onloadend = () => {
-          onRecordingComplete(reader.result as string);
-        };
-        reader.readAsDataURL(blob);
-        stream.getTracks().forEach(track => track.stop());
-      };
+          onRecordingComplete(reader.result as string)
+        }
+        reader.readAsDataURL(blob)
+        stream.getTracks().forEach((track) => track.stop())
+      }
 
-      mediaRecorder.start();
-      setIsRecording(true);
-      setRecordingTime(0);
-      triggerHaptic('medium');
+      mediaRecorder.start()
+      setIsRecording(true)
+      setRecordingTime(0)
+      triggerHaptic('medium')
     } catch (err) {
-      console.error('Error accessing microphone:', err);
-      toast.warning('Could not access microphone. Please check permissions.');
+      console.error('Error accessing microphone:', err)
+      toast.warning('Could not access microphone. Please check permissions.')
     }
-  };
+  }
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      triggerHaptic('heavy');
+      mediaRecorderRef.current.stop()
+      setIsRecording(false)
+      triggerHaptic('heavy')
     }
-  };
+  }
 
   return (
     <button
@@ -348,8 +348,8 @@ const VoiceRecorder = ({
         </>
       )}
     </button>
-  );
-};
+  )
+}
 
 // Photo Capture with Camera
 const PhotoCapture = ({
@@ -357,23 +357,23 @@ const PhotoCapture = ({
   onAdd,
   onRemove,
 }: {
-  photos: string[];
-  onAdd: (photo: string) => void;
-  onRemove: (index: number) => void;
+  photos: string[]
+  onAdd: (photo: string) => void
+  onRemove: (index: number) => void
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader();
+      const reader = new FileReader()
       reader.onloadend = () => {
-        onAdd(reader.result as string);
-        triggerHaptic('medium');
-      };
-      reader.readAsDataURL(file);
+        onAdd(reader.result as string)
+        triggerHaptic('medium')
+      }
+      reader.readAsDataURL(file)
     }
-  };
+  }
 
   return (
     <div className="space-y-3">
@@ -385,7 +385,7 @@ const PhotoCapture = ({
         onChange={handleCapture}
         className="hidden"
       />
-      
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -407,8 +407,8 @@ const PhotoCapture = ({
               <button
                 type="button"
                 onClick={() => {
-                  onRemove(idx);
-                  triggerHaptic('light');
+                  onRemove(idx)
+                  triggerHaptic('light')
                 }}
                 aria-label="Remove photo"
                 className="absolute top-1 right-1 p-1.5 bg-red-500 rounded-full text-white"
@@ -420,43 +420,43 @@ const PhotoCapture = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
 // Location Capture
 const LocationCapture = ({
   location,
   onCapture,
 }: {
-  location?: { lat: number; lng: number };
-  onCapture: (loc: { lat: number; lng: number }) => void;
+  location?: { lat: number; lng: number }
+  onCapture: (loc: { lat: number; lng: number }) => void
 }) => {
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false)
 
   const captureLocation = () => {
     if (!navigator.geolocation) {
-      toast.warning('Geolocation is not supported by this device.');
-      return;
+      toast.warning('Geolocation is not supported by this device.')
+      return
     }
 
-    setIsCapturing(true);
+    setIsCapturing(true)
     navigator.geolocation.getCurrentPosition(
       (position) => {
         onCapture({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        });
-        setIsCapturing(false);
-        triggerHaptic('medium');
+        })
+        setIsCapturing(false)
+        triggerHaptic('medium')
       },
       (error) => {
-        console.error('Geolocation error:', error);
-        toast.warning('Could not get location. Please check permissions.');
-        setIsCapturing(false);
+        console.error('Geolocation error:', error)
+        toast.warning('Could not get location. Please check permissions.')
+        setIsCapturing(false)
       },
-      { enableHighAccuracy: true }
-    );
-  };
+      { enableHighAccuracy: true },
+    )
+  }
 
   return (
     <button
@@ -486,74 +486,74 @@ const LocationCapture = ({
         </>
       )}
     </button>
-  );
-};
+  )
+}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export default function MobileAuditExecution() {
-  const navigate = useNavigate();
-  
-  const [audit] = useState<AuditData | null>(MOCK_AUDIT);
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
-  const [isPaused, setIsPaused] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [showGuidance, setShowGuidance] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSynced, setIsSynced] = useState(true);
-  const [batteryLevel] = useState(85);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [showAISuggestion, setShowAISuggestion] = useState(true);
+  const navigate = useNavigate()
+
+  const [audit] = useState<AuditData | null>(MOCK_AUDIT)
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [responses, setResponses] = useState<Record<string, QuestionResponse>>({})
+  const [isPaused, setIsPaused] = useState(false)
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [showGuidance, setShowGuidance] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
+  const [isOnline, setIsOnline] = useState(navigator.onLine)
+  const [isSynced, setIsSynced] = useState(true)
+  const [batteryLevel] = useState(85)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [showAISuggestion, setShowAISuggestion] = useState(true)
 
   // Handle online/offline status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
 
   // Timer
   useEffect(() => {
-    if (isPaused || !audit) return;
-    
-    const timer = setInterval(() => {
-      setElapsedTime(prev => prev + 1);
-    }, 1000);
+    if (isPaused || !audit) return
 
-    return () => clearInterval(timer);
-  }, [isPaused, audit]);
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => prev + 1)
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isPaused, audit])
 
   // Simulate AI loading when question changes
   useEffect(() => {
-    if (!audit) return;
-    const question = audit.sections[currentSectionIndex]?.questions[currentQuestionIndex];
+    if (!audit) return
+    const question = audit.sections[currentSectionIndex]?.questions[currentQuestionIndex]
     if (question && AI_SUGGESTIONS[question.id]) {
-      setAiLoading(true);
-      setShowAISuggestion(true);
-      const timer = setTimeout(() => setAiLoading(false), 800);
-      return () => clearTimeout(timer);
+      setAiLoading(true)
+      setShowAISuggestion(true)
+      const timer = setTimeout(() => setAiLoading(false), 800)
+      return () => clearTimeout(timer)
     } else {
-      setShowAISuggestion(false);
+      setShowAISuggestion(false)
     }
-  }, [currentSectionIndex, currentQuestionIndex, audit]);
+  }, [currentSectionIndex, currentQuestionIndex, audit])
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   if (!audit) {
     return (
@@ -563,9 +563,7 @@ export default function MobileAuditExecution() {
             <ClipboardCheck className="w-10 h-10 text-slate-500" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">No Audit Loaded</h2>
-          <p className="text-slate-400 mb-6">
-            Select an audit from the audit list to begin.
-          </p>
+          <p className="text-slate-400 mb-6">Select an audit from the audit list to begin.</p>
           <button
             onClick={() => navigate('/audits')}
             className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl"
@@ -574,56 +572,56 @@ export default function MobileAuditExecution() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   // Current section and question
-  const currentSection = audit.sections[currentSectionIndex];
-  const currentQuestion = currentSection?.questions[currentQuestionIndex];
-  const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined;
-  const currentAISuggestion = currentQuestion ? AI_SUGGESTIONS[currentQuestion.id] : undefined;
+  const currentSection = audit.sections[currentSectionIndex]
+  const currentQuestion = currentSection?.questions[currentQuestionIndex]
+  const currentResponse = currentQuestion ? responses[currentQuestion.id] : undefined
+  const currentAISuggestion = currentQuestion ? AI_SUGGESTIONS[currentQuestion.id] : undefined
 
   // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
-  const answeredQuestions = Object.keys(responses).length;
-  const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
+  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0)
+  const answeredQuestions = Object.keys(responses).length
+  const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0
 
   // Calculate score
   const calculateScore = () => {
-    let totalWeight = 0;
-    let achievedWeight = 0;
+    let totalWeight = 0
+    let achievedWeight = 0
 
-    audit.sections.forEach(section => {
-      section.questions.forEach(question => {
-        const response = responses[question.id];
-        if (!response) return;
+    audit.sections.forEach((section) => {
+      section.questions.forEach((question) => {
+        const response = responses[question.id]
+        if (!response) return
 
-        totalWeight += question.weight;
+        totalWeight += question.weight
 
         if (question.type === 'pass_fail' || question.type === 'yes_no') {
           if (response.response === 'pass' || response.response === 'yes') {
-            achievedWeight += question.weight;
+            achievedWeight += question.weight
           }
         } else if (question.type === 'yes_no_na') {
           if (response.response === 'yes' || response.response === 'na') {
-            achievedWeight += question.weight;
+            achievedWeight += question.weight
           }
         } else if (question.type.startsWith('scale_')) {
-          const max = question.type === 'scale_1_5' ? 5 : 10;
-          achievedWeight += (Number(response.response) / max) * question.weight;
+          const max = question.type === 'scale_1_5' ? 5 : 10
+          achievedWeight += (Number(response.response) / max) * question.weight
         } else if (question.weight > 0) {
-          achievedWeight += question.weight;
+          achievedWeight += question.weight
         }
-      });
-    });
+      })
+    })
 
-    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0;
-  };
+    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0
+  }
 
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
-    if (!currentQuestion) return;
-    setResponses(prev => ({
+    if (!currentQuestion) return
+    setResponses((prev) => ({
       ...prev,
       [currentQuestion.id]: {
         ...prev[currentQuestion.id],
@@ -631,39 +629,39 @@ export default function MobileAuditExecution() {
         questionId: currentQuestion.id,
         timestamp: new Date().toISOString(),
       },
-    }));
-    setIsSynced(false);
+    }))
+    setIsSynced(false)
     // Simulate sync
-    setTimeout(() => setIsSynced(true), 1500);
-  };
+    setTimeout(() => setIsSynced(true), 1500)
+  }
 
   // Navigation
   const goNext = () => {
-    triggerHaptic('light');
+    triggerHaptic('light')
     if (currentQuestionIndex < currentSection.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1)
     } else if (currentSectionIndex < audit.sections.length - 1) {
-      setCurrentSectionIndex(prev => prev + 1);
-      setCurrentQuestionIndex(0);
+      setCurrentSectionIndex((prev) => prev + 1)
+      setCurrentQuestionIndex(0)
     } else {
-      setShowSummary(true);
+      setShowSummary(true)
     }
-  };
+  }
 
   const goPrev = () => {
-    triggerHaptic('light');
+    triggerHaptic('light')
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      setCurrentQuestionIndex((prev) => prev - 1)
     } else if (currentSectionIndex > 0) {
-      setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
+      setCurrentSectionIndex((prev) => prev - 1)
+      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1)
     }
-  };
+  }
 
   // Render question input based on type
   const renderQuestionInput = () => {
-    if (!currentQuestion) return null;
-    
+    if (!currentQuestion) return null
+
     switch (currentQuestion.type) {
       case 'pass_fail':
         return (
@@ -685,7 +683,7 @@ export default function MobileAuditExecution() {
               FAIL
             </TouchResponseButton>
           </div>
-        );
+        )
 
       case 'yes_no':
         return (
@@ -707,7 +705,7 @@ export default function MobileAuditExecution() {
               NO
             </TouchResponseButton>
           </div>
-        );
+        )
 
       case 'yes_no_na':
         return (
@@ -737,7 +735,7 @@ export default function MobileAuditExecution() {
               N/A
             </TouchResponseButton>
           </div>
-        );
+        )
 
       case 'scale_1_5':
         return (
@@ -746,7 +744,7 @@ export default function MobileAuditExecution() {
             onChange={(val) => updateResponse({ response: val })}
             max={5}
           />
-        );
+        )
 
       case 'numeric':
         return (
@@ -758,7 +756,7 @@ export default function MobileAuditExecution() {
             placeholder="Enter number..."
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg text-center"
           />
-        );
+        )
 
       default:
         return (
@@ -769,27 +767,31 @@ export default function MobileAuditExecution() {
             rows={3}
             className="w-full px-4 py-4 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 text-lg"
           />
-        );
+        )
     }
-  };
+  }
 
   if (showSummary) {
-    const score = calculateScore();
-    const passed = score >= 80;
-    const failedItems = Object.values(responses).filter(r => r.response === 'fail' || r.response === 'no');
+    const score = calculateScore()
+    const passed = score >= 80
+    const failedItems = Object.values(responses).filter(
+      (r) => r.response === 'fail' || r.response === 'no',
+    )
 
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col">
         <StatusBar isOnline={isOnline} isSynced={isSynced} batteryLevel={batteryLevel} />
-        
+
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="max-w-lg w-full text-center animate-fade-in">
             {/* Score Display */}
-            <div className={`w-40 h-40 mx-auto rounded-full flex items-center justify-center mb-6 ${
-              passed 
-                ? 'bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg shadow-green-500/30' 
-                : 'bg-gradient-to-br from-red-500 to-rose-500 shadow-lg shadow-red-500/30'
-            }`}>
+            <div
+              className={`w-40 h-40 mx-auto rounded-full flex items-center justify-center mb-6 ${
+                passed
+                  ? 'bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg shadow-green-500/30'
+                  : 'bg-gradient-to-br from-red-500 to-rose-500 shadow-lg shadow-red-500/30'
+              }`}
+            >
               <span className="text-5xl font-bold text-white">{score}%</span>
             </div>
 
@@ -807,10 +809,9 @@ export default function MobileAuditExecution() {
                 <span className="font-semibold text-purple-300">AI Summary</span>
               </div>
               <p className="text-sm text-purple-200">
-                {passed 
+                {passed
                   ? `Vehicle ${audit.asset} passed all critical checks. ${failedItems.length} minor issues noted for follow-up. Recommend scheduling preventive maintenance within 30 days.`
-                  : `Vehicle ${audit.asset} has ${failedItems.length} failed items requiring immediate attention. Do not operate until issues are resolved. Priority: ${failedItems.some(f => audit.sections.flatMap(s => s.questions).find(q => q.id === f.questionId)?.riskLevel === 'critical') ? 'CRITICAL' : 'HIGH'}`
-                }
+                  : `Vehicle ${audit.asset} has ${failedItems.length} failed items requiring immediate attention. Do not operate until issues are resolved. Priority: ${failedItems.some((f) => audit.sections.flatMap((s) => s.questions).find((q) => q.id === f.questionId)?.riskLevel === 'critical') ? 'CRITICAL' : 'HIGH'}`}
               </p>
             </div>
 
@@ -835,8 +836,8 @@ export default function MobileAuditExecution() {
               <button
                 onClick={() => {
                   // Submit audit
-                  triggerHaptic('heavy');
-                  navigate('/audits');
+                  triggerHaptic('heavy')
+                  navigate('/audits')
                 }}
                 className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl active:scale-98"
               >
@@ -853,7 +854,7 @@ export default function MobileAuditExecution() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   if (!currentQuestion) {
@@ -861,7 +862,7 @@ export default function MobileAuditExecution() {
       <div className="min-h-screen bg-slate-950 p-6">
         <CardSkeleton count={4} />
       </div>
-    );
+    )
   }
 
   return (
@@ -873,14 +874,10 @@ export default function MobileAuditExecution() {
       <header className="sticky top-0 z-40 bg-slate-900/95 backdrop-blur-xl border-b border-slate-800">
         <div className="px-4 py-3">
           <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/audits')}
-              aria-label="Go back"
-              className="p-2 -ml-2"
-            >
+            <button onClick={() => navigate('/audits')} aria-label="Go back" className="p-2 -ml-2">
               <ArrowLeft className="w-5 h-5 text-slate-400" />
             </button>
-            
+
             <div className="text-center">
               <h1 className="text-sm font-bold text-white">{audit.templateName}</h1>
               <p className="text-xs text-slate-500">{audit.asset}</p>
@@ -910,7 +907,9 @@ export default function MobileAuditExecution() {
             </div>
             <div className="flex justify-between mt-1">
               <span className="text-xs text-slate-500">{currentSection.title}</span>
-              <span className="text-xs text-slate-500">{answeredQuestions}/{totalQuestions}</span>
+              <span className="text-xs text-slate-500">
+                {answeredQuestions}/{totalQuestions}
+              </span>
             </div>
           </div>
         </div>
@@ -920,31 +919,33 @@ export default function MobileAuditExecution() {
       <div className="overflow-x-auto px-4 py-2 bg-slate-900/50">
         <div className="flex gap-2">
           {audit.sections.map((section, idx) => {
-            const sectionAnswered = section.questions.filter(q => responses[q.id]).length;
-            const isComplete = sectionAnswered === section.questions.length;
-            const isCurrent = idx === currentSectionIndex;
+            const sectionAnswered = section.questions.filter((q) => responses[q.id]).length
+            const isComplete = sectionAnswered === section.questions.length
+            const isCurrent = idx === currentSectionIndex
 
             return (
               <button
                 key={section.id}
                 onClick={() => {
-                  setCurrentSectionIndex(idx);
-                  setCurrentQuestionIndex(0);
-                  triggerHaptic('light');
+                  setCurrentSectionIndex(idx)
+                  setCurrentQuestionIndex(0)
+                  triggerHaptic('light')
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full whitespace-nowrap text-xs font-medium transition-all ${
                   isCurrent
                     ? 'bg-purple-500 text-white'
                     : isComplete
-                    ? 'bg-green-500/20 text-green-400'
-                    : 'bg-slate-800 text-slate-400'
+                      ? 'bg-green-500/20 text-green-400'
+                      : 'bg-slate-800 text-slate-400'
                 }`}
               >
                 {isComplete && <CheckCheck className="w-3 h-3" />}
                 <span>{section.title}</span>
-                <span className="opacity-60">{sectionAnswered}/{section.questions.length}</span>
+                <span className="opacity-60">
+                  {sectionAnswered}/{section.questions.length}
+                </span>
               </button>
-            );
+            )
           })}
         </div>
       </div>
@@ -956,17 +957,22 @@ export default function MobileAuditExecution() {
           <div className="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
             {/* Question Header */}
             <div className={`h-1 bg-gradient-to-r ${currentSection.color}`} />
-            
+
             <div className="p-4 space-y-4">
               {/* Risk & Required Badges */}
               <div className="flex items-center gap-2">
                 {currentQuestion.riskLevel && (
-                  <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                    currentQuestion.riskLevel === 'critical' ? 'bg-red-500/20 text-red-400' :
-                    currentQuestion.riskLevel === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                    currentQuestion.riskLevel === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                    'bg-green-500/20 text-green-400'
-                  }`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-medium rounded ${
+                      currentQuestion.riskLevel === 'critical'
+                        ? 'bg-red-500/20 text-red-400'
+                        : currentQuestion.riskLevel === 'high'
+                          ? 'bg-orange-500/20 text-orange-400'
+                          : currentQuestion.riskLevel === 'medium'
+                            ? 'bg-amber-500/20 text-amber-400'
+                            : 'bg-green-500/20 text-green-400'
+                    }`}
+                  >
                     {currentQuestion.riskLevel.toUpperCase()}
                   </span>
                 )}
@@ -1000,10 +1006,14 @@ export default function MobileAuditExecution() {
                 >
                   <Lightbulb className="w-4 h-4" />
                   <span>Guidance</span>
-                  {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {showGuidance ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
                 </button>
               )}
-              
+
               {showGuidance && currentQuestion.guidance && (
                 <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
                   <p className="text-sm text-purple-200">{currentQuestion.guidance}</p>
@@ -1022,9 +1032,7 @@ export default function MobileAuditExecution() {
               )}
 
               {/* Response Input */}
-              <div className="pt-2">
-                {renderQuestionInput()}
-              </div>
+              <div className="pt-2">{renderQuestionInput()}</div>
             </div>
           </div>
 
@@ -1040,12 +1048,12 @@ export default function MobileAuditExecution() {
                 onAdd={(photo) => {
                   updateResponse({
                     photos: [...(currentResponse?.photos || []), photo],
-                  });
+                  })
                 }}
                 onRemove={(idx) => {
                   updateResponse({
                     photos: currentResponse?.photos?.filter((_, i) => i !== idx) || [],
-                  });
+                  })
                 }}
               />
             </div>
@@ -1084,8 +1092,8 @@ export default function MobileAuditExecution() {
           {/* Flag */}
           <button
             onClick={() => {
-              updateResponse({ flagged: !currentResponse?.flagged });
-              triggerHaptic('medium');
+              updateResponse({ flagged: !currentResponse?.flagged })
+              triggerHaptic('medium')
             }}
             className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl font-medium transition-all ${
               currentResponse?.flagged
@@ -1113,43 +1121,44 @@ export default function MobileAuditExecution() {
 
           {/* Quick Jump Dots */}
           <div className="flex items-center gap-1">
-            {currentSection.questions.slice(
-              Math.max(0, currentQuestionIndex - 2),
-              Math.min(currentSection.questions.length, currentQuestionIndex + 3)
-            ).map((q, idx) => {
-              const actualIdx = Math.max(0, currentQuestionIndex - 2) + idx;
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => {
-                    setCurrentQuestionIndex(actualIdx);
-                    triggerHaptic('light');
-                  }}
-                  className={`w-2 h-2 rounded-full transition-all ${
-                    actualIdx === currentQuestionIndex
-                      ? 'bg-purple-500 w-4'
-                      : responses[q.id]
-                      ? 'bg-green-500'
-                      : 'bg-slate-600'
-                  }`}
-                />
-              );
-            })}
+            {currentSection.questions
+              .slice(
+                Math.max(0, currentQuestionIndex - 2),
+                Math.min(currentSection.questions.length, currentQuestionIndex + 3),
+              )
+              .map((q, idx) => {
+                const actualIdx = Math.max(0, currentQuestionIndex - 2) + idx
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setCurrentQuestionIndex(actualIdx)
+                      triggerHaptic('light')
+                    }}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      actualIdx === currentQuestionIndex
+                        ? 'bg-purple-500 w-4'
+                        : responses[q.id]
+                          ? 'bg-green-500'
+                          : 'bg-slate-600'
+                    }`}
+                  />
+                )
+              })}
           </div>
 
           <button
             onClick={goNext}
             className="flex-1 flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-bold active:scale-98"
           >
-            {currentSectionIndex === audit.sections.length - 1 && 
-             currentQuestionIndex === currentSection.questions.length - 1
+            {currentSectionIndex === audit.sections.length - 1 &&
+            currentQuestionIndex === currentSection.questions.length - 1
               ? 'Finish'
-              : 'Next'
-            }
+              : 'Next'}
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </footer>
     </div>
-  );
+  )
 }

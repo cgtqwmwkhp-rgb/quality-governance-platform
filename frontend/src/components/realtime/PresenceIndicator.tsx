@@ -1,21 +1,21 @@
 /**
  * PresenceIndicator - Shows online/offline status for users
- * 
+ *
  * Features:
  * - Color-coded status indicator
  * - Tooltip with last seen time
  * - Animated pulse for online users
  */
 
-import React from 'react';
+import React from 'react'
 
-type PresenceStatus = 'online' | 'away' | 'busy' | 'offline';
+type PresenceStatus = 'online' | 'away' | 'busy' | 'offline'
 
 interface PresenceIndicatorProps {
-  status: PresenceStatus;
-  size?: 'sm' | 'md' | 'lg';
-  showLabel?: boolean;
-  className?: string;
+  status: PresenceStatus
+  size?: 'sm' | 'md' | 'lg'
+  showLabel?: boolean
+  className?: string
 }
 
 const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
@@ -28,7 +28,7 @@ const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
     sm: 'w-2 h-2',
     md: 'w-3 h-3',
     lg: 'w-4 h-4',
-  };
+  }
 
   const statusConfig = {
     online: {
@@ -51,9 +51,9 @@ const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
       label: 'Offline',
       pulse: false,
     },
-  };
+  }
 
-  const config = statusConfig[status];
+  const config = statusConfig[status]
 
   return (
     <div className={`flex items-center gap-1.5 ${className}`}>
@@ -75,11 +75,9 @@ const PresenceIndicator: React.FC<PresenceIndicatorProps> = ({
           />
         )}
       </span>
-      {showLabel && (
-        <span className="text-xs text-gray-400">{config.label}</span>
-      )}
+      {showLabel && <span className="text-xs text-gray-400">{config.label}</span>}
     </div>
-  );
-};
+  )
+}
 
-export default PresenceIndicator;
+export default PresenceIndicator

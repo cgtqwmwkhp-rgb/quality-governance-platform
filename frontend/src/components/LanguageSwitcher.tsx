@@ -1,16 +1,14 @@
-import { useTranslation } from 'react-i18next';
-import { Globe } from 'lucide-react';
+import { useTranslation } from 'react-i18next'
+import { Globe } from 'lucide-react'
 
-const LANGUAGES = [
-  { code: 'en', label: 'English' },
-] as const;
+const LANGUAGES = [{ code: 'en', label: 'English' }] as const
 
 export function LanguageSwitcher() {
-  const { i18n, t } = useTranslation();
+  const { i18n, t } = useTranslation()
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    i18n.changeLanguage(e.target.value);
-  };
+    i18n.changeLanguage(e.target.value)
+  }
 
   return (
     <div className="relative flex items-center">
@@ -28,5 +26,5 @@ export function LanguageSwitcher() {
         ))}
       </select>
     </div>
-  );
+  )
 }

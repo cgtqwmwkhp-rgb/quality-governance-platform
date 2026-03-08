@@ -24,7 +24,17 @@ import {
   X,
   ExternalLink,
 } from 'lucide-react'
-import { complaintsApi, Complaint, ComplaintUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
+import {
+  complaintsApi,
+  Complaint,
+  ComplaintUpdate,
+  investigationsApi,
+  actionsApi,
+  Action,
+  UserSearchResult,
+  getApiErrorMessage,
+  CreateFromRecordError,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -169,7 +179,10 @@ export default function ComplaintDetail() {
   }
 
   const [investigationError, setInvestigationError] = useState('')
-  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+  const [existingInvestigation, setExistingInvestigation] = useState<{
+    id: number
+    reference: string
+  } | null>(null)
 
   const handleCreateInvestigation = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -177,7 +190,7 @@ export default function ComplaintDetail() {
     setCreating(true)
     setInvestigationError('')
     setExistingInvestigation(null)
-    
+
     try {
       // Use from-record endpoint with proper JSON body
       await investigationsApi.createFromRecord({
@@ -195,14 +208,19 @@ export default function ComplaintDetail() {
       navigate('/investigations')
     } catch (err: any) {
       trackError(err, { component: 'ComplaintDetail', action: 'createInvestigation' })
-      
+
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
         const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
-        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+        if (
+          errorData?.error_code === 'INV_ALREADY_EXISTS' &&
+          errorData.details?.existing_investigation_id
+        ) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
-            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
+            reference:
+              errorData.details.existing_reference_number ||
+              `INV-${errorData.details.existing_investigation_id}`,
           })
           setInvestigationError(t('complaints.detail.investigation_exists'))
           return
@@ -256,10 +274,26 @@ export default function ComplaintDetail() {
 
   const ACTION_STATUS_OPTIONS = [
     { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
-    { value: 'in_progress', label: 'In Progress', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
-    { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
-    { value: 'completed', label: 'Completed', className: 'bg-green-100 text-green-800 hover:bg-green-200' },
-    { value: 'cancelled', label: 'Cancelled', className: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
+    {
+      value: 'in_progress',
+      label: 'In Progress',
+      className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+    },
+    {
+      value: 'pending_verification',
+      label: 'Pending Verification',
+      className: 'bg-purple-100 text-purple-800 hover:bg-purple-200',
+    },
+    {
+      value: 'completed',
+      label: 'Completed',
+      className: 'bg-green-100 text-green-800 hover:bg-green-200',
+    },
+    {
+      value: 'cancelled',
+      label: 'Cancelled',
+      className: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+    },
   ]
 
   const handleOpenAction = (action: Action) => {
@@ -277,7 +311,7 @@ export default function ComplaintDetail() {
       if (completionNotes) updatePayload.completion_notes = completionNotes
       const response = await actionsApi.update(selectedAction.id, 'complaint', updatePayload)
       setSelectedAction(response.data)
-      setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
+      setActions((prev) => prev.map((a) => (a.id === selectedAction.id ? response.data : a)))
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'updateActionStatus' })
       setActionUpdateError(getApiErrorMessage(err))
@@ -294,38 +328,61 @@ export default function ComplaintDetail() {
 
   const getPriorityVariant = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'critical'
-      case 'high': return 'high'
-      case 'medium': return 'medium'
-      case 'low': return 'low'
-      default: return 'secondary'
+      case 'critical':
+        return 'critical'
+      case 'high':
+        return 'high'
+      case 'medium':
+        return 'medium'
+      case 'low':
+        return 'low'
+      default:
+        return 'secondary'
     }
   }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'closed': case 'resolved': return 'resolved'
-      case 'received': return 'submitted'
-      case 'acknowledged': return 'acknowledged'
-      case 'under_investigation': return 'in-progress'
-      case 'pending_response': return 'awaiting-user'
-      case 'awaiting_customer': return 'awaiting-user'
-      case 'escalated': return 'critical'
-      default: return 'secondary'
+      case 'closed':
+      case 'resolved':
+        return 'resolved'
+      case 'received':
+        return 'submitted'
+      case 'acknowledged':
+        return 'acknowledged'
+      case 'under_investigation':
+        return 'in-progress'
+      case 'pending_response':
+        return 'awaiting-user'
+      case 'awaiting_customer':
+        return 'awaiting-user'
+      case 'escalated':
+        return 'critical'
+      default:
+        return 'secondary'
     }
   }
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'product': return '📦'
-      case 'service': return '🛠️'
-      case 'delivery': return '🚚'
-      case 'communication': return '📞'
-      case 'billing': return '💳'
-      case 'staff': return '👤'
-      case 'environmental': return '🌿'
-      case 'safety': return '⚠️'
-      default: return '📋'
+      case 'product':
+        return '📦'
+      case 'service':
+        return '🛠️'
+      case 'delivery':
+        return '🚚'
+      case 'communication':
+        return '📞'
+      case 'billing':
+        return '💳'
+      case 'staff':
+        return '👤'
+      case 'environmental':
+        return '🌿'
+      case 'safety':
+        return '⚠️'
+      default:
+        return '📋'
     }
   }
 
@@ -337,7 +394,13 @@ export default function ComplaintDetail() {
     return (
       <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
         <p className="text-sm text-destructive">{error}</p>
-        <button onClick={() => { setError(null); loadComplaint(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
+        <button
+          onClick={() => {
+            setError(null)
+            loadComplaint(parseInt(id!))
+          }}
+          className="text-sm font-medium text-destructive hover:underline"
+        >
           {t('complaints.detail.try_again')}
         </button>
       </div>
@@ -359,15 +422,23 @@ export default function ComplaintDetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Breadcrumbs items={[
-        { label: t('complaints.title', 'Complaints'), href: '/complaints' },
-        { label: complaint?.reference_number || `#${id}` },
-      ]} />
+      <Breadcrumbs
+        items={[
+          { label: t('complaints.title', 'Complaints'), href: '/complaints' },
+          { label: complaint?.reference_number || `#${id}` },
+        ]}
+      />
 
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={() => { setError(null); loadComplaint(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
+          <button
+            onClick={() => {
+              setError(null)
+              loadComplaint(parseInt(id!))
+            }}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
             {t('complaints.detail.try_again')}
           </button>
         </div>
@@ -375,11 +446,7 @@ export default function ComplaintDetail() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => navigate('/complaints')}
-          >
+          <Button variant="outline" size="icon" onClick={() => navigate('/complaints')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -394,7 +461,8 @@ export default function ComplaintDetail() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">{complaint.title}</h1>
             <p className="text-muted-foreground mt-1">
-              {t('complaints.detail.received_on')} {new Date(complaint.received_date).toLocaleDateString()}
+              {t('complaints.detail.received_on')}{' '}
+              {new Date(complaint.received_date).toLocaleDateString()}
             </p>
           </div>
         </div>
@@ -406,7 +474,11 @@ export default function ComplaintDetail() {
                 {t('cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
                 {t('complaints.detail.save_changes')}
               </Button>
             </>
@@ -445,16 +517,28 @@ export default function ComplaintDetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label htmlFor="complaintdetail-field-0" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.title_label')}</label>
-                    <Input id="complaintdetail-field-0"
+                    <label
+                      htmlFor="complaintdetail-field-0"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('complaints.detail.title_label')}
+                    </label>
+                    <Input
+                      id="complaintdetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-1" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
-                    <Textarea id="complaintdetail-field-1"
+                    <label
+                      htmlFor="complaintdetail-field-1"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('common.description')}
+                    </label>
+                    <Textarea
+                      id="complaintdetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={4}
@@ -463,10 +547,17 @@ export default function ComplaintDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="complaintdetail-field-2" className="text-sm font-medium text-muted-foreground">{t('common.type')}</label>
+                      <label
+                        htmlFor="complaintdetail-field-2"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('common.type')}
+                      </label>
                       <Select
                         value={editForm.complaint_type}
-                        onValueChange={(value) => setEditForm({ ...editForm, complaint_type: value })}
+                        onValueChange={(value) =>
+                          setEditForm({ ...editForm, complaint_type: value })
+                        }
                       >
                         <SelectTrigger id="complaintdetail-field-2" className="mt-1">
                           <SelectValue />
@@ -475,17 +566,26 @@ export default function ComplaintDetail() {
                           <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
                           <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
                           <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
-                          <SelectItem value="communication">{t('complaints.type.communication')}</SelectItem>
+                          <SelectItem value="communication">
+                            {t('complaints.type.communication')}
+                          </SelectItem>
                           <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
                           <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
-                          <SelectItem value="environmental">{t('complaints.type.environmental')}</SelectItem>
+                          <SelectItem value="environmental">
+                            {t('complaints.type.environmental')}
+                          </SelectItem>
                           <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
                           <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="complaintdetail-field-3" className="text-sm font-medium text-muted-foreground">{t('common.priority')}</label>
+                      <label
+                        htmlFor="complaintdetail-field-3"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('common.priority')}
+                      </label>
                       <Select
                         value={editForm.priority}
                         onValueChange={(value) => setEditForm({ ...editForm, priority: value })}
@@ -494,7 +594,9 @@ export default function ComplaintDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="critical">{t('complaints.priority.critical')}</SelectItem>
+                          <SelectItem value="critical">
+                            {t('complaints.priority.critical')}
+                          </SelectItem>
                           <SelectItem value="high">{t('complaints.priority.high')}</SelectItem>
                           <SelectItem value="medium">{t('complaints.priority.medium')}</SelectItem>
                           <SelectItem value="low">{t('complaints.priority.low')}</SelectItem>
@@ -502,7 +604,12 @@ export default function ComplaintDetail() {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label htmlFor="complaintdetail-field-4" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
+                      <label
+                        htmlFor="complaintdetail-field-4"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('common.status')}
+                      </label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
@@ -511,13 +618,27 @@ export default function ComplaintDetail() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="received">{t('complaints.status.received')}</SelectItem>
-                          <SelectItem value="acknowledged">{t('complaints.status.acknowledged')}</SelectItem>
-                          <SelectItem value="under_investigation">{t('complaints.status.under_investigation')}</SelectItem>
-                          <SelectItem value="pending_response">{t('complaints.status.pending_response')}</SelectItem>
-                          <SelectItem value="awaiting_customer">{t('complaints.status.awaiting_customer')}</SelectItem>
-                          <SelectItem value="escalated">{t('complaints.status.escalated')}</SelectItem>
-                          <SelectItem value="resolved">{t('complaints.status.resolved')}</SelectItem>
+                          <SelectItem value="received">
+                            {t('complaints.status.received')}
+                          </SelectItem>
+                          <SelectItem value="acknowledged">
+                            {t('complaints.status.acknowledged')}
+                          </SelectItem>
+                          <SelectItem value="under_investigation">
+                            {t('complaints.status.under_investigation')}
+                          </SelectItem>
+                          <SelectItem value="pending_response">
+                            {t('complaints.status.pending_response')}
+                          </SelectItem>
+                          <SelectItem value="awaiting_customer">
+                            {t('complaints.status.awaiting_customer')}
+                          </SelectItem>
+                          <SelectItem value="escalated">
+                            {t('complaints.status.escalated')}
+                          </SelectItem>
+                          <SelectItem value="resolved">
+                            {t('complaints.status.resolved')}
+                          </SelectItem>
                           <SelectItem value="closed">{t('complaints.status.closed')}</SelectItem>
                         </SelectContent>
                       </Select>
@@ -527,29 +648,41 @@ export default function ComplaintDetail() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.description')}
+                    </span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
                       {complaint.description || t('complaints.detail.no_description')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('common.type')}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('common.type')}
+                      </span>
                       <p className="mt-1 text-foreground capitalize flex items-center gap-2">
                         <span>{getTypeIcon(complaint.complaint_type)}</span>
                         {complaint.complaint_type.replace('_', ' ')}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('common.priority')}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('common.priority')}
+                      </span>
                       <p className="mt-1 text-foreground capitalize">{complaint.priority}</p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
-                      <p className="mt-1 text-foreground capitalize">{complaint.status.replace('_', ' ')}</p>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('common.status')}
+                      </span>
+                      <p className="mt-1 text-foreground capitalize">
+                        {complaint.status.replace('_', ' ')}
+                      </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.received_date')}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('complaints.detail.received_date')}
+                      </span>
                       <p className="mt-1 text-foreground">
                         {new Date(complaint.received_date).toLocaleString()}
                       </p>
@@ -572,28 +705,52 @@ export default function ComplaintDetail() {
               {isEditing ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label htmlFor="complaintdetail-field-5" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.name')}</label>
-                    <Input id="complaintdetail-field-5"
+                    <label
+                      htmlFor="complaintdetail-field-5"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('complaints.detail.name')}
+                    </label>
+                    <Input
+                      id="complaintdetail-field-5"
                       value={editForm.complainant_name || ''}
-                      onChange={(e) => setEditForm({ ...editForm, complainant_name: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, complainant_name: e.target.value })
+                      }
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-6" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.email')}</label>
-                    <Input id="complaintdetail-field-6"
+                    <label
+                      htmlFor="complaintdetail-field-6"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('complaints.detail.email')}
+                    </label>
+                    <Input
+                      id="complaintdetail-field-6"
                       type="email"
                       value={editForm.complainant_email || ''}
-                      onChange={(e) => setEditForm({ ...editForm, complainant_email: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, complainant_email: e.target.value })
+                      }
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="complaintdetail-field-7" className="text-sm font-medium text-muted-foreground">{t('complaints.detail.phone')}</label>
-                    <Input id="complaintdetail-field-7"
+                    <label
+                      htmlFor="complaintdetail-field-7"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('complaints.detail.phone')}
+                    </label>
+                    <Input
+                      id="complaintdetail-field-7"
                       type="tel"
                       value={editForm.complainant_phone || ''}
-                      onChange={(e) => setEditForm({ ...editForm, complainant_phone: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, complainant_phone: e.target.value })
+                      }
                       className="mt-1"
                     />
                   </div>
@@ -601,16 +758,28 @@ export default function ComplaintDetail() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.name')}</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_name || t('complaints.detail.not_specified')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('complaints.detail.name')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {complaint.complainant_name || t('complaints.detail.not_specified')}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.email')}</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_email || t('complaints.detail.not_specified')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('complaints.detail.email')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {complaint.complainant_email || t('complaints.detail.not_specified')}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('complaints.detail.phone')}</span>
-                    <p className="mt-1 text-foreground">{complaint.complainant_phone || t('complaints.detail.not_specified')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('complaints.detail.phone')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {complaint.complainant_phone || t('complaints.detail.not_specified')}
+                    </p>
                   </div>
                 </div>
               )}
@@ -667,33 +836,50 @@ export default function ComplaintDetail() {
                       key={action.id}
                       className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
                       onClick={() => handleOpenAction(action)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenAction(action); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleOpenAction(action)
+                        }
+                      }}
                       role="button"
                       tabIndex={0}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center",
-                          action.status === 'completed' ? 'bg-success/10 text-success' :
-                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
-                          'bg-warning/10 text-warning'
-                        )}>
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center',
+                            action.status === 'completed'
+                              ? 'bg-success/10 text-success'
+                              : action.status === 'cancelled'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-warning/10 text-warning',
+                          )}
+                        >
                           <CheckCircle className="w-4 h-4" />
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{action.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            {t('complaints.detail.due')}: {action.due_date ? new Date(action.due_date).toLocaleDateString() : t('complaints.detail.no_due_date')}
+                            {t('complaints.detail.due')}:{' '}
+                            {action.due_date
+                              ? new Date(action.due_date).toLocaleDateString()
+                              : t('complaints.detail.no_due_date')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={
-                          action.status === 'completed' ? 'resolved' :
-                          action.status === 'cancelled' ? 'destructive' :
-                          action.status === 'in_progress' ? 'in-progress' :
-                          'secondary' as any
-                        }>
+                        <Badge
+                          variant={
+                            action.status === 'completed'
+                              ? 'resolved'
+                              : action.status === 'cancelled'
+                                ? 'destructive'
+                                : action.status === 'in_progress'
+                                  ? 'in-progress'
+                                  : ('secondary' as any)
+                          }
+                        >
                           {action.status.replace(/_/g, ' ')}
                         </Badge>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
@@ -730,7 +916,9 @@ export default function ComplaintDetail() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">{t('complaints.detail.email')}</p>
-                  <p className="font-medium text-foreground truncate">{complaint.complainant_email || t('complaints.detail.not_specified')}</p>
+                  <p className="font-medium text-foreground truncate">
+                    {complaint.complainant_email || t('complaints.detail.not_specified')}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -739,7 +927,9 @@ export default function ComplaintDetail() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">{t('complaints.detail.phone')}</p>
-                  <p className="font-medium text-foreground">{complaint.complainant_phone || t('complaints.detail.not_specified')}</p>
+                  <p className="font-medium text-foreground">
+                    {complaint.complainant_phone || t('complaints.detail.not_specified')}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -758,7 +948,9 @@ export default function ComplaintDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">{t('complaints.detail.complaint_received')}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('complaints.detail.complaint_received')}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(complaint.received_date).toLocaleString()}
                     </p>
@@ -767,7 +959,9 @@ export default function ComplaintDetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">{t('complaints.detail.record_created')}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('complaints.detail.record_created')}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(complaint.created_at).toLocaleString()}
                     </p>
@@ -780,13 +974,16 @@ export default function ComplaintDetail() {
       </div>
 
       {/* Create Investigation Modal */}
-      <Dialog open={showInvestigationModal} onOpenChange={(open) => {
-        setShowInvestigationModal(open)
-        if (!open) {
-          setInvestigationError('')
-          setExistingInvestigation(null)
-        }
-      }}>
+      <Dialog
+        open={showInvestigationModal}
+        onOpenChange={(open) => {
+          setShowInvestigationModal(open)
+          if (!open) {
+            setInvestigationError('')
+            setExistingInvestigation(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -794,36 +991,57 @@ export default function ComplaintDetail() {
               {t('complaints.detail.start_investigation')}
             </DialogTitle>
             <DialogDescription>
-              {t('complaints.detail.investigation_description', { reference: complaint.reference_number })}
+              {t('complaints.detail.investigation_description', {
+                reference: complaint.reference_number,
+              })}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label htmlFor="complaintdetail-field-8" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-8"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('complaints.detail.investigation_title')}
               </label>
-              <Input id="complaintdetail-field-8"
+              <Input
+                id="complaintdetail-field-8"
                 value={investigationForm.title}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({ ...investigationForm, title: e.target.value })
+                }
                 placeholder={`Investigation - ${complaint.reference_number}`}
               />
             </div>
             <div>
-              <label htmlFor="complaintdetail-field-9" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-9"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('complaints.detail.investigation_type')}
               </label>
               <Select
                 value={investigationForm.investigation_type}
-                onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
+                onValueChange={(value) =>
+                  setInvestigationForm({ ...investigationForm, investigation_type: value })
+                }
               >
                 <SelectTrigger id="complaintdetail-field-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="root_cause_analysis">{t('complaints.investigation_type.root_cause_analysis')}</SelectItem>
-                  <SelectItem value="5_whys">{t('complaints.investigation_type.5_whys')}</SelectItem>
-                  <SelectItem value="fishbone">{t('complaints.investigation_type.fishbone')}</SelectItem>
-                  <SelectItem value="incident_review">{t('complaints.investigation_type.incident_review')}</SelectItem>
+                  <SelectItem value="root_cause_analysis">
+                    {t('complaints.investigation_type.root_cause_analysis')}
+                  </SelectItem>
+                  <SelectItem value="5_whys">
+                    {t('complaints.investigation_type.5_whys')}
+                  </SelectItem>
+                  <SelectItem value="fishbone">
+                    {t('complaints.investigation_type.fishbone')}
+                  </SelectItem>
+                  <SelectItem value="incident_review">
+                    {t('complaints.investigation_type.incident_review')}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -834,12 +1052,18 @@ export default function ComplaintDetail() {
               placeholder={t('complaints.detail.search_by_email')}
             />
             <div>
-              <label htmlFor="complaintdetail-field-10" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-10"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('complaints.detail.initial_notes')}
               </label>
-              <Textarea id="complaintdetail-field-10"
+              <Textarea
+                id="complaintdetail-field-10"
                 value={investigationForm.description}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({ ...investigationForm, description: e.target.value })
+                }
                 placeholder={t('complaints.detail.initial_notes_placeholder')}
                 rows={4}
               />
@@ -861,18 +1085,28 @@ export default function ComplaintDetail() {
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    {t('complaints.detail.open_existing_investigation', { reference: existingInvestigation.reference })}
+                    {t('complaints.detail.open_existing_investigation', {
+                      reference: existingInvestigation.reference,
+                    })}
                   </Button>
                 )}
               </div>
             )}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInvestigationModal(false)}
+              >
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('complaints.detail.create_investigation')}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  t('complaints.detail.create_investigation')
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -887,16 +1121,18 @@ export default function ComplaintDetail() {
               <ClipboardList className="w-5 h-5 text-primary" />
               {t('complaints.detail.add_action')}
             </DialogTitle>
-            <DialogDescription>
-              {t('complaints.detail.action_description')}
-            </DialogDescription>
+            <DialogDescription>{t('complaints.detail.action_description')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label htmlFor="complaintdetail-field-11" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-11"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('complaints.detail.action_title')}
               </label>
-              <Input id="complaintdetail-field-11"
+              <Input
+                id="complaintdetail-field-11"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder={t('complaints.detail.action_title_placeholder')}
@@ -911,7 +1147,10 @@ export default function ComplaintDetail() {
               required
             />
             <div>
-              <label htmlFor="complaintdetail-field-12" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-12"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('common.priority')}
               </label>
               <Select
@@ -930,20 +1169,28 @@ export default function ComplaintDetail() {
               </Select>
             </div>
             <div>
-              <label htmlFor="complaintdetail-field-13" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-13"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('common.due_date')}
               </label>
-              <Input id="complaintdetail-field-13"
+              <Input
+                id="complaintdetail-field-13"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label htmlFor="complaintdetail-field-14" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="complaintdetail-field-14"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('common.description')}
               </label>
-              <Textarea id="complaintdetail-field-14"
+              <Textarea
+                id="complaintdetail-field-14"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder={t('complaints.detail.action_description_placeholder')}
@@ -955,7 +1202,11 @@ export default function ComplaintDetail() {
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('complaints.detail.create_action')}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  t('complaints.detail.create_action')
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -979,11 +1230,9 @@ export default function ComplaintDetail() {
               <ClipboardList className="w-5 h-5 text-primary" />
               Action Details
             </DialogTitle>
-            <DialogDescription>
-              View / Update Status
-            </DialogDescription>
+            <DialogDescription>View / Update Status</DialogDescription>
           </DialogHeader>
-          
+
           {selectedAction && (
             <div className="space-y-4">
               <div className="space-y-3">
@@ -991,23 +1240,30 @@ export default function ComplaintDetail() {
                   <span className="text-sm font-medium text-muted-foreground">Title</span>
                   <p className="font-medium text-foreground">{selectedAction.title}</p>
                 </div>
-                
+
                 {selectedAction.description && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.description')}
+                    </span>
                     <p className="text-foreground">{selectedAction.description}</p>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
-                    <Badge 
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.status')}
+                    </span>
+                    <Badge
                       variant={
-                        selectedAction.status === 'completed' ? 'resolved' :
-                        selectedAction.status === 'cancelled' ? 'destructive' :
-                        selectedAction.status === 'in_progress' ? 'in-progress' :
-                        'secondary' as any
+                        selectedAction.status === 'completed'
+                          ? 'resolved'
+                          : selectedAction.status === 'cancelled'
+                            ? 'destructive'
+                            : selectedAction.status === 'in_progress'
+                              ? 'in-progress'
+                              : ('secondary' as any)
                       }
                       className="mt-1"
                     >
@@ -1019,13 +1275,13 @@ export default function ComplaintDetail() {
                     <p className="text-foreground capitalize">{selectedAction.priority}</p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Due Date</span>
                     <p className="text-foreground">
-                      {selectedAction.due_date 
-                        ? new Date(selectedAction.due_date).toLocaleDateString() 
+                      {selectedAction.due_date
+                        ? new Date(selectedAction.due_date).toLocaleDateString()
                         : 'Not set'}
                     </p>
                   </div>
@@ -1036,7 +1292,7 @@ export default function ComplaintDetail() {
                     </p>
                   </div>
                 </div>
-                
+
                 {selectedAction.completed_at && (
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Completed at</span>
@@ -1045,15 +1301,17 @@ export default function ComplaintDetail() {
                     </p>
                   </div>
                 )}
-                
+
                 {selectedAction.completion_notes && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Completion Notes</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Completion Notes
+                    </span>
                     <p className="text-foreground">{selectedAction.completion_notes}</p>
                   </div>
                 )}
               </div>
-              
+
               <div className="border-t pt-4">
                 <span className="text-sm font-medium text-muted-foreground mb-2 block">
                   Update Status
@@ -1066,7 +1324,7 @@ export default function ComplaintDetail() {
                       variant="outline"
                       className={cn(
                         option.className,
-                        selectedAction.status === option.value && 'ring-2 ring-primary'
+                        selectedAction.status === option.value && 'ring-2 ring-primary',
                       )}
                       disabled={updatingAction || selectedAction.status === option.value}
                       onClick={() => {
@@ -1081,11 +1339,11 @@ export default function ComplaintDetail() {
                     </Button>
                   ))}
                 </div>
-                
+
                 {actionUpdateError && (
                   <p className="text-sm text-destructive mt-2">{actionUpdateError}</p>
                 )}
-                
+
                 {updatingAction && (
                   <div className="flex items-center gap-2 mt-2 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1093,7 +1351,7 @@ export default function ComplaintDetail() {
                   </div>
                 )}
               </div>
-              
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
                   Close

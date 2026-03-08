@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   Save,
   Settings,
@@ -11,26 +11,26 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { cn } from '../../helpers/utils';
+} from 'lucide-react'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { cn } from '../../helpers/utils'
 
 interface SettingCategory {
-  id: string;
-  name: string;
-  icon: React.ReactNode;
-  description: string;
+  id: string
+  name: string
+  icon: React.ReactNode
+  description: string
 }
 
 interface Setting {
-  key: string;
-  value: string;
-  category: string;
-  description: string;
-  value_type: 'string' | 'number' | 'boolean' | 'json' | 'email' | 'color';
-  is_editable: boolean;
+  key: string
+  value: string
+  category: string
+  description: string
+  value_type: 'string' | 'number' | 'boolean' | 'json' | 'email' | 'color'
+  is_editable: boolean
 }
 
 const SETTING_CATEGORIES: SettingCategory[] = [
@@ -70,77 +70,229 @@ const SETTING_CATEGORIES: SettingCategory[] = [
     icon: <Globe className="w-5 h-5" />,
     description: 'Date format, timezone, and language',
   },
-];
+]
 
 const INITIAL_SETTINGS: Setting[] = [
   // Branding
-  { key: 'company_name', value: '', category: 'branding', description: 'Company name displayed throughout the system', value_type: 'string', is_editable: true },
-  { key: 'company_logo_url', value: '', category: 'branding', description: 'URL to company logo image', value_type: 'string', is_editable: true },
-  { key: 'primary_color', value: '#000000', category: 'branding', description: 'Primary brand color', value_type: 'color', is_editable: true },
-  { key: 'accent_color', value: '#000000', category: 'branding', description: 'Accent/hover color', value_type: 'color', is_editable: true },
-  
+  {
+    key: 'company_name',
+    value: '',
+    category: 'branding',
+    description: 'Company name displayed throughout the system',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'company_logo_url',
+    value: '',
+    category: 'branding',
+    description: 'URL to company logo image',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'primary_color',
+    value: '#000000',
+    category: 'branding',
+    description: 'Primary brand color',
+    value_type: 'color',
+    is_editable: true,
+  },
+  {
+    key: 'accent_color',
+    value: '#000000',
+    category: 'branding',
+    description: 'Accent/hover color',
+    value_type: 'color',
+    is_editable: true,
+  },
+
   // Contact
-  { key: 'support_email', value: '', category: 'contact', description: 'Support email address', value_type: 'email', is_editable: true },
-  { key: 'support_phone', value: '', category: 'contact', description: 'Support phone number', value_type: 'string', is_editable: true },
-  { key: 'emergency_phone', value: '', category: 'contact', description: 'Emergency contact number', value_type: 'string', is_editable: true },
-  
+  {
+    key: 'support_email',
+    value: '',
+    category: 'contact',
+    description: 'Support email address',
+    value_type: 'email',
+    is_editable: true,
+  },
+  {
+    key: 'support_phone',
+    value: '',
+    category: 'contact',
+    description: 'Support phone number',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'emergency_phone',
+    value: '',
+    category: 'contact',
+    description: 'Emergency contact number',
+    value_type: 'string',
+    is_editable: true,
+  },
+
   // Notifications
-  { key: 'incident_notification_emails', value: '', category: 'notifications', description: 'Emails notified on incident submission', value_type: 'string', is_editable: true },
-  { key: 'complaint_notification_emails', value: '', category: 'notifications', description: 'Emails notified on complaint submission', value_type: 'string', is_editable: true },
-  { key: 'rta_notification_emails', value: '', category: 'notifications', description: 'Emails notified on RTA submission', value_type: 'string', is_editable: true },
-  { key: 'enable_email_notifications', value: 'true', category: 'notifications', description: 'Enable email notifications', value_type: 'boolean', is_editable: true },
-  { key: 'enable_push_notifications', value: 'true', category: 'notifications', description: 'Enable push notifications', value_type: 'boolean', is_editable: true },
-  
+  {
+    key: 'incident_notification_emails',
+    value: '',
+    category: 'notifications',
+    description: 'Emails notified on incident submission',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'complaint_notification_emails',
+    value: '',
+    category: 'notifications',
+    description: 'Emails notified on complaint submission',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'rta_notification_emails',
+    value: '',
+    category: 'notifications',
+    description: 'Emails notified on RTA submission',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'enable_email_notifications',
+    value: 'true',
+    category: 'notifications',
+    description: 'Enable email notifications',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+  {
+    key: 'enable_push_notifications',
+    value: 'true',
+    category: 'notifications',
+    description: 'Enable push notifications',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+
   // Workflow
-  { key: 'auto_assign_incidents', value: 'true', category: 'workflow', description: 'Auto-assign incidents to safety team', value_type: 'boolean', is_editable: true },
-  { key: 'require_investigation', value: 'true', category: 'workflow', description: 'Require investigation for all incidents', value_type: 'boolean', is_editable: true },
-  { key: 'incident_sla_hours', value: '24', category: 'workflow', description: 'Hours to acknowledge an incident', value_type: 'number', is_editable: true },
-  { key: 'complaint_sla_hours', value: '48', category: 'workflow', description: 'Hours to respond to a complaint', value_type: 'number', is_editable: true },
-  
+  {
+    key: 'auto_assign_incidents',
+    value: 'true',
+    category: 'workflow',
+    description: 'Auto-assign incidents to safety team',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+  {
+    key: 'require_investigation',
+    value: 'true',
+    category: 'workflow',
+    description: 'Require investigation for all incidents',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+  {
+    key: 'incident_sla_hours',
+    value: '24',
+    category: 'workflow',
+    description: 'Hours to acknowledge an incident',
+    value_type: 'number',
+    is_editable: true,
+  },
+  {
+    key: 'complaint_sla_hours',
+    value: '48',
+    category: 'workflow',
+    description: 'Hours to respond to a complaint',
+    value_type: 'number',
+    is_editable: true,
+  },
+
   // Security
-  { key: 'session_timeout_minutes', value: '60', category: 'security', description: 'Session timeout in minutes', value_type: 'number', is_editable: true },
-  { key: 'require_mfa', value: 'false', category: 'security', description: 'Require multi-factor authentication', value_type: 'boolean', is_editable: true },
-  { key: 'allow_portal_anonymous', value: 'false', category: 'security', description: 'Allow anonymous portal submissions', value_type: 'boolean', is_editable: true },
-  
+  {
+    key: 'session_timeout_minutes',
+    value: '60',
+    category: 'security',
+    description: 'Session timeout in minutes',
+    value_type: 'number',
+    is_editable: true,
+  },
+  {
+    key: 'require_mfa',
+    value: 'false',
+    category: 'security',
+    description: 'Require multi-factor authentication',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+  {
+    key: 'allow_portal_anonymous',
+    value: 'false',
+    category: 'security',
+    description: 'Allow anonymous portal submissions',
+    value_type: 'boolean',
+    is_editable: true,
+  },
+
   // Regional
-  { key: 'date_format', value: 'DD/MM/YYYY', category: 'regional', description: 'Date display format', value_type: 'string', is_editable: true },
-  { key: 'timezone', value: 'Europe/London', category: 'regional', description: 'Default timezone', value_type: 'string', is_editable: true },
-  { key: 'language', value: 'en-GB', category: 'regional', description: 'Default language', value_type: 'string', is_editable: true },
-];
+  {
+    key: 'date_format',
+    value: 'DD/MM/YYYY',
+    category: 'regional',
+    description: 'Date display format',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'timezone',
+    value: 'Europe/London',
+    category: 'regional',
+    description: 'Default timezone',
+    value_type: 'string',
+    is_editable: true,
+  },
+  {
+    key: 'language',
+    value: 'en-GB',
+    category: 'regional',
+    description: 'Default language',
+    value_type: 'string',
+    is_editable: true,
+  },
+]
 
 export default function SystemSettings() {
-  const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS);
-  const [activeCategory, setActiveCategory] = useState('branding');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  const [settings, setSettings] = useState<Setting[]>(INITIAL_SETTINGS)
+  const [activeCategory, setActiveCategory] = useState('branding')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [hasChanges, setHasChanges] = useState(false)
 
-  const categorySettings = settings.filter((s) => s.category === activeCategory);
+  const categorySettings = settings.filter((s) => s.category === activeCategory)
 
   const updateSetting = (key: string, value: string) => {
-    setSettings((prev) =>
-      prev.map((s) => (s.key === key ? { ...s, value } : s))
-    );
-    setHasChanges(true);
-  };
+    setSettings((prev) => prev.map((s) => (s.key === key ? { ...s, value } : s)))
+    setHasChanges(true)
+  }
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setSaveError(null);
+    setIsSaving(true)
+    setSaveError(null)
     try {
       // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSaveSuccess(true);
-      setHasChanges(false);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      setSaveSuccess(true)
+      setHasChanges(false)
+      setTimeout(() => setSaveSuccess(false), 3000)
     } catch {
-      console.error('Failed to save settings');
-      setSaveError('Failed to save settings. Please try again.');
+      console.error('Failed to save settings')
+      setSaveError('Failed to save settings. Please try again.')
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const renderSettingInput = (setting: Setting) => {
     switch (setting.value_type) {
@@ -152,21 +304,23 @@ export default function SystemSettings() {
               <p className="text-xs text-muted-foreground">{setting.key}</p>
             </div>
             <button
-              onClick={() => updateSetting(setting.key, setting.value === 'true' ? 'false' : 'true')}
+              onClick={() =>
+                updateSetting(setting.key, setting.value === 'true' ? 'false' : 'true')
+              }
               className={cn(
                 'w-12 h-6 rounded-full transition-colors relative',
-                setting.value === 'true' ? 'bg-primary' : 'bg-muted'
+                setting.value === 'true' ? 'bg-primary' : 'bg-muted',
               )}
             >
               <div
                 className={cn(
                   'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-sm',
-                  setting.value === 'true' ? 'translate-x-6' : 'translate-x-0.5'
+                  setting.value === 'true' ? 'translate-x-6' : 'translate-x-0.5',
                 )}
               />
             </button>
           </div>
-        );
+        )
 
       case 'number':
         return (
@@ -182,7 +336,7 @@ export default function SystemSettings() {
             />
             <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
-        );
+        )
 
       case 'color':
         return (
@@ -207,7 +361,7 @@ export default function SystemSettings() {
             </div>
             <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
-        );
+        )
 
       case 'email':
         return (
@@ -223,7 +377,7 @@ export default function SystemSettings() {
             />
             <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
-        );
+        )
 
       default:
         return (
@@ -237,9 +391,9 @@ export default function SystemSettings() {
             />
             <p className="text-xs text-muted-foreground mt-1">{setting.key}</p>
           </div>
-        );
+        )
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -265,7 +419,9 @@ export default function SystemSettings() {
                 {saveSuccess ? 'Saved!' : 'Save Changes'}
               </Button>
               {saveError && <p className="text-sm text-destructive mt-2">{saveError}</p>}
-              {saveSuccess && <p className="text-sm text-green-600 mt-2">Settings saved successfully</p>}
+              {saveSuccess && (
+                <p className="text-sm text-green-600 mt-2">Settings saved successfully</p>
+              )}
             </div>
           </div>
         </div>
@@ -284,15 +440,13 @@ export default function SystemSettings() {
                     'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors',
                     activeCategory === category.id
                       ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-muted text-foreground'
+                      : 'hover:bg-muted text-foreground',
                   )}
                 >
                   <div
                     className={cn(
                       'p-2 rounded-lg',
-                      activeCategory === category.id
-                        ? 'bg-white/20'
-                        : 'bg-primary/10 text-primary'
+                      activeCategory === category.id ? 'bg-white/20' : 'bg-primary/10 text-primary',
                     )}
                   >
                     {category.icon}
@@ -304,7 +458,7 @@ export default function SystemSettings() {
                         'text-xs truncate',
                         activeCategory === category.id
                           ? 'text-primary-foreground/70'
-                          : 'text-muted-foreground'
+                          : 'text-muted-foreground',
                       )}
                     >
                       {category.description}
@@ -315,7 +469,7 @@ export default function SystemSettings() {
                       'w-4 h-4',
                       activeCategory === category.id
                         ? 'text-primary-foreground'
-                        : 'text-muted-foreground'
+                        : 'text-muted-foreground',
                     )}
                   />
                 </button>
@@ -362,5 +516,5 @@ export default function SystemSettings() {
         </div>
       </main>
     </div>
-  );
+  )
 }

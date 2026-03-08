@@ -21056,6 +21056,29 @@
         "title": "RefreshTokenRequest",
         "type": "object"
       },
+      "ReportRequest": {
+        "properties": {
+          "output_format": {
+            "default": "pdf",
+            "title": "Output Format",
+            "type": "string"
+          },
+          "report_type": {
+            "title": "Report Type",
+            "type": "string"
+          },
+          "time_range": {
+            "default": "last_month",
+            "title": "Time Range",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_type"
+        ],
+        "title": "ReportRequest",
+        "type": "object"
+      },
       "ReportStatusResponse": {
         "description": "Report status for tracking.",
         "properties": {
@@ -33402,37 +33425,16 @@
       "post": {
         "description": "Generate and queue a report for download.",
         "operationId": "generate_report_api_v1_analytics_reports_generate_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "report_type",
-            "required": true,
-            "schema": {
-              "title": "Report Type",
-              "type": "string"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
             }
           },
-          {
-            "in": "query",
-            "name": "format",
-            "required": false,
-            "schema": {
-              "default": "pdf",
-              "title": "Format",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "time_range",
-            "required": false,
-            "schema": {
-              "default": "last_month",
-              "title": "Time Range",
-              "type": "string"
-            }
-          }
-        ],
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -41313,6 +41315,17 @@
         "parameters": [
           {
             "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
@@ -44135,6 +44148,31 @@
       "get": {
         "description": "List all feature flags.",
         "operationId": "list_feature_flags_api_v1_feature_flags__get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -44145,6 +44183,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -44669,11 +44717,6 @@
             "description": "Successful Response"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Resource Metrics",
         "tags": [
           "Health",
@@ -57596,6 +57639,29 @@
               "minLength": 1,
               "title": "Q",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],

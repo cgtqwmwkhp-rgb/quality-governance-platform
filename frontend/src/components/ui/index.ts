@@ -5,7 +5,7 @@ export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
 export { Badge, badgeVariants } from './Badge'
 export { Input } from './Input'
 export { Textarea } from './Textarea'
-export { 
+export {
   Dialog,
   DialogPortal,
   DialogOverlay,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   Plus,
   Search,
@@ -11,43 +11,43 @@ import {
   Mail,
   Phone,
   Loader2,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
+} from 'lucide-react'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Textarea } from '../../components/ui/Textarea'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '../../components/ui/Dialog';
-import { cn } from '../../helpers/utils';
+} from '../../components/ui/Dialog'
+import { cn } from '../../helpers/utils'
 
 interface Contract {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  client_name?: string;
-  client_contact?: string;
-  client_email?: string;
-  is_active: boolean;
-  start_date?: string;
-  end_date?: string;
-  display_order: number;
+  id: number
+  name: string
+  code: string
+  description?: string
+  client_name?: string
+  client_contact?: string
+  client_email?: string
+  is_active: boolean
+  start_date?: string
+  end_date?: string
+  display_order: number
 }
 
-const INITIAL_CONTRACTS: Contract[] = [];
+const INITIAL_CONTRACTS: Contract[] = []
 
 export default function ContractsManagement() {
-  const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showInactive, setShowInactive] = useState(false);
-  const [editingContract, setEditingContract] = useState<Contract | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [contracts, setContracts] = useState<Contract[]>(INITIAL_CONTRACTS)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
+  const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [isAdding, setIsAdding] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const [formData, setFormData] = useState<Partial<Contract>>({
     name: '',
@@ -57,30 +57,30 @@ export default function ContractsManagement() {
     client_contact: '',
     client_email: '',
     is_active: true,
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  })
+  const [error, setError] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
 
   const filteredContracts = contracts
     .filter((c) => {
       const matchesSearch =
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.client_name?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesActive = showInactive || c.is_active;
-      return matchesSearch && matchesActive;
+        c.client_name?.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesActive = showInactive || c.is_active
+      return matchesSearch && matchesActive
     })
-    .sort((a, b) => a.display_order - b.display_order);
+    .sort((a, b) => a.display_order - b.display_order)
 
   const handleEdit = (contract: Contract) => {
-    setEditingContract(contract);
-    setFormData(contract);
-    setIsAdding(false);
-  };
+    setEditingContract(contract)
+    setFormData(contract)
+    setIsAdding(false)
+  }
 
   const handleAdd = () => {
-    setIsAdding(true);
-    setEditingContract(null);
+    setIsAdding(true)
+    setEditingContract(null)
     setFormData({
       name: '',
       code: '',
@@ -89,20 +89,20 @@ export default function ContractsManagement() {
       client_contact: '',
       client_email: '',
       is_active: true,
-    });
-  };
+    })
+  }
 
   const handleCancel = () => {
-    setEditingContract(null);
-    setIsAdding(false);
-    setFormData({});
-  };
+    setEditingContract(null)
+    setIsAdding(false)
+    setFormData({})
+  }
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setError(null);
+    setIsSaving(true)
+    setError(null)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
       if (isAdding) {
         const newContract: Contract = {
@@ -115,41 +115,37 @@ export default function ContractsManagement() {
           client_email: formData.client_email,
           is_active: formData.is_active ?? true,
           display_order: contracts.length + 1,
-        };
-        setContracts((prev) => [...prev, newContract]);
+        }
+        setContracts((prev) => [...prev, newContract])
       } else if (editingContract) {
         setContracts((prev) =>
-          prev.map((c) =>
-            c.id === editingContract.id ? { ...c, ...formData } : c
-          )
-        );
+          prev.map((c) => (c.id === editingContract.id ? { ...c, ...formData } : c)),
+        )
       }
 
-      handleCancel();
+      handleCancel()
     } catch {
-      console.error('Failed to save');
-      setError('Failed to save contract. Please try again.');
+      console.error('Failed to save')
+      setError('Failed to save contract. Please try again.')
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   const handleDelete = (id: number) => {
-    setDeleteTarget(id);
-  };
+    setDeleteTarget(id)
+  }
 
   const confirmDelete = () => {
     if (deleteTarget !== null) {
-      setContracts((prev) => prev.filter((c) => c.id !== deleteTarget));
+      setContracts((prev) => prev.filter((c) => c.id !== deleteTarget))
     }
-    setDeleteTarget(null);
-  };
+    setDeleteTarget(null)
+  }
 
   const toggleActive = (id: number) => {
-    setContracts((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c))
-    );
-  };
+    setContracts((prev) => prev.map((c) => (c.id === id ? { ...c, is_active: !c.is_active } : c)))
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -197,7 +193,13 @@ export default function ContractsManagement() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 mt-4">
           <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
             <p className="text-sm text-destructive">{error}</p>
-            <button onClick={() => { setError(null); handleSave(); }} className="text-sm font-medium text-destructive hover:underline">
+            <button
+              onClick={() => {
+                setError(null)
+                handleSave()
+              }}
+              className="text-sm font-medium text-destructive hover:underline"
+            >
               Try Again
             </button>
           </div>
@@ -211,12 +213,8 @@ export default function ContractsManagement() {
             {filteredContracts.length === 0 ? (
               <Card className="p-12 text-center">
                 <Building className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">
-                  No contracts found
-                </h3>
-                <p className="text-muted-foreground mb-4">
-                  Add your first contract to get started
-                </p>
+                <h3 className="text-lg font-semibold text-foreground mb-2">No contracts found</h3>
+                <p className="text-muted-foreground mb-4">Add your first contract to get started</p>
                 <Button onClick={handleAdd}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Contract
@@ -229,7 +227,7 @@ export default function ContractsManagement() {
                   className={cn(
                     'p-4 flex items-center gap-4 group',
                     !contract.is_active && 'opacity-60',
-                    editingContract?.id === contract.id && 'ring-2 ring-primary'
+                    editingContract?.id === contract.id && 'ring-2 ring-primary',
                   )}
                 >
                   <GripVertical className="w-5 h-5 text-muted-foreground cursor-grab" />
@@ -290,27 +288,21 @@ export default function ContractsManagement() {
                 {isAdding ? 'Add Contract' : editingContract ? 'Edit Contract' : 'Contract Details'}
               </h3>
 
-              {(isAdding || editingContract) ? (
+              {isAdding || editingContract ? (
                 <div className="space-y-4">
                   <div>
                     {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Name *
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Name *</label>
                     <Input
                       value={formData.name || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, name: e.target.value }))
-                      }
+                      onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                       placeholder="e.g. UKPN"
                     />
                   </div>
 
                   <div>
                     {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Code *
-                    </label>
+                    <label className="block text-sm font-medium text-foreground mb-2">Code *</label>
                     <Input
                       value={formData.code || ''}
                       onChange={(e) =>
@@ -436,13 +428,19 @@ export default function ContractsManagement() {
           <DialogHeader>
             <DialogTitle>Delete Contract</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Are you sure you want to delete this contract? This action cannot be undone.</p>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete this contract? This action cannot be undone.
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

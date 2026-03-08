@@ -1,13 +1,13 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
-import { useLiveAnnouncer } from "./LiveAnnouncer";
+import { useEffect, useRef, useCallback, useState } from 'react'
+import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
+import { useLiveAnnouncer } from './LiveAnnouncer'
 
-export type ToastVariant = "success" | "error" | "warning" | "info";
+export type ToastVariant = 'success' | 'error' | 'warning' | 'info'
 
 export interface ToastData {
-  id: string;
-  message: string;
-  variant: ToastVariant;
+  id: string
+  message: string
+  variant: ToastVariant
 }
 
 const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
@@ -15,92 +15,90 @@ const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
   error: XCircle,
   warning: AlertTriangle,
   info: Info,
-};
+}
 
 const VARIANT_STYLES: Record<ToastVariant, string> = {
-  success:
-    "bg-card border-success/30 text-foreground shadow-[0_0_0_1px_hsl(var(--success)/0.1)]",
+  success: 'bg-card border-success/30 text-foreground shadow-[0_0_0_1px_hsl(var(--success)/0.1)]',
   error:
-    "bg-card border-destructive/30 text-foreground shadow-[0_0_0_1px_hsl(var(--destructive)/0.1)]",
-  warning:
-    "bg-card border-warning/30 text-foreground shadow-[0_0_0_1px_hsl(var(--warning)/0.1)]",
-  info: "bg-card border-border text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.5)]",
-};
+    'bg-card border-destructive/30 text-foreground shadow-[0_0_0_1px_hsl(var(--destructive)/0.1)]',
+  warning: 'bg-card border-warning/30 text-foreground shadow-[0_0_0_1px_hsl(var(--warning)/0.1)]',
+  info: 'bg-card border-border text-foreground shadow-[0_0_0_1px_hsl(var(--border)/0.5)]',
+}
 
 const ICON_STYLES: Record<ToastVariant, string> = {
-  success: "text-success",
-  error: "text-destructive",
-  warning: "text-warning",
-  info: "text-info",
-};
+  success: 'text-success',
+  error: 'text-destructive',
+  warning: 'text-warning',
+  info: 'text-info',
+}
 
 const PROGRESS_STYLES: Record<ToastVariant, string> = {
-  success: "bg-success",
-  error: "bg-destructive",
-  warning: "bg-warning",
-  info: "bg-info",
-};
+  success: 'bg-success',
+  error: 'bg-destructive',
+  warning: 'bg-warning',
+  info: 'bg-info',
+}
 
 function ToastItem({
   toast,
   onDismiss,
   duration = 4000,
 }: {
-  toast: ToastData;
-  onDismiss: (id: string) => void;
-  duration?: number;
+  toast: ToastData
+  onDismiss: (id: string) => void
+  duration?: number
 }) {
-  const [exiting, setExiting] = useState(false);
-  const [progress, setProgress] = useState(100);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
-  const startRef = useRef(Date.now());
-  const rafRef = useRef<number>();
+  const [exiting, setExiting] = useState(false)
+  const [progress, setProgress] = useState(100)
+  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const startRef = useRef(Date.now())
+  const rafRef = useRef<number>()
 
   const dismiss = useCallback(() => {
-    setExiting(true);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    setTimeout(() => onDismiss(toast.id), 280);
-  }, [onDismiss, toast.id]);
+    setExiting(true)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    setTimeout(() => onDismiss(toast.id), 280)
+  }, [onDismiss, toast.id])
 
   useEffect(() => {
-    startRef.current = Date.now();
+    startRef.current = Date.now()
 
     const tick = () => {
-      const elapsed = Date.now() - startRef.current;
-      const remaining = Math.max(0, 1 - elapsed / duration);
-      setProgress(remaining * 100);
+      const elapsed = Date.now() - startRef.current
+      const remaining = Math.max(0, 1 - elapsed / duration)
+      setProgress(remaining * 100)
       if (remaining > 0) {
-        rafRef.current = requestAnimationFrame(tick);
+        rafRef.current = requestAnimationFrame(tick)
       }
-    };
-    rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick)
 
-    timerRef.current = setTimeout(dismiss, duration);
+    timerRef.current = setTimeout(dismiss, duration)
 
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [dismiss, duration]);
+      if (timerRef.current) clearTimeout(timerRef.current)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    }
+  }, [dismiss, duration])
 
-  const Icon = ICONS[toast.variant];
+  const Icon = ICONS[toast.variant]
 
-  const isUrgent = toast.variant === "error" || toast.variant === "warning";
+  const isUrgent = toast.variant === 'error' || toast.variant === 'warning'
 
   return (
     <div
       role="alert"
-      aria-live={isUrgent ? "assertive" : "polite"}
+      aria-live={isUrgent ? 'assertive' : 'polite'}
       className={`
         pointer-events-auto w-[380px] max-w-[calc(100vw-2rem)]
         flex items-start gap-3 rounded-xl border px-4 py-3.5
         shadow-lg backdrop-blur-sm
         ${VARIANT_STYLES[toast.variant]}
-        ${exiting ? "animate-toast-out" : "animate-toast-in"}
+        ${exiting ? 'animate-toast-out' : 'animate-toast-in'}
       `}
       style={{
-        animationFillMode: "forwards",
+        animationFillMode: 'forwards',
       }}
     >
       <div
@@ -129,7 +127,7 @@ function ToastItem({
         />
       </div>
     </div>
-  );
+  )
 }
 
 /**
@@ -140,10 +138,10 @@ export function ToastContainer({
   toasts,
   onDismiss,
 }: {
-  toasts: ToastData[];
-  onDismiss: (id: string) => void;
+  toasts: ToastData[]
+  onDismiss: (id: string) => void
 }) {
-  if (toasts.length === 0) return null;
+  if (toasts.length === 0) return null
 
   return (
     <div
@@ -156,32 +154,32 @@ export function ToastContainer({
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
     </div>
-  );
+  )
 }
 
 // ============================================================================
 // Hook for easy consumption
 // ============================================================================
 
-let toastCounter = 0;
+let toastCounter = 0
 
 export function useToast() {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-  const { announce } = useLiveAnnouncer();
+  const [toasts, setToasts] = useState<ToastData[]>([])
+  const { announce } = useLiveAnnouncer()
 
   const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
 
   const show = useCallback(
-    (message: string, variant: ToastVariant = "success") => {
-      const id = `toast-${++toastCounter}-${Date.now()}`;
-      setToasts((prev) => [...prev, { id, message, variant }]);
-      const isUrgent = variant === "error" || variant === "warning";
-      announce(message, isUrgent ? "assertive" : "polite");
+    (message: string, variant: ToastVariant = 'success') => {
+      const id = `toast-${++toastCounter}-${Date.now()}`
+      setToasts((prev) => [...prev, { id, message, variant }])
+      const isUrgent = variant === 'error' || variant === 'warning'
+      announce(message, isUrgent ? 'assertive' : 'polite')
     },
     [announce],
-  );
+  )
 
-  return { toasts, show, dismiss };
+  return { toasts, show, dismiss }
 }

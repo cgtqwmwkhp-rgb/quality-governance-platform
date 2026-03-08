@@ -1,13 +1,13 @@
-import { useTranslation } from 'react-i18next';
-import { CheckCircle, X, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next'
+import { CheckCircle, X, AlertTriangle } from 'lucide-react'
 
 export interface PublishDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  isPublishing: boolean;
-  templateName: string;
-  error?: string | null;
+  isOpen: boolean
+  onClose: () => void
+  onConfirm: () => void
+  isPublishing: boolean
+  templateName: string
+  error?: string | null
 }
 
 export default function PublishDialog({
@@ -18,9 +18,9 @@ export default function PublishDialog({
   templateName,
   error,
 }: PublishDialogProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -45,8 +45,9 @@ export default function PublishDialog({
             {t('audit_builder.publish_template', 'Publish Template')}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to publish <strong>&quot;{templateName || 'Untitled'}&quot;</strong>?
-            Once published, this template will be available for audit scheduling.
+            Are you sure you want to publish{' '}
+            <strong>&quot;{templateName || 'Untitled'}&quot;</strong>? Once published, this template
+            will be available for audit scheduling.
           </p>
         </div>
 
@@ -80,5 +81,5 @@ export default function PublishDialog({
         </div>
       </div>
     </div>
-  );
+  )
 }

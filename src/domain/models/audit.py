@@ -156,7 +156,6 @@ class AuditSection(Base, TimestampMixin):
 
     __tablename__ = "audit_sections"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
 
@@ -188,7 +187,6 @@ class AuditQuestion(Base, TimestampMixin):
 
     __tablename__ = "audit_questions"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     template_id: Mapped[int] = mapped_column(ForeignKey("audit_templates.id", ondelete="CASCADE"), nullable=False)
     section_id: Mapped[Optional[int]] = mapped_column(
@@ -329,10 +327,9 @@ class AuditResponse(Base, TimestampMixin):
 
     __tablename__ = "audit_responses"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False)
+    question_id: Mapped[int] = mapped_column(ForeignKey("audit_questions.id"), nullable=False, index=True)
 
     # Response values (use appropriate field based on question type)
     response_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -366,7 +363,7 @@ class AuditFinding(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False)
-    question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_questions.id"), nullable=True)
+    question_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_questions.id"), nullable=True, index=True)
 
     # Finding details
     title: Mapped[str] = mapped_column(String(300), nullable=False)

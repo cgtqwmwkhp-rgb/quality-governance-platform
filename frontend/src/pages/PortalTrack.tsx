@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Search,
   ArrowLeft,
@@ -17,64 +17,64 @@ import {
   FileText,
   Car,
   AlertCircle,
-} from 'lucide-react';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { cn } from '../helpers/utils';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
-import ReportChat from '../components/ReportChat';
-import { API_BASE_URL } from '../config/apiBase';
+} from 'lucide-react'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { cn } from '../helpers/utils'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
+import ReportChat from '../components/ReportChat'
+import { API_BASE_URL } from '../config/apiBase'
 
 // Types
 interface ReportSummary {
-  reference_number: string;
-  report_type: 'incident' | 'near_miss' | 'complaint' | 'rta';
-  title: string;
-  status: string;
-  status_label: string;
-  submitted_at: string;
-  updated_at: string;
+  reference_number: string
+  report_type: 'incident' | 'near_miss' | 'complaint' | 'rta'
+  title: string
+  status: string
+  status_label: string
+  submitted_at: string
+  updated_at: string
 }
 
 interface ReportDetail extends ReportSummary {
-  priority: string;
-  timeline: Array<{ date: string; event: string; icon: string }>;
-  next_steps: string;
-  assigned_to: string;
+  priority: string
+  timeline: Array<{ date: string; event: string; icon: string }>
+  next_steps: string
+  assigned_to: string
 }
 
 // Report type config
 const REPORT_TYPE_CONFIG = {
-  incident: { 
-    icon: AlertTriangle, 
-    color: 'text-destructive', 
+  incident: {
+    icon: AlertTriangle,
+    color: 'text-destructive',
     bgColor: 'bg-destructive/10',
     label: 'Incident',
     prefix: 'INC',
   },
-  near_miss: { 
-    icon: AlertCircle, 
-    color: 'text-warning', 
+  near_miss: {
+    icon: AlertCircle,
+    color: 'text-warning',
     bgColor: 'bg-warning/10',
     label: 'Near Miss',
     prefix: 'NM',
   },
-  complaint: { 
-    icon: MessageSquare, 
-    color: 'text-info', 
+  complaint: {
+    icon: MessageSquare,
+    color: 'text-info',
     bgColor: 'bg-info/10',
     label: 'Complaint',
     prefix: 'COMP',
   },
-  rta: { 
-    icon: Car, 
-    color: 'text-purple-600', 
+  rta: {
+    icon: Car,
+    color: 'text-purple-600',
     bgColor: 'bg-purple-100 dark:bg-purple-900/20',
     label: 'Road Traffic Collision',
     prefix: 'RTA',
   },
-};
+}
 
 // Status badge component
 const StatusBadge = ({ status, label }: { status: string; label: string }) => {
@@ -82,36 +82,41 @@ const StatusBadge = ({ status, label }: { status: string; label: string }) => {
     switch (status) {
       case 'REPORTED':
       case 'OPEN':
-        return 'bg-info/10 text-info border-info/20';
+        return 'bg-info/10 text-info border-info/20'
       case 'UNDER_INVESTIGATION':
       case 'IN_PROGRESS':
-        return 'bg-warning/10 text-warning border-warning/20';
+        return 'bg-warning/10 text-warning border-warning/20'
       case 'PENDING_REVIEW':
-        return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800';
+        return 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800'
       case 'RESOLVED':
       case 'CLOSED':
-        return 'bg-success/10 text-success border-success/20';
+        return 'bg-success/10 text-success border-success/20'
       case 'REJECTED':
-        return 'bg-destructive/10 text-destructive border-destructive/20';
+        return 'bg-destructive/10 text-destructive border-destructive/20'
       default:
-        return 'bg-muted text-muted-foreground border-border';
+        return 'bg-muted text-muted-foreground border-border'
     }
-  };
+  }
 
   return (
-    <span className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold', getStatusStyles())}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold',
+        getStatusStyles(),
+      )}
+    >
       {label}
     </span>
-  );
-};
+  )
+}
 
 // Timeline event component
-const TimelineEvent = ({ 
-  event, 
-  isLast 
-}: { 
-  event: { date: string; event: string; icon: string }; 
-  isLast: boolean;
+const TimelineEvent = ({
+  event,
+  isLast,
+}: {
+  event: { date: string; event: string; icon: string }
+  isLast: boolean
 }) => (
   <div className="flex gap-4">
     <div className="flex flex-col items-center">
@@ -133,7 +138,7 @@ const TimelineEvent = ({
       </p>
     </div>
   </div>
-);
+)
 
 // Progress indicator component
 const ProgressIndicator = ({ status }: { status: string }) => {
@@ -142,52 +147,59 @@ const ProgressIndicator = ({ status }: { status: string }) => {
     { key: 'UNDER_INVESTIGATION', label: 'Under Review', icon: '🔍' },
     { key: 'IN_PROGRESS', label: 'In Progress', icon: '⚙️' },
     { key: 'RESOLVED', label: 'Resolved', icon: '✅' },
-  ];
+  ]
 
-  const currentIndex = stages.findIndex(s => 
-    s.key === status || 
-    (status === 'OPEN' && s.key === 'REPORTED') ||
-    (status === 'PENDING_REVIEW' && s.key === 'IN_PROGRESS') ||
-    (status === 'CLOSED' && s.key === 'RESOLVED')
-  );
+  const currentIndex = stages.findIndex(
+    (s) =>
+      s.key === status ||
+      (status === 'OPEN' && s.key === 'REPORTED') ||
+      (status === 'PENDING_REVIEW' && s.key === 'IN_PROGRESS') ||
+      (status === 'CLOSED' && s.key === 'RESOLVED'),
+  )
 
   return (
     <div className="flex items-center justify-between mb-6">
       {stages.map((stage, index) => (
         <div key={stage.key} className="flex items-center">
-          <div className={cn('flex flex-col items-center', index <= currentIndex ? 'text-foreground' : 'text-muted-foreground')}>
-            <div className={cn(
-              'w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl mb-2',
-              index < currentIndex 
-                ? 'bg-success text-success-foreground' 
-                : index === currentIndex 
-                  ? 'gradient-brand text-primary-foreground'
-                  : 'bg-muted'
-            )}>
+          <div
+            className={cn(
+              'flex flex-col items-center',
+              index <= currentIndex ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            <div
+              className={cn(
+                'w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg sm:text-xl mb-2',
+                index < currentIndex
+                  ? 'bg-success text-success-foreground'
+                  : index === currentIndex
+                    ? 'gradient-brand text-primary-foreground'
+                    : 'bg-muted',
+              )}
+            >
               {index < currentIndex ? '✓' : stage.icon}
             </div>
             <span className="text-xs font-medium hidden sm:block">{stage.label}</span>
           </div>
           {index < stages.length - 1 && (
-            <div className={cn('w-6 sm:w-12 h-1 mx-1 sm:mx-2 rounded', index < currentIndex ? 'bg-success' : 'bg-border')} />
+            <div
+              className={cn(
+                'w-6 sm:w-12 h-1 mx-1 sm:mx-2 rounded',
+                index < currentIndex ? 'bg-success' : 'bg-border',
+              )}
+            />
           )}
         </div>
       ))}
     </div>
-  );
-};
+  )
+}
 
 // Report list item component
-const ReportListItem = ({ 
-  report, 
-  onClick 
-}: { 
-  report: ReportSummary; 
-  onClick: () => void;
-}) => {
-  const config = REPORT_TYPE_CONFIG[report.report_type] || REPORT_TYPE_CONFIG.incident;
-  const IconComponent = config.icon;
-  
+const ReportListItem = ({ report, onClick }: { report: ReportSummary; onClick: () => void }) => {
+  const config = REPORT_TYPE_CONFIG[report.report_type] || REPORT_TYPE_CONFIG.incident
+  const IconComponent = config.icon
+
   return (
     <button
       onClick={onClick}
@@ -220,53 +232,55 @@ const ReportListItem = ({
         </div>
       </div>
     </button>
-  );
-};
+  )
+}
 
 export default function PortalTrack() {
-  const navigate = useNavigate();
-  const { referenceNumber: urlRef } = useParams();
-  const { user, isAuthenticated, platformToken } = usePortalAuth();
-  
-  const [searchRef, setSearchRef] = useState(urlRef || '');
-  const [isSearching, setIsSearching] = useState(false);
-  const [isLoadingMyReports, setIsLoadingMyReports] = useState(false);
-  const [myReports, setMyReports] = useState<ReportSummary[]>([]);
-  const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showManualSearch, setShowManualSearch] = useState(false);
+  const navigate = useNavigate()
+  const { referenceNumber: urlRef } = useParams()
+  const { user, isAuthenticated, platformToken } = usePortalAuth()
+
+  const [searchRef, setSearchRef] = useState(urlRef || '')
+  const [isSearching, setIsSearching] = useState(false)
+  const [isLoadingMyReports, setIsLoadingMyReports] = useState(false)
+  const [myReports, setMyReports] = useState<ReportSummary[]>([])
+  const [selectedReport, setSelectedReport] = useState<ReportDetail | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showManualSearch, setShowManualSearch] = useState(false)
 
   const loadMyReports = useCallback(async () => {
-    setIsLoadingMyReports(true);
-    setError(null);
-    
+    setIsLoadingMyReports(true)
+    setError(null)
+
     try {
       // Use platform token for secure, server-side identity-based lookup
-      const apiBase = API_BASE_URL;
-      console.log('[PortalTrack] Loading my reports via secure endpoint');
-      
+      const apiBase = API_BASE_URL
+      console.log('[PortalTrack] Loading my reports via secure endpoint')
+
       // Require platform token for my-reports (no email enumeration)
-      const token = platformToken || sessionStorage.getItem('platform_access_token');
-      
+      const token = platformToken || sessionStorage.getItem('platform_access_token')
+
       if (!token) {
-        console.warn('[PortalTrack] No platform token available');
-        setError('Please sign in again to view your reports.');
-        setMyReports([]);
-        setIsLoadingMyReports(false);
-        return;
+        console.warn('[PortalTrack] No platform token available')
+        setError('Please sign in again to view your reports.')
+        setMyReports([])
+        setIsLoadingMyReports(false)
+        return
       }
-      
+
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      };
+        Authorization: `Bearer ${token}`,
+      }
 
       // Use the secure /portal/my-reports endpoint (server-side identity lookup)
       // This endpoint uses the authenticated user's email from the JWT, not query params
-      const response = await fetch(`${apiBase}/api/v1/portal/my-reports/?page=1&page_size=50`, { headers });
-      
+      const response = await fetch(`${apiBase}/api/v1/portal/my-reports/?page=1&page_size=50`, {
+        headers,
+      })
+
       if (response.ok) {
-        const data = await response.json();
+        const data = await response.json()
         const reports: ReportSummary[] = (data.items || []).map((item: any) => ({
           reference_number: item.reference_number,
           report_type: item.report_type,
@@ -275,111 +289,113 @@ export default function PortalTrack() {
           status_label: item.status_label || getStatusLabel(item.status),
           submitted_at: item.submitted_at,
           updated_at: item.updated_at,
-        }));
-        
+        }))
+
         // Sort by most recent
-        reports.sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime());
-        setMyReports(reports);
+        reports.sort(
+          (a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime(),
+        )
+        setMyReports(reports)
       } else if (response.status === 401) {
-        console.error('[PortalTrack] Authentication failed - token may be expired');
-        setError('Your session has expired. Please sign in again.');
-        setMyReports([]);
+        console.error('[PortalTrack] Authentication failed - token may be expired')
+        setError('Your session has expired. Please sign in again.')
+        setMyReports([])
       } else {
-        console.error('[PortalTrack] Failed to load reports:', response.status);
-        setError('Failed to load reports. Please try again later.');
+        console.error('[PortalTrack] Failed to load reports:', response.status)
+        setError('Failed to load reports. Please try again later.')
       }
     } catch (err) {
-      console.error('[PortalTrack] Failed to load reports:', err);
-      setError('Failed to load reports. Please try again later.');
+      console.error('[PortalTrack] Failed to load reports:', err)
+      setError('Failed to load reports. Please try again later.')
     } finally {
-      setIsLoadingMyReports(false);
+      setIsLoadingMyReports(false)
     }
-  }, [platformToken]);
+  }, [platformToken])
 
   // Load user's reports if authenticated with platform token
   useEffect(() => {
     if (isAuthenticated && user && platformToken) {
-      loadMyReports();
+      loadMyReports()
     }
-  }, [isAuthenticated, user, platformToken, loadMyReports]);
+  }, [isAuthenticated, user, platformToken, loadMyReports])
 
   // Load specific report from URL
   useEffect(() => {
     if (urlRef) {
-      searchReport(urlRef);
+      searchReport(urlRef)
     }
-  }, [urlRef]);
+  }, [urlRef])
 
   const getStatusLabel = (status: string): string => {
     const labels: Record<string, string> = {
-      'open': '📋 Open',
-      'reported': '📋 Reported',
-      'under_investigation': '🔍 Under Investigation',
-      'in_progress': '⚙️ In Progress',
-      'pending_review': '⏳ Pending Review',
-      'resolved': '✅ Resolved',
-      'closed': '✅ Closed',
-    };
-    return labels[status?.toLowerCase()] || status || 'Unknown';
-  };
+      open: '📋 Open',
+      reported: '📋 Reported',
+      under_investigation: '🔍 Under Investigation',
+      in_progress: '⚙️ In Progress',
+      pending_review: '⏳ Pending Review',
+      resolved: '✅ Resolved',
+      closed: '✅ Closed',
+    }
+    return labels[status?.toLowerCase()] || status || 'Unknown'
+  }
 
   const searchReport = async (ref: string) => {
-    if (!ref.trim()) return;
-    
-    setIsSearching(true);
-    setError(null);
-    setSelectedReport(null);
+    if (!ref.trim()) return
+
+    setIsSearching(true)
+    setError(null)
+    setSelectedReport(null)
 
     try {
-      const response = await fetch(`/api/v1/portal/reports/${ref}/`);
+      const response = await fetch(`/api/v1/portal/reports/${ref}/`)
       if (response.ok) {
-        const data = await response.json();
-        setSelectedReport(data);
+        const data = await response.json()
+        setSelectedReport(data)
       } else if (response.status === 404) {
-        setError('Report not found. Please check your reference number.');
+        setError('Report not found. Please check your reference number.')
       } else {
-        setError('Unable to fetch report. Please try again.');
+        setError('Unable to fetch report. Please try again.')
       }
     } catch {
-      setError('Unable to connect to the server. Please try again later.');
+      setError('Unable to connect to the server. Please try again later.')
     } finally {
-      setIsSearching(false);
+      setIsSearching(false)
     }
-  };
+  }
 
   const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault()
     if (searchRef.trim()) {
-      navigate(`/portal/track/${searchRef.trim()}`);
-      searchReport(searchRef.trim());
+      navigate(`/portal/track/${searchRef.trim()}`)
+      searchReport(searchRef.trim())
     }
-  };
+  }
 
   const handleReportClick = (report: ReportSummary) => {
-    navigate(`/portal/track/${report.reference_number}`);
-    searchReport(report.reference_number);
-  };
+    navigate(`/portal/track/${report.reference_number}`)
+    searchReport(report.reference_number)
+  }
 
   const handleBack = () => {
     if (selectedReport) {
-      setSelectedReport(null);
-      setSearchRef('');
-      navigate('/portal/track');
+      setSelectedReport(null)
+      setSearchRef('')
+      navigate('/portal/track')
     } else {
-      navigate('/portal');
+      navigate('/portal')
     }
-  };
+  }
 
   const copyLink = () => {
-    const url = `${window.location.origin}/portal/track/${selectedReport?.reference_number}`;
-    navigator.clipboard.writeText(url);
-  };
+    const url = `${window.location.origin}/portal/track/${selectedReport?.reference_number}`
+    navigator.clipboard.writeText(url)
+  }
 
   // Render report detail view
   if (selectedReport) {
-    const config = REPORT_TYPE_CONFIG[selectedReport.report_type] || REPORT_TYPE_CONFIG.incident;
-    const IconComponent = config.icon;
-    
+    const config = REPORT_TYPE_CONFIG[selectedReport.report_type] || REPORT_TYPE_CONFIG.incident
+    const IconComponent = config.icon
+
     return (
       <div className="min-h-screen bg-surface">
         {/* Header */}
@@ -392,7 +408,9 @@ export default function PortalTrack() {
               <ArrowLeft className="w-5 h-5 text-foreground" />
             </button>
             <div className="flex-1">
-              <span className="font-semibold text-foreground">{selectedReport.reference_number}</span>
+              <span className="font-semibold text-foreground">
+                {selectedReport.reference_number}
+              </span>
               <p className="text-xs text-muted-foreground">{config.label}</p>
             </div>
           </div>
@@ -409,7 +427,9 @@ export default function PortalTrack() {
                   <span className="text-sm text-muted-foreground">{config.label}</span>
                 </div>
                 <h2 className="text-lg font-bold text-foreground">{selectedReport.title}</h2>
-                <p className="text-sm font-mono text-muted-foreground mt-1">{selectedReport.reference_number}</p>
+                <p className="text-sm font-mono text-muted-foreground mt-1">
+                  {selectedReport.reference_number}
+                </p>
               </div>
               <StatusBadge status={selectedReport.status} label={selectedReport.status_label} />
             </div>
@@ -423,20 +443,28 @@ export default function PortalTrack() {
                 <Calendar className="w-5 h-5 text-primary mx-auto mb-1" />
                 <p className="text-xs text-muted-foreground">Submitted</p>
                 <p className="text-sm text-foreground font-medium">
-                  {new Date(selectedReport.submitted_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  {new Date(selectedReport.submitted_at).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <Clock className="w-5 h-5 text-info mx-auto mb-1" />
                 <p className="text-xs text-muted-foreground">Last Update</p>
                 <p className="text-sm text-foreground font-medium">
-                  {new Date(selectedReport.updated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  {new Date(selectedReport.updated_at).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
                 </p>
               </div>
               <div className="text-center p-3 bg-surface rounded-xl">
                 <User className="w-5 h-5 text-success mx-auto mb-1" />
                 <p className="text-xs text-muted-foreground">Assigned To</p>
-                <p className="text-sm text-foreground font-medium">{selectedReport.assigned_to || 'Pending'}</p>
+                <p className="text-sm text-foreground font-medium">
+                  {selectedReport.assigned_to || 'Pending'}
+                </p>
               </div>
             </div>
           </Card>
@@ -464,10 +492,10 @@ export default function PortalTrack() {
             </h3>
             <div className="pl-2">
               {selectedReport.timeline.map((event, index) => (
-                <TimelineEvent 
-                  key={index} 
-                  event={event} 
-                  isLast={index === selectedReport.timeline.length - 1} 
+                <TimelineEvent
+                  key={index}
+                  event={event}
+                  isLast={index === selectedReport.timeline.length - 1}
                 />
               ))}
             </div>
@@ -492,18 +520,14 @@ export default function PortalTrack() {
               <RefreshCw className="w-4 h-4" />
               Refresh Status
             </Button>
-            <Button
-              variant="outline"
-              onClick={copyLink}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={copyLink} className="flex-1">
               <Share2 className="w-4 h-4" />
               Share Link
             </Button>
           </div>
         </main>
       </div>
-    );
+    )
   }
 
   // Render list view
@@ -534,10 +558,9 @@ export default function PortalTrack() {
           </div>
           <h1 className="text-2xl font-bold text-foreground mb-2">Your Reports</h1>
           <p className="text-muted-foreground">
-            {isAuthenticated 
+            {isAuthenticated
               ? `Viewing reports for ${user?.name || user?.email}`
-              : 'Sign in to see your submitted reports'
-            }
+              : 'Sign in to see your submitted reports'}
           </p>
         </div>
 
@@ -554,16 +577,16 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-destructive/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <XCircle className="w-8 h-8 text-destructive" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Unable to Load Reports</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Unable to Load Reports
+                </h3>
                 <p className="text-muted-foreground mb-4">{error}</p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <Button onClick={loadMyReports} variant="outline">
                     <RefreshCw className="w-4 h-4 mr-2" />
                     Try Again
                   </Button>
-                  <Button onClick={() => navigate('/portal/login')}>
-                    Sign In Again
-                  </Button>
+                  <Button onClick={() => navigate('/portal/login')}>Sign In Again</Button>
                 </div>
               </Card>
             ) : myReports.length > 0 ? (
@@ -582,7 +605,9 @@ export default function PortalTrack() {
                 <div className="w-16 h-16 bg-warning/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <RefreshCw className="w-8 h-8 text-warning" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Session Refresh Required</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Session Refresh Required
+                </h3>
                 <p className="text-muted-foreground mb-4">
                   To view your reports, please sign out and sign back in.
                 </p>
@@ -590,9 +615,7 @@ export default function PortalTrack() {
                   <Button onClick={() => navigate('/portal/login')} variant="outline">
                     Sign In Again
                   </Button>
-                  <Button onClick={() => navigate('/portal/report')}>
-                    Submit a Report
-                  </Button>
+                  <Button onClick={() => navigate('/portal/report')}>Submit a Report</Button>
                 </div>
               </Card>
             ) : (
@@ -601,12 +624,8 @@ export default function PortalTrack() {
                   <FileText className="w-8 h-8 text-muted-foreground" />
                 </div>
                 <h3 className="text-lg font-semibold text-foreground mb-2">No Reports Yet</h3>
-                <p className="text-muted-foreground mb-4">
-                  You haven't submitted any reports yet.
-                </p>
-                <Button onClick={() => navigate('/portal/report')}>
-                  Submit a Report
-                </Button>
+                <p className="text-muted-foreground mb-4">You haven't submitted any reports yet.</p>
+                <Button onClick={() => navigate('/portal/report')}>Submit a Report</Button>
               </Card>
             )}
           </div>
@@ -618,11 +637,13 @@ export default function PortalTrack() {
             {isAuthenticated && (
               <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wide">or search by reference</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                  or search by reference
+                </span>
                 <div className="flex-1 h-px bg-border" />
               </div>
             )}
-            
+
             <form onSubmit={handleSearch}>
               <div className="flex gap-3">
                 <div className="flex-1">
@@ -634,10 +655,7 @@ export default function PortalTrack() {
                     className="font-mono text-base"
                   />
                 </div>
-                <Button
-                  type="submit"
-                  disabled={isSearching || !searchRef.trim()}
-                >
+                <Button type="submit" disabled={isSearching || !searchRef.trim()}>
                   {isSearching ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
@@ -676,11 +694,10 @@ export default function PortalTrack() {
                 <User className="w-10 h-10 text-primary mx-auto mb-3" />
                 <h3 className="font-semibold text-foreground mb-2">Sign in for easier access</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Sign in with Microsoft to automatically see all your submitted reports without entering reference numbers.
+                  Sign in with Microsoft to automatically see all your submitted reports without
+                  entering reference numbers.
                 </p>
-                <Button onClick={() => navigate('/portal/login')}>
-                  Sign In
-                </Button>
+                <Button onClick={() => navigate('/portal/login')}>Sign In</Button>
               </div>
             </Card>
           </div>
@@ -692,13 +709,17 @@ export default function PortalTrack() {
             <Card className="p-4 max-w-sm mx-auto">
               <p className="text-xs text-muted-foreground mb-2 text-center">Example formats:</p>
               <div className="flex flex-wrap gap-2 justify-center">
-                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">INC-2026-0001</span>
-                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">COMP-2026-0001</span>
+                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">
+                  INC-2026-0001
+                </span>
+                <span className="px-3 py-1 bg-muted rounded-lg text-sm font-mono text-foreground">
+                  COMP-2026-0001
+                </span>
               </div>
             </Card>
           </div>
         )}
       </main>
     </div>
-  );
+  )
 }

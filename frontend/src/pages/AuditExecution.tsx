@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,68 +21,59 @@ import {
   MinusCircle,
   ClipboardCheck,
   Loader2,
-} from 'lucide-react';
-import { auditsApi, getApiErrorMessage } from '../api/client';
+} from 'lucide-react'
+import { auditsApi, getApiErrorMessage } from '../api/client'
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type ResponseType = 
-  | 'yes' 
-  | 'no' 
-  | 'na' 
-  | 'pass' 
-  | 'fail' 
-  | number 
-  | string 
-  | string[] 
-  | null;
+type ResponseType = 'yes' | 'no' | 'na' | 'pass' | 'fail' | number | string | string[] | null
 
 interface QuestionResponse {
-  questionId: string;
-  response: ResponseType;
-  notes?: string;
-  photos?: string[];
-  signature?: string;
-  flagged?: boolean;
-  timestamp: string;
-  duration?: number; // seconds spent on question
+  questionId: string
+  response: ResponseType
+  notes?: string
+  photos?: string[]
+  signature?: string
+  flagged?: boolean
+  timestamp: string
+  duration?: number // seconds spent on question
 }
 
 interface AuditSection {
-  id: string;
-  title: string;
-  description?: string;
-  color: string;
-  questions: AuditQuestion[];
-  isComplete: boolean;
+  id: string
+  title: string
+  description?: string
+  color: string
+  questions: AuditQuestion[]
+  isComplete: boolean
 }
 
 interface AuditQuestion {
-  id: string;
-  text: string;
-  description?: string;
-  type: string;
-  required: boolean;
-  weight: number;
-  options?: { id: string; label: string; value: string; score?: number }[];
-  evidenceRequired: boolean;
-  guidance?: string;
-  riskLevel?: string;
-  isoClause?: string;
-  positiveAnswer?: 'yes' | 'no';
+  id: string
+  text: string
+  description?: string
+  type: string
+  required: boolean
+  weight: number
+  options?: { id: string; label: string; value: string; score?: number }[]
+  evidenceRequired: boolean
+  guidance?: string
+  riskLevel?: string
+  isoClause?: string
+  positiveAnswer?: 'yes' | 'no'
 }
 
 interface AuditData {
-  id: string;
-  templateId: string;
-  templateName: string;
-  location: string;
-  asset: string;
-  scheduledDate: string;
-  auditor: string;
-  sections: AuditSection[];
+  id: string
+  templateId: string
+  templateName: string
+  location: string
+  asset: string
+  scheduledDate: string
+  auditor: string
+  sections: AuditSection[]
 }
 
 const SECTION_COLORS = [
@@ -94,44 +85,63 @@ const SECTION_COLORS = [
   'from-cyan-500/20 to-cyan-600/20',
   'from-yellow-500/20 to-yellow-600/20',
   'from-red-500/20 to-red-600/20',
-];
+]
 
-function mapBackendQuestionType(q: { question_type: string; question_text?: string; allow_na?: boolean; max_score?: number; max_value?: number }): string {
+function mapBackendQuestionType(q: {
+  question_type: string
+  question_text?: string
+  allow_na?: boolean
+  max_score?: number
+  max_value?: number
+}): string {
   switch (q.question_type) {
-    case 'yes_no': return q.allow_na ? 'yes_no_na' : 'yes_no';
-    case 'pass_fail': return 'pass_fail';
-    case 'date': return 'date';
+    case 'yes_no':
+      return q.allow_na ? 'yes_no_na' : 'yes_no'
+    case 'pass_fail':
+      return 'pass_fail'
+    case 'date':
+      return 'date'
     case 'text': {
-      const label = (q.question_text || '').toLowerCase().trim();
-      if (label === 'date' || label === 'date of inspection' || label === 'inspection date' || label === 'audit date') return 'date';
-      return 'text_short';
+      const label = (q.question_text || '').toLowerCase().trim()
+      if (
+        label === 'date' ||
+        label === 'date of inspection' ||
+        label === 'inspection date' ||
+        label === 'audit date'
+      )
+        return 'date'
+      return 'text_short'
     }
-    case 'textarea': return 'text_long';
-    case 'number': return 'numeric';
-    case 'signature': return 'signature';
+    case 'textarea':
+      return 'text_long'
+    case 'number':
+      return 'numeric'
+    case 'signature':
+      return 'signature'
     case 'rating':
     case 'score':
-      return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5';
-    default: return 'text_short';
+      return (q.max_score ?? q.max_value ?? 5) > 5 ? 'scale_1_10' : 'scale_1_5'
+    default:
+      return 'text_short'
   }
 }
 
 function parseResponseValue(value: string | undefined | null, questionType: string): ResponseType {
-  if (value == null || value === '') return null;
-  if (['yes_no', 'yes_no_na'].includes(questionType)) return value as 'yes' | 'no' | 'na';
-  if (questionType === 'pass_fail') return value as 'pass' | 'fail';
+  if (value == null || value === '') return null
+  if (['yes_no', 'yes_no_na'].includes(questionType)) return value as 'yes' | 'no' | 'na'
+  if (questionType === 'pass_fail') return value as 'pass' | 'fail'
   if (['scale_1_5', 'scale_1_10', 'numeric'].includes(questionType)) {
-    const num = Number(value);
-    return isNaN(num) ? value : num;
+    const num = Number(value)
+    return isNaN(num) ? value : num
   }
-  return value;
+  return value
 }
 
 function serializeResponse(response: ResponseType): string | undefined {
-  if (response === null || response === undefined) return undefined;
-  if (typeof response === 'number') return String(response);
-  if (Array.isArray(response)) return JSON.stringify(response);
-  return String(response);
+  if (response === null || response === undefined) return undefined
+  if (typeof response === 'number') return String(response)
+  if (Array.isArray(response)) return JSON.stringify(response)
+  return String(response)
 }
 
 // ============================================================================
@@ -146,25 +156,25 @@ const ResponseButton = ({
   children,
   icon: Icon,
 }: {
-  selected: boolean;
-  onClick: () => void;
-  variant: 'success' | 'danger' | 'warning' | 'neutral';
-  children: React.ReactNode;
-  icon?: React.ElementType;
+  selected: boolean
+  onClick: () => void
+  variant: 'success' | 'danger' | 'warning' | 'neutral'
+  children: React.ReactNode
+  icon?: React.ElementType
 }) => {
   const variantStyles = {
     success: 'border-success bg-success/20 text-success',
     danger: 'border-destructive bg-destructive/20 text-destructive',
     warning: 'border-warning bg-warning/20 text-warning',
     neutral: 'border-muted-foreground bg-muted-foreground/20 text-muted-foreground',
-  };
+  }
 
   const hoverStyles = {
     success: 'hover:bg-success/30 hover:border-success',
     danger: 'hover:bg-destructive/30 hover:border-destructive',
     warning: 'hover:bg-warning/30 hover:border-warning',
     neutral: 'hover:bg-muted-foreground/30 hover:border-muted-foreground',
-  };
+  }
 
   return (
     <button
@@ -176,8 +186,8 @@ const ResponseButton = ({
       {Icon && <Icon className="w-5 h-5" />}
       {children}
     </button>
-  );
-};
+  )
+}
 
 // Scale Input Component
 const ScaleInput = ({
@@ -185,9 +195,9 @@ const ScaleInput = ({
   onChange,
   max = 5,
 }: {
-  value: number | null;
-  onChange: (val: number) => void;
-  max?: number;
+  value: number | null
+  onChange: (val: number) => void
+  max?: number
 }) => {
   return (
     <div className="flex items-center gap-2">
@@ -206,8 +216,8 @@ const ScaleInput = ({
         </button>
       ))}
     </div>
-  );
-};
+  )
+}
 
 // Photo Capture Component
 const PhotoCapture = ({
@@ -215,22 +225,22 @@ const PhotoCapture = ({
   onAdd,
   onRemove,
 }: {
-  photos: string[];
-  onAdd: (photo: string) => void;
-  onRemove: (index: number) => void;
+  photos: string[]
+  onAdd: (photo: string) => void
+  onRemove: (index: number) => void
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader();
+      const reader = new FileReader()
       reader.onloadend = () => {
-        onAdd(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+        onAdd(reader.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-  };
+  }
 
   return (
     <div className="space-y-3">
@@ -242,7 +252,7 @@ const PhotoCapture = ({
         onChange={handleCapture}
         className="hidden"
       />
-      
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -274,8 +284,8 @@ const PhotoCapture = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
 // Signature Pad Component
 const SignaturePad = ({
@@ -283,67 +293,69 @@ const SignaturePad = ({
   onCapture,
   onClear,
 }: {
-  signature?: string;
-  onCapture: (sig: string) => void;
-  onClear: () => void;
+  signature?: string
+  onCapture: (sig: string) => void
+  onClear: () => void
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-    setIsDrawing(true);
-    const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    
-    ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
-  };
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    setIsDrawing(true)
+    const rect = canvas.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
+    ctx.beginPath()
+    ctx.moveTo(clientX - rect.left, clientY - rect.top)
+  }
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!isDrawing) return
 
-    const rect = canvas.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
-    const primaryHsl = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
-    ctx.strokeStyle = `hsl(${primaryHsl})`;
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-  };
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const rect = canvas.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top)
+    const primaryHsl = getComputedStyle(document.documentElement)
+      .getPropertyValue('--primary')
+      .trim()
+    ctx.strokeStyle = `hsl(${primaryHsl})`
+    ctx.lineWidth = 2
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
 
   const stopDrawing = () => {
     if (isDrawing && canvasRef.current) {
-      setIsDrawing(false);
-      onCapture(canvasRef.current.toDataURL());
+      setIsDrawing(false)
+      onCapture(canvasRef.current.toDataURL())
     }
-  };
+  }
 
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const canvas = canvasRef.current
+    if (!canvas) return
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    onClear();
-  };
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    onClear()
+  }
 
   return (
     <div className="space-y-3">
@@ -375,64 +387,64 @@ const SignaturePad = ({
         <RotateCcw className="w-4 h-4" /> Clear Signature
       </button>
     </div>
-  );
-};
+  )
+}
 
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 export default function AuditExecution() {
-  const navigate = useNavigate();
-  const { auditId: runId } = useParams<{ auditId: string }>();
+  const navigate = useNavigate()
+  const { auditId: runId } = useParams<{ auditId: string }>()
 
-  const [audit, setAudit] = useState<AuditData | null>(null);
-  const [loading, setLoading] = useState(!!runId);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [responseIdMap, setResponseIdMap] = useState<Record<string, number>>({});
-  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [responses, setResponses] = useState<Record<string, QuestionResponse>>({});
-  const [isPaused, setIsPaused] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [showGuidance, setShowGuidance] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
+  const [audit, setAudit] = useState<AuditData | null>(null)
+  const [loading, setLoading] = useState(!!runId)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [responseIdMap, setResponseIdMap] = useState<Record<string, number>>({})
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [responses, setResponses] = useState<Record<string, QuestionResponse>>({})
+  const [isPaused, setIsPaused] = useState(false)
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const [showGuidance, setShowGuidance] = useState(false)
+  const [showSummary, setShowSummary] = useState(false)
 
-  const runIdNum = runId ? Number(runId) : null;
+  const runIdNum = runId ? Number(runId) : null
 
   // Timer
   useEffect(() => {
-    if (isPaused || !audit) return;
-    
-    const timer = setInterval(() => {
-      setElapsedTime(prev => prev + 1);
-    }, 1000);
+    if (isPaused || !audit) return
 
-    return () => clearInterval(timer);
-  }, [isPaused, audit]);
+    const timer = setInterval(() => {
+      setElapsedTime((prev) => prev + 1)
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [isPaused, audit])
 
   // Load audit run from API
   useEffect(() => {
-    if (!runIdNum || isNaN(runIdNum)) return;
+    if (!runIdNum || isNaN(runIdNum)) return
 
-    let cancelled = false;
+    let cancelled = false
 
     const loadRun = async () => {
       try {
-        setLoading(true);
-        setError(null);
+        setLoading(true)
+        setError(null)
 
-        const runRes = await auditsApi.getRunDetail(runIdNum);
-        const runData = runRes.data;
+        const runRes = await auditsApi.getRunDetail(runIdNum)
+        const runData = runRes.data
 
-        const templateRes = await auditsApi.getTemplate(runData.template_id);
-        const templateData = templateRes.data;
+        const templateRes = await auditsApi.getTemplate(runData.template_id)
+        const templateData = templateRes.data
 
-        if (cancelled) return;
+        if (cancelled) return
 
         const sections: AuditSection[] = templateData.sections
-          .filter(s => s.is_active)
+          .filter((s) => s.is_active)
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((s, idx) => ({
             id: String(s.id),
@@ -440,16 +452,16 @@ export default function AuditExecution() {
             description: s.description || undefined,
             color: SECTION_COLORS[idx % SECTION_COLORS.length],
             questions: s.questions
-              .filter(q => q.is_active)
+              .filter((q) => q.is_active)
               .sort((a, b) => a.sort_order - b.sort_order)
-              .map(q => ({
+              .map((q) => ({
                 id: String(q.id),
                 text: q.question_text,
                 description: q.description || undefined,
                 type: mapBackendQuestionType(q),
                 required: q.is_required,
                 weight: q.weight,
-                options: q.options?.map(o => ({
+                options: q.options?.map((o) => ({
                   id: o.value,
                   label: o.label,
                   value: o.value,
@@ -462,28 +474,28 @@ export default function AuditExecution() {
                 positiveAnswer: q.positive_answer || undefined,
               })),
             isComplete: false,
-          }));
+          }))
 
-        const questionTypeMap: Record<string, string> = {};
+        const questionTypeMap: Record<string, string> = {}
         for (const section of sections) {
           for (const q of section.questions) {
-            questionTypeMap[q.id] = q.type;
+            questionTypeMap[q.id] = q.type
           }
         }
 
-        const existingResponses: Record<string, QuestionResponse> = {};
-        const idMap: Record<string, number> = {};
+        const existingResponses: Record<string, QuestionResponse> = {}
+        const idMap: Record<string, number> = {}
 
         for (const r of runData.responses || []) {
-          const qId = String(r.question_id);
-          const qType = questionTypeMap[qId] || 'text_short';
+          const qId = String(r.question_id)
+          const qType = questionTypeMap[qId] || 'text_short'
           existingResponses[qId] = {
             questionId: qId,
             response: parseResponseValue(r.response_value, qType),
             notes: r.notes || undefined,
             timestamp: r.created_at,
-          };
-          idMap[qId] = r.id;
+          }
+          idMap[qId] = r.id
         }
 
         setAudit({
@@ -495,93 +507,95 @@ export default function AuditExecution() {
           scheduledDate: runData.scheduled_date || '',
           auditor: '',
           sections,
-        });
-        setResponses(existingResponses);
-        setResponseIdMap(idMap);
+        })
+        setResponses(existingResponses)
+        setResponseIdMap(idMap)
 
         if (runData.status === 'scheduled') {
-          await auditsApi.startRun(runIdNum);
+          await auditsApi.startRun(runIdNum)
         }
       } catch (err) {
         if (!cancelled) {
-          setError(getApiErrorMessage(err));
+          setError(getApiErrorMessage(err))
         }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          setLoading(false)
         }
       }
-    };
+    }
 
-    loadRun();
+    loadRun()
 
-    return () => { cancelled = true; };
-  }, [runIdNum]);
+    return () => {
+      cancelled = true
+    }
+  }, [runIdNum])
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   const saveAllResponses = async (): Promise<boolean> => {
-    if (!runIdNum) return false;
+    if (!runIdNum) return false
 
-    setSaving(true);
-    setError(null);
+    setSaving(true)
+    setError(null)
     try {
-      const updatedIdMap = { ...responseIdMap };
+      const updatedIdMap = { ...responseIdMap }
 
       for (const [questionId, resp] of Object.entries(responses)) {
-        if (resp.response === null && !resp.notes) continue;
+        if (resp.response === null && !resp.notes) continue
 
         const payload = {
           response_value: serializeResponse(resp.response),
           notes: resp.notes || undefined,
-        };
+        }
 
-        const existingId = updatedIdMap[questionId];
+        const existingId = updatedIdMap[questionId]
         if (existingId) {
-          await auditsApi.updateResponse(existingId, payload);
+          await auditsApi.updateResponse(existingId, payload)
         } else {
           const res = await auditsApi.createResponse(runIdNum, {
             question_id: Number(questionId),
             ...payload,
-          });
-          updatedIdMap[questionId] = res.data.id;
+          })
+          updatedIdMap[questionId] = res.data.id
         }
       }
 
-      setResponseIdMap(updatedIdMap);
-      return true;
+      setResponseIdMap(updatedIdMap)
+      return true
     } catch (err) {
-      setError(getApiErrorMessage(err));
-      return false;
+      setError(getApiErrorMessage(err))
+      return false
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   const handleSaveDraft = async () => {
-    await saveAllResponses();
-  };
+    await saveAllResponses()
+  }
 
   const handleSubmitAudit = async () => {
-    if (!runIdNum) return;
+    if (!runIdNum) return
 
-    const saved = await saveAllResponses();
-    if (!saved) return;
+    const saved = await saveAllResponses()
+    if (!saved) return
 
     try {
-      setSaving(true);
-      await auditsApi.completeRun(runIdNum);
-      navigate('/audits');
+      setSaving(true)
+      await auditsApi.completeRun(runIdNum)
+      navigate('/audits')
     } catch (err) {
-      setError(getApiErrorMessage(err));
+      setError(getApiErrorMessage(err))
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   if (loading) {
     return (
@@ -591,7 +605,7 @@ export default function AuditExecution() {
           <p className="text-muted-foreground">Loading audit...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (!audit) {
@@ -613,71 +627,76 @@ export default function AuditExecution() {
           </button>
         </div>
       </div>
-    );
+    )
   }
 
   // Current section and question
-  const currentSection = audit.sections[currentSectionIndex];
-  const currentQuestion = currentSection.questions[currentQuestionIndex];
-  const currentResponse = responses[currentQuestion.id];
-  const allQuestions = audit.sections.flatMap(s => s.questions);
+  const currentSection = audit.sections[currentSectionIndex]
+  const currentQuestion = currentSection.questions[currentQuestionIndex]
+  const currentResponse = responses[currentQuestion.id]
+  const allQuestions = audit.sections.flatMap((s) => s.questions)
 
   const isFindingResponse = (response: QuestionResponse): boolean => {
-    const question = allQuestions.find(q => q.id === response.questionId);
-    if (!question) return false;
-    if (!['pass_fail', 'yes_no', 'yes_no_na'].includes(question.type)) return false;
+    const question = allQuestions.find((q) => q.id === response.questionId)
+    if (!question) return false
+    if (!['pass_fail', 'yes_no', 'yes_no_na'].includes(question.type)) return false
 
-    const inverted = question.positiveAnswer === 'no';
+    const inverted = question.positiveAnswer === 'no'
     if (question.type === 'pass_fail') {
-      return inverted ? response.response === 'pass' : response.response === 'fail';
+      return inverted ? response.response === 'pass' : response.response === 'fail'
     }
-    return inverted ? response.response === 'yes' : response.response === 'no';
-  };
+    return inverted ? response.response === 'yes' : response.response === 'no'
+  }
 
   // Calculate progress
-  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0);
-  const answeredQuestions = Object.keys(responses).length;
-  const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0;
+  const totalQuestions = audit.sections.reduce((sum, s) => sum + s.questions.length, 0)
+  const answeredQuestions = Object.keys(responses).length
+  const progressPercentage = totalQuestions > 0 ? (answeredQuestions / totalQuestions) * 100 : 0
 
   // Calculate score
   const calculateScore = () => {
-    let totalWeight = 0;
-    let achievedWeight = 0;
+    let totalWeight = 0
+    let achievedWeight = 0
 
-    audit.sections.forEach(section => {
-      section.questions.forEach(question => {
-        const response = responses[question.id];
-        if (!response) return;
+    audit.sections.forEach((section) => {
+      section.questions.forEach((question) => {
+        const response = responses[question.id]
+        if (!response) return
 
-        totalWeight += question.weight;
+        totalWeight += question.weight
 
         if (question.type === 'pass_fail' || question.type === 'yes_no') {
-          const positiveVal = question.positiveAnswer === 'no'
-            ? (question.type === 'pass_fail' ? 'fail' : 'no')
-            : (question.type === 'pass_fail' ? 'pass' : 'yes');
+          const positiveVal =
+            question.positiveAnswer === 'no'
+              ? question.type === 'pass_fail'
+                ? 'fail'
+                : 'no'
+              : question.type === 'pass_fail'
+                ? 'pass'
+                : 'yes'
           if (response.response === positiveVal) {
-            achievedWeight += question.weight;
+            achievedWeight += question.weight
           }
         } else if (question.type === 'yes_no_na') {
-          const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes';
+          const positiveVal = question.positiveAnswer === 'no' ? 'no' : 'yes'
           if (response.response === positiveVal || response.response === 'na') {
-            achievedWeight += question.weight;
+            achievedWeight += question.weight
           }
         } else if (question.type.startsWith('scale_')) {
-          const max = question.type === 'scale_1_5' ? 5 : 10;
-          achievedWeight += (Number(response.response) / max) * question.weight;
+          const max = question.type === 'scale_1_5' ? 5 : 10
+          achievedWeight += (Number(response.response) / max) * question.weight
         } else if (question.weight > 0) {
-          achievedWeight += question.weight;
+          achievedWeight += question.weight
         }
-      });
-    });
+      })
+    })
 
-    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0;
-  };
+    return totalWeight > 0 ? Math.round((achievedWeight / totalWeight) * 100) : 0
+  }
 
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
-    setResponses(prev => ({
+    setResponses((prev) => ({
       ...prev,
       [currentQuestion.id]: {
         ...prev[currentQuestion.id],
@@ -685,36 +704,36 @@ export default function AuditExecution() {
         questionId: currentQuestion.id,
         timestamp: new Date().toISOString(),
       },
-    }));
-  };
+    }))
+  }
 
   // Navigation
   const goNext = () => {
     if (currentQuestionIndex < currentSection.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1)
     } else if (currentSectionIndex < audit.sections.length - 1) {
-      setCurrentSectionIndex(prev => prev + 1);
-      setCurrentQuestionIndex(0);
+      setCurrentSectionIndex((prev) => prev + 1)
+      setCurrentQuestionIndex(0)
     } else {
-      setShowSummary(true);
+      setShowSummary(true)
     }
-  };
+  }
 
   const goPrev = () => {
     if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
+      setCurrentQuestionIndex((prev) => prev - 1)
     } else if (currentSectionIndex > 0) {
-      setCurrentSectionIndex(prev => prev - 1);
-      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1);
+      setCurrentSectionIndex((prev) => prev - 1)
+      setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1)
     }
-  };
+  }
 
   // Render question input based on type
-  const isInverted = currentQuestion.positiveAnswer === 'no';
-  const yesVariant: 'success' | 'danger' = isInverted ? 'danger' : 'success';
-  const noVariant: 'success' | 'danger' = isInverted ? 'success' : 'danger';
-  const yesIcon = isInverted ? XCircle : CheckCircle2;
-  const noIcon = isInverted ? CheckCircle2 : XCircle;
+  const isInverted = currentQuestion.positiveAnswer === 'no'
+  const yesVariant: 'success' | 'danger' = isInverted ? 'danger' : 'success'
+  const noVariant: 'success' | 'danger' = isInverted ? 'success' : 'danger'
+  const yesIcon = isInverted ? XCircle : CheckCircle2
+  const noIcon = isInverted ? CheckCircle2 : XCircle
 
   const renderQuestionInput = () => {
     switch (currentQuestion.type) {
@@ -738,7 +757,7 @@ export default function AuditExecution() {
               FAIL
             </ResponseButton>
           </div>
-        );
+        )
 
       case 'yes_no':
         return (
@@ -760,7 +779,7 @@ export default function AuditExecution() {
               NO
             </ResponseButton>
           </div>
-        );
+        )
 
       case 'yes_no_na':
         return (
@@ -790,7 +809,7 @@ export default function AuditExecution() {
               N/A
             </ResponseButton>
           </div>
-        );
+        )
 
       case 'scale_1_5':
         return (
@@ -799,7 +818,7 @@ export default function AuditExecution() {
             onChange={(val) => updateResponse({ response: val })}
             max={5}
           />
-        );
+        )
 
       case 'scale_1_10':
         return (
@@ -808,7 +827,7 @@ export default function AuditExecution() {
             onChange={(val) => updateResponse({ response: val })}
             max={10}
           />
-        );
+        )
 
       case 'date':
         return (
@@ -818,7 +837,7 @@ export default function AuditExecution() {
             onChange={(e) => updateResponse({ response: e.target.value })}
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground focus:outline-none focus:border-ring cursor-pointer"
           />
-        );
+        )
 
       case 'text_short':
         return (
@@ -829,7 +848,7 @@ export default function AuditExecution() {
             placeholder="Enter your response..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
-        );
+        )
 
       case 'text_long':
         return (
@@ -840,7 +859,7 @@ export default function AuditExecution() {
             rows={4}
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring resize-none"
           />
-        );
+        )
 
       case 'numeric':
         return (
@@ -851,7 +870,7 @@ export default function AuditExecution() {
             placeholder="Enter number..."
             className="w-full px-4 py-3 bg-secondary border border-border rounded-xl text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring"
           />
-        );
+        )
 
       case 'signature':
         return (
@@ -860,25 +879,31 @@ export default function AuditExecution() {
             onCapture={(sig) => updateResponse({ signature: sig, response: 'signed' })}
             onClear={() => updateResponse({ signature: undefined, response: null })}
           />
-        );
+        )
 
       default:
-        return null;
+        return null
     }
-  };
+  }
 
   if (showSummary) {
-    const score = calculateScore();
-    const passed = score >= 80;
+    const score = calculateScore()
+    const passed = score >= 80
 
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="max-w-lg w-full bg-card border border-border rounded-3xl p-8 text-center animate-fade-in">
           {/* Score Display */}
-          <div className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-6 ${
-            passed ? 'bg-success' : 'bg-destructive'
-          }`}>
-            <span className={`text-4xl font-bold ${passed ? 'text-success-foreground' : 'text-destructive-foreground'}`}>{score}%</span>
+          <div
+            className={`w-32 h-32 mx-auto rounded-full flex items-center justify-center mb-6 ${
+              passed ? 'bg-success' : 'bg-destructive'
+            }`}
+          >
+            <span
+              className={`text-4xl font-bold ${passed ? 'text-success-foreground' : 'text-destructive-foreground'}`}
+            >
+              {score}%
+            </span>
           </div>
 
           <h2 className={`text-3xl font-bold mb-2 ${passed ? 'text-success' : 'text-destructive'}`}>
@@ -900,7 +925,7 @@ export default function AuditExecution() {
             </div>
             <div className="bg-secondary rounded-xl p-4">
               <p className="text-2xl font-bold text-foreground">
-                {Object.values(responses).filter(r => r.photos && r.photos.length > 0).length}
+                {Object.values(responses).filter((r) => r.photos && r.photos.length > 0).length}
               </p>
               <p className="text-xs text-muted-foreground">Photos</p>
             </div>
@@ -914,14 +939,17 @@ export default function AuditExecution() {
                 .filter(isFindingResponse)
                 .map((r, idx) => {
                   const question = audit.sections
-                    .flatMap(s => s.questions)
-                    .find(q => q.id === r.questionId);
+                    .flatMap((s) => s.questions)
+                    .find((q) => q.id === r.questionId)
                   return (
-                    <div key={idx} className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                    >
                       <XCircle className="w-5 h-5 text-destructive mt-0.5" />
                       <p className="text-sm text-destructive">{question?.text}</p>
                     </div>
-                  );
+                  )
                 })}
               {Object.values(responses).filter(isFindingResponse).length === 0 && (
                 <p className="text-sm text-muted-foreground">No failed items</p>
@@ -947,7 +975,7 @@ export default function AuditExecution() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -966,7 +994,9 @@ export default function AuditExecution() {
               </button>
               <div>
                 <h1 className="text-lg font-bold text-foreground">{audit.templateName}</h1>
-                <p className="text-xs text-muted-foreground">{audit.asset} • {audit.location}</p>
+                <p className="text-xs text-muted-foreground">
+                  {audit.asset} • {audit.location}
+                </p>
               </div>
             </div>
 
@@ -982,7 +1012,9 @@ export default function AuditExecution() {
                 onClick={() => setIsPaused(!isPaused)}
                 aria-label={isPaused ? 'Resume' : 'Pause'}
                 className={`p-2 rounded-lg transition-colors ${
-                  isPaused ? 'bg-warning/20 text-warning' : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  isPaused
+                    ? 'bg-warning/20 text-warning'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {isPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
@@ -994,7 +1026,11 @@ export default function AuditExecution() {
                 disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 bg-secondary text-foreground rounded-lg hover:bg-muted disabled:opacity-50"
               >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
                 Save
               </button>
             </div>
@@ -1003,7 +1039,9 @@ export default function AuditExecution() {
           {/* Progress Bar */}
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-              <span>Progress: {answeredQuestions}/{totalQuestions} questions</span>
+              <span>
+                Progress: {answeredQuestions}/{totalQuestions} questions
+              </span>
               <span>{Math.round(progressPercentage)}%</span>
             </div>
             <div className="h-2 bg-secondary rounded-full overflow-hidden">
@@ -1020,7 +1058,10 @@ export default function AuditExecution() {
       {error && (
         <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3 flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={() => setError(null)} className="text-destructive hover:text-destructive/80">
+          <button
+            onClick={() => setError(null)}
+            className="text-destructive hover:text-destructive/80"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -1030,23 +1071,23 @@ export default function AuditExecution() {
       <div className="bg-card/50 border-b border-border overflow-x-auto">
         <div className="flex px-4 py-2 gap-2">
           {audit.sections.map((section, idx) => {
-            const sectionAnswered = section.questions.filter(q => responses[q.id]).length;
-            const isComplete = sectionAnswered === section.questions.length;
-            const isCurrent = idx === currentSectionIndex;
+            const sectionAnswered = section.questions.filter((q) => responses[q.id]).length
+            const isComplete = sectionAnswered === section.questions.length
+            const isCurrent = idx === currentSectionIndex
 
             return (
               <button
                 key={section.id}
                 onClick={() => {
-                  setCurrentSectionIndex(idx);
-                  setCurrentQuestionIndex(0);
+                  setCurrentSectionIndex(idx)
+                  setCurrentQuestionIndex(0)
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl whitespace-nowrap transition-all ${
                   isCurrent
                     ? `bg-gradient-to-r ${section.color} text-foreground`
                     : isComplete
-                    ? 'bg-success/20 text-success border border-success/30'
-                    : 'bg-secondary text-muted-foreground hover:bg-muted'
+                      ? 'bg-success/20 text-success border border-success/30'
+                      : 'bg-secondary text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {isComplete ? (
@@ -1057,9 +1098,11 @@ export default function AuditExecution() {
                   </span>
                 )}
                 <span className="text-sm font-medium">{section.title}</span>
-                <span className="text-xs opacity-75">{sectionAnswered}/{section.questions.length}</span>
+                <span className="text-xs opacity-75">
+                  {sectionAnswered}/{section.questions.length}
+                </span>
               </button>
-            );
+            )
           })}
         </div>
       </div>
@@ -1075,17 +1118,23 @@ export default function AuditExecution() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">
-                      {currentSection.title} • Question {currentQuestionIndex + 1} of {currentSection.questions.length}
+                      {currentSection.title} • Question {currentQuestionIndex + 1} of{' '}
+                      {currentSection.questions.length}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {currentQuestion.riskLevel && (
-                      <span className={`px-2 py-1 text-xs rounded ${
-                        currentQuestion.riskLevel === 'critical' ? 'bg-destructive/20 text-destructive' :
-                        currentQuestion.riskLevel === 'high' ? 'bg-warning/20 text-warning' :
-                        currentQuestion.riskLevel === 'medium' ? 'bg-warning/20 text-warning' :
-                        'bg-success/20 text-success'
-                      }`}>
+                      <span
+                        className={`px-2 py-1 text-xs rounded ${
+                          currentQuestion.riskLevel === 'critical'
+                            ? 'bg-destructive/20 text-destructive'
+                            : currentQuestion.riskLevel === 'high'
+                              ? 'bg-warning/20 text-warning'
+                              : currentQuestion.riskLevel === 'medium'
+                                ? 'bg-warning/20 text-warning'
+                                : 'bg-success/20 text-success'
+                        }`}
+                      >
                         {currentQuestion.riskLevel} risk
                       </span>
                     )}
@@ -1120,7 +1169,11 @@ export default function AuditExecution() {
                   >
                     <Info className="w-4 h-4" />
                     Auditor Guidance
-                    {showGuidance ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    {showGuidance ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
                   </button>
                   {showGuidance && (
                     <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-lg">
@@ -1131,28 +1184,28 @@ export default function AuditExecution() {
               )}
 
               {/* Response Input */}
-              <div>
-                {renderQuestionInput()}
-              </div>
+              <div>{renderQuestionInput()}</div>
 
               {/* Evidence Required */}
               {currentQuestion.evidenceRequired && (
                 <div className="pt-4 border-t border-border">
                   <div className="flex items-center gap-2 mb-3">
                     <Camera className="w-4 h-4 text-info" />
-                    <span className="text-sm font-medium text-foreground">Photo Evidence Required</span>
+                    <span className="text-sm font-medium text-foreground">
+                      Photo Evidence Required
+                    </span>
                   </div>
                   <PhotoCapture
                     photos={currentResponse?.photos || []}
                     onAdd={(photo) => {
                       updateResponse({
                         photos: [...(currentResponse?.photos || []), photo],
-                      });
+                      })
                     }}
                     onRemove={(idx) => {
                       updateResponse({
                         photos: currentResponse?.photos?.filter((_, i) => i !== idx) || [],
-                      });
+                      })
                     }}
                   />
                 </div>
@@ -1212,8 +1265,8 @@ export default function AuditExecution() {
                   idx === currentQuestionIndex
                     ? 'bg-primary w-6'
                     : responses[currentSection.questions[idx].id]
-                    ? 'bg-success'
-                    : 'bg-input hover:bg-muted'
+                      ? 'bg-success'
+                      : 'bg-input hover:bg-muted'
                 }`}
               />
             ))}
@@ -1223,15 +1276,14 @@ export default function AuditExecution() {
             onClick={goNext}
             className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
           >
-            {currentSectionIndex === audit.sections.length - 1 && 
-             currentQuestionIndex === currentSection.questions.length - 1
+            {currentSectionIndex === audit.sections.length - 1 &&
+            currentQuestionIndex === currentSection.questions.length - 1
               ? 'Finish'
-              : 'Next'
-            }
+              : 'Next'}
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
       </footer>
     </div>
-  );
+  )
 }

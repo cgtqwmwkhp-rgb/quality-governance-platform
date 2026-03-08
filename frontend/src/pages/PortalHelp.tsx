@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   HelpCircle,
   Search,
@@ -20,11 +20,11 @@ import {
   Lightbulb,
   ThumbsUp,
   ThumbsDown,
-} from 'lucide-react';
-import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
-import { Button } from '../components/ui/Button';
-import { cn } from '../helpers/utils';
+} from 'lucide-react'
+import { Card } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { Button } from '../components/ui/Button'
+import { cn } from '../helpers/utils'
 
 // FAQ Item component
 const FAQItem = ({
@@ -33,10 +33,10 @@ const FAQItem = ({
   isOpen,
   onClick,
 }: {
-  question: string;
-  answer: string;
-  isOpen: boolean;
-  onClick: () => void;
+  question: string
+  answer: string
+  isOpen: boolean
+  onClick: () => void
 }) => (
   <Card className="overflow-hidden">
     <button
@@ -56,7 +56,7 @@ const FAQItem = ({
       </div>
     )}
   </Card>
-);
+)
 
 // Category card
 const CategoryCard = ({
@@ -67,37 +67,27 @@ const CategoryCard = ({
   colorClass,
   onClick,
 }: {
-  icon: any;
-  title: string;
-  description: string;
-  count: number;
-  colorClass: string;
-  onClick: () => void;
+  icon: any
+  title: string
+  description: string
+  count: number
+  colorClass: string
+  onClick: () => void
 }) => (
-  <Card
-    hoverable
-    className="p-4 cursor-pointer group"
-    onClick={onClick}
-  >
+  <Card hoverable className="p-4 cursor-pointer group" onClick={onClick}>
     <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center mb-3', colorClass)}>
       <Icon className="w-6 h-6 text-current" />
     </div>
-    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{title}</h3>
+    <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+      {title}
+    </h3>
     <p className="text-xs text-muted-foreground mt-1">{description}</p>
     <p className="text-xs text-primary mt-2 font-medium">{count} articles</p>
   </Card>
-);
+)
 
 // Quick link
-const QuickLink = ({
-  icon: Icon,
-  title,
-  href,
-}: {
-  icon: any;
-  title: string;
-  href: string;
-}) => (
+const QuickLink = ({ icon: Icon, title, href }: { icon: any; title: string; href: string }) => (
   <a
     href={href}
     className="flex items-center gap-3 p-3 bg-surface border border-border rounded-xl hover:border-primary/30 transition-colors"
@@ -106,15 +96,15 @@ const QuickLink = ({
     <span className="text-foreground text-sm">{title}</span>
     <ExternalLink className="w-4 h-4 text-muted-foreground ml-auto" />
   </a>
-);
+)
 
 export default function PortalHelp() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [openFAQ, setOpenFAQ] = useState<number | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [feedbackGiven, setFeedbackGiven] = useState<{ [key: number]: 'up' | 'down' | null }>({});
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [openFAQ, setOpenFAQ] = useState<number | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [feedbackGiven, setFeedbackGiven] = useState<{ [key: number]: 'up' | 'down' | null }>({})
 
   const categories = [
     {
@@ -149,7 +139,7 @@ export default function PortalHelp() {
       count: 4,
       colorClass: 'bg-destructive/10 text-destructive',
     },
-  ];
+  ]
 
   const faqs = [
     {
@@ -168,13 +158,13 @@ export default function PortalHelp() {
       category: 'anonymous',
       question: 'Is my identity really protected when I report anonymously?',
       answer:
-        'Yes, 100%. When you enable the anonymous toggle, no personal information is recorded. We don\'t track IP addresses or device information for anonymous reports. Only the report content is stored.',
+        "Yes, 100%. When you enable the anonymous toggle, no personal information is recorded. We don't track IP addresses or device information for anonymous reports. Only the report content is stored.",
     },
     {
       category: 'anonymous',
       question: 'Can I still track my anonymous report?',
       answer:
-        'Yes! When you submit an anonymous report, you\'ll receive a secret tracking code along with your reference number. Save this code - it\'s the only way to check your report\'s status.',
+        "Yes! When you submit an anonymous report, you'll receive a secret tracking code along with your reference number. Save this code - it's the only way to check your report's status.",
     },
     {
       category: 'tracking',
@@ -200,19 +190,19 @@ export default function PortalHelp() {
       answer:
         'For life-threatening emergencies, ALWAYS call 999 first. Use the portal to document the incident after the immediate danger has been addressed.',
     },
-  ];
+  ]
 
   const filteredFAQs = faqs.filter(
     (faq) =>
       (!selectedCategory || faq.category === selectedCategory) &&
       (!searchQuery ||
         faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        faq.answer.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+        faq.answer.toLowerCase().includes(searchQuery.toLowerCase())),
+  )
 
   const giveFeedback = (index: number, type: 'up' | 'down') => {
-    setFeedbackGiven((prev) => ({ ...prev, [index]: type }));
-  };
+    setFeedbackGiven((prev) => ({ ...prev, [index]: type }))
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -258,14 +248,12 @@ export default function PortalHelp() {
         {/* Categories */}
         {!searchQuery && !selectedCategory && (
           <div className="mb-8">
-            <h2 className="text-base font-semibold text-foreground mb-4">{t('portal.browse_category')}</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4">
+              {t('portal.browse_category')}
+            </h2>
             <div className="grid grid-cols-2 gap-3">
               {categories.map((cat) => (
-                <CategoryCard
-                  key={cat.id}
-                  {...cat}
-                  onClick={() => setSelectedCategory(cat.id)}
-                />
+                <CategoryCard key={cat.id} {...cat} onClick={() => setSelectedCategory(cat.id)} />
               ))}
             </div>
           </div>
@@ -305,14 +293,16 @@ export default function PortalHelp() {
                   />
                   {openFAQ === index && (
                     <div className="flex items-center justify-end gap-2 mt-2 px-4">
-                      <span className="text-xs text-muted-foreground">{t('portal.was_helpful')}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t('portal.was_helpful')}
+                      </span>
                       <button
                         onClick={() => giveFeedback(index, 'up')}
                         className={cn(
                           'p-1.5 rounded-lg transition-colors',
                           feedbackGiven[index] === 'up'
                             ? 'bg-success/20 text-success'
-                            : 'bg-muted text-muted-foreground hover:bg-surface'
+                            : 'bg-muted text-muted-foreground hover:bg-surface',
                         )}
                       >
                         <ThumbsUp className="w-4 h-4" />
@@ -323,7 +313,7 @@ export default function PortalHelp() {
                           'p-1.5 rounded-lg transition-colors',
                           feedbackGiven[index] === 'down'
                             ? 'bg-destructive/20 text-destructive'
-                            : 'bg-muted text-muted-foreground hover:bg-surface'
+                            : 'bg-muted text-muted-foreground hover:bg-surface',
                         )}
                       >
                         <ThumbsDown className="w-4 h-4" />
@@ -349,7 +339,11 @@ export default function PortalHelp() {
           </h2>
           <div className="grid gap-3">
             <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href="#chat" />
-            <QuickLink icon={Mail} title={t('portal.email_support')} href="mailto:safety@plantexpand.com" />
+            <QuickLink
+              icon={Mail}
+              title={t('portal.email_support')}
+              href="mailto:safety@plantexpand.com"
+            />
             <QuickLink icon={Phone} title={t('portal.call_helpline')} href="tel:08001234567" />
           </div>
         </Card>
@@ -364,16 +358,12 @@ export default function PortalHelp() {
             <AlertTriangle className="w-4 h-4" />
             {t('portal.submit_report_btn')}
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => navigate('/portal/track')}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={() => navigate('/portal/track')} className="flex-1">
             <Clock className="w-4 h-4" />
             {t('portal.track_my_report')}
           </Button>
         </div>
       </main>
     </div>
-  );
+  )
 }

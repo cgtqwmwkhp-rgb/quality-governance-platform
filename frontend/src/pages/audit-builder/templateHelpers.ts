@@ -1,10 +1,10 @@
-import type { AuditTemplate, Section, Question, QuestionType, ScoringMethod } from './types';
-import type { AuditQuestionCreate, AuditQuestionUpdate } from '../../api/client';
-import { generateId, createNewSection, SECTION_COLORS } from './types';
+import type { AuditTemplate, Section, Question, QuestionType, ScoringMethod } from './types'
+import type { AuditQuestionCreate, AuditQuestionUpdate } from '../../api/client'
+import { generateId, createNewSection, SECTION_COLORS } from './types'
 
 function mapApiQuestion(q: any, questionIdMap: Record<string, number>): Question {
-  const id = String(q.id);
-  questionIdMap[id] = q.id;
+  const id = String(q.id)
+  questionIdMap[id] = q.id
   return {
     id,
     text: q.question_text,
@@ -13,14 +13,18 @@ function mapApiQuestion(q: any, questionIdMap: Record<string, number>): Question
     required: q.is_required,
     weight: q.weight,
     options: q.options?.map((o: any) => ({
-      id: generateId(), label: o.label, value: o.value, score: o.score, isCorrect: o.is_correct,
+      id: generateId(),
+      label: o.label,
+      value: o.value,
+      score: o.score,
+      isCorrect: o.is_correct,
     })),
     evidenceRequired: false,
     failureTriggersAction: false,
     riskLevel: q.risk_category as Question['riskLevel'],
     guidance: q.help_text,
     positiveAnswer: q.positive_answer || undefined,
-  };
+  }
 }
 
 export function mapApiToTemplate(
@@ -29,8 +33,8 @@ export function mapApiToTemplate(
   questionIdMap: Record<string, number>,
 ): AuditTemplate {
   const mappedSections: Section[] = data.sections.map((s: any, idx: number) => {
-    const id = String(s.id);
-    sectionIdMap[id] = s.id;
+    const id = String(s.id)
+    sectionIdMap[id] = s.id
     return {
       id,
       title: s.title,
@@ -40,8 +44,8 @@ export function mapApiToTemplate(
       weight: s.weight,
       order: s.sort_order,
       color: SECTION_COLORS[idx % SECTION_COLORS.length],
-    };
-  });
+    }
+  })
 
   return {
     id: String(data.id),
@@ -60,10 +64,13 @@ export function mapApiToTemplate(
     tags: [],
     estimatedDuration: 60,
     isLocked: false,
-  };
+  }
 }
 
-export function mapAISectionsToLocal(generatedSections: any[], existingSectionCount: number): Section[] {
+export function mapAISectionsToLocal(
+  generatedSections: any[],
+  existingSectionCount: number,
+): Section[] {
   return generatedSections.map((gs, idx) => ({
     id: gs.id,
     title: gs.title,
@@ -84,12 +91,20 @@ export function mapAISectionsToLocal(generatedSections: any[], existingSectionCo
     weight: 1,
     order: existingSectionCount + idx,
     color: SECTION_COLORS[(existingSectionCount + idx) % SECTION_COLORS.length],
-  }));
+  }))
 }
 
-export function buildQuestionPayload(q: Question, sortOrder: number): AuditQuestionUpdate;
-export function buildQuestionPayload(q: Question, sortOrder: number, sectionId: number): AuditQuestionCreate;
-export function buildQuestionPayload(q: Question, sortOrder: number, sectionId?: number): AuditQuestionCreate | AuditQuestionUpdate {
+export function buildQuestionPayload(q: Question, sortOrder: number): AuditQuestionUpdate
+export function buildQuestionPayload(
+  q: Question,
+  sortOrder: number,
+  sectionId: number,
+): AuditQuestionCreate
+export function buildQuestionPayload(
+  q: Question,
+  sortOrder: number,
+  sectionId?: number,
+): AuditQuestionCreate | AuditQuestionUpdate {
   const base = {
     question_text: q.text,
     question_type: q.type,
@@ -99,11 +114,16 @@ export function buildQuestionPayload(q: Question, sortOrder: number, sectionId?:
     weight: q.weight,
     sort_order: sortOrder,
     options: q.options?.length
-      ? q.options.map(o => ({ value: o.value, label: o.label, score: o.score, is_correct: o.isCorrect }))
+      ? q.options.map((o) => ({
+          value: o.value,
+          label: o.label,
+          score: o.score,
+          is_correct: o.isCorrect,
+        }))
       : undefined,
     risk_category: q.riskLevel,
     positive_answer: q.positiveAnswer || undefined,
-  };
-  if (sectionId !== undefined) return { ...base, section_id: sectionId };
-  return base;
+  }
+  if (sectionId !== undefined) return { ...base, section_id: sectionId }
+  return base
 }

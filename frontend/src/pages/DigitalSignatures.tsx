@@ -1,6 +1,6 @@
 /**
  * Digital Signatures Page
- * 
+ *
  * DocuSign-level e-signature management with:
  * - Signature request creation
  * - Template management
@@ -8,7 +8,7 @@
  * - Audit trail viewer
  */
 
-import React, { useState } from 'react';
+import React, { useState } from 'react'
 import {
   FileSignature,
   Plus,
@@ -33,62 +33,86 @@ import {
   Shield,
   MapPin,
   Smartphone,
-} from 'lucide-react';
-import { cn } from "../helpers/utils";
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card, CardHeader, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card, CardHeader, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/Dialog'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '../components/ui/Select'
 
 interface SignatureRequest {
-  id: number;
-  referenceNumber: string;
-  title: string;
-  description?: string;
-  documentType: string;
-  status: 'draft' | 'pending' | 'in_progress' | 'completed' | 'declined' | 'expired';
-  workflowType: 'sequential' | 'parallel';
-  createdAt: Date;
-  expiresAt: Date;
-  completedAt?: Date;
-  signers: Signer[];
+  id: number
+  referenceNumber: string
+  title: string
+  description?: string
+  documentType: string
+  status: 'draft' | 'pending' | 'in_progress' | 'completed' | 'declined' | 'expired'
+  workflowType: 'sequential' | 'parallel'
+  createdAt: Date
+  expiresAt: Date
+  completedAt?: Date
+  signers: Signer[]
 }
 
 interface Signer {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  order: number;
-  status: 'pending' | 'viewed' | 'signed' | 'declined';
-  signedAt?: Date;
-  declinedAt?: Date;
+  id: number
+  name: string
+  email: string
+  role: string
+  order: number
+  status: 'pending' | 'viewed' | 'signed' | 'declined'
+  signedAt?: Date
+  declinedAt?: Date
 }
 
 interface SignatureTemplate {
-  id: number;
-  name: string;
-  description?: string;
-  signerRoles: { role: string; order: number }[];
-  workflowType: string;
-  expiryDays: number;
+  id: number
+  name: string
+  description?: string
+  signerRoles: { role: string; order: number }[]
+  workflowType: string
+  expiryDays: number
 }
 
 const DigitalSignatures: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>('requests');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showSigningModal, setShowSigningModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'requests' | 'pending' | 'templates' | 'audit'>(
+    'requests',
+  )
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showSigningModal, setShowSigningModal] = useState(false)
+  const [selectedRequest, setSelectedRequest] = useState<SignatureRequest | null>(null)
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const signatureRequests: SignatureRequest[] = [];
-  const templates: SignatureTemplate[] = [];
-  const auditLog: { id: number; action: string; actor: string; time: Date; details: string; ip?: string }[] = [];
+  const signatureRequests: SignatureRequest[] = []
+  const templates: SignatureTemplate[] = []
+  const auditLog: {
+    id: number
+    action: string
+    actor: string
+    time: Date
+    details: string
+    ip?: string
+  }[] = []
 
-  const statusVariants: Record<string, 'default' | 'submitted' | 'in-progress' | 'resolved' | 'destructive'> = {
+  const statusVariants: Record<
+    string,
+    'default' | 'submitted' | 'in-progress' | 'resolved' | 'destructive'
+  > = {
     draft: 'default',
     pending: 'submitted',
     in_progress: 'in-progress',
@@ -97,30 +121,30 @@ const DigitalSignatures: React.FC = () => {
     expired: 'default',
     viewed: 'in-progress',
     signed: 'resolved',
-  };
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
       case 'signed':
-        return <CheckCircle className="w-4 h-4 text-success" />;
+        return <CheckCircle className="w-4 h-4 text-success" />
       case 'declined':
-        return <XCircle className="w-4 h-4 text-destructive" />;
+        return <XCircle className="w-4 h-4 text-destructive" />
       case 'pending':
-        return <Clock className="w-4 h-4 text-warning" />;
+        return <Clock className="w-4 h-4 text-warning" />
       case 'in_progress':
       case 'viewed':
-        return <AlertCircle className="w-4 h-4 text-info" />;
+        return <AlertCircle className="w-4 h-4 text-info" />
       default:
-        return <Clock className="w-4 h-4 text-muted-foreground" />;
+        return <Clock className="w-4 h-4 text-muted-foreground" />
     }
-  };
+  }
 
-  const filteredRequests = signatureRequests.filter(req => {
-    if (filterStatus !== 'all' && req.status !== filterStatus) return false;
-    if (searchQuery && !req.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  const filteredRequests = signatureRequests.filter((req) => {
+    if (filterStatus !== 'all' && req.status !== filterStatus) return false
+    if (searchQuery && !req.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
 
   return (
     <div className="space-y-6">
@@ -153,7 +177,9 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'pending').length}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {signatureRequests.filter((r) => r.status === 'pending').length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -166,7 +192,9 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">In Progress</p>
-                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'in_progress').length}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {signatureRequests.filter((r) => r.status === 'in_progress').length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -179,7 +207,9 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Completed</p>
-                <p className="text-2xl font-bold text-foreground">{signatureRequests.filter(r => r.status === 'completed').length}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {signatureRequests.filter((r) => r.status === 'completed').length}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -192,7 +222,9 @@ const DigitalSignatures: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Signatures</p>
-                <p className="text-2xl font-bold text-foreground">{signatureRequests.reduce((sum, r) => sum + r.signers.length, 0)}</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {signatureRequests.reduce((sum, r) => sum + r.signers.length, 0)}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -206,15 +238,15 @@ const DigitalSignatures: React.FC = () => {
           { id: 'pending', label: 'Awaiting My Signature', icon: PenTool },
           { id: 'templates', label: 'Templates', icon: FileSignature },
           { id: 'audit', label: 'Audit Trail', icon: History },
-        ].map(tab => (
+        ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors",
+              'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors',
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
             )}
           >
             <tab.icon className="w-4 h-4" />
@@ -262,11 +294,13 @@ const DigitalSignatures: React.FC = () => {
             {filteredRequests.length === 0 && (
               <div className="text-center py-12">
                 <FileSignature className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">No signature requests</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  No signature requests
+                </h3>
                 <p className="text-muted-foreground">Create a new request to get started.</p>
               </div>
             )}
-            {filteredRequests.map(request => (
+            {filteredRequests.map((request) => (
               <Card key={request.id} className="hover:border-primary/50 transition-colors">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between">
@@ -275,17 +309,20 @@ const DigitalSignatures: React.FC = () => {
                         <Badge variant={statusVariants[request.status]}>
                           {request.status.replace('_', ' ').toUpperCase()}
                         </Badge>
-                        <span className="text-sm text-muted-foreground">{request.referenceNumber}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {request.referenceNumber}
+                        </span>
                         <span className="text-sm text-muted-foreground">•</span>
                         <span className="text-sm text-muted-foreground">
-                          {request.workflowType === 'sequential' ? 'Sequential' : 'Parallel'} signing
+                          {request.workflowType === 'sequential' ? 'Sequential' : 'Parallel'}{' '}
+                          signing
                         </span>
                       </div>
                       <h3 className="text-lg font-medium text-foreground mb-1">{request.title}</h3>
                       {request.description && (
                         <p className="text-sm text-muted-foreground mb-3">{request.description}</p>
                       )}
-                      
+
                       {/* Signers */}
                       <div className="flex items-center gap-4 mt-4">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -293,14 +330,18 @@ const DigitalSignatures: React.FC = () => {
                           <span>{request.signers.length} signers</span>
                         </div>
                         <div className="flex -space-x-2">
-                          {request.signers.map(signer => (
+                          {request.signers.map((signer) => (
                             <div
                               key={signer.id}
                               className={cn(
-                                "w-8 h-8 rounded-full border-2 border-card flex items-center justify-center text-xs font-medium text-white",
-                                signer.status === 'signed' ? 'bg-success' :
-                                signer.status === 'declined' ? 'bg-destructive' :
-                                signer.status === 'viewed' ? 'bg-info' : 'bg-muted-foreground'
+                                'w-8 h-8 rounded-full border-2 border-card flex items-center justify-center text-xs font-medium text-white',
+                                signer.status === 'signed'
+                                  ? 'bg-success'
+                                  : signer.status === 'declined'
+                                    ? 'bg-destructive'
+                                    : signer.status === 'viewed'
+                                      ? 'bg-info'
+                                      : 'bg-muted-foreground',
                               )}
                               title={`${signer.name} - ${signer.status}`}
                             >
@@ -314,7 +355,7 @@ const DigitalSignatures: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" onClick={() => setSelectedRequest(request)}>
                         <Eye className="w-5 h-5" />
@@ -345,7 +386,9 @@ const DigitalSignatures: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2">
                             {getStatusIcon(signer.status)}
-                            <span className="text-sm text-muted-foreground capitalize">{signer.status}</span>
+                            <span className="text-sm text-muted-foreground capitalize">
+                              {signer.status}
+                            </span>
                             {signer.signedAt && (
                               <span className="text-xs text-muted-foreground">
                                 {signer.signedAt.toLocaleString()}
@@ -372,15 +415,24 @@ const DigitalSignatures: React.FC = () => {
                 <PenTool className="w-8 h-8 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground">{signatureRequests.filter(r => r.status === 'pending' || r.status === 'in_progress').length} Documents Awaiting Your Signature</h2>
-                <p className="text-muted-foreground">Review and sign these documents to complete the approval process.</p>
+                <h2 className="text-xl font-semibold text-foreground">
+                  {
+                    signatureRequests.filter(
+                      (r) => r.status === 'pending' || r.status === 'in_progress',
+                    ).length
+                  }{' '}
+                  Documents Awaiting Your Signature
+                </h2>
+                <p className="text-muted-foreground">
+                  Review and sign these documents to complete the approval process.
+                </p>
               </div>
             </div>
           </div>
 
           {signatureRequests
-            .filter(r => r.status === 'pending' || r.status === 'in_progress')
-            .map(request => (
+            .filter((r) => r.status === 'pending' || r.status === 'in_progress')
+            .map((request) => (
               <Card key={request.id}>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
@@ -405,8 +457,8 @@ const DigitalSignatures: React.FC = () => {
                   <div className="flex gap-3">
                     <Button
                       onClick={() => {
-                        setSelectedRequest(request);
-                        setShowSigningModal(true);
+                        setSelectedRequest(request)
+                        setShowSigningModal(true)
                       }}
                     >
                       <PenTool className="w-4 h-4" />
@@ -426,7 +478,7 @@ const DigitalSignatures: React.FC = () => {
       {/* Templates Tab */}
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map(template => (
+          {templates.map((template) => (
             <Card key={template.id} className="hover:border-primary/50 transition-colors">
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
@@ -435,7 +487,9 @@ const DigitalSignatures: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-medium text-foreground">{template.name}</h3>
-                    <p className="text-sm text-muted-foreground">{template.workflowType} workflow</p>
+                    <p className="text-sm text-muted-foreground">
+                      {template.workflowType} workflow
+                    </p>
                   </div>
                 </div>
 
@@ -489,18 +543,26 @@ const DigitalSignatures: React.FC = () => {
               <div className="text-center py-12">
                 <History className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold text-foreground mb-2">No audit activity</h3>
-                <p className="text-muted-foreground">Activity will appear here as signatures are processed.</p>
+                <p className="text-muted-foreground">
+                  Activity will appear here as signatures are processed.
+                </p>
               </div>
             )}
-            {auditLog.map(log => (
+            {auditLog.map((log) => (
               <div key={log.id} className="p-4 hover:bg-muted/30 transition-colors">
                 <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "p-2 rounded-lg",
-                    log.action === 'signed' ? 'bg-success/20' :
-                    log.action === 'viewed' ? 'bg-info/20' :
-                    log.action === 'created' ? 'bg-primary/20' : 'bg-muted'
-                  )}>
+                  <div
+                    className={cn(
+                      'p-2 rounded-lg',
+                      log.action === 'signed'
+                        ? 'bg-success/20'
+                        : log.action === 'viewed'
+                          ? 'bg-info/20'
+                          : log.action === 'created'
+                            ? 'bg-primary/20'
+                            : 'bg-muted',
+                    )}
+                  >
                     {log.action === 'signed' && <CheckCircle className="w-5 h-5 text-success" />}
                     {log.action === 'viewed' && <Eye className="w-5 h-5 text-info" />}
                     {log.action === 'created' && <Plus className="w-5 h-5 text-primary" />}
@@ -520,9 +582,7 @@ const DigitalSignatures: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {log.time.toLocaleString()}
-                  </div>
+                  <div className="text-sm text-muted-foreground">{log.time.toLocaleString()}</div>
                 </div>
               </div>
             ))}
@@ -536,18 +596,20 @@ const DigitalSignatures: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Create Signature Request</DialogTitle>
           </DialogHeader>
-          <p className="text-muted-foreground mb-4">Create a new document for signature collection.</p>
+          <p className="text-muted-foreground mb-4">
+            Create a new document for signature collection.
+          </p>
           <div className="text-center py-8">
             <FileSignature className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-muted-foreground">Coming soon: Full document upload and signer configuration</p>
+            <p className="text-muted-foreground">
+              Coming soon: Full document upload and signer configuration
+            </p>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>
               Cancel
             </Button>
-            <Button onClick={() => setShowCreateModal(false)}>
-              Create
-            </Button>
+            <Button onClick={() => setShowCreateModal(false)}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -557,72 +619,72 @@ const DigitalSignatures: React.FC = () => {
         <SigningModal
           request={selectedRequest}
           onClose={() => {
-            setShowSigningModal(false);
-            setSelectedRequest(null);
+            setShowSigningModal(false)
+            setSelectedRequest(null)
           }}
         />
       )}
     </div>
-  );
-};
+  )
+}
 
 // Signing Modal Component
 const SigningModal: React.FC<{
-  request: SignatureRequest;
-  onClose: () => void;
+  request: SignatureRequest
+  onClose: () => void
 }> = ({ request, onClose }) => {
-  const [signatureType, setSignatureType] = useState<'draw' | 'type' | 'upload'>('draw');
-  const [typedName, setTypedName] = useState('');
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [signatureType, setSignatureType] = useState<'draw' | 'type' | 'upload'>('draw')
+  const [typedName, setTypedName] = useState('')
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    setIsDrawing(true);
-    const ctx = canvas.getContext('2d');
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    setIsDrawing(true)
+    const ctx = canvas.getContext('2d')
     if (ctx) {
-      const rect = canvas.getBoundingClientRect();
-      ctx.beginPath();
-      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+      const rect = canvas.getBoundingClientRect()
+      ctx.beginPath()
+      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
     }
-  };
+  }
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+    if (!isDrawing) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
     if (ctx) {
-      const rect = canvas.getBoundingClientRect();
-      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-      ctx.strokeStyle = 'hsl(var(--primary))';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.stroke();
+      const rect = canvas.getBoundingClientRect()
+      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
+      ctx.strokeStyle = 'hsl(var(--primary))'
+      ctx.lineWidth = 2
+      ctx.lineCap = 'round'
+      ctx.stroke()
     }
-  };
+  }
 
   const stopDrawing = () => {
-    setIsDrawing(false);
-  };
+    setIsDrawing(false)
+  }
 
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
     if (ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
     }
-  };
+  }
 
   const handleSign = () => {
-    console.log('Signing document...');
-    onClose();
-  };
+    console.log('Signing document...')
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -652,8 +714,9 @@ const SigningModal: React.FC<{
               <h3 className="font-bold text-foreground mb-4">{request.title}</h3>
               <p className="text-sm text-muted-foreground mb-4">{request.description}</p>
               <p className="text-sm text-muted-foreground">
-                This document requires your electronic signature to indicate your acknowledgment and agreement 
-                to the terms outlined above. By signing, you confirm that you have read and understood the contents.
+                This document requires your electronic signature to indicate your acknowledgment and
+                agreement to the terms outlined above. By signing, you confirm that you have read
+                and understood the contents.
               </p>
             </div>
           </div>
@@ -666,15 +729,15 @@ const SigningModal: React.FC<{
                 { id: 'draw', label: 'Draw', icon: PenTool },
                 { id: 'type', label: 'Type', icon: FileText },
                 { id: 'upload', label: 'Upload', icon: FileSignature },
-              ].map(option => (
+              ].map((option) => (
                 <button
                   key={option.id}
                   onClick={() => setSignatureType(option.id as typeof signatureType)}
                   className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors",
+                    'flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors',
                     signatureType === option.id
                       ? 'border-primary bg-primary/20 text-primary'
-                      : 'border-border text-muted-foreground hover:border-primary/50'
+                      : 'border-border text-muted-foreground hover:border-primary/50',
                   )}
                 >
                   <option.icon className="w-4 h-4" />
@@ -690,7 +753,10 @@ const SigningModal: React.FC<{
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm text-muted-foreground">Draw your signature below:</p>
-                  <button onClick={clearCanvas} className="text-sm text-primary hover:text-primary-hover">
+                  <button
+                    onClick={clearCanvas}
+                    className="text-sm text-primary hover:text-primary-hover"
+                  >
                     Clear
                   </button>
                 </div>
@@ -706,7 +772,7 @@ const SigningModal: React.FC<{
                 />
               </div>
             )}
-            
+
             {signatureType === 'type' && (
               <div>
                 <p className="text-sm text-muted-foreground mb-2">Type your name:</p>
@@ -747,9 +813,9 @@ const SigningModal: React.FC<{
                 className="mt-1"
               />
               <label htmlFor="agree" className="text-sm text-foreground">
-                By signing this document electronically, I agree that my electronic signature is the legal 
-                equivalent of my manual signature. I consent to the use of electronic signatures, and I 
-                understand that I am legally bound by this agreement.
+                By signing this document electronically, I agree that my electronic signature is the
+                legal equivalent of my manual signature. I consent to the use of electronic
+                signatures, and I understand that I am legally bound by this agreement.
               </label>
             </div>
           </div>
@@ -783,7 +849,7 @@ const SigningModal: React.FC<{
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default DigitalSignatures;
+export default DigitalSignatures

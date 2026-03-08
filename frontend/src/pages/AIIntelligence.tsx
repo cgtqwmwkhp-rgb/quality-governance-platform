@@ -49,7 +49,9 @@ interface Cluster {
 }
 
 export default function AIIntelligence() {
-  const [activeTab, setActiveTab] = useState<'predictions' | 'anomalies' | 'audit' | 'recommendations'>('predictions')
+  const [activeTab, setActiveTab] = useState<
+    'predictions' | 'anomalies' | 'audit' | 'recommendations'
+  >('predictions')
   const [analyzing, setAnalyzing] = useState(false)
 
   const predictions: Prediction[] = []
@@ -58,9 +60,17 @@ export default function AIIntelligence() {
 
   const clusters: Cluster[] = []
 
-  const auditQuestions: { clause: string; question: string; type: string; evidence: string[] }[] = []
+  const auditQuestions: { clause: string; question: string; type: string; evidence: string[] }[] =
+    []
 
-  const recommendations: { title: string; description: string; priority: string; timeframe: string; responsible: string; confidence: number }[] = []
+  const recommendations: {
+    title: string
+    description: string
+    priority: string
+    timeframe: string
+    responsible: string
+    confidence: number
+  }[] = []
 
   const handleAnalyze = () => {
     setAnalyzing(true)
@@ -74,7 +84,8 @@ export default function AIIntelligence() {
       {isComingSoon && (
         <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
           <span className="text-lg">🚧</span>
-          <span className="font-medium">Coming Soon</span> — AI Intelligence features are under active development. Data shown below is illustrative.
+          <span className="font-medium">Coming Soon</span> — AI Intelligence features are under
+          active development. Data shown below is illustrative.
         </div>
       )}
       {/* Header */}
@@ -87,10 +98,7 @@ export default function AIIntelligence() {
           <p className="text-muted-foreground">Predictive Analytics & Smart Recommendations</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <Button
-            onClick={handleAnalyze}
-            disabled={analyzing}
-          >
+          <Button onClick={handleAnalyze} disabled={analyzing}>
             {analyzing ? (
               <>
                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -163,10 +171,10 @@ export default function AIIntelligence() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap",
+                'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap',
                 activeTab === tab.id
                   ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
               <Icon className="w-4 h-4" />
@@ -198,14 +206,16 @@ export default function AIIntelligence() {
                 <div key={i} className="p-4 bg-surface rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground uppercase">{pred.factor_type}</span>
+                      <span className="text-xs text-muted-foreground uppercase">
+                        {pred.factor_type}
+                      </span>
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
                           pred.risk_level === 'high'
                             ? 'bg-destructive/10 text-destructive border-destructive/20'
                             : pred.risk_level === 'medium'
-                            ? 'bg-warning/10 text-warning border-warning/20'
-                            : 'bg-success/10 text-success border-success/20'
+                              ? 'bg-warning/10 text-warning border-warning/20'
+                              : 'bg-success/10 text-success border-success/20'
                         }`}
                       >
                         {pred.risk_level}
@@ -215,7 +225,9 @@ export default function AIIntelligence() {
                   </div>
                   <div className="text-lg font-semibold text-white">{pred.factor_value}</div>
                   {pred.incident_count && (
-                    <div className="text-sm text-gray-400 mt-1">{pred.incident_count} incidents</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      {pred.incident_count} incidents
+                    </div>
                   )}
                   <div className="w-full bg-slate-600 rounded-full h-2 mt-2">
                     <div
@@ -223,8 +235,8 @@ export default function AIIntelligence() {
                         pred.risk_level === 'high'
                           ? 'bg-red-500'
                           : pred.risk_level === 'medium'
-                          ? 'bg-yellow-500'
-                          : 'bg-green-500'
+                            ? 'bg-yellow-500'
+                            : 'bg-green-500'
                       }`}
                       style={{ width: `${Math.min(pred.percentage ?? 0, 100)}%` }}
                     ></div>
@@ -241,7 +253,9 @@ export default function AIIntelligence() {
                 <GitBranch className="w-5 h-5 text-blue-400" />
                 Root Cause Clusters
               </h3>
-              <p className="text-sm text-gray-400">Similar incidents grouped for systemic analysis</p>
+              <p className="text-sm text-gray-400">
+                Similar incidents grouped for systemic analysis
+              </p>
             </div>
             <div className="p-4 space-y-4">
               {clusters.length === 0 && (
@@ -299,10 +313,7 @@ export default function AIIntelligence() {
               </div>
             )}
             {anomalies.map((anomaly, i) => (
-              <div
-                key={i}
-                className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg"
-              >
+              <div key={i} className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-red-500/20 rounded-lg">
                     <AlertTriangle className="w-6 h-6 text-red-400" />
@@ -374,7 +385,10 @@ export default function AIIntelligence() {
                   <p className="text-white text-sm mb-2">{q.question}</p>
                   <div className="flex flex-wrap gap-1">
                     {q.evidence.map((e, j) => (
-                      <span key={j} className="px-2 py-0.5 bg-slate-600 text-gray-300 rounded text-xs">
+                      <span
+                        key={j}
+                        className="px-2 py-0.5 bg-slate-600 text-gray-300 rounded text-xs"
+                      >
                         {e}
                       </span>
                     ))}
@@ -429,10 +443,21 @@ export default function AIIntelligence() {
               </h3>
               <div className="space-y-3">
                 {[
-                  { clause: '7.2', gap: 'Training records incomplete for 3 new starters', severity: 'minor' },
-                  { clause: '8.1.2', gap: 'Control effectiveness review overdue', severity: 'minor' },
+                  {
+                    clause: '7.2',
+                    gap: 'Training records incomplete for 3 new starters',
+                    severity: 'minor',
+                  },
+                  {
+                    clause: '8.1.2',
+                    gap: 'Control effectiveness review overdue',
+                    severity: 'minor',
+                  },
                 ].map((gap, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg"
+                  >
                     <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5" />
                     <div>
                       <div className="flex items-center gap-2">

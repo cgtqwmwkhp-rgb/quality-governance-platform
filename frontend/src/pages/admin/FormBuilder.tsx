@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Plus,
@@ -15,12 +15,12 @@ import {
   Check,
   Loader2,
   HelpCircle,
-} from 'lucide-react';
-import { Card } from '../../components/ui/Card';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Textarea } from '../../components/ui/Textarea';
-import { cn } from '../../helpers/utils';
+} from 'lucide-react'
+import { Card } from '../../components/ui/Card'
+import { Button } from '../../components/ui/Button'
+import { Input } from '../../components/ui/Input'
+import { Textarea } from '../../components/ui/Textarea'
+import { cn } from '../../helpers/utils'
 
 // Field type definitions
 const FIELD_TYPES = [
@@ -46,54 +46,54 @@ const FIELD_TYPES = [
   { value: 'heading', label: 'Section Heading', icon: '📌' },
   { value: 'paragraph', label: 'Info Text', icon: 'ℹ️' },
   { value: 'divider', label: 'Divider Line', icon: '➖' },
-];
+]
 
 interface FormField {
-  id: string;
-  name: string;
-  label: string;
-  field_type: string;
-  order: number;
-  placeholder?: string;
-  help_text?: string;
-  is_required: boolean;
-  options?: Array<{ value: string; label: string }>;
-  width: string;
+  id: string
+  name: string
+  label: string
+  field_type: string
+  order: number
+  placeholder?: string
+  help_text?: string
+  is_required: boolean
+  options?: Array<{ value: string; label: string }>
+  width: string
 }
 
 interface FormStep {
-  id: string;
-  name: string;
-  description?: string;
-  order: number;
-  icon?: string;
-  fields: FormField[];
-  isExpanded: boolean;
+  id: string
+  name: string
+  description?: string
+  order: number
+  icon?: string
+  fields: FormField[]
+  isExpanded: boolean
 }
 
 interface FormTemplate {
-  id?: number;
-  name: string;
-  slug: string;
-  description?: string;
-  form_type: string;
-  icon?: string;
-  color?: string;
-  allow_drafts: boolean;
-  allow_attachments: boolean;
-  require_signature: boolean;
-  auto_assign_reference: boolean;
-  reference_prefix?: string;
-  notify_on_submit: boolean;
-  notification_emails?: string;
-  steps: FormStep[];
+  id?: number
+  name: string
+  slug: string
+  description?: string
+  form_type: string
+  icon?: string
+  color?: string
+  allow_drafts: boolean
+  allow_attachments: boolean
+  require_signature: boolean
+  auto_assign_reference: boolean
+  reference_prefix?: string
+  notify_on_submit: boolean
+  notification_emails?: string
+  steps: FormStep[]
 }
 
 export default function FormBuilder() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { templateId } = useParams();
-  const isEditing = !!templateId;
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { templateId } = useParams()
+  const isEditing = !!templateId
 
   const [template, setTemplate] = useState<FormTemplate>({
     name: '',
@@ -117,14 +117,14 @@ export default function FormBuilder() {
         isExpanded: true,
       },
     ],
-  });
+  })
 
-  const [showSettings, setShowSettings] = useState(false);
-  const [showFieldPalette, setShowFieldPalette] = useState(false);
-  const [selectedStepId, setSelectedStepId] = useState<string | null>('step-1');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false)
+  const [showFieldPalette, setShowFieldPalette] = useState(false)
+  const [selectedStepId, setSelectedStepId] = useState<string | null>('step-1')
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Load existing template if editing
   useEffect(() => {
@@ -132,22 +132,22 @@ export default function FormBuilder() {
       // In real implementation, fetch from API
       // For now, use placeholder
     }
-  }, [templateId]);
+  }, [templateId])
 
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-  };
+      .replace(/(^-|-$)/g, '')
+  }
 
   const handleNameChange = (name: string) => {
     setTemplate((prev) => ({
       ...prev,
       name,
       slug: prev.slug || generateSlug(name),
-    }));
-  };
+    }))
+  }
 
   const addStep = () => {
     const newStep: FormStep = {
@@ -157,42 +157,40 @@ export default function FormBuilder() {
       order: template.steps.length,
       fields: [],
       isExpanded: true,
-    };
+    }
     setTemplate((prev) => ({
       ...prev,
       steps: [...prev.steps, newStep],
-    }));
-    setSelectedStepId(newStep.id);
-  };
+    }))
+    setSelectedStepId(newStep.id)
+  }
 
   const removeStep = (stepId: string) => {
-    if (template.steps.length <= 1) return;
+    if (template.steps.length <= 1) return
     setTemplate((prev) => ({
       ...prev,
       steps: prev.steps.filter((s) => s.id !== stepId),
-    }));
-  };
+    }))
+  }
 
   const toggleStepExpanded = (stepId: string) => {
     setTemplate((prev) => ({
       ...prev,
-      steps: prev.steps.map((s) =>
-        s.id === stepId ? { ...s, isExpanded: !s.isExpanded } : s
-      ),
-    }));
-  };
+      steps: prev.steps.map((s) => (s.id === stepId ? { ...s, isExpanded: !s.isExpanded } : s)),
+    }))
+  }
 
   const updateStep = (stepId: string, updates: Partial<FormStep>) => {
     setTemplate((prev) => ({
       ...prev,
       steps: prev.steps.map((s) => (s.id === stepId ? { ...s, ...updates } : s)),
-    }));
-  };
+    }))
+  }
 
   const addField = (stepId: string, fieldType: string) => {
-    const fieldDef = FIELD_TYPES.find((f) => f.value === fieldType);
-    const step = template.steps.find((s) => s.id === stepId);
-    if (!step) return;
+    const fieldDef = FIELD_TYPES.find((f) => f.value === fieldType)
+    const step = template.steps.find((s) => s.id === stepId)
+    if (!step) return
 
     const newField: FormField = {
       id: `field-${Date.now()}`,
@@ -202,47 +200,47 @@ export default function FormBuilder() {
       order: step.fields.length,
       is_required: false,
       width: 'full',
-    };
+    }
 
     updateStep(stepId, {
       fields: [...step.fields, newField],
-    });
-    setShowFieldPalette(false);
-  };
+    })
+    setShowFieldPalette(false)
+  }
 
   const updateField = (stepId: string, fieldId: string, updates: Partial<FormField>) => {
-    const step = template.steps.find((s) => s.id === stepId);
-    if (!step) return;
+    const step = template.steps.find((s) => s.id === stepId)
+    if (!step) return
 
     updateStep(stepId, {
       fields: step.fields.map((f) => (f.id === fieldId ? { ...f, ...updates } : f)),
-    });
-  };
+    })
+  }
 
   const removeField = (stepId: string, fieldId: string) => {
-    const step = template.steps.find((s) => s.id === stepId);
-    if (!step) return;
+    const step = template.steps.find((s) => s.id === stepId)
+    if (!step) return
 
     updateStep(stepId, {
       fields: step.fields.filter((f) => f.id !== fieldId),
-    });
-  };
+    })
+  }
 
   const handleSave = async () => {
-    setIsSaving(true);
-    setSaveError(null);
+    setIsSaving(true)
+    setSaveError(null)
     try {
       // In real implementation, save to API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2000)
     } catch {
-      console.error('Failed to save template');
-      setSaveError(t('admin.forms.save_error'));
+      console.error('Failed to save template')
+      setSaveError(t('admin.forms.save_error'))
     } finally {
-      setIsSaving(false);
+      setIsSaving(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -260,9 +258,7 @@ export default function FormBuilder() {
               <h1 className="text-lg font-bold text-foreground">
                 {isEditing ? t('admin.forms.edit_form') : t('admin.forms.create_new_form')}
               </h1>
-              <p className="text-sm text-muted-foreground">
-                {t('admin.forms.design_subtitle')}
-              </p>
+              <p className="text-sm text-muted-foreground">{t('admin.forms.design_subtitle')}</p>
             </div>
           </div>
 
@@ -298,23 +294,33 @@ export default function FormBuilder() {
           <div className="lg:col-span-2 space-y-6">
             {/* Form Details */}
             <Card className="p-6">
-              <h2 className="text-lg font-semibold text-foreground mb-4">{t('admin.forms.form_details')}</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-4">
+                {t('admin.forms.form_details')}
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="formbuilder-field-0" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="formbuilder-field-0"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('admin.forms.form_name')}
                   </label>
-                  <Input id="formbuilder-field-0"
+                  <Input
+                    id="formbuilder-field-0"
                     value={template.name}
                     onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g. Incident Report Form"
                   />
                 </div>
                 <div>
-                  <label htmlFor="formbuilder-field-1" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="formbuilder-field-1"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('admin.forms.form_type')}
                   </label>
-                  <select id="formbuilder-field-1"
+                  <select
+                    id="formbuilder-field-1"
                     value={template.form_type}
                     onChange={(e) =>
                       setTemplate((prev) => ({ ...prev, form_type: e.target.value }))
@@ -330,10 +336,14 @@ export default function FormBuilder() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label htmlFor="formbuilder-field-2" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="formbuilder-field-2"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('common.description')}
                   </label>
-                  <Textarea id="formbuilder-field-2"
+                  <Textarea
+                    id="formbuilder-field-2"
                     value={template.description || ''}
                     onChange={(e) =>
                       setTemplate((prev) => ({ ...prev, description: e.target.value }))
@@ -348,7 +358,9 @@ export default function FormBuilder() {
             {/* Steps */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-foreground">{t('admin.forms.form_steps')}</h2>
+                <h2 className="text-lg font-semibold text-foreground">
+                  {t('admin.forms.form_steps')}
+                </h2>
                 <Button variant="outline" size="sm" onClick={addStep}>
                   <Plus className="w-4 h-4 mr-2" />
                   {t('admin.forms.add_step')}
@@ -361,13 +373,19 @@ export default function FormBuilder() {
                   <div
                     className={cn(
                       'flex items-center justify-between p-4 cursor-pointer',
-                      selectedStepId === step.id ? 'bg-primary/5' : 'bg-surface'
+                      selectedStepId === step.id ? 'bg-primary/5' : 'bg-surface',
                     )}
                     onClick={() => {
-                      setSelectedStepId(step.id);
-                      toggleStepExpanded(step.id);
+                      setSelectedStepId(step.id)
+                      toggleStepExpanded(step.id)
                     }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedStepId(step.id); toggleStepExpanded(step.id); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedStepId(step.id)
+                        toggleStepExpanded(step.id)
+                      }
+                    }}
                     role="button"
                     tabIndex={0}
                   >
@@ -381,23 +399,21 @@ export default function FormBuilder() {
                           type="text"
                           value={step.name}
                           onChange={(e) => {
-                            e.stopPropagation();
-                            updateStep(step.id, { name: e.target.value });
+                            e.stopPropagation()
+                            updateStep(step.id, { name: e.target.value })
                           }}
                           onClick={(e) => e.stopPropagation()}
                           className="font-medium text-foreground bg-transparent border-none focus:outline-none focus:ring-0"
                         />
-                        <p className="text-sm text-muted-foreground">
-                          {step.fields.length} fields
-                        </p>
+                        <p className="text-sm text-muted-foreground">{step.fields.length} fields</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {template.steps.length > 1 && (
                         <button
                           onClick={(e) => {
-                            e.stopPropagation();
-                            removeStep(step.id);
+                            e.stopPropagation()
+                            removeStep(step.id)
                           }}
                           className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
                         >
@@ -451,8 +467,12 @@ export default function FormBuilder() {
                                 ))}
                               </select>
                               <div className="flex items-center gap-2">
-                                <label htmlFor="formbuilder-field-3" className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <input id="formbuilder-field-3"
+                                <label
+                                  htmlFor="formbuilder-field-3"
+                                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                                >
+                                  <input
+                                    id="formbuilder-field-3"
                                     type="checkbox"
                                     checked={field.is_required}
                                     onChange={(e) =>
@@ -483,8 +503,8 @@ export default function FormBuilder() {
                           size="sm"
                           className="w-full border-dashed"
                           onClick={() => {
-                            setSelectedStepId(step.id);
-                            setShowFieldPalette(!showFieldPalette);
+                            setSelectedStepId(step.id)
+                            setShowFieldPalette(!showFieldPalette)
                           }}
                         >
                           <Plus className="w-4 h-4 mr-2" />
@@ -522,13 +542,19 @@ export default function FormBuilder() {
           {/* Settings Panel */}
           <div className="space-y-6">
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">{t('admin.forms.form_settings')}</h3>
+              <h3 className="font-semibold text-foreground mb-4">
+                {t('admin.forms.form_settings')}
+              </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="formbuilder-field-4" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="formbuilder-field-4"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('admin.forms.reference_prefix')}
                   </label>
-                  <Input id="formbuilder-field-4"
+                  <Input
+                    id="formbuilder-field-4"
                     value={template.reference_prefix || ''}
                     onChange={(e) =>
                       setTemplate((prev) => ({
@@ -545,9 +571,13 @@ export default function FormBuilder() {
                 </div>
 
                 <div className="space-y-3">
-                  <label htmlFor="formbuilder-field-5" className="flex items-center justify-between">
+                  <label
+                    htmlFor="formbuilder-field-5"
+                    className="flex items-center justify-between"
+                  >
                     <span className="text-sm text-foreground">{t('admin.forms.allow_drafts')}</span>
-                    <input id="formbuilder-field-5"
+                    <input
+                      id="formbuilder-field-5"
                       type="checkbox"
                       checked={template.allow_drafts}
                       onChange={(e) =>
@@ -557,9 +587,15 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label htmlFor="formbuilder-field-6" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{t('admin.forms.allow_attachments')}</span>
-                    <input id="formbuilder-field-6"
+                  <label
+                    htmlFor="formbuilder-field-6"
+                    className="flex items-center justify-between"
+                  >
+                    <span className="text-sm text-foreground">
+                      {t('admin.forms.allow_attachments')}
+                    </span>
+                    <input
+                      id="formbuilder-field-6"
                       type="checkbox"
                       checked={template.allow_attachments}
                       onChange={(e) =>
@@ -572,9 +608,15 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label htmlFor="formbuilder-field-7" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{t('admin.forms.require_signature')}</span>
-                    <input id="formbuilder-field-7"
+                  <label
+                    htmlFor="formbuilder-field-7"
+                    className="flex items-center justify-between"
+                  >
+                    <span className="text-sm text-foreground">
+                      {t('admin.forms.require_signature')}
+                    </span>
+                    <input
+                      id="formbuilder-field-7"
                       type="checkbox"
                       checked={template.require_signature}
                       onChange={(e) =>
@@ -587,9 +629,15 @@ export default function FormBuilder() {
                     />
                   </label>
 
-                  <label htmlFor="formbuilder-field-8" className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{t('admin.forms.notify_on_submit')}</span>
-                    <input id="formbuilder-field-8"
+                  <label
+                    htmlFor="formbuilder-field-8"
+                    className="flex items-center justify-between"
+                  >
+                    <span className="text-sm text-foreground">
+                      {t('admin.forms.notify_on_submit')}
+                    </span>
+                    <input
+                      id="formbuilder-field-8"
                       type="checkbox"
                       checked={template.notify_on_submit}
                       onChange={(e) =>
@@ -605,10 +653,14 @@ export default function FormBuilder() {
 
                 {template.notify_on_submit && (
                   <div>
-                    <label htmlFor="formbuilder-field-9" className="block text-sm font-medium text-foreground mb-2">
-                    {t('admin.forms.notification_emails')}
-                  </label>
-                    <Input id="formbuilder-field-9"
+                    <label
+                      htmlFor="formbuilder-field-9"
+                      className="block text-sm font-medium text-foreground mb-2"
+                    >
+                      {t('admin.forms.notification_emails')}
+                    </label>
+                    <Input
+                      id="formbuilder-field-9"
                       value={template.notification_emails || ''}
                       onChange={(e) =>
                         setTemplate((prev) => ({
@@ -627,13 +679,18 @@ export default function FormBuilder() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="font-semibold text-foreground mb-4">{t('admin.forms.quick_actions')}</h3>
+              <h3 className="font-semibold text-foreground mb-4">
+                {t('admin.forms.quick_actions')}
+              </h3>
               <div className="space-y-2">
                 <Button variant="outline" className="w-full justify-start">
                   <Copy className="w-4 h-4 mr-2" />
                   {t('admin.forms.duplicate_form')}
                 </Button>
-                <Button variant="outline" className="w-full justify-start text-destructive hover:bg-destructive/10">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start text-destructive hover:bg-destructive/10"
+                >
                   <Trash2 className="w-4 h-4 mr-2" />
                   {t('admin.forms.delete_form')}
                 </Button>
@@ -643,5 +700,5 @@ export default function FormBuilder() {
         </div>
       </div>
     </div>
-  );
+  )
 }

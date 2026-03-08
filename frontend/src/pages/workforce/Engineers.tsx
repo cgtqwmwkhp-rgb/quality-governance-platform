@@ -48,9 +48,7 @@ export default function Engineers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('workforce.engineers.title')}</h1>
-        <p className="text-muted-foreground mt-1">
-          {t('workforce.engineers.subtitle')}
-        </p>
+        <p className="text-muted-foreground mt-1">{t('workforce.engineers.subtitle')}</p>
       </div>
 
       <Card>
@@ -88,8 +86,8 @@ export default function Engineers() {
                 key={eng.id}
                 hoverable
                 className={cn(
-                  "cursor-pointer transition-all",
-                  "hover:shadow-md hover:border-border-strong"
+                  'cursor-pointer transition-all',
+                  'hover:shadow-md hover:border-border-strong',
                 )}
                 onClick={() => navigate(`/workforce/engineers/${eng.id}`)}
               >

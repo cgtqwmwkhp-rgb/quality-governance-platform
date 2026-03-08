@@ -1,9 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import Investigations from '../Investigations';
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { BrowserRouter } from 'react-router-dom'
+import Investigations from '../Investigations'
 
-const mockNavigate = vi.fn();
+const mockNavigate = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -23,18 +23,18 @@ vi.mock('react-i18next', () => ({
         'investigations.stats.completed': 'Completed',
         'status.in_progress': 'In Progress',
         'status.under_review': 'Under Review',
-      };
-      return translations[key] || key;
+      }
+      return translations[key] || key
     },
     i18n: { language: 'en' },
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
-}));
+}))
 
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return { ...actual, useNavigate: () => mockNavigate };
-});
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return { ...actual, useNavigate: () => mockNavigate }
+})
 
 vi.mock('../../api/client', () => ({
   investigationsApi: {
@@ -52,11 +52,11 @@ vi.mock('../../api/client', () => ({
     update: vi.fn(),
   },
   getApiErrorMessage: (err: any) => err?.message || 'Unknown error',
-}));
+}))
 
 vi.mock('../../utils/errorTracker', () => ({
   trackError: vi.fn(),
-}));
+}))
 
 vi.mock('../../components/UserEmailSearch', () => ({
   UserEmailSearch: ({ value, onChange, label }: any) => (
@@ -69,7 +69,7 @@ vi.mock('../../components/UserEmailSearch', () => ({
       />
     </div>
   ),
-}));
+}))
 
 const MOCK_INVESTIGATIONS = [
   {
@@ -108,200 +108,196 @@ const MOCK_INVESTIGATIONS = [
     data: {},
     created_at: '2026-03-01T00:00:00Z',
   },
-];
+]
 
 function setup() {
   return render(
     <BrowserRouter>
       <Investigations />
     </BrowserRouter>,
-  );
+  )
 }
 
 describe('Investigations', () => {
-  let investigationsApi: any;
-  let actionsApi: any;
+  let investigationsApi: any
+  let actionsApi: any
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    mockNavigate.mockClear();
+    vi.clearAllMocks()
+    mockNavigate.mockClear()
 
-    const client = await import('../../api/client');
-    investigationsApi = client.investigationsApi;
-    actionsApi = client.actionsApi;
+    const client = await import('../../api/client')
+    investigationsApi = client.investigationsApi
+    actionsApi = client.actionsApi
 
     investigationsApi.list.mockResolvedValue({
       data: { items: MOCK_INVESTIGATIONS, total: 3 },
-    });
+    })
     actionsApi.list.mockResolvedValue({
       data: { items: [] },
-    });
-  });
+    })
+  })
 
   it('shows loading spinner initially', () => {
-    investigationsApi.list.mockReturnValue(new Promise(() => {}));
+    investigationsApi.list.mockReturnValue(new Promise(() => {}))
 
-    setup();
+    setup()
 
-    const spinner = document.querySelector('.animate-spin');
-    expect(spinner).toBeInTheDocument();
-  });
+    const spinner = document.querySelector('.animate-spin')
+    expect(spinner).toBeInTheDocument()
+  })
 
   it('renders page heading after data loads', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('heading', { name: 'Investigations' }),
-      ).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByRole('heading', { name: 'Investigations' })).toBeInTheDocument()
+    })
+  })
 
   it('renders investigation cards after data loads', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument();
-    expect(screen.getByText('Customer complaint follow-up')).toBeInTheDocument();
-  });
+    expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument()
+    expect(screen.getByText('Customer complaint follow-up')).toBeInTheDocument()
+  })
 
   it('displays reference numbers on cards', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+      expect(screen.getByText('INV-001')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('INV-002')).toBeInTheDocument();
-    expect(screen.getByText('INV-003')).toBeInTheDocument();
-  });
+    expect(screen.getByText('INV-002')).toBeInTheDocument()
+    expect(screen.getByText('INV-003')).toBeInTheDocument()
+  })
 
   it('renders stat cards with correct counts', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Total')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Total')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('In Progress')).toBeInTheDocument();
-    expect(screen.getByText('Under Review')).toBeInTheDocument();
-    expect(screen.getByText('Completed')).toBeInTheDocument();
-  });
+    expect(screen.getByText('In Progress')).toBeInTheDocument()
+    expect(screen.getByText('Under Review')).toBeInTheDocument()
+    expect(screen.getByText('Completed')).toBeInTheDocument()
+  })
 
   it('filters investigations by search term', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
 
-    const searchInput = screen.getByPlaceholderText('Search investigations...');
-    fireEvent.change(searchInput, { target: { value: 'warehouse' } });
+    const searchInput = screen.getByPlaceholderText('Search investigations...')
+    fireEvent.change(searchInput, { target: { value: 'warehouse' } })
 
-    expect(screen.queryByText('Vehicle collision on A1 motorway')).not.toBeInTheDocument();
-    expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument();
-  });
+    expect(screen.queryByText('Vehicle collision on A1 motorway')).not.toBeInTheDocument()
+    expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument()
+  })
 
   it('filters by reference number', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('INV-001')).toBeInTheDocument();
-    });
+      expect(screen.getByText('INV-001')).toBeInTheDocument()
+    })
 
-    const searchInput = screen.getByPlaceholderText('Search investigations...');
-    fireEvent.change(searchInput, { target: { value: 'INV-003' } });
+    const searchInput = screen.getByPlaceholderText('Search investigations...')
+    fireEvent.change(searchInput, { target: { value: 'INV-003' } })
 
-    expect(screen.queryByText('Vehicle collision on A1 motorway')).not.toBeInTheDocument();
-    expect(screen.getByText('Customer complaint follow-up')).toBeInTheDocument();
-  });
+    expect(screen.queryByText('Vehicle collision on A1 motorway')).not.toBeInTheDocument()
+    expect(screen.getByText('Customer complaint follow-up')).toBeInTheDocument()
+  })
 
   it('opens detail modal when clicking an investigation card', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
 
-    fireEvent.click(screen.getByText('Vehicle collision on A1 motorway'));
+    fireEvent.click(screen.getByText('Vehicle collision on A1 motorway'))
 
     await waitFor(() => {
-      expect(screen.getByText('5 Whys Analysis')).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByText('5 Whys Analysis')).toBeInTheDocument()
+    })
+  })
 
   it('shows empty state when no investigations exist', async () => {
     investigationsApi.list.mockResolvedValue({
       data: { items: [], total: 0 },
-    });
+    })
 
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('No investigations yet')).toBeInTheDocument();
-    });
-  });
+      expect(screen.getByText('No investigations yet')).toBeInTheDocument()
+    })
+  })
 
   it('shows empty state when search has no results', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
 
-    const searchInput = screen.getByPlaceholderText('Search investigations...');
-    fireEvent.change(searchInput, { target: { value: 'nonexistent query xyz' } });
+    const searchInput = screen.getByPlaceholderText('Search investigations...')
+    fireEvent.change(searchInput, { target: { value: 'nonexistent query xyz' } })
 
-    expect(screen.getByText('No investigations yet')).toBeInTheDocument();
-  });
+    expect(screen.getByText('No investigations yet')).toBeInTheDocument()
+  })
 
   it('handles API errors gracefully', async () => {
-    investigationsApi.list.mockRejectedValue(new Error('Network failure'));
+    investigationsApi.list.mockRejectedValue(new Error('Network failure'))
 
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('No investigations yet')).toBeInTheDocument();
-    });
+      expect(screen.getByText('No investigations yet')).toBeInTheDocument()
+    })
 
-    const { trackError } = await import('../../utils/errorTracker');
-    expect(trackError).toHaveBeenCalled();
-  });
+    const { trackError } = await import('../../utils/errorTracker')
+    expect(trackError).toHaveBeenCalled()
+  })
 
   it('shows "New Investigation" button', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Vehicle collision on A1 motorway')).toBeInTheDocument()
+    })
 
-    expect(
-      screen.getByRole('button', { name: /New Investigation/i }),
-    ).toBeInTheDocument();
-  });
+    expect(screen.getByRole('button', { name: /New Investigation/i })).toBeInTheDocument()
+  })
 
   it('shows RCA preview for investigations with data', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument();
-    });
+      expect(screen.getByText('Warehouse safety incident')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('Root Cause Analysis')).toBeInTheDocument();
-    expect(screen.getByText('Poor lighting')).toBeInTheDocument();
-  });
+    expect(screen.getByText('Root Cause Analysis')).toBeInTheDocument()
+    expect(screen.getByText('Poor lighting')).toBeInTheDocument()
+  })
 
   it('shows entity type labels on cards', async () => {
-    setup();
+    setup()
 
     await waitFor(() => {
-      expect(screen.getByText('road traffic collision')).toBeInTheDocument();
-    });
+      expect(screen.getByText('road traffic collision')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('reporting incident')).toBeInTheDocument();
-    expect(screen.getByText('complaint')).toBeInTheDocument();
-  });
-});
+    expect(screen.getByText('reporting incident')).toBeInTheDocument()
+    expect(screen.getByText('complaint')).toBeInTheDocument()
+  })
+})

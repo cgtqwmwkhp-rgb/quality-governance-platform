@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   Calendar,
   ChevronLeft,
@@ -10,96 +10,110 @@ import {
   Filter,
   List,
   Grid3X3,
-  Bell
-} from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { cn } from "../helpers/utils";
+  Bell,
+} from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { cn } from '../helpers/utils'
 
 interface CalendarEvent {
-  id: string;
-  title: string;
-  type: 'audit' | 'review' | 'deadline' | 'meeting' | 'training';
-  date: string;
-  time?: string;
-  endTime?: string;
-  location?: string;
-  attendees?: string[];
-  description?: string;
-  status: 'upcoming' | 'today' | 'overdue' | 'completed';
-  priority?: 'high' | 'medium' | 'low';
-  relatedModule?: string;
-  relatedId?: string;
+  id: string
+  title: string
+  type: 'audit' | 'review' | 'deadline' | 'meeting' | 'training'
+  date: string
+  time?: string
+  endTime?: string
+  location?: string
+  attendees?: string[]
+  description?: string
+  status: 'upcoming' | 'today' | 'overdue' | 'completed'
+  priority?: 'high' | 'medium' | 'low'
+  relatedModule?: string
+  relatedId?: string
 }
 
 export default function CalendarView() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19));
-  const [viewMode, setViewMode] = useState<'month' | 'list'>('month');
-  const [, setSelectedDate] = useState<Date | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 19))
+  const [viewMode, setViewMode] = useState<'month' | 'list'>('month')
+  const [, setSelectedDate] = useState<Date | null>(null)
+  const [showFilters, setShowFilters] = useState(false)
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([])
 
-  const events: CalendarEvent[] = [];
+  const events: CalendarEvent[] = []
 
   const eventTypeStyles: Record<string, { variant: string }> = {
     audit: { variant: 'info' },
     review: { variant: 'info' },
     deadline: { variant: 'destructive' },
     meeting: { variant: 'success' },
-    training: { variant: 'warning' }
-  };
+    training: { variant: 'warning' },
+  }
 
   const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDay = firstDay.getDay();
-    
-    const days: (number | null)[] = [];
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDay = firstDay.getDay()
+
+    const days: (number | null)[] = []
     for (let i = 0; i < startingDay; i++) {
-      days.push(null);
+      days.push(null)
     }
     for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
+      days.push(i)
     }
-    return days;
-  };
+    return days
+  }
 
   const getEventsForDate = (day: number) => {
-    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return events.filter(e => e.date === dateStr);
-  };
+    const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return events.filter((e) => e.date === dateStr)
+  }
 
   const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => {
-      const newDate = new Date(prev);
+    setCurrentDate((prev) => {
+      const newDate = new Date(prev)
       if (direction === 'prev') {
-        newDate.setMonth(newDate.getMonth() - 1);
+        newDate.setMonth(newDate.getMonth() - 1)
       } else {
-        newDate.setMonth(newDate.getMonth() + 1);
+        newDate.setMonth(newDate.getMonth() + 1)
       }
-      return newDate;
-    });
-  };
+      return newDate
+    })
+  }
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                      'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ]
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   const isToday = (day: number) => {
-    const today = new Date(2024, 0, 19);
-    return day === today.getDate() && 
-           currentDate.getMonth() === today.getMonth() && 
-           currentDate.getFullYear() === today.getFullYear();
-  };
+    const today = new Date(2024, 0, 19)
+    return (
+      day === today.getDate() &&
+      currentDate.getMonth() === today.getMonth() &&
+      currentDate.getFullYear() === today.getFullYear()
+    )
+  }
 
   const upcomingEvents = events
-    .filter(e => e.status !== 'completed')
+    .filter((e) => e.status !== 'completed')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 5);
+    .slice(0, 5)
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -114,14 +128,16 @@ export default function CalendarView() {
           </h1>
           <p className="text-muted-foreground mt-1">Audits, reviews, deadlines and events</p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="flex bg-surface rounded-lg p-1 border border-border">
             <button
               onClick={() => setViewMode('month')}
               className={cn(
-                "p-2 rounded-md transition-all",
-                viewMode === 'month' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                'p-2 rounded-md transition-all',
+                viewMode === 'month'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               title="Month View"
             >
@@ -130,15 +146,17 @@ export default function CalendarView() {
             <button
               onClick={() => setViewMode('list')}
               className={cn(
-                "p-2 rounded-md transition-all",
-                viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                'p-2 rounded-md transition-all',
+                viewMode === 'list'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
               title="List View"
             >
               <List className="w-5 h-5" />
             </button>
           </div>
-          
+
           <Button
             variant={showFilters ? 'default' : 'outline'}
             size="sm"
@@ -146,7 +164,7 @@ export default function CalendarView() {
           >
             <Filter className="w-5 h-5" />
           </Button>
-          
+
           <Button>
             <Plus className="w-5 h-5" />
             Add Event
@@ -161,12 +179,14 @@ export default function CalendarView() {
             {Object.entries(eventTypeStyles).map(([type]) => (
               <Button
                 key={type}
-                variant={selectedTypes.includes(type) || selectedTypes.length === 0 ? 'default' : 'outline'}
+                variant={
+                  selectedTypes.includes(type) || selectedTypes.length === 0 ? 'default' : 'outline'
+                }
                 size="sm"
                 onClick={() => {
-                  setSelectedTypes(prev => 
-                    prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
-                  );
+                  setSelectedTypes((prev) =>
+                    prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
+                  )
                 }}
               >
                 {type.charAt(0).toUpperCase() + type.slice(1)}
@@ -184,11 +204,11 @@ export default function CalendarView() {
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            
+
             <h2 className="text-xl font-semibold text-foreground">
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
-            
+
             <Button variant="ghost" size="sm" onClick={() => navigateMonth('next')}>
               <ChevronRight className="w-5 h-5" />
             </Button>
@@ -199,7 +219,10 @@ export default function CalendarView() {
               {/* Day Names */}
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {dayNames.map((day) => (
-                  <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
+                  <div
+                    key={day}
+                    className="text-center text-sm font-medium text-muted-foreground py-2"
+                  >
                     {day}
                   </div>
                 ))}
@@ -208,28 +231,40 @@ export default function CalendarView() {
               {/* Calendar Grid */}
               <div className="grid grid-cols-7 gap-1">
                 {getDaysInMonth(currentDate).map((day, index) => {
-                  const dayEvents = day ? getEventsForDate(day) : [];
-                  const today = isToday(day || 0);
-                  
+                  const dayEvents = day ? getEventsForDate(day) : []
+                  const today = isToday(day || 0)
+
                   return (
                     <div
                       key={index}
                       role="button"
                       tabIndex={0}
                       className={cn(
-                        "min-h-[100px] p-2 rounded-lg transition-all",
-                        day && "bg-surface hover:bg-surface-hover cursor-pointer",
-                        today && "ring-2 ring-primary"
+                        'min-h-[100px] p-2 rounded-lg transition-all',
+                        day && 'bg-surface hover:bg-surface-hover cursor-pointer',
+                        today && 'ring-2 ring-primary',
                       )}
-                      onClick={() => day && setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
-                      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && day) setSelectedDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), day)); }}
+                      onClick={() =>
+                        day &&
+                        setSelectedDate(
+                          new Date(currentDate.getFullYear(), currentDate.getMonth(), day),
+                        )
+                      }
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && day)
+                          setSelectedDate(
+                            new Date(currentDate.getFullYear(), currentDate.getMonth(), day),
+                          )
+                      }}
                     >
                       {day && (
                         <>
-                          <span className={cn(
-                            "text-sm font-medium",
-                            today ? 'text-primary' : 'text-muted-foreground'
-                          )}>
+                          <span
+                            className={cn(
+                              'text-sm font-medium',
+                              today ? 'text-primary' : 'text-muted-foreground',
+                            )}
+                          >
                             {day}
                           </span>
                           <div className="mt-1 space-y-1">
@@ -251,7 +286,7 @@ export default function CalendarView() {
                         </>
                       )}
                     </div>
-                  );
+                  )
                 })}
               </div>
             </>
@@ -264,12 +299,12 @@ export default function CalendarView() {
                   key={event.id}
                   hoverable
                   className={cn(
-                    "p-4 border-l-4",
-                    event.type === 'audit' && "border-l-info",
-                    event.type === 'review' && "border-l-info",
-                    event.type === 'deadline' && "border-l-destructive",
-                    event.type === 'meeting' && "border-l-success",
-                    event.type === 'training' && "border-l-warning",
+                    'p-4 border-l-4',
+                    event.type === 'audit' && 'border-l-info',
+                    event.type === 'review' && 'border-l-info',
+                    event.type === 'deadline' && 'border-l-destructive',
+                    event.type === 'meeting' && 'border-l-success',
+                    event.type === 'training' && 'border-l-warning',
                   )}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -278,19 +313,24 @@ export default function CalendarView() {
                         <Badge variant={eventTypeStyles[event.type].variant as any}>
                           {event.type}
                         </Badge>
-                        <Badge variant={
-                          event.status === 'overdue' ? 'destructive' :
-                          event.status === 'today' ? 'info' : 'secondary'
-                        }>
+                        <Badge
+                          variant={
+                            event.status === 'overdue'
+                              ? 'destructive'
+                              : event.status === 'today'
+                                ? 'info'
+                                : 'secondary'
+                          }
+                        >
                           {event.status}
                         </Badge>
                         {event.priority === 'high' && (
                           <AlertTriangle className="w-4 h-4 text-warning" />
                         )}
                       </div>
-                      
+
                       <h3 className="font-semibold text-foreground mb-1">{event.title}</h3>
-                      
+
                       <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
@@ -323,7 +363,7 @@ export default function CalendarView() {
             <Bell className="w-5 h-5 text-primary" />
             Upcoming
           </h3>
-          
+
           <div className="space-y-4">
             {upcomingEvents.map((event) => (
               <div
@@ -331,12 +371,14 @@ export default function CalendarView() {
                 className="p-3 bg-surface rounded-lg hover:bg-surface-hover transition-colors cursor-pointer"
               >
                 <div className="flex items-start gap-3">
-                  <div className={cn(
-                    "w-2 h-2 rounded-full mt-2",
-                    event.status === 'overdue' && 'bg-destructive',
-                    event.status === 'today' && 'bg-primary animate-pulse',
-                    event.status === 'upcoming' && 'bg-info'
-                  )} />
+                  <div
+                    className={cn(
+                      'w-2 h-2 rounded-full mt-2',
+                      event.status === 'overdue' && 'bg-destructive',
+                      event.status === 'today' && 'bg-primary animate-pulse',
+                      event.status === 'upcoming' && 'bg-info',
+                    )}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{event.title}</p>
                     <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
@@ -349,7 +391,10 @@ export default function CalendarView() {
                         </>
                       )}
                     </div>
-                    <Badge variant={eventTypeStyles[event.type].variant as any} className="mt-2 text-[10px]">
+                    <Badge
+                      variant={eventTypeStyles[event.type].variant as any}
+                      className="mt-2 text-[10px]"
+                    >
                       {event.type}
                     </Badge>
                   </div>
@@ -373,5 +418,5 @@ export default function CalendarView() {
         </Card>
       </div>
     </div>
-  );
+  )
 }

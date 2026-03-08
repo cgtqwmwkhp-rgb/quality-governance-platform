@@ -4,7 +4,12 @@ import { trackError } from '../../utils/errorTracker'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap } from 'lucide-react'
 import { CardSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, getApiErrorMessage, type AssessmentRun, type InductionRun } from '../../api/client'
+import {
+  workforceApi,
+  getApiErrorMessage,
+  type AssessmentRun,
+  type InductionRun,
+} from '../../api/client'
 import { cn } from '../../helpers/utils'
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
@@ -29,7 +34,8 @@ export default function Calendar() {
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
 
   useEffect(() => {
-    workforceApi.listEngineers({ page: '1', page_size: '500' })
+    workforceApi
+      .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
         const map: Record<number, string> = {}
         for (const e of res.data?.items || []) {
@@ -58,7 +64,7 @@ export default function Calendar() {
 
         const mapToEvents = (
           items: (AssessmentRun | InductionRun)[],
-          type: 'assessment' | 'induction'
+          type: 'assessment' | 'induction',
         ): CalendarEvent[] => {
           return items
             .filter((i) => {
@@ -104,24 +110,17 @@ export default function Calendar() {
 
   const monthName = new Date(year, month).toLocaleString('default', { month: 'long' })
 
-  const getEventsForDay = (day: number) =>
-    events.filter((e) => e.date === day)
+  const getEventsForDay = (day: number) => events.filter((e) => e.date === day)
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>
-      )}
+      {error && <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('workforce.calendar.title')}</h1>
-        <p className="text-muted-foreground mt-1">
-          {t('workforce.calendar.subtitle')}
-        </p>
+        <p className="text-muted-foreground mt-1">{t('workforce.calendar.subtitle')}</p>
       </div>
 
-      {loading && (
-        <CardSkeleton count={3} />
-      )}
+      {loading && <CardSkeleton count={3} />}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
@@ -178,8 +177,8 @@ export default function Calendar() {
             <div
               key={i}
               className={cn(
-                "min-h-[100px] p-2 border-b border-r border-border/50",
-                (i + 1) % 7 === 0 && "border-r-0"
+                'min-h-[100px] p-2 border-b border-r border-border/50',
+                (i + 1) % 7 === 0 && 'border-r-0',
               )}
             >
               {day !== null ? (
@@ -195,11 +194,11 @@ export default function Calendar() {
                             : navigate(`/workforce/training/${ev.id}/execute`)
                         }
                         className={cn(
-                          "w-full text-left text-xs px-2 py-1.5 rounded border truncate block",
+                          'w-full text-left text-xs px-2 py-1.5 rounded border truncate block',
                           ev.type === 'assessment'
-                            ? "border-warning/50 bg-warning/10 text-warning-foreground hover:bg-warning/20"
-                            : "border-primary/30 bg-primary/10 text-primary-foreground hover:bg-primary/20",
-                          ev.overdue && "border-destructive/50 bg-destructive/10"
+                            ? 'border-warning/50 bg-warning/10 text-warning-foreground hover:bg-warning/20'
+                            : 'border-primary/30 bg-primary/10 text-primary-foreground hover:bg-primary/20',
+                          ev.overdue && 'border-destructive/50 bg-destructive/10',
                         )}
                         title={ev.title}
                       >

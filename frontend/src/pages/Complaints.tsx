@@ -4,13 +4,15 @@ import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, MessageSquare, Search, Loader2 } from 'lucide-react'
 import { complaintsApi, Complaint, ComplaintCreate, getApiErrorMessage } from '../api/client'
+import { queueForSync } from '../lib/syncService'
+import { toast } from '../contexts/ToastContext'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Input } from '../components/ui/Input'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { Textarea } from '../components/ui/Textarea'
 import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { Badge, type BadgeVariant } from '../components/ui/Badge'
 import {
   Dialog,
   DialogContent,
@@ -35,6 +37,7 @@ export default function Complaints() {
   const [showModal, setShowModal] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState<ComplaintCreate>({
     title: '',
@@ -56,14 +59,16 @@ export default function Complaints() {
       } catch (err) {
         if (!cancelled) {
           trackError(err, { component: 'Complaints', action: 'load' })
-          setFormError(getApiErrorMessage(err))
+          setLoadError(getApiErrorMessage(err))
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -74,13 +79,26 @@ export default function Complaints() {
     }
     setFormError(null)
     setCreating(true)
+
+    if (!navigator.onLine) {
+      const payload = {
+        ...formData,
+        received_date: new Date(formData.received_date).toISOString(),
+      }
+      await queueForSync('/api/v1/complaints', 'POST', payload)
+      toast.success(t('complaints.saved_offline', 'Saved for sync when back online'))
+      setShowModal(false)
+      setCreating(false)
+      return
+    }
+
     try {
       const response = await complaintsApi.create({
         ...formData,
         received_date: new Date(formData.received_date).toISOString(),
       })
       if (response.data) {
-        setComplaints(prev => [response.data, ...prev])
+        setComplaints((prev) => [response.data, ...prev])
       }
       setShowModal(false)
       setFormData({
@@ -101,48 +119,72 @@ export default function Complaints() {
     }
   }
 
-  const getPriorityVariant = (priority: string) => {
+  const getPriorityVariant = (priority: string): BadgeVariant => {
     switch (priority) {
-      case 'critical': return 'critical'
-      case 'high': return 'high'
-      case 'medium': return 'medium'
-      case 'low': return 'low'
-      default: return 'secondary'
+      case 'critical':
+        return 'critical'
+      case 'high':
+        return 'high'
+      case 'medium':
+        return 'medium'
+      case 'low':
+        return 'low'
+      default:
+        return 'secondary'
     }
   }
 
-  const getStatusVariant = (status: string) => {
+  const getStatusVariant = (status: string): BadgeVariant => {
     switch (status) {
-      case 'closed': case 'resolved': return 'resolved'
-      case 'received': return 'submitted'
-      case 'acknowledged': return 'acknowledged'
-      case 'under_investigation': return 'in-progress'
-      case 'pending_response': return 'awaiting-user'
-      case 'awaiting_customer': return 'awaiting-user'
-      case 'escalated': return 'critical'
-      default: return 'secondary'
+      case 'closed':
+      case 'resolved':
+        return 'resolved'
+      case 'received':
+        return 'submitted'
+      case 'acknowledged':
+        return 'acknowledged'
+      case 'under_investigation':
+        return 'in-progress'
+      case 'pending_response':
+        return 'awaiting-user'
+      case 'awaiting_customer':
+        return 'awaiting-user'
+      case 'escalated':
+        return 'critical'
+      default:
+        return 'secondary'
     }
   }
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'product': return '📦'
-      case 'service': return '🛠️'
-      case 'delivery': return '🚚'
-      case 'communication': return '📞'
-      case 'billing': return '💳'
-      case 'staff': return '👤'
-      case 'environmental': return '🌿'
-      case 'safety': return '⚠️'
-      default: return '📋'
+      case 'product':
+        return '📦'
+      case 'service':
+        return '🛠️'
+      case 'delivery':
+        return '🚚'
+      case 'communication':
+        return '📞'
+      case 'billing':
+        return '💳'
+      case 'staff':
+        return '👤'
+      case 'environmental':
+        return '🌿'
+      case 'safety':
+        return '⚠️'
+      default:
+        return '📋'
     }
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
   const filteredComplaints = complaints.filter(
-    c => c.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-         c.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
-         c.complainant_name.toLowerCase().includes(deferredSearch.toLowerCase())
+    (c) =>
+      c.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      c.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+      c.complainant_name.toLowerCase().includes(deferredSearch.toLowerCase()),
   )
 
   if (loading) {
@@ -154,7 +196,11 @@ export default function Complaints() {
             <p className="text-muted-foreground mt-1">{t('complaints.subtitle')}</p>
           </div>
         </div>
-        <Card><CardContent className="p-6"><TableSkeleton rows={6} columns={6} /></CardContent></Card>
+        <Card>
+          <CardContent className="p-6">
+            <TableSkeleton rows={6} columns={6} />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -172,6 +218,12 @@ export default function Complaints() {
           {t('complaints.new')}
         </Button>
       </div>
+
+      {loadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 mb-4">
+          <p className="text-sm text-destructive">{loadError}</p>
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex gap-4">
@@ -194,13 +246,27 @@ export default function Complaints() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.reference')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.title')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.type')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.complainant')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.priority')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.status')}</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('complaints.table.received')}</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.reference')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.title')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.type')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.complainant')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.priority')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.status')}
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {t('complaints.table.received')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -210,7 +276,10 @@ export default function Complaints() {
                       <EmptyState
                         icon={<MessageSquare className="w-6 h-6 text-muted-foreground" />}
                         title={t('complaints.empty.title', 'No complaints found')}
-                        description={t('complaints.empty.subtitle', 'Create your first complaint to get started.')}
+                        description={t(
+                          'complaints.empty.subtitle',
+                          'Create your first complaint to get started.',
+                        )}
                         action={
                           <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
                             <Plus size={16} /> {t('complaints.new', 'New Complaint')}
@@ -228,13 +297,22 @@ export default function Complaints() {
                       onClick={() => navigate(`/complaints/${complaint.id}`)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/complaints/${complaint.id}`); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/complaints/${complaint.id}`)
+                        }
+                      }}
                     >
                       <td className="px-6 py-4">
-                        <span className="font-mono text-sm text-primary">{complaint.reference_number}</span>
+                        <span className="font-mono text-sm text-primary">
+                          {complaint.reference_number}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-foreground truncate max-w-xs">{complaint.title}</p>
+                        <p className="text-sm font-medium text-foreground truncate max-w-xs">
+                          {complaint.title}
+                        </p>
                       </td>
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
@@ -246,12 +324,12 @@ export default function Complaints() {
                         <p className="text-sm text-foreground">{complaint.complainant_name}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getPriorityVariant(complaint.priority) as any}>
+                        <Badge variant={getPriorityVariant(complaint.priority)}>
                           {complaint.priority}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <Badge variant={getStatusVariant(complaint.status) as any}>
+                        <Badge variant={getStatusVariant(complaint.status)}>
                           {complaint.status.replace('_', ' ')}
                         </Badge>
                       </td>
@@ -276,8 +354,14 @@ export default function Complaints() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="complaints-field-0" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.title')} <span className="text-destructive">*</span></label>
-              <Input id="complaints-field-0"
+              <label
+                htmlFor="complaints-field-0"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('complaints.form.title')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="complaints-field-0"
                 type="text"
                 required
                 value={formData.title}
@@ -287,8 +371,14 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-1" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.description')} <span className="text-destructive">*</span></label>
-              <Textarea id="complaints-field-1"
+              <label
+                htmlFor="complaints-field-1"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('complaints.form.description')} <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                id="complaints-field-1"
                 required
                 rows={3}
                 value={formData.description}
@@ -299,7 +389,12 @@ export default function Complaints() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="complaints-field-2" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.type')}</label>
+                <label
+                  htmlFor="complaints-field-2"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.type')}
+                </label>
                 <Select
                   value={formData.complaint_type}
                   onValueChange={(value) => setFormData({ ...formData, complaint_type: value })}
@@ -311,10 +406,14 @@ export default function Complaints() {
                     <SelectItem value="product">{t('complaints.type.product')}</SelectItem>
                     <SelectItem value="service">{t('complaints.type.service')}</SelectItem>
                     <SelectItem value="delivery">{t('complaints.type.delivery')}</SelectItem>
-                    <SelectItem value="communication">{t('complaints.type.communication')}</SelectItem>
+                    <SelectItem value="communication">
+                      {t('complaints.type.communication')}
+                    </SelectItem>
                     <SelectItem value="billing">{t('complaints.type.billing')}</SelectItem>
                     <SelectItem value="staff">{t('complaints.type.staff')}</SelectItem>
-                    <SelectItem value="environmental">{t('complaints.type.environmental')}</SelectItem>
+                    <SelectItem value="environmental">
+                      {t('complaints.type.environmental')}
+                    </SelectItem>
                     <SelectItem value="safety">{t('complaints.type.safety')}</SelectItem>
                     <SelectItem value="other">{t('complaints.type.other')}</SelectItem>
                   </SelectContent>
@@ -322,7 +421,12 @@ export default function Complaints() {
               </div>
 
               <div>
-                <label htmlFor="complaints-field-3" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.priority')}</label>
+                <label
+                  htmlFor="complaints-field-3"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.priority')}
+                </label>
                 <Select
                   value={formData.priority}
                   onValueChange={(value) => setFormData({ ...formData, priority: value })}
@@ -341,8 +445,14 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-4" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.complainant_name')} <span className="text-destructive">*</span></label>
-              <Input id="complaints-field-4"
+              <label
+                htmlFor="complaints-field-4"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('complaints.form.complainant_name')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="complaints-field-4"
                 type="text"
                 required
                 value={formData.complainant_name}
@@ -353,8 +463,14 @@ export default function Complaints() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="complaints-field-5" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.email')}</label>
-                <Input id="complaints-field-5"
+                <label
+                  htmlFor="complaints-field-5"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.email')}
+                </label>
+                <Input
+                  id="complaints-field-5"
                   type="email"
                   value={formData.complainant_email || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_email: e.target.value })}
@@ -362,8 +478,14 @@ export default function Complaints() {
                 />
               </div>
               <div>
-                <label htmlFor="complaints-field-6" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.phone')}</label>
-                <Input id="complaints-field-6"
+                <label
+                  htmlFor="complaints-field-6"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('complaints.form.phone')}
+                </label>
+                <Input
+                  id="complaints-field-6"
                   type="tel"
                   value={formData.complainant_phone || ''}
                   onChange={(e) => setFormData({ ...formData, complainant_phone: e.target.value })}
@@ -373,8 +495,14 @@ export default function Complaints() {
             </div>
 
             <div>
-              <label htmlFor="complaints-field-7" className="block text-sm font-medium text-foreground mb-2">{t('complaints.form.received_date')} <span className="text-destructive">*</span></label>
-              <Input id="complaints-field-7"
+              <label
+                htmlFor="complaints-field-7"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('complaints.form.received_date')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="complaints-field-7"
                 type="datetime-local"
                 required
                 value={formData.received_date}
@@ -384,17 +512,10 @@ export default function Complaints() {
 
             <DialogFooter className="gap-3 pt-4">
               {formError && <p className="text-sm text-destructive">{formError}</p>}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowModal(false)}
-              >
+              <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                 {t('cancel')}
               </Button>
-              <Button
-                type="submit"
-                disabled={creating}
-              >
+              <Button type="submit" disabled={creating}>
                 {creating ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />

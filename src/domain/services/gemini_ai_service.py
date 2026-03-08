@@ -20,7 +20,11 @@ from typing import Optional
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
+
 logger = logging.getLogger(__name__)
+
+_gemini_cb = CircuitBreaker("gemini_ai", failure_threshold=5, recovery_timeout=60)
 
 GEMINI_MODEL = "gemini-2.5-pro-preview-05-06"
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
@@ -107,7 +111,7 @@ Only return valid JSON, no markdown formatting."""
                 os.unlink(tmp_path)
 
         try:
-            text = await asyncio.to_thread(_run)
+            text = await _gemini_cb.call(asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -177,7 +181,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await asyncio.to_thread(_run)
+            text = await _gemini_cb.call(asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -219,7 +223,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await asyncio.to_thread(_run)
+            text = await _gemini_cb.call(asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -267,7 +271,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await asyncio.to_thread(_run)
+            text = await _gemini_cb.call(asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]
@@ -349,7 +353,7 @@ Only return valid JSON."""
             return response.text
 
         try:
-            text = await asyncio.to_thread(_run)
+            text = await _gemini_cb.call(asyncio.to_thread, _run)
             text = text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0]

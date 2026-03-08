@@ -1,6 +1,6 @@
 /**
  * Compliance Automation Center
- * 
+ *
  * Features:
  * - Regulatory change monitoring
  * - Gap analysis
@@ -10,7 +10,7 @@
  * - RIDDOR automation
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'
 import {
   Bell,
   AlertTriangle,
@@ -34,45 +34,45 @@ import {
   BarChart3,
   Zap,
   BookOpen,
-} from 'lucide-react';
-import { cn } from '../helpers/utils';
-import { Button } from '../components/ui/Button';
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
 
 interface RegulatoryUpdate {
-  id: number;
-  source: string;
-  source_reference: string;
-  title: string;
-  summary: string;
-  category: string;
-  impact: string;
-  affected_standards: string[];
-  published_date: string;
-  effective_date: string;
-  is_reviewed: boolean;
-  requires_action: boolean;
+  id: number
+  source: string
+  source_reference: string
+  title: string
+  summary: string
+  category: string
+  impact: string
+  affected_standards: string[]
+  published_date: string
+  effective_date: string
+  is_reviewed: boolean
+  requires_action: boolean
 }
 
 interface Certificate {
-  id: number;
-  name: string;
-  certificate_type: string;
-  entity_type: string;
-  entity_name: string;
-  issuing_body: string;
-  expiry_date: string;
-  status: string;
-  is_critical: boolean;
+  id: number
+  name: string
+  certificate_type: string
+  entity_type: string
+  entity_name: string
+  issuing_body: string
+  expiry_date: string
+  status: string
+  is_critical: boolean
 }
 
 interface ScheduledAudit {
-  id: number;
-  name: string;
-  audit_type: string;
-  frequency: string;
-  next_due_date: string;
-  status: string;
-  standards: string[];
+  id: number
+  name: string
+  audit_type: string
+  frequency: string
+  next_due_date: string
+  status: string
+  standards: string[]
 }
 
 const impactColors: Record<string, string> = {
@@ -81,7 +81,7 @@ const impactColors: Record<string, string> = {
   medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   low: 'bg-green-500/20 text-green-400 border-green-500/30',
   informational: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-};
+}
 
 const statusColors: Record<string, string> = {
   valid: 'bg-success/10 text-success',
@@ -89,27 +89,29 @@ const statusColors: Record<string, string> = {
   expired: 'bg-destructive/10 text-destructive',
   scheduled: 'bg-info/10 text-info',
   overdue: 'bg-destructive/10 text-destructive',
-};
+}
 
 export default function ComplianceAutomation() {
-  const [activeTab, setActiveTab] = useState<'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor'>('regulatory');
-  const [updates, setUpdates] = useState<RegulatoryUpdate[]>([]);
-  const [certificates, setCertificates] = useState<Certificate[]>([]);
-  const [audits, setAudits] = useState<ScheduledAudit[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<
+    'regulatory' | 'certificates' | 'audits' | 'scoring' | 'riddor'
+  >('regulatory')
+  const [updates, setUpdates] = useState<RegulatoryUpdate[]>([])
+  const [certificates, setCertificates] = useState<Certificate[]>([])
+  const [audits, setAudits] = useState<ScheduledAudit[]>([])
+  const [loading, setLoading] = useState(true)
   const [complianceScore] = useState({
     overall: 87.5,
     previous: 85.2,
     change: 2.3,
-  });
+  })
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData()
+  }, [])
 
   const loadData = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    setLoading(true)
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
     setUpdates([
       {
@@ -117,7 +119,8 @@ export default function ComplianceAutomation() {
         source: 'hse_uk',
         source_reference: 'HSE/2026/001',
         title: 'Updated guidance on workplace first aid requirements',
-        summary: 'New requirements for first aid training and equipment in workplaces with 50+ employees.',
+        summary:
+          'New requirements for first aid training and equipment in workplaces with 50+ employees.',
         category: 'health_safety',
         impact: 'high',
         affected_standards: ['ISO 45001'],
@@ -154,9 +157,9 @@ export default function ComplianceAutomation() {
         is_reviewed: false,
         requires_action: true,
       },
-    ]);
+    ])
 
-    setCertificates([]);
+    setCertificates([])
 
     setAudits([
       {
@@ -177,25 +180,40 @@ export default function ComplianceAutomation() {
         status: 'overdue',
         standards: ['ISO 9001'],
       },
-    ]);
+    ])
 
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   const tabs = [
-    { id: 'regulatory', label: 'Regulatory Updates', icon: Bell, count: updates.filter(u => !u.is_reviewed).length },
-    { id: 'certificates', label: 'Certificates', icon: Award, count: certificates.filter(c => c.status === 'expiring_soon').length },
-    { id: 'audits', label: 'Scheduled Audits', icon: Calendar, count: audits.filter(a => a.status === 'overdue').length },
+    {
+      id: 'regulatory',
+      label: 'Regulatory Updates',
+      icon: Bell,
+      count: updates.filter((u) => !u.is_reviewed).length,
+    },
+    {
+      id: 'certificates',
+      label: 'Certificates',
+      icon: Award,
+      count: certificates.filter((c) => c.status === 'expiring_soon').length,
+    },
+    {
+      id: 'audits',
+      label: 'Scheduled Audits',
+      icon: Calendar,
+      count: audits.filter((a) => a.status === 'overdue').length,
+    },
     { id: 'scoring', label: 'Compliance Score', icon: BarChart3 },
     { id: 'riddor', label: 'RIDDOR', icon: FileText },
-  ];
+  ]
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
       </div>
-    );
+    )
   }
 
   return (
@@ -204,12 +222,11 @@ export default function ComplianceAutomation() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Compliance Automation</h1>
-          <p className="text-muted-foreground mt-1">Monitor regulations, track certificates, and automate compliance</p>
+          <p className="text-muted-foreground mt-1">
+            Monitor regulations, track certificates, and automate compliance
+          </p>
         </div>
-        <Button
-          onClick={loadData}
-          variant="outline"
-        >
+        <Button onClick={loadData} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
@@ -220,9 +237,16 @@ export default function ComplianceAutomation() {
         <div className="lg:col-span-1 bg-gradient-to-br from-primary to-primary-hover rounded-xl p-6 text-primary-foreground">
           <div className="flex items-center justify-between mb-4">
             <Shield className="w-8 h-8 opacity-80" />
-            <span className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}>
-              {complianceScore.change >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-              {complianceScore.change >= 0 ? '+' : ''}{complianceScore.change}%
+            <span
+              className={`flex items-center gap-1 text-sm ${complianceScore.change >= 0 ? 'text-primary-foreground/80' : 'text-destructive'}`}
+            >
+              {complianceScore.change >= 0 ? (
+                <TrendingUp className="w-4 h-4" />
+              ) : (
+                <TrendingDown className="w-4 h-4" />
+              )}
+              {complianceScore.change >= 0 ? '+' : ''}
+              {complianceScore.change}%
             </span>
           </div>
           <div className="text-4xl font-bold mb-1">{complianceScore.overall}%</div>
@@ -236,7 +260,9 @@ export default function ComplianceAutomation() {
             </div>
             <span className="text-muted-foreground text-sm">Regulatory Updates</span>
           </div>
-          <div className="text-2xl font-bold text-foreground">{updates.filter(u => !u.is_reviewed).length}</div>
+          <div className="text-2xl font-bold text-foreground">
+            {updates.filter((u) => !u.is_reviewed).length}
+          </div>
           <div className="text-sm text-muted-foreground">Pending review</div>
         </div>
 
@@ -247,7 +273,9 @@ export default function ComplianceAutomation() {
             </div>
             <span className="text-muted-foreground text-sm">Expiring Certificates</span>
           </div>
-          <div className="text-2xl font-bold text-foreground">{certificates.filter(c => c.status === 'expiring_soon').length}</div>
+          <div className="text-2xl font-bold text-foreground">
+            {certificates.filter((c) => c.status === 'expiring_soon').length}
+          </div>
           <div className="text-sm text-muted-foreground">Within 60 days</div>
         </div>
 
@@ -258,31 +286,35 @@ export default function ComplianceAutomation() {
             </div>
             <span className="text-muted-foreground text-sm">Overdue Audits</span>
           </div>
-          <div className="text-2xl font-bold text-foreground">{audits.filter(a => a.status === 'overdue').length}</div>
+          <div className="text-2xl font-bold text-foreground">
+            {audits.filter((a) => a.status === 'overdue').length}
+          </div>
           <div className="text-sm text-muted-foreground">Require attention</div>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-card/50 p-1 rounded-xl overflow-x-auto border border-border">
-        {tabs.map(tab => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+              'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap',
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
             )}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
             {tab.count !== undefined && tab.count > 0 && (
-              <span className={cn(
-                "px-2 py-0.5 rounded-full text-xs",
-                activeTab === tab.id ? 'bg-white/20' : 'bg-red-500/20 text-red-400'
-              )}>
+              <span
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-xs',
+                  activeTab === tab.id ? 'bg-white/20' : 'bg-red-500/20 text-red-400',
+                )}
+              >
                 {tab.count}
               </span>
             )}
@@ -293,7 +325,7 @@ export default function ComplianceAutomation() {
       {/* Regulatory Updates Tab */}
       {activeTab === 'regulatory' && (
         <div className="space-y-4">
-          {updates.map(update => (
+          {updates.map((update) => (
             <div
               key={update.id}
               className={`bg-slate-800/50 border rounded-xl p-5 transition-colors ${
@@ -303,7 +335,9 @@ export default function ComplianceAutomation() {
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium border ${impactColors[update.impact]}`}>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium border ${impactColors[update.impact]}`}
+                    >
                       {update.impact.toUpperCase()}
                     </span>
                     <span className="px-2 py-1 bg-slate-700 rounded text-xs text-gray-300">
@@ -362,17 +396,26 @@ export default function ComplianceAutomation() {
             </button>
           </div>
           <div className="divide-y divide-slate-700">
-            {certificates.map(cert => (
+            {certificates.map((cert) => (
               <div key={cert.id} className="p-4 hover:bg-slate-700/30 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${
-                      cert.entity_type === 'user' ? 'bg-blue-500/20' :
-                      cert.entity_type === 'equipment' ? 'bg-purple-500/20' : 'bg-emerald-500/20'
-                    }`}>
-                      {cert.entity_type === 'user' ? <Users className="w-5 h-5 text-blue-400" /> :
-                       cert.entity_type === 'equipment' ? <Truck className="w-5 h-5 text-purple-400" /> :
-                       <Building className="w-5 h-5 text-emerald-400" />}
+                    <div
+                      className={`p-2 rounded-lg ${
+                        cert.entity_type === 'user'
+                          ? 'bg-blue-500/20'
+                          : cert.entity_type === 'equipment'
+                            ? 'bg-purple-500/20'
+                            : 'bg-emerald-500/20'
+                      }`}
+                    >
+                      {cert.entity_type === 'user' ? (
+                        <Users className="w-5 h-5 text-blue-400" />
+                      ) : cert.entity_type === 'equipment' ? (
+                        <Truck className="w-5 h-5 text-purple-400" />
+                      ) : (
+                        <Building className="w-5 h-5 text-emerald-400" />
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
@@ -390,7 +433,9 @@ export default function ComplianceAutomation() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[cert.status]}`}>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${statusColors[cert.status]}`}
+                      >
                         {cert.status.replace('_', ' ').toUpperCase()}
                       </span>
                       <p className="text-sm text-gray-400 mt-1">
@@ -419,13 +464,15 @@ export default function ComplianceAutomation() {
             </button>
           </div>
           <div className="divide-y divide-slate-700">
-            {audits.map(audit => (
+            {audits.map((audit) => (
               <div key={audit.id} className="p-4 hover:bg-slate-700/30 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <h4 className="font-medium text-white">{audit.name}</h4>
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status]}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status]}`}
+                      >
                         {audit.status.toUpperCase()}
                       </span>
                     </div>
@@ -435,7 +482,9 @@ export default function ComplianceAutomation() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="text-sm text-white">Due: {new Date(audit.next_due_date).toLocaleDateString()}</p>
+                      <p className="text-sm text-white">
+                        Due: {new Date(audit.next_due_date).toLocaleDateString()}
+                      </p>
                     </div>
                     <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
                       <Play className="w-4 h-4" />
@@ -459,7 +508,7 @@ export default function ComplianceAutomation() {
                 { name: 'ISO 9001', score: 92, color: 'emerald' },
                 { name: 'ISO 14001', score: 88.5, color: 'blue' },
                 { name: 'ISO 45001', score: 82, color: 'purple' },
-              ].map(standard => (
+              ].map((standard) => (
                 <div key={standard.name}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-white font-medium">{standard.name}</span>
@@ -481,14 +530,24 @@ export default function ComplianceAutomation() {
             <div className="space-y-3">
               {[
                 { standard: 'ISO 45001', clause: '8.2', description: 'First aid training gaps' },
-                { standard: 'ISO 14001', clause: '6.1', description: 'Environmental risk register outdated' },
-                { standard: 'ISO 9001', clause: '10.2', description: 'NCR closure rate below target' },
+                {
+                  standard: 'ISO 14001',
+                  clause: '6.1',
+                  description: 'Environmental risk register outdated',
+                },
+                {
+                  standard: 'ISO 9001',
+                  clause: '10.2',
+                  description: 'NCR closure rate below target',
+                },
               ].map((gap, i) => (
                 <div key={i} className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
                   <AlertCircle className="w-5 h-5 text-yellow-400" />
                   <div className="flex-1">
                     <p className="text-white text-sm">{gap.description}</p>
-                    <p className="text-gray-500 text-xs">{gap.standard} Clause {gap.clause}</p>
+                    <p className="text-gray-500 text-xs">
+                      {gap.standard} Clause {gap.clause}
+                    </p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-500" />
                 </div>
@@ -509,7 +568,8 @@ export default function ComplianceAutomation() {
               <div className="flex-1">
                 <h3 className="text-lg font-semibold text-white mb-2">RIDDOR Automation</h3>
                 <p className="text-gray-300 mb-4">
-                  Automatically detect reportable incidents and prepare RIDDOR submissions to the Health & Safety Executive.
+                  Automatically detect reportable incidents and prepare RIDDOR submissions to the
+                  Health & Safety Executive.
                 </p>
                 <div className="flex items-center gap-4">
                   <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
@@ -532,11 +592,13 @@ export default function ComplianceAutomation() {
             <div className="p-8 text-center">
               <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
               <p className="text-white font-medium">No pending RIDDOR submissions</p>
-              <p className="text-gray-400 text-sm mt-1">All reportable incidents have been submitted</p>
+              <p className="text-gray-400 text-sm mt-1">
+                All reportable incidents have been submitted
+              </p>
             </div>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

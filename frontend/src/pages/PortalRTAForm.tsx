@@ -1,30 +1,30 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { toast } from '../contexts/ToastContext';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
-import { API_BASE_URL } from '../config/apiBase';
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
+import { toast } from '../contexts/ToastContext'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
+import { API_BASE_URL } from '../config/apiBase'
 
 // Portal report submission - uses public endpoint (no auth required)
 interface PortalReportPayload {
-  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss';
-  title: string;
-  description: string;
-  location?: string;
-  severity: string;
-  reporter_name?: string;
-  reporter_email?: string;
-  reporter_phone?: string;
-  department?: string;
-  is_anonymous: boolean;
+  report_type: 'incident' | 'complaint' | 'rta' | 'near_miss'
+  title: string
+  description: string
+  location?: string
+  severity: string
+  reporter_name?: string
+  reporter_email?: string
+  reporter_phone?: string
+  department?: string
+  is_anonymous: boolean
 }
 
 interface PortalReportResponse {
-  success: boolean;
-  reference_number: string;
-  tracking_code: string;
-  message: string;
-  estimated_response: string;
+  success: boolean
+  reference_number: string
+  tracking_code: string
+  message: string
+  estimated_response: string
 }
 
 async function submitPortalReport(payload: PortalReportPayload): Promise<PortalReportResponse> {
@@ -32,14 +32,14 @@ async function submitPortalReport(payload: PortalReportPayload): Promise<PortalR
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  });
-  
+  })
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Submission failed: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.message || `Submission failed: ${response.status}`)
   }
-  
-  return response.json();
+
+  return response.json()
 }
 import {
   ArrowLeft,
@@ -69,13 +69,13 @@ import {
   Video,
   Navigation,
   AlertCircle,
-} from 'lucide-react';
-import FuzzySearchDropdown from '../components/FuzzySearchDropdown';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Textarea } from '../components/ui/Textarea';
-import { cn } from '../helpers/utils';
+} from 'lucide-react'
+import FuzzySearchDropdown from '../components/FuzzySearchDropdown'
+import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+import { cn } from '../helpers/utils'
 
 // PE Vehicle options
 const PE_VEHICLES = [
@@ -86,7 +86,7 @@ const PE_VEHICLES = [
   { value: 'DY72EOX', label: 'DY72EOX', sublabel: 'Peugeot Expert' },
   { value: 'BD21NTJ', label: 'BD21NTJ', sublabel: 'Renault Master' },
   { value: 'other', label: 'Other', sublabel: 'Enter manually' },
-];
+]
 
 // Accident types
 const ACCIDENT_TYPES = [
@@ -96,7 +96,7 @@ const ACCIDENT_TYPES = [
   { value: 'animal', label: 'Animal', icon: '🦌' },
   { value: 'hit-run', label: 'Hit & Run', icon: '🏃' },
   { value: 'single', label: 'Single Vehicle', icon: '🚗' },
-];
+]
 
 // Impact points
 const IMPACT_POINTS = [
@@ -108,7 +108,7 @@ const IMPACT_POINTS = [
   { value: 'rear', label: 'Rear' },
   { value: 'rear-left', label: 'Rear Left' },
   { value: 'rear-right', label: 'Rear Right' },
-];
+]
 
 // Weather options
 const WEATHER_OPTIONS = [
@@ -118,7 +118,7 @@ const WEATHER_OPTIONS = [
   { value: 'fog', label: 'Fog', icon: CloudFog },
   { value: 'wind', label: 'Windy', icon: Wind },
   { value: 'snow', label: 'Snow', icon: Snowflake },
-];
+]
 
 // Road conditions
 const ROAD_CONDITIONS = [
@@ -126,59 +126,59 @@ const ROAD_CONDITIONS = [
   { value: 'wet', label: 'Wet' },
   { value: 'icy', label: 'Icy' },
   { value: 'muddy', label: 'Muddy' },
-];
+]
 
 interface ThirdParty {
-  registration: string;
-  driverName: string;
-  driverPhone: string;
-  insuranceCompany: string;
-  policyNumber: string;
-  damage: string;
-  hasInjuries: boolean | null;
+  registration: string
+  driverName: string
+  driverPhone: string
+  insuranceCompany: string
+  policyNumber: string
+  damage: string
+  hasInjuries: boolean | null
 }
 
 interface FormData {
-  employeeName: string;
-  peVehicle: string;
-  peVehicleOther: string;
-  hasPassengers: boolean | null;
-  passengerDetails: string;
-  location: string;
-  accidentDate: string;
-  accidentTime: string;
-  accidentType: string;
-  vehicleCount: number;
-  thirdParties: ThirdParty[];
-  impactPoint: string;
-  damageDescription: string;
-  isDrivable: boolean | null;
-  weather: string;
-  roadCondition: string;
-  hasWitnesses: boolean | null;
-  witnessDetails: string;
-  emergencyServices: string;
-  policeRef: string;
-  purposeOfJourney: string;
-  speed: string;
-  hasDashcam: boolean | null;
-  hasCCTV: boolean | null;
-  fullDescription: string;
-  photos: File[];
+  employeeName: string
+  peVehicle: string
+  peVehicleOther: string
+  hasPassengers: boolean | null
+  passengerDetails: string
+  location: string
+  accidentDate: string
+  accidentTime: string
+  accidentType: string
+  vehicleCount: number
+  thirdParties: ThirdParty[]
+  impactPoint: string
+  damageDescription: string
+  isDrivable: boolean | null
+  weather: string
+  roadCondition: string
+  hasWitnesses: boolean | null
+  witnessDetails: string
+  emergencyServices: string
+  policeRef: string
+  purposeOfJourney: string
+  speed: string
+  hasDashcam: boolean | null
+  hasCCTV: boolean | null
+  fullDescription: string
+  photos: File[]
 }
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5
 
 export default function PortalRTAForm() {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { user } = usePortalAuth();
-  const [step, setStep] = useState<Step>(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [geolocating, setGeolocating] = useState(false);
-  const [submittedRef, setSubmittedRef] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { user } = usePortalAuth()
+  const [step, setStep] = useState<Step>(1)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [geolocating, setGeolocating] = useState(false)
+  const [submittedRef, setSubmittedRef] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const createEmptyThirdParty = (): ThirdParty => ({
     registration: '',
@@ -188,7 +188,7 @@ export default function PortalRTAForm() {
     policyNumber: '',
     damage: '',
     hasInjuries: null,
-  });
+  })
 
   const [formData, setFormData] = useState<FormData>({
     employeeName: '',
@@ -217,9 +217,9 @@ export default function PortalRTAForm() {
     hasCCTV: null,
     fullDescription: '',
     photos: [],
-  });
+  })
 
-  const totalSteps = 5;
+  const totalSteps = 5
 
   // Pre-fill user details from SSO
   useEffect(() => {
@@ -227,80 +227,84 @@ export default function PortalRTAForm() {
       setFormData((prev) => ({
         ...prev,
         employeeName: user.name || '',
-      }));
+      }))
     }
-  }, [user]);
+  }, [user])
 
   // Update vehicle count
   const setVehicleCount = (count: number) => {
-    const newCount = Math.max(0, Math.min(3, count));
-    const parties = [...formData.thirdParties];
-    while (parties.length < newCount) parties.push(createEmptyThirdParty());
-    while (parties.length > newCount) parties.pop();
-    setFormData((prev) => ({ ...prev, vehicleCount: newCount, thirdParties: parties }));
-  };
+    const newCount = Math.max(0, Math.min(3, count))
+    const parties = [...formData.thirdParties]
+    while (parties.length < newCount) parties.push(createEmptyThirdParty())
+    while (parties.length > newCount) parties.pop()
+    setFormData((prev) => ({ ...prev, vehicleCount: newCount, thirdParties: parties }))
+  }
 
   // Update third party
   const updateThirdParty = (index: number, field: keyof ThirdParty, value: any) => {
-    const updated = [...formData.thirdParties];
-    updated[index] = { ...updated[index], [field]: value };
-    setFormData((prev) => ({ ...prev, thirdParties: updated }));
-  };
+    const updated = [...formData.thirdParties]
+    updated[index] = { ...updated[index], [field]: value }
+    setFormData((prev) => ({ ...prev, thirdParties: updated }))
+  }
 
   // GPS detection
   const detectLocation = () => {
-    setGeolocating(true);
+    setGeolocating(true)
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           setFormData((prev) => ({
             ...prev,
             location: `GPS: ${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`,
-          }));
-          setGeolocating(false);
+          }))
+          setGeolocating(false)
         },
         () => {
-          setGeolocating(false);
-          toast.warning('Could not detect location');
-        }
-      );
+          setGeolocating(false)
+          toast.warning('Could not detect location')
+        },
+      )
     }
-  };
+  }
 
   // Voice recording toggle
-  const toggleVoiceRecording = () => setIsRecording(!isRecording);
+  const toggleVoiceRecording = () => setIsRecording(!isRecording)
 
   // Photo handling
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...Array.from(e.target.files!)] }));
+      setFormData((prev) => ({ ...prev, photos: [...prev.photos, ...Array.from(e.target.files!)] }))
     }
-  };
+  }
 
   const removePhoto = (index: number) => {
-    setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }));
-  };
+    setFormData((prev) => ({ ...prev, photos: prev.photos.filter((_, i) => i !== index) }))
+  }
 
   // Submit - uses public portal endpoint (no auth required)
   const handleSubmit = async () => {
-    setIsSubmitting(true);
-    setError(null);
-    
+    setIsSubmitting(true)
+    setError(null)
+
     try {
       // Build detailed RTA description
-      const thirdPartiesDesc = formData.thirdParties.length > 0 
-        ? `\n\nThird Parties:\n${formData.thirdParties.map((tp, i) => 
-            `${i + 1}. ${tp.registration || 'Unknown'} - Driver: ${tp.driverName || 'Unknown'}`
-          ).join('\n')}`
-        : '';
-      
+      const thirdPartiesDesc =
+        formData.thirdParties.length > 0
+          ? `\n\nThird Parties:\n${formData.thirdParties
+              .map(
+                (tp, i) =>
+                  `${i + 1}. ${tp.registration || 'Unknown'} - Driver: ${tp.driverName || 'Unknown'}`,
+              )
+              .join('\n')}`
+          : ''
+
       const fullDescription = `${formData.fullDescription}
 
 Vehicle: ${formData.peVehicle === 'other' ? formData.peVehicleOther : formData.peVehicle}
 Damage: ${formData.damageDescription}
 Weather: ${formData.weather || 'Not specified'}
 Road Conditions: ${formData.roadCondition || 'Not specified'}
-Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
+Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
 
       // Build portal report payload - RTA goes to RTA dashboard
       const payload: PortalReportPayload = {
@@ -313,34 +317,42 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         reporter_email: user?.email || undefined,
         department: undefined,
         is_anonymous: false,
-      };
-      
-      const response = await submitPortalReport(payload);
-      setSubmittedRef(response.reference_number);
+      }
+
+      const response = await submitPortalReport(payload)
+      setSubmittedRef(response.reference_number)
       // Store tracking code for anonymous access if needed
       if (response.tracking_code) {
-        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code);
+        sessionStorage.setItem(`tracking_${response.reference_number}`, response.tracking_code)
       }
     } catch (error) {
-      console.error('Submission error:', error);
+      console.error('Submission error:', error)
       // Show real error - do NOT generate fake reference numbers
-      setError(error instanceof Error ? error.message : 'Failed to submit report. Please try again.');
+      setError(
+        error instanceof Error ? error.message : 'Failed to submit report. Please try again.',
+      )
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   // Validation
   const canProceed = (): boolean => {
     switch (step) {
-      case 1: return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null;
-      case 2: return !!formData.location && !!formData.accidentType;
-      case 3: return true;
-      case 4: return !!formData.damageDescription;
-      case 5: return !!formData.fullDescription;
-      default: return false;
+      case 1:
+        return !!formData.employeeName && !!formData.peVehicle && formData.hasPassengers !== null
+      case 2:
+        return !!formData.location && !!formData.accidentType
+      case 3:
+        return true
+      case 4:
+        return !!formData.damageDescription
+      case 5:
+        return !!formData.fullDescription
+      default:
+        return false
     }
-  };
+  }
 
   // Success screen
   if (submittedRef) {
@@ -350,10 +362,14 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
           <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check className="w-10 h-10 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('portal.rta_report_submitted')}</h1>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {t('portal.rta_report_submitted')}
+          </h1>
           <p className="text-muted-foreground mb-6">{t('portal.reference_label')}</p>
           <div className="bg-surface border border-border rounded-xl px-6 py-4 mb-6">
-            <span className="text-2xl font-mono font-bold text-orange-600 dark:text-orange-400">{submittedRef}</span>
+            <span className="text-2xl font-mono font-bold text-orange-600 dark:text-orange-400">
+              {submittedRef}
+            </span>
           </div>
           <div className="flex gap-3">
             <Button
@@ -362,17 +378,13 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             >
               {t('portal.track_status')}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate('/portal')}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={() => navigate('/portal')} className="flex-1">
               {t('portal.done')}
             </Button>
           </div>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -381,7 +393,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
       <header className="bg-card/95 backdrop-blur-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
           <button
-            onClick={() => step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)}
+            onClick={() =>
+              step === 1 ? navigate('/portal/report') : setStep((s) => (s - 1) as Step)
+            }
             className="w-10 h-10 flex items-center justify-center rounded-xl bg-surface hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -391,10 +405,12 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
               <Car className="w-5 h-5 text-orange-600 dark:text-orange-400" />
               <span className="font-semibold text-foreground">{t('portal.rta_report')}</span>
             </div>
-            <div className="text-xs text-muted-foreground">{t('portal.step_of', { step, total: totalSteps })}</div>
+            <div className="text-xs text-muted-foreground">
+              {t('portal.step_of', { step, total: totalSteps })}
+            </div>
           </div>
         </div>
-        
+
         <div className="h-1 bg-border">
           <div
             className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-300"
@@ -413,13 +429,21 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-0" className="block text-sm font-medium text-foreground mb-2">{t('portal.your_name_label')} *</label>
+              <label
+                htmlFor="portalrtaform-field-0"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.your_name_label')} *
+              </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="portalrtaform-field-0"
+                <Input
+                  id="portalrtaform-field-0"
                   data-testid="rta-employee-name"
                   value={formData.employeeName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, employeeName: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, employeeName: e.target.value }))
+                  }
                   placeholder={t('portal.full_name_placeholder')}
                   className="pl-10"
                 />
@@ -438,14 +462,18 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             {formData.peVehicle === 'other' && (
               <Input
                 value={formData.peVehicleOther}
-                onChange={(e) => setFormData((prev) => ({ ...prev, peVehicleOther: e.target.value.toUpperCase() }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, peVehicleOther: e.target.value.toUpperCase() }))
+                }
                 placeholder={t('portal.enter_registration')}
                 className="uppercase"
               />
             )}
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_passengers')} *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.any_passengers')} *
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -456,7 +484,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasPassengers === val
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -467,10 +495,18 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {formData.hasPassengers && (
               <div>
-                <label htmlFor="portalrtaform-field-1" className="block text-sm font-medium text-foreground mb-2">{t('portal.passenger_details')}</label>
-                <Input id="portalrtaform-field-1"
+                <label
+                  htmlFor="portalrtaform-field-1"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.passenger_details')}
+                </label>
+                <Input
+                  id="portalrtaform-field-1"
                   value={formData.passengerDetails}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, passengerDetails: e.target.value }))
+                  }
                   placeholder={t('portal.passenger_placeholder')}
                 />
               </div>
@@ -482,15 +518,23 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.accident_details')}</h1>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.accident_details')}
+              </h1>
               <p className="text-muted-foreground text-sm">{t('portal.when_where')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-2" className="block text-sm font-medium text-foreground mb-2">{t('portal.location_label')} *</label>
+              <label
+                htmlFor="portalrtaform-field-2"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.location_label')} *
+              </label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="portalrtaform-field-2"
+                <Input
+                  id="portalrtaform-field-2"
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder={t('portal.road_placeholder')}
@@ -503,32 +547,52 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                   aria-label="Detect location"
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 rounded-lg"
                 >
-                  {geolocating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                  {geolocating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Navigation className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalrtaform-field-3" className="block text-sm font-medium text-foreground mb-2">{t('portal.date_label')}</label>
+                <label
+                  htmlFor="portalrtaform-field-3"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.date_label')}
+                </label>
                 <div className="relative">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="portalrtaform-field-3"
+                  <Input
+                    id="portalrtaform-field-3"
                     type="date"
                     value={formData.accidentDate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, accidentDate: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, accidentDate: e.target.value }))
+                    }
                     className="pl-10"
                   />
                 </div>
               </div>
               <div>
-                <label htmlFor="portalrtaform-field-4" className="block text-sm font-medium text-foreground mb-2">{t('portal.time_label')}</label>
+                <label
+                  htmlFor="portalrtaform-field-4"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.time_label')}
+                </label>
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input id="portalrtaform-field-4"
+                  <Input
+                    id="portalrtaform-field-4"
                     type="time"
                     value={formData.accidentTime}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, accidentTime: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, accidentTime: e.target.value }))
+                    }
                     className="pl-10"
                   />
                 </div>
@@ -536,7 +600,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.accident_type')} *</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.accident_type')} *
+              </span>
               <div className="grid grid-cols-3 gap-2">
                 {ACCIDENT_TYPES.map((type) => (
                   <button
@@ -547,7 +613,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
                       formData.accidentType === type.value
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500'
-                        : 'bg-card border-border hover:border-border-strong'
+                        : 'bg-card border-border hover:border-border-strong',
                     )}
                   >
                     <span className="text-xl">{type.icon}</span>
@@ -558,7 +624,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.other_vehicles')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.other_vehicles')}
+              </span>
               <Card className="p-4">
                 <div className="flex items-center justify-center gap-6">
                   <button
@@ -570,7 +638,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                     <Minus className="w-5 h-5 text-foreground" />
                   </button>
                   <div className="text-center">
-                    <span className="text-3xl font-bold text-foreground">{formData.vehicleCount}</span>
+                    <span className="text-3xl font-bold text-foreground">
+                      {formData.vehicleCount}
+                    </span>
                     <p className="text-muted-foreground text-xs">{t('portal.vehicles')}</p>
                   </div>
                   <button
@@ -592,10 +662,14 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
           <div className="space-y-5">
             <div>
               <h1 className="text-xl font-bold text-foreground mb-1">
-                {formData.vehicleCount === 0 ? t('portal.any_witnesses') : t('portal.third_party_details')}
+                {formData.vehicleCount === 0
+                  ? t('portal.any_witnesses')
+                  : t('portal.third_party_details')}
               </h1>
               <p className="text-muted-foreground text-sm">
-                {formData.vehicleCount === 0 ? t('portal.witnesses_to_accident') : t('portal.other_vehicles_details')}
+                {formData.vehicleCount === 0
+                  ? t('portal.witnesses_to_accident')
+                  : t('portal.other_vehicles_details')}
               </p>
             </div>
 
@@ -608,7 +682,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 <div className="grid grid-cols-2 gap-2">
                   <Input
                     value={party.registration}
-                    onChange={(e) => updateThirdParty(index, 'registration', e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      updateThirdParty(index, 'registration', e.target.value.toUpperCase())
+                    }
                     placeholder={t('portal.reg_placeholder')}
                     className="uppercase text-sm"
                   />
@@ -644,7 +720,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             ))}
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.any_witnesses')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.any_witnesses')}
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -655,7 +733,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.hasWitnesses === val
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -667,7 +745,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             {formData.hasWitnesses && (
               <Input
                 value={formData.witnessDetails}
-                onChange={(e) => setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, witnessDetails: e.target.value }))
+                }
                 placeholder={t('portal.witness_contact_rta')}
               />
             )}
@@ -678,12 +758,16 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 4 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.damage_conditions')}</h1>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.damage_conditions')}
+              </h1>
               <p className="text-muted-foreground text-sm">{t('portal.impact_road')}</p>
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.point_of_impact')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.point_of_impact')}
+              </span>
               <div className="grid grid-cols-4 gap-2">
                 {IMPACT_POINTS.map((point) => (
                   <button
@@ -694,7 +778,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'px-2 py-2 rounded-lg border-2 text-xs font-medium transition-all',
                       formData.impactPoint === point.value
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {point.label}
@@ -704,17 +788,27 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-5" className="block text-sm font-medium text-foreground mb-2">{t('portal.damage_description')} *</label>
-              <Textarea id="portalrtaform-field-5"
+              <label
+                htmlFor="portalrtaform-field-5"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.damage_description')} *
+              </label>
+              <Textarea
+                id="portalrtaform-field-5"
                 value={formData.damageDescription}
-                onChange={(e) => setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, damageDescription: e.target.value }))
+                }
                 placeholder={t('portal.describe_damage')}
                 rows={3}
               />
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.vehicle_drivable')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.vehicle_drivable')}
+              </span>
               <div className="grid grid-cols-2 gap-3">
                 {[true, false].map((val) => (
                   <button
@@ -724,8 +818,10 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                     className={cn(
                       'px-4 py-3 rounded-xl border-2 font-medium transition-all',
                       formData.isDrivable === val
-                        ? val ? 'bg-success/10 border-success text-success' : 'bg-destructive/10 border-destructive text-destructive'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        ? val
+                          ? 'bg-success/10 border-success text-success'
+                          : 'bg-destructive/10 border-destructive text-destructive'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {val ? 'Yes' : 'No'}
@@ -735,7 +831,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.weather')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.weather')}
+              </span>
               <div className="grid grid-cols-6 gap-2">
                 {WEATHER_OPTIONS.map((w) => (
                   <button
@@ -746,17 +844,26 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all',
                       formData.weather === w.value
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500'
-                        : 'bg-card border-border hover:border-border-strong'
+                        : 'bg-card border-border hover:border-border-strong',
                     )}
                   >
-                    <w.icon className={cn('w-5 h-5', formData.weather === w.value ? 'text-orange-600 dark:text-orange-400' : 'text-muted-foreground')} />
+                    <w.icon
+                      className={cn(
+                        'w-5 h-5',
+                        formData.weather === w.value
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : 'text-muted-foreground',
+                      )}
+                    />
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.road_condition')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.road_condition')}
+              </span>
               <div className="flex flex-wrap gap-2">
                 {ROAD_CONDITIONS.map((cond) => (
                   <button
@@ -767,7 +874,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                       'px-4 py-2 rounded-full border-2 text-sm font-medium transition-all',
                       formData.roadCondition === cond.value
                         ? 'bg-orange-100 dark:bg-orange-900/20 border-orange-500 text-orange-700 dark:text-orange-400'
-                        : 'bg-card border-border text-foreground hover:border-border-strong'
+                        : 'bg-card border-border text-foreground hover:border-border-strong',
                     )}
                   >
                     {cond.label}
@@ -778,11 +885,17 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             {/* Photos */}
             <div>
-              <span className="block text-sm font-medium text-foreground mb-2">{t('portal.photos')}</span>
+              <span className="block text-sm font-medium text-foreground mb-2">
+                {t('portal.photos')}
+              </span>
               <div className="grid grid-cols-4 gap-2">
                 {formData.photos.map((photo, index) => (
                   <div key={index} className="relative aspect-square">
-                    <img src={URL.createObjectURL(photo)} alt="" className="w-full h-full object-cover rounded-xl" />
+                    <img
+                      src={URL.createObjectURL(photo)}
+                      alt=""
+                      className="w-full h-full object-cover rounded-xl"
+                    />
                     <button
                       type="button"
                       onClick={() => removePhoto(index)}
@@ -796,7 +909,14 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 <span className="aspect-square flex flex-col items-center justify-center bg-surface border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary/30 transition-colors">
                   <Camera className="w-6 h-6 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground mt-1">Add</span>
-                  <input type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} className="hidden" multiple />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePhotoCapture}
+                    className="hidden"
+                    multiple
+                  />
                 </span>
               </div>
             </div>
@@ -807,16 +927,26 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         {step === 5 && (
           <div className="space-y-5">
             <div>
-              <h1 className="text-xl font-bold text-foreground mb-1">{t('portal.what_happened')}</h1>
+              <h1 className="text-xl font-bold text-foreground mb-1">
+                {t('portal.what_happened')}
+              </h1>
               <p className="text-muted-foreground text-sm">{t('portal.describe_accident')}</p>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-6" className="block text-sm font-medium text-foreground mb-2">{t('portal.full_description')} *</label>
+              <label
+                htmlFor="portalrtaform-field-6"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.full_description')} *
+              </label>
               <div className="relative">
-                <Textarea id="portalrtaform-field-6"
+                <Textarea
+                  id="portalrtaform-field-6"
                   value={formData.fullDescription}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, fullDescription: e.target.value }))
+                  }
                   placeholder={t('portal.describe_exactly')}
                   rows={6}
                 />
@@ -825,7 +955,9 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                   onClick={toggleVoiceRecording}
                   className={cn(
                     'absolute right-3 bottom-3 p-2 rounded-full transition-colors',
-                    isRecording ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/30'
+                    isRecording
+                      ? 'bg-destructive text-destructive-foreground animate-pulse'
+                      : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-200 dark:hover:bg-orange-900/30',
                   )}
                 >
                   {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -835,17 +967,31 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label htmlFor="portalrtaform-field-7" className="block text-sm font-medium text-foreground mb-2">{t('portal.purpose_journey')}</label>
-                <Input id="portalrtaform-field-7"
+                <label
+                  htmlFor="portalrtaform-field-7"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.purpose_journey')}
+                </label>
+                <Input
+                  id="portalrtaform-field-7"
                   value={formData.purposeOfJourney}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, purposeOfJourney: e.target.value }))
+                  }
                   placeholder={t('portal.purpose_placeholder')}
                   className="text-sm"
                 />
               </div>
               <div>
-                <label htmlFor="portalrtaform-field-8" className="block text-sm font-medium text-foreground mb-2">{t('portal.speed_at_impact')}</label>
-                <Input id="portalrtaform-field-8"
+                <label
+                  htmlFor="portalrtaform-field-8"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('portal.speed_at_impact')}
+                </label>
+                <Input
+                  id="portalrtaform-field-8"
                   value={formData.speed}
                   onChange={(e) => setFormData((prev) => ({ ...prev, speed: e.target.value }))}
                   placeholder={t('portal.speed_placeholder')}
@@ -860,10 +1006,17 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 onClick={() => setFormData((prev) => ({ ...prev, hasDashcam: !prev.hasDashcam }))}
                 className={cn(
                   'flex items-center gap-2 p-3 rounded-xl border-2 transition-all',
-                  formData.hasDashcam ? 'bg-success/10 border-success' : 'bg-card border-border hover:border-border-strong'
+                  formData.hasDashcam
+                    ? 'bg-success/10 border-success'
+                    : 'bg-card border-border hover:border-border-strong',
                 )}
               >
-                <Video className={cn('w-5 h-5', formData.hasDashcam ? 'text-success' : 'text-muted-foreground')} />
+                <Video
+                  className={cn(
+                    'w-5 h-5',
+                    formData.hasDashcam ? 'text-success' : 'text-muted-foreground',
+                  )}
+                />
                 <span className="text-sm text-foreground">{t('portal.dashcam')}</span>
               </button>
               <button
@@ -871,21 +1024,36 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
                 onClick={() => setFormData((prev) => ({ ...prev, hasCCTV: !prev.hasCCTV }))}
                 className={cn(
                   'flex items-center gap-2 p-3 rounded-xl border-2 transition-all',
-                  formData.hasCCTV ? 'bg-success/10 border-success' : 'bg-card border-border hover:border-border-strong'
+                  formData.hasCCTV
+                    ? 'bg-success/10 border-success'
+                    : 'bg-card border-border hover:border-border-strong',
                 )}
               >
-                <Eye className={cn('w-5 h-5', formData.hasCCTV ? 'text-success' : 'text-muted-foreground')} />
+                <Eye
+                  className={cn(
+                    'w-5 h-5',
+                    formData.hasCCTV ? 'text-success' : 'text-muted-foreground',
+                  )}
+                />
                 <span className="text-sm text-foreground">{t('portal.cctv_nearby')}</span>
               </button>
             </div>
 
             <div>
-              <label htmlFor="portalrtaform-field-9" className="block text-sm font-medium text-foreground mb-2">{t('portal.emergency_services')}</label>
+              <label
+                htmlFor="portalrtaform-field-9"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('portal.emergency_services')}
+              </label>
               <div className="relative">
                 <Siren className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input id="portalrtaform-field-9"
+                <Input
+                  id="portalrtaform-field-9"
                   value={formData.emergencyServices}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, emergencyServices: e.target.value }))
+                  }
                   placeholder={t('portal.emergency_placeholder')}
                   className="pl-10"
                 />
@@ -903,11 +1071,13 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
             <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-destructive">{t('portal.submission_failed')}</p>
+                <p className="text-sm font-medium text-destructive">
+                  {t('portal.submission_failed')}
+                </p>
                 <p className="text-sm text-destructive/80">{error}</p>
               </div>
-              <button 
-                onClick={() => setError(null)} 
+              <button
+                onClick={() => setError(null)}
                 className="ml-auto text-destructive/60 hover:text-destructive"
               >
                 <X className="w-4 h-4" />
@@ -917,15 +1087,12 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         </div>
         <div className="max-w-lg mx-auto flex gap-3">
           {step > 1 && (
-            <Button
-              variant="outline"
-              onClick={() => setStep((s) => (s - 1) as Step)}
-            >
+            <Button variant="outline" onClick={() => setStep((s) => (s - 1) as Step)}>
               <ChevronLeft className="w-5 h-5" />
               {t('back')}
             </Button>
           )}
-          
+
           {step < totalSteps ? (
             <Button
               onClick={() => setStep((s) => (s + 1) as Step)}
@@ -958,5 +1125,5 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`;
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  Check,
-  X,
-  Minus,
-  ChevronDown,
-} from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Minus, ChevronDown } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { workforceApi, auditsApi, type InductionRun, type AuditQuestion } from '../../api/client'
 import { Button } from '../../components/ui/Button'
@@ -63,7 +55,7 @@ export default function TrainingExecution() {
       }
       return flat.sort((a, b) => a.id - b.id)
     },
-    []
+    [],
   )
 
   useEffect(() => {
@@ -80,7 +72,10 @@ export default function TrainingExecution() {
           await workforceApi.startInduction(id)
         }
 
-        let template: { sections: { title: string; questions: AuditQuestion[] }[]; name: string } | null = null
+        let template: {
+          sections: { title: string; questions: AuditQuestion[] }[]
+          name: string
+        } | null = null
         try {
           const templateRes = await auditsApi.getTemplate(run.template_id)
           template = templateRes.data
@@ -93,7 +88,7 @@ export default function TrainingExecution() {
             template.sections.map((s) => ({
               title: s.title,
               questions: s.questions || [],
-            }))
+            })),
           )
           setQuestions(flat)
           setTemplateName(template.name)
@@ -188,8 +183,12 @@ export default function TrainingExecution() {
     }
   }
 
-  const competentCount = Array.from(responses.values()).filter((r) => r.verdict === 'competent').length
-  const notYetCompetentCount = Array.from(responses.values()).filter((r) => r.verdict === 'not_yet_competent').length
+  const competentCount = Array.from(responses.values()).filter(
+    (r) => r.verdict === 'competent',
+  ).length
+  const notYetCompetentCount = Array.from(responses.values()).filter(
+    (r) => r.verdict === 'not_yet_competent',
+  ).length
   const naCount = Array.from(responses.values()).filter((r) => r.verdict === 'na').length
 
   if (loading) {
@@ -219,11 +218,18 @@ export default function TrainingExecution() {
     return (
       <div className="space-y-6 pb-8">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setShowSummary(false)} aria-label="Back">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowSummary(false)}
+            aria-label="Back"
+          >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{t('workforce.induction.summary')}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {t('workforce.induction.summary')}
+            </h1>
             <p className="text-muted-foreground text-sm">
               {induction?.reference_number} · {engineerName} · {templateName}
             </p>
@@ -232,17 +238,23 @@ export default function TrainingExecution() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <h2 className="text-lg font-semibold text-foreground">{t('workforce.common.overall_statistics')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('workforce.common.overall_statistics')}
+            </h2>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="rounded-lg bg-success/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{competentCount}</span>
-                <p className="text-sm text-muted-foreground">{t('workforce.competency.competent')}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('workforce.competency.competent')}
+                </p>
               </div>
               <div className="rounded-lg bg-destructive/10 border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{notYetCompetentCount}</span>
-                <p className="text-sm text-muted-foreground">{t('workforce.competency.not_yet_competent')}</p>
+                <p className="text-sm text-muted-foreground">
+                  {t('workforce.competency.not_yet_competent')}
+                </p>
               </div>
               <div className="rounded-lg bg-muted border border-border p-4 text-center">
                 <span className="text-2xl font-bold text-foreground">{naCount}</span>
@@ -277,13 +289,17 @@ export default function TrainingExecution() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? t('workforce.induction.title')}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              {induction?.reference_number ?? t('workforce.induction.title')}
+            </h1>
             <p className="text-muted-foreground text-sm">{t('workforce.common.no_questions')}</p>
           </div>
         </div>
         <Card>
           <CardContent className="pt-6">
-            <p className="text-muted-foreground">{t('workforce.common.no_questions_description')}</p>
+            <p className="text-muted-foreground">
+              {t('workforce.common.no_questions_description')}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -295,13 +311,23 @@ export default function TrainingExecution() {
   return (
     <div className="space-y-6 pb-8">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/workforce/training')} aria-label="Back">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/workforce/training')}
+          aria-label="Back"
+        >
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{induction?.reference_number ?? t('workforce.induction.title')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            {induction?.reference_number ?? t('workforce.induction.title')}
+          </h1>
           <p className="text-muted-foreground text-sm">
-            {engineerName} · {templateName} · {induction?.scheduled_date ? new Date(induction.scheduled_date).toLocaleDateString() : '—'}
+            {engineerName} · {templateName} ·{' '}
+            {induction?.scheduled_date
+              ? new Date(induction.scheduled_date).toLocaleDateString()
+              : '—'}
           </p>
         </div>
       </div>
@@ -309,7 +335,9 @@ export default function TrainingExecution() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">{t('workforce.common.progress')}</span>
+            <span className="text-sm font-medium text-foreground">
+              {t('workforce.common.progress')}
+            </span>
             <span className="text-sm text-muted-foreground">
               {answeredCount} / {totalQuestions} {t('workforce.common.items')}
             </span>
@@ -332,7 +360,7 @@ export default function TrainingExecution() {
                     ? 'bg-primary text-primary-foreground'
                     : responses.get(q.id)?.verdict
                       ? 'bg-muted text-foreground hover:bg-muted/80'
-                      : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted',
                 )}
                 aria-label={`${t('workforce.common.item')} ${i + 1}`}
               >
@@ -346,17 +374,21 @@ export default function TrainingExecution() {
       <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">{question.section_title ?? t('workforce.common.item')}</span>
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">
+              {question.section_title ?? t('workforce.common.item')}
+            </span>
             {question.criticality && (
               <span
                 className={cn(
                   'px-2 py-0.5 rounded text-xs font-medium',
                   question.criticality === 'essential'
                     ? 'bg-destructive/20 text-destructive'
-                    : 'bg-info/20 text-info'
+                    : 'bg-info/20 text-info',
                 )}
               >
-                {question.criticality === 'essential' ? t('workforce.common.essential') : t('workforce.common.good_to_have')}
+                {question.criticality === 'essential'
+                  ? t('workforce.common.essential')
+                  : t('workforce.common.good_to_have')}
               </span>
             )}
           </div>
@@ -369,10 +401,14 @@ export default function TrainingExecution() {
                 className="text-sm text-muted-foreground flex items-center gap-1 hover:text-foreground"
               >
                 {t('workforce.common.guidance')}
-                <ChevronDown className={cn('w-4 h-4 transition-transform', guidanceOpen && 'rotate-180')} />
+                <ChevronDown
+                  className={cn('w-4 h-4 transition-transform', guidanceOpen && 'rotate-180')}
+                />
               </button>
               {guidanceOpen && (
-                <p className="mt-2 text-sm text-foreground pl-4 border-l-2 border-border">{question.help_text}</p>
+                <p className="mt-2 text-sm text-foreground pl-4 border-l-2 border-border">
+                  {question.help_text}
+                </p>
               )}
             </div>
           )}
@@ -386,7 +422,9 @@ export default function TrainingExecution() {
                 onChange={(e) => setResponse(question.id, { shownExplained: e.target.checked })}
                 className="rounded border-border h-5 w-5"
               />
-              <span className="text-sm font-medium text-foreground">{t('workforce.induction.shown_explained')}</span>
+              <span className="text-sm font-medium text-foreground">
+                {t('workforce.induction.shown_explained')}
+              </span>
             </label>
           </div>
 
@@ -426,11 +464,17 @@ export default function TrainingExecution() {
           </div>
 
           <div>
-            <label htmlFor="trainingexecution-field-0" className="block text-sm font-medium text-foreground mb-2">
+            <label
+              htmlFor="trainingexecution-field-0"
+              className="block text-sm font-medium text-foreground mb-2"
+            >
               {t('workforce.common.supervisor_notes')}
-              {resp.verdict === 'not_yet_competent' && <span className="text-destructive ml-1">{t('workforce.common.recommended')}</span>}
+              {resp.verdict === 'not_yet_competent' && (
+                <span className="text-destructive ml-1">{t('workforce.common.recommended')}</span>
+              )}
             </label>
-            <textarea id="trainingexecution-field-0"
+            <textarea
+              id="trainingexecution-field-0"
               value={resp.supervisorNotes}
               onChange={(e) => setResponse(question.id, { supervisorNotes: e.target.value })}
               placeholder={t('workforce.common.supervisor_notes_placeholder')}

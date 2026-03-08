@@ -1,6 +1,19 @@
 import { useEffect, useState, useCallback, useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
+import {
+  Search,
+  ListTodo,
+  Plus,
+  Calendar,
+  User,
+  Flag,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  ArrowUpRight,
+  Filter,
+  Loader2,
+} from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
@@ -22,11 +35,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 import { actionsApi, Action as ApiAction, ActionCreate } from '../api/client'
 
 // Bounded error taxonomy for deterministic error handling
-type ErrorClass = 'VALIDATION_ERROR' | 'AUTH_ERROR' | 'NOT_FOUND' | 'NETWORK_ERROR' | 'SERVER_ERROR' | 'UNKNOWN'
+type ErrorClass =
+  | 'VALIDATION_ERROR'
+  | 'AUTH_ERROR'
+  | 'NOT_FOUND'
+  | 'NETWORK_ERROR'
+  | 'SERVER_ERROR'
+  | 'UNKNOWN'
 
 interface ApiError {
   error_class: ErrorClass
@@ -46,7 +65,10 @@ function classifyError(error: unknown): ApiError {
       return { error_class: 'VALIDATION_ERROR', message: 'Invalid data provided.' }
     }
     if (message.includes('network') || message.includes('fetch')) {
-      return { error_class: 'NETWORK_ERROR', message: 'Network error. Please check your connection.' }
+      return {
+        error_class: 'NETWORK_ERROR',
+        message: 'Network error. Please check your connection.',
+      }
     }
     if (message.includes('500') || message.includes('server')) {
       return { error_class: 'SERVER_ERROR', message: 'Server error. Please try again later.' }
@@ -94,7 +116,7 @@ export default function Actions() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
-  
+
   // Form state
   const [formData, setFormData] = useState<CreateActionForm>(INITIAL_FORM)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -150,10 +172,10 @@ export default function Actions() {
 
       const response = await actionsApi.create(payload)
       if (response.data) {
-        setActions(prev => [transformAction(response.data), ...prev])
+        setActions((prev) => [transformAction(response.data), ...prev])
       }
       setSubmitSuccess(true)
-      
+
       // STATIC_UI_CONFIG_OK - UX delay to show success state before closing modal
       setTimeout(() => {
         setShowModal(false)
@@ -170,33 +192,50 @@ export default function Actions() {
 
   const getPriorityVariant = (priority: string) => {
     switch (priority) {
-      case 'critical': return 'critical'
-      case 'high': return 'high'
-      case 'medium': return 'medium'
-      case 'low': return 'low'
-      default: return 'secondary'
+      case 'critical':
+        return 'critical'
+      case 'high':
+        return 'high'
+      case 'medium':
+        return 'medium'
+      case 'low':
+        return 'low'
+      default:
+        return 'secondary'
     }
   }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'completed': return 'resolved'
-      case 'open': return 'submitted'
-      case 'in_progress': return 'in-progress'
-      case 'pending_verification': return 'acknowledged'
-      case 'cancelled': return 'closed'
-      default: return 'secondary'
+      case 'completed':
+        return 'resolved'
+      case 'open':
+        return 'submitted'
+      case 'in_progress':
+        return 'in-progress'
+      case 'pending_verification':
+        return 'acknowledged'
+      case 'cancelled':
+        return 'closed'
+      default:
+        return 'secondary'
     }
   }
 
   const getSourceIcon = (type: string) => {
     switch (type) {
-      case 'incident': return '🔥'
-      case 'audit': return '📋'
-      case 'rta': return '🚗'
-      case 'complaint': return '💬'
-      case 'risk': return '⚠️'
-      default: return '📌'
+      case 'incident':
+        return '🔥'
+      case 'audit':
+        return '📋'
+      case 'rta':
+        return '🚗'
+      case 'complaint':
+        return '💬'
+      case 'risk':
+        return '⚠️'
+      default:
+        return '📌'
     }
   }
 
@@ -206,9 +245,12 @@ export default function Actions() {
   }
 
   const deferredSearch = useDeferredValue(searchTerm)
-  const filteredActions = actions.filter(action => {
-    if (deferredSearch && !action.title.toLowerCase().includes(deferredSearch.toLowerCase()) &&
-        !(action.reference_number?.toLowerCase().includes(deferredSearch.toLowerCase()))) {
+  const filteredActions = actions.filter((action) => {
+    if (
+      deferredSearch &&
+      !action.title.toLowerCase().includes(deferredSearch.toLowerCase()) &&
+      !action.reference_number?.toLowerCase().includes(deferredSearch.toLowerCase())
+    ) {
       return false
     }
     if (filterStatus !== 'all' && action.status !== filterStatus) {
@@ -222,10 +264,10 @@ export default function Actions() {
 
   const stats = {
     total: actions.length,
-    open: actions.filter(a => a.status === 'open').length,
-    inProgress: actions.filter(a => a.status === 'in_progress').length,
-    overdue: actions.filter(a => isOverdue(a.due_date, a.status)).length,
-    completed: actions.filter(a => a.status === 'completed').length,
+    open: actions.filter((a) => a.status === 'open').length,
+    inProgress: actions.filter((a) => a.status === 'in_progress').length,
+    overdue: actions.filter((a) => isOverdue(a.due_date, a.status)).length,
+    completed: actions.filter((a) => a.status === 'completed').length,
   }
 
   if (loading) {
@@ -266,28 +308,55 @@ export default function Actions() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: t('actions.total'), value: stats.total, icon: ListTodo, variant: 'primary' as const },
-          { label: t('status.open'), value: stats.open, icon: AlertCircle, variant: 'info' as const },
-          { label: t('status.in_progress'), value: stats.inProgress, icon: Clock, variant: 'warning' as const },
-          { label: t('common.overdue'), value: stats.overdue, icon: Flag, variant: 'destructive' as const },
-          { label: t('actions.completed'), value: stats.completed, icon: CheckCircle2, variant: 'success' as const },
+          {
+            label: t('actions.total'),
+            value: stats.total,
+            icon: ListTodo,
+            variant: 'primary' as const,
+          },
+          {
+            label: t('status.open'),
+            value: stats.open,
+            icon: AlertCircle,
+            variant: 'info' as const,
+          },
+          {
+            label: t('status.in_progress'),
+            value: stats.inProgress,
+            icon: Clock,
+            variant: 'warning' as const,
+          },
+          {
+            label: t('common.overdue'),
+            value: stats.overdue,
+            icon: Flag,
+            variant: 'destructive' as const,
+          },
+          {
+            label: t('actions.completed'),
+            value: stats.completed,
+            icon: CheckCircle2,
+            variant: 'success' as const,
+          },
         ].map((stat) => (
-          <Card 
+          <Card
             key={stat.label}
             hoverable
             className={cn(
-              "p-5",
-              stat.label === 'Overdue' && stats.overdue > 0 && "border-destructive/30"
+              'p-5',
+              stat.label === 'Overdue' && stats.overdue > 0 && 'border-destructive/30',
             )}
           >
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-              stat.variant === 'primary' && "bg-primary/10 text-primary",
-              stat.variant === 'info' && "bg-info/10 text-info",
-              stat.variant === 'warning' && "bg-warning/10 text-warning",
-              stat.variant === 'destructive' && "bg-destructive/10 text-destructive",
-              stat.variant === 'success' && "bg-success/10 text-success",
-            )}>
+            <div
+              className={cn(
+                'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                stat.variant === 'primary' && 'bg-primary/10 text-primary',
+                stat.variant === 'info' && 'bg-info/10 text-info',
+                stat.variant === 'warning' && 'bg-warning/10 text-warning',
+                stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
+                stat.variant === 'success' && 'bg-success/10 text-success',
+              )}
+            >
               <stat.icon className="w-5 h-5" />
             </div>
             <p className="text-2xl font-bold text-foreground">{stat.value}</p>
@@ -318,10 +387,10 @@ export default function Actions() {
               key={mode}
               onClick={() => setViewMode(mode)}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                viewMode === mode 
-                  ? 'bg-primary text-primary-foreground shadow-sm' 
-                  : 'text-muted-foreground hover:text-foreground'
+                'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                viewMode === mode
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
               )}
             >
               {mode === 'my' ? 'My Actions' : mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -329,7 +398,10 @@ export default function Actions() {
           ))}
         </div>
 
-        <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as FilterStatus)}>
+        <Select
+          value={filterStatus}
+          onValueChange={(value) => setFilterStatus(value as FilterStatus)}
+        >
           <SelectTrigger className="w-[180px]">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="All Status" />
@@ -350,35 +422,40 @@ export default function Actions() {
           <EmptyState
             icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
             title={t('actions.empty.title')}
-            description={filterStatus !== 'all' || viewMode !== 'all' ? t('actions.empty.filter_hint') : t('actions.empty.subtitle')}
+            description={
+              filterStatus !== 'all' || viewMode !== 'all'
+                ? t('actions.empty.filter_hint')
+                : t('actions.empty.subtitle')
+            }
           />
         ) : (
           filteredActions.map((action) => {
             const overdue = isOverdue(action.due_date, action.status)
-            
+
             return (
               <Card
                 key={action.id}
                 hoverable
-                className={cn(
-                  "overflow-hidden",
-                  overdue && "border-destructive/30"
-                )}
+                className={cn('overflow-hidden', overdue && 'border-destructive/30')}
               >
                 <div className="flex items-stretch">
-                  <div className={cn(
-                    "w-1.5",
-                    action.priority === 'critical' && "bg-destructive",
-                    action.priority === 'high' && "bg-warning",
-                    action.priority === 'medium' && "bg-warning/70",
-                    action.priority === 'low' && "bg-success",
-                  )} />
-                  
+                  <div
+                    className={cn(
+                      'w-1.5',
+                      action.priority === 'critical' && 'bg-destructive',
+                      action.priority === 'high' && 'bg-warning',
+                      action.priority === 'medium' && 'bg-warning/70',
+                      action.priority === 'low' && 'bg-success',
+                    )}
+                  />
+
                   <CardContent className="flex-1 p-5">
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <span className="font-mono text-sm text-primary">{action.reference_number || `ACT-${action.id}`}</span>
+                          <span className="font-mono text-sm text-primary">
+                            {action.reference_number || `ACT-${action.id}`}
+                          </span>
                           <Badge variant={getPriorityVariant(action.priority) as any}>
                             {action.priority}
                           </Badge>
@@ -394,21 +471,27 @@ export default function Actions() {
                         <h3 className="text-lg font-semibold text-foreground mb-1">
                           {action.title}
                         </h3>
-                        <p className="text-sm text-muted-foreground line-clamp-1">{action.description}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-1">
+                          {action.description}
+                        </p>
                       </div>
 
                       <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2 lg:gap-1 lg:w-48 flex-shrink-0">
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg">
                           <span className="text-lg">{getSourceIcon(action.source_type)}</span>
-                          <span className="text-xs font-mono text-muted-foreground">{action.source_ref}</span>
+                          <span className="text-xs font-mono text-muted-foreground">
+                            {action.source_ref}
+                          </span>
                           <ArrowUpRight className="w-3 h-3 text-muted-foreground" />
                         </div>
 
                         {action.due_date && (
-                          <div className={cn(
-                            "flex items-center gap-2 text-sm",
-                            overdue ? 'text-destructive' : 'text-muted-foreground'
-                          )}>
+                          <div
+                            className={cn(
+                              'flex items-center gap-2 text-sm',
+                              overdue ? 'text-destructive' : 'text-muted-foreground',
+                            )}
+                          >
                             <Calendar className="w-4 h-4" />
                             <span>Due {new Date(action.due_date).toLocaleDateString()}</span>
                           </div>
@@ -431,19 +514,22 @@ export default function Actions() {
       </div>
 
       {/* Create Modal */}
-      <Dialog open={showModal} onOpenChange={(open) => {
-        setShowModal(open)
-        if (!open) {
-          setFormData(INITIAL_FORM)
-          setSubmitError(null)
-          setSubmitSuccess(false)
-        }
-      }}>
+      <Dialog
+        open={showModal}
+        onOpenChange={(open) => {
+          setShowModal(open)
+          if (!open) {
+            setFormData(INITIAL_FORM)
+            setSubmitError(null)
+            setSubmitSuccess(false)
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('actions.dialog.title')}</DialogTitle>
           </DialogHeader>
-          
+
           {submitSuccess ? (
             <div className="py-8 text-center">
               <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
@@ -455,37 +541,54 @@ export default function Actions() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label htmlFor="actions-field-0" className="block text-sm font-medium text-foreground mb-2">
+                <label
+                  htmlFor="actions-field-0"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
                   {t('common.title')} <span className="text-destructive">*</span>
                 </label>
-                <Input id="actions-field-0" 
-                  placeholder="Action title..." 
+                <Input
+                  id="actions-field-0"
+                  placeholder="Action title..."
                   value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                   required
                   maxLength={300}
                 />
               </div>
 
               <div>
-                <label htmlFor="actions-field-1" className="block text-sm font-medium text-foreground mb-2">
+                <label
+                  htmlFor="actions-field-1"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
                   {t('common.description')} <span className="text-destructive">*</span>
                 </label>
-                <Textarea id="actions-field-1" 
-                  rows={3} 
+                <Textarea
+                  id="actions-field-1"
+                  rows={3}
                   placeholder="Describe the action required..."
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, description: e.target.value }))
+                  }
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="actions-field-2" className="block text-sm font-medium text-foreground mb-2">{t('actions.form.source_type')}</label>
-                  <Select 
-                    value={formData.source_type} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, source_type: value }))}
+                  <label
+                    htmlFor="actions-field-2"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('actions.form.source_type')}
+                  </label>
+                  <Select
+                    value={formData.source_type}
+                    onValueChange={(value) =>
+                      setFormData((prev) => ({ ...prev, source_type: value }))
+                    }
                   >
                     <SelectTrigger id="actions-field-2">
                       <SelectValue placeholder="Select source" />
@@ -498,14 +601,20 @@ export default function Actions() {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="actions-field-3" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="actions-field-3"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     Source ID <span className="text-destructive">*</span>
                   </label>
-                  <Input id="actions-field-3" 
+                  <Input
+                    id="actions-field-3"
                     type="number"
                     placeholder="e.g., 42"
                     value={formData.source_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, source_id: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, source_id: e.target.value }))
+                    }
                     required
                     min={1}
                   />
@@ -514,10 +623,15 @@ export default function Actions() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="actions-field-4" className="block text-sm font-medium text-foreground mb-2">{t('common.priority')}</label>
-                  <Select 
+                  <label
+                    htmlFor="actions-field-4"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('common.priority')}
+                  </label>
+                  <Select
                     value={formData.priority}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))}
                   >
                     <SelectTrigger id="actions-field-4">
                       <SelectValue placeholder="Select priority" />
@@ -531,11 +645,17 @@ export default function Actions() {
                   </Select>
                 </div>
                 <div>
-                  <label htmlFor="actions-field-5" className="block text-sm font-medium text-foreground mb-2">{t('common.due_date')}</label>
-                  <Input id="actions-field-5" 
+                  <label
+                    htmlFor="actions-field-5"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('common.due_date')}
+                  </label>
+                  <Input
+                    id="actions-field-5"
                     type="date"
                     value={formData.due_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, due_date: e.target.value }))}
                     min={new Date().toISOString().split('T')[0]}
                   />
                 </div>
@@ -546,14 +666,21 @@ export default function Actions() {
                 <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-destructive">{submitError.error_class}</p>
+                    <p className="text-sm font-medium text-destructive">
+                      {submitError.error_class}
+                    </p>
                     <p className="text-sm text-destructive/80">{submitError.message}</p>
                   </div>
                 </div>
               )}
 
               <DialogFooter className="gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowModal(false)} disabled={isSubmitting}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowModal(false)}
+                  disabled={isSubmitting}
+                >
                   {t('cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>

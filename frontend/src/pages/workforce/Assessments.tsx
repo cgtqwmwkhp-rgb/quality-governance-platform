@@ -4,14 +4,23 @@ import { trackError } from '../../utils/errorTracker'
 import { Plus, Search, Filter, ChevronRight } from 'lucide-react'
 import { TableSkeleton } from '../../components/ui/SkeletonLoader'
 import { useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, getApiErrorMessage, type AssessmentRun, type AssetType } from '../../api/client'
+import {
+  workforceApi,
+  auditsApi,
+  getApiErrorMessage,
+  type AssessmentRun,
+  type AssetType,
+} from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
 
-const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'secondary'> = {
+const STATUS_VARIANTS: Record<
+  string,
+  'success' | 'warning' | 'info' | 'destructive' | 'secondary'
+> = {
   completed: 'success',
   in_progress: 'warning',
   scheduled: 'info',
@@ -49,10 +58,12 @@ export default function Assessments() {
 
   // Load asset types, engineers, and templates for name resolution
   useEffect(() => {
-    workforceApi.listAssetTypes()
+    workforceApi
+      .listAssetTypes()
       .then((res) => setAssetTypes(res.data?.items || []))
       .catch(() => setAssetTypes([]))
-    workforceApi.listEngineers({ page: '1', page_size: '500' })
+    workforceApi
+      .listEngineers({ page: '1', page_size: '500' })
       .then((res) => {
         const map: Record<number, string> = {}
         for (const e of res.data?.items || []) {
@@ -61,7 +72,8 @@ export default function Assessments() {
         setEngineerMap(map)
       })
       .catch(() => {})
-    auditsApi.listTemplates(1, 500, { is_published: true })
+    auditsApi
+      .listTemplates(1, 500, { is_published: true })
       .then((res) => {
         const map: Record<number, string> = {}
         for (const t of res.data?.items || []) {
@@ -96,15 +108,11 @@ export default function Assessments() {
 
   return (
     <div className="space-y-6">
-      {error && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>
-      )}
+      {error && <div className="bg-destructive/10 text-destructive p-4 rounded-lg">{error}</div>}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">{t('workforce.assessments.title')}</h1>
-          <p className="text-muted-foreground mt-1">
-            {t('workforce.assessments.subtitle')}
-          </p>
+          <p className="text-muted-foreground mt-1">{t('workforce.assessments.subtitle')}</p>
         </div>
         <Button onClick={() => navigate('/workforce/assessments/new')} className="gap-2">
           <Plus className="w-4 h-4" />
@@ -133,7 +141,9 @@ export default function Assessments() {
                 <option value="">{t('workforce.common.all_statuses')}</option>
                 <option value="draft">{t('common.draft')}</option>
                 <option value="in_progress">{t('common.in_progress')}</option>
-                <option value="pending_debrief">{t('workforce.assessments.pending_debrief')}</option>
+                <option value="pending_debrief">
+                  {t('workforce.assessments.pending_debrief')}
+                </option>
                 <option value="completed">{t('common.completed')}</option>
                 <option value="cancelled">{t('common.cancelled')}</option>
               </select>
@@ -144,7 +154,9 @@ export default function Assessments() {
               >
                 <option value="">{t('workforce.common.all_asset_types')}</option>
                 {assetTypes.map((at) => (
-                  <option key={at.id} value={String(at.id)}>{at.name}</option>
+                  <option key={at.id} value={String(at.id)}>
+                    {at.name}
+                  </option>
                 ))}
               </select>
               <Button variant="outline" size="sm" className="gap-2">
@@ -162,13 +174,27 @@ export default function Assessments() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.reference')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.engineer')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.template')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.common.asset_type')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.status')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('common.date')}</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">{t('workforce.assessments.outcome')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.reference')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.engineer')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.template')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.common.asset_type')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('common.status')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('common.date')}
+                    </th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+                      {t('workforce.assessments.outcome')}
+                    </th>
                     <th className="w-10" />
                   </tr>
                 </thead>
@@ -184,14 +210,25 @@ export default function Assessments() {
                       <tr
                         key={a.id}
                         className={cn(
-                          "border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer",
+                          'border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer',
                         )}
                         onClick={() => navigate(`/workforce/assessments/${a.id}/execute`)}
                       >
-                        <td className="py-3 px-4 text-sm font-medium text-foreground">{a.reference_number}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">{engineerMap[a.engineer_id] ?? `#${a.engineer_id}`}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">{templateMap[a.template_id] ?? `#${a.template_id}`}</td>
-                        <td className="py-3 px-4 text-sm text-muted-foreground">{a.asset_type_id ? (assetTypes.find(at => at.id === a.asset_type_id)?.name ?? `#${a.asset_type_id}`) : '—'}</td>
+                        <td className="py-3 px-4 text-sm font-medium text-foreground">
+                          {a.reference_number}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {engineerMap[a.engineer_id] ?? `#${a.engineer_id}`}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-foreground">
+                          {templateMap[a.template_id] ?? `#${a.template_id}`}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground">
+                          {a.asset_type_id
+                            ? (assetTypes.find((at) => at.id === a.asset_type_id)?.name ??
+                              `#${a.asset_type_id}`)
+                            : '—'}
+                        </td>
                         <td className="py-3 px-4">
                           <Badge variant={STATUS_VARIANTS[a.status] || 'secondary'}>
                             {a.status?.replace(/_/g, ' ') ?? '—'}

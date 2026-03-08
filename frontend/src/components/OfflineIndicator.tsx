@@ -7,8 +7,15 @@ export default function OfflineIndicator() {
   const connectionStatus = useAppStore((s) => s.connectionStatus)
 
   useEffect(() => {
-    const handleOnline = () => { setBrowserOnline(true); setShowBanner(true); setTimeout(() => setShowBanner(false), 3000) }
-    const handleOffline = () => { setBrowserOnline(false); setShowBanner(true) }
+    const handleOnline = () => {
+      setBrowserOnline(true)
+      setShowBanner(true)
+      setTimeout(() => setShowBanner(false), 3000)
+    }
+    const handleOffline = () => {
+      setBrowserOnline(false)
+      setShowBanner(true)
+    }
 
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
@@ -42,7 +49,9 @@ export default function OfflineIndicator() {
   if (!message) return null
 
   return (
-    <div className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all ${style}`}>
+    <div
+      className={`fixed bottom-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all ${style}`}
+    >
       {message}
     </div>
   )

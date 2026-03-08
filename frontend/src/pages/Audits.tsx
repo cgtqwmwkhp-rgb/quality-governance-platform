@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, ClipboardCheck, Search, Calendar, MapPin, Target, AlertCircle, CheckCircle2, Clock, BarChart3, Loader2, FileText, Play } from 'lucide-react'
+import {
+  Plus,
+  ClipboardCheck,
+  Search,
+  Calendar,
+  MapPin,
+  Target,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  BarChart3,
+  Loader2,
+  FileText,
+  Play,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -18,51 +32,51 @@ import {
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
-import { cn, decodeHtmlEntities } from "../helpers/utils"
+import { cn, decodeHtmlEntities } from '../helpers/utils'
 
-type ViewMode = "kanban" | "list" | "findings";
+type ViewMode = 'kanban' | 'list' | 'findings'
 
 // Form state for creating a new audit
 interface CreateAuditForm {
-  template_id: number | null;
-  title: string;
-  location: string;
-  scheduled_date: string;
+  template_id: number | null
+  title: string
+  location: string
+  scheduled_date: string
 }
 
 const KANBAN_COLUMNS = [
   {
-    id: "scheduled",
-    label: "Scheduled",
-    variant: "info" as const,
+    id: 'scheduled',
+    label: 'Scheduled',
+    variant: 'info' as const,
     icon: Calendar,
   },
   {
-    id: "in_progress",
-    label: "In Progress",
-    variant: "warning" as const,
+    id: 'in_progress',
+    label: 'In Progress',
+    variant: 'warning' as const,
     icon: Clock,
   },
   {
-    id: "pending_review",
-    label: "Pending Review",
-    variant: "default" as const,
+    id: 'pending_review',
+    label: 'Pending Review',
+    variant: 'default' as const,
     icon: Target,
   },
   {
-    id: "completed",
-    label: "Completed",
-    variant: "success" as const,
+    id: 'completed',
+    label: 'Completed',
+    variant: 'success' as const,
     icon: CheckCircle2,
   },
-];
+]
 
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
-  title: "",
-  location: "",
-  scheduled_date: new Date().toISOString().split("T")[0]!,
-};
+  title: '',
+  location: '',
+  scheduled_date: new Date().toISOString().split('T')[0]!,
+}
 
 export default function Audits() {
   const { t } = useTranslation()
@@ -74,7 +88,7 @@ export default function Audits() {
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
-  
+
   // Form state
   const [formData, setFormData] = useState<CreateAuditForm>(INITIAL_FORM_STATE)
   const [formError, setFormError] = useState<string | null>(null)
@@ -95,12 +109,12 @@ export default function Audits() {
       setAudits(auditsRes.status === 'fulfilled' ? auditsRes.value.data.items || [] : [])
       setFindings(findingsRes.status === 'fulfilled' ? findingsRes.value.data.items || [] : [])
       setTemplates(templatesRes.status === 'fulfilled' ? templatesRes.value.data.items || [] : [])
-      const failures = [auditsRes, findingsRes, templatesRes].filter(r => r.status === 'rejected')
+      const failures = [auditsRes, findingsRes, templatesRes].filter((r) => r.status === 'rejected')
       if (failures.length > 0) {
         setLoadError(`Failed to load some data. ${failures.length} of 3 requests failed.`)
       }
     } catch (err) {
-      console.error('Failed to load audits:', err)
+      if (import.meta.env.DEV) console.error('Failed to load audits:', err)
       setLoadError('Failed to load audit data. Please try again.')
       setAudits([])
       setFindings([])
@@ -140,14 +154,21 @@ export default function Audits() {
   }, [templates])
 
   const latestPublishedTemplates = useMemo(
-    () => templateFamilies.map((family) => family.versions[0]).filter((t): t is AuditTemplate => t != null),
-    [templateFamilies]
+    () =>
+      templateFamilies
+        .map((family) => family.versions[0])
+        .filter((t): t is AuditTemplate => t != null),
+    [templateFamilies],
   )
 
   const selectedTemplate = templates.find((template) => template.id === formData.template_id)
   const selectedTemplateFamily = useMemo(() => {
     if (!selectedTemplate) return null
-    return templateFamilies.find((family) => family.versions.some((version) => version.id === selectedTemplate.id)) ?? null
+    return (
+      templateFamilies.find((family) =>
+        family.versions.some((version) => version.id === selectedTemplate.id),
+      ) ?? null
+    )
   }, [selectedTemplate, templateFamilies])
 
   const latestSelectedTemplate =
@@ -181,48 +202,45 @@ export default function Audits() {
   }
 
   const handleSubmitAudit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
+    e.preventDefault()
+    setFormError(null)
 
     if (!formData.template_id) {
-      setFormError("Please select an audit template");
-      return;
+      setFormError('Please select an audit template')
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
       const payload: AuditRunCreate = {
         template_id: formData.template_id,
         title: formData.title || undefined,
         location: formData.location || undefined,
         scheduled_date: formData.scheduled_date || undefined,
-      };
+      }
 
-      const res = await auditsApi.createRun(payload);
-      const result = res.data;
+      const res = await auditsApi.createRun(payload)
+      const result = res.data
 
-      setSuccessMessage(
-        `Audit scheduled successfully! Reference: ${result.reference_number}`,
-      );
+      setSuccessMessage(`Audit scheduled successfully! Reference: ${result.reference_number}`)
 
-      await loadData();
+      await loadData()
 
       // STATIC_UI_CONFIG_OK: UX delay to show success before closing modal
       setTimeout(() => {
-        handleCloseModal();
-        setSuccessMessage(null);
-      }, 2000);
+        handleCloseModal()
+        setSuccessMessage(null)
+      }, 2000)
     } catch (err: unknown) {
-      console.error("Failed to create audit:", err);
-      const axiosErr = err as { response?: { data?: { detail?: string } } };
+      if (import.meta.env.DEV) console.error('Failed to create audit:', err)
+      const axiosErr = err as { response?: { data?: { detail?: string } } }
       const errorMessage =
-        axiosErr.response?.data?.detail ||
-        "Failed to schedule audit. Please try again.";
-      setFormError(errorMessage);
+        axiosErr.response?.data?.detail || 'Failed to schedule audit. Please try again.'
+      setFormError(errorMessage)
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   const filteredAudits = useMemo(() => {
     if (!searchTerm.trim()) return audits
@@ -231,71 +249,73 @@ export default function Audits() {
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
-        (a.location || '').toLowerCase().includes(term)
+        (a.location || '').toLowerCase().includes(term),
     )
   }, [audits, searchTerm])
 
   const getAuditsByStatus = (status: string) => {
-    return filteredAudits.filter((a) => a.status === status);
-  };
+    return filteredAudits.filter((a) => a.status === status)
+  }
 
   const getScoreColor = (percentage?: number) => {
-    if (!percentage) return "text-muted-foreground";
-    if (percentage >= 90) return "text-success";
-    if (percentage >= 70) return "text-warning";
-    return "text-destructive";
-  };
+    if (!percentage) return 'text-muted-foreground'
+    if (percentage >= 90) return 'text-success'
+    if (percentage >= 70) return 'text-warning'
+    return 'text-destructive'
+  }
 
   const getSeverityVariant = (severity: string) => {
     switch (severity) {
-      case "critical":
-        return "critical";
-      case "high":
-        return "high";
-      case "medium":
-        return "medium";
-      case "low":
-        return "low";
-      case "observation":
-        return "info";
+      case 'critical':
+        return 'critical'
+      case 'high':
+        return 'high'
+      case 'medium':
+        return 'medium'
+      case 'low':
+        return 'low'
+      case 'observation':
+        return 'info'
       default:
-        return "secondary";
+        return 'secondary'
     }
-  };
+  }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case "closed":
-        return "resolved";
-      case "open":
-        return "destructive";
-      case "in_progress":
-        return "in-progress";
-      case "pending_verification":
-        return "acknowledged";
-      case "deferred":
-        return "secondary";
+      case 'closed':
+        return 'resolved'
+      case 'open':
+        return 'destructive'
+      case 'in_progress':
+        return 'in-progress'
+      case 'pending_verification':
+        return 'acknowledged'
+      case 'deferred':
+        return 'secondary'
       default:
-        return "secondary";
+        return 'secondary'
     }
-  };
+  }
 
   const stats = {
     total: filteredAudits.length,
-    inProgress: filteredAudits.filter(a => a.status === 'in_progress').length,
-    completed: filteredAudits.filter(a => a.status === 'completed').length,
-    avgScore: filteredAudits.filter(a => a.score_percentage != null).reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) / 
-              (filteredAudits.filter(a => a.score_percentage != null).length || 1),
-    openFindings: findings.filter(f => f.status === 'open').length,
+    inProgress: filteredAudits.filter((a) => a.status === 'in_progress').length,
+    completed: filteredAudits.filter((a) => a.status === 'completed').length,
+    avgScore:
+      filteredAudits
+        .filter((a) => a.score_percentage != null)
+        .reduce((acc, a) => acc + (a.score_percentage ?? 0), 0) /
+      (filteredAudits.filter((a) => a.score_percentage != null).length || 1),
+    openFindings: findings.filter((f) => f.status === 'open').length,
   }
   if (loading) {
     return (
       <div className="p-6">
         <LoadingSkeleton variant="table" rows={5} columns={4} />
       </div>
-    );
+    )
   }
-
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -313,9 +333,7 @@ export default function Audits() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">
-            Audit Management
-          </h1>
+          <h1 className="text-3xl font-bold text-foreground">Audit Management</h1>
           <p className="text-muted-foreground mt-1">
             Internal audits, inspections & compliance checks
           </p>
@@ -323,22 +341,19 @@ export default function Audits() {
         <div className="flex items-center gap-3">
           {/* View Toggle */}
           <div className="flex bg-surface rounded-xl p-1 border border-border">
-            {(["kanban", "list", "findings"] as ViewMode[]).map((mode) => (
+            {(['kanban', 'list', 'findings'] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
+                aria-pressed={viewMode === mode}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                   viewMode === mode
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {mode === "kanban"
-                  ? "Board"
-                  : mode === "findings"
-                    ? "Findings"
-                    : "List"}
+                {mode === 'kanban' ? 'Board' : mode === 'findings' ? 'Findings' : 'List'}
               </button>
             ))}
           </div>
@@ -351,48 +366,47 @@ export default function Audits() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          {[
+        {[
           {
             label: t('audits.stats.total'),
             value: stats.total,
             icon: ClipboardCheck,
-            variant: "info" as const,
+            variant: 'info' as const,
           },
           {
             label: t('status.in_progress'),
             value: stats.inProgress,
             icon: Clock,
-            variant: "warning" as const,
+            variant: 'warning' as const,
           },
           {
             label: t('audits.stats.completed'),
             value: stats.completed,
             icon: CheckCircle2,
-            variant: "success" as const,
+            variant: 'success' as const,
           },
           {
             label: t('audits.stats.avg_score'),
             value: `${(stats.avgScore ?? 0).toFixed(0)}%`,
             icon: BarChart3,
-            variant: "primary" as const,
+            variant: 'primary' as const,
           },
           {
             label: t('audits.stats.open_findings'),
             value: stats.openFindings,
             icon: AlertCircle,
-            variant: "destructive" as const,
+            variant: 'destructive' as const,
           },
         ].map((stat) => (
           <Card key={stat.label} hoverable className="p-5">
             <div
               className={cn(
-                "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-                stat.variant === "info" && "bg-info/10 text-info",
-                stat.variant === "warning" && "bg-warning/10 text-warning",
-                stat.variant === "success" && "bg-success/10 text-success",
-                stat.variant === "primary" && "bg-primary/10 text-primary",
-                stat.variant === "destructive" &&
-                  "bg-destructive/10 text-destructive",
+                'w-10 h-10 rounded-xl flex items-center justify-center mb-3',
+                stat.variant === 'info' && 'bg-info/10 text-info',
+                stat.variant === 'warning' && 'bg-warning/10 text-warning',
+                stat.variant === 'success' && 'bg-success/10 text-success',
+                stat.variant === 'primary' && 'bg-primary/10 text-primary',
+                stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
               )}
             >
               <stat.icon className="w-5 h-5" />
@@ -416,31 +430,26 @@ export default function Audits() {
       </div>
 
       {/* Kanban View */}
-      {viewMode === "kanban" && (
+      {viewMode === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {KANBAN_COLUMNS.map((column) => {
-            const columnAudits = getAuditsByStatus(column.id);
+            const columnAudits = getAuditsByStatus(column.id)
             return (
               <div key={column.id}>
                 {/* Column Header */}
                 <div className="flex items-center gap-3 mb-4">
                   <div
                     className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center",
-                      column.variant === "info" && "bg-info/10 text-info",
-                      column.variant === "warning" &&
-                        "bg-warning/10 text-warning",
-                      column.variant === "success" &&
-                        "bg-success/10 text-success",
-                      column.variant === "default" &&
-                        "bg-primary/10 text-primary",
+                      'w-8 h-8 rounded-lg flex items-center justify-center',
+                      column.variant === 'info' && 'bg-info/10 text-info',
+                      column.variant === 'warning' && 'bg-warning/10 text-warning',
+                      column.variant === 'success' && 'bg-success/10 text-success',
+                      column.variant === 'default' && 'bg-primary/10 text-primary',
                     )}
                   >
                     <column.icon className="w-4 h-4" />
                   </div>
-                  <h3 className="font-semibold text-foreground">
-                    {column.label}
-                  </h3>
+                  <h3 className="font-semibold text-foreground">{column.label}</h3>
                   <Badge variant="secondary" className="ml-auto">
                     {columnAudits.length}
                   </Badge>
@@ -461,23 +470,38 @@ export default function Audits() {
                         role="button"
                         tabIndex={0}
                         onClick={() => navigate(`/audits/${audit.id}/execute`)}
-                        onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audits/${audit.id}/execute`); } }}
+                        onKeyDown={(e: React.KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(`/audits/${audit.id}/execute`)
+                          }
+                        }}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-primary">{audit.reference_number}</span>
-                            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                            <span className="font-mono text-xs text-primary">
+                              {audit.reference_number}
+                            </span>
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] uppercase tracking-wide"
+                            >
                               v{audit.template_version}
                             </Badge>
                           </div>
                           {audit.score_percentage != null && (
-                            <span className={cn("text-sm font-bold", getScoreColor(audit.score_percentage))}>
+                            <span
+                              className={cn(
+                                'text-sm font-bold',
+                                getScoreColor(audit.score_percentage),
+                              )}
+                            >
                               {audit.score_percentage.toFixed(0)}%
                             </span>
                           )}
                         </div>
                         <h4 className="font-medium text-foreground text-sm mb-2 line-clamp-2">
-                          {audit.title || "Untitled Audit"}
+                          {audit.title || 'Untitled Audit'}
                         </h4>
                         {audit.location && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
@@ -489,32 +513,21 @@ export default function Audits() {
                           {audit.scheduled_date && (
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <Calendar size={12} />
-                              <span>
-                                {new Date(
-                                  audit.scheduled_date,
-                                ).toLocaleDateString()}
-                              </span>
+                              <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
                             </div>
                           )}
-                          {(audit.status === "scheduled" ||
-                            audit.status === "in_progress") && (
+                          {(audit.status === 'scheduled' || audit.status === 'in_progress') && (
                             <Button
                               size="sm"
-                              variant={
-                                audit.status === "in_progress"
-                                  ? "default"
-                                  : "outline"
-                              }
+                              variant={audit.status === 'in_progress' ? 'default' : 'outline'}
                               onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/audits/${audit.id}/execute`);
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
                               }}
                               className="text-xs h-7 px-2.5"
                             >
                               <Play size={12} />
-                              {audit.status === "in_progress"
-                                ? "Continue"
-                                : "Start"}
+                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
                             </Button>
                           )}
                         </div>
@@ -523,27 +536,43 @@ export default function Audits() {
                   )}
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       )}
 
       {/* List View */}
-      {viewMode === "list" && (
+      {viewMode === 'list' && (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.reference')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.title')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.location')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.template')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.status')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.score')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('audits.table.date')}</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider"><span className="sr-only">Actions</span></th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.reference')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.title')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.location')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.template')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.status')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.score')}
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {t('audits.table.date')}
+                    </th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -553,7 +582,10 @@ export default function Audits() {
                         <EmptyState
                           icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
                           title={t('audits.empty.title')}
-                          description={t('audits.empty.subtitle', 'No audits match your current filters.')}
+                          description={t(
+                            'audits.empty.subtitle',
+                            'No audits match your current filters.',
+                          )}
                         />
                       </td>
                     </tr>
@@ -565,7 +597,12 @@ export default function Audits() {
                         role="button"
                         tabIndex={0}
                         onClick={() => navigate(`/audits/${audit.id}/execute`)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audits/${audit.id}/execute`); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(`/audits/${audit.id}/execute`)
+                          }
+                        }}
                       >
                         <td className="px-6 py-4">
                           <span className="font-mono text-sm text-primary">
@@ -574,11 +611,11 @@ export default function Audits() {
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">
-                            {audit.title || "Untitled"}
+                            {audit.title || 'Untitled'}
                           </p>
                         </td>
                         <td className="px-6 py-4 text-sm text-foreground">
-                          {audit.location || "-"}
+                          {audit.location || '-'}
                         </td>
                         <td className="px-6 py-4">
                           <Badge variant="secondary" className="text-xs">
@@ -586,22 +623,24 @@ export default function Audits() {
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge variant={
-                            audit.status === 'completed' ? 'resolved' :
-                            audit.status === 'in_progress' ? 'in-progress' :
-                            audit.status === 'pending_review' ? 'acknowledged' :
-                            'submitted'
-                          }>
+                          <Badge
+                            variant={
+                              audit.status === 'completed'
+                                ? 'resolved'
+                                : audit.status === 'in_progress'
+                                  ? 'in-progress'
+                                  : audit.status === 'pending_review'
+                                    ? 'acknowledged'
+                                    : 'submitted'
+                            }
+                          >
                             {(audit.status as string).replace(/_/g, ' ')}
                           </Badge>
                         </td>
                         <td className="px-6 py-4">
                           {audit.score_percentage != null ? (
                             <span
-                              className={cn(
-                                "font-bold",
-                                getScoreColor(audit.score_percentage),
-                              )}
+                              className={cn('font-bold', getScoreColor(audit.score_percentage))}
                             >
                               {audit.score_percentage.toFixed(0)}%
                             </span>
@@ -611,39 +650,30 @@ export default function Audits() {
                         </td>
                         <td className="px-6 py-4 text-sm text-muted-foreground">
                           {audit.scheduled_date
-                            ? new Date(
-                                audit.scheduled_date,
-                              ).toLocaleDateString()
-                            : "-"}
+                            ? new Date(audit.scheduled_date).toLocaleDateString()
+                            : '-'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {audit.status === "scheduled" ||
-                          audit.status === "in_progress" ? (
+                          {audit.status === 'scheduled' || audit.status === 'in_progress' ? (
                             <Button
                               size="sm"
-                              variant={
-                                audit.status === "in_progress"
-                                  ? "default"
-                                  : "outline"
-                              }
+                              variant={audit.status === 'in_progress' ? 'default' : 'outline'}
                               onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/audits/${audit.id}/execute`);
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
                               }}
                               className="text-xs h-7"
                             >
                               <Play size={12} />
-                              {audit.status === "in_progress"
-                                ? "Continue"
-                                : "Start"}
+                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
                             </Button>
-                          ) : audit.status === "completed" ? (
+                          ) : audit.status === 'completed' ? (
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/audits/${audit.id}/execute`);
+                                e.stopPropagation()
+                                navigate(`/audits/${audit.id}/execute`)
                               }}
                               className="text-xs h-7"
                             >
@@ -662,7 +692,7 @@ export default function Audits() {
       )}
 
       {/* Findings View */}
-      {viewMode === "findings" && (
+      {viewMode === 'findings' && (
         <div className="space-y-4">
           {findings.length === 0 ? (
             <Card className="p-12 text-center">
@@ -675,18 +705,13 @@ export default function Audits() {
                 <div className="flex items-start gap-4">
                   <div
                     className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      finding.severity === "critical" &&
-                        "bg-destructive/10 text-destructive",
-                      finding.severity === "high" &&
-                        "bg-warning/10 text-warning",
-                      finding.severity === "medium" &&
-                        "bg-warning/10 text-warning",
-                      finding.severity === "low" &&
-                        "bg-success/10 text-success",
-                      !["critical", "high", "medium", "low"].includes(
-                        finding.severity,
-                      ) && "bg-info/10 text-info",
+                      'w-12 h-12 rounded-xl flex items-center justify-center',
+                      finding.severity === 'critical' && 'bg-destructive/10 text-destructive',
+                      finding.severity === 'high' && 'bg-warning/10 text-warning',
+                      finding.severity === 'medium' && 'bg-warning/10 text-warning',
+                      finding.severity === 'low' && 'bg-success/10 text-success',
+                      !['critical', 'high', 'medium', 'low'].includes(finding.severity) &&
+                        'bg-info/10 text-info',
                     )}
                   >
                     <AlertCircle className="w-6 h-6" />
@@ -696,24 +721,14 @@ export default function Audits() {
                       <span className="font-mono text-xs text-primary">
                         {finding.reference_number}
                       </span>
-                      <Badge
-                        variant={
-                          getSeverityVariant(finding.severity) as BadgeVariant
-                        }
-                      >
+                      <Badge variant={getSeverityVariant(finding.severity) as BadgeVariant}>
                         {finding.severity}
                       </Badge>
-                      <Badge
-                        variant={
-                          getStatusVariant(finding.status) as BadgeVariant
-                        }
-                      >
-                        {finding.status.replace("_", " ")}
+                      <Badge variant={getStatusVariant(finding.status) as BadgeVariant}>
+                        {finding.status.replace('_', ' ')}
                       </Badge>
                     </div>
-                    <h3 className="font-semibold text-foreground mb-1">
-                      {finding.title}
-                    </h3>
+                    <h3 className="font-semibold text-foreground mb-1">{finding.title}</h3>
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {finding.description}
                     </p>
@@ -721,10 +736,7 @@ export default function Audits() {
                       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                         <Calendar size={14} />
                         <span>
-                          Due:{" "}
-                          {new Date(
-                            finding.corrective_action_due_date,
-                          ).toLocaleDateString()}
+                          Due: {new Date(finding.corrective_action_due_date).toLocaleDateString()}
                         </span>
                       </div>
                     )}
@@ -769,8 +781,7 @@ export default function Audits() {
                 {templates.length === 0 ? (
                   <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                     <p className="text-sm text-warning">
-                      No published templates available. Please create and
-                      publish a template first.
+                      No published templates available. Please create and publish a template first.
                     </p>
                   </div>
                 ) : (
@@ -779,11 +790,14 @@ export default function Audits() {
                       value={formData.template_id ?? ''}
                       onChange={(e) => {
                         const templateId = Number(e.target.value)
-                        const template = latestPublishedTemplates.find((item) => item.id === templateId)
+                        const template = latestPublishedTemplates.find(
+                          (item) => item.id === templateId,
+                        )
                         setFormData((prev) => ({
                           ...prev,
                           template_id: Number.isNaN(templateId) ? null : templateId,
-                          title: prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                          title:
+                            prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
                         }))
                         setShowVersionSelector(false)
                       }}
@@ -792,7 +806,8 @@ export default function Audits() {
                       <option value="">Select a published template (latest version)...</option>
                       {latestPublishedTemplates.map((template) => (
                         <option key={template.id} value={template.id}>
-                          {decodeHtmlEntities(template.name)} (Latest v{template.version}) - {template.reference_number}
+                          {decodeHtmlEntities(template.name)} (Latest v{template.version}) -{' '}
+                          {template.reference_number}
                         </option>
                       ))}
                     </select>
@@ -803,18 +818,24 @@ export default function Audits() {
                           onClick={() => setShowVersionSelector((prev) => !prev)}
                           className="text-xs font-medium text-primary hover:underline"
                         >
-                          {showVersionSelector ? 'Hide older versions' : 'Need an older version? Choose here'}
+                          {showVersionSelector
+                            ? 'Hide older versions'
+                            : 'Need an older version? Choose here'}
                         </button>
                         {showVersionSelector && (
                           <select
                             value={formData.template_id ?? ''}
                             onChange={(e) => {
                               const templateId = Number(e.target.value)
-                              const template = selectedTemplateFamily.versions.find((item) => item.id === templateId)
+                              const template = selectedTemplateFamily.versions.find(
+                                (item) => item.id === templateId,
+                              )
                               setFormData((prev) => ({
                                 ...prev,
                                 template_id: Number.isNaN(templateId) ? null : templateId,
-                                title: prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                                title:
+                                  prev.title ||
+                                  (template?.name ? decodeHtmlEntities(template.name) : ''),
                               }))
                             }}
                             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -828,11 +849,12 @@ export default function Audits() {
                         )}
                       </div>
                     )}
-                    {latestSelectedTemplate && selectedTemplate?.id === latestSelectedTemplate.id && (
-                      <p className="text-xs text-muted-foreground">
-                        Using latest published version: v{latestSelectedTemplate.version}
-                      </p>
-                    )}
+                    {latestSelectedTemplate &&
+                      selectedTemplate?.id === latestSelectedTemplate.id && (
+                        <p className="text-xs text-muted-foreground">
+                          Using latest published version: v{latestSelectedTemplate.version}
+                        </p>
+                      )}
                     {selectedTemplate && (
                       <div className="rounded-xl border border-border bg-surface p-3">
                         <div className="flex items-center gap-2 mb-1">
@@ -842,7 +864,8 @@ export default function Audits() {
                           </p>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          {selectedTemplate.category || selectedTemplate.audit_type} • v{selectedTemplate.version} • {selectedTemplate.reference_number}
+                          {selectedTemplate.category || selectedTemplate.audit_type} • v
+                          {selectedTemplate.version} • {selectedTemplate.reference_number}
                         </p>
                       </div>
                     )}
@@ -852,10 +875,7 @@ export default function Audits() {
 
               {/* Title */}
               <div className="space-y-2">
-                <label
-                  htmlFor="audit-title"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="audit-title" className="text-sm font-medium text-foreground">
                   Audit Title
                 </label>
                 <Input
@@ -863,9 +883,7 @@ export default function Audits() {
                   type="text"
                   placeholder="e.g., Q1 2026 Safety Inspection - Site A"
                   value={formData.title}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, title: e.target.value }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
                   maxLength={300}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -875,10 +893,7 @@ export default function Audits() {
 
               {/* Location */}
               <div className="space-y-2">
-                <label
-                  htmlFor="audit-location"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="audit-location" className="text-sm font-medium text-foreground">
                   Location
                 </label>
                 <Input
@@ -898,10 +913,7 @@ export default function Audits() {
 
               {/* Scheduled Date */}
               <div className="space-y-2">
-                <label
-                  htmlFor="audit-date"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="audit-date" className="text-sm font-medium text-foreground">
                   Scheduled Date
                 </label>
                 <Input
@@ -914,7 +926,7 @@ export default function Audits() {
                       scheduled_date: e.target.value,
                     }))
                   }
-                  min={new Date().toISOString().split("T")[0]}
+                  min={new Date().toISOString().split('T')[0]}
                 />
               </div>
 
@@ -938,11 +950,7 @@ export default function Audits() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={
-                    isSubmitting ||
-                    templates.length === 0 ||
-                    !formData.template_id
-                  }
+                  disabled={isSubmitting || templates.length === 0 || !formData.template_id}
                 >
                   {isSubmitting ? (
                     <>
@@ -963,5 +971,5 @@ export default function Audits() {
       </Dialog>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
-  );
+  )
 }

@@ -146,7 +146,9 @@ describe('Risks', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText((text) => text === 'Validation failed' || text === 'risks.error.load_failed')
+        screen.getByText(
+          (text) => text === 'Validation failed' || text === 'risks.error.load_failed',
+        ),
       ).toBeInTheDocument()
     })
 
@@ -214,7 +216,9 @@ describe('Risks', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText((text) => text === 'Validation failed' || text === 'risks.error.load_failed')
+        screen.getByText(
+          (text) => text === 'Validation failed' || text === 'risks.error.load_failed',
+        ),
       ).toBeInTheDocument()
     })
   })

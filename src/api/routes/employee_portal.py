@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, literal, select, union_all
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.schemas.error_codes import ErrorCode
@@ -733,98 +733,89 @@ async def get_my_reports(
     """
     user_email = current_user.email.lower()
     tid = current_user.tenant_id
-    all_reports: list[MyReportSummary] = []
 
-    incidents_query = (
-        select(Incident).where(Incident.tenant_id == tid).where(func.lower(Incident.reporter_email) == user_email)
-    )
-    incidents_result = await db.execute(incidents_query)
-    incidents = incidents_result.scalars().all()
-
-    for inc in incidents:
-        all_reports.append(
-            MyReportSummary(
-                reference_number=inc.reference_number,
-                report_type="incident",
-                title=inc.title,
-                status=(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
-                status_label=get_status_label(inc.status.value if hasattr(inc.status, "value") else str(inc.status)),
-                submitted_at=inc.reported_date or inc.created_at,
-                updated_at=inc.updated_at or inc.created_at,
-            )
+    # Build UNION ALL across all 4 report tables so sorting and pagination
+    # happen in SQL rather than in Python.
+    inc_q = (
+        select(
+            Incident.reference_number.label("reference_number"),
+            literal("incident").label("report_type"),
+            Incident.title.label("title"),
+            cast(Incident.status, String).label("status"),
+            func.coalesce(Incident.reported_date, Incident.created_at).label("submitted_at"),
+            func.coalesce(Incident.updated_at, Incident.created_at).label("updated_at"),
         )
-
-    complaints_query = (
-        select(Complaint).where(Complaint.tenant_id == tid).where(func.lower(Complaint.complainant_email) == user_email)
+        .where(Incident.tenant_id == tid)
+        .where(func.lower(Incident.reporter_email) == user_email)
     )
-    complaints_result = await db.execute(complaints_query)
-    complaints = complaints_result.scalars().all()
 
-    for comp in complaints:
-        all_reports.append(
-            MyReportSummary(
-                reference_number=comp.reference_number,
-                report_type="complaint",
-                title=comp.title,
-                status=(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
-                status_label=get_status_label(comp.status.value if hasattr(comp.status, "value") else str(comp.status)),
-                submitted_at=comp.received_date or comp.created_at,
-                updated_at=comp.updated_at or comp.created_at,
-            )
+    comp_q = (
+        select(
+            Complaint.reference_number.label("reference_number"),
+            literal("complaint").label("report_type"),
+            Complaint.title.label("title"),
+            cast(Complaint.status, String).label("status"),
+            func.coalesce(Complaint.received_date, Complaint.created_at).label("submitted_at"),
+            func.coalesce(Complaint.updated_at, Complaint.created_at).label("updated_at"),
         )
+        .where(Complaint.tenant_id == tid)
+        .where(func.lower(Complaint.complainant_email) == user_email)
+    )
 
-    rtas_query = (
-        select(RoadTrafficCollision)
+    rta_q = (
+        select(
+            RoadTrafficCollision.reference_number.label("reference_number"),
+            literal("rta").label("report_type"),
+            RoadTrafficCollision.title.label("title"),
+            cast(RoadTrafficCollision.status, String).label("status"),
+            func.coalesce(RoadTrafficCollision.reported_date, RoadTrafficCollision.created_at).label("submitted_at"),
+            func.coalesce(RoadTrafficCollision.updated_at, RoadTrafficCollision.created_at).label("updated_at"),
+        )
         .where(RoadTrafficCollision.tenant_id == tid)
         .where(func.lower(RoadTrafficCollision.reporter_email) == user_email)
     )
-    rtas_result = await db.execute(rtas_query)
-    rtas = rtas_result.scalars().all()
 
-    for rta in rtas:
-        all_reports.append(
-            MyReportSummary(
-                reference_number=rta.reference_number,
-                report_type="rta",
-                title=rta.title,
-                status=(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
-                status_label=get_status_label(rta.status.value if hasattr(rta.status, "value") else str(rta.status)),
-                submitted_at=rta.reported_date or rta.created_at,
-                updated_at=rta.updated_at or rta.created_at,
-            )
+    nm_q = (
+        select(
+            NearMiss.reference_number.label("reference_number"),
+            literal("near_miss").label("report_type"),
+            func.concat(literal("Near Miss - "), NearMiss.contract).label("title"),
+            cast(NearMiss.status, String).label("status"),
+            func.coalesce(NearMiss.event_date, NearMiss.created_at).label("submitted_at"),
+            func.coalesce(NearMiss.updated_at, NearMiss.created_at).label("updated_at"),
         )
-
-    nm_query = (
-        select(NearMiss).where(NearMiss.tenant_id == tid).where(func.lower(NearMiss.reporter_email) == user_email)
+        .where(NearMiss.tenant_id == tid)
+        .where(func.lower(NearMiss.reporter_email) == user_email)
     )
-    nm_result = await db.execute(nm_query)
-    near_misses = nm_result.scalars().all()
 
-    for nm in near_misses:
-        all_reports.append(
-            MyReportSummary(
-                reference_number=nm.reference_number,
-                report_type="near_miss",
-                title=f"Near Miss - {nm.contract}",
-                status=nm.status,
-                status_label=get_status_label(nm.status),
-                submitted_at=nm.event_date or nm.created_at,
-                updated_at=nm.updated_at or nm.created_at,
-            )
+    combined = union_all(inc_q, comp_q, rta_q, nm_q).subquery("all_reports")
+
+    # Total count via SQL
+    count_result = await db.execute(select(func.count()).select_from(combined))
+    total = count_result.scalar() or 0
+
+    # Paginated + sorted fetch
+    offset = (page - 1) * page_size
+    data_query = select(combined).order_by(combined.c.submitted_at.desc()).offset(offset).limit(page_size)
+    result = await db.execute(data_query)
+    rows = result.all()
+
+    items = [
+        MyReportSummary(
+            reference_number=row.reference_number,
+            report_type=row.report_type,
+            title=row.title,
+            status=row.status,
+            status_label=get_status_label(row.status),
+            submitted_at=row.submitted_at,
+            updated_at=row.updated_at,
         )
+        for row in rows
+    ]
 
-    # Sort by submitted_at descending
-    all_reports.sort(key=lambda r: r.submitted_at, reverse=True)
-
-    # Paginate
-    total = len(all_reports)
-    start = (page - 1) * page_size
-    end = start + page_size
-    paginated = all_reports[start:end]
-
-    pages = ((total or 0) + page_size - 1) // page_size if (total or 0) > 0 else 0
+    pages = (total + page_size - 1) // page_size if total > 0 else 0
     return MyReportsResponse(
-        items=paginated,
+        items=items,
         total=total,
         page=page,
         page_size=page_size,

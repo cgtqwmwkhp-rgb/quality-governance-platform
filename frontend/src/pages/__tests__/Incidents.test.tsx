@@ -176,7 +176,6 @@ describe('Incidents', () => {
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.title).toBe('New incident')
     expect(callArgs.description).toBe('Detailed description')
-
   })
 
   it('shows error when creation fails', async () => {

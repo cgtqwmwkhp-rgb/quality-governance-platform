@@ -1,22 +1,22 @@
-import { Filter, RefreshCw, Loader2, History } from "lucide-react";
-import type { TimelineEvent } from "../../api/client";
-import { Button } from "../../components/ui/Button";
-import { Card } from "../../components/ui/Card";
-import { Badge } from "../../components/ui/Badge";
+import { Filter, RefreshCw, Loader2, History } from 'lucide-react'
+import type { TimelineEvent } from '../../api/client'
+import { Button } from '../../components/ui/Button'
+import { Card } from '../../components/ui/Card'
+import { Badge } from '../../components/ui/Badge'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../../components/ui/Select";
+} from '../../components/ui/Select'
 
 interface InvestigationTimelineProps {
-  timeline: TimelineEvent[];
-  timelineLoading: boolean;
-  timelineFilter: string;
-  onTimelineFilterChange: (value: string) => void;
-  onRefresh: () => void;
+  timeline: TimelineEvent[]
+  timelineLoading: boolean
+  timelineFilter: string
+  onTimelineFilterChange: (value: string) => void
+  onRefresh: () => void
 }
 
 export default function InvestigationTimeline({
@@ -57,9 +57,7 @@ export default function InvestigationTimeline({
       ) : timeline.length === 0 ? (
         <Card className="p-12 text-center">
           <History className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">
-            No Timeline Events
-          </h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Timeline Events</h3>
           <p className="text-muted-foreground">
             Events will appear here as the investigation progresses.
           </p>
@@ -75,10 +73,10 @@ export default function InvestigationTimeline({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-foreground">
-                      {event.event_type.replace(/_/g, " ")}
+                      {event.event_type.replace(/_/g, ' ')}
                     </span>
                     <Badge variant="outline" className="text-xs">
-                      {event.field_path || "System"}
+                      {event.field_path || 'System'}
                     </Badge>
                   </div>
                   {event.old_value && event.new_value && (
@@ -97,5 +95,5 @@ export default function InvestigationTimeline({
         </div>
       )}
     </div>
-  );
+  )
 }

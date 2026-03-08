@@ -1,6 +1,6 @@
 """Feature Flags API routes."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
@@ -22,12 +22,15 @@ router = APIRouter()
 async def list_feature_flags(
     db: DbSession,
     current_user: CurrentUser,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
 ) -> FeatureFlagListResponse:
     """List all feature flags."""
     service = FeatureFlagService(db)
     flags = await service.list_flags()
+    paginated = flags[skip : skip + limit]
     return FeatureFlagListResponse(
-        items=[FeatureFlagResponse.model_validate(f) for f in flags],
+        items=[FeatureFlagResponse.model_validate(f) for f in paginated],
         total=len(flags),
     )
 

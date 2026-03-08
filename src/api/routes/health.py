@@ -11,7 +11,6 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from src.api.dependencies import CurrentUser
 from src.infrastructure.database import engine
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,7 @@ async def readiness_check():
 
 
 @router.get("/metrics/resources", response_model=Dict[str, Any])
-async def resource_metrics(current_user: CurrentUser = None):
+async def resource_metrics():
     """Resource utilization metrics for cost monitoring."""
     process = psutil.Process()
     mem = process.memory_info()

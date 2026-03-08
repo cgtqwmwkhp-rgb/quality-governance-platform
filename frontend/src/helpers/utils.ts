@@ -1,5 +1,5 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
 import i18n from '../i18n/i18n'
 
 /**
@@ -15,7 +15,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  const locale = i18n.language || 'en-GB';
+  const locale = i18n.language || 'en-GB'
   return d.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
@@ -29,7 +29,7 @@ export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOpt
  */
 export function formatDateTime(date: string | Date): string {
   const d = typeof date === 'string' ? new Date(date) : date
-  const locale = i18n.language || 'en-GB';
+  const locale = i18n.language || 'en-GB'
   return d.toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
@@ -40,8 +40,8 @@ export function formatDateTime(date: string | Date): string {
 }
 
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
-  const locale = i18n.language || 'en-GB';
-  return new Intl.NumberFormat(locale, options).format(value);
+  const locale = i18n.language || 'en-GB'
+  return new Intl.NumberFormat(locale, options).format(value)
 }
 
 /**
@@ -58,7 +58,7 @@ export function truncate(text: string, length: number): string {
 export function getInitials(name: string): string {
   return name
     .split(' ')
-    .map(word => word[0])
+    .map((word) => word[0])
     .join('')
     .toUpperCase()
     .slice(0, 2)
@@ -68,7 +68,7 @@ export function getInitials(name: string): string {
  * Sleep for a specified duration (useful for animations/transitions)
  */
 export function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /**
@@ -76,7 +76,7 @@ export function sleep(ms: number): Promise<void> {
  */
 export function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
-  wait: number
+  wait: number,
 ): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null = null
   return (...args: Parameters<T>) => {

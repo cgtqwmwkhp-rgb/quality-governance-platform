@@ -1,17 +1,17 @@
-import { useEffect } from 'react';
-import { useNavigate, Outlet } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
-import { usePortalAuth } from '../contexts/PortalAuthContext';
+import { useEffect } from 'react'
+import { useNavigate, Outlet } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
+import { usePortalAuth } from '../contexts/PortalAuthContext'
 
 export default function PortalLayout() {
-  const navigate = useNavigate();
-  const { isAuthenticated, isLoading } = usePortalAuth();
+  const navigate = useNavigate()
+  const { isAuthenticated, isLoading } = usePortalAuth()
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      navigate('/portal/login');
+      navigate('/portal/login')
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [isAuthenticated, isLoading, navigate])
 
   if (isLoading) {
     return (
@@ -21,12 +21,12 @@ export default function PortalLayout() {
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (!isAuthenticated) {
-    return null; // Will redirect to login
+    return null // Will redirect to login
   }
 
-  return <Outlet />;
+  return <Outlet />
 }

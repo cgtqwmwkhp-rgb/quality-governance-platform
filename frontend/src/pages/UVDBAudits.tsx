@@ -51,7 +51,9 @@ type LoadState = 'idle' | 'loading' | 'success' | 'error'
 
 export default function UVDBAudits() {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>('dashboard')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>(
+    'dashboard',
+  )
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
   const [loadState, setLoadState] = useState<LoadState>('idle')
@@ -60,11 +62,11 @@ export default function UVDBAudits() {
 
   // Transform API section to component type
   const transformSection = (apiSection: {
-    section_number: number;
-    title: string;
-    description: string;
-    question_count: number;
-    weight: number;
+    section_number: number
+    title: string
+    description: string
+    question_count: number
+    weight: number
   }): UVDBSection => ({
     number: String(apiSection.section_number),
     title: apiSection.title,
@@ -75,15 +77,15 @@ export default function UVDBAudits() {
 
   // Transform API audit to component type
   const transformAudit = (apiAudit: {
-    id: number;
-    reference_number: string;
-    audit_year: number;
-    status: string;
-    percentage_score?: number;
-    total_questions: number;
-    answered_questions: number;
-    created_at: string;
-    submitted_at?: string;
+    id: number
+    reference_number: string
+    audit_year: number
+    status: string
+    percentage_score?: number
+    total_questions: number
+    answered_questions: number
+    created_at: string
+    submitted_at?: string
   }): UVDBAudit => ({
     id: apiAudit.id,
     audit_reference: apiAudit.reference_number,
@@ -95,70 +97,77 @@ export default function UVDBAudits() {
     lead_auditor: null,
   })
 
-  const loadData = useCallback(async (isRetry = false) => {
-    if (isRetry && retryCount >= 1) {
-      // Max 1 retry for transient errors
-      return
-    }
-
-    setLoadState('loading')
-    setErrorClass(null)
-
-    try {
-      // Fetch sections from API
-      const sectionsResponse = await uvdbApi.listSections()
-      const transformedSections = sectionsResponse.data.map(transformSection)
-      // Sort by section number for deterministic ordering
-      transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
-      setSections(transformedSections)
-
-      // Fetch audits from API
-      const auditsResponse = await uvdbApi.listAudits(1, 50)
-      const transformedAudits = auditsResponse.data.items.map(transformAudit)
-      // Sort by id descending for deterministic ordering (most recent first)
-      transformedAudits.sort((a, b) => b.id - a.id)
-      setAudits(transformedAudits)
-
-      // Try to get ISO mapping to enrich sections
-      try {
-        const mappingResponse = await uvdbApi.getISOMapping()
-        const mappings = mappingResponse.data.mappings
-        // Enrich sections with ISO mapping
-        const enrichedSections = transformedSections.map(section => {
-          const mapping = mappings.find(m => m.uvdb_section === section.number)
-          if (mapping) {
-            const isoMapping: Record<string, string> = {}
-            mapping.iso_clauses.forEach(clause => {
-              const [isoStandard, isoClause] = clause.split(':')
-              if (isoStandard && isoClause) {
-                isoMapping[isoStandard] = isoClause
-              }
-            })
-            return { ...section, iso_mapping: isoMapping }
-          }
-          return section
-        })
-        setSections(enrichedSections)
-      } catch {
-        // ISO mapping endpoint may not exist, sections still usable
-      }
-
-      setLoadState('success')
-      setRetryCount(0)
-    } catch (err) {
-      const apiError = createApiError(err)
-      setErrorClass(apiError.error_class)
-      
-      // Auto-retry once for transient network errors
-      if (!isRetry && (apiError.error_class === ErrorClass.NETWORK_ERROR || apiError.error_class === ErrorClass.SERVER_ERROR)) {
-        setRetryCount(prev => prev + 1)
-        loadData(true)
+  const loadData = useCallback(
+    async (isRetry = false) => {
+      if (isRetry && retryCount >= 1) {
+        // Max 1 retry for transient errors
         return
       }
-      
-      setLoadState('error')
-    }
-  }, [retryCount])
+
+      setLoadState('loading')
+      setErrorClass(null)
+
+      try {
+        // Fetch sections from API
+        const sectionsResponse = await uvdbApi.listSections()
+        const transformedSections = sectionsResponse.data.map(transformSection)
+        // Sort by section number for deterministic ordering
+        transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
+        setSections(transformedSections)
+
+        // Fetch audits from API
+        const auditsResponse = await uvdbApi.listAudits(1, 50)
+        const transformedAudits = auditsResponse.data.items.map(transformAudit)
+        // Sort by id descending for deterministic ordering (most recent first)
+        transformedAudits.sort((a, b) => b.id - a.id)
+        setAudits(transformedAudits)
+
+        // Try to get ISO mapping to enrich sections
+        try {
+          const mappingResponse = await uvdbApi.getISOMapping()
+          const mappings = mappingResponse.data.mappings
+          // Enrich sections with ISO mapping
+          const enrichedSections = transformedSections.map((section) => {
+            const mapping = mappings.find((m) => m.uvdb_section === section.number)
+            if (mapping) {
+              const isoMapping: Record<string, string> = {}
+              mapping.iso_clauses.forEach((clause) => {
+                const [isoStandard, isoClause] = clause.split(':')
+                if (isoStandard && isoClause) {
+                  isoMapping[isoStandard] = isoClause
+                }
+              })
+              return { ...section, iso_mapping: isoMapping }
+            }
+            return section
+          })
+          setSections(enrichedSections)
+        } catch {
+          // ISO mapping endpoint may not exist, sections still usable
+        }
+
+        setLoadState('success')
+        setRetryCount(0)
+      } catch (err) {
+        const apiError = createApiError(err)
+        setErrorClass(apiError.error_class)
+
+        // Auto-retry once for transient network errors
+        if (
+          !isRetry &&
+          (apiError.error_class === ErrorClass.NETWORK_ERROR ||
+            apiError.error_class === ErrorClass.SERVER_ERROR)
+        ) {
+          setRetryCount((prev) => prev + 1)
+          loadData(true)
+          return
+        }
+
+        setLoadState('error')
+      }
+    },
+    [retryCount],
+  )
 
   useEffect(() => {
     loadData()
@@ -168,11 +177,16 @@ export default function UVDBAudits() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-success/10 text-success'
-      case 'in_progress': return 'bg-info/10 text-info'
-      case 'scheduled': return 'bg-warning/10 text-warning'
-      case 'expired': return 'bg-destructive/10 text-destructive'
-      default: return 'bg-muted text-muted-foreground'
+      case 'completed':
+        return 'bg-success/10 text-success'
+      case 'in_progress':
+        return 'bg-info/10 text-info'
+      case 'scheduled':
+        return 'bg-warning/10 text-warning'
+      case 'expired':
+        return 'bg-destructive/10 text-destructive'
+      default:
+        return 'bg-muted text-muted-foreground'
     }
   }
 
@@ -245,7 +259,9 @@ export default function UVDBAudits() {
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-primary-foreground mb-1">{t('uvdb.protocol_ref')}</h2>
+            <h2 className="text-2xl font-bold text-primary-foreground mb-1">
+              {t('uvdb.protocol_ref')}
+            </h2>
             <p className="text-primary-foreground/80">{t('uvdb.protocol_version')}</p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
@@ -312,7 +328,10 @@ export default function UVDBAudits() {
             {(errorClass === ErrorClass.UNKNOWN || !errorClass) && t('uvdb.error_unknown')}
           </p>
           <button
-            onClick={() => { setRetryCount(0); loadData(); }}
+            onClick={() => {
+              setRetryCount(0)
+              loadData()
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
@@ -342,14 +361,41 @@ export default function UVDBAudits() {
               {/* ISO Alignment Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { standard: 'ISO 9001:2015', titleKey: 'uvdb.quality', icon: Shield, color: 'bg-blue-500', sections: '1.1, 2.1-2.5, 12-13' },
-                  { standard: 'ISO 14001:2015', titleKey: 'uvdb.environmental', icon: Leaf, color: 'bg-emerald-500', sections: '1.3, 8-11, 15' },
-                  { standard: 'ISO 45001:2018', titleKey: 'uvdb.ohs', icon: HardHat, color: 'bg-orange-500', sections: '1.2, 3-7, 14, 15' },
-                  { standard: 'ISO 27001:2022', titleKey: 'uvdb.info_security', icon: Lock, color: 'bg-purple-500', sections: '2.3' },
+                  {
+                    standard: 'ISO 9001:2015',
+                    titleKey: 'uvdb.quality',
+                    icon: Shield,
+                    color: 'bg-blue-500',
+                    sections: '1.1, 2.1-2.5, 12-13',
+                  },
+                  {
+                    standard: 'ISO 14001:2015',
+                    titleKey: 'uvdb.environmental',
+                    icon: Leaf,
+                    color: 'bg-emerald-500',
+                    sections: '1.3, 8-11, 15',
+                  },
+                  {
+                    standard: 'ISO 45001:2018',
+                    titleKey: 'uvdb.ohs',
+                    icon: HardHat,
+                    color: 'bg-orange-500',
+                    sections: '1.2, 3-7, 14, 15',
+                  },
+                  {
+                    standard: 'ISO 27001:2022',
+                    titleKey: 'uvdb.info_security',
+                    icon: Lock,
+                    color: 'bg-purple-500',
+                    sections: '2.3',
+                  },
                 ].map((iso) => {
                   const Icon = iso.icon
                   return (
-                    <div key={iso.standard} className="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                    <div
+                      key={iso.standard}
+                      className="bg-slate-800 rounded-xl p-5 border border-slate-700"
+                    >
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`p-2 ${iso.color} rounded-lg`}>
                           <Icon className="w-5 h-5 text-white" />
@@ -389,18 +435,23 @@ export default function UVDBAudits() {
                         <div>
                           <div className="font-medium text-white">{audit.audit_reference}</div>
                           <div className="text-sm text-gray-400">
-                            {audit.audit_type} Audit • {audit.audit_date || 'TBD'} • {audit.lead_auditor}
+                            {audit.audit_type} Audit • {audit.audit_date || 'TBD'} •{' '}
+                            {audit.lead_auditor}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
                         {audit.percentage_score && (
                           <div className="text-right">
-                            <div className="text-2xl font-bold text-emerald-400">{audit.percentage_score}%</div>
+                            <div className="text-2xl font-bold text-emerald-400">
+                              {audit.percentage_score}%
+                            </div>
                             <div className="text-xs text-gray-400">{t('uvdb.audit_score')}</div>
                           </div>
                         )}
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}>
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
+                        >
                           {audit.status}
                         </span>
                         <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -428,12 +479,19 @@ export default function UVDBAudits() {
                     <div key={i} className="bg-slate-700/50 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-white">{kpi.value}</div>
                       <div className="text-xs text-gray-400">{kpi.label}</div>
-                      <div className={`flex items-center justify-center gap-1 mt-1 text-xs ${
-                        kpi.trend === 'up' ? 'text-emerald-400' :
-                        kpi.trend === 'down' ? 'text-red-400' : 'text-gray-400'
-                      }`}>
+                      <div
+                        className={`flex items-center justify-center gap-1 mt-1 text-xs ${
+                          kpi.trend === 'up'
+                            ? 'text-emerald-400'
+                            : kpi.trend === 'down'
+                              ? 'text-red-400'
+                              : 'text-gray-400'
+                        }`}
+                      >
                         {kpi.trend === 'up' && <TrendingUp className="w-3 h-3" />}
-                        {kpi.trend === 'down' && <TrendingUp className="w-3 h-3 transform rotate-180" />}
+                        {kpi.trend === 'down' && (
+                          <TrendingUp className="w-3 h-3 transform rotate-180" />
+                        )}
                         {kpi.trend === 'stable' && <span>—</span>}
                       </div>
                     </div>
@@ -474,10 +532,13 @@ export default function UVDBAudits() {
                           <span
                             key={iso}
                             className={`px-2 py-0.5 rounded text-xs ${
-                              iso === '9001' ? 'bg-blue-500/20 text-blue-400' :
-                              iso === '14001' ? 'bg-emerald-500/20 text-emerald-400' :
-                              iso === '45001' ? 'bg-orange-500/20 text-orange-400' :
-                              'bg-purple-500/20 text-purple-400'
+                              iso === '9001'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : iso === '14001'
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : iso === '45001'
+                                    ? 'bg-orange-500/20 text-orange-400'
+                                    : 'bg-purple-500/20 text-purple-400'
                             }`}
                           >
                             {iso}
@@ -518,20 +579,38 @@ export default function UVDBAudits() {
                 <table className="w-full">
                   <thead className="bg-slate-700/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.reference')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.company')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.type')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.date')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.lead_auditor')}</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.score')}</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.status')}</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('uvdb.actions')}</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.reference')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.company')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.type')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.date')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.lead_auditor')}
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.score')}
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.status')}
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.actions')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
                     {audits.map((audit) => (
                       <tr key={audit.id} className="hover:bg-slate-700/50">
-                        <td className="px-4 py-3 font-medium text-white">{audit.audit_reference}</td>
+                        <td className="px-4 py-3 font-medium text-white">
+                          {audit.audit_reference}
+                        </td>
                         <td className="px-4 py-3 text-gray-300">{audit.company_name}</td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs font-medium">
@@ -542,18 +621,25 @@ export default function UVDBAudits() {
                         <td className="px-4 py-3 text-gray-300">{audit.lead_auditor}</td>
                         <td className="px-4 py-3 text-center">
                           {audit.percentage_score ? (
-                            <span className="text-emerald-400 font-bold">{audit.percentage_score}%</span>
+                            <span className="text-emerald-400 font-bold">
+                              {audit.percentage_score}%
+                            </span>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
+                          >
                             {audit.status}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <button aria-label="Open external link" className="p-2 hover:bg-slate-600 rounded-lg transition-colors">
+                          <button
+                            aria-label="Open external link"
+                            className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
+                          >
                             <ExternalLink className="w-4 h-4 text-gray-400" />
                           </button>
                         </td>
@@ -576,52 +662,170 @@ export default function UVDBAudits() {
                 <table className="w-full">
                   <thead className="bg-slate-700/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.uvdb_section')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('uvdb.topic')}</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 9001</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 14001</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 45001</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">ISO 27001</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.uvdb_section')}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                        {t('uvdb.topic')}
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        ISO 9001
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        ISO 14001
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        ISO 45001
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                        ISO 27001
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
                     {[
-                      { section: '1.1', topic: 'Quality Management Systems', iso9001: '4.4, 5.1, 9.2', iso14001: '', iso45001: '', iso27001: '' },
-                      { section: '1.2', topic: 'Health and Safety Management Systems', iso9001: '', iso14001: '', iso45001: '4.4, 5.1, 9.2', iso27001: '' },
-                      { section: '1.3', topic: 'Environmental Management Systems', iso9001: '', iso14001: '4.4, 5.1, 9.2', iso45001: '', iso27001: '' },
-                      { section: '1.4', topic: 'CDM Regulations 2015', iso9001: '', iso14001: '', iso45001: '6.1, 8.1', iso27001: '' },
-                      { section: '1.5', topic: 'Permits and Licensing', iso9001: '', iso14001: '6.1.3', iso45001: '6.1.3', iso27001: '' },
-                      { section: '2.1', topic: 'Top Management Quality Assurance', iso9001: '5.1, 5.2, 5.3', iso14001: '', iso45001: '', iso27001: '' },
-                      { section: '2.2', topic: 'Document Control', iso9001: '7.5', iso14001: '', iso45001: '', iso27001: '7.5' },
-                      { section: '2.3', topic: 'Information Security', iso9001: '', iso14001: '', iso45001: '', iso27001: '5.1, 8.1, A.8' },
-                      { section: '2.4', topic: 'Service Provision & Handover', iso9001: '8.5, 8.6', iso14001: '', iso45001: '', iso27001: '' },
-                      { section: '2.5', topic: 'Internal Auditing', iso9001: '9.2', iso14001: '9.2', iso45001: '9.2', iso27001: '' },
-                      { section: '12', topic: 'Sub-contractor Management', iso9001: '8.4', iso14001: '', iso45001: '8.1.4', iso27001: '' },
-                      { section: '13', topic: 'Sourcing (CFSI, Sustainability)', iso9001: '8.4.2', iso14001: '8.1', iso45001: '', iso27001: '' },
-                      { section: '14', topic: 'Work Equipment & Vehicles', iso9001: '', iso14001: '', iso45001: '7.1.3, 8.1', iso27001: '' },
-                      { section: '15', topic: 'Key Performance Indicators', iso9001: '', iso14001: '9.1', iso45001: '9.1', iso27001: '' },
+                      {
+                        section: '1.1',
+                        topic: 'Quality Management Systems',
+                        iso9001: '4.4, 5.1, 9.2',
+                        iso14001: '',
+                        iso45001: '',
+                        iso27001: '',
+                      },
+                      {
+                        section: '1.2',
+                        topic: 'Health and Safety Management Systems',
+                        iso9001: '',
+                        iso14001: '',
+                        iso45001: '4.4, 5.1, 9.2',
+                        iso27001: '',
+                      },
+                      {
+                        section: '1.3',
+                        topic: 'Environmental Management Systems',
+                        iso9001: '',
+                        iso14001: '4.4, 5.1, 9.2',
+                        iso45001: '',
+                        iso27001: '',
+                      },
+                      {
+                        section: '1.4',
+                        topic: 'CDM Regulations 2015',
+                        iso9001: '',
+                        iso14001: '',
+                        iso45001: '6.1, 8.1',
+                        iso27001: '',
+                      },
+                      {
+                        section: '1.5',
+                        topic: 'Permits and Licensing',
+                        iso9001: '',
+                        iso14001: '6.1.3',
+                        iso45001: '6.1.3',
+                        iso27001: '',
+                      },
+                      {
+                        section: '2.1',
+                        topic: 'Top Management Quality Assurance',
+                        iso9001: '5.1, 5.2, 5.3',
+                        iso14001: '',
+                        iso45001: '',
+                        iso27001: '',
+                      },
+                      {
+                        section: '2.2',
+                        topic: 'Document Control',
+                        iso9001: '7.5',
+                        iso14001: '',
+                        iso45001: '',
+                        iso27001: '7.5',
+                      },
+                      {
+                        section: '2.3',
+                        topic: 'Information Security',
+                        iso9001: '',
+                        iso14001: '',
+                        iso45001: '',
+                        iso27001: '5.1, 8.1, A.8',
+                      },
+                      {
+                        section: '2.4',
+                        topic: 'Service Provision & Handover',
+                        iso9001: '8.5, 8.6',
+                        iso14001: '',
+                        iso45001: '',
+                        iso27001: '',
+                      },
+                      {
+                        section: '2.5',
+                        topic: 'Internal Auditing',
+                        iso9001: '9.2',
+                        iso14001: '9.2',
+                        iso45001: '9.2',
+                        iso27001: '',
+                      },
+                      {
+                        section: '12',
+                        topic: 'Sub-contractor Management',
+                        iso9001: '8.4',
+                        iso14001: '',
+                        iso45001: '8.1.4',
+                        iso27001: '',
+                      },
+                      {
+                        section: '13',
+                        topic: 'Sourcing (CFSI, Sustainability)',
+                        iso9001: '8.4.2',
+                        iso14001: '8.1',
+                        iso45001: '',
+                        iso27001: '',
+                      },
+                      {
+                        section: '14',
+                        topic: 'Work Equipment & Vehicles',
+                        iso9001: '',
+                        iso14001: '',
+                        iso45001: '7.1.3, 8.1',
+                        iso27001: '',
+                      },
+                      {
+                        section: '15',
+                        topic: 'Key Performance Indicators',
+                        iso9001: '',
+                        iso14001: '9.1',
+                        iso45001: '9.1',
+                        iso27001: '',
+                      },
                     ].map((row, i) => (
                       <tr key={i} className="hover:bg-slate-700/50">
                         <td className="px-4 py-3 font-medium text-white">{row.section}</td>
                         <td className="px-4 py-3 text-gray-300">{row.topic}</td>
                         <td className="px-4 py-3 text-center">
                           {row.iso9001 && (
-                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">{row.iso9001}</span>
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                              {row.iso9001}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {row.iso14001 && (
-                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">{row.iso14001}</span>
+                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
+                              {row.iso14001}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {row.iso45001 && (
-                            <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">{row.iso45001}</span>
+                            <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
+                              {row.iso45001}
+                            </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {row.iso27001 && (
-                            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">{row.iso27001}</span>
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
+                              {row.iso27001}
+                            </span>
                           )}
                         </td>
                       </tr>

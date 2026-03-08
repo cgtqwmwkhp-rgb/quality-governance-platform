@@ -1,6 +1,6 @@
 /**
  * useWebSocket - React hook for WebSocket connection management
- * 
+ *
  * Features:
  * - Auto-connect on mount
  * - Auto-reconnect with exponential backoff
@@ -9,53 +9,53 @@
  * - Notification handling
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { API_BASE_URL } from '../config/apiBase';
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { API_BASE_URL } from '../config/apiBase'
 
 interface WebSocketMessage {
-  type: string;
-  data?: any;
-  timestamp?: string;
+  type: string
+  data?: any
+  timestamp?: string
 }
 
 interface Notification {
-  id: number;
-  type: string;
-  priority: string;
-  title: string;
-  message: string;
-  entity_type?: string;
-  entity_id?: string;
-  action_url?: string;
-  is_read: boolean;
-  created_at: string;
+  id: number
+  type: string
+  priority: string
+  title: string
+  message: string
+  entity_type?: string
+  entity_id?: string
+  action_url?: string
+  is_read: boolean
+  created_at: string
 }
 
 interface UseWebSocketOptions {
-  userId?: number;
-  autoConnect?: boolean;
-  reconnectAttempts?: number;
-  reconnectInterval?: number;
-  heartbeatInterval?: number;
-  onNotification?: (notification: Notification) => void;
-  onConnect?: () => void;
-  onDisconnect?: () => void;
-  onError?: (error: Event) => void;
+  userId?: number
+  autoConnect?: boolean
+  reconnectAttempts?: number
+  reconnectInterval?: number
+  heartbeatInterval?: number
+  onNotification?: (notification: Notification) => void
+  onConnect?: () => void
+  onDisconnect?: () => void
+  onError?: (error: Event) => void
 }
 
 interface UseWebSocketReturn {
-  isConnected: boolean;
-  isConnecting: boolean;
-  lastMessage: WebSocketMessage | null;
-  notifications: Notification[];
-  unreadCount: number;
-  connect: () => void;
-  disconnect: () => void;
-  subscribe: (channel: string) => void;
-  unsubscribe: (channel: string) => void;
-  send: (message: any) => void;
-  clearNotifications: () => void;
-  markAsRead: (notificationId: number) => void;
+  isConnected: boolean
+  isConnecting: boolean
+  lastMessage: WebSocketMessage | null
+  notifications: Notification[]
+  unreadCount: number
+  connect: () => void
+  disconnect: () => void
+  subscribe: (channel: string) => void
+  unsubscribe: (channel: string) => void
+  send: (message: any) => void
+  clearNotifications: () => void
+  markAsRead: (notificationId: number) => void
 }
 
 const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => {
@@ -69,150 +69,155 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
     onConnect,
     onDisconnect,
     onError,
-  } = options;
+  } = options
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectAttemptsRef = useRef(0)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Get WebSocket URL
   const getWsUrl = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = API_BASE_URL.replace(/^https?:\/\//, '');
-    return `${protocol}//${host}/api/v1/realtime/ws/${userId || 0}`;
-  }, [userId]);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = API_BASE_URL.replace(/^https?:\/\//, '')
+    return `${protocol}//${host}/api/v1/realtime/ws/${userId || 0}`
+  }, [userId])
 
   // Send heartbeat
   const sendHeartbeat = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'ping' }));
+      wsRef.current.send(JSON.stringify({ type: 'ping' }))
     }
-  }, []);
+  }, [])
 
   // Start heartbeat interval
   const startHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
+      clearInterval(heartbeatIntervalRef.current)
     }
-    heartbeatIntervalRef.current = setInterval(sendHeartbeat, heartbeatInterval);
-  }, [sendHeartbeat, heartbeatInterval]);
+    heartbeatIntervalRef.current = setInterval(sendHeartbeat, heartbeatInterval)
+  }, [sendHeartbeat, heartbeatInterval])
 
   // Stop heartbeat interval
   const stopHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
+      clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = null
     }
-  }, []);
+  }, [])
 
   // Handle incoming message
-  const handleMessage = useCallback((event: MessageEvent) => {
-    try {
-      const message: WebSocketMessage = JSON.parse(event.data);
-      setLastMessage(message);
+  const handleMessage = useCallback(
+    (event: MessageEvent) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data)
+        setLastMessage(message)
 
-      switch (message.type) {
-        case 'notification':
-          const notification = message.data as Notification;
-          setNotifications(prev => [notification, ...prev]);
-          if (!notification.is_read) {
-            setUnreadCount(prev => prev + 1);
-          }
-          onNotification?.(notification);
-          
-          // Show browser notification if permitted
-          if (Notification.permission === 'granted') {
-            new Notification(notification.title, {
-              body: notification.message,
-              icon: '/vite.svg',
-              tag: `notification-${notification.id}`,
-            });
-          }
-          break;
+        switch (message.type) {
+          case 'notification':
+            const notification = message.data as Notification
+            setNotifications((prev) => [notification, ...prev])
+            if (!notification.is_read) {
+              setUnreadCount((prev) => prev + 1)
+            }
+            onNotification?.(notification)
 
-        case 'pong':
-          // Heartbeat response - connection is alive
-          break;
+            // Show browser notification if permitted
+            if (Notification.permission === 'granted') {
+              new Notification(notification.title, {
+                body: notification.message,
+                icon: '/vite.svg',
+                tag: `notification-${notification.id}`,
+              })
+            }
+            break
 
-        case 'subscribed':
-          console.log(`Subscribed to channel: ${message.data?.channel}`);
-          break;
+          case 'pong':
+            // Heartbeat response - connection is alive
+            break
 
-        case 'unsubscribed':
-          console.log(`Unsubscribed from channel: ${message.data?.channel}`);
-          break;
+          case 'subscribed':
+            console.log(`Subscribed to channel: ${message.data?.channel}`)
+            break
 
-        case 'presence_update':
-          // Handle presence update
-          break;
+          case 'unsubscribed':
+            console.log(`Unsubscribed from channel: ${message.data?.channel}`)
+            break
 
-        default:
-          console.log('Unknown message type:', message.type);
+          case 'presence_update':
+            // Handle presence update
+            break
+
+          default:
+            console.log('Unknown message type:', message.type)
+        }
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error)
       }
-    } catch (error) {
-      console.error('Failed to parse WebSocket message:', error);
-    }
-  }, [onNotification]);
+    },
+    [onNotification],
+  )
 
   // Connect to WebSocket
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN || isConnecting) {
-      return;
+      return
     }
 
-    setIsConnecting(true);
-    const url = getWsUrl();
-    console.log(`Connecting to WebSocket: ${url}`);
+    setIsConnecting(true)
+    const url = getWsUrl()
+    console.log(`Connecting to WebSocket: ${url}`)
 
     try {
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(url)
 
       ws.onopen = () => {
-        console.log('WebSocket connected');
-        setIsConnected(true);
-        setIsConnecting(false);
-        reconnectAttemptsRef.current = 0;
-        startHeartbeat();
-        onConnect?.();
-      };
+        console.log('WebSocket connected')
+        setIsConnected(true)
+        setIsConnecting(false)
+        reconnectAttemptsRef.current = 0
+        startHeartbeat()
+        onConnect?.()
+      }
 
-      ws.onmessage = handleMessage;
+      ws.onmessage = handleMessage
 
       ws.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
-        setIsConnected(false);
-        setIsConnecting(false);
-        stopHeartbeat();
-        onDisconnect?.();
+        console.log('WebSocket disconnected:', event.code, event.reason)
+        setIsConnected(false)
+        setIsConnecting(false)
+        stopHeartbeat()
+        onDisconnect?.()
 
         // Attempt reconnection
         if (reconnectAttemptsRef.current < reconnectAttempts) {
-          const delay = reconnectInterval * Math.pow(2, reconnectAttemptsRef.current);
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${reconnectAttempts})`);
-          
+          const delay = reconnectInterval * Math.pow(2, reconnectAttemptsRef.current)
+          console.log(
+            `Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${reconnectAttempts})`,
+          )
+
           reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectAttemptsRef.current++;
-            connect();
-          }, delay);
+            reconnectAttemptsRef.current++
+            connect()
+          }, delay)
         }
-      };
+      }
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        onError?.(error);
-      };
+        console.error('WebSocket error:', error)
+        onError?.(error)
+      }
 
-      wsRef.current = ws;
+      wsRef.current = ws
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
-      setIsConnecting(false);
+      console.error('Failed to create WebSocket:', error)
+      setIsConnecting(false)
     }
   }, [
     getWsUrl,
@@ -225,78 +230,78 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
     onConnect,
     onDisconnect,
     onError,
-  ]);
+  ])
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+      clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
     }
-    
-    stopHeartbeat();
-    
+
+    stopHeartbeat()
+
     if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+      wsRef.current.close()
+      wsRef.current = null
     }
-    
-    setIsConnected(false);
-    setIsConnecting(false);
-  }, [stopHeartbeat]);
+
+    setIsConnected(false)
+    setIsConnecting(false)
+  }, [stopHeartbeat])
 
   // Subscribe to a channel
   const subscribe = useCallback((channel: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'subscribe', channel }));
+      wsRef.current.send(JSON.stringify({ type: 'subscribe', channel }))
     }
-  }, []);
+  }, [])
 
   // Unsubscribe from a channel
   const unsubscribe = useCallback((channel: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel }));
+      wsRef.current.send(JSON.stringify({ type: 'unsubscribe', channel }))
     }
-  }, []);
+  }, [])
 
   // Send a message
   const send = useCallback((message: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
+      wsRef.current.send(JSON.stringify(message))
     } else {
-      console.warn('WebSocket not connected, message not sent');
+      console.warn('WebSocket not connected, message not sent')
     }
-  }, []);
+  }, [])
 
   // Clear all notifications
   const clearNotifications = useCallback(() => {
-    setNotifications([]);
-    setUnreadCount(0);
-  }, []);
+    setNotifications([])
+    setUnreadCount(0)
+  }, [])
 
   // Mark notification as read
   const markAsRead = useCallback((notificationId: number) => {
-    setNotifications(prev =>
-      prev.map(n => (n.id === notificationId ? { ...n, is_read: true } : n))
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  }, []);
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true } : n)),
+    )
+    setUnreadCount((prev) => Math.max(0, prev - 1))
+  }, [])
 
   // Auto-connect on mount
   useEffect(() => {
     if (autoConnect && userId) {
       // Request notification permission
       if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
+        Notification.requestPermission()
       }
-      
-      connect();
+
+      connect()
     }
 
     return () => {
-      disconnect();
-    };
-  }, [autoConnect, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+      disconnect()
+    }
+  }, [autoConnect, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     isConnected,
@@ -311,7 +316,7 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
     send,
     clearNotifications,
     markAsRead,
-  };
-};
+  }
+}
 
-export default useWebSocket;
+export default useWebSocket

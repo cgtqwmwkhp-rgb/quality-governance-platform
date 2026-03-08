@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react'
 import {
   Search,
   X,
@@ -17,124 +17,130 @@ import {
   Command,
   ArrowRight,
   Tag,
-  Calendar
-} from 'lucide-react';
-import { cn } from "../helpers/utils";
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+  Calendar,
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
 
 interface SearchResult {
-  id: string;
-  type: 'incident' | 'rta' | 'complaint' | 'risk' | 'audit' | 'action' | 'document';
-  title: string;
-  description: string;
-  module: string;
-  status: string;
-  date: string;
-  relevance: number;
-  highlights: string[];
+  id: string
+  type: 'incident' | 'rta' | 'complaint' | 'risk' | 'audit' | 'action' | 'document'
+  title: string
+  description: string
+  module: string
+  status: string
+  date: string
+  relevance: number
+  highlights: string[]
 }
 
 interface SearchFilter {
-  modules: string[];
-  status: string[];
-  dateRange: string;
+  modules: string[]
+  status: string[]
+  dateRange: string
 }
 
 export default function GlobalSearch() {
-  const [query, setQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
+  const [query, setQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<SearchFilter>({
     modules: [],
     status: [],
-    dateRange: 'all'
-  });
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+    dateRange: 'all',
+  })
+  const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  const mockResults: SearchResult[] = [];
+  const mockResults: SearchResult[] = []
 
   const moduleIcons: Record<string, React.ReactNode> = {
-    'Incidents': <AlertTriangle className="w-5 h-5" />,
-    'RTAs': <Car className="w-5 h-5" />,
-    'Complaints': <MessageSquare className="w-5 h-5" />,
-    'Risks': <Shield className="w-5 h-5" />,
-    'Audits': <ClipboardCheck className="w-5 h-5" />,
-    'Actions': <Zap className="w-5 h-5" />,
-    'Documents': <FileText className="w-5 h-5" />
-  };
+    Incidents: <AlertTriangle className="w-5 h-5" />,
+    RTAs: <Car className="w-5 h-5" />,
+    Complaints: <MessageSquare className="w-5 h-5" />,
+    Risks: <Shield className="w-5 h-5" />,
+    Audits: <ClipboardCheck className="w-5 h-5" />,
+    Actions: <Zap className="w-5 h-5" />,
+    Documents: <FileText className="w-5 h-5" />,
+  }
 
   const moduleColors: Record<string, string> = {
-    'Incidents': 'text-destructive bg-destructive/20',
-    'RTAs': 'text-warning bg-warning/20',
-    'Complaints': 'text-primary bg-primary/20',
-    'Risks': 'text-destructive bg-destructive/20',
-    'Audits': 'text-success bg-success/20',
-    'Actions': 'text-info bg-info/20',
-    'Documents': 'text-info bg-info/20'
-  };
+    Incidents: 'text-destructive bg-destructive/20',
+    RTAs: 'text-warning bg-warning/20',
+    Complaints: 'text-primary bg-primary/20',
+    Risks: 'text-destructive bg-destructive/20',
+    Audits: 'text-success bg-success/20',
+    Actions: 'text-info bg-info/20',
+    Documents: 'text-info bg-info/20',
+  }
 
-  const statusVariants: Record<string, 'warning' | 'info' | 'acknowledged' | 'default' | 'destructive' | 'resolved'> = {
-    'Open': 'warning',
+  const statusVariants: Record<
+    string,
+    'warning' | 'info' | 'acknowledged' | 'default' | 'destructive' | 'resolved'
+  > = {
+    Open: 'warning',
     'In Progress': 'info',
     'Under Investigation': 'acknowledged',
-    'Monitoring': 'info',
-    'Scheduled': 'default',
-    'Overdue': 'destructive',
-    'Closed': 'resolved'
-  };
+    Monitoring: 'info',
+    Scheduled: 'default',
+    Overdue: 'destructive',
+    Closed: 'resolved',
+  }
 
   const handleSearch = () => {
-    if (!query.trim()) return;
-    
-    setIsSearching(true);
-    
+    if (!query.trim()) return
+
+    setIsSearching(true)
+
     if (!searchHistory.includes(query)) {
-      setSearchHistory([query, ...searchHistory.slice(0, 4)]);
+      setSearchHistory([query, ...searchHistory.slice(0, 4)])
     }
-    
+
     setTimeout(() => {
-      setResults(mockResults.filter(r => 
-        r.title.toLowerCase().includes(query.toLowerCase()) ||
-        r.description.toLowerCase().includes(query.toLowerCase()) ||
-        r.module.toLowerCase().includes(query.toLowerCase())
-      ));
-      setIsSearching(false);
-    }, 500);
-  };
+      setResults(
+        mockResults.filter(
+          (r) =>
+            r.title.toLowerCase().includes(query.toLowerCase()) ||
+            r.description.toLowerCase().includes(query.toLowerCase()) ||
+            r.module.toLowerCase().includes(query.toLowerCase()),
+        ),
+      )
+      setIsSearching(false)
+    }, 500)
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      handleSearch();
+      handleSearch()
     }
-  };
+  }
 
   const clearSearch = () => {
-    setQuery('');
-    setResults([]);
-    inputRef.current?.focus();
-  };
+    setQuery('')
+    setResults([])
+    inputRef.current?.focus()
+  }
 
   const applyFilter = (type: keyof SearchFilter, value: string) => {
-    setFilters(prev => {
+    setFilters((prev) => {
       if (type === 'dateRange') {
-        return { ...prev, dateRange: value };
+        return { ...prev, dateRange: value }
       }
-      const arr = prev[type] as string[];
+      const arr = prev[type] as string[]
       if (arr.includes(value)) {
-        return { ...prev, [type]: arr.filter(v => v !== value) };
+        return { ...prev, [type]: arr.filter((v) => v !== value) }
       }
-      return { ...prev, [type]: [...arr, value] };
-    });
-  };
+      return { ...prev, [type]: [...arr, value] }
+    })
+  }
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    inputRef.current?.focus()
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -160,7 +166,7 @@ export default function GlobalSearch() {
               <Search className="w-6 h-6 text-muted-foreground" />
             )}
           </div>
-          
+
           <Input
             ref={inputRef}
             type="text"
@@ -170,14 +176,14 @@ export default function GlobalSearch() {
             placeholder="Search incidents, RTAs, complaints, risks, audits, actions, documents..."
             className="w-full pl-14 pr-32 py-5 text-lg rounded-2xl"
           />
-          
+
           <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-4">
             {query && (
               <Button variant="ghost" size="sm" onClick={clearSearch}>
                 <X className="w-5 h-5" />
               </Button>
             )}
-            
+
             <Button
               variant={showFilters ? 'default' : 'ghost'}
               size="sm"
@@ -185,7 +191,7 @@ export default function GlobalSearch() {
             >
               <Filter className="w-5 h-5" />
             </Button>
-            
+
             <Button onClick={handleSearch}>
               Search
               <ArrowRight className="w-4 h-4" />
@@ -209,10 +215,10 @@ export default function GlobalSearch() {
                         key={module}
                         onClick={() => applyFilter('modules', module)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                           filters.modules.includes(module)
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {module}
@@ -232,10 +238,10 @@ export default function GlobalSearch() {
                         key={status}
                         onClick={() => applyFilter('status', status)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                           filters.status.includes(status)
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {status}
@@ -254,16 +260,16 @@ export default function GlobalSearch() {
                       { label: 'All Time', value: 'all' },
                       { label: 'Today', value: 'today' },
                       { label: 'This Week', value: 'week' },
-                      { label: 'This Month', value: 'month' }
+                      { label: 'This Month', value: 'month' },
                     ].map((option) => (
                       <button
                         key={option.value}
                         onClick={() => applyFilter('dateRange', option.value)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                           filters.dateRange === option.value
                             ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:text-foreground'
+                            : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
                         {option.label}
@@ -291,8 +297,8 @@ export default function GlobalSearch() {
                   <button
                     key={i}
                     onClick={() => {
-                      setQuery(term);
-                      handleSearch();
+                      setQuery(term)
+                      handleSearch()
                     }}
                     className="px-4 py-2 bg-card border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-all flex items-center gap-2"
                   >
@@ -303,7 +309,7 @@ export default function GlobalSearch() {
               </div>
             </>
           )}
-          
+
           {/* AI Suggestions */}
           <div className="mt-8 p-6 bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/30 rounded-xl">
             <div className="flex items-center gap-3 mb-4">
@@ -315,7 +321,7 @@ export default function GlobalSearch() {
                 'Show all overdue actions',
                 'Recent high-priority incidents',
                 'Pending ISO audits this month',
-                'Unresolved customer complaints'
+                'Unresolved customer complaints',
               ].map((suggestion, i) => (
                 <button
                   key={i}
@@ -336,10 +342,11 @@ export default function GlobalSearch() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <p className="text-muted-foreground">
-              Found <span className="text-foreground font-medium">{results.length}</span> results for "{query}"
+              Found <span className="text-foreground font-medium">{results.length}</span> results
+              for "{query}"
             </p>
           </div>
-          
+
           <div className="space-y-4">
             {results.map((result) => (
               <Card
@@ -348,10 +355,10 @@ export default function GlobalSearch() {
               >
                 <CardContent className="p-5">
                   <div className="flex items-start gap-4">
-                    <div className={cn("p-3 rounded-xl", moduleColors[result.module])}>
+                    <div className={cn('p-3 rounded-xl', moduleColors[result.module])}>
                       {moduleIcons[result.module]}
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -360,7 +367,7 @@ export default function GlobalSearch() {
                           </h3>
                           <p className="text-sm text-muted-foreground mt-0.5">{result.id}</p>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <Badge variant={statusVariants[result.status] || 'default'}>
                             {result.status}
@@ -368,11 +375,11 @@ export default function GlobalSearch() {
                           <span className="text-xs text-muted-foreground">{result.date}</span>
                         </div>
                       </div>
-                      
+
                       <p className="text-muted-foreground mt-2 text-sm line-clamp-2">
                         {result.description}
                       </p>
-                      
+
                       <div className="flex items-center gap-4 mt-3">
                         <span className="text-xs text-muted-foreground">{result.module}</span>
                         <div className="flex items-center gap-1">
@@ -406,11 +413,9 @@ export default function GlobalSearch() {
             <Search className="w-10 h-10 text-muted-foreground" />
           </div>
           <h3 className="text-xl font-semibold text-foreground mb-2">No results found</h3>
-          <p className="text-muted-foreground">
-            Try different keywords or adjust your filters
-          </p>
+          <p className="text-muted-foreground">Try different keywords or adjust your filters</p>
         </div>
       )}
     </div>
-  );
+  )
 }

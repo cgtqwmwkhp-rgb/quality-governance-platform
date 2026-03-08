@@ -1,26 +1,21 @@
-import { useTranslation } from 'react-i18next';
-import {
-  ArrowLeft,
-  Save,
-  CheckCircle,
-  Sparkles,
-} from 'lucide-react';
+import { useTranslation } from 'react-i18next'
+import { ArrowLeft, Save, CheckCircle, Sparkles } from 'lucide-react'
 
 export interface TemplateHeaderProps {
-  templateName: string;
-  templateStatus: 'draft' | 'published' | 'archived';
-  templateVersion: string;
-  totalQuestions: number;
-  activeTab: 'builder' | 'settings' | 'preview';
-  onTabChange: (tab: 'builder' | 'settings' | 'preview') => void;
-  onNameChange: (name: string) => void;
-  onBack: () => void;
-  onSave: () => void;
-  isSaving: boolean;
-  onPublish: () => void;
-  canPublish: boolean;
-  onAIAssist: () => void;
-  saveError: string | null;
+  templateName: string
+  templateStatus: 'draft' | 'published' | 'archived'
+  templateVersion: string
+  totalQuestions: number
+  activeTab: 'builder' | 'settings' | 'preview'
+  onTabChange: (tab: 'builder' | 'settings' | 'preview') => void
+  onNameChange: (name: string) => void
+  onBack: () => void
+  onSave: () => void
+  isSaving: boolean
+  onPublish: () => void
+  canPublish: boolean
+  onAIAssist: () => void
+  saveError: string | null
 }
 
 export default function TemplateHeader({
@@ -39,7 +34,7 @@ export default function TemplateHeader({
   onAIAssist,
   saveError,
 }: TemplateHeaderProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
 
   return (
     <header className="sticky top-0 z-40 bg-card/80 backdrop-blur-xl border-b border-border">
@@ -61,11 +56,15 @@ export default function TemplateHeader({
                 className="bg-transparent text-xl font-bold text-foreground placeholder:text-muted-foreground focus:outline-none"
               />
               <div className="flex items-center gap-2 mt-1">
-                <span className={`px-2 py-0.5 text-xs rounded ${
-                  templateStatus === 'published' ? 'bg-success/20 text-success' :
-                  templateStatus === 'archived' ? 'bg-muted text-muted-foreground' :
-                  'bg-warning/20 text-warning'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 text-xs rounded ${
+                    templateStatus === 'published'
+                      ? 'bg-success/20 text-success'
+                      : templateStatus === 'archived'
+                        ? 'bg-muted text-muted-foreground'
+                        : 'bg-warning/20 text-warning'
+                  }`}
+                >
                   {templateStatus}
                 </span>
                 <span className="text-xs text-muted-foreground">v{templateVersion}</span>
@@ -129,5 +128,5 @@ export default function TemplateHeader({
         </div>
       </div>
     </header>
-  );
+  )
 }

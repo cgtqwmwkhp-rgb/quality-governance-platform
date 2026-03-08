@@ -152,6 +152,7 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
 async def list_sessions(
     current_user: CurrentUser,
     db: DbSession,
+    offset: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
 ):
     """List user's recent sessions."""
@@ -161,6 +162,7 @@ async def list_sessions(
         select(CopilotSession)
         .where(CopilotSession.user_id == current_user.id)
         .order_by(CopilotSession.updated_at.desc())
+        .offset(offset)
         .limit(limit)
     )
     sessions = result.scalars().all()

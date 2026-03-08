@@ -39,7 +39,10 @@ export default function LookupTables() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                {t(`admin.lookups.${cat.key}_desc`, `Configure ${cat.label.toLowerCase()} for your organisation`)}
+                {t(
+                  `admin.lookups.${cat.key}_desc`,
+                  `Configure ${cat.label.toLowerCase()} for your organisation`,
+                )}
               </p>
             </CardContent>
           </Card>

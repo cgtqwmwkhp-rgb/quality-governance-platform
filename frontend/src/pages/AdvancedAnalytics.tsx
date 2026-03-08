@@ -1,6 +1,6 @@
 /**
  * Advanced Analytics Dashboard
- * 
+ *
  * Features:
  * - Interactive drill-down charts
  * - Trend forecasting with confidence intervals
@@ -9,8 +9,8 @@
  * - ROI tracking
  */
 
-import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   BarChart3,
   TrendingUp,
@@ -34,59 +34,77 @@ import {
   Activity,
   Eye,
   X,
-} from 'lucide-react';
-import { cn } from '../helpers/utils';
-import { Button } from '../components/ui/Button';
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
 
 interface KPIData {
-  incidents: { total: number; open: number; closed: number; trend: number; avg_resolution_days: number };
-  actions: { total: number; open: number; overdue: number; completed_on_time_rate: number; trend: number };
-  audits: { total: number; completed: number; in_progress: number; avg_score: number; trend: number };
-  risks: { total: number; high: number; medium: number; low: number; mitigated: number };
-  compliance: { overall_score: number; iso_9001: number; iso_14001: number; iso_45001: number };
-  training: { completion_rate: number; expiring_soon: number; overdue: number };
+  incidents: {
+    total: number
+    open: number
+    closed: number
+    trend: number
+    avg_resolution_days: number
+  }
+  actions: {
+    total: number
+    open: number
+    overdue: number
+    completed_on_time_rate: number
+    trend: number
+  }
+  audits: {
+    total: number
+    completed: number
+    in_progress: number
+    avg_score: number
+    trend: number
+  }
+  risks: { total: number; high: number; medium: number; low: number; mitigated: number }
+  compliance: { overall_score: number; iso_9001: number; iso_14001: number; iso_45001: number }
+  training: { completion_rate: number; expiring_soon: number; overdue: number }
 }
 
 interface BenchmarkData {
-  your_value: number;
-  industry_average: number;
-  industry_median: number;
-  percentile_25: number;
-  percentile_75: number;
-  percentile_90: number;
-  your_percentile: number;
-  trend: string;
+  your_value: number
+  industry_average: number
+  industry_median: number
+  percentile_25: number
+  percentile_75: number
+  percentile_90: number
+  your_percentile: number
+  trend: string
 }
 
 interface CostData {
-  total_cost: number;
+  total_cost: number
   breakdown: {
-    incident_costs: { amount: number; count: number };
-    regulatory_fines: { amount: number; count: number };
-    legal_costs: { amount: number; count: number };
-    remediation: { amount: number; count: number };
-    productivity_loss: { amount: number };
-  };
-  trend: { vs_previous_period: number; direction: string };
+    incident_costs: { amount: number; count: number }
+    regulatory_fines: { amount: number; count: number }
+    legal_costs: { amount: number; count: number }
+    remediation: { amount: number; count: number }
+    productivity_loss: { amount: number }
+  }
+  trend: { vs_previous_period: number; direction: string }
 }
 
 interface ROIData {
   investments: Array<{
-    id: number;
-    name: string;
-    category: string;
-    investment: number;
-    annual_savings: number;
-    incidents_prevented: number;
-    roi_percentage: number;
-    payback_months: number;
-  }>;
+    id: number
+    name: string
+    category: string
+    investment: number
+    annual_savings: number
+    incidents_prevented: number
+    roi_percentage: number
+    payback_months: number
+  }>
   summary: {
-    total_investment: number;
-    total_annual_savings: number;
-    total_incidents_prevented: number;
-    overall_roi: number;
-  };
+    total_investment: number
+    total_annual_savings: number
+    total_incidents_prevented: number
+    overall_roi: number
+  }
 }
 
 const timeRanges = [
@@ -95,29 +113,31 @@ const timeRanges = [
   { value: 'last_90_days', label: 'Last 90 Days' },
   { value: 'last_12_months', label: 'Last 12 Months' },
   { value: 'year_to_date', label: 'Year to Date' },
-];
+]
 
 export default function AdvancedAnalytics() {
-  const { t } = useTranslation();
-  const [timeRange, setTimeRange] = useState('last_30_days');
-  const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'benchmarks' | 'costs' | 'roi'>('overview');
-  const [kpis, setKpis] = useState<KPIData | null>(null);
-  const [benchmarks, setBenchmarks] = useState<Record<string, BenchmarkData>>({});
-  const [costs, setCosts] = useState<CostData | null>(null);
-  const [roi, setRoi] = useState<ROIData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [drillDownOpen, setDrillDownOpen] = useState(false);
-  const [drillDownData, setDrillDownData] = useState<any>(null);
+  const { t } = useTranslation()
+  const [timeRange, setTimeRange] = useState('last_30_days')
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'trends' | 'benchmarks' | 'costs' | 'roi'
+  >('overview')
+  const [kpis, setKpis] = useState<KPIData | null>(null)
+  const [benchmarks, setBenchmarks] = useState<Record<string, BenchmarkData>>({})
+  const [costs, setCosts] = useState<CostData | null>(null)
+  const [roi, setRoi] = useState<ROIData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [drillDownOpen, setDrillDownOpen] = useState(false)
+  const [drillDownData, setDrillDownData] = useState<any>(null)
 
   useEffect(() => {
-    loadData();
-  }, [timeRange]);
+    loadData()
+  }, [timeRange])
 
   const loadData = async () => {
-    setLoading(true);
+    setLoading(true)
     // Simulate API calls
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
     setKpis({
       incidents: { total: 47, open: 12, closed: 35, trend: -8.5, avg_resolution_days: 4.2 },
       actions: { total: 156, open: 34, overdue: 8, completed_on_time_rate: 87.5, trend: 12.3 },
@@ -125,13 +145,40 @@ export default function AdvancedAnalytics() {
       risks: { total: 89, high: 12, medium: 34, low: 43, mitigated: 67 },
       compliance: { overall_score: 94.2, iso_9001: 96.1, iso_14001: 92.8, iso_45001: 93.7 },
       training: { completion_rate: 91.2, expiring_soon: 14, overdue: 3 },
-    });
+    })
 
     setBenchmarks({
-      incident_rate: { your_value: 2.3, industry_average: 3.8, industry_median: 3.5, percentile_25: 4.2, percentile_75: 2.8, percentile_90: 1.9, your_percentile: 72, trend: 'improving' },
-      audit_score: { your_value: 89.4, industry_average: 82.1, industry_median: 83.5, percentile_25: 78.0, percentile_75: 88.0, percentile_90: 92.5, your_percentile: 78, trend: 'stable' },
-      action_completion_rate: { your_value: 87.5, industry_average: 79.2, industry_median: 81.0, percentile_25: 72.0, percentile_75: 86.0, percentile_90: 93.0, your_percentile: 76, trend: 'improving' },
-    });
+      incident_rate: {
+        your_value: 2.3,
+        industry_average: 3.8,
+        industry_median: 3.5,
+        percentile_25: 4.2,
+        percentile_75: 2.8,
+        percentile_90: 1.9,
+        your_percentile: 72,
+        trend: 'improving',
+      },
+      audit_score: {
+        your_value: 89.4,
+        industry_average: 82.1,
+        industry_median: 83.5,
+        percentile_25: 78.0,
+        percentile_75: 88.0,
+        percentile_90: 92.5,
+        your_percentile: 78,
+        trend: 'stable',
+      },
+      action_completion_rate: {
+        your_value: 87.5,
+        industry_average: 79.2,
+        industry_median: 81.0,
+        percentile_25: 72.0,
+        percentile_75: 86.0,
+        percentile_90: 93.0,
+        your_percentile: 76,
+        trend: 'improving',
+      },
+    })
 
     setCosts({
       total_cost: 127500,
@@ -143,19 +190,51 @@ export default function AdvancedAnalytics() {
         productivity_loss: { amount: 20000 },
       },
       trend: { vs_previous_period: -12.5, direction: 'improving' },
-    });
+    })
 
     setRoi({
       investments: [
-        { id: 1, name: 'Safety Management System', category: 'technology', investment: 50000, annual_savings: 35000, incidents_prevented: 12, roi_percentage: 70, payback_months: 17 },
-        { id: 2, name: 'Enhanced PPE Program', category: 'equipment', investment: 25000, annual_savings: 18000, incidents_prevented: 8, roi_percentage: 72, payback_months: 17 },
-        { id: 3, name: 'Comprehensive Training', category: 'training', investment: 40000, annual_savings: 28000, incidents_prevented: 15, roi_percentage: 70, payback_months: 17 },
+        {
+          id: 1,
+          name: 'Safety Management System',
+          category: 'technology',
+          investment: 50000,
+          annual_savings: 35000,
+          incidents_prevented: 12,
+          roi_percentage: 70,
+          payback_months: 17,
+        },
+        {
+          id: 2,
+          name: 'Enhanced PPE Program',
+          category: 'equipment',
+          investment: 25000,
+          annual_savings: 18000,
+          incidents_prevented: 8,
+          roi_percentage: 72,
+          payback_months: 17,
+        },
+        {
+          id: 3,
+          name: 'Comprehensive Training',
+          category: 'training',
+          investment: 40000,
+          annual_savings: 28000,
+          incidents_prevented: 15,
+          roi_percentage: 70,
+          payback_months: 17,
+        },
       ],
-      summary: { total_investment: 115000, total_annual_savings: 81000, total_incidents_prevented: 35, overall_roi: 70.4 },
-    });
+      summary: {
+        total_investment: 115000,
+        total_annual_savings: 81000,
+        total_incidents_prevented: 35,
+        overall_roi: 70.4,
+      },
+    })
 
-    setLoading(false);
-  };
+    setLoading(false)
+  }
 
   const handleDrillDown = (metric: string, dimension: string, value: string) => {
     setDrillDownData({
@@ -163,36 +242,59 @@ export default function AdvancedAnalytics() {
       dimension,
       value,
       records: [
-        { id: 'INC-001', title: 'Slip and fall incident', date: '2026-01-15', status: 'closed', severity: 'medium' },
-        { id: 'INC-002', title: 'Near miss - falling object', date: '2026-01-12', status: 'closed', severity: 'low' },
-        { id: 'INC-003', title: 'Equipment malfunction', date: '2026-01-10', status: 'open', severity: 'high' },
+        {
+          id: 'INC-001',
+          title: 'Slip and fall incident',
+          date: '2026-01-15',
+          status: 'closed',
+          severity: 'medium',
+        },
+        {
+          id: 'INC-002',
+          title: 'Near miss - falling object',
+          date: '2026-01-12',
+          status: 'closed',
+          severity: 'low',
+        },
+        {
+          id: 'INC-003',
+          title: 'Equipment malfunction',
+          date: '2026-01-10',
+          status: 'open',
+          severity: 'high',
+        },
       ],
-    });
-    setDrillDownOpen(true);
-  };
+    })
+    setDrillDownOpen(true)
+  }
 
-  const KPICard = ({ 
-    title, 
-    value, 
-    subtitle, 
+  const KPICard = ({
+    title,
+    value,
+    subtitle,
     trend,
-    icon: Icon, 
+    icon: Icon,
     color,
-    onClick 
-  }: { 
-    title: string; 
-    value: string | number; 
-    subtitle?: string;
-    trend?: number; 
-    trendLabel?: string;
-    icon: React.ElementType; 
-    color: string;
-    onClick?: () => void;
+    onClick,
+  }: {
+    title: string
+    value: string | number
+    subtitle?: string
+    trend?: number
+    trendLabel?: string
+    icon: React.ElementType
+    color: string
+    onClick?: () => void
   }) => (
-    <div 
+    <div
       className={`bg-card/50 backdrop-blur-sm border border-border rounded-xl p-5 hover:border-primary/50 transition-all cursor-pointer group`}
       onClick={onClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); } }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick?.()
+        }
+      }}
       role="button"
       tabIndex={0}
     >
@@ -201,8 +303,14 @@ export default function AdvancedAnalytics() {
           <Icon className={`w-5 h-5 text-${color}-400`} />
         </div>
         {trend !== undefined && (
-          <div className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {trend >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+          <div
+            className={`flex items-center gap-1 text-sm ${trend >= 0 ? 'text-success' : 'text-destructive'}`}
+          >
+            {trend >= 0 ? (
+              <ArrowUpRight className="w-4 h-4" />
+            ) : (
+              <ArrowDownRight className="w-4 h-4" />
+            )}
             <span>{Math.abs(trend)}%</span>
           </div>
         )}
@@ -215,13 +323,21 @@ export default function AdvancedAnalytics() {
         <span>Click to drill down</span>
       </div>
     </div>
-  );
+  )
 
-  const TrendChart = ({ data, title, color = '#10B981' }: { data: number[]; title: string; color?: string }) => {
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const range = max - min || 1;
-    
+  const TrendChart = ({
+    data,
+    title,
+    color = '#10B981',
+  }: {
+    data: number[]
+    title: string
+    color?: string
+  }) => {
+    const max = Math.max(...data)
+    const min = Math.min(...data)
+    const range = max - min || 1
+
     return (
       <div className="bg-card/50 border border-border rounded-xl p-5">
         <h3 className="text-lg font-semibold text-foreground mb-4">{title}</h3>
@@ -244,25 +360,31 @@ export default function AdvancedAnalytics() {
           <span>Today</span>
         </div>
       </div>
-    );
-  };
+    )
+  }
 
   const BenchmarkGauge = ({ metric, data }: { metric: string; data: BenchmarkData }) => {
-    const position = (data.your_percentile / 100) * 100;
-    
+    const position = (data.your_percentile / 100) * 100
+
     return (
       <div className="bg-card/50 border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-foreground capitalize">{metric.replace(/_/g, ' ')}</h3>
-          <span className={`px-2 py-1 rounded text-xs font-medium ${
-            data.trend === 'improving' ? 'bg-success/10 text-success' :
-            data.trend === 'stable' ? 'bg-info/10 text-info' :
-            'bg-destructive/10 text-destructive'
-          }`}>
+          <h3 className="text-lg font-semibold text-foreground capitalize">
+            {metric.replace(/_/g, ' ')}
+          </h3>
+          <span
+            className={`px-2 py-1 rounded text-xs font-medium ${
+              data.trend === 'improving'
+                ? 'bg-success/10 text-success'
+                : data.trend === 'stable'
+                  ? 'bg-info/10 text-info'
+                  : 'bg-destructive/10 text-destructive'
+            }`}
+          >
             {data.trend}
           </span>
         </div>
-        
+
         {/* Gauge */}
         <div className="relative h-8 bg-surface rounded-full overflow-hidden mb-4">
           <div className="absolute inset-0 flex">
@@ -271,12 +393,12 @@ export default function AdvancedAnalytics() {
             <div className="w-1/4 bg-info/30" />
             <div className="w-1/4 bg-success/30" />
           </div>
-          <div 
+          <div
             className="absolute top-0 bottom-0 w-1 bg-foreground shadow-lg transition-all"
             style={{ left: `${position}%` }}
           />
         </div>
-        
+
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground">Your Value:</span>
@@ -296,8 +418,8 @@ export default function AdvancedAnalytics() {
           </div>
         </div>
       </div>
-    );
-  };
+    )
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -305,14 +427,14 @@ export default function AdvancedAnalytics() {
     { id: 'benchmarks', label: 'Benchmarks', icon: Target },
     { id: 'costs', label: 'Cost Analysis', icon: DollarSign },
     { id: 'roi', label: 'ROI Tracking', icon: PiggyBank },
-  ];
+  ]
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
       </div>
-    );
+    )
   }
 
   return (
@@ -321,7 +443,9 @@ export default function AdvancedAnalytics() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Advanced Analytics</h1>
-          <p className="text-muted-foreground mt-1">Interactive insights with forecasting and benchmarks</p>
+          <p className="text-muted-foreground mt-1">
+            Interactive insights with forecasting and benchmarks
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -329,15 +453,13 @@ export default function AdvancedAnalytics() {
             onChange={(e) => setTimeRange(e.target.value)}
             className="bg-background border border-border rounded-lg px-4 py-2 text-foreground text-sm focus:ring-2 focus:ring-primary/50"
           >
-            {timeRanges.map(range => (
-              <option key={range.value} value={range.value}>{range.label}</option>
+            {timeRanges.map((range) => (
+              <option key={range.value} value={range.value}>
+                {range.label}
+              </option>
             ))}
           </select>
-          <Button 
-            onClick={loadData}
-            variant="outline"
-            size="icon"
-          >
+          <Button onClick={loadData} variant="outline" size="icon">
             <RefreshCw className="w-5 h-5" />
           </Button>
           <Button>
@@ -349,15 +471,15 @@ export default function AdvancedAnalytics() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-card/50 p-1 rounded-xl border border-border">
-        {tabs.map(tab => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
+              'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
             )}
           >
             <tab.icon className="w-4 h-4" />
@@ -412,12 +534,18 @@ export default function AdvancedAnalytics() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <TrendChart
               title="Incident Trend (30 days)"
-              data={[8, 12, 7, 15, 10, 8, 11, 9, 6, 13, 8, 7, 10, 12, 9, 8, 11, 7, 9, 10, 8, 6, 9, 11, 8, 7, 10, 9, 8, 7]}
+              data={[
+                8, 12, 7, 15, 10, 8, 11, 9, 6, 13, 8, 7, 10, 12, 9, 8, 11, 7, 9, 10, 8, 6, 9, 11, 8,
+                7, 10, 9, 8, 7,
+              ]}
               color="#EF4444"
             />
             <TrendChart
               title="Action Completion Rate (%)"
-              data={[82, 85, 84, 86, 88, 87, 89, 88, 90, 89, 91, 88, 90, 92, 89, 91, 90, 88, 91, 93, 90, 92, 89, 91, 90, 88, 91, 89, 90, 88]}
+              data={[
+                82, 85, 84, 86, 88, 87, 89, 88, 90, 89, 91, 88, 90, 92, 89, 91, 90, 88, 91, 93, 90,
+                92, 89, 91, 90, 88, 91, 89, 90, 88,
+              ]}
               color="#10B981"
             />
           </div>
@@ -432,8 +560,8 @@ export default function AdvancedAnalytics() {
                   <span className="text-sm font-semibold text-red-400">{kpis.risks.high}</span>
                 </div>
                 <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-red-500 rounded-full" 
+                  <div
+                    className="h-full bg-red-500 rounded-full"
                     style={{ width: `${(kpis.risks.high / kpis.risks.total) * 100}%` }}
                   />
                 </div>
@@ -444,8 +572,8 @@ export default function AdvancedAnalytics() {
                   <span className="text-sm font-semibold text-yellow-400">{kpis.risks.medium}</span>
                 </div>
                 <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-yellow-500 rounded-full" 
+                  <div
+                    className="h-full bg-yellow-500 rounded-full"
                     style={{ width: `${(kpis.risks.medium / kpis.risks.total) * 100}%` }}
                   />
                 </div>
@@ -456,8 +584,8 @@ export default function AdvancedAnalytics() {
                   <span className="text-sm font-semibold text-emerald-400">{kpis.risks.low}</span>
                 </div>
                 <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-emerald-500 rounded-full" 
+                  <div
+                    className="h-full bg-emerald-500 rounded-full"
                     style={{ width: `${(kpis.risks.low / kpis.risks.total) * 100}%` }}
                   />
                 </div>
@@ -473,15 +601,23 @@ export default function AdvancedAnalytics() {
                 { standard: 'ISO 9001', score: kpis.compliance.iso_9001, color: 'blue' },
                 { standard: 'ISO 14001', score: kpis.compliance.iso_14001, color: 'green' },
                 { standard: 'ISO 45001', score: kpis.compliance.iso_45001, color: 'purple' },
-              ].map(item => (
+              ].map((item) => (
                 <div key={item.standard} className="text-center">
                   <div className="relative w-24 h-24 mx-auto mb-3">
                     <svg className="w-full h-full transform -rotate-90">
                       <circle cx="48" cy="48" r="40" stroke="#334155" strokeWidth="8" fill="none" />
-                      <circle 
-                        cx="48" cy="48" r="40" 
-                        stroke={item.color === 'blue' ? '#3B82F6' : item.color === 'green' ? '#10B981' : '#8B5CF6'}
-                        strokeWidth="8" 
+                      <circle
+                        cx="48"
+                        cy="48"
+                        r="40"
+                        stroke={
+                          item.color === 'blue'
+                            ? '#3B82F6'
+                            : item.color === 'green'
+                              ? '#10B981'
+                              : '#8B5CF6'
+                        }
+                        strokeWidth="8"
                         fill="none"
                         strokeDasharray={`${(item.score / 100) * 251.2} 251.2`}
                         strokeLinecap="round"
@@ -503,7 +639,9 @@ export default function AdvancedAnalytics() {
       {activeTab === 'trends' && (
         <div className="space-y-6">
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Incident Forecast (Next 12 Periods)</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Incident Forecast (Next 12 Periods)
+            </h3>
             <div className="h-64 flex items-end gap-1">
               {/* Historical */}
               {[8, 12, 7, 15, 10, 8, 11, 9, 6, 13, 8, 7].map((value, i) => (
@@ -568,22 +706,23 @@ export default function AdvancedAnalytics() {
                 <div className="flex gap-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                   <Zap className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    <strong className="text-emerald-400">Positive Trend:</strong> Incident rate shows consistent 
-                    improvement over the last 90 days, with a projected 25% reduction by Q2.
+                    <strong className="text-emerald-400">Positive Trend:</strong> Incident rate
+                    shows consistent improvement over the last 90 days, with a projected 25%
+                    reduction by Q2.
                   </p>
                 </div>
                 <div className="flex gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    <strong className="text-yellow-400">Seasonal Pattern:</strong> Historical data suggests 
-                    increased incidents during winter months. Consider enhanced training.
+                    <strong className="text-yellow-400">Seasonal Pattern:</strong> Historical data
+                    suggests increased incidents during winter months. Consider enhanced training.
                   </p>
                 </div>
                 <div className="flex gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
                   <Activity className="w-5 h-5 text-blue-400 flex-shrink-0" />
                   <p className="text-sm text-gray-300">
-                    <strong className="text-blue-400">Correlation Found:</strong> Strong correlation between 
-                    training completion rates and incident reduction (r=0.82).
+                    <strong className="text-blue-400">Correlation Found:</strong> Strong correlation
+                    between training completion rates and incident reduction (r=0.82).
                   </p>
                 </div>
               </div>
@@ -653,7 +792,9 @@ export default function AdvancedAnalytics() {
                 <tr>
                   <th className="text-left p-4 text-sm font-medium text-gray-400">Metric</th>
                   <th className="text-center p-4 text-sm font-medium text-gray-400">Your Value</th>
-                  <th className="text-center p-4 text-sm font-medium text-gray-400">Industry Avg</th>
+                  <th className="text-center p-4 text-sm font-medium text-gray-400">
+                    Industry Avg
+                  </th>
                   <th className="text-center p-4 text-sm font-medium text-gray-400">Top 10%</th>
                   <th className="text-center p-4 text-sm font-medium text-gray-400">Status</th>
                 </tr>
@@ -662,7 +803,9 @@ export default function AdvancedAnalytics() {
                 {Object.entries(benchmarks).map(([metric, data]) => (
                   <tr key={metric} className="border-t border-slate-700">
                     <td className="p-4 text-white capitalize">{metric.replace(/_/g, ' ')}</td>
-                    <td className="p-4 text-center text-emerald-400 font-semibold">{data.your_value}</td>
+                    <td className="p-4 text-center text-emerald-400 font-semibold">
+                      {data.your_value}
+                    </td>
                     <td className="p-4 text-center text-gray-300">{data.industry_average}</td>
                     <td className="p-4 text-center text-gray-300">{data.percentile_90}</td>
                     <td className="p-4 text-center">
@@ -698,8 +841,14 @@ export default function AdvancedAnalytics() {
                 <p className="text-gray-400 mt-1">Last 12 months</p>
               </div>
               <div className="text-right">
-                <div className={`flex items-center gap-2 text-lg ${costs.trend.vs_previous_period < 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {costs.trend.vs_previous_period < 0 ? <TrendingDown className="w-5 h-5" /> : <TrendingUp className="w-5 h-5" />}
+                <div
+                  className={`flex items-center gap-2 text-lg ${costs.trend.vs_previous_period < 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {costs.trend.vs_previous_period < 0 ? (
+                    <TrendingDown className="w-5 h-5" />
+                  ) : (
+                    <TrendingUp className="w-5 h-5" />
+                  )}
                   {Math.abs(costs.trend.vs_previous_period)}%
                 </div>
                 <p className="text-gray-400 text-sm">vs previous period</p>
@@ -713,8 +862,8 @@ export default function AdvancedAnalytics() {
               <h3 className="text-lg font-semibold text-white mb-4">Cost Breakdown</h3>
               <div className="space-y-4">
                 {Object.entries(costs.breakdown).map(([key, data]) => {
-                  const amount = 'amount' in data ? data.amount : 0;
-                  const percentage = (amount / costs.total_cost) * 100;
+                  const amount = 'amount' in data ? data.amount : 0
+                  const percentage = (amount / costs.total_cost) * 100
                   return (
                     <div key={key}>
                       <div className="flex items-center justify-between mb-2">
@@ -722,13 +871,13 @@ export default function AdvancedAnalytics() {
                         <span className="text-white font-semibold">£{amount.toLocaleString()}</span>
                       </div>
                       <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className="h-full bg-gradient-to-r from-red-500 to-orange-500 rounded-full"
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
                     </div>
-                  );
+                  )
                 })}
               </div>
             </div>
@@ -738,7 +887,12 @@ export default function AdvancedAnalytics() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
                   <span className="text-gray-300">Average Cost per Incident</span>
-                  <span className="text-white font-semibold">£{Math.round(costs.breakdown.incident_costs.amount / costs.breakdown.incident_costs.count).toLocaleString()}</span>
+                  <span className="text-white font-semibold">
+                    £
+                    {Math.round(
+                      costs.breakdown.incident_costs.amount / costs.breakdown.incident_costs.count,
+                    ).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
                   <span className="text-gray-300">Cost per Employee</span>
@@ -758,7 +912,9 @@ export default function AdvancedAnalytics() {
 
           {/* Recommendations */}
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
-            <h3 className="text-lg font-semibold text-white mb-4">Cost Reduction Recommendations</h3>
+            <h3 className="text-lg font-semibold text-white mb-4">
+              Cost Reduction Recommendations
+            </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg">
                 <div className="flex items-center gap-3">
@@ -797,7 +953,9 @@ export default function AdvancedAnalytics() {
                   <Coins className="w-5 h-5 text-blue-400" />
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">£{roi.summary.total_investment.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-white">
+                £{roi.summary.total_investment.toLocaleString()}
+              </div>
               <div className="text-sm text-gray-400">Total Investment</div>
             </div>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
@@ -806,7 +964,9 @@ export default function AdvancedAnalytics() {
                   <PiggyBank className="w-5 h-5 text-emerald-400" />
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">£{roi.summary.total_annual_savings.toLocaleString()}</div>
+              <div className="text-2xl font-bold text-white">
+                £{roi.summary.total_annual_savings.toLocaleString()}
+              </div>
               <div className="text-sm text-gray-400">Annual Savings</div>
             </div>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
@@ -815,7 +975,9 @@ export default function AdvancedAnalytics() {
                   <Percent className="w-5 h-5 text-purple-400" />
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">{(roi.summary?.overall_roi ?? 0).toFixed(1)}%</div>
+              <div className="text-2xl font-bold text-white">
+                {(roi.summary?.overall_roi ?? 0).toFixed(1)}%
+              </div>
               <div className="text-sm text-gray-400">Overall ROI</div>
             </div>
             <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
@@ -824,7 +986,9 @@ export default function AdvancedAnalytics() {
                   <Shield className="w-5 h-5 text-yellow-400" />
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">{roi.summary.total_incidents_prevented}</div>
+              <div className="text-2xl font-bold text-white">
+                {roi.summary.total_incidents_prevented}
+              </div>
               <div className="text-sm text-gray-400">Incidents Prevented</div>
             </div>
           </div>
@@ -840,13 +1004,15 @@ export default function AdvancedAnalytics() {
                   <th className="text-left p-4 text-sm font-medium text-gray-400">Investment</th>
                   <th className="text-left p-4 text-sm font-medium text-gray-400">Category</th>
                   <th className="text-right p-4 text-sm font-medium text-gray-400">Amount</th>
-                  <th className="text-right p-4 text-sm font-medium text-gray-400">Annual Savings</th>
+                  <th className="text-right p-4 text-sm font-medium text-gray-400">
+                    Annual Savings
+                  </th>
                   <th className="text-right p-4 text-sm font-medium text-gray-400">ROI</th>
                   <th className="text-right p-4 text-sm font-medium text-gray-400">Payback</th>
                 </tr>
               </thead>
               <tbody>
-                {roi.investments.map(investment => (
+                {roi.investments.map((investment) => (
                   <tr key={investment.id} className="border-t border-slate-700">
                     <td className="p-4 text-white">{investment.name}</td>
                     <td className="p-4">
@@ -854,10 +1020,18 @@ export default function AdvancedAnalytics() {
                         {investment.category}
                       </span>
                     </td>
-                    <td className="p-4 text-right text-gray-300">£{investment.investment.toLocaleString()}</td>
-                    <td className="p-4 text-right text-emerald-400">£{investment.annual_savings.toLocaleString()}</td>
-                    <td className="p-4 text-right text-white font-semibold">{investment.roi_percentage}%</td>
-                    <td className="p-4 text-right text-gray-300">{investment.payback_months} months</td>
+                    <td className="p-4 text-right text-gray-300">
+                      £{investment.investment.toLocaleString()}
+                    </td>
+                    <td className="p-4 text-right text-emerald-400">
+                      £{investment.annual_savings.toLocaleString()}
+                    </td>
+                    <td className="p-4 text-right text-white font-semibold">
+                      {investment.roi_percentage}%
+                    </td>
+                    <td className="p-4 text-right text-gray-300">
+                      {investment.payback_months} months
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -868,22 +1042,28 @@ export default function AdvancedAnalytics() {
           <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-5">
             <h3 className="text-lg font-semibold text-white mb-4">Investment vs Returns</h3>
             <div className="space-y-4">
-              {roi.investments.map(investment => (
+              {roi.investments.map((investment) => (
                 <div key={investment.id}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-gray-300">{investment.name}</span>
-                    <span className="text-emerald-400 font-semibold">{investment.roi_percentage}% ROI</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {investment.roi_percentage}% ROI
+                    </span>
                   </div>
                   <div className="h-8 bg-slate-700 rounded-lg overflow-hidden flex">
-                    <div 
+                    <div
                       className="bg-blue-500 flex items-center justify-center text-xs text-white font-medium"
-                      style={{ width: `${(investment.investment / (investment.investment + investment.annual_savings)) * 100}%` }}
+                      style={{
+                        width: `${(investment.investment / (investment.investment + investment.annual_savings)) * 100}%`,
+                      }}
                     >
                       Investment
                     </div>
-                    <div 
+                    <div
                       className="bg-emerald-500 flex items-center justify-center text-xs text-white font-medium"
-                      style={{ width: `${(investment.annual_savings / (investment.investment + investment.annual_savings)) * 100}%` }}
+                      style={{
+                        width: `${(investment.annual_savings / (investment.investment + investment.annual_savings)) * 100}%`,
+                      }}
                     >
                       Returns
                     </div>
@@ -903,7 +1083,10 @@ export default function AdvancedAnalytics() {
               <h3 className="text-lg font-semibold text-white">
                 Drill Down: {drillDownData.metric} - {drillDownData.value}
               </h3>
-              <button onClick={() => setDrillDownOpen(false)} className="text-gray-400 hover:text-white">
+              <button
+                onClick={() => setDrillDownOpen(false)}
+                className="text-gray-400 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -920,23 +1103,34 @@ export default function AdvancedAnalytics() {
                 </thead>
                 <tbody>
                   {drillDownData.records.map((record: any) => (
-                    <tr key={record.id} className="border-t border-slate-700 hover:bg-slate-700/30 cursor-pointer">
+                    <tr
+                      key={record.id}
+                      className="border-t border-slate-700 hover:bg-slate-700/30 cursor-pointer"
+                    >
                       <td className="p-3 text-blue-400">{record.id}</td>
                       <td className="p-3 text-white">{record.title}</td>
                       <td className="p-3 text-gray-300">{record.date}</td>
                       <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          record.status === 'open' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-emerald-500/20 text-emerald-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            record.status === 'open'
+                              ? 'bg-yellow-500/20 text-yellow-400'
+                              : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
                           {record.status}
                         </span>
                       </td>
                       <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs ${
-                          record.severity === 'high' ? 'bg-red-500/20 text-red-400' :
-                          record.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-emerald-500/20 text-emerald-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded text-xs ${
+                            record.severity === 'high'
+                              ? 'bg-red-500/20 text-red-400'
+                              : record.severity === 'medium'
+                                ? 'bg-yellow-500/20 text-yellow-400'
+                                : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
                           {record.severity}
                         </span>
                       </td>
@@ -949,5 +1143,5 @@ export default function AdvancedAnalytics() {
         </div>
       )}
     </div>
-  );
+  )
 }

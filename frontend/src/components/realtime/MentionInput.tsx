@@ -1,6 +1,6 @@
 /**
  * MentionInput - Rich text input with @mention support
- * 
+ *
  * Features:
  * - @mention autocomplete popup
  * - Fuzzy search for users
@@ -9,26 +9,26 @@
  * - Accessible
  */
 
-import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { User, Search } from 'lucide-react';
-import { trackError } from '../../utils/errorTracker';
+import React, { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react'
+import { User, Search } from 'lucide-react'
+import { trackError } from '../../utils/errorTracker'
 
 interface MentionUser {
-  id: number;
-  display_name: string;
-  email: string;
-  avatar_url?: string;
+  id: number
+  display_name: string
+  email: string
+  avatar_url?: string
 }
 
 interface MentionInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onMention?: (user: MentionUser) => void;
-  placeholder?: string;
-  className?: string;
-  rows?: number;
-  disabled?: boolean;
-  maxLength?: number;
+  value: string
+  onChange: (value: string) => void
+  onMention?: (user: MentionUser) => void
+  placeholder?: string
+  className?: string
+  rows?: number
+  disabled?: boolean
+  maxLength?: number
 }
 
 const MentionInput: React.FC<MentionInputProps> = ({
@@ -41,191 +41,203 @@ const MentionInput: React.FC<MentionInputProps> = ({
   disabled = false,
   maxLength = 5000,
 }) => {
-  const [showPopup, setShowPopup] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 });
-  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
-  const [users, setUsers] = useState<MentionUser[]>([]);
-  
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
+  const [showPopup, setShowPopup] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [popupPosition, setPopupPosition] = useState({ top: 0, left: 0 })
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null)
+  const [users, setUsers] = useState<MentionUser[]>([])
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
 
   // Search users via API when query changes
   useEffect(() => {
-    if (!showPopup) return;
+    if (!showPopup) return
 
-    const controller = new AbortController();
+    const controller = new AbortController()
 
     const searchUsers = async () => {
       try {
         const endpoint = searchQuery
           ? `/api/v1/notifications/mentions/search?q=${encodeURIComponent(searchQuery)}`
-          : `/api/v1/notifications/mentions/search?q=`;
-        const response = await fetch(endpoint, { signal: controller.signal });
+          : `/api/v1/notifications/mentions/search?q=`
+        const response = await fetch(endpoint, { signal: controller.signal })
         if (response.ok) {
-          const data: MentionUser[] = await response.json();
-          setUsers(data.slice(0, 8));
+          const data: MentionUser[] = await response.json()
+          setUsers(data.slice(0, 8))
         }
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
-          trackError(err, { component: 'MentionInput', action: 'searchUsers' });
+          trackError(err, { component: 'MentionInput', action: 'searchUsers' })
         }
       }
-    };
+    }
 
-    const debounceTimer = setTimeout(searchUsers, 200);
-    setSelectedIndex(0);
+    const debounceTimer = setTimeout(searchUsers, 200)
+    setSelectedIndex(0)
 
     return () => {
-      clearTimeout(debounceTimer);
-      controller.abort();
-    };
-  }, [searchQuery, showPopup]);
+      clearTimeout(debounceTimer)
+      controller.abort()
+    }
+  }, [searchQuery, showPopup])
 
   // Calculate popup position
   const updatePopupPosition = useCallback(() => {
-    if (!textareaRef.current) return;
+    if (!textareaRef.current) return
 
-    const textarea = textareaRef.current;
-    const { selectionStart } = textarea;
-    
+    const textarea = textareaRef.current
+    const { selectionStart } = textarea
+
     // Create a hidden div to measure text
-    const div = document.createElement('div');
-    div.style.cssText = window.getComputedStyle(textarea, null).cssText;
-    div.style.height = 'auto';
-    div.style.position = 'absolute';
-    div.style.visibility = 'hidden';
-    div.style.whiteSpace = 'pre-wrap';
-    div.style.wordWrap = 'break-word';
-    div.textContent = value.substring(0, selectionStart);
-    
+    const div = document.createElement('div')
+    div.style.cssText = window.getComputedStyle(textarea, null).cssText
+    div.style.height = 'auto'
+    div.style.position = 'absolute'
+    div.style.visibility = 'hidden'
+    div.style.whiteSpace = 'pre-wrap'
+    div.style.wordWrap = 'break-word'
+    div.textContent = value.substring(0, selectionStart)
+
     // Add a span for cursor position
-    const span = document.createElement('span');
-    span.textContent = '|';
-    div.appendChild(span);
-    
-    document.body.appendChild(div);
-    
-    const spanRect = span.getBoundingClientRect();
-    const textareaRect = textarea.getBoundingClientRect();
-    
-    document.body.removeChild(div);
-    
+    const span = document.createElement('span')
+    span.textContent = '|'
+    div.appendChild(span)
+
+    document.body.appendChild(div)
+
+    const spanRect = span.getBoundingClientRect()
+    const textareaRect = textarea.getBoundingClientRect()
+
+    document.body.removeChild(div)
+
     // Position popup below cursor
     setPopupPosition({
       top: Math.min(spanRect.height, textarea.scrollHeight - textarea.scrollTop) + 4,
-      left: Math.min(spanRect.width - div.offsetWidth + textareaRect.width, textareaRect.width - 250),
-    });
-  }, [value]);
+      left: Math.min(
+        spanRect.width - div.offsetWidth + textareaRect.width,
+        textareaRect.width - 250,
+      ),
+    })
+  }, [value])
 
   // Handle input change
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    const cursorPos = e.target.selectionStart;
-    
-    onChange(newValue);
+    const newValue = e.target.value
+    const cursorPos = e.target.selectionStart
+
+    onChange(newValue)
 
     // Check for @ trigger
-    const textBeforeCursor = newValue.substring(0, cursorPos);
-    const atIndex = textBeforeCursor.lastIndexOf('@');
-    
+    const textBeforeCursor = newValue.substring(0, cursorPos)
+    const atIndex = textBeforeCursor.lastIndexOf('@')
+
     if (atIndex !== -1) {
       // Check if @ is at start or preceded by whitespace
-      const charBefore = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' ';
+      const charBefore = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
       if (charBefore === ' ' || charBefore === '\n' || atIndex === 0) {
-        const query = textBeforeCursor.substring(atIndex + 1);
-        
+        const query = textBeforeCursor.substring(atIndex + 1)
+
         // Check if query doesn't contain spaces (still typing mention)
         if (!query.includes(' ') && !query.includes('\n')) {
-          setMentionStartIndex(atIndex);
-          setSearchQuery(query);
-          setShowPopup(true);
-          updatePopupPosition();
-          return;
+          setMentionStartIndex(atIndex)
+          setSearchQuery(query)
+          setShowPopup(true)
+          updatePopupPosition()
+          return
         }
       }
     }
-    
-    setShowPopup(false);
-    setMentionStartIndex(null);
-  };
+
+    setShowPopup(false)
+    setMentionStartIndex(null)
+  }
 
   // Handle keyboard navigation
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!showPopup) return;
+    if (!showPopup) return
 
     switch (e.key) {
       case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, users.length - 1));
-        break;
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.min(prev + 1, users.length - 1))
+        break
       case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-        break;
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.max(prev - 1, 0))
+        break
       case 'Enter':
       case 'Tab':
-        e.preventDefault();
+        e.preventDefault()
         if (users[selectedIndex]) {
-          insertMention(users[selectedIndex]);
+          insertMention(users[selectedIndex])
         }
-        break;
+        break
       case 'Escape':
-        e.preventDefault();
-        setShowPopup(false);
-        break;
+        e.preventDefault()
+        setShowPopup(false)
+        break
     }
-  };
+  }
 
   // Insert mention into text
   const insertMention = (user: MentionUser) => {
-    if (mentionStartIndex === null || !textareaRef.current) return;
+    if (mentionStartIndex === null || !textareaRef.current) return
 
-    const cursorPos = textareaRef.current.selectionStart;
-    const beforeMention = value.substring(0, mentionStartIndex);
-    const afterMention = value.substring(cursorPos);
-    
+    const cursorPos = textareaRef.current.selectionStart
+    const beforeMention = value.substring(0, mentionStartIndex)
+    const afterMention = value.substring(cursorPos)
+
     // Format: @[Display Name]
-    const mentionText = `@[${user.display_name}] `;
-    const newValue = beforeMention + mentionText + afterMention;
-    
-    onChange(newValue);
-    setShowPopup(false);
-    setMentionStartIndex(null);
-    
+    const mentionText = `@[${user.display_name}] `
+    const newValue = beforeMention + mentionText + afterMention
+
+    onChange(newValue)
+    setShowPopup(false)
+    setMentionStartIndex(null)
+
     // Notify parent
     if (onMention) {
-      onMention(user);
+      onMention(user)
     }
 
     // Set cursor position after mention
     setTimeout(() => {
       if (textareaRef.current) {
-        const newPos = mentionStartIndex + mentionText.length;
-        textareaRef.current.selectionStart = newPos;
-        textareaRef.current.selectionEnd = newPos;
-        textareaRef.current.focus();
+        const newPos = mentionStartIndex + mentionText.length
+        textareaRef.current.selectionStart = newPos
+        textareaRef.current.selectionEnd = newPos
+        textareaRef.current.focus()
       }
-    }, 0);
-  };
+    }, 0)
+  }
 
   // Close popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popupRef.current && !popupRef.current.contains(e.target as Node) &&
-          textareaRef.current && !textareaRef.current.contains(e.target as Node)) {
-        setShowPopup(false);
+      if (
+        popupRef.current &&
+        !popupRef.current.contains(e.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(e.target as Node)
+      ) {
+        setShowPopup(false)
       }
-    };
+    }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-  };
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
 
   return (
     <div className={`relative ${className}`}>
@@ -281,25 +293,33 @@ const MentionInput: React.FC<MentionInputProps> = ({
                   ${index === selectedIndex ? 'bg-emerald-600 text-white' : 'hover:bg-slate-700 text-gray-300'}
                 `}
               >
-                  {/* Avatar */}
-                  <div className={`
+                {/* Avatar */}
+                <div
+                  className={`
                     w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold
                     ${index === selectedIndex ? 'bg-emerald-700' : 'bg-slate-600'}
-                  `}>
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.display_name} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      getInitials(user.display_name)
-                    )}
-                  </div>
+                  `}
+                >
+                  {user.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={user.display_name}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    getInitials(user.display_name)
+                  )}
+                </div>
 
-                  {/* Info */}
-                  <div className="flex-grow min-w-0">
-                    <div className="text-sm font-medium truncate">{user.display_name}</div>
-                    <div className={`text-xs truncate ${index === selectedIndex ? 'text-emerald-200' : 'text-gray-500'}`}>
-                      {user.email}
-                    </div>
+                {/* Info */}
+                <div className="flex-grow min-w-0">
+                  <div className="text-sm font-medium truncate">{user.display_name}</div>
+                  <div
+                    className={`text-xs truncate ${index === selectedIndex ? 'text-emerald-200' : 'text-gray-500'}`}
+                  >
+                    {user.email}
                   </div>
+                </div>
               </button>
             ))}
           </div>
@@ -325,7 +345,7 @@ const MentionInput: React.FC<MentionInputProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default MentionInput;
+export default MentionInput

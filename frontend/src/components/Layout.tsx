@@ -1,8 +1,8 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  AlertTriangle, 
-  FileText, 
+import {
+  LayoutDashboard,
+  AlertTriangle,
+  FileText,
   Shield,
   Car,
   MessageSquare,
@@ -41,7 +41,7 @@ import AICopilot from './copilot/AICopilot'
 import OfflineIndicator from './OfflineIndicator'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 
 interface LayoutProps {
   onLogout: () => void
@@ -58,7 +58,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/incidents', icon: AlertTriangle, label: t('nav.incidents') },
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
-      ]
+      ],
     },
     {
       title: t('nav.workforce'),
@@ -68,7 +68,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/workforce/engineers', icon: Users, label: t('nav.engineers') },
         { path: '/workforce/calendar', icon: Calendar, label: t('nav.calendar') },
         { path: '/workforce/dashboard', icon: BarChart3, label: t('nav.competency') },
-      ]
+      ],
     },
     {
       title: t('nav.governance'),
@@ -81,7 +81,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
         { path: '/standards', icon: BookOpen, label: t('nav.standards') },
         { path: '/actions', icon: ListTodo, label: t('nav.actions') },
-      ]
+      ],
     },
     {
       title: t('nav.library'),
@@ -89,7 +89,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
         { path: '/policies', icon: FileText, label: t('nav.policies') },
         { path: '/risks', icon: Shield, label: t('nav.risks') },
-      ]
+      ],
     },
     {
       title: t('nav.enterprise'),
@@ -97,7 +97,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/risk-register', icon: Target, label: t('nav.risk_register') },
         { path: '/ims', icon: GitMerge, label: t('nav.ims_dashboard') },
         { path: '/ai-intelligence', icon: Brain, label: t('nav.ai_intelligence') },
-      ]
+      ],
     },
     {
       title: t('nav.analytics'),
@@ -108,7 +108,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/analytics/reports', icon: FileText, label: t('nav.report_generator') },
         { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
         { path: '/exports', icon: Download, label: t('nav.export_center') },
-      ]
+      ],
     },
     {
       title: t('nav.automation'),
@@ -116,15 +116,15 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
         { path: '/compliance-automation', icon: Shield, label: t('nav.compliance_automation') },
         { path: '/signatures', icon: FileSignature, label: t('nav.digital_signatures') },
-      ]
+      ],
     },
     {
       title: t('nav.admin'),
       items: [
         { path: '/users', icon: Users, label: t('nav.user_management') },
         { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
-      ]
-    }
+      ],
+    },
   ]
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
@@ -132,7 +132,8 @@ export default function Layout({ onLogout }: LayoutProps) {
   const navigate = useNavigate()
 
   const fetchUnreadCount = useCallback(() => {
-    notificationsApi.getUnreadCount()
+    notificationsApi
+      .getUnreadCount()
       .then((res) => setUnreadNotifications(res.data?.unread_count ?? 0))
       .catch(() => {})
   }, [])
@@ -163,10 +164,10 @@ export default function Layout({ onLogout }: LayoutProps) {
         <button
           onClick={() => navigate('/search')}
           className={cn(
-            "flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground",
-            "bg-surface border border-border",
-            "hover:text-foreground hover:border-border-strong transition-all",
-            "w-full max-w-md"
+            'flex items-center gap-3 px-4 py-2 rounded-lg text-muted-foreground',
+            'bg-surface border border-border',
+            'hover:text-foreground hover:border-border-strong transition-all',
+            'w-full max-w-md',
           )}
         >
           <Search className="w-4 h-4" />
@@ -176,16 +177,16 @@ export default function Layout({ onLogout }: LayoutProps) {
             <span>K</span>
           </div>
         </button>
-        
+
         {/* Right Actions */}
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          
+
           <NavLink
             to="/notifications"
             className={cn(
-              "relative p-2 rounded-lg transition-colors",
-              "text-muted-foreground hover:text-foreground hover:bg-surface"
+              'relative p-2 rounded-lg transition-colors',
+              'text-muted-foreground hover:text-foreground hover:bg-surface',
             )}
           >
             <Bell className="w-5 h-5" />
@@ -195,23 +196,20 @@ export default function Layout({ onLogout }: LayoutProps) {
               </span>
             )}
           </NavLink>
-          
+
           <NavLink
             to="/users"
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
           >
             <Settings className="w-5 h-5" />
           </NavLink>
-          
+
           {/* AI Copilot Toggle */}
           <Button
             onClick={() => setCopilotOpen(!copilotOpen)}
             variant={copilotOpen ? 'default' : 'ghost'}
             size="sm"
-            className={cn(
-              "gap-2",
-              copilotOpen && "shadow-glow"
-            )}
+            className={cn('gap-2', copilotOpen && 'shadow-glow')}
           >
             <Bot className="w-4 h-4" />
             <span className="hidden sm:inline">{t('nav.copilot')}</span>
@@ -228,12 +226,14 @@ export default function Layout({ onLogout }: LayoutProps) {
       </button>
 
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border",
-        "transform transition-transform duration-300 ease-in-out",
-        "lg:translate-x-0",
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 w-72 bg-card/95 backdrop-blur-xl border-r border-border',
+          'transform transition-transform duration-300 ease-in-out',
+          'lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-border">
@@ -267,20 +267,26 @@ export default function Layout({ onLogout }: LayoutProps) {
                       key={item.path}
                       to={item.path}
                       onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) => cn(
-                        "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium",
-                        "transition-all duration-200 group",
-                        isActive
-                          ? "bg-primary/10 text-primary border border-primary/20"
-                          : "text-muted-foreground hover:text-foreground hover:bg-surface"
-                      )}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                          'transition-all duration-200 group',
+                          isActive
+                            ? 'bg-primary/10 text-primary border border-primary/20'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                        )
+                      }
                     >
                       {({ isActive }) => (
                         <>
-                          <item.icon className={cn(
-                            "w-5 h-5 transition-colors",
-                            isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
-                          )} />
+                          <item.icon
+                            className={cn(
+                              'w-5 h-5 transition-colors',
+                              isActive
+                                ? 'text-primary'
+                                : 'text-muted-foreground group-hover:text-foreground',
+                            )}
+                          />
                           {item.label}
                           {isActive && (
                             <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
@@ -299,8 +305,8 @@ export default function Layout({ onLogout }: LayoutProps) {
             <button
               onClick={onLogout}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium",
-                "text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+                'flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium',
+                'text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-200',
               )}
             >
               <LogOut size={20} />
@@ -325,7 +331,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           aria-hidden="true"
         />
       )}
-      
+
       {/* AI Copilot */}
       <AICopilot
         isOpen={copilotOpen}

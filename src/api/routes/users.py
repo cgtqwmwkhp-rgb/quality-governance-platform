@@ -36,6 +36,8 @@ async def search_users(
         min_length=1,
         description="Search query for email, first name, or last name",
     ),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
 ) -> list[UserResponse]:
     """Search users by email, first name, or last name."""
     search_filter = f"%{q}%"
@@ -49,7 +51,8 @@ async def search_users(
         )
         .where(User.is_active == True)  # noqa: E712
         .order_by(User.email)
-        .limit(20)
+        .offset(skip)
+        .limit(limit)
     )
 
     result = await db.execute(query)

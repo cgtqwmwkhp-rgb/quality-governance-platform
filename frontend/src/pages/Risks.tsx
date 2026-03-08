@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
-import { cn } from "../helpers/utils"
+import { cn } from '../helpers/utils'
 
 export default function Risks() {
   const { t } = useTranslation()
@@ -44,20 +44,25 @@ export default function Risks() {
   })
   const [error, setError] = useState<string | null>(null)
 
-  const loadRisks = useCallback(async (search?: string) => {
-    setError(null)
-    try {
-      const response = await risksApi.list(1, 50, search || undefined)
-      setRisks(response.data.items ?? [])
-    } catch (err) {
-      trackError(err, { component: 'Risks', action: 'loadRisks' })
-      setError(t('risks.error.load_failed'))
-    } finally {
-      setLoading(false)
-    }
-  }, [t])
+  const loadRisks = useCallback(
+    async (search?: string) => {
+      setError(null)
+      try {
+        const response = await risksApi.list(1, 50, search || undefined)
+        setRisks(response.data.items ?? [])
+      } catch (err) {
+        trackError(err, { component: 'Risks', action: 'loadRisks' })
+        setError(t('risks.error.load_failed'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [t],
+  )
 
-  useEffect(() => { loadRisks() }, [loadRisks])
+  useEffect(() => {
+    loadRisks()
+  }, [loadRisks])
   useEffect(() => {
     if (!searchTerm) return
     const timer = setTimeout(() => loadRisks(searchTerm), 300)
@@ -97,34 +102,49 @@ export default function Risks() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'closed': return 'resolved'
-      case 'identified': return 'submitted'
-      case 'assessing': return 'acknowledged'
-      case 'treating': return 'in-progress'
-      case 'monitoring': return 'info'
-      default: return 'secondary'
+      case 'closed':
+        return 'resolved'
+      case 'identified':
+        return 'submitted'
+      case 'assessing':
+        return 'acknowledged'
+      case 'treating':
+        return 'in-progress'
+      case 'monitoring':
+        return 'info'
+      default:
+        return 'secondary'
     }
   }
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'strategic': return '🎯'
-      case 'operational': return '⚙️'
-      case 'financial': return '💰'
-      case 'compliance': return '📋'
-      case 'reputational': return '🏆'
-      case 'technology': return '💻'
-      case 'environmental': return '🌍'
-      case 'health_safety': return '🏥'
-      default: return '📊'
+      case 'strategic':
+        return '🎯'
+      case 'operational':
+        return '⚙️'
+      case 'financial':
+        return '💰'
+      case 'compliance':
+        return '📋'
+      case 'reputational':
+        return '🏆'
+      case 'technology':
+        return '💻'
+      case 'environmental':
+        return '🌍'
+      case 'health_safety':
+        return '🏥'
+      default:
+        return '📊'
     }
   }
 
   const riskStats = {
-    critical: risks.filter(r => r.risk_score >= 20).length,
-    high: risks.filter(r => r.risk_score >= 12 && r.risk_score < 20).length,
-    medium: risks.filter(r => r.risk_score >= 6 && r.risk_score < 12).length,
-    low: risks.filter(r => r.risk_score < 6).length,
+    critical: risks.filter((r) => r.risk_score >= 20).length,
+    high: risks.filter((r) => r.risk_score >= 12 && r.risk_score < 20).length,
+    medium: risks.filter((r) => r.risk_score >= 6 && r.risk_score < 12).length,
+    low: risks.filter((r) => r.risk_score < 6).length,
   }
 
   if (loading) {
@@ -146,7 +166,13 @@ export default function Risks() {
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={() => { setError(null); loadRisks(); }} className="text-sm font-medium text-destructive hover:underline">
+          <button
+            onClick={() => {
+              setError(null)
+              loadRisks()
+            }}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
             {t('risks.error.try_again')}
           </button>
         </div>
@@ -179,18 +205,32 @@ export default function Risks() {
       {/* Risk Heat Map Summary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: t('risks.stats.critical_risks'), count: riskStats.critical, variant: 'destructive' as const },
-          { label: t('risks.stats.high_risks'), count: riskStats.high, variant: 'warning' as const },
-          { label: t('risks.stats.medium_risks'), count: riskStats.medium, variant: 'warning' as const },
+          {
+            label: t('risks.stats.critical_risks'),
+            count: riskStats.critical,
+            variant: 'destructive' as const,
+          },
+          {
+            label: t('risks.stats.high_risks'),
+            count: riskStats.high,
+            variant: 'warning' as const,
+          },
+          {
+            label: t('risks.stats.medium_risks'),
+            count: riskStats.medium,
+            variant: 'warning' as const,
+          },
           { label: t('risks.stats.low_risks'), count: riskStats.low, variant: 'success' as const },
         ].map((stat) => (
           <Card key={stat.label} className="p-4">
-            <div className={cn(
-              "w-10 h-10 rounded-lg flex items-center justify-center mb-3",
-              stat.variant === 'destructive' && "bg-destructive/10 text-destructive",
-              stat.variant === 'warning' && "bg-warning/10 text-warning",
-              stat.variant === 'success' && "bg-success/10 text-success",
-            )}>
+            <div
+              className={cn(
+                'w-10 h-10 rounded-lg flex items-center justify-center mb-3',
+                stat.variant === 'destructive' && 'bg-destructive/10 text-destructive',
+                stat.variant === 'warning' && 'bg-warning/10 text-warning',
+                stat.variant === 'success' && 'bg-success/10 text-success',
+              )}
+            >
               <span className="font-bold">{stat.count}</span>
             </div>
             <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
@@ -204,12 +244,24 @@ export default function Risks() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.reference')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.risk')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.category')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.score')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.status')}</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('risks.table.treatment')}</th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.reference')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.risk')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.category')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.score')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.status')}
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {t('risks.table.treatment')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -219,7 +271,10 @@ export default function Risks() {
                     <EmptyState
                       icon={<Shield className="w-6 h-6 text-muted-foreground" />}
                       title={t('risks.empty.title', 'No risks found')}
-                      description={t('risks.empty.subtitle', 'Create your first risk to get started.')}
+                      description={t(
+                        'risks.empty.subtitle',
+                        'Create your first risk to get started.',
+                      )}
                       action={
                         <Button variant="outline" size="sm" onClick={() => setShowModal(true)}>
                           <Plus size={16} /> {t('risks.new', 'New Risk')}
@@ -230,15 +285,16 @@ export default function Risks() {
                 </tr>
               ) : (
                 risks.map((risk) => (
-                  <tr
-                    key={risk.id}
-                    className="hover:bg-surface transition-colors cursor-pointer"
-                  >
+                  <tr key={risk.id} className="hover:bg-surface transition-colors cursor-pointer">
                     <td className="px-6 py-4">
-                      <span className="font-mono text-sm text-primary">{risk.reference_number}</span>
+                      <span className="font-mono text-sm text-primary">
+                        {risk.reference_number}
+                      </span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm font-medium text-foreground truncate max-w-xs">{risk.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate max-w-xs">
+                        {risk.title}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
@@ -248,7 +304,9 @@ export default function Risks() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <Badge variant={getRiskLevelVariant(risk.risk_level, risk.risk_score) as any}>
+                        <Badge
+                          variant={getRiskLevelVariant(risk.risk_level, risk.risk_score) as any}
+                        >
                           {risk.risk_score}
                         </Badge>
                         <span className="text-xs text-muted-foreground">
@@ -283,8 +341,14 @@ export default function Risks() {
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-5">
             <div>
-              <label htmlFor="risks-field-0" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.title')} <span className="text-destructive">*</span></label>
-              <Input id="risks-field-0"
+              <label
+                htmlFor="risks-field-0"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('risks.form.title')} <span className="text-destructive">*</span>
+              </label>
+              <Input
+                id="risks-field-0"
                 type="text"
                 required
                 aria-required="true"
@@ -295,8 +359,14 @@ export default function Risks() {
             </div>
 
             <div>
-              <label htmlFor="risks-field-1" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.description')} <span className="text-destructive">*</span></label>
-              <Textarea id="risks-field-1"
+              <label
+                htmlFor="risks-field-1"
+                className="block text-sm font-medium text-foreground mb-2"
+              >
+                {t('risks.form.description')} <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                id="risks-field-1"
                 required
                 aria-required="true"
                 rows={3}
@@ -308,7 +378,12 @@ export default function Risks() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="risks-field-2" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.category')}</label>
+                <label
+                  htmlFor="risks-field-2"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('risks.form.category')}
+                </label>
                 <Select
                   value={formData.category}
                   onValueChange={(value) => setFormData({ ...formData, category: value })}
@@ -323,14 +398,23 @@ export default function Risks() {
                     <SelectItem value="compliance">{t('risks.category.compliance')}</SelectItem>
                     <SelectItem value="reputational">{t('risks.category.reputational')}</SelectItem>
                     <SelectItem value="technology">{t('risks.category.technology')}</SelectItem>
-                    <SelectItem value="environmental">{t('risks.category.environmental')}</SelectItem>
-                    <SelectItem value="health_safety">{t('risks.category.health_safety')}</SelectItem>
+                    <SelectItem value="environmental">
+                      {t('risks.category.environmental')}
+                    </SelectItem>
+                    <SelectItem value="health_safety">
+                      {t('risks.category.health_safety')}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div>
-                <label htmlFor="risks-field-3" className="block text-sm font-medium text-foreground mb-2">{t('risks.form.treatment')}</label>
+                <label
+                  htmlFor="risks-field-3"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
+                  {t('risks.form.treatment')}
+                </label>
                 <Select
                   value={formData.treatment_strategy}
                   onValueChange={(value) => setFormData({ ...formData, treatment_strategy: value })}
@@ -350,15 +434,21 @@ export default function Risks() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="risks-field-4" className="block text-sm font-medium text-foreground mb-2">
+                <label
+                  htmlFor="risks-field-4"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
                   {t('risks.form.likelihood')}
                 </label>
-                <input id="risks-field-4"
+                <input
+                  id="risks-field-4"
                   type="range"
                   min="1"
                   max="5"
                   value={formData.likelihood}
-                  onChange={(e) => setFormData({ ...formData, likelihood: parseInt(e.target.value) })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, likelihood: parseInt(e.target.value) })
+                  }
                   className="w-full h-2 bg-surface rounded-lg appearance-none cursor-pointer accent-primary"
                   aria-label="Likelihood"
                 />
@@ -370,10 +460,14 @@ export default function Risks() {
               </div>
 
               <div>
-                <label htmlFor="risks-field-5" className="block text-sm font-medium text-foreground mb-2">
+                <label
+                  htmlFor="risks-field-5"
+                  className="block text-sm font-medium text-foreground mb-2"
+                >
                   {t('risks.form.impact')}
                 </label>
-                <input id="risks-field-5"
+                <input
+                  id="risks-field-5"
                   type="range"
                   min="1"
                   max="5"
@@ -392,8 +486,13 @@ export default function Risks() {
 
             <Card className="p-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">{t('risks.form.calculated_score')}</span>
-                <Badge variant={getRiskLevelVariant('', formData.likelihood * formData.impact) as any} className="text-lg px-4 py-2">
+                <span className="text-sm text-muted-foreground">
+                  {t('risks.form.calculated_score')}
+                </span>
+                <Badge
+                  variant={getRiskLevelVariant('', formData.likelihood * formData.impact) as any}
+                  className="text-lg px-4 py-2"
+                >
                   {formData.likelihood * formData.impact}
                 </Badge>
               </div>

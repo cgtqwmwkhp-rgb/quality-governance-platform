@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from 'react'
 import {
   BarChart3,
   TrendingUp,
@@ -15,35 +15,35 @@ import {
   RefreshCw,
   Download,
   Sparkles,
-} from 'lucide-react';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { cn } from "../helpers/utils";
+} from 'lucide-react'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { cn } from '../helpers/utils'
 
 interface KPICard {
-  id: string;
-  title: string;
-  value: number | string;
-  change: number;
-  changeType: 'increase' | 'decrease' | 'neutral';
-  icon: React.ReactNode;
-  variant: 'primary' | 'info' | 'warning' | 'success' | 'destructive';
-  sparkline?: number[];
+  id: string
+  title: string
+  value: number | string
+  change: number
+  changeType: 'increase' | 'decrease' | 'neutral'
+  icon: React.ReactNode
+  variant: 'primary' | 'info' | 'warning' | 'success' | 'destructive'
+  sparkline?: number[]
 }
 
 interface ModuleStats {
-  module: string;
-  total: number;
-  open: number;
-  closed: number;
-  avgResolutionDays: number;
-  trend: number;
+  module: string
+  total: number
+  open: number
+  closed: number
+  avgResolutionDays: number
+  trend: number
 }
 
 export default function Analytics() {
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedModule, setSelectedModule] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d')
+  const [isLoading, setIsLoading] = useState(false)
+  const [selectedModule, setSelectedModule] = useState<string | null>(null)
 
   const kpis: KPICard[] = [
     {
@@ -99,8 +99,8 @@ export default function Analytics() {
       changeType: 'neutral',
       icon: <AlertTriangle className="w-6 h-6" />,
       variant: 'destructive',
-    }
-  ];
+    },
+  ]
 
   const moduleStats: ModuleStats[] = [
     { module: 'Incidents', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
@@ -108,64 +108,72 @@ export default function Analytics() {
     { module: 'Complaints', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
     { module: 'Risks', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
     { module: 'Audits', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
-    { module: 'Actions', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 }
-  ];
+    { module: 'Actions', total: 0, open: 0, closed: 0, avgResolutionDays: 0, trend: 0 },
+  ]
 
-  const monthlyTrends: { month: string; incidents: number; rtas: number; complaints: number }[] = [];
+  const monthlyTrends: { month: string; incidents: number; rtas: number; complaints: number }[] = []
 
   const handleRefresh = () => {
-    setIsLoading(true);
-    setIsLoading(false);
-  };
+    setIsLoading(true)
+    setIsLoading(false)
+  }
 
-  const TrendIndicator = ({ change, type }: { change: number; type: 'increase' | 'decrease' | 'neutral' }) => {
+  const TrendIndicator = ({
+    change,
+    type,
+  }: {
+    change: number
+    type: 'increase' | 'decrease' | 'neutral'
+  }) => {
     if (type === 'neutral') {
       return (
         <span className="flex items-center gap-1 text-muted-foreground text-sm">
           <Minus className="w-4 h-4" />
           No change
         </span>
-      );
+      )
     }
-    
-    const isPositive = type === 'decrease' ? change < 0 : change > 0;
-    const Icon = change > 0 ? ArrowUpRight : ArrowDownRight;
-    
+
+    const isPositive = type === 'decrease' ? change < 0 : change > 0
+    const Icon = change > 0 ? ArrowUpRight : ArrowDownRight
+
     return (
-      <span className={cn(
-        "flex items-center gap-1 text-sm",
-        isPositive ? 'text-success' : 'text-destructive'
-      )}>
+      <span
+        className={cn(
+          'flex items-center gap-1 text-sm',
+          isPositive ? 'text-success' : 'text-destructive',
+        )}
+      >
         <Icon className="w-4 h-4" />
         {Math.abs(change)}%
       </span>
-    );
-  };
+    )
+  }
 
   const MiniSparkline = ({ data, variant }: { data: number[]; variant: string }) => {
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const range = max - min || 1;
-    
+    const max = Math.max(...data)
+    const min = Math.min(...data)
+    const range = max - min || 1
+
     return (
       <div className="flex items-end gap-0.5 h-8">
         {data.map((value, i) => (
           <div
             key={i}
             className={cn(
-              "w-1.5 rounded-full opacity-60",
-              variant === 'primary' && "bg-primary",
-              variant === 'info' && "bg-info",
-              variant === 'warning' && "bg-warning",
-              variant === 'success' && "bg-success",
-              variant === 'destructive' && "bg-destructive",
+              'w-1.5 rounded-full opacity-60',
+              variant === 'primary' && 'bg-primary',
+              variant === 'info' && 'bg-info',
+              variant === 'warning' && 'bg-warning',
+              variant === 'success' && 'bg-success',
+              variant === 'destructive' && 'bg-destructive',
             )}
             style={{ height: `${((value - min) / range) * 100}%`, minHeight: '4px' }}
           />
         ))}
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -178,9 +186,11 @@ export default function Analytics() {
             </div>
             Analytics Dashboard
           </h1>
-          <p className="text-muted-foreground mt-1">Cross-module insights and performance metrics</p>
+          <p className="text-muted-foreground mt-1">
+            Cross-module insights and performance metrics
+          </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <div className="flex bg-surface rounded-lg p-1 border border-border">
             {(['7d', '30d', '90d', '1y'] as const).map((range) => (
@@ -188,17 +198,17 @@ export default function Analytics() {
                 key={range}
                 onClick={() => setTimeRange(range)}
                 className={cn(
-                  "px-3 py-1.5 text-sm font-medium rounded-md transition-all",
+                  'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
                   timeRange === range
                     ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {range}
               </button>
             ))}
           </div>
-          
+
           <Button
             variant="outline"
             size="sm"
@@ -207,7 +217,7 @@ export default function Analytics() {
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
-          
+
           <Button variant="outline" size="sm">
             <Download className="w-4 h-4" />
           </Button>
@@ -219,27 +229,27 @@ export default function Analytics() {
         {kpis.map((kpi) => (
           <Card key={kpi.id} hoverable className="p-4">
             <div className="flex items-start justify-between mb-3">
-              <div className={cn(
-                "p-2 rounded-lg",
-                kpi.variant === 'primary' && "bg-primary/10 text-primary",
-                kpi.variant === 'info' && "bg-info/10 text-info",
-                kpi.variant === 'warning' && "bg-warning/10 text-warning",
-                kpi.variant === 'success' && "bg-success/10 text-success",
-                kpi.variant === 'destructive' && "bg-destructive/10 text-destructive",
-              )}>
+              <div
+                className={cn(
+                  'p-2 rounded-lg',
+                  kpi.variant === 'primary' && 'bg-primary/10 text-primary',
+                  kpi.variant === 'info' && 'bg-info/10 text-info',
+                  kpi.variant === 'warning' && 'bg-warning/10 text-warning',
+                  kpi.variant === 'success' && 'bg-success/10 text-success',
+                  kpi.variant === 'destructive' && 'bg-destructive/10 text-destructive',
+                )}
+              >
                 {kpi.icon}
               </div>
               <TrendIndicator change={kpi.change} type={kpi.changeType} />
             </div>
-            
+
             <div className="mb-3">
               <p className="text-2xl font-bold text-foreground">{kpi.value}</p>
               <p className="text-sm text-muted-foreground">{kpi.title}</p>
             </div>
-            
-            {kpi.sparkline && (
-              <MiniSparkline data={kpi.sparkline} variant={kpi.variant} />
-            )}
+
+            {kpi.sparkline && <MiniSparkline data={kpi.sparkline} variant={kpi.variant} />}
           </Card>
         ))}
       </div>
@@ -268,7 +278,7 @@ export default function Analytics() {
               </span>
             </div>
           </div>
-          
+
           <div className="h-64 flex items-end justify-between gap-2">
             {monthlyTrends.length === 0 ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
@@ -304,19 +314,19 @@ export default function Analytics() {
             <PieChart className="w-5 h-5 text-primary" />
             Module Distribution
           </h2>
-          
+
           <div className="space-y-4">
             {moduleStats.map((stat) => {
-              const percentage = (stat.total / moduleStats.reduce((a, b) => a + b.total, 0)) * 100;
+              const percentage = (stat.total / moduleStats.reduce((a, b) => a + b.total, 0)) * 100
               const variants: Record<string, string> = {
-                'Incidents': 'bg-info',
-                'RTAs': 'bg-warning',
-                'Complaints': 'bg-primary',
-                'Risks': 'bg-destructive',
-                'Audits': 'bg-success',
-                'Actions': 'bg-info'
-              };
-              
+                Incidents: 'bg-info',
+                RTAs: 'bg-warning',
+                Complaints: 'bg-primary',
+                Risks: 'bg-destructive',
+                Audits: 'bg-success',
+                Actions: 'bg-info',
+              }
+
               return (
                 <div key={stat.module} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
@@ -325,12 +335,12 @@ export default function Analytics() {
                   </div>
                   <div className="h-2 bg-surface rounded-full overflow-hidden">
                     <div
-                      className={cn("h-full rounded-full transition-all", variants[stat.module])}
+                      className={cn('h-full rounded-full transition-all', variants[stat.module])}
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
                 </div>
-              );
+              )
             })}
           </div>
         </Card>
@@ -344,7 +354,7 @@ export default function Analytics() {
             Module Performance
           </h2>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-surface">
@@ -352,8 +362,12 @@ export default function Analytics() {
                 <th className="text-left p-4 text-sm font-medium text-muted-foreground">Module</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Total</th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Open</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Closed</th>
-                <th className="text-center p-4 text-sm font-medium text-muted-foreground">Avg Resolution</th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">
+                  Closed
+                </th>
+                <th className="text-center p-4 text-sm font-medium text-muted-foreground">
+                  Avg Resolution
+                </th>
                 <th className="text-center p-4 text-sm font-medium text-muted-foreground">Trend</th>
               </tr>
             </thead>
@@ -362,10 +376,12 @@ export default function Analytics() {
                 <tr
                   key={stat.module}
                   className={cn(
-                    "border-b border-border hover:bg-surface transition-colors cursor-pointer",
-                    selectedModule === stat.module && 'bg-primary/5'
+                    'border-b border-border hover:bg-surface transition-colors cursor-pointer',
+                    selectedModule === stat.module && 'bg-primary/5',
                   )}
-                  onClick={() => setSelectedModule(stat.module === selectedModule ? null : stat.module)}
+                  onClick={() =>
+                    setSelectedModule(stat.module === selectedModule ? null : stat.module)
+                  }
                 >
                   <td className="p-4">
                     <span className="font-medium text-foreground">{stat.module}</span>
@@ -404,14 +420,26 @@ export default function Analytics() {
           <div>
             <h3 className="text-lg font-semibold text-foreground mb-2">AI-Powered Insights</h3>
             <div className="space-y-2 text-muted-foreground">
-              <p>• <strong className="text-foreground">Incident resolution</strong> has improved by 15.8% this quarter, reducing average time from 5 days to 4.2 days.</p>
-              <p>• <strong className="text-foreground">RTA frequency</strong> shows a downward trend (-12.3%), likely due to recent safety training initiatives.</p>
-              <p>• <strong className="text-foreground">Complaint volumes</strong> peaked in July (+55 cases) - consider reviewing Q3 service delivery processes.</p>
-              <p>• <strong className="text-foreground">Risk register</strong> has 28 open items requiring attention, 8 are overdue for review.</p>
+              <p>
+                • <strong className="text-foreground">Incident resolution</strong> has improved by
+                15.8% this quarter, reducing average time from 5 days to 4.2 days.
+              </p>
+              <p>
+                • <strong className="text-foreground">RTA frequency</strong> shows a downward trend
+                (-12.3%), likely due to recent safety training initiatives.
+              </p>
+              <p>
+                • <strong className="text-foreground">Complaint volumes</strong> peaked in July (+55
+                cases) - consider reviewing Q3 service delivery processes.
+              </p>
+              <p>
+                • <strong className="text-foreground">Risk register</strong> has 28 open items
+                requiring attention, 8 are overdue for review.
+              </p>
             </div>
           </div>
         </div>
       </Card>
     </div>
-  );
+  )
 }

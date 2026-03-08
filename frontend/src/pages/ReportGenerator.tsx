@@ -1,6 +1,6 @@
 /**
  * Report Generator
- * 
+ *
  * Features:
  * - Automated monthly reports
  * - PDF/Excel export
@@ -8,9 +8,9 @@
  * - Template management
  */
 
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from '../contexts/ToastContext';
+import React, { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { toast } from '../contexts/ToastContext'
 import {
   FileText,
   Download,
@@ -29,34 +29,40 @@ import {
   FileSpreadsheet,
   Presentation,
   Filter,
-} from 'lucide-react';
-import { cn } from "../helpers/utils";
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Card, CardHeader, CardContent } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/Select';
+} from 'lucide-react'
+import { cn } from '../helpers/utils'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Card, CardHeader, CardContent } from '../components/ui/Card'
+import { Badge } from '../components/ui/Badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '../components/ui/Select'
 
 interface ScheduledReport {
-  id: number;
-  name: string;
-  template: string;
-  schedule: string;
-  nextRun: string;
-  recipients: string[];
-  format: string;
-  status: 'active' | 'paused';
-  lastRun?: string;
-  lastStatus?: 'success' | 'failed';
+  id: number
+  name: string
+  template: string
+  schedule: string
+  nextRun: string
+  recipients: string[]
+  format: string
+  status: 'active' | 'paused'
+  lastRun?: string
+  lastStatus?: 'success' | 'failed'
 }
 
 interface ReportTemplate {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ElementType;
-  sections: string[];
+  id: string
+  name: string
+  description: string
+  icon: React.ElementType
+  sections: string[]
 }
 
 const reportTemplates: ReportTemplate[] = [
@@ -102,7 +108,7 @@ const reportTemplates: ReportTemplate[] = [
     icon: Users,
     sections: ['Completion Rates', 'Expiring Certifications', 'Training Matrix', 'Gaps'],
   },
-];
+]
 
 const scheduledReports: ScheduledReport[] = [
   {
@@ -141,15 +147,15 @@ const scheduledReports: ScheduledReport[] = [
     lastRun: '2025-10-01 09:00',
     lastStatus: 'success',
   },
-];
+]
 
 export default function ReportGenerator() {
-  const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'generate' | 'scheduled' | 'history'>('generate');
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [reports, setReports] = useState(scheduledReports);
+  const { t } = useTranslation()
+  const [activeTab, setActiveTab] = useState<'generate' | 'scheduled' | 'history'>('generate')
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [reports, setReports] = useState(scheduledReports)
 
   const [reportConfig, setReportConfig] = useState({
     timeRange: 'last_month',
@@ -158,27 +164,29 @@ export default function ReportGenerator() {
     includeData: true,
     sendEmail: false,
     recipients: '',
-  });
+  })
 
   const handleGenerateReport = async () => {
-    if (!selectedTemplate) return;
-    setGenerating(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setGenerating(false);
-    toast.success('Report generated! Download starting...');
-  };
+    if (!selectedTemplate) return
+    setGenerating(true)
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    setGenerating(false)
+    toast.success('Report generated! Download starting...')
+  }
 
   const toggleReportStatus = (id: number) => {
-    setReports(prev => prev.map(r => 
-      r.id === id ? { ...r, status: r.status === 'active' ? 'paused' : 'active' } : r
-    ));
-  };
+    setReports((prev) =>
+      prev.map((r) =>
+        r.id === id ? { ...r, status: r.status === 'active' ? 'paused' : 'active' } : r,
+      ),
+    )
+  }
 
   const tabs = [
     { id: 'generate', label: t('report_generator.generate_tab'), icon: FileText },
     { id: 'scheduled', label: t('report_generator.scheduled_tab'), icon: Calendar },
     { id: 'history', label: t('report_generator.history_tab'), icon: Clock },
-  ];
+  ]
 
   return (
     <div className="space-y-6">
@@ -196,15 +204,15 @@ export default function ReportGenerator() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-muted/50 p-1 rounded-xl">
-        {tabs.map(tab => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as typeof activeTab)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all",
+              'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
               activeTab === tab.id
                 ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
             )}
           >
             <tab.icon className="w-4 h-4" />
@@ -218,36 +226,47 @@ export default function ReportGenerator() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Template Selection */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">{t('report_generator.select_template')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('report_generator.select_template')}
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {reportTemplates.map(template => (
+              {reportTemplates.map((template) => (
                 <Card
                   key={template.id}
                   onClick={() => setSelectedTemplate(template.id)}
                   className={cn(
-                    "cursor-pointer transition-all",
+                    'cursor-pointer transition-all',
                     selectedTemplate === template.id
                       ? 'border-primary ring-2 ring-primary/30'
-                      : 'hover:border-primary/50'
+                      : 'hover:border-primary/50',
                   )}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "p-2.5 rounded-lg",
-                        selectedTemplate === template.id ? 'bg-primary/20' : 'bg-muted'
-                      )}>
-                        <template.icon className={cn(
-                          "w-5 h-5",
-                          selectedTemplate === template.id ? 'text-primary' : 'text-muted-foreground'
-                        )} />
+                      <div
+                        className={cn(
+                          'p-2.5 rounded-lg',
+                          selectedTemplate === template.id ? 'bg-primary/20' : 'bg-muted',
+                        )}
+                      >
+                        <template.icon
+                          className={cn(
+                            'w-5 h-5',
+                            selectedTemplate === template.id
+                              ? 'text-primary'
+                              : 'text-muted-foreground',
+                          )}
+                        />
                       </div>
                       <div className="flex-1">
                         <h3 className="font-medium text-foreground">{template.name}</h3>
                         <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
                         <div className="flex flex-wrap gap-1 mt-3">
-                          {template.sections.map(section => (
-                            <span key={section} className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground">
+                          {template.sections.map((section) => (
+                            <span
+                              key={section}
+                              className="px-2 py-0.5 bg-muted rounded text-xs text-muted-foreground"
+                            >
                               {section}
                             </span>
                           ))}
@@ -262,15 +281,24 @@ export default function ReportGenerator() {
 
           {/* Report Configuration */}
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">{t('report_generator.report_options')}</h2>
+            <h2 className="text-lg font-semibold text-foreground">
+              {t('report_generator.report_options')}
+            </h2>
             <Card>
               <CardContent className="p-5 space-y-4">
                 {/* Time Range */}
                 <div>
-                  <label htmlFor="reportgenerator-field-0" className="block text-sm font-medium text-foreground mb-2">{t('report_generator.time_range')}</label>
+                  <label
+                    htmlFor="reportgenerator-field-0"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    {t('report_generator.time_range')}
+                  </label>
                   <Select
                     value={reportConfig.timeRange}
-                    onValueChange={(value) => setReportConfig(prev => ({ ...prev, timeRange: value }))}
+                    onValueChange={(value) =>
+                      setReportConfig((prev) => ({ ...prev, timeRange: value }))
+                    }
                   >
                     <SelectTrigger id="reportgenerator-field-0">
                       <SelectValue />
@@ -288,21 +316,25 @@ export default function ReportGenerator() {
 
                 {/* Format */}
                 <div>
-                  <span className="block text-sm font-medium text-foreground mb-2">{t('report_generator.export_format')}</span>
+                  <span className="block text-sm font-medium text-foreground mb-2">
+                    {t('report_generator.export_format')}
+                  </span>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'pdf', label: 'PDF', icon: FileText },
                       { value: 'excel', label: 'Excel', icon: FileSpreadsheet },
                       { value: 'pptx', label: 'PowerPoint', icon: Presentation },
-                    ].map(format => (
+                    ].map((format) => (
                       <button
                         key={format.value}
-                        onClick={() => setReportConfig(prev => ({ ...prev, format: format.value }))}
+                        onClick={() =>
+                          setReportConfig((prev) => ({ ...prev, format: format.value }))
+                        }
                         className={cn(
-                          "flex flex-col items-center p-3 rounded-lg border transition-all",
+                          'flex flex-col items-center p-3 rounded-lg border transition-all',
                           reportConfig.format === format.value
                             ? 'bg-primary/20 border-primary text-primary'
-                            : 'bg-muted/50 border-border text-muted-foreground hover:border-primary/50'
+                            : 'bg-muted/50 border-border text-muted-foreground hover:border-primary/50',
                         )}
                       >
                         <format.icon className="w-5 h-5 mb-1" />
@@ -314,46 +346,74 @@ export default function ReportGenerator() {
 
                 {/* Include Options */}
                 <div>
-                  <label htmlFor="reportgenerator-field-1" className="block text-sm font-medium text-foreground mb-2">Include</label>
+                  <label
+                    htmlFor="reportgenerator-field-1"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
+                    Include
+                  </label>
                   <div className="space-y-2">
-                    <label htmlFor="reportgenerator-field-2" className="flex items-center gap-3 cursor-pointer">
-                      <input id="reportgenerator-field-1"
+                    <label
+                      htmlFor="reportgenerator-field-2"
+                      className="flex items-center gap-3 cursor-pointer"
+                    >
+                      <input
+                        id="reportgenerator-field-1"
                         type="checkbox"
                         checked={reportConfig.includeCharts}
-                        onChange={(e) => setReportConfig(prev => ({ ...prev, includeCharts: e.target.checked }))}
+                        onChange={(e) =>
+                          setReportConfig((prev) => ({ ...prev, includeCharts: e.target.checked }))
+                        }
                         className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                       />
-                      <span className="text-sm text-foreground">{t('report_generator.include_charts')}</span>
+                      <span className="text-sm text-foreground">
+                        {t('report_generator.include_charts')}
+                      </span>
                     </label>
                     <label className="flex items-center gap-3 cursor-pointer">
-                      <input id="reportgenerator-field-2"
+                      <input
+                        id="reportgenerator-field-2"
                         type="checkbox"
                         checked={reportConfig.includeData}
-                        onChange={(e) => setReportConfig(prev => ({ ...prev, includeData: e.target.checked }))}
+                        onChange={(e) =>
+                          setReportConfig((prev) => ({ ...prev, includeData: e.target.checked }))
+                        }
                         className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                       />
-                      <span className="text-sm text-foreground">{t('report_generator.include_data')}</span>
+                      <span className="text-sm text-foreground">
+                        {t('report_generator.include_data')}
+                      </span>
                     </label>
                   </div>
                 </div>
 
                 {/* Email Option */}
                 <div>
-                  <label htmlFor="reportgenerator-field-3" className="flex items-center gap-3 cursor-pointer">
+                  <label
+                    htmlFor="reportgenerator-field-3"
+                    className="flex items-center gap-3 cursor-pointer"
+                  >
                     <input
                       type="checkbox"
                       checked={reportConfig.sendEmail}
-                      onChange={(e) => setReportConfig(prev => ({ ...prev, sendEmail: e.target.checked }))}
+                      onChange={(e) =>
+                        setReportConfig((prev) => ({ ...prev, sendEmail: e.target.checked }))
+                      }
                       className="w-4 h-4 rounded border-border bg-muted text-primary focus:ring-primary"
                     />
-                    <span className="text-sm text-foreground">{t('report_generator.email_report')}</span>
+                    <span className="text-sm text-foreground">
+                      {t('report_generator.email_report')}
+                    </span>
                   </label>
                   {reportConfig.sendEmail && (
-                    <Input id="reportgenerator-field-3"
+                    <Input
+                      id="reportgenerator-field-3"
                       type="email"
                       placeholder="Enter email addresses"
                       value={reportConfig.recipients}
-                      onChange={(e) => setReportConfig(prev => ({ ...prev, recipients: e.target.value }))}
+                      onChange={(e) =>
+                        setReportConfig((prev) => ({ ...prev, recipients: e.target.value }))
+                      }
                       className="mt-2"
                     />
                   )}
@@ -390,23 +450,37 @@ export default function ReportGenerator() {
             <table className="w-full">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Report</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Schedule</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Next Run</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Recipients</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Report
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Schedule
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Next Run
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Recipients
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {reports.map(report => (
+                {reports.map((report) => (
                   <tr key={report.id} className="border-t border-border">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <FileText className="w-5 h-5 text-primary" />
                         <div>
                           <div className="font-medium text-foreground">{report.name}</div>
-                          <div className="text-sm text-muted-foreground">{report.format.toUpperCase()}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {report.format.toUpperCase()}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -420,19 +494,35 @@ export default function ReportGenerator() {
                     </td>
                     <td className="p-4">
                       <Badge variant={report.status === 'active' ? 'resolved' : 'submitted'}>
-                        {report.status === 'active' ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                        {report.status === 'active' ? (
+                          <Play className="w-3 h-3" />
+                        ) : (
+                          <Pause className="w-3 h-3" />
+                        )}
                         {report.status}
                       </Badge>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => toggleReportStatus(report.id)}>
-                          {report.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleReportStatus(report.id)}
+                        >
+                          {report.status === 'active' ? (
+                            <Pause className="w-4 h-4" />
+                          ) : (
+                            <Play className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button variant="ghost" size="sm">
                           <Settings className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
@@ -457,22 +547,50 @@ export default function ReportGenerator() {
           </CardHeader>
           <div className="divide-y divide-border">
             {[
-              { name: 'Monthly Executive Summary', date: '2026-01-01 09:00', status: 'success', size: '2.4 MB' },
-              { name: 'Weekly Safety Report', date: '2026-01-13 08:00', status: 'success', size: '1.8 MB' },
-              { name: 'Weekly Safety Report', date: '2026-01-06 08:00', status: 'success', size: '1.7 MB' },
-              { name: 'Quarterly Compliance', date: '2025-10-01 09:00', status: 'success', size: '3.2 MB' },
-              { name: 'Monthly Executive Summary', date: '2025-12-01 09:00', status: 'failed', size: '-' },
+              {
+                name: 'Monthly Executive Summary',
+                date: '2026-01-01 09:00',
+                status: 'success',
+                size: '2.4 MB',
+              },
+              {
+                name: 'Weekly Safety Report',
+                date: '2026-01-13 08:00',
+                status: 'success',
+                size: '1.8 MB',
+              },
+              {
+                name: 'Weekly Safety Report',
+                date: '2026-01-06 08:00',
+                status: 'success',
+                size: '1.7 MB',
+              },
+              {
+                name: 'Quarterly Compliance',
+                date: '2025-10-01 09:00',
+                status: 'success',
+                size: '3.2 MB',
+              },
+              {
+                name: 'Monthly Executive Summary',
+                date: '2025-12-01 09:00',
+                status: 'failed',
+                size: '-',
+              },
             ].map((report, i) => (
               <div key={i} className="p-4 flex items-center justify-between hover:bg-muted/30">
                 <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "p-2 rounded-lg",
-                    report.status === 'success' ? 'bg-success/20' : 'bg-destructive/20'
-                  )}>
-                    {report.status === 'success' 
-                      ? <CheckCircle className="w-5 h-5 text-success" />
-                      : <AlertCircle className="w-5 h-5 text-destructive" />
-                    }
+                  <div
+                    className={cn(
+                      'p-2 rounded-lg',
+                      report.status === 'success' ? 'bg-success/20' : 'bg-destructive/20',
+                    )}
+                  >
+                    {report.status === 'success' ? (
+                      <CheckCircle className="w-5 h-5 text-success" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-destructive" />
+                    )}
                   </div>
                   <div>
                     <div className="font-medium text-foreground">{report.name}</div>
@@ -501,11 +619,15 @@ export default function ReportGenerator() {
             <DialogTitle>Schedule New Report</DialogTitle>
           </DialogHeader>
           <p className="text-muted-foreground">Report scheduling coming soon...</p>
-          <Button variant="secondary" onClick={() => setShowScheduleModal(false)} className="w-full">
+          <Button
+            variant="secondary"
+            onClick={() => setShowScheduleModal(false)}
+            className="w-full"
+          >
             Close
           </Button>
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

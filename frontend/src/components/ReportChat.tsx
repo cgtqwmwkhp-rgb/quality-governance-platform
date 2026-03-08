@@ -1,6 +1,6 @@
 /**
  * ReportChat - Two-way messaging between reporter and investigating officer
- * 
+ *
  * Features:
  * - Real-time messaging interface
  * - File attachments (images, documents, videos)
@@ -9,8 +9,8 @@
  * - Conversation closure option
  */
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { trackError } from '../utils/errorTracker';
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { trackError } from '../utils/errorTracker'
 import {
   Send,
   Paperclip,
@@ -27,91 +27,92 @@ import {
   Loader2,
   ChevronDown,
   AlertCircle,
-} from 'lucide-react';
-import { Card } from './ui/Card';
-import { Button } from './ui/Button';
-import { Textarea } from './ui/Textarea';
-import { cn } from '../helpers/utils';
+} from 'lucide-react'
+import { Card } from './ui/Card'
+import { Button } from './ui/Button'
+import { Textarea } from './ui/Textarea'
+import { cn } from '../helpers/utils'
 
 // Types
 interface Attachment {
-  id: string;
-  name: string;
-  type: 'image' | 'document' | 'video' | 'other';
-  url: string;
-  size: number;
-  mimeType: string;
+  id: string
+  name: string
+  type: 'image' | 'document' | 'video' | 'other'
+  url: string
+  size: number
+  mimeType: string
 }
 
 interface Message {
-  id: string;
-  content: string;
-  sender: 'reporter' | 'officer';
-  senderName: string;
-  timestamp: string;
-  attachments: Attachment[];
-  isRead: boolean;
-  isDelivered: boolean;
+  id: string
+  content: string
+  sender: 'reporter' | 'officer'
+  senderName: string
+  timestamp: string
+  attachments: Attachment[]
+  isRead: boolean
+  isDelivered: boolean
 }
 
 interface ReportChatProps {
-  referenceNumber: string;
-  reporterName: string;
-  officerName?: string;
-  isReporter: boolean; // true if current user is the reporter, false if officer
-  isClosed?: boolean;
-  onClose?: () => void;
+  referenceNumber: string
+  reporterName: string
+  officerName?: string
+  isReporter: boolean // true if current user is the reporter, false if officer
+  isClosed?: boolean
+  onClose?: () => void
 }
 
 // File type detection
 const getFileType = (mimeType: string): Attachment['type'] => {
-  if (mimeType.startsWith('image/')) return 'image';
-  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
   if (
     mimeType.includes('pdf') ||
     mimeType.includes('word') ||
     mimeType.includes('document') ||
     mimeType.includes('text/')
-  ) return 'document';
-  return 'other';
-};
+  )
+    return 'document'
+  return 'other'
+}
 
 // Format file size
 const formatFileSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 // File icon component
 const FileIcon = ({ type }: { type: Attachment['type'] }) => {
   switch (type) {
     case 'image':
-      return <Image className="w-4 h-4" />;
+      return <Image className="w-4 h-4" />
     case 'video':
-      return <Video className="w-4 h-4" />;
+      return <Video className="w-4 h-4" />
     case 'document':
-      return <FileText className="w-4 h-4" />;
+      return <FileText className="w-4 h-4" />
     default:
-      return <Paperclip className="w-4 h-4" />;
+      return <Paperclip className="w-4 h-4" />
   }
-};
+}
 
 // Attachment preview component
-const AttachmentPreview = ({ 
-  attachment, 
+const AttachmentPreview = ({
+  attachment,
   onRemove,
   isUploading = false,
-}: { 
-  attachment: Attachment | File; 
-  onRemove?: () => void;
-  isUploading?: boolean;
+}: {
+  attachment: Attachment | File
+  onRemove?: () => void
+  isUploading?: boolean
 }) => {
-  const isFile = attachment instanceof File;
-  const name = isFile ? attachment.name : attachment.name;
-  const size = isFile ? attachment.size : attachment.size;
-  const type = isFile ? getFileType(attachment.type) : attachment.type;
-  const url = isFile ? URL.createObjectURL(attachment) : attachment.url;
+  const isFile = attachment instanceof File
+  const name = isFile ? attachment.name : attachment.name
+  const size = isFile ? attachment.size : attachment.size
+  const type = isFile ? getFileType(attachment.type) : attachment.type
+  const url = isFile ? URL.createObjectURL(attachment) : attachment.url
 
   return (
     <div className="relative group flex items-center gap-2 p-2 bg-muted rounded-lg">
@@ -136,66 +137,58 @@ const AttachmentPreview = ({
           <X className="w-4 h-4 text-destructive" />
         </button>
       ) : (
-        <a
-          href={url}
-          download={name}
-          className="p-1 hover:bg-primary/10 rounded"
-        >
+        <a href={url} download={name} className="p-1 hover:bg-primary/10 rounded">
           <Download className="w-4 h-4 text-primary" />
         </a>
       )}
     </div>
-  );
-};
+  )
+}
 
 // Message bubble component
-const MessageBubble = ({ 
-  message, 
-  isOwn 
-}: { 
-  message: Message; 
-  isOwn: boolean;
-}) => {
-  const isOfficer = message.sender === 'officer';
-  
+const MessageBubble = ({ message, isOwn }: { message: Message; isOwn: boolean }) => {
+  const isOfficer = message.sender === 'officer'
+
   return (
     <div className={cn('flex gap-3 mb-4', isOwn ? 'flex-row-reverse' : '')}>
       {/* Avatar */}
-      <div className={cn(
-        'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
-        isOfficer ? 'bg-primary/10' : 'bg-info/10'
-      )}>
+      <div
+        className={cn(
+          'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0',
+          isOfficer ? 'bg-primary/10' : 'bg-info/10',
+        )}
+      >
         {isOfficer ? (
           <Shield className={cn('w-4 h-4', isOfficer ? 'text-primary' : 'text-info')} />
         ) : (
           <User className="w-4 h-4 text-info" />
         )}
       </div>
-      
+
       {/* Message content */}
       <div className={cn('max-w-[75%] space-y-1', isOwn ? 'items-end' : 'items-start')}>
         {/* Sender name */}
         <div className={cn('flex items-center gap-2', isOwn ? 'flex-row-reverse' : '')}>
-          <span className="text-xs font-medium text-muted-foreground">
-            {message.senderName}
-          </span>
+          <span className="text-xs font-medium text-muted-foreground">{message.senderName}</span>
           {isOfficer && (
             <span className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded">
               Investigator
             </span>
           )}
         </div>
-        
+
         {/* Bubble */}
-        <div className={cn(
-          'p-3 rounded-2xl',
-          isOwn
-            ? 'bg-primary text-primary-foreground rounded-tr-md'
-            : 'bg-muted text-foreground rounded-tl-md'
-        )}>
+        <div
+          className={cn(
+            'p-3 rounded-2xl',
+            isOwn
+              ? 'bg-primary text-primary-foreground rounded-tr-md'
+              : 'bg-muted text-foreground rounded-tl-md',
+          )}
+        >
           <p className="text-sm whitespace-pre-wrap">{message.content}</p>
         </div>
-        
+
         {/* Attachments */}
         {message.attachments.length > 0 && (
           <div className="space-y-2 mt-2">
@@ -204,29 +197,33 @@ const MessageBubble = ({
             ))}
           </div>
         )}
-        
+
         {/* Timestamp and status */}
-        <div className={cn('flex items-center gap-1 text-xs text-muted-foreground', isOwn ? 'flex-row-reverse' : '')}>
+        <div
+          className={cn(
+            'flex items-center gap-1 text-xs text-muted-foreground',
+            isOwn ? 'flex-row-reverse' : '',
+          )}
+        >
           <span>
             {new Date(message.timestamp).toLocaleTimeString('en-GB', {
               hour: '2-digit',
               minute: '2-digit',
             })}
           </span>
-          {isOwn && (
-            message.isRead ? (
+          {isOwn &&
+            (message.isRead ? (
               <CheckCheck className="w-3 h-3 text-primary" />
             ) : message.isDelivered ? (
               <CheckCheck className="w-3 h-3" />
             ) : (
               <Clock className="w-3 h-3" />
-            )
-          )}
+            ))}
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // Main component
 export default function ReportChat({
@@ -237,47 +234,47 @@ export default function ReportChat({
   isClosed = false,
   onClose,
 }: ReportChatProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [messages, setMessages] = useState<Message[]>([])
+  const [newMessage, setNewMessage] = useState('')
+  const [attachments, setAttachments] = useState<File[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSending, setIsSending] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadMessages = useCallback(async () => {
-    setIsLoading(true);
+    setIsLoading(true)
     try {
-      const response = await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`);
+      const response = await fetch(`/api/v1/portal/reports/${referenceNumber}/messages`)
       if (response.ok) {
-        const data: Message[] = await response.json();
-        setMessages(data);
+        const data: Message[] = await response.json()
+        setMessages(data)
       } else {
-        setMessages([]);
+        setMessages([])
       }
     } catch (err) {
-      trackError(err, { component: 'ReportChat', action: 'loadMessages' });
-      setMessages([]);
+      trackError(err, { component: 'ReportChat', action: 'loadMessages' })
+      setMessages([])
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, [referenceNumber]);
+  }, [referenceNumber])
 
   // Load messages
   useEffect(() => {
-    loadMessages();
-  }, [referenceNumber, loadMessages]);
+    loadMessages()
+  }, [referenceNumber, loadMessages])
 
   // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   const handleSend = async () => {
-    if (!newMessage.trim() && attachments.length === 0) return;
-    
-    setIsSending(true);
+    if (!newMessage.trim() && attachments.length === 0) return
+
+    setIsSending(true)
     try {
       // In production, this would upload files and send to API
       // const formData = new FormData();
@@ -287,9 +284,9 @@ export default function ReportChat({
       //   method: 'POST',
       //   body: formData,
       // });
-      
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
       const newMsg: Message = {
         id: Date.now().toString(),
         content: newMessage,
@@ -306,39 +303,39 @@ export default function ReportChat({
         })),
         isRead: false,
         isDelivered: true,
-      };
-      
-      setMessages(prev => [...prev, newMsg]);
-      setNewMessage('');
-      setAttachments([]);
+      }
+
+      setMessages((prev) => [...prev, newMsg])
+      setNewMessage('')
+      setAttachments([])
     } catch (err) {
-      trackError(err, { component: 'ReportChat', action: 'sendMessage' });
+      trackError(err, { component: 'ReportChat', action: 'sendMessage' })
     } finally {
-      setIsSending(false);
+      setIsSending(false)
     }
-  };
+  }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      setAttachments(prev => [...prev, ...newFiles]);
+      const newFiles = Array.from(e.target.files)
+      setAttachments((prev) => [...prev, ...newFiles])
     }
     // Reset input
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = ''
     }
-  };
+  }
 
   const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
+    setAttachments((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      e.preventDefault()
+      handleSend()
     }
-  };
+  }
 
   return (
     <Card className="overflow-hidden">
@@ -358,10 +355,12 @@ export default function ReportChat({
             </p>
           </div>
         </div>
-        <ChevronDown className={cn(
-          'w-5 h-5 text-muted-foreground transition-transform',
-          isExpanded && 'rotate-180'
-        )} />
+        <ChevronDown
+          className={cn(
+            'w-5 h-5 text-muted-foreground transition-transform',
+            isExpanded && 'rotate-180',
+          )}
+        />
       </button>
 
       {/* Chat content */}
@@ -378,7 +377,8 @@ export default function ReportChat({
                 <MessageCircle className="w-12 h-12 text-muted-foreground/30 mb-3" />
                 <p className="text-muted-foreground">No messages yet</p>
                 <p className="text-sm text-muted-foreground">
-                  Start a conversation with {isReporter ? 'the investigating officer' : 'the reporter'}
+                  Start a conversation with{' '}
+                  {isReporter ? 'the investigating officer' : 'the reporter'}
                 </p>
               </div>
             ) : (
@@ -404,10 +404,7 @@ export default function ReportChat({
               <AlertCircle className="w-4 h-4" />
               This conversation has been closed.
               {onClose && (
-                <button
-                  onClick={onClose}
-                  className="ml-auto text-primary hover:underline"
-                >
+                <button onClick={onClose} className="ml-auto text-primary hover:underline">
                   Reopen
                 </button>
               )}
@@ -480,5 +477,5 @@ export default function ReportChat({
         </>
       )}
     </Card>
-  );
+  )
 }

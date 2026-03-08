@@ -27,7 +27,13 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { planetMarkApi, ErrorClass, createApiError, isSetupRequired, SetupRequiredResponse } from '../api/client'
+import {
+  planetMarkApi,
+  ErrorClass,
+  createApiError,
+  isSetupRequired,
+  SetupRequiredResponse,
+} from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface ReportingYear {
@@ -70,7 +76,9 @@ type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function PlanetMark() {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'>('dashboard')
+  const [activeTab, setActiveTab] = useState<
+    'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'
+  >('dashboard')
   const [years, setYears] = useState<ReportingYear[]>([])
   const [currentYear, setCurrentYear] = useState<ReportingYear | null>(null)
   const [actions, setActions] = useState<ImprovementAction[]>([])
@@ -81,16 +89,16 @@ export default function PlanetMark() {
   const [retryCount, setRetryCount] = useState(0)
 
   // Transform API response to component types
-  const transformYear = (apiYear: { 
-    id: number; 
-    year: number; 
-    baseline_year: boolean; 
-    total_emissions_tco2e: number; 
-    scope1_emissions: number; 
-    scope2_emissions: number; 
-    scope3_emissions: number; 
-    status: string; 
-    certification_status?: string;
+  const transformYear = (apiYear: {
+    id: number
+    year: number
+    baseline_year: boolean
+    total_emissions_tco2e: number
+    scope1_emissions: number
+    scope2_emissions: number
+    scope3_emissions: number
+    status: string
+    certification_status?: string
   }): ReportingYear => ({
     id: apiYear.id,
     year_label: `YE${apiYear.year}`,
@@ -106,31 +114,42 @@ export default function PlanetMark() {
     is_baseline: apiYear.baseline_year,
   })
 
-  const transformAction = (apiAction: {
-    id: number;
-    title: string;
-    description: string;
-    target_reduction_tco2e: number;
-    status: string;
-    due_date?: string;
-  }, index: number): ImprovementAction => ({
+  const transformAction = (
+    apiAction: {
+      id: number
+      title: string
+      description: string
+      target_reduction_tco2e: number
+      status: string
+      due_date?: string
+    },
+    index: number,
+  ): ImprovementAction => ({
     id: apiAction.id,
     action_id: `ACT-${String(index + 1).padStart(3, '0')}`,
     action_title: apiAction.title,
     owner: 'TBD', // API may not provide owner
     deadline: apiAction.due_date || '',
-    scheduled_month: apiAction.due_date ? new Date(apiAction.due_date).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }) : '',
+    scheduled_month: apiAction.due_date
+      ? new Date(apiAction.due_date).toLocaleDateString('en-GB', {
+          month: 'short',
+          year: '2-digit',
+        })
+      : '',
     status: apiAction.status,
-    progress_percent: apiAction.status === 'completed' ? 100 : apiAction.status === 'in_progress' ? 50 : 0,
-    is_overdue: apiAction.due_date ? new Date(apiAction.due_date) < new Date() && apiAction.status !== 'completed' : false,
+    progress_percent:
+      apiAction.status === 'completed' ? 100 : apiAction.status === 'in_progress' ? 50 : 0,
+    is_overdue: apiAction.due_date
+      ? new Date(apiAction.due_date) < new Date() && apiAction.status !== 'completed'
+      : false,
   })
 
   const transformScope3 = (apiScope3: {
-    category_number: number;
-    category_name: string;
-    emissions_tco2e: number;
-    percentage: number;
-    data_quality: string;
+    category_number: number
+    category_name: string
+    emissions_tco2e: number
+    percentage: number
+    data_quality: string
   }): Scope3Category => ({
     number: apiScope3.category_number,
     name: apiScope3.category_name,
@@ -139,79 +158,86 @@ export default function PlanetMark() {
     percentage: apiScope3.percentage,
   })
 
-  const loadData = useCallback(async (isRetry = false) => {
-    if (isRetry && retryCount >= 1) {
-      // Max 1 retry for transient errors
-      return
-    }
-
-    setLoadState('loading')
-    setErrorClass(null)
-    setSetupRequired(null)
-
-    try {
-      // Fetch dashboard data from API
-      const dashboardResponse = await planetMarkApi.getDashboard()
-      const dashboard = dashboardResponse.data
-
-      // CRITICAL: Check for SETUP_REQUIRED response before processing
-      // This is returned as HTTP 200 but signals the module needs configuration
-      if (isSetupRequired(dashboard)) {
-        setSetupRequired(dashboard)
-        setLoadState('setup_required')
-        setRetryCount(0) // Reset retry count - this is a terminal state, not an error
-        return // Do NOT retry setup_required - it's a valid terminal state
-      }
-
-      // Transform years data
-      const transformedYears = (dashboard.years ?? []).map(transformYear)
-      // Sort by year descending for deterministic ordering
-      transformedYears.sort((a, b) => b.year_number - a.year_number)
-      
-      setYears(transformedYears)
-      setCurrentYear(transformedYears[0] || null)
-
-      // Try to load actions for current year if available
-      if (transformedYears.length > 0) {
-        try {
-          const actionsResponse = await planetMarkApi.listActions(transformedYears[0].id)
-          const transformedActions = (actionsResponse.data ?? []).map(transformAction)
-          // Sort by deadline for deterministic ordering
-          transformedActions.sort((a, b) => a.deadline.localeCompare(b.deadline))
-          setActions(transformedActions)
-        } catch {
-          // Actions endpoint may not exist yet, use empty array
-          setActions([])
-        }
-
-        try {
-          const scope3Response = await planetMarkApi.getScope3(transformedYears[0].id)
-          const transformedScope3 = (scope3Response.data ?? []).map(transformScope3)
-          // Sort by category number for deterministic ordering
-          transformedScope3.sort((a, b) => a.number - b.number)
-          setScope3Categories(transformedScope3)
-        } catch {
-          // Scope3 endpoint may not exist yet, use empty array
-          setScope3Categories([])
-        }
-      }
-
-      setLoadState('success')
-      setRetryCount(0)
-    } catch (err) {
-      const apiError = createApiError(err)
-      setErrorClass(apiError.error_class)
-      
-      // Auto-retry once for transient network errors
-      if (!isRetry && (apiError.error_class === ErrorClass.NETWORK_ERROR || apiError.error_class === ErrorClass.SERVER_ERROR)) {
-        setRetryCount(prev => prev + 1)
-        loadData(true)
+  const loadData = useCallback(
+    async (isRetry = false) => {
+      if (isRetry && retryCount >= 1) {
+        // Max 1 retry for transient errors
         return
       }
-      
-      setLoadState('error')
-    }
-  }, [retryCount])
+
+      setLoadState('loading')
+      setErrorClass(null)
+      setSetupRequired(null)
+
+      try {
+        // Fetch dashboard data from API
+        const dashboardResponse = await planetMarkApi.getDashboard()
+        const dashboard = dashboardResponse.data
+
+        // CRITICAL: Check for SETUP_REQUIRED response before processing
+        // This is returned as HTTP 200 but signals the module needs configuration
+        if (isSetupRequired(dashboard)) {
+          setSetupRequired(dashboard)
+          setLoadState('setup_required')
+          setRetryCount(0) // Reset retry count - this is a terminal state, not an error
+          return // Do NOT retry setup_required - it's a valid terminal state
+        }
+
+        // Transform years data
+        const transformedYears = (dashboard.years ?? []).map(transformYear)
+        // Sort by year descending for deterministic ordering
+        transformedYears.sort((a, b) => b.year_number - a.year_number)
+
+        setYears(transformedYears)
+        setCurrentYear(transformedYears[0] || null)
+
+        // Try to load actions for current year if available
+        if (transformedYears.length > 0) {
+          try {
+            const actionsResponse = await planetMarkApi.listActions(transformedYears[0].id)
+            const transformedActions = (actionsResponse.data ?? []).map(transformAction)
+            // Sort by deadline for deterministic ordering
+            transformedActions.sort((a, b) => a.deadline.localeCompare(b.deadline))
+            setActions(transformedActions)
+          } catch {
+            // Actions endpoint may not exist yet, use empty array
+            setActions([])
+          }
+
+          try {
+            const scope3Response = await planetMarkApi.getScope3(transformedYears[0].id)
+            const transformedScope3 = (scope3Response.data ?? []).map(transformScope3)
+            // Sort by category number for deterministic ordering
+            transformedScope3.sort((a, b) => a.number - b.number)
+            setScope3Categories(transformedScope3)
+          } catch {
+            // Scope3 endpoint may not exist yet, use empty array
+            setScope3Categories([])
+          }
+        }
+
+        setLoadState('success')
+        setRetryCount(0)
+      } catch (err) {
+        const apiError = createApiError(err)
+        setErrorClass(apiError.error_class)
+
+        // Auto-retry once for transient network errors
+        if (
+          !isRetry &&
+          (apiError.error_class === ErrorClass.NETWORK_ERROR ||
+            apiError.error_class === ErrorClass.SERVER_ERROR)
+        ) {
+          setRetryCount((prev) => prev + 1)
+          loadData(true)
+          return
+        }
+
+        setLoadState('error')
+      }
+    },
+    [retryCount],
+  )
 
   useEffect(() => {
     loadData()
@@ -219,19 +245,28 @@ export default function PlanetMark() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-emerald-500/20 text-emerald-400'
-      case 'in_progress': return 'bg-blue-500/20 text-blue-400'
-      case 'planned': return 'bg-gray-500/20 text-gray-400'
-      case 'delayed': return 'bg-red-500/20 text-red-400'
-      case 'certified': return 'bg-emerald-500/20 text-emerald-400'
-      default: return 'bg-gray-500/20 text-gray-400'
+      case 'completed':
+        return 'bg-emerald-500/20 text-emerald-400'
+      case 'in_progress':
+        return 'bg-blue-500/20 text-blue-400'
+      case 'planned':
+        return 'bg-gray-500/20 text-gray-400'
+      case 'delayed':
+        return 'bg-red-500/20 text-red-400'
+      case 'certified':
+        return 'bg-emerald-500/20 text-emerald-400'
+      default:
+        return 'bg-gray-500/20 text-gray-400'
     }
   }
 
-  const completedActions = actions.filter(a => a.status === 'completed').length
-  const yoyChange = currentYear && years.length >= 2 
-    ? ((currentYear.emissions_per_fte - years[1].emissions_per_fte) / years[1].emissions_per_fte * 100) 
-    : null
+  const completedActions = actions.filter((a) => a.status === 'completed').length
+  const yoyChange =
+    currentYear && years.length >= 2
+      ? ((currentYear.emissions_per_fte - years[1].emissions_per_fte) /
+          years[1].emissions_per_fte) *
+        100
+      : null
 
   // Handle SETUP_REQUIRED state with dedicated panel
   if (loadState === 'setup_required' && setupRequired) {
@@ -249,10 +284,10 @@ export default function PlanetMark() {
             </div>
           </div>
         </div>
-        
+
         {/* Setup Required Panel */}
-        <SetupRequiredPanel 
-          response={setupRequired} 
+        <SetupRequiredPanel
+          response={setupRequired}
           onRetry={() => {
             setRetryCount(0)
             loadData()
@@ -295,10 +330,12 @@ export default function PlanetMark() {
               <div className="flex items-center gap-3 mb-2">
                 <select
                   value={currentYear.id}
-                  onChange={(e) => setCurrentYear(years.find(y => y.id === parseInt(e.target.value)) || years[0])}
+                  onChange={(e) =>
+                    setCurrentYear(years.find((y) => y.id === parseInt(e.target.value)) || years[0])
+                  }
                   className="bg-primary-foreground/20 border border-primary-foreground/30 rounded-lg px-3 py-1 text-primary-foreground font-bold text-lg"
                 >
-                  {years.map(y => (
+                  {years.map((y) => (
                     <option key={y.id} value={y.id} className="bg-card text-foreground">
                       {y.year_label} {y.is_baseline ? `(${t('planet_mark.baseline')})` : ''}
                     </option>
@@ -311,28 +348,45 @@ export default function PlanetMark() {
                 )}
               </div>
               <p className="text-primary-foreground/80">
-                Reporting: 1 Jul {2024 + currentYear.year_number - 1} → 30 Jun {2024 + currentYear.year_number}
+                Reporting: 1 Jul {2024 + currentYear.year_number - 1} → 30 Jun{' '}
+                {2024 + currentYear.year_number}
               </p>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div className="text-center">
-                <div className="text-3xl font-bold text-primary-foreground">{(currentYear.total_emissions ?? 0).toFixed(1)}</div>
-                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.tco2e_total')}</div>
+                <div className="text-3xl font-bold text-primary-foreground">
+                  {(currentYear.total_emissions ?? 0).toFixed(1)}
+                </div>
+                <div className="text-primary-foreground/80 text-sm">
+                  {t('planet_mark.tco2e_total')}
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-primary-foreground">{(currentYear.emissions_per_fte ?? 0).toFixed(2)}</div>
-                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.tco2e_fte')}</div>
+                <div className="text-3xl font-bold text-primary-foreground">
+                  {(currentYear.emissions_per_fte ?? 0).toFixed(2)}
+                </div>
+                <div className="text-primary-foreground/80 text-sm">
+                  {t('planet_mark.tco2e_fte')}
+                </div>
               </div>
               <div className="text-center">
-                <div className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-primary-foreground' : 'text-warning'}`}>
+                <div
+                  className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-primary-foreground' : 'text-warning'}`}
+                >
                   {yoyChange ? `${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%` : '—'}
                 </div>
-                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.vs_baseline')}</div>
+                <div className="text-primary-foreground/80 text-sm">
+                  {t('planet_mark.vs_baseline')}
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-primary-foreground">{currentYear.data_quality}/16</div>
-                <div className="text-primary-foreground/80 text-sm">{t('planet_mark.data_quality')}</div>
+                <div className="text-3xl font-bold text-primary-foreground">
+                  {currentYear.data_quality}/16
+                </div>
+                <div className="text-primary-foreground/80 text-sm">
+                  {t('planet_mark.data_quality')}
+                </div>
               </div>
             </div>
           </div>
@@ -379,7 +433,9 @@ export default function PlanetMark() {
       {loadState === 'error' && (
         <div className="flex flex-col items-center justify-center py-12 bg-card rounded-xl border border-border">
           <XCircle className="w-12 h-12 text-destructive mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">{t('planet_mark.failed_to_load')}</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">
+            {t('planet_mark.failed_to_load')}
+          </h3>
           <p className="text-muted-foreground mb-4">
             {errorClass === ErrorClass.NETWORK_ERROR && t('planet_mark.error_network')}
             {errorClass === ErrorClass.SERVER_ERROR && t('planet_mark.error_server')}
@@ -388,7 +444,10 @@ export default function PlanetMark() {
             {(errorClass === ErrorClass.UNKNOWN || !errorClass) && t('planet_mark.error_unknown')}
           </p>
           <button
-            onClick={() => { setRetryCount(0); loadData(); }}
+            onClick={() => {
+              setRetryCount(0)
+              loadData()
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
@@ -418,14 +477,42 @@ export default function PlanetMark() {
               {/* Scope Breakdown */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                  { scopeKey: 'planet_mark.scope1', value: currentYear.scope_1, color: 'bg-orange-500', icon: Fuel, labelKey: 'planet_mark.scope1_label', detailKey: 'planet_mark.scope1_sources' },
-                  { scopeKey: 'planet_mark.scope2', value: currentYear.scope_2, color: 'bg-blue-500', icon: Zap, labelKey: 'planet_mark.scope2_label', detailKey: 'planet_mark.scope2_sources' },
-                  { scopeKey: 'planet_mark.scope3', value: currentYear.scope_3, color: 'bg-purple-500', icon: Globe, labelKey: 'planet_mark.scope3_label', detailKey: 'planet_mark.scope3_sources' },
+                  {
+                    scopeKey: 'planet_mark.scope1',
+                    value: currentYear.scope_1,
+                    color: 'bg-orange-500',
+                    icon: Fuel,
+                    labelKey: 'planet_mark.scope1_label',
+                    detailKey: 'planet_mark.scope1_sources',
+                  },
+                  {
+                    scopeKey: 'planet_mark.scope2',
+                    value: currentYear.scope_2,
+                    color: 'bg-blue-500',
+                    icon: Zap,
+                    labelKey: 'planet_mark.scope2_label',
+                    detailKey: 'planet_mark.scope2_sources',
+                  },
+                  {
+                    scopeKey: 'planet_mark.scope3',
+                    value: currentYear.scope_3,
+                    color: 'bg-purple-500',
+                    icon: Globe,
+                    labelKey: 'planet_mark.scope3_label',
+                    detailKey: 'planet_mark.scope3_sources',
+                  },
                 ].map((scope) => {
                   const Icon = scope.icon
-                  const pct = (currentYear.total_emissions ? (scope.value / currentYear.total_emissions) * 100 : 0).toFixed(1)
+                  const pct = (
+                    currentYear.total_emissions
+                      ? (scope.value / currentYear.total_emissions) * 100
+                      : 0
+                  ).toFixed(1)
                   return (
-                    <div key={scope.scopeKey} className="bg-card rounded-xl p-6 border border-border">
+                    <div
+                      key={scope.scopeKey}
+                      className="bg-card rounded-xl p-6 border border-border"
+                    >
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                           <div className={`p-3 ${scope.color} rounded-xl`}>
@@ -437,7 +524,9 @@ export default function PlanetMark() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-foreground">{scope.value.toFixed(1)}</div>
+                          <div className="text-2xl font-bold text-foreground">
+                            {scope.value.toFixed(1)}
+                          </div>
                           <div className="text-xs text-muted-foreground">tCO₂e</div>
                         </div>
                       </div>
@@ -461,16 +550,50 @@ export default function PlanetMark() {
                 {/* Key Emission Sources */}
                 <div className="bg-card rounded-xl border border-border">
                   <div className="p-4 bg-surface border-b border-border">
-                    <h3 className="font-bold text-foreground">{t('planet_mark.key_emission_sources')}</h3>
-                    <p className="text-sm text-muted-foreground">{t('planet_mark.key_emission_sources_desc')}</p>
+                    <h3 className="font-bold text-foreground">
+                      {t('planet_mark.key_emission_sources')}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {t('planet_mark.key_emission_sources_desc')}
+                    </p>
                   </div>
                   <div className="p-4 space-y-4">
                     {[
-                      { source: 'Fleet Diesel', value: 256.2, pct: 89, icon: Truck, color: 'text-orange-400' },
-                      { source: 'Natural Gas (Heating)', value: 18.4, pct: 6, icon: Building2, color: 'text-blue-400' },
-                      { source: 'Electricity', value: 1.9, pct: 1, icon: Zap, color: 'text-yellow-400' },
-                      { source: 'Employee Commuting', value: 1.1, pct: 0.4, icon: Car, color: 'text-purple-400' },
-                      { source: 'Business Travel', value: 0.3, pct: 0.1, icon: Plane, color: 'text-sky-400' },
+                      {
+                        source: 'Fleet Diesel',
+                        value: 256.2,
+                        pct: 89,
+                        icon: Truck,
+                        color: 'text-orange-400',
+                      },
+                      {
+                        source: 'Natural Gas (Heating)',
+                        value: 18.4,
+                        pct: 6,
+                        icon: Building2,
+                        color: 'text-blue-400',
+                      },
+                      {
+                        source: 'Electricity',
+                        value: 1.9,
+                        pct: 1,
+                        icon: Zap,
+                        color: 'text-yellow-400',
+                      },
+                      {
+                        source: 'Employee Commuting',
+                        value: 1.1,
+                        pct: 0.4,
+                        icon: Car,
+                        color: 'text-purple-400',
+                      },
+                      {
+                        source: 'Business Travel',
+                        value: 0.3,
+                        pct: 0.1,
+                        icon: Plane,
+                        color: 'text-sky-400',
+                      },
                     ].map((source, i) => {
                       const Icon = source.icon
                       return (
@@ -479,7 +602,9 @@ export default function PlanetMark() {
                           <div className="flex-grow">
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-foreground">{source.source}</span>
-                              <span className="text-muted-foreground">{source.value} tCO₂e ({source.pct}%)</span>
+                              <span className="text-muted-foreground">
+                                {source.value} tCO₂e ({source.pct}%)
+                              </span>
                             </div>
                             <div className="w-full bg-surface rounded-full h-2">
                               <div
@@ -499,16 +624,29 @@ export default function PlanetMark() {
                   <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
                     <div>
                       <h3 className="font-bold text-white">{t('planet_mark.improvement_plan')}</h3>
-                      <p className="text-sm text-gray-400">{t('planet_mark.actions_completed', { completed: completedActions, total: actions.length })}</p>
+                      <p className="text-sm text-gray-400">
+                        {t('planet_mark.actions_completed', {
+                          completed: completedActions,
+                          total: actions.length,
+                        })}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-green-400">{actions.length > 0 ? Math.round((completedActions / actions.length) * 100) : 0}%</div>
+                      <div className="text-2xl font-bold text-green-400">
+                        {actions.length > 0
+                          ? Math.round((completedActions / actions.length) * 100)
+                          : 0}
+                        %
+                      </div>
                       <div className="text-xs text-gray-400">{t('planet_mark.complete')}</div>
                     </div>
                   </div>
                   <div className="p-4 space-y-3 max-h-80 overflow-y-auto">
                     {actions.slice(0, 6).map((action) => (
-                      <div key={action.id} className="flex items-center gap-3 p-2 bg-slate-700/50 rounded-lg">
+                      <div
+                        key={action.id}
+                        className="flex items-center gap-3 p-2 bg-slate-700/50 rounded-lg"
+                      >
                         {action.status === 'completed' ? (
                           <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
                         ) : action.status === 'in_progress' ? (
@@ -518,9 +656,13 @@ export default function PlanetMark() {
                         )}
                         <div className="flex-grow min-w-0">
                           <div className="text-sm text-white truncate">{action.action_title}</div>
-                          <div className="text-xs text-gray-400">{action.scheduled_month} • {action.owner}</div>
+                          <div className="text-xs text-gray-400">
+                            {action.scheduled_month} • {action.owner}
+                          </div>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(action.status)}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs ${getStatusColor(action.status)}`}
+                        >
                           {action.progress_percent}%
                         </span>
                       </div>
@@ -536,30 +678,78 @@ export default function PlanetMark() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">
                   {[
-                    { q: 'Q1', period: 'Jul-Sep 25', milestones: ['Taskforce & dashboard live', 'Fuel-card 100% complete', 'Fleet 100% tracked'], status: 'completed' },
-                    { q: 'Q2', period: 'Oct-Dec 25', milestones: ['Heating optimised, gas ↓5%', 'Eco-driving roll-out', 'Smart electricity meters'], status: 'in_progress' },
-                    { q: 'Q3', period: 'Jan-Mar 26', milestones: ['Fleet CO₂ ↓≥5% vs July', 'Supplier data ≥90% spend'], status: 'planned' },
-                    { q: 'Q4', period: 'Apr-Jun 26', milestones: ['Staff engagement ≥75%', 'Data quality S1&2 ≥12/16', 'Planet Mark submission'], status: 'planned' },
+                    {
+                      q: 'Q1',
+                      period: 'Jul-Sep 25',
+                      milestones: [
+                        'Taskforce & dashboard live',
+                        'Fuel-card 100% complete',
+                        'Fleet 100% tracked',
+                      ],
+                      status: 'completed',
+                    },
+                    {
+                      q: 'Q2',
+                      period: 'Oct-Dec 25',
+                      milestones: [
+                        'Heating optimised, gas ↓5%',
+                        'Eco-driving roll-out',
+                        'Smart electricity meters',
+                      ],
+                      status: 'in_progress',
+                    },
+                    {
+                      q: 'Q3',
+                      period: 'Jan-Mar 26',
+                      milestones: ['Fleet CO₂ ↓≥5% vs July', 'Supplier data ≥90% spend'],
+                      status: 'planned',
+                    },
+                    {
+                      q: 'Q4',
+                      period: 'Apr-Jun 26',
+                      milestones: [
+                        'Staff engagement ≥75%',
+                        'Data quality S1&2 ≥12/16',
+                        'Planet Mark submission',
+                      ],
+                      status: 'planned',
+                    },
                   ].map((quarter) => (
-                    <div key={quarter.q} className={`p-4 rounded-lg border ${
-                      quarter.status === 'completed' ? 'bg-green-500/10 border-green-500/30' :
-                      quarter.status === 'in_progress' ? 'bg-blue-500/10 border-blue-500/30' :
-                      'bg-slate-700/50 border-slate-600'
-                    }`}>
+                    <div
+                      key={quarter.q}
+                      className={`p-4 rounded-lg border ${
+                        quarter.status === 'completed'
+                          ? 'bg-green-500/10 border-green-500/30'
+                          : quarter.status === 'in_progress'
+                            ? 'bg-blue-500/10 border-blue-500/30'
+                            : 'bg-slate-700/50 border-slate-600'
+                      }`}
+                    >
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-bold text-white">{quarter.q}</span>
-                        <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(quarter.status)}`}>
-                          {quarter.status === 'completed' ? t('planet_mark.done') : quarter.status === 'in_progress' ? t('planet_mark.in_progress') : t('planet_mark.upcoming')}
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs ${getStatusColor(quarter.status)}`}
+                        >
+                          {quarter.status === 'completed'
+                            ? t('planet_mark.done')
+                            : quarter.status === 'in_progress'
+                              ? t('planet_mark.in_progress')
+                              : t('planet_mark.upcoming')}
                         </span>
                       </div>
                       <div className="text-xs text-gray-400 mb-2">{quarter.period}</div>
                       <ul className="space-y-1">
                         {quarter.milestones.map((m, i) => (
                           <li key={i} className="text-sm text-gray-300 flex items-start gap-2">
-                            <span className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                              quarter.status === 'completed' ? 'bg-green-400' :
-                              quarter.status === 'in_progress' && i === 0 ? 'bg-blue-400' : 'bg-gray-500'
-                            }`}></span>
+                            <span
+                              className={`mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                quarter.status === 'completed'
+                                  ? 'bg-green-400'
+                                  : quarter.status === 'in_progress' && i === 0
+                                    ? 'bg-blue-400'
+                                    : 'bg-gray-500'
+                              }`}
+                            ></span>
                             {m}
                           </li>
                         ))}
@@ -576,7 +766,9 @@ export default function PlanetMark() {
             <div className="space-y-6">
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
-                  <h3 className="font-bold text-white">{t('planet_mark.emission_sources_by_scope')}</h3>
+                  <h3 className="font-bold text-white">
+                    {t('planet_mark.emission_sources_by_scope')}
+                  </h3>
                   <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <Plus className="w-4 h-4" /> {t('planet_mark.add_source')}
                   </button>
@@ -585,48 +777,113 @@ export default function PlanetMark() {
                   <table className="w-full">
                     <thead className="bg-slate-700/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.source')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.scope')}</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.activity')}</th>
-                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">tCO₂e</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.pct_of_total')}</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.data_quality')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.source')}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.scope')}
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.activity')}
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-gray-300 uppercase">
+                          tCO₂e
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.pct_of_total')}
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.data_quality')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
                       {[
-                        { source: 'Fleet Diesel', scope: 'Scope 1', activity: '103,500 litres', co2e: 260.0, pct: 88.7, quality: 'Actual' },
-                        { source: 'Natural Gas', scope: 'Scope 1', activity: '110,000 kWh', co2e: 20.0, pct: 6.8, quality: 'Estimated' },
-                        { source: 'Electricity (Grid)', scope: 'Scope 2', activity: '9,200 kWh', co2e: 1.9, pct: 0.6, quality: 'Estimated' },
-                        { source: 'Employee Commuting', scope: 'Scope 3', activity: '68.6 FTE', co2e: 1.1, pct: 0.4, quality: 'Calculated' },
-                        { source: 'Waste Generated', scope: 'Scope 3', activity: '12 tonnes', co2e: 0.5, pct: 0.2, quality: 'Calculated' },
+                        {
+                          source: 'Fleet Diesel',
+                          scope: 'Scope 1',
+                          activity: '103,500 litres',
+                          co2e: 260.0,
+                          pct: 88.7,
+                          quality: 'Actual',
+                        },
+                        {
+                          source: 'Natural Gas',
+                          scope: 'Scope 1',
+                          activity: '110,000 kWh',
+                          co2e: 20.0,
+                          pct: 6.8,
+                          quality: 'Estimated',
+                        },
+                        {
+                          source: 'Electricity (Grid)',
+                          scope: 'Scope 2',
+                          activity: '9,200 kWh',
+                          co2e: 1.9,
+                          pct: 0.6,
+                          quality: 'Estimated',
+                        },
+                        {
+                          source: 'Employee Commuting',
+                          scope: 'Scope 3',
+                          activity: '68.6 FTE',
+                          co2e: 1.1,
+                          pct: 0.4,
+                          quality: 'Calculated',
+                        },
+                        {
+                          source: 'Waste Generated',
+                          scope: 'Scope 3',
+                          activity: '12 tonnes',
+                          co2e: 0.5,
+                          pct: 0.2,
+                          quality: 'Calculated',
+                        },
                       ].map((row, i) => (
                         <tr key={i} className="hover:bg-slate-700/50">
                           <td className="px-4 py-3 font-medium text-white">{row.source}</td>
                           <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              row.scope === 'Scope 1' ? 'bg-orange-500/20 text-orange-400' :
-                              row.scope === 'Scope 2' ? 'bg-blue-500/20 text-blue-400' :
-                              'bg-purple-500/20 text-purple-400'
-                            }`}>{row.scope}</span>
+                            <span
+                              className={`px-2 py-1 rounded text-xs ${
+                                row.scope === 'Scope 1'
+                                  ? 'bg-orange-500/20 text-orange-400'
+                                  : row.scope === 'Scope 2'
+                                    ? 'bg-blue-500/20 text-blue-400'
+                                    : 'bg-purple-500/20 text-purple-400'
+                              }`}
+                            >
+                              {row.scope}
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-right text-gray-300">{row.activity}</td>
-                          <td className="px-4 py-3 text-right font-bold text-white">{row.co2e.toFixed(1)}</td>
+                          <td className="px-4 py-3 text-right font-bold text-white">
+                            {row.co2e.toFixed(1)}
+                          </td>
                           <td className="px-4 py-3 text-center text-gray-400">{row.pct}%</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              row.quality === 'Actual' ? 'bg-green-500/20 text-green-400' :
-                              row.quality === 'Calculated' ? 'bg-yellow-500/20 text-yellow-400' :
-                              'bg-gray-500/20 text-gray-400'
-                            }`}>{row.quality}</span>
+                            <span
+                              className={`px-2 py-1 rounded text-xs ${
+                                row.quality === 'Actual'
+                                  ? 'bg-green-500/20 text-green-400'
+                                  : row.quality === 'Calculated'
+                                    ? 'bg-yellow-500/20 text-yellow-400'
+                                    : 'bg-gray-500/20 text-gray-400'
+                              }`}
+                            >
+                              {row.quality}
+                            </span>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-slate-700/30">
                       <tr>
-                        <td colSpan={3} className="px-4 py-3 font-bold text-white">{t('planet_mark.total')}</td>
-                        <td className="px-4 py-3 text-right font-bold text-green-400">{(currentYear.total_emissions ?? 0).toFixed(1)}</td>
+                        <td colSpan={3} className="px-4 py-3 font-bold text-white">
+                          {t('planet_mark.total')}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-green-400">
+                          {(currentYear.total_emissions ?? 0).toFixed(1)}
+                        </td>
                         <td className="px-4 py-3 text-center font-bold text-white">100%</td>
                         <td></td>
                       </tr>
@@ -643,14 +900,30 @@ export default function PlanetMark() {
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
                   <h3 className="font-bold text-white">{t('planet_mark.scope3_categories')}</h3>
-                  <p className="text-sm text-gray-400">{t('planet_mark.scope3_measured', { count: scope3Categories.filter(c => c.is_measured).length })}</p>
+                  <p className="text-sm text-gray-400">
+                    {t('planet_mark.scope3_measured', {
+                      count: scope3Categories.filter((c) => c.is_measured).length,
+                    })}
+                  </p>
                 </div>
                 <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {scope3Categories.map((cat) => {
                     const icons: Record<number, React.ElementType> = {
-                      1: ShoppingCart, 2: Building2, 3: Fuel, 4: Truck, 5: Trash2,
-                      6: Briefcase, 7: Home, 8: Building2, 9: Truck, 10: Factory,
-                      11: Users, 12: Trash2, 13: Building2, 14: Users, 15: BarChart3
+                      1: ShoppingCart,
+                      2: Building2,
+                      3: Fuel,
+                      4: Truck,
+                      5: Trash2,
+                      6: Briefcase,
+                      7: Home,
+                      8: Building2,
+                      9: Truck,
+                      10: Factory,
+                      11: Users,
+                      12: Trash2,
+                      13: Building2,
+                      14: Users,
+                      15: BarChart3,
                     }
                     const Icon = icons[cat.number] || Globe
                     return (
@@ -664,8 +937,12 @@ export default function PlanetMark() {
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <div className={`p-2 rounded-lg ${cat.is_measured ? 'bg-green-500/20' : 'bg-slate-600'}`}>
-                              <Icon className={`w-4 h-4 ${cat.is_measured ? 'text-green-400' : 'text-gray-400'}`} />
+                            <div
+                              className={`p-2 rounded-lg ${cat.is_measured ? 'bg-green-500/20' : 'bg-slate-600'}`}
+                            >
+                              <Icon
+                                className={`w-4 h-4 ${cat.is_measured ? 'text-green-400' : 'text-gray-400'}`}
+                              />
                             </div>
                             <span className="text-xs text-gray-400">Cat {cat.number}</span>
                           </div>
@@ -677,10 +954,14 @@ export default function PlanetMark() {
                         </div>
                         <div className="text-sm font-medium text-white mb-1">{cat.name}</div>
                         {cat.is_measured && (
-                          <div className="text-lg font-bold text-green-400">{cat.total_co2e.toFixed(1)} tCO₂e</div>
+                          <div className="text-lg font-bold text-green-400">
+                            {cat.total_co2e.toFixed(1)} tCO₂e
+                          </div>
                         )}
                         {!cat.is_measured && (
-                          <div className="text-sm text-gray-400">{t('planet_mark.not_measured')}</div>
+                          <div className="text-sm text-gray-400">
+                            {t('planet_mark.not_measured')}
+                          </div>
                         )}
                       </div>
                     )
@@ -697,7 +978,9 @@ export default function PlanetMark() {
                 <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
                   <div>
                     <h3 className="font-bold text-white">{t('planet_mark.improvement_actions')}</h3>
-                    <p className="text-sm text-gray-400">{t('planet_mark.improvement_plan_desc')}</p>
+                    <p className="text-sm text-gray-400">
+                      {t('planet_mark.improvement_plan_desc')}
+                    </p>
                   </div>
                   <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <Plus className="w-4 h-4" /> {t('planet_mark.add_action')}
@@ -707,17 +990,29 @@ export default function PlanetMark() {
                   <table className="w-full">
                     <thead className="bg-slate-700/50">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.month')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.action')}</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.owner')}</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.progress')}</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">{t('planet_mark.status')}</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.month')}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.action')}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.owner')}
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.progress')}
+                        </th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                          {t('planet_mark.status')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-700">
                       {actions.map((action) => (
                         <tr key={action.id} className="hover:bg-slate-700/50">
-                          <td className="px-4 py-3 font-medium text-white">{action.scheduled_month}</td>
+                          <td className="px-4 py-3 font-medium text-white">
+                            {action.scheduled_month}
+                          </td>
                           <td className="px-4 py-3 text-gray-300">{action.action_title}</td>
                           <td className="px-4 py-3 text-gray-400">{action.owner}</td>
                           <td className="px-4 py-3">
@@ -725,17 +1020,24 @@ export default function PlanetMark() {
                               <div className="w-20 bg-slate-700 rounded-full h-2">
                                 <div
                                   className={`h-2 rounded-full ${
-                                    action.status === 'completed' ? 'bg-green-500' :
-                                    action.status === 'in_progress' ? 'bg-blue-500' : 'bg-gray-500'
+                                    action.status === 'completed'
+                                      ? 'bg-green-500'
+                                      : action.status === 'in_progress'
+                                        ? 'bg-blue-500'
+                                        : 'bg-gray-500'
                                   }`}
                                   style={{ width: `${action.progress_percent}%` }}
                                 ></div>
                               </div>
-                              <span className="text-sm text-gray-400">{action.progress_percent}%</span>
+                              <span className="text-sm text-gray-400">
+                                {action.progress_percent}%
+                              </span>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(action.status)}`}>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(action.status)}`}
+                            >
                               {action.status}
                             </span>
                           </td>
@@ -753,15 +1055,41 @@ export default function PlanetMark() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                  { scopeKey: 'planet_mark.dq_scope_1_2', score: 9, target: 12, status: 'needs_improvement' },
-                  { scopeKey: 'planet_mark.dq_scope_3', score: 8, target: 11, status: 'needs_improvement' },
-                  { scopeKey: 'planet_mark.dq_scope_overall', score: 11, target: 12, status: 'close' },
+                  {
+                    scopeKey: 'planet_mark.dq_scope_1_2',
+                    score: 9,
+                    target: 12,
+                    status: 'needs_improvement',
+                  },
+                  {
+                    scopeKey: 'planet_mark.dq_scope_3',
+                    score: 8,
+                    target: 11,
+                    status: 'needs_improvement',
+                  },
+                  {
+                    scopeKey: 'planet_mark.dq_scope_overall',
+                    score: 11,
+                    target: 12,
+                    status: 'close',
+                  },
                 ].map((dq) => (
-                  <div key={dq.scopeKey} className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                  <div
+                    key={dq.scopeKey}
+                    className="bg-slate-800 rounded-xl p-6 border border-slate-700"
+                  >
                     <h3 className="font-bold text-white mb-4">{t(dq.scopeKey)}</h3>
                     <div className="relative w-32 h-32 mx-auto mb-4">
                       <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700" />
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="56"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          fill="transparent"
+                          className="text-slate-700"
+                        />
                         <circle
                           cx="64"
                           cy="64"
@@ -770,7 +1098,13 @@ export default function PlanetMark() {
                           strokeWidth="8"
                           fill="transparent"
                           strokeDasharray={`${(dq.score / 16) * 352} 352`}
-                          className={dq.score >= dq.target ? 'text-green-500' : dq.score >= dq.target - 2 ? 'text-yellow-500' : 'text-red-500'}
+                          className={
+                            dq.score >= dq.target
+                              ? 'text-green-500'
+                              : dq.score >= dq.target - 2
+                                ? 'text-yellow-500'
+                                : 'text-red-500'
+                          }
                         />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -779,11 +1113,17 @@ export default function PlanetMark() {
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="text-sm text-gray-400">{t('planet_mark.target_label', { target: dq.target })}</div>
-                      <div className={`text-sm font-medium mt-1 ${
-                        dq.score >= dq.target ? 'text-green-400' : 'text-yellow-400'
-                      }`}>
-                        {dq.score >= dq.target ? t('planet_mark.met') : t('planet_mark.points_needed', { count: dq.target - dq.score })}
+                      <div className="text-sm text-gray-400">
+                        {t('planet_mark.target_label', { target: dq.target })}
+                      </div>
+                      <div
+                        className={`text-sm font-medium mt-1 ${
+                          dq.score >= dq.target ? 'text-green-400' : 'text-yellow-400'
+                        }`}
+                      >
+                        {dq.score >= dq.target
+                          ? t('planet_mark.met')
+                          : t('planet_mark.points_needed', { count: dq.target - dq.score })}
                       </div>
                     </div>
                   </div>
@@ -792,26 +1132,63 @@ export default function PlanetMark() {
 
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">{t('planet_mark.data_quality_recommendations')}</h3>
+                  <h3 className="font-bold text-white">
+                    {t('planet_mark.data_quality_recommendations')}
+                  </h3>
                 </div>
                 <div className="p-4 space-y-4">
                   {[
-                    { action: 'Complete fuel-card audit for 100% fleet transactions', impact: '+2 points', scope: 'Scope 1', priority: 'high' },
-                    { action: 'Install smart electricity meters with auto-upload', impact: '+3 points', scope: 'Scope 2', priority: 'high' },
-                    { action: 'Replace estimated gas readings with actual meter reads', impact: '+2 points', scope: 'Scope 1', priority: 'medium' },
-                    { action: 'Engage top 10 suppliers for specific emission data', impact: '+2 points', scope: 'Scope 3', priority: 'medium' },
-                    { action: 'Implement employee commute survey (annual)', impact: '+1 point', scope: 'Scope 3', priority: 'low' },
+                    {
+                      action: 'Complete fuel-card audit for 100% fleet transactions',
+                      impact: '+2 points',
+                      scope: 'Scope 1',
+                      priority: 'high',
+                    },
+                    {
+                      action: 'Install smart electricity meters with auto-upload',
+                      impact: '+3 points',
+                      scope: 'Scope 2',
+                      priority: 'high',
+                    },
+                    {
+                      action: 'Replace estimated gas readings with actual meter reads',
+                      impact: '+2 points',
+                      scope: 'Scope 1',
+                      priority: 'medium',
+                    },
+                    {
+                      action: 'Engage top 10 suppliers for specific emission data',
+                      impact: '+2 points',
+                      scope: 'Scope 3',
+                      priority: 'medium',
+                    },
+                    {
+                      action: 'Implement employee commute survey (annual)',
+                      impact: '+1 point',
+                      scope: 'Scope 3',
+                      priority: 'low',
+                    },
                   ].map((rec, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${
-                          rec.priority === 'high' ? 'bg-red-500' :
-                          rec.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                        }`}></div>
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            rec.priority === 'high'
+                              ? 'bg-red-500'
+                              : rec.priority === 'medium'
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                          }`}
+                        ></div>
                         <span className="text-white">{rec.action}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="px-2 py-1 bg-slate-600 rounded text-xs text-gray-300">{rec.scope}</span>
+                        <span className="px-2 py-1 bg-slate-600 rounded text-xs text-gray-300">
+                          {rec.scope}
+                        </span>
                         <span className="text-green-400 font-medium">{rec.impact}</span>
                       </div>
                     </div>
@@ -831,7 +1208,9 @@ export default function PlanetMark() {
                       <Award className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold text-white">{t('planet_mark.certification_title')}</h3>
+                      <h3 className="text-xl font-bold text-white">
+                        {t('planet_mark.certification_title')}
+                      </h3>
                       <p className="text-gray-400">{t('planet_mark.year_progress')}</p>
                     </div>
                   </div>
@@ -839,7 +1218,9 @@ export default function PlanetMark() {
                   <div className="space-y-4">
                     <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
                       <span className="text-gray-300">{t('planet_mark.certification_status')}</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor('in_progress')}`}>
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor('in_progress')}`}
+                      >
                         {t('planet_mark.in_progress')}
                       </span>
                     </div>
@@ -861,7 +1242,9 @@ export default function PlanetMark() {
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600">
                     <h3 className="font-bold text-white">{t('planet_mark.evidence_checklist')}</h3>
-                    <p className="text-sm text-gray-400">{t('planet_mark.evidence_checklist_desc')}</p>
+                    <p className="text-sm text-gray-400">
+                      {t('planet_mark.evidence_checklist_desc')}
+                    </p>
                   </div>
                   <div className="p-4 space-y-3">
                     {[
@@ -872,20 +1255,34 @@ export default function PlanetMark() {
                       { item: 'Business travel records', uploaded: true, verified: false },
                       { item: 'Improvement plan evidence', uploaded: true, verified: true },
                     ].map((doc, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg">
+                      <div
+                        key={i}
+                        className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg"
+                      >
                         <div className="flex items-center gap-3">
                           {doc.uploaded ? (
-                            <CheckCircle2 className={`w-5 h-5 ${doc.verified ? 'text-green-400' : 'text-yellow-400'}`} />
+                            <CheckCircle2
+                              className={`w-5 h-5 ${doc.verified ? 'text-green-400' : 'text-yellow-400'}`}
+                            />
                           ) : (
                             <AlertTriangle className="w-5 h-5 text-red-400" />
                           )}
                           <span className="text-white text-sm">{doc.item}</span>
                         </div>
-                        <span className={`text-xs ${
-                          doc.verified ? 'text-green-400' :
-                          doc.uploaded ? 'text-yellow-400' : 'text-red-400'
-                        }`}>
-                          {doc.verified ? t('planet_mark.verified') : doc.uploaded ? t('planet_mark.pending_review') : t('planet_mark.missing')}
+                        <span
+                          className={`text-xs ${
+                            doc.verified
+                              ? 'text-green-400'
+                              : doc.uploaded
+                                ? 'text-yellow-400'
+                                : 'text-red-400'
+                          }`}
+                        >
+                          {doc.verified
+                            ? t('planet_mark.verified')
+                            : doc.uploaded
+                              ? t('planet_mark.pending_review')
+                              : t('planet_mark.missing')}
                         </span>
                       </div>
                     ))}

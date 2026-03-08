@@ -22,7 +22,17 @@ import {
   X,
   ExternalLink,
 } from 'lucide-react'
-import { rtasApi, RTA, RTAUpdate, investigationsApi, actionsApi, Action, UserSearchResult, getApiErrorMessage, CreateFromRecordError } from '../api/client'
+import {
+  rtasApi,
+  RTA,
+  RTAUpdate,
+  investigationsApi,
+  actionsApi,
+  Action,
+  UserSearchResult,
+  getApiErrorMessage,
+  CreateFromRecordError,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -160,7 +170,10 @@ export default function RTADetail() {
   }
 
   const [investigationError, setInvestigationError] = useState('')
-  const [existingInvestigation, setExistingInvestigation] = useState<{ id: number; reference: string } | null>(null)
+  const [existingInvestigation, setExistingInvestigation] = useState<{
+    id: number
+    reference: string
+  } | null>(null)
 
   const handleCreateInvestigation = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,7 +181,7 @@ export default function RTADetail() {
     setCreating(true)
     setInvestigationError('')
     setExistingInvestigation(null)
-    
+
     try {
       // Use from-record endpoint with proper JSON body
       await investigationsApi.createFromRecord({
@@ -186,14 +199,19 @@ export default function RTADetail() {
       navigate('/investigations')
     } catch (err: any) {
       trackError(err, { component: 'RTADetail', action: 'createInvestigation' })
-      
+
       // Check for 409 Conflict (already exists)
       if (err.response?.status === 409) {
         const errorData = err.response?.data?.detail as CreateFromRecordError | undefined
-        if (errorData?.error_code === 'INV_ALREADY_EXISTS' && errorData.details?.existing_investigation_id) {
+        if (
+          errorData?.error_code === 'INV_ALREADY_EXISTS' &&
+          errorData.details?.existing_investigation_id
+        ) {
           setExistingInvestigation({
             id: errorData.details.existing_investigation_id,
-            reference: errorData.details.existing_reference_number || `INV-${errorData.details.existing_investigation_id}`,
+            reference:
+              errorData.details.existing_reference_number ||
+              `INV-${errorData.details.existing_investigation_id}`,
           })
           setInvestigationError(t('rtas.detail.investigation_exists'))
           return
@@ -247,10 +265,26 @@ export default function RTADetail() {
 
   const ACTION_STATUS_OPTIONS = [
     { value: 'open', label: 'Open', className: 'bg-blue-100 text-blue-800 hover:bg-blue-200' },
-    { value: 'in_progress', label: 'In Progress', className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' },
-    { value: 'pending_verification', label: 'Pending Verification', className: 'bg-purple-100 text-purple-800 hover:bg-purple-200' },
-    { value: 'completed', label: 'Completed', className: 'bg-green-100 text-green-800 hover:bg-green-200' },
-    { value: 'cancelled', label: 'Cancelled', className: 'bg-gray-100 text-gray-800 hover:bg-gray-200' },
+    {
+      value: 'in_progress',
+      label: 'In Progress',
+      className: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+    },
+    {
+      value: 'pending_verification',
+      label: 'Pending Verification',
+      className: 'bg-purple-100 text-purple-800 hover:bg-purple-200',
+    },
+    {
+      value: 'completed',
+      label: 'Completed',
+      className: 'bg-green-100 text-green-800 hover:bg-green-200',
+    },
+    {
+      value: 'cancelled',
+      label: 'Cancelled',
+      className: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+    },
   ]
 
   const handleOpenAction = (action: Action) => {
@@ -268,7 +302,7 @@ export default function RTADetail() {
       if (completionNotes) updatePayload.completion_notes = completionNotes
       const response = await actionsApi.update(selectedAction.id, 'rta', updatePayload)
       setSelectedAction(response.data)
-      setActions(prev => prev.map(a => a.id === selectedAction.id ? response.data : a))
+      setActions((prev) => prev.map((a) => (a.id === selectedAction.id ? response.data : a)))
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'updateActionStatus' })
       setActionUpdateError(getApiErrorMessage(err))
@@ -285,23 +319,35 @@ export default function RTADetail() {
 
   const getSeverityVariant = (severity: string) => {
     switch (severity) {
-      case 'fatal': return 'critical'
-      case 'serious_injury': return 'critical'
-      case 'minor_injury': return 'high'
-      case 'damage_only': return 'medium'
-      case 'near_miss': return 'low'
-      default: return 'secondary'
+      case 'fatal':
+        return 'critical'
+      case 'serious_injury':
+        return 'critical'
+      case 'minor_injury':
+        return 'high'
+      case 'damage_only':
+        return 'medium'
+      case 'near_miss':
+        return 'low'
+      default:
+        return 'secondary'
     }
   }
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case 'closed': return 'resolved'
-      case 'reported': return 'submitted'
-      case 'under_investigation': return 'in-progress'
-      case 'pending_insurance': return 'acknowledged'
-      case 'pending_actions': return 'awaiting-user'
-      default: return 'secondary'
+      case 'closed':
+        return 'resolved'
+      case 'reported':
+        return 'submitted'
+      case 'under_investigation':
+        return 'in-progress'
+      case 'pending_insurance':
+        return 'acknowledged'
+      case 'pending_actions':
+        return 'awaiting-user'
+      default:
+        return 'secondary'
     }
   }
 
@@ -317,7 +363,13 @@ export default function RTADetail() {
     return (
       <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
         <p className="text-sm text-destructive">{error}</p>
-        <button onClick={() => { setError(null); loadRTA(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
+        <button
+          onClick={() => {
+            setError(null)
+            loadRTA(parseInt(id!))
+          }}
+          className="text-sm font-medium text-destructive hover:underline"
+        >
           {t('rtas.detail.try_again')}
         </button>
       </div>
@@ -339,15 +391,23 @@ export default function RTADetail() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <Breadcrumbs items={[
-        { label: t('rtas.title', 'Road Traffic Collisions'), href: '/rtas' },
-        { label: rta?.reference_number || `#${id}` },
-      ]} />
+      <Breadcrumbs
+        items={[
+          { label: t('rtas.title', 'Road Traffic Collisions'), href: '/rtas' },
+          { label: rta?.reference_number || `#${id}` },
+        ]}
+      />
 
       {error && (
         <div className="mx-4 mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
           <p className="text-sm text-destructive">{error}</p>
-          <button onClick={() => { setError(null); loadRTA(parseInt(id!)); }} className="text-sm font-medium text-destructive hover:underline">
+          <button
+            onClick={() => {
+              setError(null)
+              loadRTA(parseInt(id!))
+            }}
+            className="text-sm font-medium text-destructive hover:underline"
+          >
             {t('rtas.detail.try_again')}
           </button>
         </div>
@@ -355,11 +415,7 @@ export default function RTADetail() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Button 
-            variant="outline" 
-            size="icon"
-            onClick={() => navigate('/rtas')}
-          >
+          <Button variant="outline" size="icon" onClick={() => navigate('/rtas')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -374,7 +430,9 @@ export default function RTADetail() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">{rta.title}</h1>
             <p className="text-muted-foreground mt-1">
-              {t('rtas.detail.reported_on', { date: new Date(rta.reported_date).toLocaleDateString() })}
+              {t('rtas.detail.reported_on', {
+                date: new Date(rta.reported_date).toLocaleDateString(),
+              })}
             </p>
           </div>
         </div>
@@ -386,7 +444,11 @@ export default function RTADetail() {
                 {t('cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
-                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
                 {t('rtas.detail.save_changes')}
               </Button>
             </>
@@ -425,16 +487,28 @@ export default function RTADetail() {
               {isEditing ? (
                 <>
                   <div>
-                    <label htmlFor="rtadetail-field-0" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.title_label')}</label>
-                    <Input id="rtadetail-field-0"
+                    <label
+                      htmlFor="rtadetail-field-0"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('rtas.detail.title_label')}
+                    </label>
+                    <Input
+                      id="rtadetail-field-0"
                       value={editForm.title || ''}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                       className="mt-1"
                     />
                   </div>
                   <div>
-                    <label htmlFor="rtadetail-field-1" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
-                    <Textarea id="rtadetail-field-1"
+                    <label
+                      htmlFor="rtadetail-field-1"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('common.description')}
+                    </label>
+                    <Textarea
+                      id="rtadetail-field-1"
                       value={editForm.description || ''}
                       onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                       rows={4}
@@ -443,7 +517,12 @@ export default function RTADetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label htmlFor="rtadetail-field-2" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</label>
+                      <label
+                        htmlFor="rtadetail-field-2"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('rtas.detail.severity')}
+                      </label>
                       <Select
                         value={editForm.severity}
                         onValueChange={(value) => setEditForm({ ...editForm, severity: value })}
@@ -461,7 +540,12 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div>
-                      <label htmlFor="rtadetail-field-3" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
+                      <label
+                        htmlFor="rtadetail-field-3"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('common.status')}
+                      </label>
                       <Select
                         value={editForm.status}
                         onValueChange={(value) => setEditForm({ ...editForm, status: value })}
@@ -479,8 +563,14 @@ export default function RTADetail() {
                       </Select>
                     </div>
                     <div className="col-span-2">
-                      <label htmlFor="rtadetail-field-4" className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
-                      <Input id="rtadetail-field-4"
+                      <label
+                        htmlFor="rtadetail-field-4"
+                        className="text-sm font-medium text-muted-foreground"
+                      >
+                        {t('common.location')}
+                      </label>
+                      <Input
+                        id="rtadetail-field-4"
                         value={editForm.location || ''}
                         onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
                         className="mt-1"
@@ -491,29 +581,45 @@ export default function RTADetail() {
               ) : (
                 <>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.description')}
+                    </span>
                     <p className="mt-1 text-foreground whitespace-pre-wrap">
                       {rta.description || t('rtas.detail.no_description')}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</span>
-                      <p className="mt-1 text-foreground capitalize">{rta.severity.replace('_', ' ')}</p>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('rtas.detail.severity')}
+                      </span>
+                      <p className="mt-1 text-foreground capitalize">
+                        {rta.severity.replace('_', ' ')}
+                      </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
-                      <p className="mt-1 text-foreground capitalize">{rta.status.replace('_', ' ')}</p>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('common.status')}
+                      </span>
+                      <p className="mt-1 text-foreground capitalize">
+                        {rta.status.replace('_', ' ')}
+                      </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.collision_date')}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('rtas.detail.collision_date')}
+                      </span>
                       <p className="mt-1 text-foreground">
                         {new Date(rta.collision_date).toLocaleString()}
                       </p>
                     </div>
                     <div>
-                      <span className="text-sm font-medium text-muted-foreground">{t('common.location')}</span>
-                      <p className="mt-1 text-foreground">{rta.location || t('rtas.detail.not_specified')}</p>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {t('common.location')}
+                      </span>
+                      <p className="mt-1 text-foreground">
+                        {rta.location || t('rtas.detail.not_specified')}
+                      </p>
                     </div>
                   </div>
                 </>
@@ -533,17 +639,31 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="rtadetail-field-5" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.vehicle_registration')}</label>
-                    <Input id="rtadetail-field-5"
+                    <label
+                      htmlFor="rtadetail-field-5"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('rtas.detail.vehicle_registration')}
+                    </label>
+                    <Input
+                      id="rtadetail-field-5"
                       value={editForm.company_vehicle_registration || ''}
-                      onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, company_vehicle_registration: e.target.value })
+                      }
                       className="mt-1"
                       placeholder="AB12 CDE"
                     />
                   </div>
                   <div>
-                    <label htmlFor="rtadetail-field-6" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_name')}</label>
-                    <Input id="rtadetail-field-6"
+                    <label
+                      htmlFor="rtadetail-field-6"
+                      className="text-sm font-medium text-muted-foreground"
+                    >
+                      {t('rtas.detail.driver_name')}
+                    </label>
+                    <Input
+                      id="rtadetail-field-6"
                       value={editForm.driver_name || ''}
                       onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })}
                       className="mt-1"
@@ -552,35 +672,59 @@ export default function RTADetail() {
                   <div className="flex items-center gap-3 pt-4">
                     <Switch
                       checked={editForm.driver_injured || false}
-                      onCheckedChange={(checked) => setEditForm({ ...editForm, driver_injured: checked })}
+                      onCheckedChange={(checked) =>
+                        setEditForm({ ...editForm, driver_injured: checked })
+                      }
                     />
-                    <span className="text-sm text-foreground">{t('rtas.detail.driver_injured')}</span>
+                    <span className="text-sm text-foreground">
+                      {t('rtas.detail.driver_injured')}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3 pt-4">
                     <Switch
                       checked={editForm.police_attended || false}
-                      onCheckedChange={(checked) => setEditForm({ ...editForm, police_attended: checked })}
+                      onCheckedChange={(checked) =>
+                        setEditForm({ ...editForm, police_attended: checked })
+                      }
                     />
-                    <span className="text-sm text-foreground">{t('rtas.detail.police_attended')}</span>
+                    <span className="text-sm text-foreground">
+                      {t('rtas.detail.police_attended')}
+                    </span>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.vehicle_registration')}</span>
-                    <p className="mt-1 text-foreground">{rta.company_vehicle_registration || t('rtas.detail.not_specified')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('rtas.detail.vehicle_registration')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {rta.company_vehicle_registration || t('rtas.detail.not_specified')}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_name')}</span>
-                    <p className="mt-1 text-foreground">{rta.driver_name || t('rtas.detail.not_specified')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('rtas.detail.driver_name')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {rta.driver_name || t('rtas.detail.not_specified')}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.driver_injured')}</span>
-                    <p className="mt-1 text-foreground">{rta.driver_injured ? t('common.yes') : t('common.no')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('rtas.detail.driver_injured')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {rta.driver_injured ? t('common.yes') : t('common.no')}
+                    </p>
                   </div>
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('rtas.detail.police_attended')}</span>
-                    <p className="mt-1 text-foreground">{rta.police_attended ? t('common.yes') : t('common.no')}</p>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('rtas.detail.police_attended')}
+                    </span>
+                    <p className="mt-1 text-foreground">
+                      {rta.police_attended ? t('common.yes') : t('common.no')}
+                    </p>
                   </div>
                 </div>
               )}
@@ -613,33 +757,51 @@ export default function RTADetail() {
                       key={action.id}
                       className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border cursor-pointer hover:bg-accent/50 transition-colors"
                       onClick={() => handleOpenAction(action)}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleOpenAction(action); } }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          handleOpenAction(action)
+                        }
+                      }}
                       role="button"
                       tabIndex={0}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center",
-                          action.status === 'completed' ? 'bg-success/10 text-success' :
-                          action.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
-                          'bg-warning/10 text-warning'
-                        )}>
+                        <div
+                          className={cn(
+                            'w-8 h-8 rounded-lg flex items-center justify-center',
+                            action.status === 'completed'
+                              ? 'bg-success/10 text-success'
+                              : action.status === 'cancelled'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-warning/10 text-warning',
+                          )}
+                        >
                           <CheckCircle className="w-4 h-4" />
                         </div>
                         <div>
                           <p className="font-medium text-foreground">{action.title}</p>
                           <p className="text-sm text-muted-foreground">
-                            {action.due_date ? t('rtas.detail.due', { date: new Date(action.due_date).toLocaleDateString() }) : t('rtas.detail.no_due_date')}
+                            {action.due_date
+                              ? t('rtas.detail.due', {
+                                  date: new Date(action.due_date).toLocaleDateString(),
+                                })
+                              : t('rtas.detail.no_due_date')}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge variant={
-                          action.status === 'completed' ? 'resolved' :
-                          action.status === 'cancelled' ? 'destructive' :
-                          action.status === 'in_progress' ? 'in-progress' :
-                          'secondary' as any
-                        }>
+                        <Badge
+                          variant={
+                            action.status === 'completed'
+                              ? 'resolved'
+                              : action.status === 'cancelled'
+                                ? 'destructive'
+                                : action.status === 'in_progress'
+                                  ? 'in-progress'
+                                  : ('secondary' as any)
+                          }
+                        >
                           {action.status.replace(/_/g, ' ')}
                         </Badge>
                         <ExternalLink className="w-4 h-4 text-muted-foreground" />
@@ -676,7 +838,9 @@ export default function RTADetail() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">{t('common.location')}</p>
-                  <p className="font-medium text-foreground">{rta.location || t('rtas.detail.not_specified')}</p>
+                  <p className="font-medium text-foreground">
+                    {rta.location || t('rtas.detail.not_specified')}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -684,8 +848,12 @@ export default function RTADetail() {
                   <Shield className="w-5 h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('rtas.detail.insurance_notified')}</p>
-                  <p className="font-medium text-foreground">{rta.insurance_notified ? t('common.yes') : t('common.no')}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('rtas.detail.insurance_notified')}
+                  </p>
+                  <p className="font-medium text-foreground">
+                    {rta.insurance_notified ? t('common.yes') : t('common.no')}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -704,7 +872,9 @@ export default function RTADetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">{t('rtas.detail.rta_reported')}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('rtas.detail.rta_reported')}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(rta.reported_date).toLocaleString()}
                     </p>
@@ -713,7 +883,9 @@ export default function RTADetail() {
                 <div className="flex gap-3">
                   <div className="w-2 h-2 rounded-full bg-muted mt-2" />
                   <div>
-                    <p className="text-sm font-medium text-foreground">{t('rtas.detail.record_created')}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {t('rtas.detail.record_created')}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(rta.created_at).toLocaleString()}
                     </p>
@@ -726,13 +898,16 @@ export default function RTADetail() {
       </div>
 
       {/* Create Investigation Modal */}
-      <Dialog open={showInvestigationModal} onOpenChange={(open) => {
-        setShowInvestigationModal(open)
-        if (!open) {
-          setInvestigationError('')
-          setExistingInvestigation(null)
-        }
-      }}>
+      <Dialog
+        open={showInvestigationModal}
+        onOpenChange={(open) => {
+          setShowInvestigationModal(open)
+          if (!open) {
+            setInvestigationError('')
+            setExistingInvestigation(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -745,22 +920,33 @@ export default function RTADetail() {
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label htmlFor="rtadetail-field-7" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-7"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('rtas.detail.investigation_title')}
               </label>
-              <Input id="rtadetail-field-7"
+              <Input
+                id="rtadetail-field-7"
                 value={investigationForm.title}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, title: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({ ...investigationForm, title: e.target.value })
+                }
                 placeholder={`Investigation - ${rta.reference_number}`}
               />
             </div>
             <div>
-              <label htmlFor="rtadetail-field-8" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-8"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('rtas.detail.investigation_type')}
               </label>
               <Select
                 value={investigationForm.investigation_type}
-                onValueChange={(value) => setInvestigationForm({ ...investigationForm, investigation_type: value })}
+                onValueChange={(value) =>
+                  setInvestigationForm({ ...investigationForm, investigation_type: value })
+                }
               >
                 <SelectTrigger id="rtadetail-field-8">
                   <SelectValue />
@@ -780,17 +966,23 @@ export default function RTADetail() {
               placeholder={t('rtas.detail.search_by_email')}
             />
             <div>
-              <label htmlFor="rtadetail-field-9" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-9"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('rtas.detail.initial_notes')}
               </label>
-              <Textarea id="rtadetail-field-9"
+              <Textarea
+                id="rtadetail-field-9"
                 value={investigationForm.description}
-                onChange={(e) => setInvestigationForm({ ...investigationForm, description: e.target.value })}
+                onChange={(e) =>
+                  setInvestigationForm({ ...investigationForm, description: e.target.value })
+                }
                 placeholder={t('rtas.detail.initial_notes_placeholder')}
                 rows={4}
               />
             </div>
-            
+
             {/* Error Message with existing investigation link */}
             {investigationError && (
               <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3">
@@ -807,18 +999,28 @@ export default function RTADetail() {
                     className="mt-2 p-0 h-auto text-primary"
                   >
                     <ExternalLink className="w-3 h-3 mr-1" />
-                    {t('rtas.detail.open_existing_investigation', { reference: existingInvestigation.reference })}
+                    {t('rtas.detail.open_existing_investigation', {
+                      reference: existingInvestigation.reference,
+                    })}
                   </Button>
                 )}
               </div>
             )}
-            
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInvestigationModal(false)}
+              >
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rtas.detail.create_investigation')}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  t('rtas.detail.create_investigation')
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -833,16 +1035,18 @@ export default function RTADetail() {
               <ClipboardList className="w-5 h-5 text-primary" />
               {t('rtas.detail.add_action')}
             </DialogTitle>
-            <DialogDescription>
-              {t('rtas.detail.add_action_description')}
-            </DialogDescription>
+            <DialogDescription>{t('rtas.detail.add_action_description')}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAction} className="space-y-4">
             <div>
-              <label htmlFor="rtadetail-field-10" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-10"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('rtas.detail.action_title_required')}
               </label>
-              <Input id="rtadetail-field-10"
+              <Input
+                id="rtadetail-field-10"
                 value={actionForm.title}
                 onChange={(e) => setActionForm({ ...actionForm, title: e.target.value })}
                 placeholder={t('rtas.detail.action_title_placeholder')}
@@ -857,7 +1061,10 @@ export default function RTADetail() {
               required
             />
             <div>
-              <label htmlFor="rtadetail-field-11" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-11"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('common.priority')}
               </label>
               <Select
@@ -876,20 +1083,28 @@ export default function RTADetail() {
               </Select>
             </div>
             <div>
-              <label htmlFor="rtadetail-field-12" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-12"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('rtas.detail.due_date')}
               </label>
-              <Input id="rtadetail-field-12"
+              <Input
+                id="rtadetail-field-12"
                 type="date"
                 value={actionForm.due_date}
                 onChange={(e) => setActionForm({ ...actionForm, due_date: e.target.value })}
               />
             </div>
             <div>
-              <label htmlFor="rtadetail-field-13" className="block text-sm font-medium text-foreground mb-1">
+              <label
+                htmlFor="rtadetail-field-13"
+                className="block text-sm font-medium text-foreground mb-1"
+              >
                 {t('common.description')}
               </label>
-              <Textarea id="rtadetail-field-13"
+              <Textarea
+                id="rtadetail-field-13"
                 value={actionForm.description}
                 onChange={(e) => setActionForm({ ...actionForm, description: e.target.value })}
                 placeholder={t('rtas.detail.action_description_placeholder')}
@@ -901,7 +1116,11 @@ export default function RTADetail() {
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={creating || !actionForm.title}>
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rtas.detail.create_action')}
+                {creating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  t('rtas.detail.create_action')
+                )}
               </Button>
             </DialogFooter>
           </form>
@@ -925,11 +1144,9 @@ export default function RTADetail() {
               <ClipboardList className="w-5 h-5 text-primary" />
               Action Details
             </DialogTitle>
-            <DialogDescription>
-              View / Update Status
-            </DialogDescription>
+            <DialogDescription>View / Update Status</DialogDescription>
           </DialogHeader>
-          
+
           {selectedAction && (
             <div className="space-y-4">
               <div className="space-y-3">
@@ -937,23 +1154,30 @@ export default function RTADetail() {
                   <span className="text-sm font-medium text-muted-foreground">Title</span>
                   <p className="font-medium text-foreground">{selectedAction.title}</p>
                 </div>
-                
+
                 {selectedAction.description && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.description')}</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.description')}
+                    </span>
                     <p className="text-foreground">{selectedAction.description}</p>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">{t('common.status')}</span>
-                    <Badge 
+                    <span className="text-sm font-medium text-muted-foreground">
+                      {t('common.status')}
+                    </span>
+                    <Badge
                       variant={
-                        selectedAction.status === 'completed' ? 'resolved' :
-                        selectedAction.status === 'cancelled' ? 'destructive' :
-                        selectedAction.status === 'in_progress' ? 'in-progress' :
-                        'secondary' as any
+                        selectedAction.status === 'completed'
+                          ? 'resolved'
+                          : selectedAction.status === 'cancelled'
+                            ? 'destructive'
+                            : selectedAction.status === 'in_progress'
+                              ? 'in-progress'
+                              : ('secondary' as any)
                       }
                       className="mt-1"
                     >
@@ -965,13 +1189,13 @@ export default function RTADetail() {
                     <p className="text-foreground capitalize">{selectedAction.priority}</p>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Due Date</span>
                     <p className="text-foreground">
-                      {selectedAction.due_date 
-                        ? new Date(selectedAction.due_date).toLocaleDateString() 
+                      {selectedAction.due_date
+                        ? new Date(selectedAction.due_date).toLocaleDateString()
                         : 'Not set'}
                     </p>
                   </div>
@@ -982,7 +1206,7 @@ export default function RTADetail() {
                     </p>
                   </div>
                 </div>
-                
+
                 {selectedAction.completed_at && (
                   <div>
                     <span className="text-sm font-medium text-muted-foreground">Completed at</span>
@@ -991,15 +1215,17 @@ export default function RTADetail() {
                     </p>
                   </div>
                 )}
-                
+
                 {selectedAction.completion_notes && (
                   <div>
-                    <span className="text-sm font-medium text-muted-foreground">Completion Notes</span>
+                    <span className="text-sm font-medium text-muted-foreground">
+                      Completion Notes
+                    </span>
                     <p className="text-foreground">{selectedAction.completion_notes}</p>
                   </div>
                 )}
               </div>
-              
+
               <div className="border-t pt-4">
                 <span className="text-sm font-medium text-muted-foreground mb-2 block">
                   Update Status
@@ -1012,7 +1238,7 @@ export default function RTADetail() {
                       variant="outline"
                       className={cn(
                         option.className,
-                        selectedAction.status === option.value && 'ring-2 ring-primary'
+                        selectedAction.status === option.value && 'ring-2 ring-primary',
                       )}
                       disabled={updatingAction || selectedAction.status === option.value}
                       onClick={() => {
@@ -1027,11 +1253,11 @@ export default function RTADetail() {
                     </Button>
                   ))}
                 </div>
-                
+
                 {actionUpdateError && (
                   <p className="text-sm text-destructive mt-2">{actionUpdateError}</p>
                 )}
-                
+
                 {updatingAction && (
                   <div className="flex items-center gap-2 mt-2 text-muted-foreground">
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1039,7 +1265,7 @@ export default function RTADetail() {
                   </div>
                 )}
               </div>
-              
+
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowActionDetailModal(false)}>
                   Close

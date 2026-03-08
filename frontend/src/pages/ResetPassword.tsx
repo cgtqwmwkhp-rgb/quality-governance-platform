@@ -1,39 +1,50 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Shield, Lock, ArrowLeft, AlertCircle, Loader2, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import {
+  Shield,
+  Lock,
+  ArrowLeft,
+  AlertCircle,
+  Loader2,
+  CheckCircle,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { ThemeToggle } from '../components/ui/ThemeToggle'
 import { API_BASE_URL } from '../config/apiBase'
 
-const API_BASE = API_BASE_URL;
+const API_BASE = API_BASE_URL
 
-type FormState = 'idle' | 'submitting' | 'success' | 'error' | 'invalid_token';
+type FormState = 'idle' | 'submitting' | 'success' | 'error' | 'invalid_token'
 
 // Password strength calculation
-const calculatePasswordStrength = (password: string): { score: number; label: string; color: string } => {
-  let score = 0;
-  
-  if (password.length >= 8) score += 1;
-  if (password.length >= 12) score += 1;
-  if (/[a-z]/.test(password)) score += 1;
-  if (/[A-Z]/.test(password)) score += 1;
-  if (/[0-9]/.test(password)) score += 1;
-  if (/[^a-zA-Z0-9]/.test(password)) score += 1;
-  
-  if (score <= 2) return { score, label: 'weak', color: 'bg-destructive' };
-  if (score <= 4) return { score, label: 'medium', color: 'bg-warning' };
-  return { score, label: 'strong', color: 'bg-success' };
-};
+const calculatePasswordStrength = (
+  password: string,
+): { score: number; label: string; color: string } => {
+  let score = 0
+
+  if (password.length >= 8) score += 1
+  if (password.length >= 12) score += 1
+  if (/[a-z]/.test(password)) score += 1
+  if (/[A-Z]/.test(password)) score += 1
+  if (/[0-9]/.test(password)) score += 1
+  if (/[^a-zA-Z0-9]/.test(password)) score += 1
+
+  if (score <= 2) return { score, label: 'weak', color: 'bg-destructive' }
+  if (score <= 4) return { score, label: 'medium', color: 'bg-warning' }
+  return { score, label: 'strong', color: 'bg-success' }
+}
 
 export default function ResetPassword() {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const token = searchParams.get('token')
-  
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -47,7 +58,7 @@ export default function ResetPassword() {
       setFormState('invalid_token')
       setErrorMessage(t('reset_password.invalid_token_message'))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable after init
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable after init
   }, [token])
 
   const passwordStrength = calculatePasswordStrength(password)
@@ -56,9 +67,9 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!isFormValid) return
-    
+
     setFormState('submitting')
     setErrorMessage(null)
 
@@ -66,9 +77,9 @@ export default function ResetPassword() {
       const response = await fetch(`${API_BASE}/api/v1/auth/password-reset/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           token,
-          new_password: password 
+          new_password: password,
         }),
       })
 
@@ -78,7 +89,7 @@ export default function ResetPassword() {
       }
 
       setFormState('success')
-      
+
       // Redirect to login after 3 seconds
       setTimeout(() => {
         navigate('/login')
@@ -86,11 +97,7 @@ export default function ResetPassword() {
     } catch (err) {
       console.error('Password reset failed:', err)
       setFormState('error')
-      setErrorMessage(
-        err instanceof Error 
-          ? err.message 
-          : t('reset_password.error_fallback')
-      )
+      setErrorMessage(err instanceof Error ? err.message : t('reset_password.error_fallback'))
     }
   }
 
@@ -113,10 +120,10 @@ export default function ResetPassword() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-brand mb-4 shadow-glow">
             <Shield className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">{t('reset_password.create_title')}</h1>
-          <p className="text-muted-foreground">
-            {t('reset_password.create_subtitle')}
-          </p>
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {t('reset_password.create_title')}
+          </h1>
+          <p className="text-muted-foreground">{t('reset_password.create_subtitle')}</p>
         </div>
 
         <Card className="p-8">
@@ -125,10 +132,10 @@ export default function ResetPassword() {
               <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-success" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">{t('reset_password.success_title')}</h2>
-              <p className="text-muted-foreground mb-6">
-                {t('reset_password.success_message')}
-              </p>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                {t('reset_password.success_title')}
+              </h2>
+              <p className="text-muted-foreground mb-6">{t('reset_password.success_message')}</p>
               <Link to="/login">
                 <Button variant="outline" className="w-full">
                   <ArrowLeft size={18} />
@@ -141,14 +148,12 @@ export default function ResetPassword() {
               <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <AlertCircle className="w-8 h-8 text-destructive" />
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2">{t('reset_password.invalid_title')}</h2>
-              <p className="text-muted-foreground mb-6">
-                {errorMessage}
-              </p>
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                {t('reset_password.invalid_title')}
+              </h2>
+              <p className="text-muted-foreground mb-6">{errorMessage}</p>
               <Link to="/forgot-password">
-                <Button className="w-full mb-3">
-                  {t('reset_password.request_new')}
-                </Button>
+                <Button className="w-full mb-3">{t('reset_password.request_new')}</Button>
               </Link>
               <Link to="/login">
                 <Button variant="outline" className="w-full">
@@ -161,7 +166,7 @@ export default function ResetPassword() {
             <form onSubmit={handleSubmit}>
               {/* Error display */}
               {formState === 'error' && errorMessage && (
-                <div 
+                <div
                   className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm"
                   data-testid="error-message"
                 >
@@ -175,12 +180,16 @@ export default function ResetPassword() {
               <div className="space-y-5">
                 {/* New Password */}
                 <div>
-                  <label htmlFor="resetpassword-field-0" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="resetpassword-field-0"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('reset_password.new_password')}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="resetpassword-field-0"
+                    <Input
+                      id="resetpassword-field-0"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -199,18 +208,20 @@ export default function ResetPassword() {
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                  
+
                   {/* Password strength indicator */}
                   {password && (
                     <div className="mt-2" data-testid="password-strength">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div 
+                          <div
                             className={`h-full ${passwordStrength.color} transition-all duration-300`}
                             style={{ width: `${(passwordStrength.score / 6) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs text-muted-foreground">{t(`reset_password.strength_${passwordStrength.label}`)}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {t(`reset_password.strength_${passwordStrength.label}`)}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         {t('reset_password.strength_hint')}
@@ -221,12 +232,16 @@ export default function ResetPassword() {
 
                 {/* Confirm Password */}
                 <div>
-                  <label htmlFor="resetpassword-field-1" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="resetpassword-field-1"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     {t('reset_password.confirm_password')}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input id="resetpassword-field-1"
+                    <Input
+                      id="resetpassword-field-1"
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -244,19 +259,23 @@ export default function ResetPassword() {
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                  
+
                   {/* Match indicator */}
                   {confirmPassword && (
                     <div className="mt-2 flex items-center gap-2" data-testid="password-match">
                       {passwordsMatch ? (
                         <>
                           <CheckCircle size={14} className="text-success" />
-                          <span className="text-xs text-success">{t('reset_password.passwords_match')}</span>
+                          <span className="text-xs text-success">
+                            {t('reset_password.passwords_match')}
+                          </span>
                         </>
                       ) : (
                         <>
                           <AlertCircle size={14} className="text-destructive" />
-                          <span className="text-xs text-destructive">{t('reset_password.passwords_no_match')}</span>
+                          <span className="text-xs text-destructive">
+                            {t('reset_password.passwords_no_match')}
+                          </span>
                         </>
                       )}
                     </div>
@@ -279,8 +298,8 @@ export default function ResetPassword() {
               </Button>
 
               <div className="mt-6 text-center">
-                <Link 
-                  to="/login" 
+                <Link
+                  to="/login"
                   className="text-sm text-primary hover:underline inline-flex items-center gap-1"
                   data-testid="back-to-login"
                 >

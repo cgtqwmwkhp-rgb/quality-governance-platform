@@ -1,6 +1,6 @@
 /**
  * Audit Trail Viewer
- * 
+ *
  * Enterprise-grade immutable audit log viewer with:
  * - Hash chain verification
  * - Filterable history
@@ -8,7 +8,7 @@
  * - Tamper detection
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react'
 import {
   Shield,
   Search,
@@ -31,35 +31,35 @@ import {
   Link2,
   ChevronDown,
   ChevronRight,
-} from 'lucide-react';
+} from 'lucide-react'
 
 // Types
 interface AuditEntry {
-  id: number;
-  sequence: number;
-  entry_hash: string;
-  previous_hash: string;
-  entity_type: string;
-  entity_id: string;
-  entity_name?: string;
-  action: string;
-  action_category: string;
-  user_email?: string;
-  user_name?: string;
-  changed_fields?: string[];
-  old_values?: Record<string, any>;
-  new_values?: Record<string, any>;
-  ip_address?: string;
-  timestamp: string;
-  is_sensitive: boolean;
+  id: number
+  sequence: number
+  entry_hash: string
+  previous_hash: string
+  entity_type: string
+  entity_id: string
+  entity_name?: string
+  action: string
+  action_category: string
+  user_email?: string
+  user_name?: string
+  changed_fields?: string[]
+  old_values?: Record<string, any>
+  new_values?: Record<string, any>
+  ip_address?: string
+  timestamp: string
+  is_sensitive: boolean
 }
 
 interface Verification {
-  id: number;
-  is_valid: boolean;
-  entries_verified: number;
-  invalid_entries?: any[];
-  verified_at: string;
+  id: number
+  is_valid: boolean
+  entries_verified: number
+  invalid_entries?: any[]
+  verified_at: string
 }
 
 // Action icons
@@ -72,7 +72,7 @@ const actionIcons: Record<string, React.ElementType> = {
   logout: Unlock,
   approve: CheckCircle,
   reject: XCircle,
-};
+}
 
 // Action colors
 const actionColors: Record<string, string> = {
@@ -84,16 +84,16 @@ const actionColors: Record<string, string> = {
   logout: 'text-amber-400 bg-amber-400/10',
   approve: 'text-emerald-400 bg-emerald-400/10',
   reject: 'text-red-400 bg-red-400/10',
-};
+}
 
 export default function AuditTrailViewer() {
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [verification, setVerification] = useState<Verification | null>(null);
-  const [verifying, setVerifying] = useState(false);
-  const [_selectedEntry, _setSelectedEntry] = useState<AuditEntry | null>(null);
-  const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
-  
+  const [entries, setEntries] = useState<AuditEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [verification, setVerification] = useState<Verification | null>(null)
+  const [verifying, setVerifying] = useState(false)
+  const [_selectedEntry, _setSelectedEntry] = useState<AuditEntry | null>(null)
+  const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set())
+
   // Filters
   const [filters, setFilters] = useState({
     entity_type: '',
@@ -101,63 +101,63 @@ export default function AuditTrailViewer() {
     user: '',
     date_from: '',
     date_to: '',
-  });
-  const [error, setError] = useState<string | null>(null);
+  })
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    loadAuditLogs();
-  }, [filters]);
+    loadAuditLogs()
+  }, [filters])
 
   const loadAuditLogs = async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
       // Placeholder — wire to /api/v1/audit-trail when available
-      setEntries([]);
+      setEntries([])
     } catch (error) {
-      console.error('Failed to load audit logs', error);
-      setError('Failed to load audit logs. Please try again.');
+      console.error('Failed to load audit logs', error)
+      setError('Failed to load audit logs. Please try again.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const verifyChain = async () => {
-    if (entries.length === 0) return;
-    setVerifying(true);
+    if (entries.length === 0) return
+    setVerifying(true)
     try {
       // Placeholder — wire to /api/v1/audit-trail/verify when available
-      setVerification(null);
+      setVerification(null)
     } catch (error) {
-      console.error('Verification failed', error);
+      console.error('Verification failed', error)
     } finally {
-      setVerifying(false);
+      setVerifying(false)
     }
-  };
+  }
 
   const exportLogs = async (format: 'json' | 'csv') => {
     // Would trigger API export
-    console.log('Exporting as', format);
-  };
+    console.log('Exporting as', format)
+  }
 
   const toggleExpanded = (id: number) => {
-    const newExpanded = new Set(expandedEntries);
+    const newExpanded = new Set(expandedEntries)
     if (newExpanded.has(id)) {
-      newExpanded.delete(id);
+      newExpanded.delete(id)
     } else {
-      newExpanded.add(id);
+      newExpanded.add(id)
     }
-    setExpandedEntries(newExpanded);
-  };
+    setExpandedEntries(newExpanded)
+  }
 
   const formatTimestamp = (ts: string) => {
-    const date = new Date(ts);
-    return date.toLocaleString();
-  };
+    const date = new Date(ts)
+    return date.toLocaleString()
+  }
 
   const truncateHash = (hash: string) => {
-    return `${hash.slice(0, 8)}...${hash.slice(-8)}`;
-  };
+    return `${hash.slice(0, 8)}...${hash.slice(-8)}`
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
@@ -173,7 +173,7 @@ export default function AuditTrailViewer() {
               <p className="text-slate-400">Immutable blockchain-style change history</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <button
               onClick={verifyChain}
@@ -187,7 +187,7 @@ export default function AuditTrailViewer() {
               )}
               Verify Chain
             </button>
-            
+
             <div className="relative group">
               <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors">
                 <Download className="h-4 w-4" />
@@ -213,11 +213,13 @@ export default function AuditTrailViewer() {
 
         {/* Verification Status */}
         {verification && (
-          <div className={`p-4 rounded-xl border ${
-            verification.is_valid
-              ? 'bg-emerald-500/10 border-emerald-500/30'
-              : 'bg-red-500/10 border-red-500/30'
-          }`}>
+          <div
+            className={`p-4 rounded-xl border ${
+              verification.is_valid
+                ? 'bg-emerald-500/10 border-emerald-500/30'
+                : 'bg-red-500/10 border-red-500/30'
+            }`}
+          >
             <div className="flex items-center gap-3">
               {verification.is_valid ? (
                 <CheckCircle className="h-6 w-6 text-emerald-400" />
@@ -225,11 +227,16 @@ export default function AuditTrailViewer() {
                 <XCircle className="h-6 w-6 text-red-400" />
               )}
               <div>
-                <p className={`font-medium ${verification.is_valid ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {verification.is_valid ? 'Chain Verified Successfully' : 'Chain Verification Failed'}
+                <p
+                  className={`font-medium ${verification.is_valid ? 'text-emerald-400' : 'text-red-400'}`}
+                >
+                  {verification.is_valid
+                    ? 'Chain Verified Successfully'
+                    : 'Chain Verification Failed'}
                 </p>
                 <p className="text-sm text-slate-400">
-                  {verification.entries_verified} entries verified • Last check: {formatTimestamp(verification.verified_at)}
+                  {verification.entries_verified} entries verified • Last check:{' '}
+                  {formatTimestamp(verification.verified_at)}
                 </p>
               </div>
             </div>
@@ -239,7 +246,13 @@ export default function AuditTrailViewer() {
         {error && (
           <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between">
             <p className="text-sm text-destructive">{error}</p>
-            <button onClick={() => { setError(null); loadAuditLogs(); }} className="text-sm font-medium text-destructive hover:underline">
+            <button
+              onClick={() => {
+                setError(null)
+                loadAuditLogs()
+              }}
+              className="text-sm font-medium text-destructive hover:underline"
+            >
               Try Again
             </button>
           </div>
@@ -252,10 +265,10 @@ export default function AuditTrailViewer() {
               <Filter className="h-4 w-4 text-slate-400" />
               <span className="text-sm font-medium text-slate-400">Filters:</span>
             </div>
-            
+
             <select
               value={filters.entity_type}
-              onChange={e => setFilters({ ...filters, entity_type: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, entity_type: e.target.value })}
               className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Entity Types</option>
@@ -265,10 +278,10 @@ export default function AuditTrailViewer() {
               <option value="document">Documents</option>
               <option value="auth">Authentication</option>
             </select>
-            
+
             <select
               value={filters.action}
-              onChange={e => setFilters({ ...filters, action: e.target.value })}
+              onChange={(e) => setFilters({ ...filters, action: e.target.value })}
               className="px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Actions</option>
@@ -279,14 +292,14 @@ export default function AuditTrailViewer() {
               <option value="login">Login</option>
               <option value="approve">Approve</option>
             </select>
-            
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search user..."
                 value={filters.user}
-                onChange={e => setFilters({ ...filters, user: e.target.value })}
+                onChange={(e) => setFilters({ ...filters, user: e.target.value })}
                 aria-label="Search audit logs"
                 className="pl-10 pr-4 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -301,14 +314,12 @@ export default function AuditTrailViewer() {
               <RefreshCw className="h-8 w-8 text-blue-400 animate-spin" />
             </div>
           ) : entries.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              No audit entries found
-            </div>
+            <div className="text-center py-12 text-slate-400">No audit entries found</div>
           ) : (
             entries.map((entry, index) => {
-              const ActionIcon = actionIcons[entry.action] || Activity;
-              const isExpanded = expandedEntries.has(entry.id);
-              
+              const ActionIcon = actionIcons[entry.action] || Activity
+              const isExpanded = expandedEntries.has(entry.id)
+
               return (
                 <div
                   key={entry.id}
@@ -320,19 +331,23 @@ export default function AuditTrailViewer() {
                     tabIndex={0}
                     className="p-4 cursor-pointer hover:bg-slate-700/30 transition-colors"
                     onClick={() => toggleExpanded(entry.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleExpanded(entry.id); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') toggleExpanded(entry.id)
+                    }}
                   >
                     <div className="flex items-center gap-4">
                       {/* Hash Chain Visualization */}
                       <div className="flex flex-col items-center gap-1">
-                        <div className={`p-2 rounded-lg ${actionColors[entry.action] || 'text-slate-400 bg-slate-400/10'}`}>
+                        <div
+                          className={`p-2 rounded-lg ${actionColors[entry.action] || 'text-slate-400 bg-slate-400/10'}`}
+                        >
                           <ActionIcon className="h-5 w-5" />
                         </div>
                         {index < entries.length - 1 && (
                           <div className="w-0.5 h-8 bg-gradient-to-b from-purple-500 to-transparent" />
                         )}
                       </div>
-                      
+
                       {/* Entry Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -346,7 +361,7 @@ export default function AuditTrailViewer() {
                             </>
                           )}
                         </div>
-                        
+
                         <div className="flex items-center gap-4 text-sm text-slate-400">
                           <span className="flex items-center gap-1">
                             <User className="h-3.5 w-3.5" />
@@ -362,7 +377,7 @@ export default function AuditTrailViewer() {
                           </span>
                         </div>
                       </div>
-                      
+
                       {/* Expand/Collapse */}
                       <div>
                         {isExpanded ? (
@@ -373,18 +388,22 @@ export default function AuditTrailViewer() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Expanded Details */}
                   {isExpanded && (
                     <div className="px-4 pb-4 pt-0 border-t border-slate-700/50">
                       <div className="grid grid-cols-2 gap-4 mt-4">
                         {/* Hash Details */}
                         <div className="p-3 rounded-lg bg-slate-900/50">
-                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">Hash Chain</h4>
+                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">
+                            Hash Chain
+                          </h4>
                           <div className="space-y-2">
                             <div>
                               <span className="text-xs text-slate-500">Current Hash:</span>
-                              <p className="font-mono text-xs text-blue-400 break-all">{entry.entry_hash}</p>
+                              <p className="font-mono text-xs text-blue-400 break-all">
+                                {entry.entry_hash}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1 text-slate-500">
                               <Link2 className="h-3 w-3" />
@@ -392,14 +411,18 @@ export default function AuditTrailViewer() {
                             </div>
                             <div>
                               <span className="text-xs text-slate-500">Previous Hash:</span>
-                              <p className="font-mono text-xs text-purple-400 break-all">{entry.previous_hash}</p>
+                              <p className="font-mono text-xs text-purple-400 break-all">
+                                {entry.previous_hash}
+                              </p>
                             </div>
                           </div>
                         </div>
-                        
+
                         {/* Change Details */}
                         <div className="p-3 rounded-lg bg-slate-900/50">
-                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">Change Details</h4>
+                          <h4 className="text-xs font-medium text-slate-500 uppercase mb-2">
+                            Change Details
+                          </h4>
                           {entry.changed_fields && entry.changed_fields.length > 0 ? (
                             <div className="space-y-2">
                               <p className="text-xs text-slate-400">
@@ -434,7 +457,7 @@ export default function AuditTrailViewer() {
                           )}
                         </div>
                       </div>
-                      
+
                       {/* Metadata */}
                       <div className="flex items-center gap-6 mt-4 text-xs text-slate-500">
                         <span>Sequence: #{entry.sequence}</span>
@@ -450,7 +473,7 @@ export default function AuditTrailViewer() {
                     </div>
                   )}
                 </div>
-              );
+              )
             })
           )}
         </div>
@@ -463,24 +486,24 @@ export default function AuditTrailViewer() {
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-emerald-400">
-              {entries.filter(e => e.action === 'create').length}
+              {entries.filter((e) => e.action === 'create').length}
             </p>
             <p className="text-sm text-slate-400">Created</p>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-blue-400">
-              {entries.filter(e => e.action === 'update').length}
+              {entries.filter((e) => e.action === 'update').length}
             </p>
             <p className="text-sm text-slate-400">Updated</p>
           </div>
           <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/50">
             <p className="text-2xl font-bold text-purple-400">
-              {new Set(entries.map(e => e.user_email)).size}
+              {new Set(entries.map((e) => e.user_email)).size}
             </p>
             <p className="text-sm text-slate-400">Active Users</p>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }
