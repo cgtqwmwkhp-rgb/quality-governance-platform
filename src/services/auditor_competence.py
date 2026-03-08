@@ -176,7 +176,7 @@ class AuditorCompetenceService:
         days_ahead: int = 90,
     ) -> List[Dict[str, Any]]:
         """Get certifications expiring within specified days."""
-        cutoff = datetime.utcnow() + timedelta(days=days_ahead)
+        cutoff = datetime.now(timezone.utc) + timedelta(days=days_ahead)
 
         result = await self.db.execute(
             select(AuditorCertification)
@@ -206,7 +206,7 @@ class AuditorCompetenceService:
 
     async def update_expired_certifications(self) -> int:
         """Update status of expired certifications."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         result = await self.db.execute(
             select(AuditorCertification).where(
@@ -336,7 +336,7 @@ class AuditorCompetenceService:
 
         if competency:
             competency.current_level = current_level
-            competency.last_assessed = datetime.utcnow()
+            competency.last_assessed = datetime.now(timezone.utc)
             competency.assessed_by_id = assessor_id
             competency.assessment_method = assessment_method
             competency.evidence_summary = evidence_summary
@@ -345,7 +345,7 @@ class AuditorCompetenceService:
                 profile_id=profile.id,
                 competency_area_id=competency_area_id,
                 current_level=current_level,
-                last_assessed=datetime.utcnow(),
+                last_assessed=datetime.now(timezone.utc),
                 assessed_by_id=assessor_id,
                 assessment_method=assessment_method,
                 evidence_summary=evidence_summary,

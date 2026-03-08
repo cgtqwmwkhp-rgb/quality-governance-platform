@@ -140,11 +140,22 @@ class Settings(BaseSettings):
             raise ValueError("PSEUDONYMIZATION_PEPPER must be at least 16 characters")
         return v
 
+    # Application version (used by telemetry)
+    app_version: str = "0.1.0"
+
     # Logging
     log_level: str = "INFO"
 
     # Redis (optional — used by idempotency middleware when available)
     redis_url: str = ""
+
+    # Celery (optional — background task processing)
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
+
+    # OpenTelemetry / Azure Monitor
+    otel_trace_sample_rate: float | None = None
+    applicationinsights_connection_string: str = ""
 
     # UAT Mode for production-safe testing
     # READ_ONLY: Block all non-idempotent operations (default for production)

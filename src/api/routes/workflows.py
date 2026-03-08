@@ -168,7 +168,7 @@ async def cancel_workflow(workflow_id: str, current_user: CurrentUser, reason: O
         "status": "cancelled",
         "cancelled_by": current_user.id,
         "reason": reason,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -276,7 +276,7 @@ async def cancel_delegation(delegation_id: str, current_user: CurrentUser):
     return {
         "delegation_id": delegation_id,
         "status": "cancelled",
-        "cancelled_at": datetime.utcnow().isoformat(),
+        "cancelled_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

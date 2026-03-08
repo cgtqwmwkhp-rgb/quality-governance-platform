@@ -52,7 +52,7 @@ class ComplianceAutomationService:
             "id": update_id,
             "is_reviewed": True,
             "reviewed_by": reviewed_by,
-            "reviewed_at": datetime.utcnow().isoformat(),
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
             "requires_action": requires_action,
             "action_notes": action_notes,
         }
@@ -148,9 +148,9 @@ class ComplianceAutomationService:
         deadline = None
         if is_riddor:
             if "death" in riddor_types or "specified_injury" in riddor_types:
-                deadline = datetime.utcnow() + timedelta(days=10)
+                deadline = datetime.now(timezone.utc) + timedelta(days=10)
             else:
-                deadline = datetime.utcnow() + timedelta(days=15)
+                deadline = datetime.now(timezone.utc) + timedelta(days=15)
 
         return {
             "is_riddor": is_riddor,

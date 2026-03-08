@@ -34,7 +34,7 @@ class ExecutiveDashboardService:
         period_days: int = 30,
     ) -> Dict[str, Any]:
         """Get complete executive dashboard with all KPIs."""
-        cutoff = datetime.utcnow() - timedelta(days=period_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 
         # Get all module summaries in parallel
         incident_summary = await self._get_incident_summary(cutoff)
@@ -58,7 +58,7 @@ class ExecutiveDashboardService:
         )
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_days": period_days,
             "health_score": health_score,
             "incidents": incident_summary,
@@ -320,7 +320,7 @@ class ExecutiveDashboardService:
         incident_trend = []
 
         for i in range(weeks, 0, -1):
-            week_end = datetime.utcnow() - timedelta(days=(i - 1) * 7)
+            week_end = datetime.now(timezone.utc) - timedelta(days=(i - 1) * 7)
             week_start = week_end - timedelta(days=7)
 
             result = await self.db.execute(
@@ -382,7 +382,7 @@ class ExecutiveDashboardService:
                     "type": "policy_overdue",
                     "severity": "amber",
                     "title": f"{overdue_count} overdue policy acknowledgments",
-                    "triggered_at": datetime.utcnow().isoformat(),
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
 
@@ -412,7 +412,7 @@ class ExecutiveDashboardService:
                     "type": "incident_critical",
                     "severity": "red",
                     "title": f"{critical_count} high/critical incidents require attention",
-                    "triggered_at": datetime.utcnow().isoformat(),
+                    "triggered_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
 

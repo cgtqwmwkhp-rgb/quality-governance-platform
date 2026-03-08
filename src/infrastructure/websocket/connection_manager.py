@@ -28,8 +28,8 @@ class UserConnection:
     websocket: WebSocket
     user_id: int
     connection_id: str
-    connected_at: datetime = field(default_factory=datetime.utcnow)
-    last_ping: datetime = field(default_factory=datetime.utcnow)
+    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_ping: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     subscribed_channels: Set[str] = field(default_factory=set)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -81,7 +81,7 @@ class ConnectionManager:
     def _generate_connection_id(self) -> str:
         """Generate unique connection ID"""
         self._connection_counter += 1
-        return f"conn_{self._connection_counter}_{datetime.utcnow().timestamp()}"
+        return f"conn_{self._connection_counter}_{datetime.now(timezone.utc).timestamp()}"
 
     async def connect(
         self,
@@ -202,7 +202,7 @@ class ConnectionManager:
             {
                 "type": event_type,
                 "data": message,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -283,7 +283,7 @@ class ConnectionManager:
         self.presence[user_id] = PresenceInfo(
             user_id=user_id,
             status=status if connection_count > 0 else "offline",
-            last_seen=datetime.utcnow(),
+            last_seen=datetime.now(timezone.utc),
             active_connections=connection_count,
         )
 
@@ -302,12 +302,12 @@ class ConnectionManager:
 
     async def handle_heartbeat(self, connection: UserConnection) -> None:
         """Handle heartbeat/ping from client"""
-        connection.last_ping = datetime.utcnow()
+        connection.last_ping = datetime.now(timezone.utc)
         self._update_presence(connection.user_id, "online")
 
         # Send pong response
         try:
-            await connection.websocket.send_json({"type": "pong", "timestamp": datetime.utcnow().isoformat()})
+            await connection.websocket.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
         except Exception:
             logger.debug("Failed to send pong to WebSocket connection", exc_info=True)
         return None

@@ -1,7 +1,7 @@
 import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, AlertTriangle, Search } from 'lucide-react'
+import { Plus, AlertTriangle, Search, Loader2 } from 'lucide-react'
 import { incidentsApi, Incident, IncidentCreate, getApiErrorMessage } from '../api/client'
 import { trackError } from '../utils/errorTracker'
 import { Button } from '../components/ui/Button'

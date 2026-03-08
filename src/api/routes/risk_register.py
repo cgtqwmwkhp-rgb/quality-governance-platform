@@ -324,7 +324,7 @@ async def update_risk(
     for key, value in update_data.items():
         setattr(risk, key, value)
 
-    risk.updated_at = datetime.utcnow()
+    risk.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(risk)
 
@@ -380,7 +380,7 @@ async def delete_risk(
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
     risk.status = "closed"
-    risk.updated_at = datetime.utcnow()
+    risk.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
 
@@ -819,7 +819,7 @@ async def get_risk_summary(
 
     overdue_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.next_review_date < datetime.utcnow(),
+            EnterpriseRisk.next_review_date < datetime.now(timezone.utc),
             EnterpriseRisk.status != "closed",
             tenant_filter,
         )

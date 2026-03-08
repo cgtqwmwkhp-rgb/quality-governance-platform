@@ -102,7 +102,7 @@ class AnalyticsService:
         days = 30 if time_range == "last_30_days" else 90
         labels = []
         for i in range(days):
-            date = datetime.utcnow() - timedelta(days=days - i - 1)
+            date = datetime.now(timezone.utc) - timedelta(days=days - i - 1)
             labels.append(date.strftime("%Y-%m-%d"))
 
         return {
@@ -324,7 +324,7 @@ class AnalyticsService:
         benchmarks = self.get_benchmark_summary()
 
         return {
-            "report_date": datetime.utcnow().isoformat(),
+            "report_date": datetime.now(timezone.utc).isoformat(),
             "time_range": time_range,
             "executive_summary": {
                 "headline": "Executive Summary",

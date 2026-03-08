@@ -170,7 +170,7 @@ class RiskService:
             tenant_id=data.get("tenant_id"),
         )
 
-        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
+        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
 
         self.db.add(risk)
         await self.db.commit()
@@ -203,8 +203,8 @@ class RiskService:
 
         risk.is_within_appetite = risk.residual_score <= risk.appetite_threshold
 
-        risk.last_review_date = datetime.utcnow()
-        risk.next_review_date = datetime.utcnow() + timedelta(days=risk.review_frequency_days)
+        risk.last_review_date = datetime.now(timezone.utc)
+        risk.next_review_date = datetime.now(timezone.utc) + timedelta(days=risk.review_frequency_days)
 
         if "review_notes" in data:
             risk.review_notes = data["review_notes"]
@@ -303,7 +303,7 @@ class RiskService:
         tenant_id: Optional[int] = None,
     ) -> list[dict[str, Any]]:
         """Get risk score trends over time"""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         stmt = (
             select(RiskAssessmentHistory)
@@ -408,10 +408,10 @@ class KRIService:
         if kri.historical_values is None:
             kri.historical_values = []
 
-        kri.historical_values.append({"value": new_value, "date": datetime.utcnow().isoformat()})
+        kri.historical_values.append({"value": new_value, "date": datetime.now(timezone.utc).isoformat()})
 
         kri.current_value = new_value
-        kri.last_updated = datetime.utcnow()
+        kri.last_updated = datetime.now(timezone.utc)
 
         if kri.threshold_direction == "above":
             if new_value >= kri.red_threshold:

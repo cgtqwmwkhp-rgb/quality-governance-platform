@@ -242,7 +242,7 @@ class ActionService:
             else:
                 action.status = ActionStatus(sv)
             if sv == "completed" and not action.completed_at:
-                action.completed_at = datetime.utcnow()
+                action.completed_at = datetime.now(timezone.utc)
             elif sv != "completed":
                 action.completed_at = None
 

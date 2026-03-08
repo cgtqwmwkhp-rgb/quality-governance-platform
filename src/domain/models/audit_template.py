@@ -4,7 +4,7 @@ Supports templates, sections, questions, conditional logic, and scoring
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, List, Optional
 
@@ -140,8 +140,8 @@ class AuditTemplate(Base):
     organization_id = Column(String(36), nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     published_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -187,8 +187,8 @@ class AuditTemplateSection(Base):
     weight = Column(Float, nullable=False, default=1.0)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="sections")
@@ -247,8 +247,8 @@ class AuditTemplateQuestion(Base):
     order = Column(Integer, nullable=False, default=0)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     section = relationship("AuditTemplateSection", back_populates="questions")
@@ -274,7 +274,7 @@ class AuditTemplateVersion(Base):
 
     # Metadata
     created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="versions")
@@ -326,8 +326,8 @@ class AuditRun(Base):
     notes = Column(Text, nullable=True)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="audit_runs")
@@ -367,8 +367,8 @@ class AuditResponse(Base):
     duration_seconds = Column(Integer, nullable=True)  # Time spent on question
 
     # Timestamps
-    answered_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    answered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     audit_run = relationship("AuditRun", back_populates="responses")
@@ -410,8 +410,8 @@ class AuditFinding(Base):
     evidence = Column(JSON, nullable=True, default=list)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     closed_at = Column(DateTime, nullable=True)
 
     # Relationships

@@ -60,10 +60,8 @@ class ComplaintService:
         )
 
         self.db.add(complaint)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(complaint)
-        await invalidate_tenant_cache(tenant_id, "complaints")
-        track_metric("complaints.created")
 
         await record_audit_event(
             db=self.db,
@@ -75,6 +73,10 @@ class ComplaintService:
             user_id=user_id,
             request_id=request_id,
         )
+
+        await self.db.commit()
+        await invalidate_tenant_cache(tenant_id, "complaints")
+        track_metric("complaints.created")
 
         return complaint
 
@@ -132,9 +134,8 @@ class ComplaintService:
         old_status = complaint.status
         update_data = apply_updates(complaint, complaint_data, set_updated_at=False)
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(complaint)
-        await invalidate_tenant_cache(tenant_id, "complaints")
 
         await record_audit_event(
             db=self.db,
@@ -150,6 +151,9 @@ class ComplaintService:
             user_id=user_id,
             request_id=request_id,
         )
+
+        await self.db.commit()
+        await invalidate_tenant_cache(tenant_id, "complaints")
 
         return complaint
 

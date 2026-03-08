@@ -182,7 +182,7 @@ async def link_evidence(request: EvidenceLinkRequest, current_user: CurrentUser)
                 "clause_id": clause_id,
                 "linked_by": request.linked_by,
                 "confidence": request.confidence,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
         )
 

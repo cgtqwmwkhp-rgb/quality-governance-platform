@@ -30,7 +30,7 @@ Cross-Mapping to ISO Standards:
 - Section 2.3 → ISO 27001:2022 (Information Security)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
@@ -61,8 +61,8 @@ class UVDBSection(Base):
     is_mse_only: Mapped[bool] = mapped_column(Boolean, default=False)  # MSE = Main Site Evaluation
     is_site_applicable: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     questions = relationship("UVDBQuestion", back_populates="section")
@@ -101,8 +101,8 @@ class UVDBQuestion(Base):
     positive_indicators: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
     negative_indicators: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     section = relationship("UVDBSection", back_populates="questions")
@@ -167,8 +167,8 @@ class UVDBAudit(Base):
     audit_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     responses = relationship("UVDBAuditResponse", back_populates="audit")
@@ -203,8 +203,8 @@ class UVDBAuditResponse(Base):
     auditor_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     positive_elements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     audit = relationship("UVDBAudit", back_populates="responses")
@@ -248,8 +248,8 @@ class UVDBKPIRecord(Base):
     ltifr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Lost Time Injury Frequency Rate
     trifr: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Total Recordable Injury Frequency Rate
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class UVDBISOCrossMapping(Base):
@@ -271,7 +271,7 @@ class UVDBISOCrossMapping(Base):
 
     mapping_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     uvdb_question = relationship("UVDBQuestion")

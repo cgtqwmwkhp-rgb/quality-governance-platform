@@ -983,7 +983,7 @@ class AuditTrendAnalyzer:
         """Analyze finding trends over time"""
         from src.domain.models.audit import Audit, AuditFinding
 
-        cutoff = datetime.utcnow() - timedelta(days=months * 30)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
         result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
         audits = result.scalars().all()

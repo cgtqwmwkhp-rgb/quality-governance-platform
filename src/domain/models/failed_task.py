@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, Text
@@ -16,6 +16,6 @@ class FailedTask(Base):
     exception: Mapped[str] = mapped_column(Text, nullable=False)
     args: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     kwargs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    failed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    failed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     retried: Mapped[bool] = mapped_column(Boolean, default=False)
     retried_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

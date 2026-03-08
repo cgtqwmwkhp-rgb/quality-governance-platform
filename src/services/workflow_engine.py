@@ -503,7 +503,7 @@ class WorkflowEngine:
                 entity_type=entity_type,
                 entity_id=entity_id,
                 trigger_event=trigger_event,
-                executed_at=datetime.utcnow(),
+                executed_at=datetime.now(timezone.utc),
                 success=action_result.get("success", False),
                 error_message=action_result.get("error"),
                 action_taken=f"{rule.action_type.value}: {rule.name}",
@@ -589,7 +589,7 @@ class WorkflowEngine:
             if not model:
                 continue
 
-            threshold = datetime.utcnow() - timedelta(hours=float(rule.delay_hours or 0))
+            threshold = datetime.now(timezone.utc) - timedelta(hours=float(rule.delay_hours or 0))
             delay_field = rule.delay_from_field or "created_at"
 
             # This is a simplified example - real implementation would be more sophisticated
@@ -605,7 +605,7 @@ class WorkflowEngine:
 
         This should be called periodically by a scheduler.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         results = []
 
         # Check for SLA warnings
@@ -702,7 +702,7 @@ class SLAService:
             logger.info(f"No SLA config found for {entity_type.value}")
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Calculate due times
         acknowledgment_due = None
@@ -736,7 +736,7 @@ class SLAService:
         """Mark entity as acknowledged."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.acknowledged_at:
-            tracking.acknowledged_at = datetime.utcnow()
+            tracking.acknowledged_at = datetime.now(timezone.utc)
             tracking.acknowledgment_met = (
                 tracking.acknowledged_at <= tracking.acknowledgment_due if tracking.acknowledgment_due else True
             )
@@ -747,7 +747,7 @@ class SLAService:
         """Mark entity as responded to."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.responded_at:
-            tracking.responded_at = datetime.utcnow()
+            tracking.responded_at = datetime.now(timezone.utc)
             tracking.response_met = tracking.responded_at <= tracking.response_due if tracking.response_due else True
             await self.db.commit()
         return tracking
@@ -756,7 +756,7 @@ class SLAService:
         """Mark entity as resolved."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.resolved_at:
-            tracking.resolved_at = datetime.utcnow()
+            tracking.resolved_at = datetime.now(timezone.utc)
             tracking.resolution_met = tracking.resolved_at <= tracking.resolution_due
             await self.db.commit()
         return tracking
@@ -766,7 +766,7 @@ class SLAService:
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and not tracking.is_paused:
             tracking.is_paused = True
-            tracking.paused_at = datetime.utcnow()
+            tracking.paused_at = datetime.now(timezone.utc)
             await self.db.commit()
         return tracking
 
@@ -774,7 +774,7 @@ class SLAService:
         """Resume SLA tracking."""
         tracking = await self._get_tracking(entity_type, entity_id)
         if tracking and tracking.is_paused and tracking.paused_at is not None:
-            paused_duration = (datetime.utcnow() - tracking.paused_at).total_seconds() / 3600
+            paused_duration = (datetime.now(timezone.utc) - tracking.paused_at).total_seconds() / 3600
             tracking.total_paused_hours = (tracking.total_paused_hours or 0) + paused_duration
             tracking.is_paused = False
             tracking.paused_at = None

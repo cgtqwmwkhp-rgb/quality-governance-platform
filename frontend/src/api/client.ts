@@ -3359,32 +3359,32 @@ export const formTemplatesApi = {
       .get<{
         items: FormTemplate[];
         total: number;
-      }>(`/admin/config/templates${formType ? `?form_type=${formType}` : ""}`)
+      }>(`/api/v1/admin/config/templates${formType ? `?form_type=${formType}` : ""}`)
       .then((r) => r.data),
 
   getById: (id: number) =>
-    api.get<FormTemplate>(`/admin/config/templates/${id}`).then((r) => r.data),
+    api.get<FormTemplate>(`/api/v1/admin/config/templates/${id}`).then((r) => r.data),
 
   getBySlug: (slug: string) =>
     api
-      .get<FormTemplate>(`/admin/config/templates/by-slug/${slug}`)
+      .get<FormTemplate>(`/api/v1/admin/config/templates/by-slug/${slug}`)
       .then((r) => r.data),
 
   create: (data: Partial<FormTemplate>) =>
-    api.post<FormTemplate>("/admin/config/templates", data).then((r) => r.data),
+    api.post<FormTemplate>("/api/v1/admin/config/templates", data).then((r) => r.data),
 
   update: (id: number, data: Partial<FormTemplate>) =>
     api
-      .patch<FormTemplate>(`/admin/config/templates/${id}`, data)
+      .patch<FormTemplate>(`/api/v1/admin/config/templates/${id}`, data)
       .then((r) => r.data),
 
   publish: (id: number) =>
     api
-      .post<FormTemplate>(`/admin/config/templates/${id}/publish`)
+      .post<FormTemplate>(`/api/v1/admin/config/templates/${id}/publish`)
       .then((r) => r.data),
 
   delete: (id: number) =>
-    api.delete<void>(`/admin/config/templates/${id}`).then((r) => r.data),
+    api.delete<void>(`/api/v1/admin/config/templates/${id}`).then((r) => r.data),
 };
 
 export const contractsApi = {
@@ -3393,19 +3393,19 @@ export const contractsApi = {
       .get<{
         items: Contract[];
         total: number;
-      }>(`/admin/config/contracts${activeOnly ? "?is_active=true" : ""}`)
+      }>(`/api/v1/admin/config/contracts${activeOnly ? "?is_active=true" : ""}`)
       .then((r) => r.data),
 
   create: (data: Partial<Contract>) =>
-    api.post<Contract>("/admin/config/contracts", data).then((r) => r.data),
+    api.post<Contract>("/api/v1/admin/config/contracts", data).then((r) => r.data),
 
   update: (id: number, data: Partial<Contract>) =>
     api
-      .patch<Contract>(`/admin/config/contracts/${id}`, data)
+      .patch<Contract>(`/api/v1/admin/config/contracts/${id}`, data)
       .then((r) => r.data),
 
   delete: (id: number) =>
-    api.delete<void>(`/admin/config/contracts/${id}`).then((r) => r.data),
+    api.delete<void>(`/api/v1/admin/config/contracts/${id}`).then((r) => r.data),
 };
 
 export const lookupsApi = {
@@ -3414,22 +3414,22 @@ export const lookupsApi = {
       .get<{
         items: LookupOption[];
         total: number;
-      }>(`/admin/config/lookup/${category}${activeOnly ? "?is_active=true" : ""}`)
+      }>(`/api/v1/admin/config/lookup/${category}${activeOnly ? "?is_active=true" : ""}`)
       .then((r) => r.data),
 
   create: (category: string, data: Partial<LookupOption>) =>
     api
-      .post<LookupOption>(`/admin/config/lookup/${category}`, data)
+      .post<LookupOption>(`/api/v1/admin/config/lookup/${category}`, data)
       .then((r) => r.data),
 
   update: (category: string, id: number, data: Partial<LookupOption>) =>
     api
-      .patch<LookupOption>(`/admin/config/lookup/${category}/${id}`, data)
+      .patch<LookupOption>(`/api/v1/admin/config/lookup/${category}/${id}`, data)
       .then((r) => r.data),
 
   delete: (category: string, id: number) =>
     api
-      .delete<void>(`/admin/config/lookup/${category}/${id}`)
+      .delete<void>(`/api/v1/admin/config/lookup/${category}/${id}`)
       .then((r) => r.data),
 };
 
@@ -3439,15 +3439,15 @@ export const settingsApi = {
       .get<{
         items: SystemSetting[];
         total: number;
-      }>(`/admin/config/settings${category ? `?category=${category}` : ""}`)
+      }>(`/api/v1/admin/config/settings${category ? `?category=${category}` : ""}`)
       .then((r) => r.data),
 
   get: (key: string) =>
-    api.get<SystemSetting>(`/admin/config/settings/${key}`).then((r) => r.data),
+    api.get<SystemSetting>(`/api/v1/admin/config/settings/${key}`).then((r) => r.data),
 
   update: (key: string, value: string) =>
     api
-      .patch<SystemSetting>(`/admin/config/settings/${key}`, { value })
+      .patch<SystemSetting>(`/api/v1/admin/config/settings/${key}`, { value })
       .then((r) => r.data),
 };
 

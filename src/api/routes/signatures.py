@@ -490,7 +490,7 @@ async def get_signature_stats(
     total_signatures = result.scalar()
 
     # This month
-    this_month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0)
+    this_month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0)
     result = await db.execute(
         select(func.count(SignatureRequest.id)).where(
             SignatureRequest.tenant_id == current_user.tenant_id,

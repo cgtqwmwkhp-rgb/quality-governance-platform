@@ -534,7 +534,7 @@ class PlanetMarkService:
         result = await db.execute(stmt.order_by(ImprovementAction.time_bound))  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         actions = result.scalars().all()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         completed = len([a for a in actions if a.status == "completed"])
         in_progress = len([a for a in actions if a.status == "in_progress"])
         overdue = len([a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < now])
@@ -617,7 +617,7 @@ class PlanetMarkService:
         for key, value in updates.items():
             setattr(action, key, value)
         if hasattr(action, "updated_at"):
-            action.updated_at = datetime.utcnow()
+            action.updated_at = datetime.now(timezone.utc)
         await db.commit()
         return {"message": "Action updated", "id": action.id}
 
@@ -885,7 +885,7 @@ class PlanetMarkService:
         )
         actions = list(actions_result.scalars().all())
 
-        dashboard_now = datetime.utcnow()
+        dashboard_now = datetime.now(timezone.utc)
         overdue_actions = [
             a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < dashboard_now
         ]

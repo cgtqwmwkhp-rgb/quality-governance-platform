@@ -920,7 +920,7 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
             clause_details.append(detail)
 
         return {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "summary": coverage,
             "clauses": clause_details,
         }

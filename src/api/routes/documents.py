@@ -186,7 +186,7 @@ async def upload_document(
         )
 
     # Generate unique file path (for Azure Blob Storage)
-    file_path = f"documents/{datetime.utcnow().strftime('%Y/%m')}/{uuid.uuid4()}/{file.filename}"
+    file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{file.filename}"
 
     # Create document record
     doc = Document(
@@ -248,7 +248,7 @@ async def upload_document(
             doc.ai_topics = analysis.topics
             doc.ai_entities = analysis.entities
             doc.ai_confidence = analysis.confidence
-            doc.ai_processed_at = datetime.utcnow()
+            doc.ai_processed_at = datetime.now(timezone.utc)
             doc.has_tables = analysis.has_tables
             doc.has_images = analysis.has_images
             doc.word_count = len(text_content.split())
@@ -279,7 +279,7 @@ async def upload_document(
 
             if embeddings:
                 await vector_service.upsert_chunks(doc.id, chunks, embeddings)
-                doc.indexed_at = datetime.utcnow()
+                doc.indexed_at = datetime.now(timezone.utc)
                 doc.status = DocumentStatus.INDEXED
             else:
                 doc.status = DocumentStatus.APPROVED
@@ -386,7 +386,7 @@ async def get_document(
 
     # Increment view count
     document.view_count += 1
-    document.last_accessed_at = datetime.utcnow()
+    document.last_accessed_at = datetime.now(timezone.utc)
     await db.commit()
 
     return DocumentResponse.model_validate(document)

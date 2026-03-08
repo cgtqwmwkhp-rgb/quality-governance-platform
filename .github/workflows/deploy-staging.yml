@@ -1,9 +1,10 @@
 name: Deploy to Azure Staging
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
     inputs:
       reason:
@@ -25,6 +26,9 @@ jobs:
   build-and-deploy:
     name: Build and Deploy to Staging
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     outputs:
       deployment_id: ${{ steps.generate-id.outputs.deployment_id }}
       image_tag: ${{ steps.build.outputs.image_tag }}

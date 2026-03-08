@@ -85,7 +85,7 @@ class AuditLogService:
                 k for k in set(old_values.keys()) | set(new_values.keys()) if old_values.get(k) != new_values.get(k)
             ]
 
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(timezone.utc)
 
         # Compute entry hash
         entry_hash = AuditLogEntry.compute_hash(
@@ -301,7 +301,7 @@ class AuditLogService:
         days: int = 30,
     ) -> list[AuditLogEntry]:
         """Get recent activity for a user."""
-        date_from = datetime.utcnow() - timedelta(days=days)
+        date_from = datetime.now(timezone.utc) - timedelta(days=days)
         return await self.get_entries(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -499,7 +499,7 @@ class AuditLogService:
 
     async def get_stats(self, tenant_id: int, days: int = 30) -> dict:
         """Get audit log statistics."""
-        date_from = datetime.utcnow() - timedelta(days=days)
+        date_from = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Total entries
         result = await self.db.execute(

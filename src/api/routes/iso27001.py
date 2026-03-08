@@ -193,7 +193,7 @@ async def create_asset(
 
     asset = InformationAsset(
         asset_id=asset_id,
-        next_review_date=datetime.utcnow() + timedelta(days=365),
+        next_review_date=datetime.now(timezone.utc) + timedelta(days=365),
         **asset_data.model_dump(),
     )
     db.add(asset)
@@ -336,11 +336,11 @@ async def update_control(
         setattr(control, key, value)
 
     if control_data.implementation_status == "implemented":
-        control.implementation_date = datetime.utcnow()
+        control.implementation_date = datetime.now(timezone.utc)
     if control_data.effectiveness_rating:
-        control.last_effectiveness_review = datetime.utcnow()
+        control.last_effectiveness_review = datetime.now(timezone.utc)
 
-    control.updated_at = datetime.utcnow()
+    control.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Control updated", "id": control.id}
@@ -471,7 +471,7 @@ async def create_security_risk(
         risk_id=risk_id,
         inherent_risk_score=inherent_score,
         residual_risk_score=max(residual_score, 1),
-        next_review_date=datetime.utcnow() + timedelta(days=90),
+        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
         **risk_data.model_dump(),
     )
     db.add(risk)
@@ -583,11 +583,11 @@ async def update_security_incident(
         setattr(incident, key, value)
 
     if incident_data.status == "contained" and not incident.contained_date:
-        incident.contained_date = datetime.utcnow()
+        incident.contained_date = datetime.now(timezone.utc)
     if incident_data.status == "closed" and not incident.resolved_date:
-        incident.resolved_date = datetime.utcnow()
+        incident.resolved_date = datetime.now(timezone.utc)
 
-    incident.updated_at = datetime.utcnow()
+    incident.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Incident updated", "id": incident.id}
@@ -647,8 +647,8 @@ async def create_supplier_assessment(
 ) -> dict[str, Any]:
     """Create supplier security assessment"""
     assessment = SupplierSecurityAssessment(
-        assessment_date=datetime.utcnow(),
-        next_assessment_date=datetime.utcnow()
+        assessment_date=datetime.now(timezone.utc),
+        next_assessment_date=datetime.now(timezone.utc)
         + timedelta(
             days=(
                 assessment_data.assessment_frequency_months
@@ -718,7 +718,7 @@ async def get_isms_dashboard(
 
     result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
-            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30)
+            SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30)
         )
     )
     incidents_30d = result.scalar()

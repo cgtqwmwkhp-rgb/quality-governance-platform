@@ -563,7 +563,7 @@ async def list_improvement_actions(
     # Summary
     completed = len([a for a in actions if a.status == "completed"])
     in_progress = len([a for a in actions if a.status == "in_progress"])
-    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()])
+    overdue = len([a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)])
 
     return {
         "year_id": year_id,
@@ -586,7 +586,7 @@ async def list_improvement_actions(
                 "progress_percent": a.progress_percent,
                 "target_scope": a.target_scope,
                 "expected_reduction_pct": a.expected_reduction_pct,
-                "is_overdue": a.status != "completed" and a.time_bound < datetime.utcnow(),
+                "is_overdue": a.status != "completed" and a.time_bound < datetime.now(timezone.utc),
             }
             for a in actions
         ],
@@ -652,7 +652,7 @@ async def update_action_status(
     for key, value in status_data.model_dump(exclude_unset=True).items():
         setattr(action, key, value)
 
-    action.updated_at = datetime.utcnow()
+    action.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Action updated", "id": action.id}
@@ -1027,7 +1027,7 @@ async def get_carbon_dashboard(
     result = await db.execute(select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id))
     actions = result.scalars().all()
 
-    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.utcnow()]
+    overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)]
 
     return {
         "current_year": {

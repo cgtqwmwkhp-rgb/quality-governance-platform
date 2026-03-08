@@ -335,7 +335,7 @@ async def send_test_notification(current_user: CurrentUser):
             "priority": "low",
             "title": "Test Notification",
             "message": "This is a test notification. WebSocket is working!",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         },
         event_type="notification",
     )

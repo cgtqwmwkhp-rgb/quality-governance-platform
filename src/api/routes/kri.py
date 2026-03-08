@@ -267,7 +267,7 @@ async def acknowledge_alert(
         raise HTTPException(status_code=404, detail="Alert not found")
 
     alert.is_acknowledged = True
-    alert.acknowledged_at = datetime.utcnow()
+    alert.acknowledged_at = datetime.now(timezone.utc)
     alert.acknowledged_by_id = current_user.get("id")
     alert.acknowledgment_notes = notes
 
@@ -291,7 +291,7 @@ async def resolve_alert(
         raise HTTPException(status_code=404, detail="Alert not found")
 
     alert.is_resolved = True
-    alert.resolved_at = datetime.utcnow()
+    alert.resolved_at = datetime.now(timezone.utc)
     alert.resolved_by_id = current_user.get("id")
     alert.resolution_notes = notes
 
@@ -345,7 +345,7 @@ async def assess_incident_sif(
     incident.is_sif = assessment.is_sif
     incident.is_psif = assessment.is_psif
     incident.sif_classification = assessment.sif_classification
-    incident.sif_assessment_date = datetime.utcnow()
+    incident.sif_assessment_date = datetime.now(timezone.utc)
     incident.sif_assessed_by_id = current_user.get("id")
     incident.sif_rationale = assessment.sif_rationale
     incident.life_altering_potential = assessment.life_altering_potential

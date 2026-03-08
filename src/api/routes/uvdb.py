@@ -610,7 +610,7 @@ async def create_audit(
     """Create a new UVDB audit"""
     count_result = await db.execute(select(func.count()).select_from(UVDBAudit))
     count = count_result.scalar()
-    audit_reference = f"UVDB-{datetime.utcnow().year}-{(count + 1):04d}"
+    audit_reference = f"UVDB-{datetime.now(timezone.utc).year}-{(count + 1):04d}"
 
     audit = UVDBAudit(
         audit_reference=audit_reference,
@@ -688,7 +688,7 @@ async def update_audit(
     for key, value in update_data.items():
         setattr(audit, key, value)
 
-    audit.updated_at = datetime.utcnow()
+    audit.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Audit updated", "id": audit.id}

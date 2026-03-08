@@ -560,11 +560,11 @@ async def update_investigation(
     # Update status timestamps
     if investigation_data.status:
         if investigation_data.status == "in_progress" and not investigation.started_at:
-            setattr(investigation, "started_at", datetime.utcnow())
+            setattr(investigation, "started_at", datetime.now(timezone.utc))
         elif investigation_data.status == "completed" and not investigation.completed_at:
-            setattr(investigation, "completed_at", datetime.utcnow())
+            setattr(investigation, "completed_at", datetime.now(timezone.utc))
         elif investigation_data.status == "closed" and not investigation.closed_at:
-            setattr(investigation, "closed_at", datetime.utcnow())
+            setattr(investigation, "closed_at", datetime.now(timezone.utc))
 
     await db.commit()
     await db.refresh(investigation)

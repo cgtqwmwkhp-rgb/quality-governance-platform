@@ -160,7 +160,7 @@ async def list_documents(
                 "owner_name": d.owner_name,
                 "effective_date": (d.effective_date.isoformat() if d.effective_date else None),
                 "next_review_date": (d.next_review_date.isoformat() if d.next_review_date else None),
-                "is_overdue": (d.next_review_date < datetime.utcnow() if d.next_review_date else False),
+                "is_overdue": (d.next_review_date < datetime.now(timezone.utc) if d.next_review_date else False),
             }
             for d in documents
         ],
@@ -324,7 +324,7 @@ async def update_document(
     for key, value in update_data.items():
         setattr(document, key, value)
 
-    document.updated_at = datetime.utcnow()
+    document.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(document)
 
@@ -362,7 +362,7 @@ async def create_new_version(
     document.major_version = new_major
     document.minor_version = new_minor
     document.status = "under_revision"
-    document.updated_at = datetime.utcnow()
+    document.updated_at = datetime.now(timezone.utc)
 
     # Create version record
     version = ControlledDocumentVersion(
@@ -501,7 +501,7 @@ async def submit_for_approval(
 
     # Set due date based on workflow
     if workflow.auto_escalate_after_days:
-        instance.due_date = datetime.utcnow() + timedelta(days=workflow.auto_escalate_after_days)
+        instance.due_date = datetime.now(timezone.utc) + timedelta(days=workflow.auto_escalate_after_days)
 
     document.status = "pending_approval"
 
@@ -556,19 +556,19 @@ async def take_approval_action(
         # Check if this was the last step
         if instance.current_step >= len(workflow.workflow_steps):
             instance.status = "approved"
-            instance.completed_date = datetime.utcnow()
+            instance.completed_date = datetime.now(timezone.utc)
             instance.final_decision = "approved"
             if document:
                 document.status = "approved"
-                document.approved_date = datetime.utcnow()
-                document.effective_date = datetime.utcnow()
-                document.next_review_date = datetime.utcnow() + timedelta(days=document.review_frequency_months * 30)
+                document.approved_date = datetime.now(timezone.utc)
+                document.effective_date = datetime.now(timezone.utc)
+                document.next_review_date = datetime.now(timezone.utc) + timedelta(days=document.review_frequency_months * 30)
         else:
             instance.current_step += 1
 
     elif action_request.action == "rejected":
         instance.status = "rejected"
-        instance.completed_date = datetime.utcnow()
+        instance.completed_date = datetime.now(timezone.utc)
         instance.final_decision = "rejected"
         instance.final_comments = action_request.comments
         if document:
@@ -605,7 +605,7 @@ async def distribute_document(
 
     dist = DocumentDistribution(
         document_id=document_id,
-        notified_date=datetime.utcnow(),
+        notified_date=datetime.now(timezone.utc),
         **distribution.model_dump(),
     )
     db.add(dist)
@@ -641,7 +641,7 @@ async def acknowledge_distribution(
         raise HTTPException(status_code=404, detail="Distribution not found")
 
     dist.acknowledged = True
-    dist.acknowledged_date = datetime.utcnow()
+    dist.acknowledged_date = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Acknowledgment recorded"}
@@ -666,18 +666,18 @@ async def mark_document_obsolete(
     # Update document
     document.status = "obsolete"
     document.is_current = False
-    document.obsolete_date = datetime.utcnow()
+    document.obsolete_date = datetime.now(timezone.utc)
     document.obsolete_reason = obsolete_data.obsolete_reason
     document.superseded_by = obsolete_data.superseded_by_id
 
     # Create obsolete record
     record = ObsoleteDocumentRecord(
         document_id=document_id,
-        obsolete_date=datetime.utcnow(),
+        obsolete_date=datetime.now(timezone.utc),
         obsolete_reason=obsolete_data.obsolete_reason,
         superseded_by_id=obsolete_data.superseded_by_id,
         retention_required=True,
-        retention_end_date=datetime.utcnow() + timedelta(days=document.retention_period_years * 365),
+        retention_end_date=datetime.now(timezone.utc) + timedelta(days=document.retention_period_years * 365),
     )
     db.add(record)
     await db.commit()
@@ -757,7 +757,7 @@ async def get_document_summary(
 
     result = await db.execute(
         select(func.count(ControlledDocument.id)).where(
-            ControlledDocument.next_review_date < datetime.utcnow(),
+            ControlledDocument.next_review_date < datetime.now(timezone.utc),
             ControlledDocument.status == "active",
             ControlledDocument.is_current == True,
         )

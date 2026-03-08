@@ -109,7 +109,7 @@ class IMSDashboardService:
 
         open_incidents = await self._count(select(SecurityIncident).where(SecurityIncident.status == "open"))
         incidents_30d = await self._count(
-            select(SecurityIncident).where(SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30))
+            select(SecurityIncident).where(SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30))
         )
 
         high_risk_suppliers = await self._count(
@@ -163,7 +163,7 @@ class IMSDashboardService:
     async def _get_recent_incidents(self, incident_model: Any) -> list[dict[str, Any]]:
         result = await self._db.execute(
             select(incident_model)
-            .where(incident_model.detected_date >= datetime.utcnow() - timedelta(days=30))
+            .where(incident_model.detected_date >= datetime.now(timezone.utc) - timedelta(days=30))
             .order_by(incident_model.detected_date.desc())
             .limit(10)
         )
@@ -333,7 +333,7 @@ class IMSDashboardService:
         from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
 
         response: dict[str, Any] = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
         # Standards compliance

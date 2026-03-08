@@ -273,7 +273,7 @@ class WorkflowEngine:
         if not template:
             return {"error": f"Template not found: {template_code}"}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         sla_due = now + timedelta(hours=template.get("sla_hours", 72))
         warning_at = now + timedelta(hours=template.get("warning_hours", 48))
 
@@ -350,7 +350,7 @@ class WorkflowEngine:
         Returns:
             Updated workflow state
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         return {
             "workflow_id": workflow_id,
@@ -380,7 +380,7 @@ class WorkflowEngine:
             "status": "approved",
             "approved_by": user_id,
             "notes": notes,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def reject(
@@ -395,7 +395,7 @@ class WorkflowEngine:
             "status": "rejected",
             "rejected_by": user_id,
             "reason": reason,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def bulk_approve(
@@ -422,7 +422,7 @@ class WorkflowEngine:
         """Check for workflows that need escalation."""
         # In production, would query database for SLA breaches
         escalations = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Mock escalation data - workflow with SLA breach 2 hours ago
         mock_sla_due = now - timedelta(hours=2)
@@ -464,7 +464,7 @@ class WorkflowEngine:
             "escalated_to": escalate_to,
             "reason": reason,
             "new_priority": new_priority or "high",
-            "escalated_at": datetime.utcnow().isoformat(),
+            "escalated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     # ==================== Delegation ====================
@@ -480,7 +480,7 @@ class WorkflowEngine:
     ) -> Dict[str, Any]:
         """Set up out-of-office delegation."""
         return {
-            "id": f"DEL-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
+            "id": f"DEL-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}",
             "user_id": user_id,
             "delegate_id": delegate_id,
             "start_date": start_date.isoformat(),

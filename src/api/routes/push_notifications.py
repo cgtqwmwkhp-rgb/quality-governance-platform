@@ -43,7 +43,7 @@ class PushSubscription(Base):
     auth_key = Column(String(255), nullable=False)
     user_agent = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
 
 
@@ -72,8 +72,8 @@ class NotificationPreference(Base):
     quiet_hours_start = Column(String(5), nullable=True)  # "22:00"
     quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class NotificationLog(Base):
@@ -98,7 +98,7 @@ class NotificationLog(Base):
     delivered_at = Column(DateTime, nullable=True)
     read_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 # ============================================================================
@@ -171,7 +171,7 @@ class PushNotificationService:
         if existing:
             existing.user_id = user_id
             existing.is_active = True
-            existing.last_used_at = datetime.utcnow()
+            existing.last_used_at = datetime.now(timezone.utc)
             await self.db.commit()
             return existing
 
@@ -242,7 +242,7 @@ class PushNotificationService:
                 "url": url or "/portal",
                 "tag": notification_type,
                 "data": data or {},
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -263,7 +263,7 @@ class PushNotificationService:
                     channel="push",
                     status="sent" if result.get("success") else "failed",
                     error_message=result.get("error"),
-                    sent_at=datetime.utcnow(),
+                    sent_at=datetime.now(timezone.utc),
                 )
                 self.db.add(log)
 
@@ -301,7 +301,7 @@ class PushNotificationService:
                 vapid_claims=self.vapid_claims,
             )
 
-            subscription.last_used_at = datetime.utcnow()
+            subscription.last_used_at = datetime.now(timezone.utc)
             return {"success": True, "endpoint": subscription.endpoint}
 
         except ImportError:

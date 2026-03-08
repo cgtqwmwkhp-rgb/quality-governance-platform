@@ -42,7 +42,7 @@ class SMSResult:
 
     def __post_init__(self):
         if self.sent_at is None:
-            self.sent_at = datetime.utcnow()
+            self.sent_at = datetime.now(timezone.utc)
 
 
 class SMSService:
@@ -179,7 +179,7 @@ class SMSService:
 Location: {location}
 {f'Map: {gps_link}' if gps_link else ''}
 
-Time: {datetime.utcnow().strftime('%H:%M UTC')}
+Time: {datetime.now(timezone.utc).strftime('%H:%M UTC')}
 
 RESPOND IMMEDIATELY"""
 

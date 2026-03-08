@@ -339,7 +339,7 @@ async def get_sla_status(
     if not tracking:
         raise HTTPException(status_code=404, detail="SLA tracking not found for this entity")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Calculate status
     if tracking.resolved_at:
