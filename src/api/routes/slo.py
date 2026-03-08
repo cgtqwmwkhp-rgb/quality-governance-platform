@@ -229,7 +229,7 @@ class SLOMetricsMiddleware(BaseHTTPMiddleware):
 # ------------------------------------------------------------------
 
 
-@router.get("/slo/current")
+@router.get("/current")
 async def get_slo_metrics():
     """Get current SLO compliance metrics computed from live request data."""
     snap = metrics_collector.snapshot()
@@ -274,7 +274,7 @@ async def get_slo_metrics():
     }
 
 
-@router.get("/slo/metrics")
+@router.get("/metrics")
 async def get_slo_raw_metrics(current_user: CurrentUser = None):
     """Expose raw SLO metrics snapshot (availability, latency percentiles)."""
     return {

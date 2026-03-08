@@ -86,7 +86,7 @@ async def create_complaint(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=api_error(
                     ErrorCode.DUPLICATE_ENTITY,
-                    f"Complaint with external_ref already exists",
+                    "Complaint with external_ref already exists",
                     details={"existing_reference_number": parts[2] if len(parts) > 2 else ""},
                 ),
             )

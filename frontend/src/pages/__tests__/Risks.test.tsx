@@ -82,8 +82,8 @@ describe('Risks', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     const { container } = render(<Risks />, { wrapper: Wrapper })
 
-    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
-    expect(screen.queryByText('risks.title')).not.toBeInTheDocument()
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
+    expect(screen.getByText('risks.title')).toBeInTheDocument()
   })
 
   it('renders risk list after data loads', async () => {

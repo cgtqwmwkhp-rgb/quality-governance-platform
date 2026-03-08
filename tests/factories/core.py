@@ -41,6 +41,7 @@ class TenantFactory(factory.Factory):
 
     name = factory.Sequence(lambda n: f"Tenant {n}")
     slug = factory.Sequence(lambda n: f"tenant-{n}")
+    admin_email = factory.Sequence(lambda n: f"admin-{n}@example.com")
     is_active = True
     subscription_tier = "standard"
 

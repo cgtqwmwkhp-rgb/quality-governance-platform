@@ -17,12 +17,12 @@ from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.core.config import settings
-
-DEFAULT_PORTAL_TENANT_ID = getattr(settings, "default_tenant_id", 1)
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
+
+DEFAULT_PORTAL_TENANT_ID = getattr(settings, "default_tenant_id", 1)
 
 router = APIRouter(tags=["Employee Portal"])
 

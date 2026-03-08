@@ -259,51 +259,47 @@ async def _seed_default_data():
     ``created_by_id=1``.  This user MUST exist in the ``users`` table
     to satisfy FK constraints.
     """
-    try:
-        from sqlalchemy import select
+    from sqlalchemy import select, text
 
-        from src.core.security import get_password_hash
-        from src.domain.models.tenant import Tenant
-        from src.domain.models.user import User
-        from src.infrastructure.database import async_session_maker
-        from tests.factories import TenantFactory, UserFactory
+    from src.core.security import get_password_hash
+    from src.domain.models.tenant import Tenant
+    from src.domain.models.user import User
+    from src.infrastructure.database import async_session_maker, engine
+    from tests.factories import TenantFactory, UserFactory
 
-        async with async_session_maker() as session:
-            result = await session.execute(select(Tenant).where(Tenant.id == 1))
-            if result.scalar_one_or_none() is None:
-                session.add(
-                    TenantFactory.build(
-                        id=1,
-                        name="Test Tenant",
-                        slug="test-tenant",
-                        admin_email="admin@test.example.com",
-                    )
+    async with async_session_maker() as session:
+        result = await session.execute(select(Tenant).where(Tenant.id == 1))
+        if result.scalar_one_or_none() is None:
+            session.add(
+                TenantFactory.build(
+                    id=1,
+                    name="Test Tenant",
+                    slug="test-tenant",
+                    admin_email="admin@test.example.com",
                 )
-                await session.flush()
+            )
+            await session.flush()
 
-            result = await session.execute(select(User).where(User.id == 1))
-            if result.scalar_one_or_none() is None:
-                session.add(
-                    UserFactory.build(
-                        id=1,
-                        email="test@example.com",
-                        hashed_password=get_password_hash("testpassword123"),
-                        is_active=True,
-                        is_superuser=False,
-                        tenant_id=1,
-                    )
+        result = await session.execute(select(User).where(User.id == 1))
+        if result.scalar_one_or_none() is None:
+            session.add(
+                UserFactory.build(
+                    id=1,
+                    email="test@example.com",
+                    hashed_password=get_password_hash("testpassword123"),
+                    is_active=True,
+                    is_superuser=False,
+                    tenant_id=1,
                 )
-            await session.commit()
+            )
+        await session.commit()
 
-        from sqlalchemy import text
-
-        from src.infrastructure.database import engine
-
+    if "postgresql" in str(engine.url):
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
-    except Exception:
-        pass
+
+    yield
 
 
 # ---------------------------------------------------------------------------

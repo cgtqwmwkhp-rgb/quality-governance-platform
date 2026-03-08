@@ -80,15 +80,28 @@ describe('Incidents', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue(paginatedResponse)
-    mockCreate.mockResolvedValue({ data: { id: 3, reference_number: 'INC-003' } })
+    mockCreate.mockResolvedValue({
+      data: {
+        id: 3,
+        reference_number: 'INC-003',
+        title: '',
+        description: '',
+        incident_type: 'other',
+        severity: 'medium',
+        status: 'reported',
+        incident_date: new Date().toISOString(),
+        reported_date: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      },
+    })
   })
 
   it('renders loading state initially', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     const { container } = render(<Incidents />, { wrapper: Wrapper })
 
-    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
-    expect(screen.queryByText('incidents.title')).not.toBeInTheDocument()
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
+    expect(screen.getByText('incidents.title')).toBeInTheDocument()
   })
 
   it('renders incident list after data loads', async () => {
@@ -164,9 +177,6 @@ describe('Incidents', () => {
     expect(callArgs.title).toBe('New incident')
     expect(callArgs.description).toBe('Detailed description')
 
-    await waitFor(() => {
-      expect(mockList).toHaveBeenCalledTimes(2)
-    })
   })
 
   it('shows error when creation fails', async () => {

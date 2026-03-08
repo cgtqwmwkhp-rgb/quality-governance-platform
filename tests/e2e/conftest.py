@@ -19,47 +19,45 @@ async def _seed_default_data():
     from src.core.security import get_password_hash
     from src.domain.models.tenant import Tenant
     from src.domain.models.user import User
-    from src.infrastructure.database import async_session_maker
+    from src.infrastructure.database import async_session_maker, engine
 
-    try:
-        async with async_session_maker() as session:
-            result = await session.execute(select(Tenant).where(Tenant.id == 1))
-            if result.scalar_one_or_none() is None:
-                session.add(
-                    Tenant(
-                        id=1,
-                        name="E2E Test Tenant",
-                        slug="e2e-test",
-                        admin_email="e2e@test.example.com",
-                    )
+    async with async_session_maker() as session:
+        result = await session.execute(select(Tenant).where(Tenant.id == 1))
+        if result.scalar_one_or_none() is None:
+            session.add(
+                Tenant(
+                    id=1,
+                    name="E2E Test Tenant",
+                    slug="e2e-test",
+                    admin_email="e2e@test.example.com",
                 )
-                await session.flush()
+            )
+            await session.flush()
 
-            result = await session.execute(select(User).where(User.id == 1))
-            if result.scalar_one_or_none() is None:
-                session.add(
-                    User(
-                        id=1,
-                        email="test@example.com",
-                        hashed_password=get_password_hash("testpassword123"),
-                        first_name="Test",
-                        last_name="User",
-                        is_active=True,
-                        is_superuser=False,
-                        tenant_id=1,
-                    )
+        result = await session.execute(select(User).where(User.id == 1))
+        if result.scalar_one_or_none() is None:
+            session.add(
+                User(
+                    id=1,
+                    email="test@example.com",
+                    hashed_password=get_password_hash("testpassword123"),
+                    first_name="Test",
+                    last_name="User",
+                    is_active=True,
+                    is_superuser=False,
+                    tenant_id=1,
                 )
-            await session.commit()
+            )
+        await session.commit()
 
+    if "postgresql" in str(engine.url):
         from sqlalchemy import text
-
-        from src.infrastructure.database import engine
 
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
-    except Exception:
-        pass
+
+    yield
 
 
 # ---------------------------------------------------------------------------

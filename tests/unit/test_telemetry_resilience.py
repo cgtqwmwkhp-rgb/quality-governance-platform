@@ -1,5 +1,5 @@
 """
-Tests for telemetry resilience (ADR-0004).
+Tests for telemetry resilience (ADR-0008).
 
 Verifies that telemetry failures are non-blocking:
 - Backend errors are caught and swallowed
@@ -45,7 +45,7 @@ class TestFrontendTelemetryContract:
     """Document frontend telemetry contract for test coverage."""
 
     def test_resilience_requirements_documented(self):
-        """ADR-0004 resilience requirements."""
+        """ADR-0008 resilience requirements."""
         requirements = {
             "non_blocking": "Telemetry failures MUST NOT block user workflows",
             "silent_errors": "Telemetry failures MUST NOT spam console with errors",
@@ -108,28 +108,28 @@ class TestFrontendTelemetryContract:
 
 
 class TestTelemetryQuarantinePolicy:
-    """Verify ADR-0004 quarantine policy implementation."""
+    """Verify ADR-0008 quarantine policy implementation."""
 
     def test_adr_0004_exists(self):
-        """Test ADR-0004 documentation exists."""
+        """Test ADR-0008 documentation exists."""
         import os
 
-        adr_path = "docs/adr/ADR-0004-TELEMETRY-CORS-QUARANTINE.md"
-        assert os.path.exists(adr_path), f"ADR-0004 not found at {adr_path}"
+        adr_path = "docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md"
+        assert os.path.exists(adr_path), f"ADR-0008 not found at {adr_path}"
 
     def test_adr_0004_contains_feature_flag(self):
-        """Test ADR-0004 documents feature flag."""
-        with open("docs/adr/ADR-0004-TELEMETRY-CORS-QUARANTINE.md") as f:
+        """Test ADR-0008 documents feature flag."""
+        with open("docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md") as f:
             content = f.read()
 
-        assert "TELEMETRY_ENABLED" in content, "ADR-0004 must document feature flag"
-        assert "silentLog" in content, "ADR-0004 must document silent logging"
-        assert "DISABLED in production" in content, "ADR-0004 must document production disabled"
+        assert "TELEMETRY_ENABLED" in content, "ADR-0008 must document feature flag"
+        assert "silentLog" in content, "ADR-0008 must document silent logging"
+        assert "DISABLED in production" in content, "ADR-0008 must document production disabled"
 
     def test_adr_0004_has_proof_plan(self):
-        """Test ADR-0004 has testing proof plan."""
-        with open("docs/adr/ADR-0004-TELEMETRY-CORS-QUARANTINE.md") as f:
+        """Test ADR-0008 has testing proof plan."""
+        with open("docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md") as f:
             content = f.read()
 
-        assert "## Testing Proof Plan" in content, "ADR-0004 must have proof plan"
+        assert "## Testing Proof Plan" in content, "ADR-0008 must have proof plan"
         assert "DevTools Console" in content, "Proof plan must reference DevTools"

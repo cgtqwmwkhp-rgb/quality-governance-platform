@@ -2,7 +2,7 @@
 
 import logging
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -154,7 +154,7 @@ class Settings(BaseSettings):
     celery_result_backend: str = ""
 
     # OpenTelemetry / Azure Monitor
-    otel_trace_sample_rate: float | None = None
+    otel_trace_sample_rate: Optional[float] = None
     applicationinsights_connection_string: str = ""
 
     # UAT Mode for production-safe testing

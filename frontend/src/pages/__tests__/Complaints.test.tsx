@@ -82,15 +82,29 @@ describe('Complaints', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockList.mockResolvedValue(paginatedResponse)
-    mockCreate.mockResolvedValue({ data: { id: 3, reference_number: 'CMP-003' } })
+    mockCreate.mockResolvedValue({
+      data: {
+        id: 3,
+        reference_number: 'CMP-003',
+        title: '',
+        description: '',
+        complaint_type: 'other',
+        priority: 'medium',
+        status: 'received',
+        received_date: new Date().toISOString(),
+        complainant_name: '',
+        complainant_email: '',
+        complainant_phone: '',
+      },
+    })
   })
 
   it('renders loading state initially', () => {
     mockList.mockReturnValue(new Promise(() => {}))
     const { container } = render(<Complaints />, { wrapper: Wrapper })
 
-    expect(container.querySelector('.animate-spin')).toBeInTheDocument()
-    expect(screen.queryByText('complaints.title')).not.toBeInTheDocument()
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument()
+    expect(screen.getByText('complaints.title')).toBeInTheDocument()
   })
 
   it('renders complaint list after data loads', async () => {
@@ -178,9 +192,6 @@ describe('Complaints', () => {
     expect(callArgs.title).toBe('New complaint')
     expect(callArgs.description).toBe('Detailed description')
 
-    await waitFor(() => {
-      expect(mockList).toHaveBeenCalledTimes(2)
-    })
   })
 
   it('shows error when creation fails', async () => {

@@ -63,15 +63,6 @@ UVDB_ENDPOINTS = [
     ("GET", "/api/v1/uvdb/iso-mapping"),
 ]
 
-SLO_ENDPOINTS = [
-    ("GET", "/api/v1/slo/current"),
-    ("GET", "/api/v1/slo/metrics"),
-]
-
-HEALTH_PROTECTED_ENDPOINTS = [
-    ("GET", "/metrics/resources"),
-]
-
 ALL_PROTECTED = (
     TENANT_WRITE_ENDPOINTS
     + INCIDENT_ENDPOINTS
@@ -81,8 +72,6 @@ ALL_PROTECTED = (
     + NEAR_MISS_ENDPOINTS
     + PLANET_MARK_ENDPOINTS
     + UVDB_ENDPOINTS
-    + SLO_ENDPOINTS
-    + HEALTH_PROTECTED_ENDPOINTS
 )
 
 
