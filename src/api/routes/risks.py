@@ -25,8 +25,35 @@ from src.api.schemas.risk import (
     RiskUpdate,
 )
 from src.api.utils.errors import api_error
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.services.reference_number import ReferenceNumberService
+
+RISK_TRANSITIONS: dict[RiskStatus, set[RiskStatus]] = {
+    RiskStatus.OPEN: {RiskStatus.MITIGATING, RiskStatus.ACCEPTED, RiskStatus.CLOSED},
+    RiskStatus.MITIGATING: {RiskStatus.ACCEPTED, RiskStatus.CLOSED, RiskStatus.OPEN},
+    RiskStatus.ACCEPTED: {RiskStatus.MITIGATING, RiskStatus.CLOSED},
+    RiskStatus.CLOSED: set(),
+}
+
+
+def validate_risk_transition(current: str, target: str) -> None:
+    """Validate a status transition for a risk.
+
+    Raises StateTransitionError if the transition is not allowed.
+    StateTransitionError is a DomainError subclass handled globally.
+    """
+    try:
+        current_status = RiskStatus(current)
+        target_status = RiskStatus(target)
+    except ValueError:
+        return
+    allowed = RISK_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current}' to '{target}'",
+            details={"allowed": sorted(s.value for s in allowed)},
+        )
 
 
 async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
@@ -45,31 +72,6 @@ async def _get_risk_tenant_checked(db, risk_id: int, current_user) -> Risk:
 
 
 router = APIRouter()
-
-_RISK_TRANSITIONS: dict[RiskStatus, set[RiskStatus]] = {
-    RiskStatus.OPEN: {RiskStatus.MITIGATING, RiskStatus.ACCEPTED, RiskStatus.CLOSED},
-    RiskStatus.MITIGATING: {RiskStatus.ACCEPTED, RiskStatus.CLOSED, RiskStatus.OPEN},
-    RiskStatus.ACCEPTED: {RiskStatus.MITIGATING, RiskStatus.CLOSED},
-    RiskStatus.CLOSED: set(),
-}
-
-
-def _validate_risk_transition(current: str, target: str) -> None:
-    try:
-        current_status = RiskStatus(current)
-        target_status = RiskStatus(target)
-    except ValueError:
-        return
-    allowed = _RISK_TRANSITIONS.get(current_status, set())
-    if target_status not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                f"Cannot transition from '{current}' to '{target}'",
-                details={"allowed": sorted(s.value for s in allowed)},
-            ),
-        )
 
 
 # ============== Risk Matrix Configuration ==============
@@ -397,7 +399,7 @@ async def update_risk(
     update_data = risk_data.model_dump(exclude_unset=True)
 
     if "status" in update_data:
-        _validate_risk_transition(risk.status, update_data["status"])
+        validate_risk_transition(risk.status, update_data["status"])
 
     # Handle JSON array fields — map schema names to actual model columns
     JSON_FIELD_MAP = {

@@ -14,13 +14,51 @@ from sqlalchemy.orm import selectinload
 
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.complaint import Complaint
+from src.domain.exceptions import StateTransitionError
+from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
+
+COMPLAINT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
+    ComplaintStatus.RECEIVED: {ComplaintStatus.ACKNOWLEDGED, ComplaintStatus.ESCALATED},
+    ComplaintStatus.ACKNOWLEDGED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.ESCALATED},
+    ComplaintStatus.UNDER_INVESTIGATION: {ComplaintStatus.PENDING_RESPONSE, ComplaintStatus.ESCALATED},
+    ComplaintStatus.PENDING_RESPONSE: {
+        ComplaintStatus.AWAITING_CUSTOMER,
+        ComplaintStatus.RESOLVED,
+        ComplaintStatus.ESCALATED,
+    },
+    ComplaintStatus.AWAITING_CUSTOMER: {
+        ComplaintStatus.UNDER_INVESTIGATION,
+        ComplaintStatus.RESOLVED,
+        ComplaintStatus.CLOSED,
+    },
+    ComplaintStatus.RESOLVED: {ComplaintStatus.CLOSED, ComplaintStatus.UNDER_INVESTIGATION},
+    ComplaintStatus.ESCALATED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.CLOSED},
+    ComplaintStatus.CLOSED: set(),
+}
+
+
+def validate_complaint_transition(current: str, target: str) -> None:
+    """Validate a status transition for a complaint.
+
+    Raises StateTransitionError if the transition is not allowed.
+    """
+    try:
+        current_status = ComplaintStatus(current)
+        target_status = ComplaintStatus(target)
+    except ValueError:
+        return
+    allowed = COMPLAINT_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current}' to '{target}'",
+            details={"allowed": sorted(s.value for s in allowed)},
+        )
 
 
 class ComplaintService:
@@ -74,24 +112,24 @@ class ComplaintService:
             request_id=request_id,
         )
 
-        await self.db.commit()
+        await self.db.flush()
         await invalidate_tenant_cache(tenant_id, "complaints")
         track_metric("complaints.created")
 
         return complaint
 
-    async def get_complaint(self, complaint_id: int, tenant_id: int | None) -> Complaint:
+    async def get_complaint(
+        self, complaint_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> Complaint:
         """Fetch a single complaint by ID.
 
         Raises:
             LookupError: If not found.
         """
-        result = await self.db.execute(
-            select(Complaint).where(
-                Complaint.id == complaint_id,
-                Complaint.tenant_id == tenant_id,
-            )
-        )
+        query = select(Complaint).where(Complaint.id == complaint_id)
+        if not skip_tenant_check:
+            query = query.where(Complaint.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         complaint = result.scalar_one_or_none()
         if complaint is None:
             raise LookupError(f"Complaint with ID {complaint_id} not found")
@@ -124,14 +162,21 @@ class ComplaintService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> Complaint:
         """Partially update a complaint.
 
         Raises:
             LookupError: If not found.
+            StateTransitionError: If a status transition is invalid.
         """
-        complaint = await self.get_complaint(complaint_id, tenant_id)
+        complaint = await self.get_complaint(complaint_id, tenant_id, skip_tenant_check=skip_tenant_check)
         old_status = complaint.status
+
+        raw_update = complaint_data.model_dump(exclude_unset=True)
+        if "status" in raw_update:
+            validate_complaint_transition(old_status, raw_update["status"])
+
         update_data = apply_updates(complaint, complaint_data, set_updated_at=False)
 
         await self.db.flush()
@@ -152,7 +197,7 @@ class ComplaintService:
             request_id=request_id,
         )
 
-        await self.db.commit()
+        await self.db.flush()
         await invalidate_tenant_cache(tenant_id, "complaints")
 
         return complaint

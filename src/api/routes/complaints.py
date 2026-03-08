@@ -1,6 +1,5 @@
 """API routes for complaint management."""
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,49 +10,11 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
-from src.domain.models.complaint import Complaint, ComplaintStatus
+from src.domain.models.complaint import Complaint
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.complaint_service import ComplaintService
-from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Complaints"])
-
-_COMPLAINT_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
-    ComplaintStatus.RECEIVED: {ComplaintStatus.ACKNOWLEDGED, ComplaintStatus.ESCALATED},
-    ComplaintStatus.ACKNOWLEDGED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.ESCALATED},
-    ComplaintStatus.UNDER_INVESTIGATION: {ComplaintStatus.PENDING_RESPONSE, ComplaintStatus.ESCALATED},
-    ComplaintStatus.PENDING_RESPONSE: {
-        ComplaintStatus.AWAITING_CUSTOMER,
-        ComplaintStatus.RESOLVED,
-        ComplaintStatus.ESCALATED,
-    },
-    ComplaintStatus.AWAITING_CUSTOMER: {
-        ComplaintStatus.UNDER_INVESTIGATION,
-        ComplaintStatus.RESOLVED,
-        ComplaintStatus.CLOSED,
-    },
-    ComplaintStatus.RESOLVED: {ComplaintStatus.CLOSED, ComplaintStatus.UNDER_INVESTIGATION},
-    ComplaintStatus.ESCALATED: {ComplaintStatus.UNDER_INVESTIGATION, ComplaintStatus.CLOSED},
-    ComplaintStatus.CLOSED: set(),
-}
-
-
-def _validate_complaint_transition(current: str, target: str) -> None:
-    try:
-        current_status = ComplaintStatus(current)
-        target_status = ComplaintStatus(target)
-    except ValueError:
-        return
-    allowed = _COMPLAINT_TRANSITIONS.get(current_status, set())
-    if target_status not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                f"Cannot transition from '{current}' to '{target}'",
-                details={"allowed": sorted(s.value for s in allowed)},
-            ),
-        )
 
 
 @router.post("/", response_model=ComplaintResponse, status_code=status.HTTP_201_CREATED)
@@ -252,49 +213,24 @@ async def update_complaint(
     """
     Partial update of a complaint.
 
-    Requires authentication.
+    Requires authentication. StateTransitionError is caught by the
+    global domain error handler and returned as a structured JSON response.
     """
-    query = select(Complaint).where(Complaint.id == complaint_id)
-    if not current_user.is_superuser:
-        query = query.where(Complaint.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    complaint = result.scalar_one_or_none()
-
-    if not complaint:
+    svc = ComplaintService(db)
+    try:
+        return await svc.update_complaint(
+            complaint_id,
+            complaint_in,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
         )
-
-    update_data = complaint_in.model_dump(exclude_unset=True)
-    old_status = complaint.status
-
-    if "status" in update_data:
-        _validate_complaint_transition(old_status, update_data["status"])
-
-    for field, value in update_data.items():
-        setattr(complaint, field, value)
-
-    await db.commit()
-    await db.refresh(complaint)
-
-    # Record audit event
-    await record_audit_event(
-        db=db,
-        event_type="complaint.updated",
-        entity_type="complaint",
-        entity_id=str(complaint.id),
-        action="update",
-        payload={
-            "updates": update_data,
-            "old_status": old_status,
-            "new_status": complaint.status,
-        },
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    return complaint
 
 
 @router.get("/{complaint_id}/investigations", response_model=dict)

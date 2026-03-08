@@ -4975,7 +4975,7 @@
           "Incidents"
         ],
         "summary": "List Incidents",
-        "description": "List all incidents with deterministic ordering.\n\nIncidents are ordered by:\n1. reported_date DESC (newest first)\n2. id ASC (stable secondary sort)\n\nRequires authentication. Users can only filter by their own email\nunless they have admin permissions.",
+        "description": "List all incidents with deterministic ordering.\n\nIncidents are ordered by reported_date DESC, id ASC.\nRequires authentication. Users can only filter by their own email\nunless they have admin permissions.",
         "operationId": "list_incidents_api_v1_incidents__get",
         "security": [
           {
@@ -5105,7 +5105,7 @@
           "Incidents"
         ],
         "summary": "Update Incident",
-        "description": "Partially update an incident.\n\nRequires authentication.",
+        "description": "Partially update an incident.\n\nRequires authentication. StateTransitionError is caught by the\nglobal domain error handler and returned as a structured JSON response.",
         "operationId": "update_incident_api_v1_incidents__incident_id__patch",
         "security": [
           {
@@ -7612,7 +7612,7 @@
           "Complaints"
         ],
         "summary": "Update Complaint",
-        "description": "Partial update of a complaint.\n\nRequires authentication.",
+        "description": "Partial update of a complaint.\n\nRequires authentication. StateTransitionError is caught by the\nglobal domain error handler and returned as a structured JSON response.",
         "operationId": "update_complaint_api_v1_complaints__complaint_id__patch",
         "security": [
           {

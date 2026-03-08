@@ -1,6 +1,6 @@
 """Incident API routes."""
 
-from datetime import datetime, timezone
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,39 +12,13 @@ from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
 from src.api.utils.errors import api_error
-from src.domain.models.incident import Incident, IncidentStatus
+from src.api.utils.pagination import PaginationParams
+from src.domain.models.incident import Incident
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.incident_service import IncidentService
-from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter()
-
-_INCIDENT_TRANSITIONS: dict[IncidentStatus, set[IncidentStatus]] = {
-    IncidentStatus.REPORTED: {IncidentStatus.UNDER_INVESTIGATION, IncidentStatus.CLOSED},
-    IncidentStatus.UNDER_INVESTIGATION: {IncidentStatus.PENDING_ACTIONS, IncidentStatus.CLOSED},
-    IncidentStatus.PENDING_ACTIONS: {IncidentStatus.ACTIONS_IN_PROGRESS, IncidentStatus.CLOSED},
-    IncidentStatus.ACTIONS_IN_PROGRESS: {IncidentStatus.PENDING_REVIEW, IncidentStatus.PENDING_ACTIONS},
-    IncidentStatus.PENDING_REVIEW: {IncidentStatus.CLOSED, IncidentStatus.ACTIONS_IN_PROGRESS},
-    IncidentStatus.CLOSED: set(),
-}
-
-
-def _validate_incident_transition(current: str, target: str) -> None:
-    try:
-        current_status = IncidentStatus(current)
-        target_status = IncidentStatus(target)
-    except ValueError:
-        return
-    allowed = _INCIDENT_TRANSITIONS.get(current_status, set())
-    if target_status not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                f"Cannot transition from '{current}' to '{target}'",
-                details={"allowed": sorted(s.value for s in allowed)},
-            ),
-        )
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -98,25 +72,24 @@ async def get_incident(
 
     Requires authentication.
     """
-    query = select(Incident).where(Incident.id == incident_id)
-    if not current_user.is_superuser:
-        query = query.where(Incident.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    incident = result.scalar_one_or_none()
-
-    if not incident:
+    svc = IncidentService(db)
+    try:
+        return await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
-    return incident
-
 
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
-    current_user: CurrentUser,  # SECURITY FIX: Always require authentication
+    current_user: CurrentUser,
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -125,15 +98,12 @@ async def list_incidents(
     """
     List all incidents with deterministic ordering.
 
-    Incidents are ordered by:
-    1. reported_date DESC (newest first)
-    2. id ASC (stable secondary sort)
-
+    Incidents are ordered by reported_date DESC, id ASC.
     Requires authentication. Users can only filter by their own email
     unless they have admin permissions.
     """
-    # SECURITY FIX: If filtering by email, enforce that users can only access their own data
-    # unless they have admin/view-all permissions
+    svc = IncidentService(db)
+
     if reporter_email:
         user_email = getattr(current_user, "email", None)
         has_view_all = (
@@ -141,21 +111,17 @@ async def list_incidents(
         )
         is_superuser = getattr(current_user, "is_superuser", False)
 
-        if not has_view_all and not is_superuser:
-            # Non-admin users can only filter by their own email
-            if user_email and reporter_email.lower() != user_email.lower():
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only view your own incidents",
-                )
+        if not await svc.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own incidents",
+            )
 
-        # AUDIT: Log email filter usage for security monitoring
-        # Note: We log the filter type but NOT the raw email (privacy compliance)
         await record_audit_event(
             db=db,
             event_type="incident.list_filtered",
             entity_type="incident",
-            entity_id="*",  # Wildcard - listing operation
+            entity_id="*",
             action="list",
             description="Incident list accessed with email filter",
             payload={
@@ -168,48 +134,24 @@ async def list_incidents(
             request_id=request_id,
         )
 
-    import logging
-    import math
-
-    logger = logging.getLogger(__name__)
-
     try:
-        # Build base query with tenant isolation
-        query = select(Incident)
-        count_query = select(sa_func.count()).select_from(Incident)
-
-        if not current_user.is_superuser:
-            query = query.where(Incident.tenant_id == current_user.tenant_id)
-            count_query = count_query.where(Incident.tenant_id == current_user.tenant_id)
-
-        # Filter by reporter_email if provided
-        if reporter_email:
-            query = query.where(Incident.reporter_email == reporter_email)
-            count_query = count_query.where(Incident.reporter_email == reporter_email)
-
-        # Count total
-        count_result = await db.execute(count_query)
-        total = count_result.scalar_one()
-
-        # Get paginated results with deterministic ordering
-        offset = (page - 1) * page_size
-        result = await db.execute(
-            query.order_by(Incident.reported_date.desc(), Incident.id.asc()).limit(page_size).offset(offset)
+        result = await svc.list_incidents(
+            tenant_id=current_user.tenant_id,
+            params=PaginationParams(page=page, page_size=page_size),
+            reporter_email=reporter_email,
+            skip_tenant_check=current_user.is_superuser,
         )
-        incidents = result.scalars().all()
-
         return IncidentListResponse(
-            items=[IncidentResponse.model_validate(i) for i in incidents],
-            total=total,
-            page=page,
-            page_size=page_size,
-            pages=math.ceil(total / page_size) if total > 0 else 1,
+            items=[IncidentResponse.model_validate(i) for i in result.items],
+            total=result.total,
+            page=result.page,
+            page_size=result.page_size,
+            pages=result.pages,
         )
     except Exception as e:
         error_str = str(e).lower()
-        logger.error(f"Error listing incidents: {e}", exc_info=True)
+        logger.error("Error listing incidents: %s", e, exc_info=True)
 
-        # Check for various database column errors
         column_errors = [
             "reporter_email",
             "column",
@@ -221,16 +163,13 @@ async def list_incidents(
             "programmingerror",
         ]
 
-        is_column_error = any(err in error_str for err in column_errors)
-
-        if is_column_error:
+        if any(err in error_str for err in column_errors):
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database migration pending. Please wait for migrations to complete.",
             )
 
-        # Re-raise with details for debugging
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error listing incidents: {type(e).__name__}: {str(e)[:200]}",
@@ -257,13 +196,14 @@ async def list_incident_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    query = select(Incident).where(Incident.id == incident_id)
-    if not current_user.is_superuser:
-        query = query.where(Incident.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    incident = result.scalar_one_or_none()
-
-    if not incident:
+    svc = IncidentService(db)
+    try:
+        await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
@@ -317,46 +257,24 @@ async def update_incident(
     """
     Partially update an incident.
 
-    Requires authentication.
+    Requires authentication. StateTransitionError is caught by the
+    global domain error handler and returned as a structured JSON response.
     """
-    query = select(Incident).where(Incident.id == incident_id)
-    if not current_user.is_superuser:
-        query = query.where(Incident.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    incident = result.scalar_one_or_none()
-
-    if not incident:
+    svc = IncidentService(db)
+    try:
+        return await svc.update_incident(
+            incident_id,
+            incident_data,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
-
-    # Status transition validation
-    update_dict = incident_data.model_dump(exclude_unset=True)
-    if "status" in update_dict:
-        _validate_incident_transition(incident.status, update_dict["status"])
-
-    for key, value in update_dict.items():
-        setattr(incident, key, value)
-
-    incident.updated_by_id = current_user.id
-    incident.updated_at = datetime.now(timezone.utc)
-
-    await record_audit_event(
-        db=db,
-        event_type="incident.updated",
-        entity_type="incident",
-        entity_id=str(incident.id),
-        action="update",
-        description=f"Incident {incident.reference_number} updated",
-        payload=update_dict,
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    await db.commit()
-    await db.refresh(incident)
-    return incident
 
 
 @router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -371,32 +289,17 @@ async def delete_incident(
 
     Requires authentication.
     """
-    query = select(Incident).where(Incident.id == incident_id)
-    if not current_user.is_superuser:
-        query = query.where(Incident.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    incident = result.scalar_one_or_none()
-
-    if not incident:
+    svc = IncidentService(db)
+    try:
+        await svc.delete_incident(
+            incident_id,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
-
-    await record_audit_event(
-        db=db,
-        event_type="incident.deleted",
-        entity_type="incident",
-        entity_id=str(incident.id),
-        action="delete",
-        description=f"Incident {incident.reference_number} deleted",
-        payload={
-            "incident_id": incident_id,
-            "reference_number": incident.reference_number,
-        },
-        user_id=current_user.id,
-        request_id=request_id,
-    )
-
-    await db.delete(incident)
-    await db.commit()

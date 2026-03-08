@@ -372,7 +372,7 @@ class AuditService:
             AuditTemplate,
         )
         self.db.add(template)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(template)
         await invalidate_tenant_cache(tenant_id, "audits")
 
@@ -431,7 +431,7 @@ class AuditService:
             await self.db.delete(template)
 
         if purged_count > 0:
-            await self.db.commit()
+            await self.db.flush()
             await record_audit_event(
                 self.db,
                 event_type="audit_template.purge",
@@ -508,7 +508,7 @@ class AuditService:
         if "standard_ids" in update_data:
             template.standard_ids_json = update_data["standard_ids"]
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(template)
         await invalidate_tenant_cache(tenant_id, "audits")
 
@@ -553,7 +553,7 @@ class AuditService:
             raise ValidationError("Template must have at least one question to publish")
 
         template.is_published = True
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(template)
 
         await record_audit_event(
@@ -641,7 +641,7 @@ class AuditService:
                     )
                 )
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(cloned)
         return cloned
 
@@ -669,7 +669,7 @@ class AuditService:
         template.archived_at = datetime.now(timezone.utc)
         template.archived_by_id = actor_user_id
         template.is_active = False
-        await self.db.commit()
+        await self.db.flush()
         await invalidate_tenant_cache(tenant_id, "audits")
 
         await record_audit_event(
@@ -707,7 +707,7 @@ class AuditService:
         template.archived_at = None
         template.archived_by_id = None
         template.is_active = True
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(template)
 
         await record_audit_event(
@@ -744,7 +744,7 @@ class AuditService:
 
         template_name = template.name
         await self.db.delete(template)
-        await self.db.commit()
+        await self.db.flush()
         await invalidate_tenant_cache(tenant_id, "audits")
 
         await record_audit_event(
@@ -772,7 +772,7 @@ class AuditService:
 
         section = AuditSection(template_id=template_id, **data)
         self.db.add(section)
-        await self.db.commit()
+        await self.db.flush()
 
         refreshed = await self.db.execute(
             select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
@@ -800,7 +800,7 @@ class AuditService:
         )
 
         self._apply_dict(section, update_data)
-        await self.db.commit()
+        await self.db.flush()
 
         refreshed = await self.db.execute(
             select(AuditSection).options(selectinload(AuditSection.questions)).where(AuditSection.id == section.id)
@@ -820,7 +820,7 @@ class AuditService:
             tenant_id=tenant_id,
         )
         section.is_active = False
-        await self.db.commit()
+        await self.db.flush()
 
     # ==================================================================
     # Question methods
@@ -849,7 +849,7 @@ class AuditService:
 
         question = AuditQuestion(template_id=template_id, **question_dict)
         self.db.add(question)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(question)
         return question
 
@@ -877,7 +877,7 @@ class AuditService:
         )
         self._apply_dict(question, update_data, exclude=handled)
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(question)
         return question
 
@@ -897,7 +897,7 @@ class AuditService:
             tenant_id=tenant_id,
         )
         question.is_active = False
-        await self.db.commit()
+        await self.db.flush()
 
     # ==================================================================
     # Run methods
@@ -965,7 +965,7 @@ class AuditService:
         )
 
         self.db.add(run)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(run)
         await invalidate_tenant_cache(tenant_id, "audits")
 
@@ -1045,7 +1045,7 @@ class AuditService:
 
         self._apply_dict(run, update_data, exclude={"status"})
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(run)
         await invalidate_tenant_cache(tenant_id, "audits")
         return run
@@ -1066,7 +1066,7 @@ class AuditService:
 
         run.status = AuditStatus.IN_PROGRESS
         run.started_at = datetime.now(timezone.utc)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(run)
         return run
 
@@ -1104,7 +1104,7 @@ class AuditService:
         run.status = AuditStatus.COMPLETED
         run.completed_at = datetime.now(timezone.utc)
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(run)
         track_metric("audits.completed")
         return run
@@ -1146,7 +1146,7 @@ class AuditService:
 
         response = AuditResponse(run_id=run_id, **data)
         self.db.add(response)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(response)
         return response
 
@@ -1176,7 +1176,7 @@ class AuditService:
             raise ValidationError("Cannot update responses on a completed run")
 
         self._apply_dict(response, update_data)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(response)
         return response
 
@@ -1236,7 +1236,7 @@ class AuditService:
         )
 
         self.db.add(finding)
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
         track_metric("audits.findings")
@@ -1262,7 +1262,7 @@ class AuditService:
         )
         self._apply_dict(finding, update_data, exclude=handled)
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
         return finding

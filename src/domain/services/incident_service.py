@@ -15,13 +15,41 @@ from sqlalchemy.orm import selectinload
 
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
-from src.domain.models.incident import Incident
+from src.domain.exceptions import StateTransitionError
+from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.monitoring.azure_monitor import track_business_event
 
 logger = logging.getLogger(__name__)
+
+INCIDENT_TRANSITIONS: dict[IncidentStatus, set[IncidentStatus]] = {
+    IncidentStatus.REPORTED: {IncidentStatus.UNDER_INVESTIGATION, IncidentStatus.CLOSED},
+    IncidentStatus.UNDER_INVESTIGATION: {IncidentStatus.PENDING_ACTIONS, IncidentStatus.CLOSED},
+    IncidentStatus.PENDING_ACTIONS: {IncidentStatus.ACTIONS_IN_PROGRESS, IncidentStatus.CLOSED},
+    IncidentStatus.ACTIONS_IN_PROGRESS: {IncidentStatus.PENDING_REVIEW, IncidentStatus.PENDING_ACTIONS},
+    IncidentStatus.PENDING_REVIEW: {IncidentStatus.CLOSED, IncidentStatus.ACTIONS_IN_PROGRESS},
+    IncidentStatus.CLOSED: set(),
+}
+
+
+def validate_incident_transition(current: str, target: str) -> None:
+    """Validate a status transition for an incident.
+
+    Raises StateTransitionError if the transition is not allowed.
+    """
+    try:
+        current_status = IncidentStatus(current)
+        target_status = IncidentStatus(target)
+    except ValueError:
+        return
+    allowed = INCIDENT_TRANSITIONS.get(current_status, set())
+    if target_status not in allowed:
+        raise StateTransitionError(
+            f"Cannot transition from '{current}' to '{target}'",
+            details={"allowed": sorted(s.value for s in allowed)},
+        )
 
 
 class IncidentService:
@@ -99,7 +127,7 @@ class IncidentService:
             request_id=request_id,
         )
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(incident)
         await invalidate_tenant_cache(tenant_id, "incidents")
 
@@ -107,15 +135,23 @@ class IncidentService:
 
         return incident
 
-    async def get_incident(self, incident_id: int, tenant_id: int | None) -> Incident:
+    async def get_incident(
+        self, incident_id: int, tenant_id: int | None, *, skip_tenant_check: bool = False
+    ) -> Incident:
         """Fetch a single incident by ID.
+
+        Args:
+            incident_id: Primary key.
+            tenant_id: Tenant scope (ignored when skip_tenant_check is True).
+            skip_tenant_check: If True, bypasses tenant isolation (superuser).
 
         Raises:
             LookupError: If the incident is not found.
         """
-        result = await self.db.execute(
-            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
-        )
+        query = select(Incident).where(Incident.id == incident_id)
+        if not skip_tenant_check:
+            query = query.where(Incident.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         incident = result.scalar_one_or_none()
         if incident is None:
             raise LookupError(f"Incident with ID {incident_id} not found")
@@ -127,16 +163,16 @@ class IncidentService:
         tenant_id: int | None,
         params: PaginationParams,
         reporter_email: Optional[str] = None,
+        skip_tenant_check: bool = False,
     ):
         """List incidents with pagination and optional filters."""
-        query = (
-            select(Incident)
-            .options(
-                selectinload(Incident.actions),
-                selectinload(Incident.reporter),
-            )
-            .where(Incident.tenant_id == tenant_id)
+        query = select(Incident).options(
+            selectinload(Incident.actions),
+            selectinload(Incident.reporter),
         )
+
+        if not skip_tenant_check:
+            query = query.where(Incident.tenant_id == tenant_id)
 
         if reporter_email:
             query = query.where(Incident.reporter_email == reporter_email)
@@ -152,23 +188,26 @@ class IncidentService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> Incident:
         """Partially update an incident.
 
         Raises:
             LookupError: If the incident is not found.
+            StateTransitionError: If a status transition is invalid.
         """
-        result = await self.db.execute(
-            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
-        )
-        incident = result.scalar_one_or_none()
-        if incident is None:
-            raise LookupError(f"Incident with ID {incident_id} not found")
+        incident = await self.get_incident(incident_id, tenant_id, skip_tenant_check=skip_tenant_check)
+
+        raw_update = incident_data.model_dump(exclude_unset=True)
+        if "status" in raw_update:
+            validate_incident_transition(incident.status, raw_update["status"])
 
         update_dict = apply_updates(incident, incident_data, set_updated_at=False)
 
         incident.updated_by_id = user_id
         incident.updated_at = datetime.now(timezone.utc)
+
+        await self.db.flush()
 
         await record_audit_event(
             db=self.db,
@@ -182,7 +221,7 @@ class IncidentService:
             request_id=request_id,
         )
 
-        await self.db.commit()
+        await self.db.flush()
         await self.db.refresh(incident)
         await invalidate_tenant_cache(tenant_id, "incidents")
 
@@ -195,18 +234,14 @@ class IncidentService:
         user_id: int,
         tenant_id: int | None,
         request_id: str | None = None,
+        skip_tenant_check: bool = False,
     ) -> None:
         """Delete an incident.
 
         Raises:
             LookupError: If the incident is not found.
         """
-        result = await self.db.execute(
-            select(Incident).where(Incident.id == incident_id, Incident.tenant_id == tenant_id)
-        )
-        incident = result.scalar_one_or_none()
-        if incident is None:
-            raise LookupError(f"Incident with ID {incident_id} not found")
+        incident = await self.get_incident(incident_id, tenant_id, skip_tenant_check=skip_tenant_check)
 
         await record_audit_event(
             db=self.db,
@@ -224,7 +259,7 @@ class IncidentService:
         )
 
         await self.db.delete(incident)
-        await self.db.commit()
+        await self.db.flush()
         await invalidate_tenant_cache(tenant_id, "incidents")
 
     async def check_reporter_email_access(
