@@ -87,14 +87,14 @@ class TestSourceRecordsDeterminism:
         assert "total" in data
         assert "page" in data
         assert "page_size" in data
-        assert "total_pages" in data
+        assert "pages" in data
         assert "source_type" in data
 
         # Verify values
         assert data["page"] == 1
         assert data["page_size"] == 10
         assert isinstance(data["total"], int)
-        assert isinstance(data["total_pages"], int)
+        assert isinstance(data["pages"], int)
 
 
 @pytest.mark.asyncio
