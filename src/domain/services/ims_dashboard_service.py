@@ -8,7 +8,7 @@ tasks without coupling to FastAPI / HTTP concerns.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import desc, func, select
