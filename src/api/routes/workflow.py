@@ -321,7 +321,7 @@ async def get_sla_status(
     current_user: dict = Depends(get_current_user),
 ):
     """Get current SLA status for an entity."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     result = await db.execute(
         select(SLATracking)

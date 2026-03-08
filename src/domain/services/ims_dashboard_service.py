@@ -8,7 +8,7 @@ tasks without coupling to FastAPI / HTTP concerns.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from sqlalchemy import desc, func, select
@@ -109,7 +109,9 @@ class IMSDashboardService:
 
         open_incidents = await self._count(select(SecurityIncident).where(SecurityIncident.status == "open"))
         incidents_30d = await self._count(
-            select(SecurityIncident).where(SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30))
+            select(SecurityIncident).where(
+                SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30)
+            )
         )
 
         high_risk_suppliers = await self._count(

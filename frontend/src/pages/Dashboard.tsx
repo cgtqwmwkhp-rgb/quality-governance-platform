@@ -428,7 +428,7 @@ export default function Dashboard() {
         })
       )
       activityItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      setActivities(activityItems.slice(0, 15).map(({ created_at, ...rest }) => rest))
+      setActivities(activityItems.slice(0, 15).map(({ created_at: _created_at, ...rest }) => rest))
 
       setStats({
         incidents: {

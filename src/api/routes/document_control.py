@@ -9,7 +9,7 @@ Provides endpoints for:
 - Access tracking
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -562,7 +562,9 @@ async def take_approval_action(
                 document.status = "approved"
                 document.approved_date = datetime.now(timezone.utc)
                 document.effective_date = datetime.now(timezone.utc)
-                document.next_review_date = datetime.now(timezone.utc) + timedelta(days=document.review_frequency_months * 30)
+                document.next_review_date = datetime.now(timezone.utc) + timedelta(
+                    days=document.review_frequency_months * 30
+                )
         else:
             instance.current_step += 1
 

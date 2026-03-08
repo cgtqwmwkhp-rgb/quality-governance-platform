@@ -9,7 +9,7 @@ Provides endpoints for:
 - Key EnterpriseRisk Indicators (KRIs)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query

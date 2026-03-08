@@ -4,7 +4,7 @@ Digital Signature API Routes
 DocuSign-level e-signature capabilities.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

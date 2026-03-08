@@ -12,7 +12,7 @@ Features:
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional
 

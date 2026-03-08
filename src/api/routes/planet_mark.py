@@ -12,7 +12,7 @@ Features:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

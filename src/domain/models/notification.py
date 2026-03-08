@@ -213,7 +213,9 @@ class Assignment(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     def __repr__(self) -> str:
         return (
@@ -250,7 +252,9 @@ class NotificationPreference(Base):
     email_digest_frequency: Mapped[str] = mapped_column(String(20), default="daily")
 
     # Timestamps
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     def __repr__(self) -> str:
         return f"<NotificationPreference(user_id={self.user_id})>"

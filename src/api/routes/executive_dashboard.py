@@ -74,7 +74,7 @@ async def get_incident_dashboard(
 ):
     """Get incident-specific dashboard data."""
     service = ExecutiveDashboardService(db)
-    from datetime import datetime, timedelta
+    from datetime import datetime, timezone, timedelta
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
 

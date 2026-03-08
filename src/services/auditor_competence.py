@@ -5,7 +5,7 @@ competencies, and skill-based assignment.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, func, or_, select

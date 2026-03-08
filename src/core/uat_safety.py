@@ -17,7 +17,7 @@ Only users in UAT_ADMIN_USERS list can use override headers.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Request, Response

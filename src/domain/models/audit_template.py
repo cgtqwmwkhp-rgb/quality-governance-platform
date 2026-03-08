@@ -141,7 +141,9 @@ class AuditTemplate(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
     published_at = Column(DateTime, nullable=True)
 
     # Relationships
@@ -188,7 +190,9 @@ class AuditTemplateSection(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="sections")
@@ -248,7 +252,9 @@ class AuditTemplateQuestion(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     section = relationship("AuditTemplateSection", back_populates="questions")
@@ -327,7 +333,9 @@ class AuditRun(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     template = relationship("AuditTemplate", back_populates="audit_runs")
@@ -368,7 +376,9 @@ class AuditResponse(Base):
 
     # Timestamps
     answered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
     # Relationships
     audit_run = relationship("AuditRun", back_populates="responses")
@@ -411,7 +421,9 @@ class AuditFinding(Base):
 
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
     closed_at = Column(DateTime, nullable=True)
 
     # Relationships

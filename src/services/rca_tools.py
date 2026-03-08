@@ -4,7 +4,7 @@ Provides services for 5-Whys, Fishbone diagrams, and CAPA management.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, select

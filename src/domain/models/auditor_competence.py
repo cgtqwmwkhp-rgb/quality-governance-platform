@@ -8,7 +8,7 @@ Provides tracking for:
 """
 
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text

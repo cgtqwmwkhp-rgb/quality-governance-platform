@@ -10,7 +10,7 @@ Provides complete tenant management with:
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy import func, select, update

@@ -8,7 +8,7 @@ for ISO 9001, 14001, 45001 and other standards.
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 

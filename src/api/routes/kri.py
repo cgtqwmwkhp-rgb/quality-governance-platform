@@ -4,7 +4,7 @@ Provides CRUD operations for KRIs, measurements, alerts,
 and risk score tracking.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

@@ -6,7 +6,7 @@ and monitors SLAs across all modules.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Type
 
 from sqlalchemy import and_, or_, select

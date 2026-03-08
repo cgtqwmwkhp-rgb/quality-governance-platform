@@ -11,7 +11,7 @@ Features:
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -73,7 +73,9 @@ class NotificationPreference(Base):
     quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+    )
 
 
 class NotificationLog(Base):
