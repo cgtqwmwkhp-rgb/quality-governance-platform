@@ -168,7 +168,6 @@ class IncidentService:
         """List incidents with pagination and optional filters."""
         query = select(Incident).options(
             selectinload(Incident.actions),
-            selectinload(Incident.reporter),
         )
 
         if not skip_tenant_check:
