@@ -262,8 +262,8 @@ def track_business_event(event_name: str, properties: dict[str, str] | None = No
         logger.info("Business event: %s", event_name, extra={"event": event_name, **properties})
 
 
-def get_tracer() -> trace.Tracer:
-    """Get the OpenTelemetry tracer."""
+def get_tracer() -> "trace.Tracer | None":
+    """Get the OpenTelemetry tracer, or None if OTel is unavailable."""
     global _tracer
     if _tracer is None:
         if _HAS_OTEL:
