@@ -12,6 +12,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import { EmptyState } from '../components/ui/EmptyState'
 import {
   Dialog,
   DialogContent,
@@ -413,11 +414,11 @@ export default function Documents() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredDocuments.length === 0 ? (
             <div className="md:col-span-4">
-              <Card className="p-12 text-center">
-                <FileText className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-                <h3 className="text-lg font-semibold text-foreground mb-2">{t('documents.empty.title')}</h3>
-                <p className="text-muted-foreground">{t('documents.empty.subtitle')}</p>
-              </Card>
+              <EmptyState
+                icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+                title={t('documents.empty.title')}
+                description={t('documents.empty.subtitle')}
+              />
             </div>
           ) : (
             filteredDocuments.map((doc) => {

@@ -16,6 +16,13 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../../components/ui/Dialog';
 import { cn } from '../../helpers/utils';
 
 interface Contract {
@@ -52,6 +59,7 @@ export default function ContractsManagement() {
     is_active: true,
   });
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const filteredContracts = contracts
     .filter((c) => {
@@ -127,9 +135,14 @@ export default function ContractsManagement() {
   };
 
   const handleDelete = (id: number) => {
-    if (confirm('Are you sure you want to delete this contract?')) {
-      setContracts((prev) => prev.filter((c) => c.id !== id));
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget !== null) {
+      setContracts((prev) => prev.filter((c) => c.id !== deleteTarget));
     }
+    setDeleteTarget(null);
   };
 
   const toggleActive = (id: number) => {
@@ -417,6 +430,19 @@ export default function ContractsManagement() {
           </div>
         </div>
       </main>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Contract</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to delete this contract? This action cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

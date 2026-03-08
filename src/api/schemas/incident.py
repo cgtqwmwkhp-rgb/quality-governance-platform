@@ -5,6 +5,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.api.schemas.validators import sanitize_field
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 
 
@@ -40,10 +41,14 @@ class IncidentCreate(IncidentBase):
         description="Name of the person reporting (for portal submissions)",
     )
 
+    @field_validator("title", "description", "location", "department", mode="before")
+    @classmethod
+    def _sanitize(cls, v: str) -> str:
+        return sanitize_field(v)
+
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: str) -> str:
-        """Validate title is not empty or whitespace."""
         if not v or not v.strip():
             raise ValueError("Title cannot be empty or whitespace")
         return v.strip()
@@ -61,10 +66,14 @@ class IncidentUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=300)
     department: Optional[str] = Field(None, max_length=100)
 
+    @field_validator("title", "description", "location", "department", mode="before")
+    @classmethod
+    def _sanitize(cls, v: Optional[str]) -> Optional[str]:
+        return sanitize_field(v)
+
     @field_validator("title")
     @classmethod
     def title_not_empty(cls, v: Optional[str]) -> Optional[str]:
-        """Validate title is not empty or whitespace if provided."""
         if v is not None and (not v or not v.strip()):
             raise ValueError("Title cannot be empty or whitespace")
         return v.strip() if v else None

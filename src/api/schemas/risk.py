@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from src.api.schemas.validators import sanitize_field
 
 # ============== Risk Control Schemas ==============
 
@@ -203,11 +205,23 @@ class RiskBase(BaseModel):
 class RiskCreate(RiskBase):
     """Schema for creating a Risk."""
 
-    pass
+    @field_validator(
+        "title", "description", "risk_source", "risk_event", "risk_consequence", "treatment_plan", mode="before"
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
 
 class RiskUpdate(BaseModel):
     """Schema for updating a Risk."""
+
+    @field_validator(
+        "title", "description", "risk_source", "risk_event", "risk_consequence", "treatment_plan", mode="before"
+    )
+    @classmethod
+    def _sanitize(cls, v):
+        return sanitize_field(v)
 
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None

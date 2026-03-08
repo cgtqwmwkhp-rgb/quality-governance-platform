@@ -4,6 +4,7 @@ import { Search, BookOpen, ChevronRight, ChevronDown, CheckCircle2, Circle, Aler
 import { standardsApi, Standard, Clause, ControlListItem, ComplianceScore } from '../api/client'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Badge } from '../components/ui/Badge'
 import { cn } from "../helpers/utils"
 
@@ -167,10 +168,10 @@ export default function Standards() {
           {/* Standards Cards */}
           <div className="space-y-3">
             {filteredStandards.length === 0 ? (
-              <Card className="p-8 text-center">
-                <BookOpen className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                <p className="text-muted-foreground">{t('standards.empty')}</p>
-              </Card>
+              <EmptyState
+                icon={<BookOpen className="w-8 h-8 text-muted-foreground" />}
+                title={t('standards.empty')}
+              />
             ) : (
               filteredStandards.map((standard) => {
                 const scoreData = complianceScores[standard.id]

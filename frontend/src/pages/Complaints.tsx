@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
@@ -148,10 +148,11 @@ export default function Complaints() {
     }
   }
 
+  const deferredSearch = useDeferredValue(searchTerm)
   const filteredComplaints = complaints.filter(
-    c => c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         c.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         c.complainant_name.toLowerCase().includes(searchTerm.toLowerCase())
+    c => c.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+         c.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+         c.complainant_name.toLowerCase().includes(deferredSearch.toLowerCase())
   )
 
   if (loading) {

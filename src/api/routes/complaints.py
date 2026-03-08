@@ -80,12 +80,11 @@ async def create_complaint(
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "code": "DUPLICATE_EXTERNAL_REF",
-                    "message": f"Complaint with external_ref '{external_ref}' already exists",
-                    "existing_id": existing.id,
-                    "existing_reference_number": existing.reference_number,
-                },
+                detail=api_error(
+                    ErrorCode.DUPLICATE_ENTITY,
+                    f"Complaint with external_ref '{external_ref}' already exists",
+                    details={"existing_reference_number": existing.reference_number},
+                ),
             )
 
     ref_num = await ReferenceNumberService.generate(db, "complaint", Complaint)

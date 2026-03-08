@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/Select'
 import {
   Dialog,
@@ -675,13 +676,11 @@ export default function Investigations() {
       {/* Investigation Cards */}
       <div className="space-y-4">
         {filteredInvestigations.length === 0 ? (
-          <Card className="p-12 text-center">
-            <FlaskConical className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">{t('investigations.empty.title')}</h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Start a root cause investigation to analyze incidents, RTAs, or complaints.
-            </p>
-          </Card>
+          <EmptyState
+            icon={<FlaskConical className="w-8 h-8 text-muted-foreground" />}
+            title={t('investigations.empty.title')}
+            description="Start a root cause investigation to analyze incidents, RTAs, or complaints."
+          />
         ) : (
           filteredInvestigations.map((investigation) => {
             const EntityIcon = getEntityIcon(investigation.assigned_entity_type)

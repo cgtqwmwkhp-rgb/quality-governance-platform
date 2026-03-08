@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../utils/errorTracker'
 import { Plus, FileText, Search, Loader2 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { EmptyState } from '../components/ui/EmptyState'
 import { policiesApi, Policy, PolicyCreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -124,10 +125,11 @@ export default function Policies() {
     }
   }
 
+  const deferredSearch = useDeferredValue(searchTerm)
   const filteredPolicies = policies.filter(
-    p => p.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         p.reference_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         (p.category || '').toLowerCase().includes(searchTerm.toLowerCase())
+    p => p.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+         p.reference_number.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+         (p.category || '').toLowerCase().includes(deferredSearch.toLowerCase())
   )
 
   if (loading) {
@@ -169,11 +171,12 @@ export default function Policies() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPolicies.length === 0 ? (
           <div className="col-span-full">
-            <Card className="p-12 text-center">
-              <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className="text-muted-foreground">{t('policies.empty.title')}</p>
-              <p className="text-sm text-muted-foreground mt-1">{t('policies.empty.subtitle')}</p>
-            </Card>
+            <EmptyState
+              icon={<FileText className="w-8 h-8 text-muted-foreground" />}
+              title={t('policies.empty.title')}
+              description={t('policies.empty.subtitle')}
+              action={<Button onClick={() => setShowCreateDialog(true)}><Plus className="w-4 h-4 mr-2" />{t('policies.create')}</Button>}
+            />
           </div>
         ) : (
           filteredPolicies.map((policy) => (

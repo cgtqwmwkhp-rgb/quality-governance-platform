@@ -16,6 +16,7 @@ import {
   DialogFooter,
 } from '../components/ui/Dialog'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
+import { EmptyState } from '../components/ui/EmptyState'
 import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn, decodeHtmlEntities } from "../helpers/utils"
 
@@ -457,7 +458,10 @@ export default function Audits() {
                         key={audit.id}
                         hoverable
                         className="p-4 cursor-pointer"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => navigate(`/audits/${audit.id}/execute`)}
+                        onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audits/${audit.id}/execute`); } }}
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-2">
@@ -545,9 +549,12 @@ export default function Audits() {
                 <tbody className="divide-y divide-border">
                   {filteredAudits.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">
-                        <ClipboardCheck className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                        <p>No audits found</p>
+                      <td colSpan={8}>
+                        <EmptyState
+                          icon={<ClipboardCheck className="w-8 h-8 text-muted-foreground" />}
+                          title={t('audits.empty.title')}
+                          description={t('audits.empty.subtitle', 'No audits match your current filters.')}
+                        />
                       </td>
                     </tr>
                   ) : (
@@ -555,7 +562,10 @@ export default function Audits() {
                       <tr
                         key={audit.id}
                         className="hover:bg-surface transition-colors cursor-pointer"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => navigate(`/audits/${audit.id}/execute`)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/audits/${audit.id}/execute`); } }}
                       >
                         <td className="px-6 py-4">
                           <span className="font-mono text-sm text-primary">

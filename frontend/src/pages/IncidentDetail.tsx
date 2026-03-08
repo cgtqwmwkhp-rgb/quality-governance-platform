@@ -101,6 +101,14 @@ export default function IncidentDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isEditing) navigate('/incidents')
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [navigate, isEditing])
+
   const loadIncident = async (incidentId: number) => {
     setError(null)
     try {

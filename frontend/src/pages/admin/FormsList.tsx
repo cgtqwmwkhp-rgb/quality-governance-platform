@@ -19,6 +19,13 @@ import {
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../../components/ui/Dialog';
 import { cn } from '../../helpers/utils';
 
 interface FormTemplate {
@@ -79,6 +86,7 @@ export default function FormsList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   const filteredForms = forms.filter((form) => {
     const matchesSearch =
@@ -89,10 +97,15 @@ export default function FormsList() {
   });
 
   const handleDelete = (id: number) => {
-    if (confirm('Are you sure you want to delete this form?')) {
-      setForms((prev) => prev.filter((f) => f.id !== id));
-    }
+    setDeleteTarget(id);
     setActiveMenu(null);
+  };
+
+  const confirmDelete = () => {
+    if (deleteTarget !== null) {
+      setForms((prev) => prev.filter((f) => f.id !== deleteTarget));
+    }
+    setDeleteTarget(null);
   };
 
   const handleDuplicate = (form: FormTemplate) => {
@@ -322,6 +335,19 @@ export default function FormsList() {
           </div>
         )}
       </main>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Form</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to delete this form? This action cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

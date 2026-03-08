@@ -43,6 +43,13 @@ import { Button } from "../components/ui/Button";
 import { Textarea } from "../components/ui/Textarea";
 import { Card } from "../components/ui/Card";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../components/ui/Dialog";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -107,6 +114,7 @@ export default function InvestigationDetail() {
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null);
+  const [deleteEvidenceTarget, setDeleteEvidenceTarget] = useState<number | null>(null);
 
   const [rcaData, setRcaData] = useState<Record<string, string>>({});
   const [rcaUnsaved, setRcaUnsaved] = useState(false);
@@ -279,7 +287,13 @@ export default function InvestigationDetail() {
   };
 
   const handleDeleteEvidence = async (assetId: number) => {
-    if (!confirm("Are you sure you want to delete this evidence?")) return;
+    setDeleteEvidenceTarget(assetId);
+  };
+
+  const confirmDeleteEvidence = async () => {
+    const assetId = deleteEvidenceTarget;
+    if (assetId === null) return;
+    setDeleteEvidenceTarget(null);
     setDeletingEvidenceId(assetId);
     try {
       await evidenceAssetsApi.delete(assetId);
@@ -805,6 +819,19 @@ export default function InvestigationDetail() {
           </div>
         )}
       </div>
+
+      <Dialog open={deleteEvidenceTarget !== null} onOpenChange={() => setDeleteEvidenceTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Evidence</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to delete this evidence? This action cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteEvidenceTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteEvidence}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

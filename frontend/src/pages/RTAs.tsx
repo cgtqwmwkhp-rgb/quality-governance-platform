@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { EmptyState } from '../components/ui/EmptyState'
 import { rtasApi, RTA, RTACreate, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -238,10 +239,12 @@ export default function RTAs() {
               <tbody className="divide-y divide-border">
                 {filteredRtas.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
-                      <Car className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>{t('rtas.empty.title')}</p>
-                      <p className="text-sm mt-1">{t('rtas.empty.subtitle')}</p>
+                    <td colSpan={6}>
+                      <EmptyState
+                        icon={<Car className="w-8 h-8 text-muted-foreground" />}
+                        title={t('rtas.empty.title')}
+                        description={t('rtas.empty.subtitle')}
+                      />
                     </td>
                   </tr>
                 ) : (

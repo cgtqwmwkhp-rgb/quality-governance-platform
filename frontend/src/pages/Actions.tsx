@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Search, ListTodo, Plus, Calendar, User, Flag, CheckCircle2, Clock, AlertCircle, ArrowUpRight, Filter, Loader2 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
+import { EmptyState } from '../components/ui/EmptyState'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -202,9 +203,10 @@ export default function Actions() {
     return new Date(dueDate) < new Date()
   }
 
+  const deferredSearch = useDeferredValue(searchTerm)
   const filteredActions = actions.filter(action => {
-    if (searchTerm && !action.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !(action.reference_number?.toLowerCase().includes(searchTerm.toLowerCase()))) {
+    if (deferredSearch && !action.title.toLowerCase().includes(deferredSearch.toLowerCase()) &&
+        !(action.reference_number?.toLowerCase().includes(deferredSearch.toLowerCase()))) {
       return false
     }
     if (filterStatus !== 'all' && action.status !== filterStatus) {
@@ -343,15 +345,11 @@ export default function Actions() {
       {/* Actions List */}
       <div className="space-y-4">
         {filteredActions.length === 0 ? (
-          <Card className="p-12 text-center">
-            <ListTodo className="w-16 h-16 mx-auto mb-4 text-muted-foreground/50" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">{t('actions.empty.title')}</h3>
-            <p className="text-muted-foreground">
-              {filterStatus !== 'all' || viewMode !== 'all' 
-                ? t('actions.empty.filter_hint') 
-                : t('actions.empty.subtitle')}
-            </p>
-          </Card>
+          <EmptyState
+            icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
+            title={t('actions.empty.title')}
+            description={filterStatus !== 'all' || viewMode !== 'all' ? t('actions.empty.filter_hint') : t('actions.empty.subtitle')}
+          />
         ) : (
           filteredActions.map((action) => {
             const overdue = isOverdue(action.due_date, action.status)

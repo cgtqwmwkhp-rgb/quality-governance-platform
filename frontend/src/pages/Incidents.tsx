@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useDeferredValue } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, AlertTriangle, Search } from 'lucide-react'
@@ -137,9 +137,10 @@ export default function Incidents() {
     }
   }
 
+  const deferredSearch = useDeferredValue(searchTerm)
   const filteredIncidents = incidents.filter(
-    i => i.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-         i.reference_number.toLowerCase().includes(searchTerm.toLowerCase())
+    i => i.title.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+         i.reference_number.toLowerCase().includes(deferredSearch.toLowerCase())
   )
 
   if (loading) {
