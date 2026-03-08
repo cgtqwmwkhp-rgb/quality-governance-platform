@@ -1,10 +1,10 @@
 {
-  "release_sha": "57a4f6b25d446b3f15399f86f0d7ecbba40d0d66",
+  "release_sha": "04ca877b209314564c76677fe6ddb2ca101bfb9e",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/uat_summary_6c24d54f.md",
   "rollback_drill_path": "docs/evidence/rollback_drill_6c24d54f.md",
-  "approved_at_utc": "2026-03-07T22:10:00Z"
+  "approved_at_utc": "2026-03-08T01:10:00Z"
 }
