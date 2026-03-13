@@ -43,7 +43,7 @@ def test_frontend_scheduler_uses_published_filter_and_dropdown():
     audits_page = Path("frontend/src/pages/Audits.tsx").read_text(encoding="utf-8")
     assert "listTemplates(1, 100, { is_published: true })" in audits_page
     assert "<select" in audits_page
-    assert "Select a published template (latest version)..." in audits_page
+    assert "Select a published template..." in audits_page
 
 
 def test_frontend_shows_template_version_labels():
