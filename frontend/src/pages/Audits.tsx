@@ -781,7 +781,8 @@ export default function Audits() {
                 {templates.length === 0 ? (
                   <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                     <p className="text-sm text-warning">
-                      No published templates available. Please create and publish a template first.
+                      No published templates available. Please create and publish a template first
+                      using the Audit Template Builder.
                     </p>
                   </div>
                 ) : (
@@ -803,14 +804,19 @@ export default function Audits() {
                       }}
                       className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
-                      <option value="">Select a published template (latest version)...</option>
+                      <option value="">Select a published template...</option>
                       {latestPublishedTemplates.map((template) => (
                         <option key={template.id} value={template.id}>
-                          {decodeHtmlEntities(template.name)} (Latest v{template.version}) -{' '}
+                          {decodeHtmlEntities(template.name)} (v{template.version}) -{' '}
                           {template.reference_number}
                         </option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground">
+                      Showing {latestPublishedTemplates.length} published{' '}
+                      {latestPublishedTemplates.length === 1 ? 'template' : 'templates'}. Only
+                      published templates appear here &mdash; publish via the Template Builder.
+                    </p>
                     {selectedTemplateFamily && selectedTemplateFamily.versions.length > 1 && (
                       <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
                         <button

@@ -328,9 +328,10 @@ export default function ComplianceAutomation() {
           {updates.map((update) => (
             <div
               key={update.id}
-              className={`bg-slate-800/50 border rounded-xl p-5 transition-colors ${
-                update.is_reviewed ? 'border-slate-700' : 'border-yellow-500/30'
-              }`}
+              className={cn(
+                'bg-card/50 border rounded-xl p-5 transition-colors',
+                update.is_reviewed ? 'border-border' : 'border-warning/30',
+              )}
             >
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex-1">
@@ -340,40 +341,40 @@ export default function ComplianceAutomation() {
                     >
                       {update.impact.toUpperCase()}
                     </span>
-                    <span className="px-2 py-1 bg-slate-700 rounded text-xs text-gray-300">
+                    <span className="px-2 py-1 bg-muted rounded text-xs text-muted-foreground">
                       {update.source.toUpperCase()}
                     </span>
-                    <span className="text-gray-500 text-xs">{update.source_reference}</span>
+                    <span className="text-muted-foreground text-xs">{update.source_reference}</span>
                     {!update.is_reviewed && (
-                      <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs">
+                      <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs">
                         NEW
                       </span>
                     )}
                   </div>
-                  <h3 className="font-medium text-white mb-1">{update.title}</h3>
-                  <p className="text-sm text-gray-400">{update.summary}</p>
+                  <h3 className="font-medium text-foreground mb-1">{update.title}</h3>
+                  <p className="text-sm text-muted-foreground">{update.summary}</p>
                 </div>
               </div>
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 text-sm">
-                  <span className="text-gray-500">
+                  <span className="text-muted-foreground">
                     Published: {new Date(update.published_date).toLocaleDateString()}
                   </span>
-                  <span className="text-gray-500">
+                  <span className="text-muted-foreground">
                     Effective: {new Date(update.effective_date).toLocaleDateString()}
                   </span>
-                  <span className="text-gray-400">
+                  <span className="text-muted-foreground">
                     Affects: {update.affected_standards.join(', ')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-lg text-sm transition-colors">
+                  <button className="flex items-center gap-2 px-3 py-1.5 bg-info/20 hover:bg-info text-info hover:text-info-foreground rounded-lg text-sm transition-colors">
                     <Zap className="w-4 h-4" />
                     Run Gap Analysis
                   </button>
                   {!update.is_reviewed && (
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+                    <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
                       <CheckCircle className="w-4 h-4" />
                       Mark Reviewed
                     </button>
@@ -387,46 +388,47 @@ export default function ComplianceAutomation() {
 
       {/* Certificates Tab */}
       {activeTab === 'certificates' && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-            <h3 className="font-medium text-white">Certificate Expiry Tracking</h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+        <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="font-medium text-foreground">Certificate Expiry Tracking</h3>
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
               <Award className="w-4 h-4" />
               Add Certificate
             </button>
           </div>
-          <div className="divide-y divide-slate-700">
+          <div className="divide-y divide-border">
             {certificates.map((cert) => (
-              <div key={cert.id} className="p-4 hover:bg-slate-700/30 transition-colors">
+              <div key={cert.id} className="p-4 hover:bg-accent/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div
-                      className={`p-2 rounded-lg ${
+                      className={cn(
+                        'p-2 rounded-lg',
                         cert.entity_type === 'user'
-                          ? 'bg-blue-500/20'
+                          ? 'bg-info/20'
                           : cert.entity_type === 'equipment'
                             ? 'bg-purple-500/20'
-                            : 'bg-emerald-500/20'
-                      }`}
+                            : 'bg-success/20',
+                      )}
                     >
                       {cert.entity_type === 'user' ? (
-                        <Users className="w-5 h-5 text-blue-400" />
+                        <Users className="w-5 h-5 text-info" />
                       ) : cert.entity_type === 'equipment' ? (
-                        <Truck className="w-5 h-5 text-purple-400" />
+                        <Truck className="w-5 h-5 text-purple-500" />
                       ) : (
-                        <Building className="w-5 h-5 text-emerald-400" />
+                        <Building className="w-5 h-5 text-success" />
                       )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-white">{cert.name}</h4>
+                        <h4 className="font-medium text-foreground">{cert.name}</h4>
                         {cert.is_critical && (
-                          <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-destructive/20 text-destructive rounded text-xs">
                             Critical
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-400">
+                      <p className="text-sm text-muted-foreground">
                         {cert.entity_name} • {cert.issuing_body}
                       </p>
                     </div>
@@ -438,11 +440,11 @@ export default function ComplianceAutomation() {
                       >
                         {cert.status.replace('_', ' ').toUpperCase()}
                       </span>
-                      <p className="text-sm text-gray-400 mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         Expires: {new Date(cert.expiry_date).toLocaleDateString()}
                       </p>
                     </div>
-                    <button className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-slate-700">
+                    <button className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent">
                       <Eye className="w-4 h-4" />
                     </button>
                   </div>
@@ -455,38 +457,38 @@ export default function ComplianceAutomation() {
 
       {/* Scheduled Audits Tab */}
       {activeTab === 'audits' && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-            <h3 className="font-medium text-white">Scheduled Audits & Inspections</h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+        <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="font-medium text-foreground">Scheduled Audits & Inspections</h3>
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
               <Calendar className="w-4 h-4" />
               Schedule Audit
             </button>
           </div>
-          <div className="divide-y divide-slate-700">
+          <div className="divide-y divide-border">
             {audits.map((audit) => (
-              <div key={audit.id} className="p-4 hover:bg-slate-700/30 transition-colors">
+              <div key={audit.id} className="p-4 hover:bg-accent/50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="font-medium text-white">{audit.name}</h4>
+                      <h4 className="font-medium text-foreground">{audit.name}</h4>
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[audit.status]}`}
                       >
                         {audit.status.toUpperCase()}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-muted-foreground">
                       {audit.frequency} • {audit.standards.join(', ')}
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="text-sm text-white">
+                      <p className="text-sm text-foreground">
                         Due: {new Date(audit.next_due_date).toLocaleDateString()}
                       </p>
                     </div>
-                    <button className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm transition-colors">
+                    <button className="flex items-center gap-2 px-3 py-1.5 bg-success hover:bg-success/90 text-success-foreground rounded-lg text-sm transition-colors">
                       <Play className="w-4 h-4" />
                       Start
                     </button>
@@ -501,22 +503,22 @@ export default function ComplianceAutomation() {
       {/* Compliance Scoring Tab */}
       {activeTab === 'scoring' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <h3 className="font-medium text-white mb-4">Score Breakdown by Standard</h3>
+          <div className="bg-card/50 border border-border rounded-xl p-6">
+            <h3 className="font-medium text-foreground mb-4">Score Breakdown by Standard</h3>
             <div className="space-y-4">
               {[
-                { name: 'ISO 9001', score: 92, color: 'emerald' },
-                { name: 'ISO 14001', score: 88.5, color: 'blue' },
-                { name: 'ISO 45001', score: 82, color: 'purple' },
+                { name: 'ISO 9001', score: 92, color: 'bg-success' },
+                { name: 'ISO 14001', score: 88.5, color: 'bg-info' },
+                { name: 'ISO 45001', score: 82, color: 'bg-primary' },
               ].map((standard) => (
                 <div key={standard.name}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium">{standard.name}</span>
-                    <span className="text-white">{standard.score}%</span>
+                    <span className="text-foreground font-medium">{standard.name}</span>
+                    <span className="text-foreground">{standard.score}%</span>
                   </div>
-                  <div className="h-3 bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full bg-${standard.color}-500`}
+                      className={`h-full rounded-full ${standard.color}`}
                       style={{ width: `${standard.score}%` }}
                     />
                   </div>
@@ -525,8 +527,8 @@ export default function ComplianceAutomation() {
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
-            <h3 className="font-medium text-white mb-4">Key Gaps</h3>
+          <div className="bg-card/50 border border-border rounded-xl p-6">
+            <h3 className="font-medium text-foreground mb-4">Key Gaps</h3>
             <div className="space-y-3">
               {[
                 { standard: 'ISO 45001', clause: '8.2', description: 'First aid training gaps' },
@@ -541,15 +543,15 @@ export default function ComplianceAutomation() {
                   description: 'NCR closure rate below target',
                 },
               ].map((gap, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-yellow-400" />
+                <div key={i} className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                  <AlertCircle className="w-5 h-5 text-warning" />
                   <div className="flex-1">
-                    <p className="text-white text-sm">{gap.description}</p>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-foreground text-sm">{gap.description}</p>
+                    <p className="text-muted-foreground text-xs">
                       {gap.standard} Clause {gap.clause}
                     </p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </div>
               ))}
             </div>
@@ -560,23 +562,23 @@ export default function ComplianceAutomation() {
       {/* RIDDOR Tab */}
       {activeTab === 'riddor' && (
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-red-600/20 to-orange-600/20 border border-red-500/30 rounded-xl p-6">
+          <div className="bg-gradient-to-r from-destructive/20 to-warning/20 border border-destructive/30 rounded-xl p-6">
             <div className="flex items-start gap-4">
-              <div className="p-3 bg-red-500/20 rounded-lg">
-                <FileText className="w-6 h-6 text-red-400" />
+              <div className="p-3 bg-destructive/20 rounded-lg">
+                <FileText className="w-6 h-6 text-destructive" />
               </div>
               <div className="flex-1">
-                <h3 className="text-lg font-semibold text-white mb-2">RIDDOR Automation</h3>
-                <p className="text-gray-300 mb-4">
+                <h3 className="text-lg font-semibold text-foreground mb-2">RIDDOR Automation</h3>
+                <p className="text-muted-foreground mb-4">
                   Automatically detect reportable incidents and prepare RIDDOR submissions to the
                   Health & Safety Executive.
                 </p>
                 <div className="flex items-center gap-4">
-                  <button className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
+                  <button className="flex items-center gap-2 px-4 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg transition-colors">
                     <ExternalLink className="w-4 h-4" />
                     HSE RIDDOR Portal
                   </button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors">
+                  <button className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg transition-colors">
                     <BookOpen className="w-4 h-4" />
                     View Guide
                   </button>
@@ -585,14 +587,14 @@ export default function ComplianceAutomation() {
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-            <div className="p-4 border-b border-slate-700">
-              <h3 className="font-medium text-white">Pending RIDDOR Submissions</h3>
+          <div className="bg-card/50 border border-border rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h3 className="font-medium text-foreground">Pending RIDDOR Submissions</h3>
             </div>
             <div className="p-8 text-center">
-              <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-              <p className="text-white font-medium">No pending RIDDOR submissions</p>
-              <p className="text-gray-400 text-sm mt-1">
+              <CheckCircle className="w-12 h-12 text-success mx-auto mb-4" />
+              <p className="text-foreground font-medium">No pending RIDDOR submissions</p>
+              <p className="text-muted-foreground text-sm mt-1">
                 All reportable incidents have been submitted
               </p>
             </div>

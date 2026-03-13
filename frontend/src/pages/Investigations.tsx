@@ -16,6 +16,7 @@ import {
   Loader2,
   ExternalLink,
   RefreshCw,
+  Save,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -520,6 +521,11 @@ export default function Investigations() {
     assigned_to: '',
   })
 
+  // RCA inline editing state
+  const [rcaData, setRcaData] = useState<Record<string, string>>({})
+  const [rcaUnsaved, setRcaUnsaved] = useState(false)
+  const [savingRca, setSavingRca] = useState(false)
+
   // Action detail modal state
   const [selectedAction, setSelectedAction] = useState<ActionItem | null>(null)
   const [showActionDetailModal, setShowActionDetailModal] = useState(false)
@@ -530,12 +536,22 @@ export default function Investigations() {
     loadInvestigations()
   }, [])
 
-  // Load actions when investigation is selected
+  // Load actions and initialize RCA when investigation is selected
   useEffect(() => {
     if (selectedInvestigation) {
       loadActionsForInvestigation(selectedInvestigation)
+      const data = (selectedInvestigation.data as Record<string, unknown>) || {}
+      const fields: Record<string, string> = {}
+      for (let i = 1; i <= 5; i++) {
+        fields[`why_${i}`] = String(data[`why_${i}`] || '')
+      }
+      fields['root_cause'] = String(data['root_cause'] || '')
+      setRcaData(fields)
+      setRcaUnsaved(false)
     } else {
       setInvestigationActions([])
+      setRcaData({})
+      setRcaUnsaved(false)
     }
   }, [selectedInvestigation])
 
@@ -651,6 +667,30 @@ export default function Investigations() {
   // Mark action as complete
   const handleCompleteAction = async (completionNotes: string) => {
     await handleUpdateActionStatus('completed', completionNotes)
+  }
+
+  const handleRcaFieldChange = (field: string, value: string) => {
+    setRcaData((prev) => ({ ...prev, [field]: value }))
+    setRcaUnsaved(true)
+  }
+
+  const handleSaveRca = async () => {
+    if (!selectedInvestigation) return
+    setSavingRca(true)
+    try {
+      const existingData = (selectedInvestigation.data as Record<string, unknown>) || {}
+      const mergedData = { ...existingData, ...rcaData }
+      const response = await investigationsApi.update(selectedInvestigation.id, {
+        data: mergedData,
+      })
+      setSelectedInvestigation(response.data)
+      await loadInvestigations()
+      setRcaUnsaved(false)
+    } catch (err) {
+      trackError(err, { component: 'Investigations', action: 'saveRCA' })
+    } finally {
+      setSavingRca(false)
+    }
   }
 
   const getEntityIcon = (type: string) => {
@@ -890,10 +930,25 @@ export default function Investigations() {
               <div className="overflow-y-auto max-h-[calc(90vh-120px)] space-y-6 py-4">
                 {/* 5 Whys Analysis */}
                 <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <GitBranch className="w-5 h-5 text-primary" />
-                    {t('investigations.five_whys')}
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <GitBranch className="w-5 h-5 text-primary" />
+                      {t('investigations.five_whys')}
+                    </h3>
+                    <Button
+                      size="sm"
+                      onClick={handleSaveRca}
+                      disabled={savingRca || !rcaUnsaved}
+                      className={cn(!rcaUnsaved && 'opacity-50')}
+                    >
+                      {savingRca ? (
+                        <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4 mr-1" />
+                      )}
+                      {rcaUnsaved ? 'Save RCA' : 'Saved'}
+                    </Button>
+                  </div>
                   <div className="space-y-4">
                     {[1, 2, 3, 4, 5].map((num) => (
                       <div key={num} className="flex items-start gap-4">
@@ -902,15 +957,17 @@ export default function Investigations() {
                         </div>
                         <div className="flex-1">
                           <label
-                            htmlFor="investigations-field-2"
+                            htmlFor={`investigations-why-${num}`}
                             className="block text-sm font-medium text-foreground mb-2"
                           >
                             Why {num}?
                           </label>
                           <Textarea
-                            id="investigations-field-2"
+                            id={`investigations-why-${num}`}
                             rows={2}
                             placeholder={`Enter the ${num === 1 ? 'initial' : 'deeper'} cause...`}
+                            value={rcaData[`why_${num}`] || ''}
+                            onChange={(e) => handleRcaFieldChange(`why_${num}`, e.target.value)}
                           />
                         </div>
                       </div>
@@ -926,6 +983,8 @@ export default function Investigations() {
                   <Textarea
                     rows={3}
                     placeholder="Document the root cause based on your 5 Whys analysis..."
+                    value={rcaData['root_cause'] || ''}
+                    onChange={(e) => handleRcaFieldChange('root_cause', e.target.value)}
                   />
                 </Card>
 

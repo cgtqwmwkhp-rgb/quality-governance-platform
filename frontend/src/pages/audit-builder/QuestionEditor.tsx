@@ -242,36 +242,49 @@ export default function QuestionEditor({
           </div>
 
           {['yes_no', 'yes_no_na', 'pass_fail'].includes(question.type) && (
-            <div className="flex items-center gap-3 px-3 py-2 bg-muted/50 rounded-lg border border-border/50">
-              <ArrowRightLeft className="w-4 h-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Positive answer:</span>
-              <div className="flex items-center gap-1">
+            <div className="px-4 py-3 bg-primary/5 rounded-lg border border-primary/20">
+              <div className="flex items-center gap-2 mb-2">
+                <ArrowRightLeft className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium text-foreground">
+                  Which answer is the &quot;good&quot; response?
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mb-2">
                 <button
                   type="button"
                   onClick={() => onUpdate(question.id, { positiveAnswer: 'yes' })}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     (question.positiveAnswer || 'yes') === 'yes'
-                      ? 'bg-success/20 text-success border border-success/30'
-                      : 'bg-secondary text-muted-foreground hover:bg-muted'
+                      ? 'bg-success/20 text-success border-2 border-success/40 ring-2 ring-success/10'
+                      : 'bg-secondary text-muted-foreground hover:bg-muted border border-border'
                   }`}
                 >
-                  {question.type === 'pass_fail' ? 'Pass' : 'Yes'} = Good
+                  {question.type === 'pass_fail' ? 'Pass' : 'Yes'} ={' '}
+                  <span className="text-success">Green</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onUpdate(question.id, { positiveAnswer: 'no' })}
-                  className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     question.positiveAnswer === 'no'
-                      ? 'bg-success/20 text-success border border-success/30'
-                      : 'bg-secondary text-muted-foreground hover:bg-muted'
+                      ? 'bg-success/20 text-success border-2 border-success/40 ring-2 ring-success/10'
+                      : 'bg-secondary text-muted-foreground hover:bg-muted border border-border'
                   }`}
                 >
-                  {question.type === 'pass_fail' ? 'Fail' : 'No'} = Good
+                  {question.type === 'pass_fail' ? 'Fail' : 'No'} ={' '}
+                  <span className="text-success">Green</span>
                 </button>
               </div>
-              <span className="text-xs text-muted-foreground italic">
-                e.g. &quot;Any spillages?&quot; → No = Good
-              </span>
+              <p className="text-xs text-muted-foreground">
+                The selected answer will appear{' '}
+                <span className="text-success font-medium">green</span> during the audit. The other
+                will appear <span className="text-destructive font-medium">red</span>.
+                <br />
+                <span className="italic">
+                  e.g. &quot;Any spillages?&quot; → choose{' '}
+                  {question.type === 'pass_fail' ? 'Fail' : 'No'} = Green
+                </span>
+              </p>
             </div>
           )}
 
