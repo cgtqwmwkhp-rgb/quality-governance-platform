@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentUser
@@ -311,6 +311,16 @@ async def receive_events_batch(batch: TelemetryBatch):
             logger.warning(f"Failed to aggregate telemetry event: {type(e).__name__}")
 
     return {"status": "ok", "count": processed}
+
+
+@router.post("/web-vitals")
+async def receive_web_vitals(request_body: dict = Body(default={})):
+    """Accept web-vitals metrics from the frontend.
+
+    Fault-tolerant: always returns 200 so client telemetry is never blocked.
+    """
+    logger.info("WEB_VITALS", extra={"payload": request_body})
+    return {"status": "ok"}
 
 
 @router.get("/metrics/{experiment_id}")
