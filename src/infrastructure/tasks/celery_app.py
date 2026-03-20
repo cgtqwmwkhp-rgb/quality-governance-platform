@@ -76,6 +76,10 @@ celery_app.conf.beat_schedule = {
         "task": "src.infrastructure.tasks.dlq_replay.replay_failed_tasks",
         "schedule": crontab(minute=0, hour="*/6"),  # Every 6 hours
     },
+    "sync-pams-checklists": {
+        "task": "src.infrastructure.tasks.pams_sync_tasks.sync_pams_checklists",
+        "schedule": crontab(minute="*/15"),  # Every 15 minutes
+    },
 }
 
 celery_app.autodiscover_tasks(

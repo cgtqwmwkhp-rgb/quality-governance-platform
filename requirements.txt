@@ -11,6 +11,7 @@ asyncpg==0.29.0
 aiosqlite==0.20.0
 alembic==1.13.1
 psycopg2-binary==2.9.9
+aiomysql>=0.2.0
 
 # Authentication & Security
 PyJWT[crypto]==2.11.0

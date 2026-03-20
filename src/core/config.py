@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:password@localhost:5432/quality_governance"
     database_echo: bool = False
 
+    # PAMS External Database (read-only MySQL connection for Van Checklists)
+    pams_database_url: str = ""
+    pams_ssl_ca: str = ""
+
     # JWT Authentication
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

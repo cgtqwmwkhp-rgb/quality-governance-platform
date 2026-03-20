@@ -19,6 +19,7 @@ from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
+from src.infrastructure.pams_database import close_pams, init_pams
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 
@@ -87,6 +88,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.is_development:
         await init_db()
 
+    # Initialise PAMS external database connection (non-blocking)
+    try:
+        await init_pams()
+    except Exception as e:
+        logger.warning("PAMS database init failed (non-fatal): %s", e)
+
     # Pre-warm OpenAPI schema generation for fast first request
     # This avoids cold-start latency when /openapi.json is first accessed
     # FastAPI caches the schema internally after first generation
@@ -107,6 +114,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
     # Shutdown
+    await close_pams()
     await close_db()
 
 

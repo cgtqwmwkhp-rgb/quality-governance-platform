@@ -5,6 +5,7 @@ import {
   FileText,
   Shield,
   Car,
+  Truck,
   MessageSquare,
   ClipboardCheck,
   GraduationCap,
@@ -58,6 +59,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/incidents', icon: AlertTriangle, label: t('nav.incidents') },
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
+        { path: '/vehicle-checklists', icon: Truck, label: t('nav.vehicle_checklists') },
       ],
     },
     {

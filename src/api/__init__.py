@@ -55,6 +55,8 @@ from src.api.routes import (
     testing,
     users,
     uvdb,
+    vehicle_checklist_analytics,
+    vehicle_checklists,
     wdp_analytics,
     workflow,
     workflows,
@@ -157,5 +159,16 @@ router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feat
 router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 # Health & Resource Monitoring
 router.include_router(health.router, prefix="/health", tags=["Health"])
+# Vehicle Checklists (PAMS Integration)
+router.include_router(
+    vehicle_checklists.router,
+    prefix="/vehicle-checklists",
+    tags=["Vehicle Checklists"],
+)
+router.include_router(
+    vehicle_checklist_analytics.router,
+    prefix="/vehicle-checklists/analytics",
+    tags=["Vehicle Checklist Analytics"],
+)
 
 __all__ = ["router"]

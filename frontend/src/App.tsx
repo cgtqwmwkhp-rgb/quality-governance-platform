@@ -60,6 +60,7 @@ const AIIntelligence = lazy(() => import('./pages/AIIntelligence'))
 const UVDBAudits = lazy(() => import('./pages/UVDBAudits'))
 const PlanetMark = lazy(() => import('./pages/PlanetMark'))
 const DigitalSignatures = lazy(() => import('./pages/DigitalSignatures'))
+const VehicleChecklists = lazy(() => import('./pages/VehicleChecklists'))
 const WorkforceAssessmentCreate = lazy(() => import('./pages/workforce/AssessmentCreate'))
 const WorkforceInductionCreate = lazy(() => import('./pages/workforce/InductionCreate'))
 const WorkforceAssessments = lazy(() => import('./pages/workforce/Assessments'))
@@ -287,6 +288,7 @@ function App() {
                 <Route path="rtas/:id" element={<RTADetail />} />
                 <Route path="complaints" element={<Complaints />} />
                 <Route path="complaints/:id" element={<ComplaintDetail />} />
+                <Route path="vehicle-checklists" element={<VehicleChecklists />} />
               </Route>
 
               {/* Governance routes */}

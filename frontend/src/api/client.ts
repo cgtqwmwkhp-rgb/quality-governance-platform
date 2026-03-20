@@ -3230,4 +3230,139 @@ export const settingsApi = {
     api.patch<SystemSetting>(`/api/v1/admin/config/settings/${key}`, { value }).then((r) => r.data),
 }
 
+// ============ Vehicle Checklists API (PAMS Integration) ============
+
+export interface VehicleDefect {
+  id: number
+  pams_table: string
+  pams_record_id: number
+  check_field: string
+  check_value?: string
+  priority: string
+  status: string
+  notes?: string
+  vehicle_reg?: string
+  created_by_id?: number
+  assigned_to_email?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface VehicleDefectCreate {
+  pams_table: string
+  pams_record_id: number
+  check_field: string
+  check_value?: string
+  priority: string
+  notes?: string
+  vehicle_reg?: string
+  assigned_to_email?: string
+}
+
+export interface VehicleDefectUpdate {
+  priority?: string
+  status?: string
+  notes?: string
+  assigned_to_email?: string
+}
+
+export interface DefectActionCreate {
+  title: string
+  description: string
+  due_date?: string
+  assigned_to_email?: string
+  action_type?: string
+}
+
+export interface AnalyticsSummary {
+  total_daily_checks: number
+  total_monthly_checks: number
+  open_defects: number
+  p1_defects: number
+  p2_defects: number
+  p3_defects: number
+  overdue_actions: number
+  pass_rate_daily?: number
+  pass_rate_monthly?: number
+  last_sync?: string
+}
+
+export interface TrendDataPoint {
+  date: string
+  p1: number
+  p2: number
+  p3: number
+  total: number
+}
+
+export interface HeatmapEntry {
+  check_field: string
+  failure_count: number
+  pams_table: string
+}
+
+export const vehicleChecklistsApi = {
+  schema: () => api.get('/api/v1/vehicle-checklists/schema'),
+
+  listDaily: (page = 1, pageSize = 25) =>
+    api.get<PaginatedResponse<Record<string, unknown>>>(
+      `/api/v1/vehicle-checklists/daily?page=${page}&page_size=${pageSize}`,
+    ),
+
+  listMonthly: (page = 1, pageSize = 25) =>
+    api.get<PaginatedResponse<Record<string, unknown>>>(
+      `/api/v1/vehicle-checklists/monthly?page=${page}&page_size=${pageSize}`,
+    ),
+
+  getDaily: (id: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/vehicle-checklists/daily/${id}`),
+
+  getMonthly: (id: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/vehicle-checklists/monthly/${id}`),
+
+  listDefects: (page = 1, pageSize = 25, priority?: string, status?: string) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    })
+    if (priority) params.set('priority', priority)
+    if (status) params.set('status', status)
+    return api.get<PaginatedResponse<VehicleDefect>>(
+      `/api/v1/vehicle-checklists/defects?${params}`,
+    )
+  },
+
+  createDefect: (data: VehicleDefectCreate) =>
+    api.post<VehicleDefect>('/api/v1/vehicle-checklists/defects', data),
+
+  getDefect: (id: number) =>
+    api.get<VehicleDefect>(`/api/v1/vehicle-checklists/defects/${id}`),
+
+  updateDefect: (id: number, data: VehicleDefectUpdate) =>
+    api.patch<VehicleDefect>(`/api/v1/vehicle-checklists/defects/${id}`, data),
+
+  createDefectAction: (defectId: number, data: DefectActionCreate) =>
+    api.post(`/api/v1/vehicle-checklists/defects/${defectId}/actions`, data),
+
+  triggerSync: () => api.post('/api/v1/vehicle-checklists/sync'),
+
+  analyticsSummary: () =>
+    api.get<AnalyticsSummary>('/api/v1/vehicle-checklists/analytics/summary'),
+
+  analyticsTrends: (days = 30) =>
+    api.get<TrendDataPoint[]>(`/api/v1/vehicle-checklists/analytics/trends?days=${days}`),
+
+  analyticsHeatmap: (limit = 20) =>
+    api.get<HeatmapEntry[]>(`/api/v1/vehicle-checklists/analytics/heatmap?limit=${limit}`),
+
+  exportDailyCsv: () =>
+    api.get('/api/v1/vehicle-checklists/analytics/export/daily', { responseType: 'blob' }),
+
+  exportMonthlyCsv: () =>
+    api.get('/api/v1/vehicle-checklists/analytics/export/monthly', { responseType: 'blob' }),
+
+  exportDefectsCsv: () =>
+    api.get('/api/v1/vehicle-checklists/analytics/export/defects', { responseType: 'blob' }),
+}
+
 export default api
