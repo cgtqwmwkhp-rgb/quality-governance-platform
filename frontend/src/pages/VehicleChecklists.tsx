@@ -208,7 +208,7 @@ export default function VehicleChecklists() {
       check_value: field ? String(record[field] ?? '') : '',
       priority: 'P2',
       notes: '',
-      vehicle_reg: String(record['registration'] || record['reg'] || record['vehicle_reg'] || record['VehicleReg'] || ''),
+      vehicle_reg: String(record['vanID'] || record['vanReg'] || record['registration'] || record['reg'] || record['VehicleReg'] || '').trim(),
     })
     setShowFlagDialog(true)
   }

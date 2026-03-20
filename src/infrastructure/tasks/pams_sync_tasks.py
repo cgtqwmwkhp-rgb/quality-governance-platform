@@ -117,9 +117,14 @@ def _auto_detect_defects(
     pams_table_label = "daily" if table_name == "vanchecklist" else "monthly"
     detected = 0
 
-    skip_keys = {"id", "ID", "created_at", "updated_at", "date", "driver", "vehicle",
-                 "registration", "reg", "VehicleReg", "DriverName", "DateSubmitted",
-                 "comments", "notes", "mileage", "Mileage"}
+    skip_keys = {"id", "ID", "inc_id", "created_at", "updated_at", "date",
+                 "driver", "vehicle", "registration", "reg", "VehicleReg",
+                 "DriverName", "DateSubmitted", "userName", "vanID", "vanReg",
+                 "startTimeDate", "endTimeDate", "technician",
+                 "comments", "notes", "mileage", "Mileage",
+                 "bodyWorkDamage", "defects", "uploaded",
+                 "roadTaxExpiryDate", "toolingCalibrationExpiryDate",
+                 "fireExtinguisherExpiryDate"}
 
     for col_name, col_value in row_dict.items():
         if col_name in skip_keys:
@@ -142,12 +147,13 @@ def _auto_detect_defects(
             continue
 
         vehicle_reg = str(
-            row_dict.get("registration")
+            row_dict.get("vanID")
+            or row_dict.get("vanReg")
+            or row_dict.get("registration")
             or row_dict.get("reg")
-            or row_dict.get("vehicle_reg")
             or row_dict.get("VehicleReg")
             or ""
-        )
+        ).strip()
 
         defect = defect_cls(
             pams_table=pams_table_label,
