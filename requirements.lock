@@ -446,9 +446,9 @@ google-api-core==2.30.0 \
     #   google-ai-generativelanguage
     #   google-api-python-client
     #   google-generativeai
-google-api-python-client==2.192.0 \
-    --hash=sha256:63a57d4457cd97df1d63eb89c5fda03c5a50588dcbc32c0115dd1433c08f4b62 \
-    --hash=sha256:d48cfa6078fadea788425481b007af33fe0ab6537b78f37da914fb6fc112eb27
+google-api-python-client==2.193.0 \
+    --hash=sha256:8f88d16e89d11341e0a8b199cafde0fb7e6b44260dffb88d451577cbd1bb5d33 \
+    --hash=sha256:c42aa324b822109901cfecab5dc4fc3915d35a7b376835233c916c70610322db
     # via google-generativeai
 google-auth==2.49.1 \
     --hash=sha256:16d40da1c3c5a0533f57d268fe72e0ebb0ae1cc3b567024122651c045d879b64 \
@@ -1002,9 +1002,9 @@ py-vapid==1.9.4 \
     --hash=sha256:a004023560cbc54e34fc06380a0580f04ffcc788e84fb6d19e9339eeb6551a28 \
     --hash=sha256:f165a5bf90dcf966b226114f01f178f137579a09784c7f0628fa2f0a299741b6
     # via pywebpush
-pyasn1==0.6.2 \
-    --hash=sha256:1eb26d860996a18e9b6ed05e7aae0e9fc21619fcee6af91cca9bad4fbea224bf \
-    --hash=sha256:9b59a2b25ba7e4f8197db7686c09fb33e658b98339fadb826e9512629017833b
+pyasn1==0.6.3 \
+    --hash=sha256:697a8ecd6d98891189184ca1fa05d1bb00e2f84b5977c481452050549c8a72cf \
+    --hash=sha256:a80184d120f0864a52a073acc6fc642847d0be408e7c7252f31390c0f4eadcde
     # via pyasn1-modules
 pyasn1-modules==0.4.2 \
     --hash=sha256:29253a9207ce32b64c3ac6600edc75368f98473906e8fd1043bd6b5b1de2c14a \
@@ -1157,6 +1157,10 @@ pyjwt==2.11.0 \
     #   msal
     #   pyjwt
     #   redis
+pymysql==1.1.2 \
+    --hash=sha256:4961d3e165614ae65014e361811a724e2044ad3ea3739de9903ae7c21f539f03 \
+    --hash=sha256:e6b1d89711dd51f8f74b1631fe08f039e7d76cf67a42a323d3178f0f25762ed9
+    # via aiomysql
 pyparsing==3.3.2 \
     --hash=sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d \
     --hash=sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc
@@ -1271,7 +1275,6 @@ requests==2.32.5 \
     #   google-api-core
     #   msal
     #   pywebpush
-
 six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
@@ -1393,9 +1396,9 @@ urllib3==2.6.3 \
     --hash=sha256:1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed \
     --hash=sha256:bf272323e553dfb2e87d9bfd225ca7b0f467b919d7bbd355436d3fd37cb0acd4
     # via requests
-uvicorn==0.41.0 \
-    --hash=sha256:09d11cf7008da33113824ee5a1c6422d89fbc2ff476540d69a34c87fab8b571a \
-    --hash=sha256:29e35b1d2c36a04b9e180d4007ede3bcb32a85fbdfd6c6aeb3f26839de088187
+uvicorn==0.42.0 \
+    --hash=sha256:96c30f5c7abe6f74ae8900a70e92b85ad6613b745d4879eb9b16ccad15645359 \
+    --hash=sha256:9b1f190ce15a2dd22e7758651d9b6d12df09a13d51ba5bf4fc33c383a48e1775
     # via -r requirements.txt
 uvloop==0.22.1 \
     --hash=sha256:017bd46f9e7b78e81606329d07141d3da446f8798c6baeec124260e22c262772 \
