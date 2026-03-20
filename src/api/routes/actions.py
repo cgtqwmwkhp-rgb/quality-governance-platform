@@ -113,6 +113,7 @@ def _action_to_response(
     action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction],
     source_type: str,
     source_id: int,
+    owner_email: Optional[str] = None,
 ) -> ActionResponse:
     """Convert an action model to a response."""
     return ActionResponse(
@@ -125,13 +126,27 @@ def _action_to_response(
         status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
+        completion_notes=getattr(action, "completion_notes", None),
         source_type=source_type,
         source_id=source_id,
         source_reference=None,
         owner_id=action.owner_id,
-        owner_email=None,
+        owner_email=owner_email,
+        assigned_to_email=owner_email,
         created_at=action.created_at.isoformat() if action.created_at else "",
     )
+
+
+async def _resolve_owner_email(db: Any, owner_id: Optional[int]) -> Optional[str]:
+    """Resolve a user's email from their ID."""
+    if not owner_id:
+        return None
+    try:
+        result = await db.execute(select(User.email).where(User.id == owner_id))
+        row = result.scalar_one_or_none()
+        return row if row else None
+    except Exception:
+        return None
 
 
 def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
@@ -290,7 +305,8 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_action_to_response(a, "incident", a.incident_id))
+                email = await _resolve_owner_email(db, a.owner_id)
+                actions_list.append(_action_to_response(a, "incident", a.incident_id, owner_email=email))
         except Exception:
             logger.warning("list_actions: incident query failed", exc_info=True)
 
@@ -307,7 +323,8 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_action_to_response(a, "rta", a.rta_id))
+                email = await _resolve_owner_email(db, a.owner_id)
+                actions_list.append(_action_to_response(a, "rta", a.rta_id, owner_email=email))
         except Exception:
             logger.warning("list_actions: rta query failed", exc_info=True)
 
@@ -328,7 +345,8 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_action_to_response(a, "complaint", a.complaint_id))
+                email = await _resolve_owner_email(db, a.owner_id)
+                actions_list.append(_action_to_response(a, "complaint", a.complaint_id, owner_email=email))
         except Exception:
             logger.warning("list_actions: complaint query failed", exc_info=True)
 
@@ -349,7 +367,8 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_action_to_response(a, "investigation", a.investigation_id))
+                email = await _resolve_owner_email(db, a.owner_id)
+                actions_list.append(_action_to_response(a, "investigation", a.investigation_id, owner_email=email))
         except Exception:
             logger.warning("list_actions: investigation query failed", exc_info=True)
 
@@ -738,6 +757,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     if isinstance(action, CAPAAction):
         return _capa_to_response(action, src_type)
 
+    resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
     return ActionResponse(
         id=action.id,
         reference_number=action.reference_number,
@@ -748,11 +768,13 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
+        completion_notes=getattr(action, "completion_notes", None),
         source_type=src_type,
         source_id=src_id,
         source_reference=None,
         owner_id=action.owner_id,
-        owner_email=action_data.assigned_to_email,
+        owner_email=resolved_email,
+        assigned_to_email=resolved_email,
         created_at=action.created_at.isoformat() if action.created_at else "",
     )
 
@@ -794,25 +816,30 @@ async def get_action(
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if incident_action:
-            return _action_to_response(incident_action, "incident", incident_action.incident_id)
+            email = await _resolve_owner_email(db, incident_action.owner_id)
+            return _action_to_response(incident_action, "incident", incident_action.incident_id, owner_email=email)
     elif src_type == "rta":
         result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
         rta_action = cast(Optional[RTAAction], result.scalar_one_or_none())
         if rta_action:
-            return _action_to_response(rta_action, "rta", rta_action.rta_id)
+            email = await _resolve_owner_email(db, rta_action.owner_id)
+            return _action_to_response(rta_action, "rta", rta_action.rta_id, owner_email=email)
     elif src_type == "complaint":
         result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if complaint_action:
-            return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id)
+            email = await _resolve_owner_email(db, complaint_action.owner_id)
+            return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id, owner_email=email)
     elif src_type == "investigation":
         result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
         investigation_action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
         if investigation_action:
+            email = await _resolve_owner_email(db, investigation_action.owner_id)
             return _action_to_response(
                 investigation_action,
                 "investigation",
                 investigation_action.investigation_id,
+                owner_email=email,
             )
 
     raise HTTPException(
@@ -990,9 +1017,29 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         if action_data.status is not None:
             status_value = action_data.status.lower()
             if src_type == "investigation":
-                action.status = InvestigationActionStatus(status_value)
+                try:
+                    action.status = InvestigationActionStatus(status_value)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=api_error(
+                            ErrorCode.VALIDATION_ERROR,
+                            f"Invalid status '{status_value}' for investigation action",
+                            details={"allowed": [s.value for s in InvestigationActionStatus]},
+                        ),
+                    )
             else:
-                action.status = ActionStatus(status_value)
+                try:
+                    action.status = ActionStatus(status_value)
+                except ValueError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=api_error(
+                            ErrorCode.VALIDATION_ERROR,
+                            f"Invalid status '{status_value}' for {src_type} action",
+                            details={"allowed": [s.value for s in ActionStatus]},
+                        ),
+                    )
             if status_value == "completed" and not action.completed_at:
                 action.completed_at = datetime.now(timezone.utc)
             elif status_value != "completed":
@@ -1021,4 +1068,6 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
 
     if isinstance(action, CAPAAction):
         return _capa_to_response(action, src_type)
-    return _action_to_response(action, src_type, source_id)
+    owner_id = getattr(action, "owner_id", None) or getattr(action, "assigned_to_id", None)
+    email = await _resolve_owner_email(db, owner_id)
+    return _action_to_response(action, src_type, source_id, owner_email=email)

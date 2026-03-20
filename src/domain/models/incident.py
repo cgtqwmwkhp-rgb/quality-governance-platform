@@ -52,6 +52,7 @@ class ActionStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     VERIFIED = "verified"
+    PENDING_VERIFICATION = "pending_verification"
     OVERDUE = "overdue"
     CANCELLED = "cancelled"
 
