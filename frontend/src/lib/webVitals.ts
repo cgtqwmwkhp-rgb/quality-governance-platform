@@ -8,8 +8,10 @@
  */
 
 import type { Metric } from 'web-vitals'
+import { API_BASE_URL } from '../config/apiBase'
 
-const TELEMETRY_ENDPOINT = import.meta.env.VITE_TELEMETRY_ENDPOINT || '/api/v1/telemetry/web-vitals'
+const TELEMETRY_ENDPOINT =
+  import.meta.env.VITE_TELEMETRY_ENDPOINT || `${API_BASE_URL}/api/v1/telemetry/web-vitals`
 
 const SEND_BEACON_SUPPORTED = typeof navigator.sendBeacon === 'function'
 
@@ -36,7 +38,8 @@ function sendMetric(metric: Metric): void {
   const body = JSON.stringify(payload)
 
   if (SEND_BEACON_SUPPORTED) {
-    navigator.sendBeacon(TELEMETRY_ENDPOINT, body)
+    const blob = new Blob([body], { type: 'application/json' })
+    navigator.sendBeacon(TELEMETRY_ENDPOINT, blob)
   } else {
     fetch(TELEMETRY_ENDPOINT, {
       method: 'POST',
