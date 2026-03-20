@@ -41,9 +41,7 @@ def _sync_table(
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
     connect_args: dict = {}
     if settings.pams_ssl_ca:
-        connect_args["ssl_ca"] = settings.pams_ssl_ca
-        connect_args["ssl_verify_cert"] = True
-        connect_args["ssl_verify_identity"] = True
+        connect_args["ssl"] = {"ca": settings.pams_ssl_ca}
     pams_engine = create_engine(sync_url, pool_pre_ping=True, connect_args=connect_args)
 
     rows_synced = 0
