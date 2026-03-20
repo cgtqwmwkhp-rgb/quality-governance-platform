@@ -137,6 +137,23 @@ class ExecutiveDashboardResponse(BaseModel):
     alerts: List[ActiveAlert]
 
 
+class VehicleGovernanceSummary(BaseModel):
+    """Vehicle governance KPIs for the executive dashboard."""
+
+    total_vehicles: int = 0
+    active_vehicles: int = 0
+    compliant_vehicles: int = 0
+    non_compliant_vehicles: int = 0
+    compliance_rate: float = 100.0
+    open_defects: int = 0
+    open_p1_defects: int = 0
+    open_p2_defects: int = 0
+    overdue_checks: int = 0
+    active_drivers: int = 0
+    pending_acknowledgements: int = 0
+    open_vehicle_capas: int = 0
+
+
 class DashboardSummaryResponse(BaseModel):
     """Simplified dashboard summary for quick overview."""
 

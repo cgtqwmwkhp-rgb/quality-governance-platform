@@ -169,6 +169,8 @@ from src.domain.models.risk_register import (
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
+from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
+from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 
 # UVDB Achilles Verify B2 Audit Protocol
 from src.domain.models.uvdb_achilles import (
@@ -356,4 +358,12 @@ __all__ = [
     "InductionStatus",
     "InductionStage",
     "UnderstandingVerdict",
+    # Vehicle Registry (Fleet Governance)
+    "VehicleRegistry",
+    "FleetStatus",
+    "ComplianceStatus",
+    # Driver Profiles (Driver Accountability)
+    "DriverProfile",
+    "DriverAcknowledgement",
+    "AcknowledgementStatus",
 ]

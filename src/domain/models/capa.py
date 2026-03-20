@@ -41,6 +41,7 @@ class CAPASource(str, PyEnum):
     JOB_ASSESSMENT = "job_assessment"
     INDUCTION = "induction"
     LOLER_EXAMINATION = "loler_examination"
+    VEHICLE_DEFECT = "vehicle_defect"
 
 
 class CAPAAction(Base):

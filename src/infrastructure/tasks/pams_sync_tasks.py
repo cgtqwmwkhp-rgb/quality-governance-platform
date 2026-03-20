@@ -90,6 +90,8 @@ def _sync_table(
                 detected = _auto_detect_defects(row_dict, pams_id, table_name, defect_cls, db)
                 defects_detected += detected
 
+                _upsert_vehicle_registry(row_dict, table_name, defect_cls, db)
+
             db.commit()
         except Exception:
             db.rollback()
@@ -105,6 +107,113 @@ def _sync_table(
 
     return {"rows_synced": rows_synced, "defects_detected": defects_detected}
 
+
+def _parse_datetime(val: Any) -> "datetime | None":
+    """Best-effort parse of a datetime value from PAMS raw data."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    s = str(val).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_vehicle_reg(row_dict: dict[str, Any]) -> str:
+    """Extract the vehicle registration from a PAMS row, normalised."""
+    return str(
+        row_dict.get("vanReg")
+        or row_dict.get("VehicleReg")
+        or row_dict.get("vanID")
+        or row_dict.get("registration")
+        or row_dict.get("reg")
+        or ""
+    ).strip()
+
+
+def _upsert_vehicle_registry(
+    row_dict: dict[str, Any],
+    table_name: str,
+    defect_cls: type,
+    db: Any,
+) -> None:
+    """Create or update a VehicleRegistry row from a PAMS checklist record."""
+    from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
+
+    vehicle_reg = _extract_vehicle_reg(row_dict)
+    if not vehicle_reg:
+        return
+
+    entry = db.query(VehicleRegistry).filter(VehicleRegistry.vehicle_reg == vehicle_reg).first()
+    if entry is None:
+        entry = VehicleRegistry(
+            vehicle_reg=vehicle_reg,
+            fleet_status=FleetStatus.ACTIVE,
+            compliance_status=ComplianceStatus.COMPLIANT,
+        )
+        db.add(entry)
+
+    pams_van_id = str(row_dict.get("vanID") or "").strip()
+    if pams_van_id:
+        entry.pams_van_id = pams_van_id
+
+    check_dt = _parse_datetime(
+        row_dict.get("startTimeDate") or row_dict.get("DateSubmitted") or row_dict.get("date")
+    )
+
+    if table_name == "vanchecklist":
+        if check_dt and (entry.last_daily_check_at is None or check_dt > entry.last_daily_check_at):
+            entry.last_daily_check_at = check_dt
+            all_pass = not any(
+                str(v).strip().lower() in FAIL_VALUES
+                for k, v in row_dict.items()
+                if k not in _SKIP_KEYS_FOR_PASS and v is not None
+            )
+            entry.last_daily_check_pass = all_pass
+    elif table_name == "vanchecklistmonthly":
+        if check_dt and (entry.last_monthly_check_at is None or check_dt > entry.last_monthly_check_at):
+            entry.last_monthly_check_at = check_dt
+
+    road_tax = _parse_datetime(row_dict.get("roadTaxExpiryDate"))
+    if road_tax:
+        entry.road_tax_expiry = road_tax
+    fire_ext = _parse_datetime(row_dict.get("fireExtinguisherExpiryDate"))
+    if fire_ext:
+        entry.fire_extinguisher_expiry = fire_ext
+    tooling = _parse_datetime(row_dict.get("toolingCalibrationExpiryDate"))
+    if tooling:
+        entry.tooling_calibration_expiry = tooling
+
+    open_critical = (
+        db.query(defect_cls)
+        .filter(
+            defect_cls.vehicle_reg == vehicle_reg,
+            defect_cls.priority.in_(["P1", "P2"]),
+            defect_cls.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+        )
+        .count()
+    )
+    if open_critical > 0:
+        entry.compliance_status = ComplianceStatus.NON_COMPLIANT
+    elif entry.compliance_status == ComplianceStatus.NON_COMPLIANT:
+        entry.compliance_status = ComplianceStatus.COMPLIANT
+
+
+_SKIP_KEYS_FOR_PASS = {
+    "id", "ID", "inc_id", "created_at", "updated_at", "date", "driver",
+    "vehicle", "registration", "reg", "VehicleReg", "DriverName",
+    "DateSubmitted", "userName", "vanID", "vanReg", "startTimeDate",
+    "endTimeDate", "technician", "comments", "notes", "mileage", "Mileage",
+    "bodyWorkDamage", "defects", "uploaded", "roadTaxExpiryDate",
+    "toolingCalibrationExpiryDate", "fireExtinguisherExpiryDate",
+}
 
 FAIL_VALUES = {"fail", "no", "0", "false", "failed", "n"}
 
@@ -192,9 +301,38 @@ def _auto_detect_defects(
             vehicle_reg=vehicle_reg,
         )
         db.add(defect)
+        db.flush()
         detected += 1
 
+        _auto_create_capa_for_defect(defect, vehicle_reg, col_name, str(col_value), db)
+
     return detected
+
+
+def _auto_create_capa_for_defect(
+    defect: Any,
+    vehicle_reg: str,
+    check_field: str,
+    check_value: str,
+    db: Any,
+) -> None:
+    """Auto-create a CAPA action for P1/P2 defects during sync."""
+    priority = getattr(defect, "priority", "P3")
+    if priority not in ("P1", "P2"):
+        return
+    try:
+        from src.domain.services.vehicle_capa_pipeline import create_capa_from_defect_sync
+
+        create_capa_from_defect_sync(
+            defect_id=defect.id,
+            defect_priority=priority,
+            vehicle_reg=vehicle_reg,
+            check_field=check_field,
+            check_value=check_value,
+            db=db,
+        )
+    except Exception:
+        logger.warning("Failed to auto-create CAPA for defect %s", defect.id, exc_info=True)
 
 
 def _safe_serialize(v: Any) -> Any:

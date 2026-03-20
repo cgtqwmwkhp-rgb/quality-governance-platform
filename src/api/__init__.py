@@ -19,6 +19,7 @@ from src.api.routes import (
     capa,
     complaints,
     compliance,
+    drivers,
     compliance_automation,
     copilot,
     document_control,
@@ -57,6 +58,7 @@ from src.api.routes import (
     uvdb,
     vehicle_checklist_analytics,
     vehicle_checklists,
+    vehicles,
     wdp_analytics,
     workflow,
     workflows,
@@ -169,6 +171,18 @@ router.include_router(
     vehicle_checklist_analytics.router,
     prefix="/vehicle-checklists/analytics",
     tags=["Vehicle Checklist Analytics"],
+)
+# Vehicle Registry (Fleet Governance)
+router.include_router(
+    vehicles.router,
+    prefix="/vehicles",
+    tags=["Vehicle Registry"],
+)
+# Driver Profiles (Driver Accountability)
+router.include_router(
+    drivers.router,
+    prefix="/drivers",
+    tags=["Driver Profiles"],
 )
 
 __all__ = ["router"]
