@@ -6,10 +6,10 @@ go to the primary QGP PostgreSQL database — PAMS is never mutated.
 """
 
 import logging
-import ssl
+import os
 from typing import Any, AsyncGenerator, Optional
 
-from sqlalchemy import MetaData, Table, create_engine, text
+from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -27,23 +27,18 @@ def _is_configured() -> bool:
     return bool(settings.pams_database_url)
 
 
-def _build_ssl_context() -> Optional[ssl.SSLContext]:
-    if not settings.pams_ssl_ca:
-        return None
-    ctx = ssl.create_default_context(cafile=settings.pams_ssl_ca)
-    return ctx
+def _mysql_ssl_args() -> dict[str, Any]:
+    """Build SSL dict compatible with both pymysql and aiomysql.
 
+    Both drivers accept ``{"ssl": {"ca": "<path>"}}`` and internally
+    create their own SSLContext.  Passing a pre-built SSLContext works
+    for pymysql but causes aiomysql to open a fresh TLS socket rather
+    than performing STARTTLS on the existing connection, which MySQL
+    rejects.  Using the dict form avoids this.
 
-def _pymysql_ssl_args() -> dict[str, Any]:
-    """Build SSL dict for pymysql (sync) connections.
-
-    pymysql creates a bare SSLContext(PROTOCOL_TLS_CLIENT) and only loads
-    the CA we specify — it does NOT load system CAs. To cover certificate
-    chains that require intermediate/root CAs beyond our DigiCert bundle,
-    we point to the system CA store and also include the custom CA.
+    We prefer the Debian system CA bundle so the full certificate chain
+    (including intermediates) is trusted.
     """
-    import os
-
     if not settings.pams_ssl_ca:
         return {}
     system_ca = "/etc/ssl/certs/ca-certificates.crt"
@@ -59,10 +54,7 @@ async def init_pams() -> None:
         logger.info("PAMS_DATABASE_URL not set — PAMS integration disabled")
         return
 
-    connect_args: dict[str, Any] = {}
-    ssl_ctx = _build_ssl_context()
-    if ssl_ctx:
-        connect_args["ssl"] = ssl_ctx
+    ssl_dict = _mysql_ssl_args()
 
     _pams_engine = create_async_engine(
         settings.pams_database_url,
@@ -72,7 +64,7 @@ async def init_pams() -> None:
         max_overflow=5,
         pool_recycle=1800,
         pool_timeout=15,
-        connect_args=connect_args,
+        connect_args=ssl_dict,
     )
 
     _pams_session_maker = async_sessionmaker(
@@ -84,7 +76,7 @@ async def init_pams() -> None:
     )
 
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
-    sync_connect_args: dict[str, Any] = _pymysql_ssl_args()
+    sync_connect_args: dict[str, Any] = ssl_dict.copy()
     try:
         sync_engine = create_engine(sync_url, poolclass=NullPool, connect_args=sync_connect_args)
         _pams_metadata = MetaData()

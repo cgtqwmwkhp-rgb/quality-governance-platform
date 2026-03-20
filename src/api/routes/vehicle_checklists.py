@@ -128,27 +128,36 @@ async def _list_from_live_pams(
     if pams_tbl is None:
         raise HTTPException(status_code=404, detail=f"PAMS table {table_name} not found")
 
-    async for pams_session in get_pams_db():
-        count_q = select(func.count()).select_from(pams_tbl)
-        total = (await pams_session.execute(count_q)).scalar() or 0
+    try:
+        async for pams_session in get_pams_db():
+            count_q = select(func.count()).select_from(pams_tbl)
+            total = (await pams_session.execute(count_q)).scalar() or 0
 
-        pk_cols = list(pams_tbl.primary_key.columns)
-        order_col = pk_cols[0] if pk_cols else list(pams_tbl.columns)[0]
+            pk_cols = list(pams_tbl.primary_key.columns)
+            order_col = pk_cols[0] if pk_cols else list(pams_tbl.columns)[0]
 
-        q = select(pams_tbl).order_by(order_col.desc()).offset((page - 1) * page_size).limit(page_size)
-        result = await pams_session.execute(q)
-        rows = result.mappings().all()
+            q = select(pams_tbl).order_by(order_col.desc()).offset((page - 1) * page_size).limit(page_size)
+            result = await pams_session.execute(q)
+            rows = result.mappings().all()
 
-        items = []
-        for row in rows:
-            items.append({k: _serialise_value(v) for k, v in dict(row).items()})
+            items = []
+            for row in rows:
+                items.append({k: _serialise_value(v) for k, v in dict(row).items()})
 
-        return ChecklistListResponse(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            pages=max(1, math.ceil(total / page_size)),
+            return ChecklistListResponse(
+                items=items,
+                total=total,
+                page=page,
+                page_size=page_size,
+                pages=max(1, math.ceil(total / page_size)),
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("PAMS live query failed for %s", table_name)
+        raise HTTPException(
+            status_code=503,
+            detail="PAMS database is temporarily unavailable. Please try again shortly.",
         )
 
     raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
