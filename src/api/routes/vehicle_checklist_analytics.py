@@ -32,51 +32,55 @@ async def analytics_summary(
     db: DbSession,
 ) -> AnalyticsSummary:
     """Dashboard summary cards: totals, defect counts, pass rate."""
-    total_daily = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
-
-    total_monthly = (await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))).scalar() or 0
-
-    open_q = (
-        select(func.count())
-        .select_from(VehicleDefect)
-        .where(VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]))
-    )
-    open_defects = (await db.execute(open_q)).scalar() or 0
-
-    p1 = (
-        await db.execute(
-            select(func.count())
-            .select_from(VehicleDefect)
-            .where(
-                VehicleDefect.priority == "P1",
-                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
-            )
-        )
-    ).scalar() or 0
-
-    p2 = (
-        await db.execute(
-            select(func.count())
-            .select_from(VehicleDefect)
-            .where(
-                VehicleDefect.priority == "P2",
-                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
-            )
-        )
-    ).scalar() or 0
-
-    p3 = (
-        await db.execute(
-            select(func.count())
-            .select_from(VehicleDefect)
-            .where(
-                VehicleDefect.priority == "P3",
-                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
-            )
-        )
-    ).scalar() or 0
-
+    total_daily = 0
+    total_monthly = 0
+    open_defects = 0
+    p1 = 0
+    p2 = 0
+    p3 = 0
     overdue_actions = 0
+    last_sync_iso: Optional[str] = None
+
+    try:
+        total_daily = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
+    except Exception:
+        logger.warning("analytics_summary: failed to count daily cache", exc_info=True)
+
+    try:
+        total_monthly = (
+            await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))
+        ).scalar() or 0
+    except Exception:
+        logger.warning("analytics_summary: failed to count monthly cache", exc_info=True)
+
+    try:
+        open_q = (
+            select(func.count())
+            .select_from(VehicleDefect)
+            .where(VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]))
+        )
+        open_defects = (await db.execute(open_q)).scalar() or 0
+
+        for label, priority_val in [("p1", "P1"), ("p2", "P2"), ("p3", "P3")]:
+            val = (
+                await db.execute(
+                    select(func.count())
+                    .select_from(VehicleDefect)
+                    .where(
+                        VehicleDefect.priority == priority_val,
+                        VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+                    )
+                )
+            ).scalar() or 0
+            if label == "p1":
+                p1 = val
+            elif label == "p2":
+                p2 = val
+            else:
+                p3 = val
+    except Exception:
+        logger.warning("analytics_summary: failed to count defects", exc_info=True)
+
     try:
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         overdue_q = (
@@ -90,16 +94,21 @@ async def analytics_summary(
         )
         overdue_actions = (await db.execute(overdue_q)).scalar() or 0
     except Exception:
-        logger.warning("Could not count overdue vehicle defect actions", exc_info=True)
+        logger.warning("analytics_summary: failed to count overdue actions", exc_info=True)
 
-    last_sync_row = (
-        await db.execute(
-            select(PAMSSyncLog)
-            .where(PAMSSyncLog.status == "success")
-            .order_by(PAMSSyncLog.completed_at.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    try:
+        last_sync_row = (
+            await db.execute(
+                select(PAMSSyncLog)
+                .where(PAMSSyncLog.status == "success")
+                .order_by(PAMSSyncLog.completed_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if last_sync_row and last_sync_row.completed_at:
+            last_sync_iso = last_sync_row.completed_at.isoformat()
+    except Exception:
+        logger.warning("analytics_summary: failed to get last sync", exc_info=True)
 
     return AnalyticsSummary(
         total_daily_checks=total_daily,
@@ -109,7 +118,7 @@ async def analytics_summary(
         p2_defects=p2,
         p3_defects=p3,
         overdue_actions=overdue_actions,
-        last_sync=last_sync_row.completed_at.isoformat() if last_sync_row and last_sync_row.completed_at else None,
+        last_sync=last_sync_iso,
     )
 
 

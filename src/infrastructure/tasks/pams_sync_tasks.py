@@ -18,20 +18,6 @@ def _now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _build_sync_ssl_context():
-    """Build SSL context for synchronous PAMS connections."""
-    import ssl
-
-    from src.core.config import settings
-
-    if not settings.pams_ssl_ca:
-        return None
-    ctx = ssl.create_default_context(cafile=settings.pams_ssl_ca)
-    ctx.check_hostname = True
-    ctx.verify_mode = ssl.CERT_REQUIRED
-    return ctx
-
-
 def _sync_table(
     table_name: str,
     cache_model_cls: type,
@@ -53,8 +39,11 @@ def _sync_table(
         return {"rows_synced": 0, "defects_detected": 0}
 
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
-    ssl_ctx = _build_sync_ssl_context()
-    connect_args: dict = {"ssl": ssl_ctx} if ssl_ctx else {}
+    connect_args: dict = {}
+    if settings.pams_ssl_ca:
+        connect_args["ssl_ca"] = settings.pams_ssl_ca
+        connect_args["ssl_verify_cert"] = True
+        connect_args["ssl_verify_identity"] = True
     pams_engine = create_engine(sync_url, pool_pre_ping=True, connect_args=connect_args)
 
     rows_synced = 0

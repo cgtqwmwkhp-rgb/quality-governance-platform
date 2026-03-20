@@ -63,6 +63,18 @@ async def readiness_check():
         logger.warning("Readiness probe: Redis check failed: %s", exc)
         redis_status = "degraded"
 
+    pams_status = "not_configured"
+    pams_tables_reflected = 0
+    try:
+        from src.infrastructure.pams_database import _pams_tables, is_pams_available
+
+        if is_pams_available():
+            pams_tables_reflected = len(_pams_tables)
+            pams_status = "ok" if pams_tables_reflected > 0 else "no_tables"
+    except Exception as exc:
+        logger.warning("Readiness probe: PAMS check failed: %s", exc)
+        pams_status = "error"
+
     payload = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -70,6 +82,8 @@ async def readiness_check():
             "database": db_status,
             "database_latency_ms": db_latency_ms,
             "redis": redis_status,
+            "pams": pams_status,
+            "pams_tables_reflected": pams_tables_reflected,
             "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
             "cpu_percent": psutil.cpu_percent(interval=0.1),
         },

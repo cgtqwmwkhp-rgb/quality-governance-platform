@@ -70,8 +70,10 @@ async def init_pams() -> None:
 
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
     sync_connect_args: dict[str, Any] = {}
-    if ssl_ctx:
-        sync_connect_args["ssl"] = ssl_ctx
+    if settings.pams_ssl_ca:
+        sync_connect_args["ssl_ca"] = settings.pams_ssl_ca
+        sync_connect_args["ssl_verify_cert"] = True
+        sync_connect_args["ssl_verify_identity"] = True
     try:
         sync_engine = create_engine(sync_url, poolclass=NullPool, connect_args=sync_connect_args)
         _pams_metadata = MetaData()
