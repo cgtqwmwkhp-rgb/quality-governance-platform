@@ -80,6 +80,7 @@ def _defect_to_response(d: VehicleDefect) -> DefectResponse:
 
 # ─── Schema discovery ───────────────────────────────────────────────
 
+
 @router.get("/schema")
 async def get_schema(
     current_user: CurrentUser,
@@ -94,6 +95,7 @@ async def get_schema(
 
 # ─── List checklists (prefer cache, fallback to live PAMS) ──────────
 
+
 async def _list_from_cache(
     db: AsyncSession,
     cache_model: type,
@@ -105,12 +107,7 @@ async def _list_from_cache(
     count_q = select(func.count()).select_from(cache_model)
     total = (await db.execute(count_q)).scalar() or 0
 
-    q = (
-        select(cache_model)
-        .order_by(cache_model.pams_id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
+    q = select(cache_model).order_by(cache_model.pams_id.desc()).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
 
     items = []
@@ -147,12 +144,7 @@ async def _list_from_live_pams(
         pk_cols = list(pams_tbl.primary_key.columns)
         order_col = pk_cols[0] if pk_cols else list(pams_tbl.columns)[0]
 
-        q = (
-            select(pams_tbl)
-            .order_by(order_col.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-        )
+        q = select(pams_tbl).order_by(order_col.desc()).offset((page - 1) * page_size).limit(page_size)
         result = await pams_session.execute(q)
         rows = result.mappings().all()
 
@@ -189,9 +181,7 @@ async def list_daily(
     search: Optional[str] = Query(None),
 ) -> ChecklistListResponse:
     """List daily van checklists (cached or live)."""
-    cache_count = (
-        await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))
-    ).scalar() or 0
+    cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
 
     if cache_count > 0:
         return await _list_from_cache(db, PAMSVanChecklistCache, page, page_size, search)
@@ -208,9 +198,7 @@ async def list_monthly(
     search: Optional[str] = Query(None),
 ) -> ChecklistListResponse:
     """List monthly van checklists (cached or live)."""
-    cache_count = (
-        await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))
-    ).scalar() or 0
+    cache_count = (await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))).scalar() or 0
 
     if cache_count > 0:
         return await _list_from_cache(db, PAMSVanChecklistMonthlyCache, page, page_size, search)
@@ -220,6 +208,7 @@ async def list_monthly(
 
 # ─── Single record detail ───────────────────────────────────────────
 
+
 @router.get("/daily/{record_id}")
 async def get_daily_record(
     record_id: int,
@@ -228,9 +217,7 @@ async def get_daily_record(
 ) -> dict[str, Any]:
     """Get a single daily checklist record."""
     cached = (
-        await db.execute(
-            select(PAMSVanChecklistCache).where(PAMSVanChecklistCache.pams_id == record_id)
-        )
+        await db.execute(select(PAMSVanChecklistCache).where(PAMSVanChecklistCache.pams_id == record_id))
     ).scalar_one_or_none()
 
     if cached and cached.raw_data:
@@ -245,9 +232,7 @@ async def get_daily_record(
 
     pk_col = list(pams_tbl.primary_key.columns)[0]
     async for pams_session in get_pams_db():
-        result = await pams_session.execute(
-            select(pams_tbl).where(pk_col == record_id)
-        )
+        result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
         row = result.mappings().first()
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
@@ -264,11 +249,7 @@ async def get_monthly_record(
 ) -> dict[str, Any]:
     """Get a single monthly checklist record."""
     cached = (
-        await db.execute(
-            select(PAMSVanChecklistMonthlyCache).where(
-                PAMSVanChecklistMonthlyCache.pams_id == record_id
-            )
-        )
+        await db.execute(select(PAMSVanChecklistMonthlyCache).where(PAMSVanChecklistMonthlyCache.pams_id == record_id))
     ).scalar_one_or_none()
 
     if cached and cached.raw_data:
@@ -283,9 +264,7 @@ async def get_monthly_record(
 
     pk_col = list(pams_tbl.primary_key.columns)[0]
     async for pams_session in get_pams_db():
-        result = await pams_session.execute(
-            select(pams_tbl).where(pk_col == record_id)
-        )
+        result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
         row = result.mappings().first()
         if not row:
             raise HTTPException(status_code=404, detail="Record not found")
@@ -295,6 +274,7 @@ async def get_monthly_record(
 
 
 # ─── Defect CRUD ─────────────────────────────────────────────────────
+
 
 @router.post("/defects", status_code=status.HTTP_201_CREATED)
 async def create_defect(
@@ -366,9 +346,7 @@ async def get_defect(
     db: DbSession,
 ) -> DefectResponse:
     """Get a single defect by ID."""
-    defect = (
-        await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))
-    ).scalar_one_or_none()
+    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
         raise HTTPException(status_code=404, detail="Defect not found")
     return _defect_to_response(defect)
@@ -382,9 +360,7 @@ async def update_defect(
     db: DbSession,
 ) -> DefectResponse:
     """Update a vehicle defect (priority, status, notes)."""
-    defect = (
-        await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))
-    ).scalar_one_or_none()
+    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
         raise HTTPException(status_code=404, detail="Defect not found")
 
@@ -407,9 +383,7 @@ async def create_defect_action(
     """Create an action against a vehicle defect (stored as CAPAAction)."""
     from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 
-    defect = (
-        await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))
-    ).scalar_one_or_none()
+    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
         raise HTTPException(status_code=404, detail="Defect not found")
 
@@ -458,6 +432,7 @@ async def create_defect_action(
 
 # ─── Audit trail + notifications helpers ─────────────────────────────
 
+
 async def _log_audit_trail(
     db: AsyncSession,
     current_user: Any,
@@ -501,9 +476,7 @@ async def _create_p1_notification(
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
         from src.domain.models.user import User
 
-        admin_users = (
-            await db.execute(select(User).where(User.is_superuser == True))  # noqa: E712
-        ).scalars().all()
+        admin_users = (await db.execute(select(User).where(User.is_superuser == True))).scalars().all()  # noqa: E712
 
         for user in admin_users:
             if user.id == current_user.id:
@@ -528,6 +501,7 @@ async def _create_p1_notification(
 
 
 # ─── Manual sync trigger (admin only) ───────────────────────────────
+
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_sync(

@@ -76,7 +76,9 @@ async def init_pams() -> None:
         for tbl_name in ("vanchecklist", "vanchecklistmonthly"):
             if tbl_name in _pams_metadata.tables:
                 _pams_tables[tbl_name] = _pams_metadata.tables[tbl_name]
-                logger.info("PAMS: reflected table %s (%d columns)", tbl_name, len(_pams_metadata.tables[tbl_name].columns))
+                logger.info(
+                    "PAMS: reflected table %s (%d columns)", tbl_name, len(_pams_metadata.tables[tbl_name].columns)
+                )
             else:
                 logger.warning("PAMS: table %s not found during reflection", tbl_name)
         sync_engine.dispose()
@@ -111,10 +113,7 @@ def get_pams_columns(table_name: str) -> list[dict[str, str]]:
     tbl = _pams_tables.get(table_name)
     if not tbl:
         return []
-    return [
-        {"name": col.name, "type": str(col.type)}
-        for col in tbl.columns
-    ]
+    return [{"name": col.name, "type": str(col.type)} for col in tbl.columns]
 
 
 def is_pams_available() -> bool:

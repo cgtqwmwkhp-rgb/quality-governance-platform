@@ -40,39 +40,49 @@ async def analytics_summary(
     db: DbSession,
 ) -> AnalyticsSummary:
     """Dashboard summary cards: totals, defect counts, pass rate."""
-    total_daily = (
-        await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))
-    ).scalar() or 0
+    total_daily = (await db.execute(select(func.count()).select_from(PAMSVanChecklistCache))).scalar() or 0
 
-    total_monthly = (
-        await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))
-    ).scalar() or 0
+    total_monthly = (await db.execute(select(func.count()).select_from(PAMSVanChecklistMonthlyCache))).scalar() or 0
 
-    open_q = select(func.count()).select_from(VehicleDefect).where(
-        VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"])
+    open_q = (
+        select(func.count())
+        .select_from(VehicleDefect)
+        .where(VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]))
     )
     open_defects = (await db.execute(open_q)).scalar() or 0
 
-    p1 = (await db.execute(
-        select(func.count()).select_from(VehicleDefect).where(
-            VehicleDefect.priority == "P1",
-            VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+    p1 = (
+        await db.execute(
+            select(func.count())
+            .select_from(VehicleDefect)
+            .where(
+                VehicleDefect.priority == "P1",
+                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+            )
         )
-    )).scalar() or 0
+    ).scalar() or 0
 
-    p2 = (await db.execute(
-        select(func.count()).select_from(VehicleDefect).where(
-            VehicleDefect.priority == "P2",
-            VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+    p2 = (
+        await db.execute(
+            select(func.count())
+            .select_from(VehicleDefect)
+            .where(
+                VehicleDefect.priority == "P2",
+                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+            )
         )
-    )).scalar() or 0
+    ).scalar() or 0
 
-    p3 = (await db.execute(
-        select(func.count()).select_from(VehicleDefect).where(
-            VehicleDefect.priority == "P3",
-            VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+    p3 = (
+        await db.execute(
+            select(func.count())
+            .select_from(VehicleDefect)
+            .where(
+                VehicleDefect.priority == "P3",
+                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+            )
         )
-    )).scalar() or 0
+    ).scalar() or 0
 
     overdue_actions = 0
     try:
@@ -120,7 +130,8 @@ async def analytics_trends(
     """Defect creation trend over time grouped by day."""
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
-    q = text("""
+    q = text(
+        """
         SELECT
             DATE(created_at) as dt,
             COUNT(*) FILTER (WHERE priority = 'P1') as p1,
@@ -131,7 +142,8 @@ async def analytics_trends(
         WHERE created_at >= :cutoff
         GROUP BY DATE(created_at)
         ORDER BY dt
-    """)
+    """
+    )
 
     result = await db.execute(q, {"cutoff": cutoff})
     rows = result.mappings().all()
@@ -179,6 +191,7 @@ async def analytics_heatmap(
 
 # ─── CSV Exports ─────────────────────────────────────────────────────
 
+
 @router.get("/export/daily")
 async def export_daily_csv(
     current_user: CurrentUser,
@@ -186,10 +199,8 @@ async def export_daily_csv(
 ) -> StreamingResponse:
     """Export all cached daily checklists as CSV."""
     rows = (
-        await db.execute(
-            select(PAMSVanChecklistCache).order_by(PAMSVanChecklistCache.pams_id.desc())
-        )
-    ).scalars().all()
+        (await db.execute(select(PAMSVanChecklistCache).order_by(PAMSVanChecklistCache.pams_id.desc()))).scalars().all()
+    )
 
     return _build_csv_response(rows, "daily_checklists.csv")
 
@@ -201,10 +212,10 @@ async def export_monthly_csv(
 ) -> StreamingResponse:
     """Export all cached monthly checklists as CSV."""
     rows = (
-        await db.execute(
-            select(PAMSVanChecklistMonthlyCache).order_by(PAMSVanChecklistMonthlyCache.pams_id.desc())
-        )
-    ).scalars().all()
+        (await db.execute(select(PAMSVanChecklistMonthlyCache).order_by(PAMSVanChecklistMonthlyCache.pams_id.desc())))
+        .scalars()
+        .all()
+    )
 
     return _build_csv_response(rows, "monthly_checklists.csv")
 
@@ -215,29 +226,43 @@ async def export_defects_csv(
     db: DbSession,
 ) -> StreamingResponse:
     """Export defect register as CSV."""
-    rows = (
-        await db.execute(
-            select(VehicleDefect).order_by(VehicleDefect.created_at.desc())
-        )
-    ).scalars().all()
+    rows = (await db.execute(select(VehicleDefect).order_by(VehicleDefect.created_at.desc()))).scalars().all()
 
     import csv
 
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow([
-        "ID", "PAMS Table", "Record ID", "Check Field", "Check Value",
-        "Priority", "Status", "Vehicle Reg", "Notes",
-        "Assigned To", "Created At",
-    ])
+    writer.writerow(
+        [
+            "ID",
+            "PAMS Table",
+            "Record ID",
+            "Check Field",
+            "Check Value",
+            "Priority",
+            "Status",
+            "Vehicle Reg",
+            "Notes",
+            "Assigned To",
+            "Created At",
+        ]
+    )
     for d in rows:
-        writer.writerow([
-            d.id, d.pams_table, d.pams_record_id, d.check_field, d.check_value,
-            d.priority.value if hasattr(d.priority, "value") else d.priority,
-            d.status.value if hasattr(d.status, "value") else d.status,
-            d.vehicle_reg, d.notes, d.assigned_to_email,
-            d.created_at.isoformat() if d.created_at else "",
-        ])
+        writer.writerow(
+            [
+                d.id,
+                d.pams_table,
+                d.pams_record_id,
+                d.check_field,
+                d.check_value,
+                d.priority.value if hasattr(d.priority, "value") else d.priority,
+                d.status.value if hasattr(d.status, "value") else d.status,
+                d.vehicle_reg,
+                d.notes,
+                d.assigned_to_email,
+                d.created_at.isoformat() if d.created_at else "",
+            ]
+        )
 
     output.seek(0)
     return StreamingResponse(

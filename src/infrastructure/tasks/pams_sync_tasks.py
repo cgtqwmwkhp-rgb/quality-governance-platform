@@ -65,9 +65,7 @@ def _sync_table(
                 row_dict = {k: _safe_serialize(v) for k, v in dict(row).items()}
                 pams_id = int(row_dict.get(pk_col.name, 0))
 
-                existing = db.query(cache_model_cls).filter(
-                    cache_model_cls.pams_id == pams_id
-                ).first()
+                existing = db.query(cache_model_cls).filter(cache_model_cls.pams_id == pams_id).first()
 
                 if existing:
                     existing.raw_data = row_dict
@@ -82,9 +80,7 @@ def _sync_table(
 
                 rows_synced += 1
 
-                detected = _auto_detect_defects(
-                    row_dict, pams_id, table_name, defect_cls, db
-                )
+                detected = _auto_detect_defects(row_dict, pams_id, table_name, defect_cls, db)
                 defects_detected += detected
 
             db.commit()
@@ -117,14 +113,37 @@ def _auto_detect_defects(
     pams_table_label = "daily" if table_name == "vanchecklist" else "monthly"
     detected = 0
 
-    skip_keys = {"id", "ID", "inc_id", "created_at", "updated_at", "date",
-                 "driver", "vehicle", "registration", "reg", "VehicleReg",
-                 "DriverName", "DateSubmitted", "userName", "vanID", "vanReg",
-                 "startTimeDate", "endTimeDate", "technician",
-                 "comments", "notes", "mileage", "Mileage",
-                 "bodyWorkDamage", "defects", "uploaded",
-                 "roadTaxExpiryDate", "toolingCalibrationExpiryDate",
-                 "fireExtinguisherExpiryDate"}
+    skip_keys = {
+        "id",
+        "ID",
+        "inc_id",
+        "created_at",
+        "updated_at",
+        "date",
+        "driver",
+        "vehicle",
+        "registration",
+        "reg",
+        "VehicleReg",
+        "DriverName",
+        "DateSubmitted",
+        "userName",
+        "vanID",
+        "vanReg",
+        "startTimeDate",
+        "endTimeDate",
+        "technician",
+        "comments",
+        "notes",
+        "mileage",
+        "Mileage",
+        "bodyWorkDamage",
+        "defects",
+        "uploaded",
+        "roadTaxExpiryDate",
+        "toolingCalibrationExpiryDate",
+        "fireExtinguisherExpiryDate",
+    }
 
     for col_name, col_value in row_dict.items():
         if col_name in skip_keys:
@@ -255,11 +274,7 @@ def _send_p1_notifications() -> None:
 
         db = SessionLocal()
         try:
-            auto_defects = (
-                db.query(VehicleDefect)
-                .filter(VehicleDefect.status == "auto_detected")
-                .all()
-            )
+            auto_defects = db.query(VehicleDefect).filter(VehicleDefect.status == "auto_detected").all()
             if not auto_defects:
                 return
 

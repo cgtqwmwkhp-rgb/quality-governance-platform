@@ -35,27 +35,21 @@ class VehicleDefect(Base):
     __tablename__ = "vehicle_defects"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     pams_table: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     pams_record_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     check_field: Mapped[str] = mapped_column(String(255), nullable=False)
     check_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    priority: Mapped[DefectPriority] = mapped_column(
-        Enum(DefectPriority), nullable=False, index=True
-    )
+    priority: Mapped[DefectPriority] = mapped_column(Enum(DefectPriority), nullable=False, index=True)
     status: Mapped[DefectStatus] = mapped_column(
         Enum(DefectStatus), default=DefectStatus.OPEN, nullable=False, index=True
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     vehicle_reg: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
 
-    created_by_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_to_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
