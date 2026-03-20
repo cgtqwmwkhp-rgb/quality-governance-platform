@@ -29,7 +29,7 @@ def _sync_table(
 
     Returns a dict with rows_synced and defects_detected counts.
     """
-    from sqlalchemy import create_engine, text, MetaData, select
+    from sqlalchemy import MetaData, create_engine, select, text
     from sqlalchemy.orm import Session
 
     from src.core.config import settings
@@ -207,11 +207,7 @@ def _safe_serialize(v: Any) -> Any:
 )
 def sync_pams_checklists(self) -> dict[str, Any]:  # type: ignore[override]
     """Celery task: sync both PAMS tables and log results."""
-    from src.domain.models.pams_cache import (
-        PAMSSyncLog,
-        PAMSVanChecklistCache,
-        PAMSVanChecklistMonthlyCache,
-    )
+    from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
     from src.domain.models.vehicle_defect import VehicleDefect
     from src.infrastructure.database import SessionLocal
 
@@ -266,11 +262,12 @@ def sync_pams_checklists(self) -> dict[str, Any]:  # type: ignore[override]
 def _send_p1_notifications() -> None:
     """Create in-app notifications for new auto-detected P1-eligible defects."""
     try:
-        from src.domain.models.vehicle_defect import VehicleDefect
+        from sqlalchemy import select
+
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
         from src.domain.models.user import User
+        from src.domain.models.vehicle_defect import VehicleDefect
         from src.infrastructure.database import SessionLocal
-        from sqlalchemy import select
 
         db = SessionLocal()
         try:

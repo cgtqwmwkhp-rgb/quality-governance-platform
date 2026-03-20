@@ -19,9 +19,9 @@ from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, init_db
-from src.infrastructure.pams_database import close_pams, init_pams
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
+from src.infrastructure.pams_database import close_pams, init_pams
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

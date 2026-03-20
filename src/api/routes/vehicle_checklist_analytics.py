@@ -16,17 +16,9 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.vehicle_checklist import (
-    AnalyticsSummary,
-    HeatmapEntry,
-    TrendDataPoint,
-)
+from src.api.schemas.vehicle_checklist import AnalyticsSummary, HeatmapEntry, TrendDataPoint
 from src.domain.models.capa import CAPAAction, CAPAStatus
-from src.domain.models.pams_cache import (
-    PAMSSyncLog,
-    PAMSVanChecklistCache,
-    PAMSVanChecklistMonthlyCache,
-)
+from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.vehicle_defect import VehicleDefect
 
 logger = logging.getLogger(__name__)

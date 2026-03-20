@@ -1,5 +1,9 @@
 {
+<<<<<<< Updated upstream
   "release_sha": "9ce5d60e0495962b970c96f112e9044352feae7a",
+=======
+  "release_sha": "bb40f23c5494b4f32d0a3e4721c9d23d9043e5fc",
+>>>>>>> Stashed changes
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",

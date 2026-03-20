@@ -14,7 +14,6 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.services.audit_service import record_audit_event
 from src.api.schemas.vehicle_checklist import (
     ChecklistListResponse,
     ChecklistSchemaResponse,
@@ -24,18 +23,10 @@ from src.api.schemas.vehicle_checklist import (
     DefectResponse,
     DefectUpdate,
 )
-from src.domain.models.pams_cache import (
-    PAMSSyncLog,
-    PAMSVanChecklistCache,
-    PAMSVanChecklistMonthlyCache,
-)
+from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.vehicle_defect import VehicleDefect
-from src.infrastructure.pams_database import (
-    get_pams_columns,
-    get_pams_db,
-    get_pams_table,
-    is_pams_available,
-)
+from src.domain.services.audit_service import record_audit_event
+from src.infrastructure.pams_database import get_pams_columns, get_pams_db, get_pams_table, is_pams_available
 
 logger = logging.getLogger(__name__)
 

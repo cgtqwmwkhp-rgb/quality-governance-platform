@@ -1,3 +1,7 @@
+aiomysql==0.3.2 \
+    --hash=sha256:72d15ef5cfc34c03468eb41e1b90adb9fd9347b0b589114bd23ead569a02ac1a \
+    --hash=sha256:c82c5ba04137d7afd5c693a258bea8ead2aad77101668044143a991e04632eb2
+    # via -r requirements.txt
 aiosmtplib==3.0.1 \
     --hash=sha256:43580604b152152a221598be3037f0ae6359c2817187ac4433bd857bc3fc6513 \
     --hash=sha256:abcceae7e820577307b4cda2041b2c25e5121469c0e186764ddf8e15b12064cd
