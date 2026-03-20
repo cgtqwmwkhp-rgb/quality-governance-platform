@@ -38,10 +38,14 @@ def _sync_table(
         logger.info("PAMS_DATABASE_URL not set — skipping %s sync", table_name)
         return {"rows_synced": 0, "defects_detected": 0}
 
+    import os
+
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
     connect_args: dict = {}
     if settings.pams_ssl_ca:
-        connect_args["ssl"] = {"ca": settings.pams_ssl_ca}
+        system_ca = "/etc/ssl/certs/ca-certificates.crt"
+        ca_file = system_ca if os.path.exists(system_ca) else settings.pams_ssl_ca
+        connect_args["ssl"] = {"ca": ca_file}
     pams_engine = create_engine(sync_url, pool_pre_ping=True, connect_args=connect_args)
 
     rows_synced = 0

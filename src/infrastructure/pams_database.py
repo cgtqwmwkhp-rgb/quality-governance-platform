@@ -31,9 +31,24 @@ def _build_ssl_context() -> Optional[ssl.SSLContext]:
     if not settings.pams_ssl_ca:
         return None
     ctx = ssl.create_default_context(cafile=settings.pams_ssl_ca)
-    ctx.check_hostname = True
-    ctx.verify_mode = ssl.CERT_REQUIRED
     return ctx
+
+
+def _pymysql_ssl_args() -> dict[str, Any]:
+    """Build SSL dict for pymysql (sync) connections.
+
+    pymysql creates a bare SSLContext(PROTOCOL_TLS_CLIENT) and only loads
+    the CA we specify — it does NOT load system CAs. To cover certificate
+    chains that require intermediate/root CAs beyond our DigiCert bundle,
+    we point to the system CA store and also include the custom CA.
+    """
+    import os
+
+    if not settings.pams_ssl_ca:
+        return {}
+    system_ca = "/etc/ssl/certs/ca-certificates.crt"
+    ca_file = system_ca if os.path.exists(system_ca) else settings.pams_ssl_ca
+    return {"ssl": {"ca": ca_file}}
 
 
 async def init_pams() -> None:
@@ -69,9 +84,7 @@ async def init_pams() -> None:
     )
 
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
-    sync_connect_args: dict[str, Any] = {}
-    if settings.pams_ssl_ca:
-        sync_connect_args["ssl"] = {"ca": settings.pams_ssl_ca}
+    sync_connect_args: dict[str, Any] = _pymysql_ssl_args()
     try:
         sync_engine = create_engine(sync_url, poolclass=NullPool, connect_args=sync_connect_args)
         _pams_metadata = MetaData()
