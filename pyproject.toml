@@ -236,6 +236,9 @@ module = [
     "src.infrastructure.middleware.rate_limiter",
     "src.infrastructure.tasks.notification_tasks",
     "src.infrastructure.websocket.connection_manager",
+    "src.api.routes.vehicle_checklists",
+    "src.api.routes.vehicle_checklist_analytics",
+    "src.infrastructure.tasks.pams_sync_tasks",
 ]
 ignore_errors = true
 
