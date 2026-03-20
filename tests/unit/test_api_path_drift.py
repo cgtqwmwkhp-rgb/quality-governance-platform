@@ -35,13 +35,11 @@ class TestDriftPatternDetection(TestCase):
     def test_bare_api_path_detected(self):
         """Bare /api/endpoint patterns MUST be detected."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_example():
     response = client.get("/api/users")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -54,11 +52,9 @@ def test_example():
     def test_bare_api_root_detected(self):
         """Bare /api/ endpoint MUST be detected."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 BASE_URL = "/api/"
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -70,13 +66,11 @@ BASE_URL = "/api/"
     def test_versioned_api_path_allowed(self):
         """Versioned /api/v1/ paths MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_example():
     response = client.get("/api/v1/users")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -88,13 +82,11 @@ def test_example():
     def test_versioned_api_v2_allowed(self):
         """Other versions like /api/v2/ MUST also be allowed."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_example():
     response = client.get("/api/v2/users")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -106,8 +98,7 @@ def test_example():
     def test_health_endpoint_allowed(self):
         """Health endpoints MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_health():
     response = client.get("/healthz")
     assert response.status_code == 200
@@ -115,8 +106,7 @@ def test_health():
 def test_ready():
     response = client.get("/readyz")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -152,13 +142,11 @@ class TestAllowlistHandling(TestCase):
     def test_allowlisted_path_not_flagged(self):
         """Paths in allowlist MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 def test_legacy():
     response = client.get("/api/legacy/endpoint")
     assert response.status_code == 200
-"""
-            )
+""")
             f.flush()
 
             allowlist = {"/api/legacy/endpoint"}
@@ -175,13 +163,11 @@ class TestViolationOutput(TestCase):
     def test_violation_includes_file_and_line(self):
         """Violations MUST include file path and line number."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """line1
+            f.write("""line1
 line2
 response = client.get("/api/users")
 line4
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -214,8 +200,7 @@ class TestMixedContent(TestCase):
     def test_mixed_paths_only_flags_invalid(self):
         """Only invalid paths should be flagged in mixed content."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write(
-                """
+            f.write("""
 # Valid paths
 valid1 = "/api/v1/users"
 valid2 = "/api/v1/policies"
@@ -225,8 +210,7 @@ valid4 = "/readyz"
 # Invalid paths
 invalid1 = "/api/users"
 invalid2 = "/api/policies"
-"""
-            )
+""")
             f.flush()
 
             violations = scan_file(Path(f.name), set())

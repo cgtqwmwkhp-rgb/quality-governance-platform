@@ -1,3 +1,7 @@
+aiomysql==0.3.2 \
+    --hash=sha256:72d15ef5cfc34c03468eb41e1b90adb9fd9347b0b589114bd23ead569a02ac1a \
+    --hash=sha256:c82c5ba04137d7afd5c693a258bea8ead2aad77101668044143a991e04632eb2
+    # via -r requirements.txt
 aiosmtplib==3.0.1 \
     --hash=sha256:43580604b152152a221598be3037f0ae6359c2817187ac4433bd857bc3fc6513 \
     --hash=sha256:abcceae7e820577307b4cda2041b2c25e5121469c0e186764ddf8e15b12064cd
@@ -526,9 +530,7 @@ greenlet==3.3.2 \
     --hash=sha256:d3a62fa76a32b462a97198e4c9e99afb9ab375115e74e9a83ce180e7a496f643 \
     --hash=sha256:e26e72bec7ab387ac80caa7496e0f908ff954f31065b0ffc1f8ecb1338b11b54 \
     --hash=sha256:e3cb43ce200f59483eb82949bf1835a99cf43d7571e900d7c8d5c62cdf25d2f9
-    # via
-    #   -r requirements.txt
-    #   sqlalchemy
+    # via -r requirements.txt
 grpcio==1.78.0 \
     --hash=sha256:082653eecbdf290e6e3e2c276ab2c54b9e7c299e07f4221872380312d8cf395e \
     --hash=sha256:10a9a644b5dd5aec3b82b5b0b90d41c0fa94c85ef42cb42cf78a23291ddb5e7d \
