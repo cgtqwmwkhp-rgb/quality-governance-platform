@@ -73,6 +73,9 @@
   "overrides": {
     "@typescript-eslint/typescript-estree": {
       "minimatch": ">=9.0.7"
-    }
+    },
+    "flatted": ">=3.4.2",
+    "undici": ">=7.24.0",
+    "tmp": ">=0.2.4"
   }
 }
