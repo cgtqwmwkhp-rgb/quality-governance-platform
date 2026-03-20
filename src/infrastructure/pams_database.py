@@ -69,8 +69,11 @@ async def init_pams() -> None:
     )
 
     sync_url = settings.pams_database_url.replace("+aiomysql", "+pymysql")
+    sync_connect_args: dict[str, Any] = {}
+    if ssl_ctx:
+        sync_connect_args["ssl"] = ssl_ctx
     try:
-        sync_engine = create_engine(sync_url, poolclass=NullPool)
+        sync_engine = create_engine(sync_url, poolclass=NullPool, connect_args=sync_connect_args)
         _pams_metadata = MetaData()
         _pams_metadata.reflect(bind=sync_engine, only=["vanchecklist", "vanchecklistmonthly"])
         for tbl_name in ("vanchecklist", "vanchecklistmonthly"):

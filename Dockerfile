@@ -46,6 +46,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini .
+COPY --chown=appuser:appgroup certs/ ./certs/
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \

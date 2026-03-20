@@ -304,7 +304,7 @@ jobs:
           echo "Creating pre-deployment database backup..."
           az postgres flexible-server backup create \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --name ${{ secrets.AZURE_DB_SERVER_NAME || 'qgp-prod-db' }} \
+            --name ${{ secrets.AZURE_DB_SERVER_NAME }} \
             --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
@@ -345,6 +345,7 @@ jobs:
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
               UAT_MODE="READ_WRITE" \
+              APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
             --output none
           
           echo "✅ Application settings configured"
