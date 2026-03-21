@@ -455,6 +455,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token: string
   token_type: string
+  refresh_token?: string
 }
 
 export interface RefreshResponse {
@@ -486,6 +487,11 @@ export interface Incident {
   location?: string
   department?: string
   created_at: string
+  updated_at?: string
+  reporter_name?: string
+  reporter_email?: string
+  investigator_id?: number | null
+  closed_at?: string | null
 }
 
 export interface IncidentCreate {
@@ -1111,7 +1117,7 @@ export interface Investigation {
   id: number
   reference_number: string
   template_id: number
-  assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint'
+  assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
   assigned_entity_id: number
   status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
   title: string
@@ -1570,12 +1576,14 @@ export interface TimelineResponse {
 
 export interface InvestigationComment {
   id: number
+  investigation_id: number
   created_at: string
   author_id: number
-  content: string // Note content (backend field name)
+  content: string
   section_id?: string
   field_id?: string
   parent_comment_id?: number
+  deleted_at?: string | null
 }
 
 export interface CommentsResponse {
@@ -1583,12 +1591,11 @@ export interface CommentsResponse {
   total: number
   page: number
   page_size: number
-  investigation_id: number
 }
 
 export interface CustomerPackSummary {
   id: number
-  created_at: string
+  generated_at: string
   pack_uuid: string
   audience: string
   checksum_sha256?: string
@@ -1604,10 +1611,8 @@ export interface PacksResponse {
 }
 
 export interface ClosureValidation {
-  status: 'OK' | 'BLOCKED'
-  reason_codes: string[]
-  missing_fields: string[]
-  checked_at_utc: string
+  can_close: boolean
+  reasons: string[]
 }
 
 export const investigationsApi = {
@@ -1650,7 +1655,7 @@ export const investigationsApi = {
     const params = new URLSearchParams({ source_type })
     if (options?.q) params.set('q', options.q)
     if (options?.page) params.set('page', String(options.page))
-    if (options?.size) params.set('size', String(options.size))
+    if (options?.size) params.set('page_size', String(options.size))
     return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
   },
 
@@ -1664,7 +1669,7 @@ export const investigationsApi = {
     const params = new URLSearchParams()
     if (options?.page) params.set('page', String(options.page))
     if (options?.page_size) params.set('page_size', String(options.page_size))
-    if (options?.type) params.set('type', options.type)
+    if (options?.type) params.set('event_type', options.type)
     return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
   },
 
@@ -1702,7 +1707,7 @@ export const investigationsApi = {
    * Generate a new customer pack for an investigation.
    */
   generatePack: (id: number, audience: string) =>
-    api.post<CustomerPackSummary>(`/api/v1/investigations/${id}/customer-pack`, { audience }),
+    api.post<CustomerPackSummary>(`/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`),
 
   /**
    * Get closure validation status for an investigation.

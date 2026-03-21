@@ -93,7 +93,7 @@ async def list_complaints(
     request_id: str = Depends(get_request_id),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status_filter: Optional[str] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
     complainant_email: Optional[str] = Query(None, description="Filter by complainant email"),
 ) -> ComplaintListResponse:
     """

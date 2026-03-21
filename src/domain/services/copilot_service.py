@@ -16,7 +16,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.ai_copilot import (
     CopilotAction,
@@ -205,7 +206,7 @@ class CopilotService:
     AI Copilot conversation service.
     """
 
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self._ai_client = None
 
@@ -213,7 +214,7 @@ class CopilotService:
     # Session Management
     # =========================================================================
 
-    def create_session(
+    async def create_session(
         self,
         tenant_id: int,
         user_id: int,
@@ -232,41 +233,44 @@ class CopilotService:
             current_page=current_page,
         )
         self.db.add(session)
-        self.db.commit()
-        self.db.refresh(session)
+        await self.db.commit()
+        await self.db.refresh(session)
 
         return session
 
-    def get_session(self, session_id: int) -> Optional[CopilotSession]:
+    async def get_session(self, session_id: int) -> Optional[CopilotSession]:
         """Get a session by ID."""
-        return self.db.query(CopilotSession).filter(CopilotSession.id == session_id).first()
-
-    def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
-        """Get the user's active session."""
-        return (
-            self.db.query(CopilotSession)
-            .filter(CopilotSession.user_id == user_id, CopilotSession.is_active == True)
-            .order_by(CopilotSession.updated_at.desc())
-            .first()
+        result = await self.db.execute(
+            select(CopilotSession).where(CopilotSession.id == session_id)
         )
+        return result.scalars().first()
 
-    def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
+    async def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
+        """Get the user's active session."""
+        result = await self.db.execute(
+            select(CopilotSession)
+            .where(CopilotSession.user_id == user_id, CopilotSession.is_active == True)
+            .order_by(CopilotSession.updated_at.desc())
+        )
+        return result.scalars().first()
+
+    async def get_session_messages(self, session_id: int, limit: int = 50) -> list[CopilotMessage]:
         """Get messages for a session."""
-        return (
-            self.db.query(CopilotMessage)
-            .filter(CopilotMessage.session_id == session_id)
+        result = await self.db.execute(
+            select(CopilotMessage)
+            .where(CopilotMessage.session_id == session_id)
             .order_by(CopilotMessage.created_at)
             .limit(limit)
-            .all()
         )
+        return list(result.scalars().all())
 
-    def close_session(self, session_id: int) -> CopilotSession:
+    async def close_session(self, session_id: int) -> CopilotSession:
         """Close a session."""
-        session = self.get_session(session_id)
+        session = await self.get_session(session_id)
         if session:
             session.is_active = False
-            self.db.commit()
-            self.db.refresh(session)
+            await self.db.commit()
+            await self.db.refresh(session)
         return session
 
     # =========================================================================
@@ -282,7 +286,7 @@ class CopilotService:
         """
         Send a message and get AI response.
         """
-        session = self.get_session(session_id)
+        session = await self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
@@ -293,10 +297,10 @@ class CopilotService:
             content=content,
         )
         self.db.add(user_message)
-        self.db.commit()
+        await self.db.commit()
 
         # Get conversation history
-        history = self.get_session_messages(session_id, limit=20)
+        history = await self.get_session_messages(session_id, limit=20)
 
         # Build context
         context = self._build_context(session)
@@ -325,8 +329,8 @@ class CopilotService:
         if not session.title and len(content) > 0:
             session.title = content[:50] + ("..." if len(content) > 50 else "")
 
-        self.db.commit()
-        self.db.refresh(assistant_message)
+        await self.db.commit()
+        await self.db.refresh(assistant_message)
 
         # Execute action if present
         if action_data:
@@ -553,7 +557,7 @@ class CopilotService:
             message.action_status = "failed"
             message.action_result = {"error": str(e)}
 
-        self.db.commit()
+        await self.db.commit()
 
     def _build_context(self, session: CopilotSession) -> dict:
         """Build context information for the AI."""
@@ -568,7 +572,7 @@ class CopilotService:
     # Feedback
     # =========================================================================
 
-    def submit_feedback(
+    async def submit_feedback(
         self,
         message_id: int,
         user_id: int,
@@ -578,22 +582,25 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        message = self.db.query(CopilotMessage).filter(CopilotMessage.id == message_id).first()
+        result = await self.db.execute(
+            select(CopilotMessage).where(CopilotMessage.id == message_id)
+        )
+        message = result.scalars().first()
 
         if not message:
             raise ValueError(f"Message {message_id} not found")
 
         # Get the user query (previous message)
-        user_query_msg = (
-            self.db.query(CopilotMessage)
-            .filter(
+        uq_result = await self.db.execute(
+            select(CopilotMessage)
+            .where(
                 CopilotMessage.session_id == message.session_id,
                 CopilotMessage.role == "user",
                 CopilotMessage.created_at < message.created_at,
             )
             .order_by(CopilotMessage.created_at.desc())
-            .first()
         )
+        user_query_msg = uq_result.scalars().first()
 
         feedback = CopilotFeedback(
             tenant_id=tenant_id,
@@ -612,8 +619,8 @@ class CopilotService:
         message.feedback_rating = rating
         message.feedback_text = feedback_text
 
-        self.db.commit()
-        self.db.refresh(feedback)
+        await self.db.commit()
+        await self.db.refresh(feedback)
 
         return feedback
 
@@ -621,7 +628,7 @@ class CopilotService:
     # Knowledge Base
     # =========================================================================
 
-    def search_knowledge(
+    async def search_knowledge(
         self,
         query: str,
         tenant_id: Optional[int] = None,
@@ -629,27 +636,26 @@ class CopilotService:
         limit: int = 5,
     ) -> list[CopilotKnowledge]:
         """Search the knowledge base."""
-        # In production, this would use vector similarity search
-        # For now, simple text search
-
-        query_db = self.db.query(CopilotKnowledge).filter(
-            CopilotKnowledge.is_active == True,
-        )
+        stmt = select(CopilotKnowledge).where(CopilotKnowledge.is_active == True)
 
         if tenant_id:
-            query_db = query_db.filter((CopilotKnowledge.tenant_id == tenant_id) | (CopilotKnowledge.tenant_id == None))
+            stmt = stmt.where(
+                (CopilotKnowledge.tenant_id == tenant_id)
+                | (CopilotKnowledge.tenant_id == None)
+            )
 
         if category:
-            query_db = query_db.filter(CopilotKnowledge.category == category)
+            stmt = stmt.where(CopilotKnowledge.category == category)
 
-        # Simple keyword matching
-        query_db = query_db.filter(
-            CopilotKnowledge.content.ilike(f"%{query}%") | CopilotKnowledge.title.ilike(f"%{query}%")
-        )
+        stmt = stmt.where(
+            CopilotKnowledge.content.ilike(f"%{query}%")
+            | CopilotKnowledge.title.ilike(f"%{query}%")
+        ).limit(limit)
 
-        return query_db.limit(limit).all()
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
-    def add_knowledge(
+    async def add_knowledge(
         self,
         title: str,
         content: str,
@@ -671,7 +677,7 @@ class CopilotService:
         )
 
         self.db.add(knowledge)
-        self.db.commit()
-        self.db.refresh(knowledge)
+        await self.db.commit()
+        await self.db.refresh(knowledge)
 
         return knowledge

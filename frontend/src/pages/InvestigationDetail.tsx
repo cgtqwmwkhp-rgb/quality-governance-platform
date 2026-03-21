@@ -632,38 +632,28 @@ export default function InvestigationDetail() {
                     <div
                       className={cn(
                         'flex items-center gap-2 p-3 rounded-lg',
-                        closureValidation.status === 'OK'
+                        closureValidation.can_close
                           ? 'bg-success/10 text-success'
                           : 'bg-warning/10 text-warning',
                       )}
                     >
-                      {closureValidation.status === 'OK' ? (
+                      {closureValidation.can_close ? (
                         <CheckCircle2 className="w-5 h-5" />
                       ) : (
                         <XCircle className="w-5 h-5" />
                       )}
                       <span className="font-medium">
-                        {closureValidation.status === 'OK'
+                        {closureValidation.can_close
                           ? 'Ready for Closure'
                           : 'Cannot Close Yet'}
                       </span>
                     </div>
-                    {closureValidation.reason_codes.length > 0 && (
+                    {closureValidation.reasons.length > 0 && (
                       <div className="space-y-1">
                         <p className="text-xs font-medium text-muted-foreground">Issues:</p>
-                        {closureValidation.reason_codes.map((code, i) => (
+                        {closureValidation.reasons.map((reason: string, i: number) => (
                           <p key={i} className="text-xs text-destructive">
-                            • {code.replace(/_/g, ' ')}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                    {closureValidation.missing_fields.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-muted-foreground">Missing Fields:</p>
-                        {closureValidation.missing_fields.map((field, i) => (
-                          <p key={i} className="text-xs text-muted-foreground">
-                            • {field}
+                            • {reason.replace(/_/g, ' ')}
                           </p>
                         ))}
                       </div>
@@ -949,7 +939,7 @@ export default function InvestigationDetail() {
                             {pack.audience.replace(/_/g, ' ')} Report
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Generated: {new Date(pack.created_at).toLocaleString()}
+                            Generated: {new Date(pack.generated_at).toLocaleString()}
                           </p>
                         </div>
                       </div>

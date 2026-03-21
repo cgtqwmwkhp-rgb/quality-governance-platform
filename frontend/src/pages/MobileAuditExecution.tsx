@@ -509,6 +509,13 @@ export default function MobileAuditExecution() {
   const [batteryLevel] = useState(85)
   const [aiLoading, setAiLoading] = useState(false)
   const [showAISuggestion, setShowAISuggestion] = useState(true)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current)
+    }
+  }, [])
 
   // Handle online/offline status
   useEffect(() => {
@@ -632,7 +639,7 @@ export default function MobileAuditExecution() {
     }))
     setIsSynced(false)
     // Simulate sync
-    setTimeout(() => setIsSynced(true), 1500)
+    syncTimerRef.current = setTimeout(() => setIsSynced(true), 1500)
   }
 
   // Navigation

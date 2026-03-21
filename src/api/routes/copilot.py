@@ -71,14 +71,14 @@ class FeedbackCreate(BaseModel):
 
 class ActionExecute(BaseModel):
     action_name: str
-    parameters: dict = {}
+    parameters: dict = Field(default_factory=dict)
 
 
 class SuggestedAction(BaseModel):
     action: str
     display_name: str
     description: str
-    parameters: dict = {}
+    parameters: dict = Field(default_factory=dict)
 
 
 # ============================================================================

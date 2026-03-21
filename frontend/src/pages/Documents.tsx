@@ -225,8 +225,9 @@ export default function Documents() {
     formData.append('document_type', 'other')
     formData.append('sensitivity', 'internal')
 
+    let progressInterval: ReturnType<typeof setInterval> | undefined
     try {
-      const progressInterval = setInterval(() => {
+      progressInterval = setInterval(() => {
         setUploadProgress((prev) => Math.min(prev + 10, 90))
       }, 200)
 
@@ -234,7 +235,6 @@ export default function Documents() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
 
-      clearInterval(progressInterval)
       setUploadProgress(100)
 
       await loadData(filterType || undefined, filterStatus || undefined)
@@ -243,6 +243,7 @@ export default function Documents() {
       trackError(err, { component: 'Documents', action: 'upload' })
       setUploadError(getApiErrorMessage(err))
     } finally {
+      if (progressInterval) clearInterval(progressInterval)
       setUploading(false)
       setUploadProgress(0)
     }

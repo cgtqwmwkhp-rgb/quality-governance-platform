@@ -117,8 +117,24 @@ Additional related gates: **dependency-review** (PRs, high severity), **lockfile
 
 ---
 
-## 9. Review
+## 9. Dependency Deprecation Notices
+
+### passlib → direct bcrypt
+
+`passlib` is in maintenance-only mode. The project plans to migrate to direct `bcrypt` usage:
+
+| Item | Current | Target |
+|------|---------|--------|
+| Library | `passlib[bcrypt]` | `bcrypt` (direct) |
+| Hash function | `CryptContext(schemes=["bcrypt"])` | `bcrypt.hashpw()` / `bcrypt.checkpw()` |
+| Timeline | — | Q3 2026 |
+| Migration risk | Low — hash format is identical; only the Python wrapper changes |
+| Tracking | ADR to be created when migration begins |
+
+**Action:** No user-facing change. During migration, verify that existing bcrypt hashes are readable by the new implementation (they will be — bcrypt is standardised).
+
+## 10. Review
 
 Review this baseline **annually** or after significant incidents, releases, or infrastructure moves.
 
-**Last updated:** _[YYYY-MM-DD]_
+**Last updated:** 2026-03-21

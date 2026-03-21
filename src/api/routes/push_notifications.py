@@ -309,11 +309,10 @@ class PushNotificationService:
             return {"success": True, "endpoint": subscription.endpoint}
 
         except ImportError:
-            # pywebpush not installed - simulate success in dev
             return {
-                "success": True,
+                "success": False,
                 "endpoint": subscription.endpoint,
-                "simulated": True,
+                "error": "Push notifications not configured",
             }
 
         except Exception as e:

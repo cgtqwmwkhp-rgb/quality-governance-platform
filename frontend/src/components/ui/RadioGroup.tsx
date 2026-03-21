@@ -52,7 +52,8 @@ export interface RadioGroupItemProps
 const RadioGroupItem = React.forwardRef<HTMLInputElement, RadioGroupItemProps>(
   ({ className, value, disabled, id, ...props }, ref) => {
     const { value: groupValue, onValueChange, name } = useRadioGroupContext()
-    const inputId = id ?? React.useId()
+    const generatedId = React.useId()
+    const inputId = id ?? generatedId
 
     return (
       <label

@@ -68,12 +68,22 @@ def _sync_table(
 
         db: Session = session_local_cls()
         try:
+            all_pams_ids = [
+                int({k: _safe_serialize(v) for k, v in dict(r).items()}.get(pk_col.name, 0))
+                for r in pams_rows
+            ]
+            existing_cache_rows = (
+                db.query(cache_model_cls)
+                .filter(cache_model_cls.pams_id.in_(all_pams_ids))
+                .all()
+            ) if all_pams_ids else []
+            cache_index = {row.pams_id: row for row in existing_cache_rows}
+
             for row in pams_rows:
                 row_dict = {k: _safe_serialize(v) for k, v in dict(row).items()}
                 pams_id = int(row_dict.get(pk_col.name, 0))
 
-                existing = db.query(cache_model_cls).filter(cache_model_cls.pams_id == pams_id).first()
-
+                existing = cache_index.get(pams_id)
                 if existing:
                     existing.raw_data = row_dict
                     existing.synced_at = _now()

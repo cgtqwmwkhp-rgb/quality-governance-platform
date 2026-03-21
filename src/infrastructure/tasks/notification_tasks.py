@@ -47,7 +47,7 @@ def send_push_notification(self, user_id: int, title: str, body: str, data: Opti
     """Send a push notification to a user via Web Push (VAPID)."""
     from sqlalchemy import select
 
-    from src.infrastructure.database import sync_session_factory
+    from src.infrastructure.database import SessionLocal
 
     if not VAPID_PRIVATE_KEY:
         logger.warning("VAPID_PRIVATE_KEY not set — skipping push for user %d", user_id)
@@ -60,7 +60,7 @@ def send_push_notification(self, user_id: int, title: str, body: str, data: Opti
     try:
         from src.api.routes.push_notifications import PushSubscription
 
-        with sync_session_factory() as session:
+        with SessionLocal() as session:
             subs = (
                 session.execute(
                     select(PushSubscription).where(

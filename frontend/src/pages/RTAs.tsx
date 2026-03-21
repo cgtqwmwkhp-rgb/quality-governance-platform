@@ -558,10 +558,11 @@ export default function RTAs() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-name`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Driver / Contact Name
                       </label>
                       <Input
+                        id={`tp-${idx}-name`}
                         type="text"
                         value={party.name || ''}
                         onChange={(e) => {
@@ -573,10 +574,11 @@ export default function RTAs() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-phone`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Phone Number
                       </label>
                       <Input
+                        id={`tp-${idx}-phone`}
                         type="tel"
                         value={party.phone || ''}
                         onChange={(e) => {
@@ -591,10 +593,11 @@ export default function RTAs() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-reg`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Vehicle Registration
                       </label>
                       <Input
+                        id={`tp-${idx}-reg`}
                         type="text"
                         value={party.vehicle_reg || ''}
                         onChange={(e) => {
@@ -606,10 +609,11 @@ export default function RTAs() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-make`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Vehicle Make / Model
                       </label>
                       <Input
+                        id={`tp-${idx}-make`}
                         type="text"
                         value={party.vehicle_make_model || ''}
                         onChange={(e) => {
@@ -626,10 +630,11 @@ export default function RTAs() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    <label htmlFor={`tp-${idx}-damage`} className="block text-xs font-medium text-muted-foreground mb-1">
                       Damage Description
                     </label>
                     <Input
+                      id={`tp-${idx}-damage`}
                       type="text"
                       value={party.damage || ''}
                       onChange={(e) => {
@@ -643,10 +648,11 @@ export default function RTAs() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-insurer`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Insurer
                       </label>
                       <Input
+                        id={`tp-${idx}-insurer`}
                         type="text"
                         value={party.insurer || ''}
                         onChange={(e) => {
@@ -658,10 +664,11 @@ export default function RTAs() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      <label htmlFor={`tp-${idx}-policy`} className="block text-xs font-medium text-muted-foreground mb-1">
                         Policy Number
                       </label>
                       <Input
+                        id={`tp-${idx}-policy`}
                         type="text"
                         value={party.insurer_policy_number || ''}
                         onChange={(e) => {

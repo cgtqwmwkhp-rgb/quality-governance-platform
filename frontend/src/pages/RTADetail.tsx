@@ -422,10 +422,17 @@ export default function RTADetail() {
     }
   }
 
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false)
+  const [completionNotes, setCompletionNotes] = useState('')
+
   const handleCompleteAction = () => {
-    const notes = window.prompt('Enter completion notes (optional):')
-    if (notes === null) return
-    handleUpdateActionStatus('completed', notes.trim() || undefined)
+    setCompletionNotes('')
+    setShowCompletionDialog(true)
+  }
+
+  const handleConfirmCompletion = () => {
+    setShowCompletionDialog(false)
+    handleUpdateActionStatus('completed', completionNotes.trim() || undefined)
   }
 
   const getSeverityVariant = (severity: string) => {
@@ -517,7 +524,7 @@ export default function RTADetail() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <Button variant="outline" size="icon" onClick={() => navigate('/rtas')}>
+          <Button variant="outline" size="icon" onClick={() => navigate('/rtas')} aria-label="Back to RTAs">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
@@ -562,15 +569,15 @@ export default function RTADetail() {
       {/* ═══════════════════ TABBED CONTENT ═══════════════════ */}
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="overview"><FileText className="w-4 h-4 mr-1.5" />Overview</TabsTrigger>
-          <TabsTrigger value="vehicle1"><Car className="w-4 h-4 mr-1.5" />Vehicle 1</TabsTrigger>
-          <TabsTrigger value="vehicle2"><Car className="w-4 h-4 mr-1.5" />Vehicle 2</TabsTrigger>
-          <TabsTrigger value="driver1"><User className="w-4 h-4 mr-1.5" />Our Driver</TabsTrigger>
-          <TabsTrigger value="driver2"><User className="w-4 h-4 mr-1.5" />Other Driver</TabsTrigger>
-          <TabsTrigger value="witnesses"><Users className="w-4 h-4 mr-1.5" />Witnesses</TabsTrigger>
-          <TabsTrigger value="photos"><Camera className="w-4 h-4 mr-1.5" />Photos</TabsTrigger>
-          <TabsTrigger value="running-sheet"><MessageSquare className="w-4 h-4 mr-1.5" />Running Sheet</TabsTrigger>
-          <TabsTrigger value="actions"><ClipboardList className="w-4 h-4 mr-1.5" />Actions ({actions.length})</TabsTrigger>
+          <TabsTrigger value="overview"><FileText className="w-4 h-4 mr-1.5" />{t('rtas.tabs.overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="vehicle1"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle1', 'Vehicle 1')}</TabsTrigger>
+          <TabsTrigger value="vehicle2"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle2', 'Vehicle 2')}</TabsTrigger>
+          <TabsTrigger value="driver1"><User className="w-4 h-4 mr-1.5" />{t('rtas.tabs.our_driver', 'Our Driver')}</TabsTrigger>
+          <TabsTrigger value="driver2"><User className="w-4 h-4 mr-1.5" />{t('rtas.tabs.other_driver', 'Other Driver')}</TabsTrigger>
+          <TabsTrigger value="witnesses"><Users className="w-4 h-4 mr-1.5" />{t('rtas.tabs.witnesses', 'Witnesses')}</TabsTrigger>
+          <TabsTrigger value="photos"><Camera className="w-4 h-4 mr-1.5" />{t('rtas.tabs.photos', 'Photos')}</TabsTrigger>
+          <TabsTrigger value="running-sheet"><MessageSquare className="w-4 h-4 mr-1.5" />{t('rtas.tabs.running_sheet', 'Running Sheet')}</TabsTrigger>
+          <TabsTrigger value="actions"><ClipboardList className="w-4 h-4 mr-1.5" />{t('rtas.tabs.actions', 'Actions')} ({actions.length})</TabsTrigger>
         </TabsList>
 
         {/* ────── OVERVIEW TAB ────── */}
@@ -588,18 +595,18 @@ export default function RTADetail() {
                   {isEditing ? (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">{t('rtas.detail.title_label')}</label>
-                        <Input value={editForm.title || ''} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="mt-1" />
+                        <label htmlFor="rta-edit-title" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.title_label')}</label>
+                        <Input id="rta-edit-title" value={editForm.title || ''} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} className="mt-1" />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
-                        <Textarea value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={4} className="mt-1" />
+                        <label htmlFor="rta-edit-description" className="text-sm font-medium text-muted-foreground">{t('common.description')}</label>
+                        <Textarea id="rta-edit-description" value={editForm.description || ''} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} rows={4} className="mt-1" />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</label>
+                          <label htmlFor="rta-edit-severity" className="text-sm font-medium text-muted-foreground">{t('rtas.detail.severity')}</label>
                           <Select value={editForm.severity} onValueChange={(v) => setEditForm({ ...editForm, severity: v })}>
-                            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="rta-edit-severity" className="mt-1"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="near_miss">Near Miss</SelectItem>
                               <SelectItem value="damage_only">Damage Only</SelectItem>
@@ -610,9 +617,9 @@ export default function RTADetail() {
                           </Select>
                         </div>
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
+                          <label htmlFor="rta-edit-status" className="text-sm font-medium text-muted-foreground">{t('common.status')}</label>
                           <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
-                            <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="rta-edit-status" className="mt-1"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="reported">Reported</SelectItem>
                               <SelectItem value="under_investigation">Under Investigation</SelectItem>
@@ -623,22 +630,22 @@ export default function RTADetail() {
                           </Select>
                         </div>
                         <div className="col-span-2">
-                          <label className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
-                          <Input value={editForm.location || ''} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} className="mt-1" />
+                          <label htmlFor="rta-edit-location" className="text-sm font-medium text-muted-foreground">{t('common.location')}</label>
+                          <Input id="rta-edit-location" value={editForm.location || ''} onChange={(e) => setEditForm({ ...editForm, location: e.target.value })} className="mt-1" />
                         </div>
                       </div>
                       <div className="grid grid-cols-3 gap-4">
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">Weather</label>
-                          <Input value={editForm.weather_conditions || ''} onChange={(e) => setEditForm({ ...editForm, weather_conditions: e.target.value })} className="mt-1" placeholder="e.g. Rain" />
+                          <label htmlFor="rta-edit-weather" className="text-sm font-medium text-muted-foreground">Weather</label>
+                          <Input id="rta-edit-weather" value={editForm.weather_conditions || ''} onChange={(e) => setEditForm({ ...editForm, weather_conditions: e.target.value })} className="mt-1" placeholder="e.g. Rain" />
                         </div>
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">Road Conditions</label>
-                          <Input value={editForm.road_conditions || ''} onChange={(e) => setEditForm({ ...editForm, road_conditions: e.target.value })} className="mt-1" placeholder="e.g. Wet" />
+                          <label htmlFor="rta-edit-road" className="text-sm font-medium text-muted-foreground">Road Conditions</label>
+                          <Input id="rta-edit-road" value={editForm.road_conditions || ''} onChange={(e) => setEditForm({ ...editForm, road_conditions: e.target.value })} className="mt-1" placeholder="e.g. Wet" />
                         </div>
                         <div>
-                          <label className="text-sm font-medium text-muted-foreground">Lighting</label>
-                          <Input value={editForm.lighting_conditions || ''} onChange={(e) => setEditForm({ ...editForm, lighting_conditions: e.target.value })} className="mt-1" placeholder="e.g. Daylight" />
+                          <label htmlFor="rta-edit-lighting" className="text-sm font-medium text-muted-foreground">Lighting</label>
+                          <Input id="rta-edit-lighting" value={editForm.lighting_conditions || ''} onChange={(e) => setEditForm({ ...editForm, lighting_conditions: e.target.value })} className="mt-1" placeholder="e.g. Daylight" />
                         </div>
                       </div>
                     </>
@@ -727,16 +734,16 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Registration</label>
-                    <Input value={editForm.company_vehicle_registration || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })} className="mt-1" placeholder="AB12 CDE" />
+                    <label htmlFor="rta-v1-reg" className="text-sm font-medium text-muted-foreground">Registration</label>
+                    <Input id="rta-v1-reg" value={editForm.company_vehicle_registration || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_registration: e.target.value })} className="mt-1" placeholder="AB12 CDE" />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Make / Model</label>
-                    <Input value={editForm.company_vehicle_make_model || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_make_model: e.target.value })} className="mt-1" placeholder="e.g. Ford Transit" />
+                    <label htmlFor="rta-v1-make" className="text-sm font-medium text-muted-foreground">Make / Model</label>
+                    <Input id="rta-v1-make" value={editForm.company_vehicle_make_model || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_make_model: e.target.value })} className="mt-1" placeholder="e.g. Ford Transit" />
                   </div>
                   <div className="col-span-2">
-                    <label className="text-sm font-medium text-muted-foreground">Damage Description</label>
-                    <Textarea value={editForm.company_vehicle_damage || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_damage: e.target.value })} rows={3} className="mt-1" placeholder="Describe damage to company vehicle" />
+                    <label htmlFor="rta-v1-damage" className="text-sm font-medium text-muted-foreground">Damage Description</label>
+                    <Textarea id="rta-v1-damage" value={editForm.company_vehicle_damage || ''} onChange={(e) => setEditForm({ ...editForm, company_vehicle_damage: e.target.value })} rows={3} className="mt-1" placeholder="Describe damage to company vehicle" />
                   </div>
                 </div>
               ) : (
@@ -836,36 +843,36 @@ export default function RTADetail() {
               {isEditing ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Driver Name</label>
-                    <Input value={editForm.driver_name || ''} onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })} className="mt-1" />
+                    <label htmlFor="rta-d1-name" className="text-sm font-medium text-muted-foreground">Driver Name</label>
+                    <Input id="rta-d1-name" value={editForm.driver_name || ''} onChange={(e) => setEditForm({ ...editForm, driver_name: e.target.value })} className="mt-1" />
                   </div>
                   <div className="flex items-center gap-3 pt-6">
-                    <Switch checked={editForm.driver_injured || false} onCheckedChange={(c) => setEditForm({ ...editForm, driver_injured: c })} />
-                    <span className="text-sm text-foreground">Driver Injured</span>
+                    <Switch id="rta-d1-injured" checked={editForm.driver_injured || false} onCheckedChange={(c) => setEditForm({ ...editForm, driver_injured: c })} />
+                    <label htmlFor="rta-d1-injured" className="text-sm text-foreground">Driver Injured</label>
                   </div>
                   {editForm.driver_injured && (
                     <div className="col-span-2">
-                      <label className="text-sm font-medium text-muted-foreground">Injury Details</label>
-                      <Textarea value={editForm.driver_injury_details || ''} onChange={(e) => setEditForm({ ...editForm, driver_injury_details: e.target.value })} rows={3} className="mt-1" placeholder="Describe injuries" />
+                      <label htmlFor="rta-d1-injury" className="text-sm font-medium text-muted-foreground">Injury Details</label>
+                      <Textarea id="rta-d1-injury" value={editForm.driver_injury_details || ''} onChange={(e) => setEditForm({ ...editForm, driver_injury_details: e.target.value })} rows={3} className="mt-1" placeholder="Describe injuries" />
                     </div>
                   )}
                   <div className="col-span-2">
-                    <label className="text-sm font-medium text-muted-foreground">Driver Statement</label>
-                    <Textarea value={editForm.driver_statement || ''} onChange={(e) => setEditForm({ ...editForm, driver_statement: e.target.value })} rows={4} className="mt-1" placeholder="Driver's account of the incident" />
+                    <label htmlFor="rta-d1-statement" className="text-sm font-medium text-muted-foreground">Driver Statement</label>
+                    <Textarea id="rta-d1-statement" value={editForm.driver_statement || ''} onChange={(e) => setEditForm({ ...editForm, driver_statement: e.target.value })} rows={4} className="mt-1" placeholder="Driver's account of the incident" />
                   </div>
                   <div className="flex items-center gap-3">
-                    <Switch checked={editForm.police_attended || false} onCheckedChange={(c) => setEditForm({ ...editForm, police_attended: c })} />
-                    <span className="text-sm text-foreground">Police Attended</span>
+                    <Switch id="rta-d1-police" checked={editForm.police_attended || false} onCheckedChange={(c) => setEditForm({ ...editForm, police_attended: c })} />
+                    <label htmlFor="rta-d1-police" className="text-sm text-foreground">Police Attended</label>
                   </div>
                   {editForm.police_attended && (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Police Reference</label>
-                        <Input value={editForm.police_reference || ''} onChange={(e) => setEditForm({ ...editForm, police_reference: e.target.value })} className="mt-1" />
+                        <label htmlFor="rta-d1-police-ref" className="text-sm font-medium text-muted-foreground">Police Reference</label>
+                        <Input id="rta-d1-police-ref" value={editForm.police_reference || ''} onChange={(e) => setEditForm({ ...editForm, police_reference: e.target.value })} className="mt-1" />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Police Station</label>
-                        <Input value={editForm.police_station || ''} onChange={(e) => setEditForm({ ...editForm, police_station: e.target.value })} className="mt-1" />
+                        <label htmlFor="rta-d1-police-stn" className="text-sm font-medium text-muted-foreground">Police Station</label>
+                        <Input id="rta-d1-police-stn" value={editForm.police_station || ''} onChange={(e) => setEditForm({ ...editForm, police_station: e.target.value })} className="mt-1" />
                       </div>
                     </>
                   )}
@@ -1020,7 +1027,7 @@ export default function RTADetail() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2"><Camera className="w-5 h-5 text-primary" />Scene Photos &amp; Evidence</CardTitle>
               <div>
-                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf" className="hidden" onChange={handlePhotoUpload} />
+                <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,.pdf" className="hidden" onChange={handlePhotoUpload} aria-label="Upload photos or evidence files" />
                 <Button variant="outline" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
                   {uploading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Upload className="w-4 h-4 mr-1" />}
                   Upload
@@ -1052,7 +1059,7 @@ export default function RTADetail() {
                         <p className="text-xs text-foreground truncate">{photo.title || photo.original_filename}</p>
                         <p className="text-xs text-muted-foreground">{new Date(photo.created_at).toLocaleDateString()}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeletePhoto(photo.id)}>
+                      <Button variant="ghost" size="sm" className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeletePhoto(photo.id)} aria-label={`Delete photo ${photo.title || photo.original_filename}`}>
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
@@ -1097,7 +1104,7 @@ export default function RTADetail() {
                         )}
                       </div>
                       <p className="text-sm text-foreground whitespace-pre-wrap">{entry.content}</p>
-                      <Button variant="ghost" size="sm" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeleteEntry(entry.id)}>
+                      <Button variant="ghost" size="sm" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeleteEntry(entry.id)} aria-label="Delete running sheet entry">
                         <Trash2 className="w-3 h-3" />
                       </Button>
                     </div>
@@ -1255,6 +1262,24 @@ export default function RTADetail() {
               <Button type="submit" disabled={creating || !actionForm.title}>{creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('rtas.detail.create_action')}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Completion Notes Dialog */}
+      <Dialog open={showCompletionDialog} onOpenChange={setShowCompletionDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('rtas.detail.completion_notes_title', 'Complete Action')}</DialogTitle>
+            <DialogDescription>{t('rtas.detail.completion_notes_desc', 'Add optional completion notes before marking this action as completed.')}</DialogDescription>
+          </DialogHeader>
+          <div>
+            <label htmlFor="completion-notes" className="block text-sm font-medium text-foreground mb-1">{t('rtas.detail.completion_notes_label', 'Completion Notes')}</label>
+            <Textarea id="completion-notes" value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)} rows={3} placeholder={t('rtas.detail.completion_notes_placeholder', 'Optional notes about how this action was completed...')} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompletionDialog(false)}>{t('cancel')}</Button>
+            <Button onClick={handleConfirmCompletion}>{t('rtas.detail.mark_complete', 'Mark Complete')}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
