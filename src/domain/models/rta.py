@@ -7,7 +7,13 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import (
+    AuditTrailMixin,
+    CaseInsensitiveEnum,
+    DataClassification,
+    ReferenceNumberMixin,
+    TimestampMixin,
+)
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -210,10 +216,14 @@ class RunningSheetEntry(Base, TimestampMixin):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     entry_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="note",
+        String(50),
+        nullable=False,
+        default="note",
     )
     author_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True,
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
     )
     author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 

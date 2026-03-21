@@ -31,23 +31,35 @@ jobs:
     steps:
       - name: Check trigger conditions
         id: check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_APP_URL: ${{ github.event.inputs.app_url }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
+          if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+            {
+              echo "should_run=true"
+            } >> "$GITHUB_OUTPUT"
             # Check if custom URL was provided
-            if [ -n "${{ github.event.inputs.app_url }}" ]; then
-              echo "use_custom_url=true" >> $GITHUB_OUTPUT
-              echo "custom_url=${{ github.event.inputs.app_url }}" >> $GITHUB_OUTPUT
+            if [ -n "${DISPATCH_APP_URL}" ]; then
+              {
+                echo "use_custom_url=true"
+                echo "custom_url=${DISPATCH_APP_URL}"
+              } >> "$GITHUB_OUTPUT"
             else
-              echo "use_custom_url=false" >> $GITHUB_OUTPUT
-              echo "custom_url=" >> $GITHUB_OUTPUT
+              {
+                echo "use_custom_url=false"
+                echo "custom_url="
+              } >> "$GITHUB_OUTPUT"
             fi
-          elif [ "${{ github.event.workflow_run.conclusion }}" = "success" ]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
-            echo "use_custom_url=false" >> $GITHUB_OUTPUT
-            echo "custom_url=" >> $GITHUB_OUTPUT
+          elif [ "${WORKFLOW_CONCLUSION}" = "success" ]; then
+            {
+              echo "should_run=true"
+              echo "use_custom_url=false"
+              echo "custom_url="
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
             echo "⏭️ Skipping: staging deployment did not succeed"
           fi
 
@@ -122,15 +134,15 @@ jobs:
       - name: Load and mask tokens
         id: load-tokens
         run: |
-          if [ -f tokens.env ]; then
-            source tokens.env
-            echo "::add-mask::$ADMIN_TEST_TOKEN"
-            echo "::add-mask::$PORTAL_TEST_TOKEN"
-            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
-            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
-            echo "tokens_loaded=true" >> $GITHUB_OUTPUT
+          if [ -f "tokens.env" ]; then
+            . "tokens.env"
+            echo "::add-mask::${ADMIN_TEST_TOKEN}"
+            echo "::add-mask::${PORTAL_TEST_TOKEN}"
+            echo "ADMIN_TEST_TOKEN=${ADMIN_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "PORTAL_TEST_TOKEN=${PORTAL_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "tokens_loaded=true" >> "$GITHUB_OUTPUT"
           else
-            echo "tokens_loaded=false" >> $GITHUB_OUTPUT
+            echo "tokens_loaded=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run Page Audit
@@ -179,12 +191,12 @@ jobs:
 
       - name: Load and mask tokens
         run: |
-          if [ -f tokens.env ]; then
-            source tokens.env
-            echo "::add-mask::$ADMIN_TEST_TOKEN"
-            echo "::add-mask::$PORTAL_TEST_TOKEN"
-            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
-            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          if [ -f "tokens.env" ]; then
+            . "tokens.env"
+            echo "::add-mask::${ADMIN_TEST_TOKEN}"
+            echo "::add-mask::${PORTAL_TEST_TOKEN}"
+            echo "ADMIN_TEST_TOKEN=${ADMIN_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "PORTAL_TEST_TOKEN=${PORTAL_TEST_TOKEN}" >> "$GITHUB_ENV"
           fi
 
       - name: Run Link Audit
@@ -233,12 +245,12 @@ jobs:
 
       - name: Load and mask tokens
         run: |
-          if [ -f tokens.env ]; then
-            source tokens.env
-            echo "::add-mask::$ADMIN_TEST_TOKEN"
-            echo "::add-mask::$PORTAL_TEST_TOKEN"
-            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
-            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          if [ -f "tokens.env" ]; then
+            . "tokens.env"
+            echo "::add-mask::${ADMIN_TEST_TOKEN}"
+            echo "::add-mask::${PORTAL_TEST_TOKEN}"
+            echo "ADMIN_TEST_TOKEN=${ADMIN_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "PORTAL_TEST_TOKEN=${PORTAL_TEST_TOKEN}" >> "$GITHUB_ENV"
           fi
 
       - name: Run Button Audit
@@ -287,12 +299,12 @@ jobs:
 
       - name: Load and mask tokens
         run: |
-          if [ -f tokens.env ]; then
-            source tokens.env
-            echo "::add-mask::$ADMIN_TEST_TOKEN"
-            echo "::add-mask::$PORTAL_TEST_TOKEN"
-            echo "ADMIN_TEST_TOKEN=$ADMIN_TEST_TOKEN" >> $GITHUB_ENV
-            echo "PORTAL_TEST_TOKEN=$PORTAL_TEST_TOKEN" >> $GITHUB_ENV
+          if [ -f "tokens.env" ]; then
+            . "tokens.env"
+            echo "::add-mask::${ADMIN_TEST_TOKEN}"
+            echo "::add-mask::${PORTAL_TEST_TOKEN}"
+            echo "ADMIN_TEST_TOKEN=${ADMIN_TEST_TOKEN}" >> "$GITHUB_ENV"
+            echo "PORTAL_TEST_TOKEN=${PORTAL_TEST_TOKEN}" >> "$GITHUB_ENV"
           fi
 
       - name: Run Workflow Audit
@@ -342,7 +354,7 @@ jobs:
         id: aggregate
         run: |
           mkdir -p artifacts
-          node scripts/governance/ux-coverage-aggregate.cjs || echo "aggregate_failed=true" >> $GITHUB_OUTPUT
+          node scripts/governance/ux-coverage-aggregate.cjs || echo "aggregate_failed=true" >> "$GITHUB_OUTPUT"
         env:
           RESULTS_DIR: tests/ux-coverage/results
           OUTPUT_DIR: artifacts
@@ -360,47 +372,60 @@ jobs:
       - name: Read Coverage Summary
         id: coverage
         run: |
-          if [ -f artifacts/ux_coverage.json ]; then
-            SCORE=$(jq -r '.score' artifacts/ux_coverage.json)
-            STATUS=$(jq -r '.status' artifacts/ux_coverage.json)
-            P0_FAILS=$(jq -r '.summary.p0_failures' artifacts/ux_coverage.json)
-            P1_FAILS=$(jq -r '.summary.p1_failures' artifacts/ux_coverage.json)
-            DEAD_ENDS=$(jq -r '.summary.dead_ends_count' artifacts/ux_coverage.json)
-            echo "score=$SCORE" >> $GITHUB_OUTPUT
-            echo "status=$STATUS" >> $GITHUB_OUTPUT
-            echo "p0_fails=$P0_FAILS" >> $GITHUB_OUTPUT
-            echo "p1_fails=$P1_FAILS" >> $GITHUB_OUTPUT
-            echo "dead_ends=$DEAD_ENDS" >> $GITHUB_OUTPUT
+          if [ -f "artifacts/ux_coverage.json" ]; then
+            SCORE="$(jq -r '.score' "artifacts/ux_coverage.json")"
+            STATUS="$(jq -r '.status' "artifacts/ux_coverage.json")"
+            P0_FAILS="$(jq -r '.summary.p0_failures' "artifacts/ux_coverage.json")"
+            P1_FAILS="$(jq -r '.summary.p1_failures' "artifacts/ux_coverage.json")"
+            DEAD_ENDS="$(jq -r '.summary.dead_ends_count' "artifacts/ux_coverage.json")"
+            {
+              echo "score=${SCORE}"
+              echo "status=${STATUS}"
+              echo "p0_fails=${P0_FAILS}"
+              echo "p1_fails=${P1_FAILS}"
+              echo "dead_ends=${DEAD_ENDS}"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "score=0" >> $GITHUB_OUTPUT
-            echo "status=HOLD" >> $GITHUB_OUTPUT
-            echo "p0_fails=-1" >> $GITHUB_OUTPUT
-            echo "p1_fails=-1" >> $GITHUB_OUTPUT
-            echo "dead_ends=-1" >> $GITHUB_OUTPUT
+            {
+              echo "score=0"
+              echo "status=HOLD"
+              echo "p0_fails=-1"
+              echo "p1_fails=-1"
+              echo "dead_ends=-1"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate Summary
+        env:
+          COVERAGE_SCORE: ${{ steps.coverage.outputs.score }}
+          COVERAGE_STATUS: ${{ steps.coverage.outputs.status }}
+          COVERAGE_P0_FAILS: ${{ steps.coverage.outputs.p0_fails }}
+          COVERAGE_P1_FAILS: ${{ steps.coverage.outputs.p1_fails }}
+          COVERAGE_DEAD_ENDS: ${{ steps.coverage.outputs.dead_ends }}
+          TOKENS_ACQUIRED: ${{ needs.acquire-tokens.outputs.tokens_acquired }}
         run: |
-          echo "## UX Functional Coverage Gate" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Score | ${{ steps.coverage.outputs.score }}/100 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ${{ steps.coverage.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| P0 Failures | ${{ steps.coverage.outputs.p0_fails }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| P1 Failures | ${{ steps.coverage.outputs.p1_fails }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dead Ends | ${{ steps.coverage.outputs.dead_ends }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tokens Acquired | ${{ needs.acquire-tokens.outputs.tokens_acquired }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.coverage.outputs.status }}" = "GO" ]; then
-            echo "✅ **PASS**: Ready for production" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.coverage.outputs.status }}" = "CANARY" ]; then
-            echo "⚠️ **CANARY**: Ready for canary deployment only" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.coverage.outputs.status }}" = "STAGING" ]; then
-            echo "⚠️ **STAGING**: Ready for staging only" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **HOLD**: Deployment blocked" >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## UX Functional Coverage Gate"
+            echo
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Score | ${COVERAGE_SCORE}/100 |"
+            echo "| Status | ${COVERAGE_STATUS} |"
+            echo "| P0 Failures | ${COVERAGE_P0_FAILS} |"
+            echo "| P1 Failures | ${COVERAGE_P1_FAILS} |"
+            echo "| Dead Ends | ${COVERAGE_DEAD_ENDS} |"
+            echo "| Tokens Acquired | ${TOKENS_ACQUIRED} |"
+            echo
+            if [ "${COVERAGE_STATUS}" = "GO" ]; then
+              echo "PASS: Ready for production"
+            elif [ "${COVERAGE_STATUS}" = "CANARY" ]; then
+              echo "CANARY: Ready for canary deployment only"
+            elif [ "${COVERAGE_STATUS}" = "STAGING" ]; then
+              echo "STAGING: Ready for staging only"
+            else
+              echo "HOLD: Deployment blocked"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Enforce Gate (Fail on P0)
         if: steps.coverage.outputs.p0_fails != '0'

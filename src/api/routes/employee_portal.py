@@ -287,9 +287,9 @@ def build_rta_portal_fields(
         "reporter_email": report.reporter_email if not report.is_anonymous else None,
         "driver_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
         "driver_email": report.reporter_email if not report.is_anonymous else None,
-        "third_parties": {"parties": third_party_entries}
-        if isinstance(third_party_entries, list) and third_party_entries
-        else None,
+        "third_parties": (
+            {"parties": third_party_entries} if isinstance(third_party_entries, list) and third_party_entries else None
+        ),
         "vehicles_involved_count": max(
             1,
             int(reporter_submission.get("vehicle_count") or 0) + 1,
@@ -300,9 +300,11 @@ def build_rta_portal_fields(
         "police_reference": reporter_submission.get("police_ref"),
         "cctv_available": bool(reporter_submission.get("has_cctv")),
         "dashcam_footage_available": bool(reporter_submission.get("has_dashcam")),
-        "footage_notes": "Portal submission indicated available footage."
-        if reporter_submission.get("has_cctv") or reporter_submission.get("has_dashcam")
-        else None,
+        "footage_notes": (
+            "Portal submission indicated available footage."
+            if reporter_submission.get("has_cctv") or reporter_submission.get("has_dashcam")
+            else None
+        ),
         "source_form_id": "portal_rta_v1",
         "reporter_submission": reporter_submission or None,
         "tenant_id": DEFAULT_PORTAL_TENANT_ID,
