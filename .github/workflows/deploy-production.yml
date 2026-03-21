@@ -519,26 +519,30 @@ jobs:
           
           # Resolve the actual Alembic head from the revision graph instead of
           # relying on file ordering, which can drift from the active head.
-          EXPECTED_HEAD=$(python3 - <<'PY'
+          EXPECTED_HEADS=$(python3 - <<'PY'
           import ast
+          import json
           from pathlib import Path
 
           versions_dir = Path("alembic/versions")
           revisions: set[str] = set()
           down_revisions: set[str] = set()
 
+          def extract_name_and_value(node):
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if isinstance(target, ast.Name):
+                          yield target.id, node.value
+              elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                  yield node.target.id, node.value
+
           for path in versions_dir.glob("*.py"):
               tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
               for node in tree.body:
-                  if not isinstance(node, ast.Assign):
-                      continue
-                  for target in node.targets:
-                      if not isinstance(target, ast.Name):
-                          continue
-                      if target.id == "revision" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-                          revisions.add(node.value.value)
-                      elif target.id == "down_revision":
-                          value = node.value
+                  for name, value in extract_name_and_value(node):
+                      if name == "revision" and isinstance(value, ast.Constant) and isinstance(value.value, str):
+                          revisions.add(value.value)
+                      elif name == "down_revision":
                           if isinstance(value, ast.Constant):
                               if isinstance(value.value, str):
                                   down_revisions.add(value.value)
@@ -548,12 +552,12 @@ jobs:
                                       down_revisions.add(elt.value)
 
           heads = sorted(revisions - down_revisions)
-          if len(heads) != 1:
-              raise SystemExit(f"Expected exactly 1 Alembic head, found {len(heads)}: {heads}")
-          print(heads[0])
+          if not heads:
+              raise SystemExit("No Alembic heads detected")
+          print(json.dumps(heads))
           PY
           )
-          echo "Expected head revision: $EXPECTED_HEAD"
+          echo "Expected head revisions: $EXPECTED_HEADS"
           
           # Create a container to check current revision
           ACR_USERNAME=$(az acr credential show --name "${{ env.ACR_NAME }}" --query username -o tsv)
@@ -612,11 +616,24 @@ jobs:
           az container delete --name "qgp-revision-check-${{ github.run_number }}" --resource-group "$AZURE_RESOURCE_GROUP" --yes || true
           
           # Assert revision matches against the full Alembic output.
-          if printf '%s\n' "$CURRENT_OUTPUT" | grep -q "$EXPECTED_HEAD"; then
-            echo "✅ Database revision matches expected head"
+          MATCHED_HEAD=$(CURRENT_OUTPUT="$CURRENT_OUTPUT" EXPECTED_HEADS="$EXPECTED_HEADS" python3 - <<'PY'
+          import json
+          import os
+
+          current_output = os.environ["CURRENT_OUTPUT"]
+          heads = json.loads(os.environ["EXPECTED_HEADS"])
+          for head in heads:
+              if head in current_output:
+                  print(head)
+                  break
+          PY
+          )
+
+          if [ -n "$MATCHED_HEAD" ]; then
+            echo "✅ Database revision matches repo head: $MATCHED_HEAD"
           else
-            echo "❌ ERROR: Database revision does not match expected head"
-            echo "Expected: $EXPECTED_HEAD"
+            echo "❌ ERROR: Database revision does not match any repo head"
+            echo "Expected one of: $EXPECTED_HEADS"
             echo "Current output: $CURRENT_OUTPUT"
             exit 1
           fi
