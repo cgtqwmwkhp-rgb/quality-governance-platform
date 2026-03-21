@@ -1,5 +1,6 @@
 """Main FastAPI application entry point."""
 
+import asyncio
 import logging
 import os as _os
 import sys
@@ -18,7 +19,7 @@ from src.api.middleware.idempotency import IdempotencyMiddleware
 from src.core.config import settings
 from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
-from src.infrastructure.database import close_db, init_db
+from src.infrastructure.database import close_db, emit_db_pool_usage_metric, init_db
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 from src.infrastructure.pams_database import close_pams, init_pams
@@ -112,8 +113,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             extra={"error": str(e)},
         )
 
+    pool_metrics_task: asyncio.Task[None] | None = None
+
+    async def _pool_metrics_loop() -> None:
+        interval_s = 60.0
+        while True:
+            await asyncio.sleep(interval_s)
+            try:
+                await emit_db_pool_usage_metric()
+            except Exception:
+                logger.exception("db.pool_usage_percent metric emission failed")
+
+    pool_metrics_task = asyncio.create_task(_pool_metrics_loop())
+
     yield
     # Shutdown
+    if pool_metrics_task is not None:
+        pool_metrics_task.cancel()
+        try:
+            await pool_metrics_task
+        except asyncio.CancelledError:
+            pass
     await close_pams()
     await close_db()
 

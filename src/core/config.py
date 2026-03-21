@@ -3,6 +3,7 @@
 import logging
 from functools import lru_cache
 from typing import List, Optional
+from urllib.parse import urlparse
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,7 @@ class Settings(BaseSettings):
         """Initialize settings with validation."""
         super().__init__(**kwargs)
         self._validate_production_settings()
+        self._log_config_summary()
 
     def _validate_production_settings(self) -> None:
         """Validate critical settings, especially for production."""
@@ -78,6 +80,26 @@ class Settings(BaseSettings):
                 f"CONFIGURATION ERROR: Invalid DATABASE_URL format: {self.database_url}. "
                 "Must start with 'postgresql' or 'sqlite'."
             )
+
+    def _log_config_summary(self) -> None:
+        """Emit a non-secret configuration summary at startup for support and audits."""
+        parsed = urlparse(self.database_url)
+        db_host = parsed.hostname or "(unknown)"
+        if parsed.port:
+            db_host = f"{db_host}:{parsed.port}"
+        db_user = parsed.username or ""
+        db_user_masked = f"{db_user}:***" if db_user else "***"
+
+        redis_configured = "yes" if (self.redis_url or "").strip() else "no"
+        pams_configured = "yes" if (self.pams_database_url or "").strip() else "no"
+        appinsights_configured = "yes" if (self.applicationinsights_connection_string or "").strip() else "no"
+
+        logger.info("Configuration summary: app_env=%s", self.app_env)
+        logger.info("Configuration summary: database_url=%s://%s@%s (password ***)", parsed.scheme, db_user_masked, db_host)
+        logger.info("Configuration summary: redis_configured=%s", redis_configured)
+        logger.info("Configuration summary: pams_configured=%s", pams_configured)
+        logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)
+        logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 
     # Application
     app_name: str = "Quality Governance Platform"

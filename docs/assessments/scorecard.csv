@@ -1,33 +1,33 @@
 ID,Dimension,Maturity,WCS,CM,Evidence_Strength,Previous,Delta,WCS_Gap,Evidence_Pointers
-D01,Product clarity & user journeys,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/user-journeys/personas-and-journeys.md; docs/product/roadmap.md; docs/user-journeys/acceptance-criteria.md (5 personas x 5 AC + 10 CUJs)
-D02,UX quality & IA,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/ux/design-system.md; docs/ux/component-inventory.md; frontend/src/styles/design-tokens.css; 19 UI primitives; Label.tsx DataTable.tsx
-D03,Accessibility,5.0,9.0,0.9,Strong,8.1,+0.9,0.5,docs/accessibility/wcag-checklist.md; jsx-a11y CI gate; __tests__/a11y.test.tsx 10 axe-core tests; LiveAnnouncer.tsx
-D04,Performance (FE+BE),5.0,9.0,0.9,Strong,6.3,+2.7,0.5,docs/slo/performance-slos.md (p50/p95/p99 SLOs); slo.yaml performance block; Lighthouse CI; size-limit; locustfile.py
-D05,Reliability & resilience,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/infra/disaster-recovery-plan.md (RPO 1h/RTO 30m); docs/evidence/ROLLBACK_DRILL_20260320.md; circuit_breaker.py; graceful degradation matrix
-D06,Security engineering,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/security/security-baseline.md (OWASP Top 10 mapping); ci.yml bandit/pip-audit/gitleaks/trojan-source; SecurityHeaders; pentest plan
-D07,Privacy & data protection,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/privacy/dpia-template.md; docs/privacy/data-retention-policy.md; Fernet encryption; pseudonymization; GDPR API; DataClassification C1-C4
-D08,Compliance readiness,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/compliance/compliance-matrix-iso.md (9001+45001+14001); audit_trail.py hash-chain; validate_release_signoff.py; evidence artifacts table
-D09,Architecture modularity,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/architecture/module-boundaries.md (import rules + dependency matrix); docs/adr/ (9 ADRs); layered src/; PAMS anti-corruption layer
-D10,API design quality,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/api/style-guide.md; docs/api/versioning-strategy.md; docs/api/error-catalog.md; openapi-baseline.json; api-path-drift CI gate
-D11,Data model quality,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/data/data-model-guide.md (entity overview + constraints + ER); DataClassification; base.py mixins; enums/FKs/indexes
-D12,Schema versioning & migrations,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/data/migration-guide.md; alembic/; ci.yml reversibility check; squash strategy; pitfalls documented
-D13,Observability,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/observability/alerting-rules.md (SLIs + 8 alert rules + 4 dashboards + escalation); azure_monitor.py 18 metrics; request_id correlation
-D14,Error handling & user-safe failures,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/api/error-catalog.md (32 codes + retry policies + circuit breaker + fallbacks); error_handler.py; error_codes.py
-D15,Testing strategy,5.0,9.0,0.9,Strong,6.0,+3.0,0.5,docs/testing/test-strategy.md (pyramid + 10 priority modules + mutation + property-based); coverage target 45%; ci.yml 25+ jobs
-D16,Test data & fixtures,5.0,9.0,0.9,Strong,6.3,+2.7,0.5,docs/testing/test-data-strategy.md (boundary datasets + masking + hypothesis plan); tests/factories/core.py 12 factories; golden datasets
-D17,CI quality gates,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/ci/gate-inventory.md (25 jobs inventoried + DAG + triage guide); ci.yml all-checks aggregator; SBOM; lockfile; npm freshness
-D18,CD/release pipeline,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/infra/deployment-strategy.md (canary plan + rollback + freeze policy + hotfix process); deploy-staging.yml; deploy-production.yml
-D19,Configuration management,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/runbooks/secret-rotation-runbook.md (inventory + schedule + emergency); src/core/config.py fail-fast; .env.example
-D20,Dependency management,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,requirements.lock hashes; ci.yml lockfile-check pip-audit SBOM; npm lockfile freshness gate; dependency-review action
-D21,Code quality & maintainability,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,pyproject.toml black/isort/mypy (8 override blocks); .flake8; eslint.config.cjs; Trojan Source detection
-D22,Documentation quality,5.0,9.5,0.95,Strong,8.0,+1.5,0.0,docs/ARCHITECTURE.md (system diagram + layers + stack); README.md; docs/adr/ (9); 25+ runbooks; roadmap; design system; API docs
-D23,Operational runbooks,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/runbooks/on-call-guide.md (playbooks + escalation + handoff + templates); 25+ runbook files; DEPLOYMENT_RUNBOOK.md
-D24,Data integrity & consistency,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/data/data-integrity.md (optimistic locking + idempotency + hash-chain audit); IdempotencyMiddleware; investigation.version
-D25,Scalability & capacity,5.0,9.0,0.9,Strong,5.4,+3.6,0.5,docs/infra/scalability-plan.md (capacity table + auto-scale rules); scripts/infra/autoscale-settings.json; database.py pool config
-D26,Cost efficiency,5.0,9.0,0.9,Strong,5.4,+3.6,0.5,docs/infra/cost-controls.md (tagging + budget + optimization + FinOps); scripts/infra/budget-alert.json; .size-limit.json
-D27,I18n/L10n readiness,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/i18n/i18n-guide.md (adding locales + key conventions + RTL plan); frontend/src/i18n/locales/en.json 2000+ keys; ci.yml i18n gate
-D28,Analytics/telemetry,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/analytics/event-catalog.md (business events + Web Vitals + backend metrics + privacy); azure_monitor.py; telemetry.py
-D29,Governance & decision records,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/governance/decision-log-template.md (ADR template + lifecycle); docs/adr/ (9 ADRs); PULL_REQUEST_TEMPLATE.md; STAGE2_COVENANTS.md
-D30,Build determinism,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/build-reproducibility.md (digest pins + reproducibility proof + parity matrix); Dockerfile sha256; requirements.lock hashes; ci.yml lockfile
-D31,Environment parity,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/build-reproducibility.md (env parity matrix + drift detection); config-drift-guard CI; environment_endpoints.json; deploy guardrails
-D32,Supportability & operability,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/ops/troubleshooting-guide.md (17 scenarios + KQL queries); /healthz /readyz /metrics/resources; Dockerfile HEALTHCHECK
+D01,Product clarity & user journeys,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/user-journeys/personas-and-journeys.md; docs/product/roadmap.md (with OKRs); docs/user-journeys/acceptance-criteria.md; docs/user-journeys/cuj-test-traceability.md; docs/user-journeys/usability-testing-protocol.md
+D02,UX quality & IA,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/ux/design-system.md; docs/ux/component-inventory.md (22 components); 24 UI primitives inc ProgressBar Checkbox RadioGroup AlertDialog DropdownMenu; Label DataTable
+D03,Accessibility,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/accessibility/vpat.md (WCAG 2.1 AA); skip-to-content link Layout.tsx; jsx-a11y CI; __tests__/a11y.test.tsx 17 axe-core tests; LiveAnnouncer.tsx
+D04,Performance (FE+BE),5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/slo/performance-slos.md; Lighthouse CI (tightened: perf 0.90 a11y 0.95); size-limit 300KB; Locust CI job; docs/evidence/load-test-baseline.md
+D05,Reliability & resilience,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/infra/disaster-recovery-plan.md (RPO 1h/RTO 30m); docs/evidence/ROLLBACK_DRILL_20260320.md; circuit_breaker.py; graceful degradation matrix
+D06,Security engineering,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/security/security-baseline.md (OWASP Top 10 mapping); ci.yml bandit/pip-audit/gitleaks/trojan-source; SecurityHeaders; pentest plan
+D07,Privacy & data protection,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/privacy/dpia-template.md; docs/privacy/data-retention-policy.md; Fernet encryption; pseudonymization; GDPR API; DataClassification C1-C4
+D08,Compliance readiness,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/compliance/compliance-matrix-iso.md (9001+45001+14001); audit_trail.py hash-chain; validate_release_signoff.py; evidence artifacts table
+D09,Architecture modularity,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/architecture/module-boundaries.md (import rules + dependency matrix); docs/adr/ (9 ADRs); layered src/; PAMS anti-corruption layer
+D10,API design quality,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/api/style-guide.md; docs/api/versioning-strategy.md; docs/api/error-catalog.md; openapi-baseline.json; api-path-drift CI gate
+D11,Data model quality,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/data/data-model-guide.md (Mermaid ER diagram + constraints); scripts/validate_schema_constraints.py; DataClassification; base.py mixins
+D12,Schema versioning & migrations,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/data/migration-guide.md; scripts/validate_migration_naming.py; migration-naming-lint CI job; alembic reversibility check
+D13,Observability,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/observability/alerting-rules.md (SLIs + 8 alert rules + 4 dashboards + escalation); azure_monitor.py 18 metrics; request_id correlation
+D14,Error handling & user-safe failures,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/api/error-catalog.md (32 codes + retry policies + circuit breaker + fallbacks); error_handler.py; error_codes.py
+D15,Testing strategy,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/testing/test-strategy.md; hypothesis + mutmut deps; mutmut scheduled CI; tests/unit/test_property_based.py; coverage target 45%
+D16,Test data & fixtures,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/testing/test-data-strategy.md; tests/factories/core.py 12 factories; golden datasets; scripts/validate_test_data_masking.py; property-based tests
+D17,CI quality gates,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/ci/gate-inventory.md (27+ jobs); ci.yml all-checks aggregator; migration-naming-lint; locust-load-test; SBOM; lockfile
+D18,CD/release pipeline,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/deployment-strategy.md; deploy-production.yml deploy-freeze check + rollback job; staging verified gate; canary plan
+D19,Configuration management,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/runbooks/secret-rotation-runbook.md; src/core/config.py fail-fast + _log_config_summary(); .env.example; config audit logging
+D20,Dependency management,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,requirements.lock hashes; ci.yml lockfile-check pip-audit SBOM; npm lockfile freshness gate; dependency-review action
+D21,Code quality & maintainability,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,pyproject.toml black/isort/mypy (8 override blocks); .flake8; eslint.config.cjs; Trojan Source detection
+D22,Documentation quality,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/ARCHITECTURE.md (system diagram + layers + stack); README.md; docs/adr/ (9); 25+ runbooks; roadmap; design system; API docs
+D23,Operational runbooks,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/runbooks/on-call-guide.md; docs/runbooks/db-pool-exhaustion.md; 25+ runbook files; DEPLOYMENT_RUNBOOK.md
+D24,Data integrity & consistency,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/data/data-integrity.md (optimistic locking + idempotency + hash-chain audit); IdempotencyMiddleware; investigation.version
+D25,Scalability & capacity,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/scalability-plan.md; db.pool_usage_percent metric wiring; docs/runbooks/db-pool-exhaustion.md; docs/evidence/load-test-baseline.md
+D26,Cost efficiency,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/cost-controls.md (tagging + budget + optimization + FinOps); scripts/infra/budget-alert.json; size-limit 300KB aligned
+D27,I18n/L10n readiness,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/i18n/i18n-guide.md; frontend/src/i18n/locales/en.json 2000+ keys; cy.json Welsh locale; pluralisation tests; ci.yml i18n gate
+D28,Analytics/telemetry,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/analytics/event-catalog.md; db.pool_usage_percent metric; azure_monitor.py 18+ metrics; telemetry.py; Web Vitals
+D29,Governance & decision records,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/governance/decision-log-template.md (ADR template + lifecycle); docs/adr/ (9 ADRs); PULL_REQUEST_TEMPLATE.md; STAGE2_COVENANTS.md
+D30,Build determinism,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/infra/build-reproducibility.md (digest pins + reproducibility proof + parity matrix); Dockerfile sha256; requirements.lock hashes; ci.yml lockfile
+D31,Environment parity,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/infra/build-reproducibility.md (env parity matrix + drift detection); config-drift-guard CI; environment_endpoints.json; deploy guardrails
+D32,Supportability & operability,5.0,9.5,0.95,Strong,9.5,+0.0,0.0,docs/ops/troubleshooting-guide.md (17 scenarios + KQL queries); /healthz /readyz /metrics/resources; Dockerfile HEALTHCHECK

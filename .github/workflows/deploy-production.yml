@@ -23,6 +23,16 @@ on:
       reason:
         description: 'Reason for production deployment'
         required: true
+      force_deploy:
+        description: 'Override deploy freeze window (Fri 16:00 UTC — Mon 09:00 UTC)'
+        required: false
+        default: false
+        type: boolean
+      rollback:
+        description: 'Run rollback documentation job only (skips normal production deploy)'
+        required: false
+        default: false
+        type: boolean
   
   # Also trigger on release
   release:
@@ -42,13 +52,52 @@ jobs:
     runs-on: ubuntu-latest
     # Only run if staging succeeded OR manual trigger OR release
     if: |
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'release'
+      (
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'release'
+      ) && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
     outputs:
       approved: ${{ steps.check.outputs.approved }}
     
     steps:
+      - name: Deploy freeze check
+        env:
+          FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.force_deploy }}
+        run: |
+          set -euo pipefail
+          echo "## Deploy freeze window (UTC)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Production deploys are **frozen** from **Friday 16:00** through **Monday 09:00** (UTC), except when \`force_deploy\` is enabled on manual runs." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${FORCE_DEPLOY}" == "true" ]]; then
+            echo "Deploy freeze overridden: force_deploy=true"
+            echo "✅ **Deploy freeze overridden** (\`force_deploy=true\`)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # GNU date: %u weekday 1=Monday … 7=Sunday; %H hour 00–23 UTC
+          DOW=$(date -u +%u)
+          HOUR=$(date -u +%H)
+          MINUTE=$(date -u +%M)
+          echo "Current UTC: weekday=$DOW (1=Mon … 7=Sun) time=${HOUR}:${MINUTE}"
+
+          FROZEN=0
+          if [[ "$DOW" == "5" && "$HOUR" -ge 16 ]]; then FROZEN=1; fi
+          if [[ "$DOW" == "6" || "$DOW" == "7" ]]; then FROZEN=1; fi
+          if [[ "$DOW" == "1" && "$HOUR" -lt 9 ]]; then FROZEN=1; fi
+
+          if [[ "$FROZEN" -eq 1 ]]; then
+            echo "❌ BLOCKED: deploy freeze active (Fri 16:00 UTC — Mon 09:00 UTC)."
+            echo "Re-run with workflow_dispatch input \`force_deploy: true\` to override."
+            echo "❌ **BLOCKED** — inside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "✅ Not in deploy freeze window; proceeding."
+          echo "✅ **Allowed** — outside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Validate deployment request
         id: check
         run: |
@@ -1132,12 +1181,68 @@ jobs:
             echo "| **Status** | ✅ Deployed |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  rollback:
+    name: Production rollback (documented)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.rollback == true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Current web app image (config show)
+        run: |
+          echo "## Current production container configuration" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          az webapp config show \
+            --name "${{ secrets.PROD_AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "{linuxFxVersion:linuxFxVersion, acrUseManagedIdentityCreds:acrUseManagedIdentityCreds}" \
+            -o json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publishing credentials context
+        run: |
+          echo "## Publishing credentials (context only)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          az webapp deployment list-publishing-credentials \
+            --name "${{ secrets.PROD_AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --query "{scmUri:scmUri, location:location}" \
+            -o json | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Document rollback via slot swap
+        run: |
+          {
+            echo "## Rollback command (slot swap)"
+            echo ""
+            echo "This job **documents** rollback. Swap a **known-good** deployment slot (for example \`staging\`) into production:"
+            echo ""
+            echo '```bash'
+            echo "az webapp deployment slot swap \\"
+            echo "  --resource-group \"${{ env.AZURE_RESOURCE_GROUP }}\" \\"
+            echo "  --name \"${{ secrets.PROD_AZURE_WEBAPP_NAME }}\" \\"
+            echo "  --slot staging \\"
+            echo "  --target-slot production"
+            echo '```'
+            echo ""
+            echo "Replace \`--slot\` with the slot that holds the **previous known-good** image if your naming differs."
+            echo ""
+            echo "To deploy a specific prior image instead, set the app’s container image to the saved digest/tag from ACR after \`az webapp config show\` / ACR history, then restart the app."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Rollback documentation written to job summary."
+
   # Notify on completion
   notify:
     name: Notify Deployment
     runs-on: ubuntu-latest
     needs: build-and-deploy
-    if: always()
+    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
     
     steps:
       - name: Notify success

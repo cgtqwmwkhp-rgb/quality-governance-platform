@@ -107,3 +107,28 @@ operational governance — enabling data-driven decisions and regulatory readine
 | R16 | Runbooks (no alerting integration) | D23 |
 | R17 | Privacy (DSAR self-service) | D07 |
 | R18 | Accessibility (external audit) | D03 |
+
+---
+
+## Objectives and Key Results (OKRs)
+
+**Period:** Q2 2026  
+**Last updated:** 2026-03-20
+
+### O1 — Achieve world-class quality governance
+
+- **KR1:** Maintain **≥ 95%** uptime SLA (production, monthly roll-up).  
+- **KR2:** Reduce **incident response time** (P1/P2) to **< 4 hours** median from detection to acknowledged ownership.  
+- **KR3:** Achieve **100%** ISO audit trail coverage for in-scope regulated events (configurable audit log on all CRUD operations defined in the control matrix).
+
+### O2 — Drive adoption across all operational teams
+
+- **KR1:** **90%** of drivers complete **vehicle checklists daily** (rolling 30-day adherence).  
+- **KR2:** **100%** of RTAs have a **running sheet** started within **24 hours** of report creation.  
+- **KR3:** **100%** of CAPA actions closed within **30 days** of due date (or formally escalated with recorded extension).
+
+### O3 — Establish Fortune 500 engineering standards
+
+- **KR1:** CI pipeline passes **100%** of configured quality gates on `main` (no waivers except approved time-boxed exceptions).  
+- **KR2:** Combined **unit + integration** test coverage reaches **60%** line coverage on `src/` (reported in CI).  
+- **KR3:** All **32 WCS (World-Class Scorecard)** dimensions score **≥ 9.5** on the quarterly assessment.

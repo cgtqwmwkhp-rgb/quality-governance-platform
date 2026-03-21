@@ -6,6 +6,38 @@ This guide summarises major domain models, relationships, shared mixins, data cl
 
 ## Entity overview
 
+The diagram below is a **conceptual** entity–relationship view of the key governance entities listed in this guide. It is intended for onboarding and documentation; table and FK names in PostgreSQL may differ slightly (for example `AuditRun` / `InvestigationRun` as ORM classes).
+
+```mermaid
+erDiagram
+    User ||--o{ Incident : "reporter_investigator_audit_trail"
+    User ||--o{ IncidentAction : "owner_verifier"
+    Incident ||--o{ IncidentAction : "actions"
+    User ||--o{ Complaint : "ownership_audit_trail"
+    Complaint ||--o{ ComplaintAction : "actions"
+    User ||--o{ Risk : "steward_optional"
+    User ||--o{ RoadTrafficCollision : "audit_trail"
+    RoadTrafficCollision ||--o{ RTAAction : "actions"
+    RoadTrafficCollision ||--o{ RunningSheetEntry : "running_sheet"
+    User ||--o{ RunningSheetEntry : "author"
+    Incident ||--o{ Investigation : "assigned_entity"
+    Complaint ||--o{ Investigation : "assigned_entity"
+    RoadTrafficCollision ||--o{ Investigation : "assigned_entity"
+    NearMiss ||--o{ Investigation : "assigned_entity"
+    Incident ||--o{ CAPAAction : "corrective_preventive"
+    Complaint ||--o{ CAPAAction : "corrective_preventive"
+    RoadTrafficCollision ||--o{ CAPAAction : "corrective_preventive"
+    User ||--o{ Audit : "audit_trail"
+    Audit ||--o{ AuditFinding : "findings"
+    EvidenceAsset }o--|| Investigation : "optional_link"
+    User ||--o{ EvidenceAsset : "provenance"
+    VehicleRegistry ||--o{ DriverProfile : "allocated_vehicle"
+    User ||--|| DriverProfile : "one_to_one"
+    User ||--o{ NearMiss : "reporter_audit_trail"
+    User ||--o{ Document : "control_metadata"
+    User ||--o{ Notification : "in_app_delivery"
+```
+
 The following table lists the primary domain models requested for governance coverage, their PostgreSQL table names, and high-level notes. Some business terms map to concrete tables with different names (called out explicitly).
 
 | Domain model | SQLAlchemy class (typical) | Table name | Notes |

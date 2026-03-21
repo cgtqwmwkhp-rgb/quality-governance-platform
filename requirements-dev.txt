@@ -25,3 +25,6 @@ mkdocs-material>=9.5.0,<10.0.0
 
 # Build Tooling
 pip-tools>=7.4.0,<8.0.0
+
+hypothesis
+mutmut

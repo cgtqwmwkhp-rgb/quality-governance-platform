@@ -2,7 +2,7 @@
 
 This document describes every job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): what it enforces, whether it blocks merges, what evidence it leaves behind, and how jobs depend on each other.
 
-**Note:** On pull requests, `dependency-review` runs; on branch pushes it is skipped. The `all-checks` job lists explicit `needs`; jobs **not** listed there (for example `uat-tests`, `smoke-gate-selftest`, `config-drift-guard`, `sbom`) still run as part of the same workflow and should pass for a healthy pipeline—treat them as **blocking** unless their logs are explicitly advisory.
+**Note:** On pull requests, `dependency-review` runs; on branch pushes it is skipped. The `all-checks` job lists explicit `needs` (and excludes PR-only, advisory, and schedule-only jobs); jobs **not** listed there (for example `uat-tests`, `smoke-gate-selftest`, `config-drift-guard`, `sbom`, `locust-load-test`, `mutation-testing`) still run as part of the same workflow and should pass for a healthy pipeline—treat them as **blocking** unless their logs are explicitly advisory.
 
 ---
 
@@ -36,7 +36,10 @@ All jobs below are defined in **`CI`** (`.github/workflows/ci.yml`).
 | 22 | **API Contract Tests** | `pytest tests/contract/` | Blocking | Console logs |
 | 23 | **Dependency Review** | GitHub dependency review on PRs; `fail-on-severity: high` | Blocking on PR when run | GitHub Security tab / step summary |
 | 24 | **Secret Scanning (Gitleaks)** | Repository secret scan | Blocking | gitleaks output |
-| 25 | **All Checks Passed** | Aggregates listed `needs`; runs `scripts/generate_gate_summary.sh` | Blocking | `gate-summary.txt` → artifact |
+| 25 | **Migration Naming Lint** | `scripts/validate_migration_naming.py` — validates Alembic filenames start with YYYYMMDD | Blocking | Console logs |
+| 26 | **Locust Load Test (advisory)** | Headless Locust run (20 users, 60s) on `main` only, after smoke tests | Advisory | `locust-results*.csv` → artifact `locust-load-test` |
+| 27 | **Mutation Testing (weekly)** | `mutmut run` on `src/domain/services/` — runs on `schedule` cron only | Advisory | `mutmut-results.txt`, `html/` → artifact `mutation-testing-report` |
+| 28 | **All Checks Passed** | Aggregates listed `needs`; runs `scripts/generate_gate_summary.sh` | Blocking | `gate-summary.txt` → artifact |
 
 ---
 
@@ -67,15 +70,21 @@ flowchart TD
     CT[Contract Tests]
     GS[Secret Scanning]
     DR[Dependency Review]
+    MNL[Migration Naming Lint]
   end
 
   BC --> SM[Smoke Tests]
   SM --> E2E[E2E Tests]
   SM --> UAT[UAT Tests]
+  SM --> LLT[Locust Load Test]
 
   UT --> QT[Quality Trend]
   IT --> QT
   E2E --> QT
+
+  subgraph weekly [Weekly schedule only]
+    MT[Mutation Testing]
+  end
 
   subgraph aggregator [Aggregator]
     AC[All Checks Passed]
@@ -99,8 +108,8 @@ flowchart TD
   LFC --> AC
   PB --> AC
   CT --> AC
-  DR --> AC
   GS --> AC
+  MNL --> AC
 ```
 
 **Important:** `all-checks` does **not** currently list `smoke-gate-selftest`, `config-drift-guard`, `sbom`, or `uat-tests` in `needs`. Those jobs still run in parallel with the rest; failures still fail the workflow. When interpreting “merge readiness,” require **all** jobs green, not only `all-checks`’s `needs` subgraph.
@@ -144,6 +153,9 @@ flowchart TD
 | **Gitleaks** | Secret in history | Rotate secret; remove from commits per security procedure. |
 | **Dependency review** | High severity on PR | Upgrade vulnerable dependency or document exception. |
 | **Config drift guard** | Forbidden hostname fragment | Replace legacy ACA reference with current staging platform URLs/paths. |
+| **Migration naming lint** | Migration filename pattern violation | Rename file to `YYYYMMDD_description.py` per `scripts/validate_migration_naming.py`. |
+| **Locust load test** | Performance degradation (advisory) | Review `locust-results*.csv` artifact; investigate slow endpoints against SLOs. |
+| **Mutation testing** | Low mutation kill rate (advisory, weekly) | Review `mutmut-results.txt` artifact; add missing assertions in unit tests. |
 
 ---
 

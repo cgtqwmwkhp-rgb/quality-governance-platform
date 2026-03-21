@@ -160,6 +160,12 @@ export default function Layout({ onLogout }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-background safe-area-top">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none"
+      >
+        {t('a11y.skip_to_content', 'Skip to main content')}
+      </a>
       {/* Top Bar */}
       <header className="fixed top-0 right-0 left-0 lg:left-72 h-16 bg-card/95 backdrop-blur-lg border-b border-border z-30 flex items-center justify-between px-4 sm:px-6">
         {/* Search Bar */}
@@ -319,7 +325,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       </aside>
 
       {/* Main content */}
-      <main className="lg:pl-72 pt-16">
+      <main id="main-content" className="lg:pl-72 pt-16">
         <div className="p-4 sm:p-6 lg:p-8 min-h-screen">
           <Outlet />
         </div>

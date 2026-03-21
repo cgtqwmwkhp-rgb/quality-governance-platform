@@ -6,7 +6,7 @@ import sys
 import time
 from typing import Any, AsyncGenerator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -72,6 +72,48 @@ async_session_maker = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+# Pool usage tracking (async engine checkout/checkin; matches pool_size + max_overflow for PostgreSQL)
+_POOL_CHECKED_OUT: int = 0
+_PG_POOL_SIZE: int = 10
+_PG_MAX_OVERFLOW: int = 20
+
+
+def get_pool_usage_percent() -> float:
+    """Return current async pool usage as a percentage (0–100), or 0 when not pooled."""
+    if _is_testing or "sqlite" in settings.database_url.lower():
+        return 0.0
+    if "postgresql" not in settings.database_url:
+        return 0.0
+    capacity = _PG_POOL_SIZE + _PG_MAX_OVERFLOW
+    if capacity <= 0:
+        return 0.0
+    return min(100.0, (_POOL_CHECKED_OUT / capacity) * 100.0)
+
+
+def _register_async_pool_usage_listeners() -> None:
+    """Track checked-out connections via SQLAlchemy pool events on the async engine."""
+
+    def _on_checkout(_dbapi_conn: object, _connection_record: object, _connection_proxy: object) -> None:
+        global _POOL_CHECKED_OUT
+        _POOL_CHECKED_OUT += 1
+
+    def _on_checkin(_dbapi_conn: object, _connection_record: object) -> None:
+        global _POOL_CHECKED_OUT
+        _POOL_CHECKED_OUT = max(0, _POOL_CHECKED_OUT - 1)
+
+    event.listen(engine.sync_engine, "checkout", _on_checkout)
+    event.listen(engine.sync_engine, "checkin", _on_checkin)
+
+
+_register_async_pool_usage_listeners()
+
+
+async def emit_db_pool_usage_metric() -> None:
+    """Emit `db.pool_usage_percent` from the module-level checkout counter (call from a periodic task)."""
+    from src.infrastructure.monitoring.azure_monitor import track_metric
+
+    track_metric("db.pool_usage_percent", float(get_pool_usage_percent()))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
