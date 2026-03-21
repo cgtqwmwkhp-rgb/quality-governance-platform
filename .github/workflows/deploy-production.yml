@@ -468,12 +468,10 @@ jobs:
             )
 
             if [ -z "$APP_SUBNET_ID" ]; then
-              echo "❌ ERROR: Could not resolve the production app's VNet integration subnet"
-              echo "Set PROD_MIGRATION_SUBNET_ID to an ACI-delegated subnet in the production VNet."
-              exit 1
-            fi
-
-            VNET_CONTEXT=$(APP_SUBNET_ID="$APP_SUBNET_ID" python3 - <<'PY'
+              echo "No App Service VNet integration detected; using default ACI networking for migration jobs."
+              MIGRATION_SUBNET_ID=""
+            else
+              VNET_CONTEXT=$(APP_SUBNET_ID="$APP_SUBNET_ID" python3 - <<'PY'
           import os
 
           parts = os.environ["APP_SUBNET_ID"].strip("/").split("/")
@@ -482,24 +480,24 @@ jobs:
           print(data.get("virtualNetworks", ""))
           print(data.get("subnets", ""))
           PY
-            )
+              )
 
-            VNET_RG=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '1p')
-            VNET_NAME=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '2p')
-            APP_SUBNET_NAME=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '3p')
+              VNET_RG=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '1p')
+              VNET_NAME=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '2p')
+              APP_SUBNET_NAME=$(printf '%s\n' "$VNET_CONTEXT" | sed -n '3p')
 
-            if [ -z "$VNET_RG" ] || [ -z "$VNET_NAME" ]; then
-              echo "❌ ERROR: Could not parse VNet information from App Service subnet: $APP_SUBNET_ID"
-              exit 1
-            fi
+              if [ -z "$VNET_RG" ] || [ -z "$VNET_NAME" ]; then
+                echo "❌ ERROR: Could not parse VNet information from App Service subnet: $APP_SUBNET_ID"
+                exit 1
+              fi
 
-            CANDIDATE_SUBNETS_JSON=$(az network vnet subnet list \
-              --resource-group "$VNET_RG" \
-              --vnet-name "$VNET_NAME" \
-              --query "[?delegations[?serviceName=='Microsoft.ContainerInstance/containerGroups']].{id:id,name:name}" \
-              -o json)
+              CANDIDATE_SUBNETS_JSON=$(az network vnet subnet list \
+                --resource-group "$VNET_RG" \
+                --vnet-name "$VNET_NAME" \
+                --query "[?delegations[?serviceName=='Microsoft.ContainerInstance/containerGroups']].{id:id,name:name}" \
+                -o json)
 
-            MIGRATION_SUBNET_ID=$(CANDIDATE_SUBNETS_JSON="$CANDIDATE_SUBNETS_JSON" APP_SUBNET_NAME="$APP_SUBNET_NAME" python3 - <<'PY'
+              MIGRATION_SUBNET_ID=$(CANDIDATE_SUBNETS_JSON="$CANDIDATE_SUBNETS_JSON" APP_SUBNET_NAME="$APP_SUBNET_NAME" python3 - <<'PY'
           import json
           import os
           import sys
@@ -525,23 +523,28 @@ jobs:
 
           sys.exit(2)
           PY
-            ) || RESOLVE_STATUS=$?
+              ) || RESOLVE_STATUS=$?
 
-            RESOLVE_STATUS=${RESOLVE_STATUS:-0}
-            if [ "$RESOLVE_STATUS" -eq 2 ]; then
-              echo "❌ ERROR: Multiple ACI-delegated subnets were found in VNet '$VNET_NAME'."
-              echo "Set PROD_MIGRATION_SUBNET_ID explicitly to the correct subnet resource ID."
-              exit 1
-            fi
+              RESOLVE_STATUS=${RESOLVE_STATUS:-0}
+              if [ "$RESOLVE_STATUS" -eq 2 ]; then
+                echo "❌ ERROR: Multiple ACI-delegated subnets were found in VNet '$VNET_NAME'."
+                echo "Set PROD_MIGRATION_SUBNET_ID explicitly to the correct subnet resource ID."
+                exit 1
+              fi
 
-            if [ -z "${MIGRATION_SUBNET_ID:-}" ]; then
-              echo "❌ ERROR: No ACI-delegated subnet was found in VNet '$VNET_NAME'."
-              echo "Set PROD_MIGRATION_SUBNET_ID to a subnet delegated to Microsoft.ContainerInstance/containerGroups."
-              exit 1
+              if [ -z "${MIGRATION_SUBNET_ID:-}" ]; then
+                echo "❌ ERROR: No ACI-delegated subnet was found in VNet '$VNET_NAME'."
+                echo "Set PROD_MIGRATION_SUBNET_ID to a subnet delegated to Microsoft.ContainerInstance/containerGroups."
+                exit 1
+              fi
             fi
           fi
 
-          echo "Using migration subnet: $MIGRATION_SUBNET_ID"
+          if [ -n "${MIGRATION_SUBNET_ID:-}" ]; then
+            echo "Using migration subnet: $MIGRATION_SUBNET_ID"
+          else
+            echo "Using default Azure Container Instance networking for migrations."
+          fi
           echo "migration_subnet_id=$MIGRATION_SUBNET_ID" >> "$GITHUB_OUTPUT"
 
       - name: Run database migrations
