@@ -566,23 +566,24 @@ jobs:
             exit 1
           fi
           
-          CURRENT_REV=$(az container logs --name "qgp-revision-check-${{ github.run_number }}" --resource-group "$AZURE_RESOURCE_GROUP" 2>/dev/null | grep -o '[a-z0-9_]*' | tail -1 || echo "unknown")
-          if [ -z "$CURRENT_REV" ] || [ "$CURRENT_REV" = "unknown" ]; then
+          CURRENT_OUTPUT=$(az container logs --name "qgp-revision-check-${{ github.run_number }}" --resource-group "$AZURE_RESOURCE_GROUP" 2>/dev/null || true)
+          if [ -z "$CURRENT_OUTPUT" ]; then
             echo "❌ ERROR: Unable to read revision check output"
             exit 1
           fi
-          echo "Current DB revision: $CURRENT_REV"
+          echo "Current DB revision output:"
+          printf '%s\n' "$CURRENT_OUTPUT"
           
           # Cleanup
           az container delete --name "qgp-revision-check-${{ github.run_number }}" --resource-group "$AZURE_RESOURCE_GROUP" --yes || true
           
-          # Assert revision matches (note: alembic current may output multiple lines)
-          if echo "$CURRENT_REV" | grep -q "$EXPECTED_HEAD"; then
+          # Assert revision matches against the full Alembic output.
+          if printf '%s\n' "$CURRENT_OUTPUT" | grep -q "$EXPECTED_HEAD"; then
             echo "✅ Database revision matches expected head"
           else
             echo "❌ ERROR: Database revision does not match expected head"
             echo "Expected: $EXPECTED_HEAD"
-            echo "Current output: $CURRENT_REV"
+            echo "Current output: $CURRENT_OUTPUT"
             exit 1
           fi
 
