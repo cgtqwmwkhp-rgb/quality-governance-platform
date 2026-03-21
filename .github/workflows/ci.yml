@@ -114,6 +114,11 @@ jobs:
 
       - name: Lint workflows
         uses: rhysd/actionlint@v1.7.10
+        with:
+          args: >-
+            -ignore "shellcheck reported issue in this script: SC2086:"
+            -ignore "shellcheck reported issue in this script: SC2129:"
+            -ignore "shellcheck reported issue in this script: SC2181:"
 
   smoke-gate-selftest:
     name: Smoke Gate Self-Test

@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -112,7 +112,7 @@ jobs:
       deploy_sha: ${{ github.sha }}
       deploy_time: ${{ steps.set_version.outputs.build_time }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
@@ -193,7 +193,7 @@ jobs:
       results_exist: ${{ steps.playwright_gate.outputs.results_exist }}
       junit_exist: ${{ steps.playwright_gate.outputs.junit_exist }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Node.js
         uses: actions/setup-node@v6

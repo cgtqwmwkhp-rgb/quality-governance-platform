@@ -255,8 +255,6 @@ jobs:
       - name: Configure Existing Service Principal
         id: sp
         run: |
-          ACR_NAME="${{ steps.acr.outputs.acr_name }}"
-          
           echo "## Service Principal Configuration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Since production resources are in the same resource group as staging," >> $GITHUB_STEP_SUMMARY
