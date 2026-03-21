@@ -1,7 +1,7 @@
 """Pydantic schemas for Road Traffic Collisions (RTAs)."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -43,6 +43,12 @@ class RTABase(BaseModel):
     insurance_reference: Optional[str] = Field(None, max_length=100)
     insurance_notes: Optional[str] = None
     estimated_cost: Optional[int] = None
+    vehicles_involved_count: Optional[int] = None
+    cctv_available: bool = False
+    cctv_location: Optional[str] = Field(None, max_length=300)
+    dashcam_footage_available: bool = False
+    footage_secured: bool = False
+    footage_notes: Optional[str] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     fault_determination: Optional[str] = Field(None, max_length=50)
@@ -103,6 +109,12 @@ class RTAUpdate(BaseModel):
     insurance_reference: Optional[str] = Field(None, max_length=100)
     insurance_notes: Optional[str] = None
     estimated_cost: Optional[int] = None
+    vehicles_involved_count: Optional[int] = None
+    cctv_available: Optional[bool] = None
+    cctv_location: Optional[str] = Field(None, max_length=300)
+    dashcam_footage_available: Optional[bool] = None
+    footage_secured: Optional[bool] = None
+    footage_notes: Optional[str] = None
     investigator_id: Optional[int] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
@@ -163,6 +175,12 @@ class RTAResponse(BaseModel):
     insurance_reference: Optional[str] = None
     insurance_notes: Optional[str] = None
     estimated_cost: Optional[int] = None
+    vehicles_involved_count: Optional[int] = None
+    cctv_available: Optional[bool] = None
+    cctv_location: Optional[str] = None
+    dashcam_footage_available: Optional[bool] = None
+    footage_secured: Optional[bool] = None
+    footage_notes: Optional[str] = None
     investigation_notes: Optional[str] = None
     root_cause: Optional[str] = None
     fault_determination: Optional[str] = None
@@ -174,6 +192,7 @@ class RTAResponse(BaseModel):
     reporter_id: Optional[int] = None
     reporter_email: Optional[str] = None
     reporter_name: Optional[str] = None
+    reporter_submission: Optional[dict[str, Any]] = None
     closed_at: Optional[datetime] = None
     closed_by_id: Optional[int] = None
     created_at: datetime

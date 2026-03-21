@@ -36,6 +36,7 @@ import {
   RunningSheetEntry,
   ThirdParty,
   EvidenceAsset,
+  Investigation,
   investigationsApi,
   actionsApi,
   evidenceAssetsApi,
@@ -51,6 +52,13 @@ import { Textarea } from '../components/ui/Textarea'
 import { Input } from '../components/ui/Input'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
+import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { SubmissionSections } from '../components/case/SubmissionSections'
+import {
+  buildRtaSubmissionSections,
+  getSubmissionPhotoSummary,
+  getSubmissionSnapshot,
+} from '../helpers/caseSubmission'
 import {
   Dialog,
   DialogContent,
@@ -77,6 +85,7 @@ export default function RTADetail() {
 
   const [rta, setRta] = useState<RTA | null>(null)
   const [actions, setActions] = useState<Action[]>([])
+  const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
@@ -141,6 +150,7 @@ export default function RTADetail() {
       setRta(response.data)
       populateEditForm(response.data)
       loadActions()
+      loadInvestigations(rtaId)
       loadRunningSheet(rtaId)
       loadPhotos(rtaId)
     } catch (err) {
@@ -192,6 +202,15 @@ export default function RTADetail() {
       setActions(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'RTADetail', action: 'loadActions' })
+    }
+  }
+
+  const loadInvestigations = async (rtaId: number) => {
+    try {
+      const response = await rtasApi.listInvestigations(rtaId, 1, 10)
+      setInvestigations(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'RTADetail', action: 'loadInvestigations' })
     }
   }
 
@@ -504,6 +523,15 @@ export default function RTADetail() {
 
   const parties = (rta.third_parties as { parties?: ThirdParty[] })?.parties || []
   const witnesses = (rta.witnesses_structured as { witnesses?: Witness[] })?.witnesses || []
+  const rtaSubmission = getSubmissionSnapshot(rta.reporter_submission)
+  const rtaSubmissionSections = buildRtaSubmissionSections(rtaSubmission)
+  const evidenceSummary =
+    photos.length > 0 ? `${photos.length} uploaded` : getSubmissionPhotoSummary(rtaSubmission)
+  const latestInvestigation = investigations[0]
+  const investigationSummary = latestInvestigation
+    ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
+    : 'Not started'
+  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
 
   // ──────────────────────── RENDER ────────────────────────
 
@@ -570,10 +598,24 @@ export default function RTADetail() {
         </div>
       </div>
 
+      <CaseSummaryRail
+        items={[
+          { label: 'Driver / Reporter', value: rta.reporter_name || rta.driver_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          { label: 'Vehicle', value: rta.company_vehicle_registration || 'Not provided', icon: <Car className="w-4 h-4" /> },
+          { label: 'Occurred at', value: new Date(rta.collision_date).toLocaleString(), icon: <Calendar className="w-4 h-4" /> },
+          { label: 'Location', value: rta.location || 'Not specified', icon: <MapPin className="w-4 h-4" /> },
+          { label: 'Third parties', value: `${parties.length} recorded`, icon: <Users className="w-4 h-4" /> },
+          { label: 'Witnesses', value: `${witnesses.length} recorded`, icon: <Users className="w-4 h-4" /> },
+          { label: 'Evidence', value: evidenceSummary, icon: <Camera className="w-4 h-4" /> },
+          { label: 'Investigation', value: investigationSummary, icon: <FlaskConical className="w-4 h-4" /> },
+        ]}
+      />
+
       {/* ═══════════════════ TABBED CONTENT ═══════════════════ */}
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview"><FileText className="w-4 h-4 mr-1.5" />{t('rtas.tabs.overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="submission"><FileText className="w-4 h-4 mr-1.5" />Reporter Submission</TabsTrigger>
           <TabsTrigger value="vehicle1"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle1', 'Vehicle 1')}</TabsTrigger>
           <TabsTrigger value="vehicle2"><Car className="w-4 h-4 mr-1.5" />{t('rtas.tabs.vehicle2', 'Vehicle 2')}</TabsTrigger>
           <TabsTrigger value="driver1"><User className="w-4 h-4 mr-1.5" />{t('rtas.tabs.our_driver', 'Our Driver')}</TabsTrigger>
@@ -699,6 +741,37 @@ export default function RTADetail() {
                       <p className="font-medium text-foreground">{rta.insurance_notified ? t('common.yes') : t('common.no')}</p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center"><User className="w-5 h-5 text-success" /></div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Reporter</p>
+                      <p className="font-medium text-foreground">{rta.reporter_name || rta.driver_name || 'Not provided'}</p>
+                      <p className="text-xs text-muted-foreground">{rta.reporter_email || rta.driver_email || 'No contact captured'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader><CardTitle className="text-base">Investigation Status</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Linked investigation</p>
+                    <p className="font-medium text-foreground">{investigationSummary}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Open actions</p>
+                    <p className="font-medium text-foreground">{openActions.length}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Evidence captured</p>
+                    <p className="font-medium text-foreground">{evidenceSummary}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Footage</p>
+                    <p className="font-medium text-foreground">
+                      {rta.dashcam_footage_available || rta.cctv_available ? 'Available' : 'Not flagged'}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
               <Card>
@@ -726,6 +799,13 @@ export default function RTADetail() {
               </Card>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="submission">
+          <SubmissionSections
+            sections={rtaSubmissionSections}
+            emptyMessage="No preserved reporter submission is available for this collision yet."
+          />
         </TabsContent>
 
         {/* ────── VEHICLE 1 TAB ────── */}

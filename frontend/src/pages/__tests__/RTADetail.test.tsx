@@ -48,6 +48,7 @@ vi.mock('../../components/ui/Tabs', () => ({
 vi.mock('../../api/client', () => ({
   rtasApi: {
     get: vi.fn(),
+    listInvestigations: vi.fn(),
     listRunningSheet: vi.fn(),
     update: vi.fn(),
     addRunningSheetEntry: vi.fn(),
@@ -79,6 +80,8 @@ const mockRta = {
   collision_date: '2026-03-01',
   reported_date: '2026-03-02',
   location: 'A1',
+  reporter_name: 'Dan Driver',
+  reporter_email: 'dan@example.com',
   driver_injured: false,
   police_attended: false,
   insurance_notified: false,
@@ -109,6 +112,12 @@ const mockRta = {
       },
     ],
   },
+  reporter_submission: {
+    employee_name: 'Dan Driver',
+    police_ref: 'POL-123',
+    has_dashcam: true,
+    photos: { count: 3 },
+  },
   created_at: '2026-03-02T10:00:00Z',
 }
 
@@ -129,6 +138,9 @@ describe('RTADetail', () => {
     client = await import('../../api/client')
 
     client.rtasApi.get.mockResolvedValue({ data: mockRta })
+    client.rtasApi.listInvestigations.mockResolvedValue({
+      data: { items: [{ id: 8, reference_number: 'INV-8', title: 'RTA investigation' }], total: 1 },
+    })
     client.rtasApi.listRunningSheet.mockResolvedValue({ data: [] })
     client.actionsApi.list.mockResolvedValue({ data: { items: [] } })
     client.evidenceAssetsApi.list.mockResolvedValue({ data: { items: [] } })
@@ -157,5 +169,18 @@ describe('RTADetail', () => {
 
     expect(screen.getByLabelText('Willing to give statement')).toBeInTheDocument()
     expect(screen.getByLabelText('Statement')).toBeInTheDocument()
+  })
+
+  it('surfaces reporter submission and investigation briefing fields', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Fleet collision' })).toBeInTheDocument()
+    })
+
+    expect(screen.getAllByText('Dan Driver').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('INV-8').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('3 uploaded').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('POL-123').length).toBeGreaterThan(0)
   })
 })

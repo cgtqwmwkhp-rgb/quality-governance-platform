@@ -490,7 +490,17 @@ export interface Incident {
   updated_at?: string
   reporter_name?: string
   reporter_email?: string
+  people_involved?: string
+  witnesses?: string
+  immediate_actions?: string
+  first_aid_given?: boolean
+  emergency_services_called?: boolean
   investigator_id?: number | null
+  is_riddor_reportable?: boolean | null
+  riddor_classification?: string | null
+  is_sif?: boolean | null
+  life_altering_potential?: boolean | null
+  reporter_submission?: Record<string, unknown> | null
   closed_at?: string | null
 }
 
@@ -583,12 +593,21 @@ export interface RTA {
   insurance_reference?: string
   insurance_notes?: string
   estimated_cost?: number
+  vehicles_involved_count?: number
+  cctv_available?: boolean
+  cctv_location?: string
+  dashcam_footage_available?: boolean
+  footage_secured?: boolean
+  footage_notes?: string
   third_parties?: { parties?: ThirdParty[] }
   witnesses?: string
   witnesses_structured?: { witnesses?: Witness[] }
   fault_determination?: string
   investigation_notes?: string
   root_cause?: string
+  reporter_name?: string
+  reporter_email?: string
+  reporter_submission?: Record<string, unknown> | null
   created_at: string
   updated_at?: string
 }
@@ -609,6 +628,9 @@ export interface RTACreate {
   driver_injured?: boolean
   police_attended?: boolean
   third_parties?: { parties?: ThirdParty[] }
+  reporter_name?: string
+  reporter_email?: string
+  reporter_submission?: Record<string, unknown>
 }
 
 export interface RTAUpdate {
@@ -639,6 +661,12 @@ export interface RTAUpdate {
   insurance_reference?: string
   insurance_notes?: string
   estimated_cost?: number
+  vehicles_involved_count?: number
+  cctv_available?: boolean
+  cctv_location?: string
+  dashcam_footage_available?: boolean
+  footage_secured?: boolean
+  footage_notes?: string
   third_parties?: { parties?: ThirdParty[] }
   witnesses?: string
   witnesses_structured?: { witnesses?: Witness[] }
@@ -661,9 +689,18 @@ export interface Complaint {
   complainant_company?: string
   related_reference?: string
   department?: string
+  target_resolution_date?: string
+  investigation_notes?: string
+  root_cause?: string
   resolution_summary?: string
+  customer_satisfied?: boolean
+  compensation_offered?: string
+  owner_id?: number
+  reporter_submission?: Record<string, unknown> | null
   due_date?: string
   created_at: string
+  updated_at?: string
+  closed_at?: string | null
 }
 
 export interface ComplaintCreate {
@@ -678,6 +715,7 @@ export interface ComplaintCreate {
   complainant_company?: string
   related_reference?: string
   department?: string
+  reporter_submission?: Record<string, unknown>
 }
 
 export interface ComplaintUpdate {
@@ -689,6 +727,10 @@ export interface ComplaintUpdate {
   complainant_name?: string
   complainant_email?: string
   complainant_phone?: string
+  investigation_notes?: string
+  root_cause?: string
+  customer_satisfied?: boolean
+  compensation_offered?: string
   resolution_summary?: string
 }
 
@@ -1282,6 +1324,10 @@ export const incidentsApi = {
   get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
   update: (id: number, data: IncidentUpdate) =>
     api.patch<Incident>(`/api/v1/incidents/${id}`, data),
+  listInvestigations: (id: number, page = 1, pageSize = 10) =>
+    api.get<PaginatedResponse<Investigation>>(
+      `/api/v1/incidents/${id}/investigations?page=${page}&page_size=${pageSize}`,
+    ),
 }
 
 export const rtasApi = {
@@ -1290,6 +1336,10 @@ export const rtasApi = {
   create: (data: RTACreate) => api.post<RTA>('/api/v1/rtas/', data),
   get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) => api.patch<RTA>(`/api/v1/rtas/${id}`, data),
+  listInvestigations: (id: number, page = 1, pageSize = 10) =>
+    api.get<PaginatedResponse<Investigation>>(
+      `/api/v1/rtas/${id}/investigations?page=${page}&page_size=${pageSize}`,
+    ),
   listRunningSheet: (rtaId: number) =>
     api.get<RunningSheetEntry[]>(`/api/v1/rtas/${rtaId}/running-sheet`),
   addRunningSheetEntry: (rtaId: number, data: { content: string; entry_type?: string }) =>
@@ -1305,6 +1355,10 @@ export const complaintsApi = {
   get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
   update: (id: number, data: ComplaintUpdate) =>
     api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
+  listInvestigations: (id: number, page = 1, pageSize = 10) =>
+    api.get<PaginatedResponse<Investigation>>(
+      `/api/v1/complaints/${id}/investigations?page=${page}&page_size=${pageSize}`,
+    ),
 }
 
 export const policiesApi = {

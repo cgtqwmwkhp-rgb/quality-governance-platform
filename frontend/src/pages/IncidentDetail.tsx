@@ -16,7 +16,6 @@ import {
   CheckCircle,
   Loader2,
   ClipboardList,
-  History,
   Pencil,
   Save,
   X,
@@ -26,6 +25,7 @@ import {
   incidentsApi,
   Incident,
   IncidentUpdate,
+  Investigation,
   investigationsApi,
   actionsApi,
   Action,
@@ -54,6 +54,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
+import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { SubmissionSections } from '../components/case/SubmissionSections'
+import {
+  buildIncidentSubmissionSections,
+  getSubmissionPhotoSummary,
+  getSubmissionSnapshot,
+} from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
@@ -88,6 +96,7 @@ export default function IncidentDetail() {
   const navigate = useNavigate()
   const [incident, setIncident] = useState<Incident | null>(null)
   const [actions, setActions] = useState<Action[]>([])
+  const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
   const [showActionModal, setShowActionModal] = useState(false)
@@ -154,6 +163,7 @@ export default function IncidentDetail() {
         department: response.data.department,
       })
       loadActions()
+      loadInvestigations(incidentId)
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadIncident' })
       setError(t('incidents.detail.failed_to_load'))
@@ -169,6 +179,15 @@ export default function IncidentDetail() {
       setActions(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadActions' })
+    }
+  }
+
+  const loadInvestigations = async (incidentId: number) => {
+    try {
+      const response = await incidentsApi.listInvestigations(incidentId, 1, 10)
+      setInvestigations(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'loadInvestigations' })
     }
   }
 
@@ -384,6 +403,32 @@ export default function IncidentDetail() {
     )
   }
 
+  const incidentSubmission = getSubmissionSnapshot(incident.reporter_submission)
+  const incidentSubmissionSections = buildIncidentSubmissionSections(incidentSubmission)
+  const affectedPerson =
+    (typeof incidentSubmission?.person_name === 'string' && incidentSubmission.person_name) ||
+    incident.people_involved ||
+    'Not provided'
+  const contractLabel =
+    incident.department ||
+    (typeof incidentSubmission?.contract === 'string' ? incidentSubmission.contract : 'Not provided')
+  const personRole =
+    (typeof incidentSubmission?.person_role === 'string' && incidentSubmission.person_role) ||
+    'Not provided'
+  const medicalAssistance =
+    (typeof incidentSubmission?.medical_assistance === 'string' && incidentSubmission.medical_assistance) ||
+    (incident.emergency_services_called
+      ? 'Emergency services called'
+      : incident.first_aid_given
+        ? 'First aid provided'
+        : 'Not provided')
+  const evidenceSummary = getSubmissionPhotoSummary(incidentSubmission)
+  const latestInvestigation = investigations[0]
+  const investigationSummary = latestInvestigation
+    ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
+    : 'Not started'
+  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Breadcrumbs
@@ -464,6 +509,47 @@ export default function IncidentDetail() {
           )}
         </div>
       </div>
+
+      <CaseSummaryRail
+        items={[
+          { label: 'Reporter', value: incident.reporter_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          { label: 'Affected person', value: affectedPerson, icon: <User className="w-4 h-4" /> },
+          {
+            label: 'Occurred at',
+            value: new Date(incident.incident_date).toLocaleString(),
+            icon: <Calendar className="w-4 h-4" />,
+          },
+          {
+            label: 'Location',
+            value: incident.location || 'Not specified',
+            icon: <MapPin className="w-4 h-4" />,
+          },
+          { label: 'Evidence', value: evidenceSummary, icon: <FileText className="w-4 h-4" /> },
+          {
+            label: 'Investigation',
+            value: investigationSummary,
+            icon: <FlaskConical className="w-4 h-4" />,
+          },
+          {
+            label: 'Open actions',
+            value: `${openActions.length} open`,
+            icon: <ClipboardList className="w-4 h-4" />,
+          },
+          {
+            label: 'Medical response',
+            value: medicalAssistance,
+            icon: <AlertTriangle className="w-4 h-4" />,
+          },
+        ]}
+      />
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-6">
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -783,22 +869,76 @@ export default function IncidentDetail() {
                   <User className="w-5 h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">{t('common.department')}</p>
+                  <p className="text-sm text-muted-foreground">Contract / Department</p>
                   <p className="font-medium text-foreground">
-                    {incident.department || t('incidents.detail.not_specified')}
+                    {contractLabel}
                   </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                  <User className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Reporter</p>
+                  <p className="font-medium text-foreground">
+                    {incident.reporter_name || t('incidents.detail.not_specified')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {incident.reporter_email || 'No reporter email captured'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-destructive/10 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-destructive" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Impact</p>
+                  <p className="font-medium text-foreground">
+                    {incidentSubmission?.has_injuries ? 'Injury reported' : 'No injury flagged'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{medicalAssistance}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Timeline Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <History className="w-4 h-4" />
-                {t('incidents.detail.activity_timeline')}
-              </CardTitle>
+              <CardTitle className="text-base">Investigation Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Linked investigation</p>
+                <p className="font-medium text-foreground">{investigationSummary}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Open actions</p>
+                <p className="font-medium text-foreground">{openActions.length}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Evidence captured</p>
+                <p className="font-medium text-foreground">{evidenceSummary}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Affected role</p>
+                <p className="font-medium text-foreground">
+                  {personRole}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Witnesses</p>
+                <p className="font-medium text-foreground">
+                  {incidentSubmission?.has_witnesses ? 'Witnesses captured' : 'No witnesses recorded'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Activity Timeline</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -829,6 +969,16 @@ export default function IncidentDetail() {
           </Card>
         </div>
       </div>
+
+        </TabsContent>
+
+        <TabsContent value="submission" className="mt-6">
+          <SubmissionSections
+            sections={incidentSubmissionSections}
+            emptyMessage="No preserved reporter submission is available for this incident yet."
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Create Investigation Modal */}
       <Dialog

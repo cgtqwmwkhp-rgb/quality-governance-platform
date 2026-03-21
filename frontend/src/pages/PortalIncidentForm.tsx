@@ -57,6 +57,7 @@ interface PortalReportPayload {
   reporter_phone?: string
   department?: string
   is_anonymous: boolean
+  reporter_submission?: Record<string, unknown>
 }
 
 interface PortalReportResponse {
@@ -365,6 +366,47 @@ export default function PortalIncidentForm() {
               ? 'low'
               : 'medium'
 
+      const photoSummary = {
+        count: formData.photos.length,
+        files: formData.photos.map((photo) => ({
+          name: photo.name,
+          type: photo.type,
+          size: photo.size,
+        })),
+      }
+
+      const reporterSubmission: Record<string, unknown> =
+        reportType === 'complaint'
+          ? {
+              contract: formData.contract,
+              contract_other: formData.contractOther || null,
+              complainant_name: formData.complainantName,
+              complainant_role: formData.complainantRole || null,
+              complainant_contact: formData.complainantContact || null,
+              location: formData.location,
+              description: formData.description,
+              photos: photoSummary,
+            }
+          : {
+              contract: formData.contract,
+              contract_other: formData.contractOther || null,
+              was_involved: formData.wasInvolved,
+              person_name: formData.personName,
+              person_role: formData.personRole || null,
+              person_contact: formData.personContact || null,
+              location: formData.location,
+              incident_date: formData.incidentDate,
+              incident_time: formData.incidentTime,
+              description: formData.description,
+              asset_number: formData.assetNumber || null,
+              has_witnesses: formData.hasWitnesses,
+              witness_names: formData.witnessNames || null,
+              has_injuries: formData.hasInjuries,
+              injuries: formData.injuries,
+              medical_assistance: formData.medicalAssistance || null,
+              photos: photoSummary,
+            }
+
       // Build portal report payload
       const payload: PortalReportPayload = {
         report_type: reportType === 'complaint' ? 'complaint' : 'incident',
@@ -380,6 +422,7 @@ export default function PortalIncidentForm() {
         reporter_phone: formData.complainantContact || undefined,
         department: formData.contract !== 'other' ? formData.contract : formData.contractOther,
         is_anonymous: false, // Portal users are identified
+        reporter_submission: reporterSubmission,
       }
 
       const response = await submitPortalReport(payload)

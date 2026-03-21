@@ -1,7 +1,7 @@
 """Pydantic schemas for Complaint API."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -105,9 +105,19 @@ class ComplaintResponse(BaseModel):
     complainant_phone: Optional[str] = None
     complainant_company: Optional[str] = None
     related_reference: Optional[str] = None
+    department: Optional[str] = None
     status: ComplaintStatus
+    target_resolution_date: Optional[datetime] = None
+    resolution_summary: Optional[str] = None
+    investigation_notes: Optional[str] = None
+    root_cause: Optional[str] = None
+    customer_satisfied: Optional[bool] = None
+    compensation_offered: Optional[str] = None
+    owner_id: Optional[int] = None
+    reporter_submission: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
+    closed_at: Optional[datetime] = None
 
 
 class ComplaintListResponse(BaseModel):

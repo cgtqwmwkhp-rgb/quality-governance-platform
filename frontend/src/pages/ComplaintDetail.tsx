@@ -28,6 +28,7 @@ import {
   complaintsApi,
   Complaint,
   ComplaintUpdate,
+  Investigation,
   investigationsApi,
   actionsApi,
   Action,
@@ -55,6 +56,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/Select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
+import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { SubmissionSections } from '../components/case/SubmissionSections'
+import {
+  buildComplaintSubmissionSections,
+  getSubmissionPhotoSummary,
+  getSubmissionSnapshot,
+} from '../helpers/caseSubmission'
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
@@ -64,6 +73,7 @@ export default function ComplaintDetail() {
   const navigate = useNavigate()
   const [complaint, setComplaint] = useState<Complaint | null>(null)
   const [actions, setActions] = useState<Action[]>([])
+  const [investigations, setInvestigations] = useState<Investigation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showInvestigationModal, setShowInvestigationModal] = useState(false)
@@ -127,6 +137,7 @@ export default function ComplaintDetail() {
         resolution_summary: response.data.resolution_summary,
       })
       loadActions()
+      loadInvestigations(complaintId)
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadComplaint' })
       setError(t('complaints.detail.load_error'))
@@ -144,6 +155,15 @@ export default function ComplaintDetail() {
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadActions' })
       setError(t('complaints.detail.load_error'))
+    }
+  }
+
+  const loadInvestigations = async (complaintId: number) => {
+    try {
+      const response = await complaintsApi.listInvestigations(complaintId, 1, 10)
+      setInvestigations(response.data.items || [])
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'loadInvestigations' })
     }
   }
 
@@ -420,6 +440,25 @@ export default function ComplaintDetail() {
     )
   }
 
+  const complaintSubmission = getSubmissionSnapshot(complaint.reporter_submission)
+  const complaintSubmissionSections = buildComplaintSubmissionSections(complaintSubmission)
+  const contractLabel =
+    complaint.department ||
+    (typeof complaintSubmission?.contract === 'string' ? complaintSubmission.contract : 'Not provided')
+  const complainantRole =
+    (typeof complaintSubmission?.complainant_role === 'string' &&
+      complaintSubmission.complainant_role) ||
+    'Not provided'
+  const locationLabel =
+    (typeof complaintSubmission?.location === 'string' && complaintSubmission.location) ||
+    'Not provided'
+  const evidenceSummary = getSubmissionPhotoSummary(complaintSubmission)
+  const latestInvestigation = investigations[0]
+  const investigationSummary = latestInvestigation
+    ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
+    : 'Not started'
+  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+
   return (
     <div className="space-y-6 animate-fade-in">
       <Breadcrumbs
@@ -500,6 +539,31 @@ export default function ComplaintDetail() {
           )}
         </div>
       </div>
+
+      <CaseSummaryRail
+        items={[
+          { label: 'Complainant', value: complaint.complainant_name || 'Not provided', icon: <User className="w-4 h-4" /> },
+          { label: 'Role', value: complainantRole, icon: <User className="w-4 h-4" /> },
+          { label: 'Contract', value: contractLabel, icon: <MessageSquare className="w-4 h-4" /> },
+          { label: 'Location', value: locationLabel, icon: <MessageSquare className="w-4 h-4" /> },
+          {
+            label: 'Received',
+            value: new Date(complaint.received_date).toLocaleString(),
+            icon: <Calendar className="w-4 h-4" />,
+          },
+          { label: 'Investigation', value: investigationSummary, icon: <FlaskConical className="w-4 h-4" /> },
+          { label: 'Open actions', value: `${openActions.length} open`, icon: <ClipboardList className="w-4 h-4" /> },
+          { label: 'Evidence', value: evidenceSummary, icon: <FileText className="w-4 h-4" /> },
+        ]}
+      />
+
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-6">
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -932,6 +996,50 @@ export default function ComplaintDetail() {
                   </p>
                 </div>
               </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
+                  <User className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Contract / Department</p>
+                  <p className="font-medium text-foreground">{contractLabel}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-secondary/80 flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Location / Site</p>
+                  <p className="font-medium text-foreground">{locationLabel}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Investigation Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-sm text-muted-foreground">Linked investigation</p>
+                <p className="font-medium text-foreground">{investigationSummary}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Open actions</p>
+                <p className="font-medium text-foreground">{openActions.length}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Resolution summary</p>
+                <p className="font-medium text-foreground">
+                  {complaint.resolution_summary || 'No resolution recorded yet'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Evidence captured</p>
+                <p className="font-medium text-foreground">{evidenceSummary}</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -972,6 +1080,16 @@ export default function ComplaintDetail() {
           </Card>
         </div>
       </div>
+
+        </TabsContent>
+
+        <TabsContent value="submission" className="mt-6">
+          <SubmissionSections
+            sections={complaintSubmissionSections}
+            emptyMessage="No preserved reporter submission is available for this complaint yet."
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Create Investigation Modal */}
       <Dialog

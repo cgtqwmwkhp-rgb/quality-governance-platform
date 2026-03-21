@@ -17,6 +17,7 @@ interface PortalReportPayload {
   reporter_phone?: string
   department?: string
   is_anonymous: boolean
+  reporter_submission?: Record<string, unknown>
 }
 
 interface PortalReportResponse {
@@ -306,6 +307,49 @@ Weather: ${formData.weather || 'Not specified'}
 Road Conditions: ${formData.roadCondition || 'Not specified'}
 Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
 
+      const reporterSubmission = {
+        employee_name: formData.employeeName,
+        pe_vehicle: formData.peVehicle,
+        pe_vehicle_other: formData.peVehicleOther || null,
+        has_passengers: formData.hasPassengers,
+        passenger_details: formData.passengerDetails || null,
+        location: formData.location,
+        accident_date: formData.accidentDate,
+        accident_time: formData.accidentTime,
+        accident_type: formData.accidentType,
+        vehicle_count: formData.vehicleCount,
+        third_parties: formData.thirdParties.map((party) => ({
+          vehicle_reg: party.registration,
+          name: party.driverName,
+          phone: party.driverPhone,
+          insurer: party.insuranceCompany,
+          insurer_policy_number: party.policyNumber,
+          damage: party.damage,
+          injured: party.hasInjuries ?? false,
+        })),
+        impact_point: formData.impactPoint || null,
+        damage_description: formData.damageDescription,
+        is_drivable: formData.isDrivable,
+        weather: formData.weather || null,
+        road_condition: formData.roadCondition || null,
+        has_witnesses: formData.hasWitnesses,
+        witness_details: formData.witnessDetails || null,
+        emergency_services: formData.emergencyServices || null,
+        police_ref: formData.policeRef || null,
+        purpose_of_journey: formData.purposeOfJourney || null,
+        speed: formData.speed || null,
+        has_dashcam: formData.hasDashcam,
+        has_cctv: formData.hasCCTV,
+        photos: {
+          count: formData.photos.length,
+          files: formData.photos.map((photo) => ({
+            name: photo.name,
+            type: photo.type,
+            size: photo.size,
+          })),
+        },
+      }
+
       // Build portal report payload - RTA goes to RTA dashboard
       const payload: PortalReportPayload = {
         report_type: 'rta', // Routes to RTA dashboard, not Incidents
@@ -317,6 +361,7 @@ Drivable: ${formData.isDrivable ? 'Yes' : 'No'}${thirdPartiesDesc}`
         reporter_email: user?.email || undefined,
         department: undefined,
         is_anonymous: false,
+        reporter_submission: reporterSubmission,
       }
 
       const response = await submitPortalReport(payload)

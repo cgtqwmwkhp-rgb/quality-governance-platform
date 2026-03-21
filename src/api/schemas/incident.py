@@ -1,7 +1,7 @@
 """Incident API schemas."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -104,7 +104,17 @@ class IncidentResponse(BaseModel):
     reporter_id: Optional[int] = None
     reporter_email: Optional[str] = None
     reporter_name: Optional[str] = None
+    people_involved: Optional[str] = None
+    witnesses: Optional[str] = None
+    immediate_actions: Optional[str] = None
+    first_aid_given: bool = False
+    emergency_services_called: bool = False
     investigator_id: Optional[int] = None
+    is_riddor_reportable: Optional[bool] = None
+    riddor_classification: Optional[str] = None
+    is_sif: Optional[bool] = None
+    life_altering_potential: Optional[bool] = None
+    reporter_submission: Optional[dict[str, Any]] = None
     closed_at: Optional[datetime] = None
 
 

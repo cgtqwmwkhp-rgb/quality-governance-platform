@@ -7,13 +7,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import (
-    AuditTrailMixin,
-    CaseInsensitiveEnum,
-    DataClassification,
-    ReferenceNumberMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -134,6 +128,9 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
 
     # Portal form source tracking (for audit traceability)
     source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_rta_v1
+    reporter_submission: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # Immutable snapshot of reporter-entered intake data
 
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -213,14 +210,10 @@ class RunningSheetEntry(Base, TimestampMixin):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     entry_type: Mapped[str] = mapped_column(
-        String(50),
-        nullable=False,
-        default="note",
+        String(50), nullable=False, default="note",
     )
     author_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
-        ForeignKey("users.id"),
-        nullable=True,
+        Integer, ForeignKey("users.id"), nullable=True,
     )
     author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 

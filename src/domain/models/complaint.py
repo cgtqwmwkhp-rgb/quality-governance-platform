@@ -7,13 +7,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import (
-    AuditTrailMixin,
-    CaseInsensitiveEnum,
-    DataClassification,
-    ReferenceNumberMixin,
-    TimestampMixin,
-)
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -130,6 +124,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     # Portal form source tracking (for audit traceability)
     source_form_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # e.g., portal_complaint_v1
+    reporter_submission: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # Immutable snapshot of reporter-entered intake data
 
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

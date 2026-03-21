@@ -9,7 +9,7 @@ Provides simplified, mobile-first endpoints for:
 import hashlib
 import secrets
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
@@ -54,6 +54,10 @@ class QuickReportCreate(BaseModel):
 
     # Optional photo/attachment reference
     attachment_ids: Optional[list[str]] = None
+    reporter_submission: Optional[dict[str, Any]] = Field(
+        None,
+        description="Immutable snapshot of reporter-entered intake data for investigator views",
+    )
 
 
 class QuickReportResponse(BaseModel):
@@ -167,6 +171,144 @@ def get_priority_label(priority: str) -> str:
     return labels.get(priority, priority)
 
 
+def parse_portal_datetime(date_value: Any, time_value: Any | None = None) -> datetime | None:
+    """Parse a date/date-time pair from portal submission data."""
+    if not date_value:
+        return None
+
+    raw_value = str(date_value).strip()
+    if not raw_value:
+        return None
+
+    if time_value:
+        raw_value = f"{raw_value}T{str(time_value).strip()}"
+
+    try:
+        parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def build_incident_portal_fields(
+    report: QuickReportCreate,
+    incident_severity: IncidentSeverity,
+    reporter_submission: dict[str, Any],
+) -> dict[str, Any]:
+    incident_occurred_at = parse_portal_datetime(
+        reporter_submission.get("incident_date"),
+        reporter_submission.get("incident_time"),
+    ) or datetime.now(timezone.utc)
+    witness_names = reporter_submission.get("witness_names")
+    medical_assistance = str(reporter_submission.get("medical_assistance") or "").strip().lower()
+
+    return {
+        "incident_type": IncidentType.OTHER,
+        "severity": incident_severity,
+        "status": IncidentStatus.REPORTED,
+        "location": report.location,
+        "department": report.department,
+        "incident_date": incident_occurred_at,
+        "reported_date": datetime.now(timezone.utc),
+        "reporter_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "reporter_email": report.reporter_email if not report.is_anonymous else None,
+        "people_involved": reporter_submission.get("person_name") or report.reporter_name,
+        "witnesses": witness_names if isinstance(witness_names, str) else None,
+        "first_aid_given": medical_assistance not in {"", "none"},
+        "emergency_services_called": medical_assistance == "ambulance",
+        "source_form_id": "portal_incident_v1",
+        "source_type": "portal",
+        "reporter_submission": reporter_submission or None,
+        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+    }
+
+
+def build_complaint_portal_fields(
+    report: QuickReportCreate,
+    complaint_priority: ComplaintPriority,
+    reporter_submission: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "complaint_type": ComplaintType.OTHER,
+        "priority": complaint_priority,
+        "status": ComplaintStatus.RECEIVED,
+        "received_date": datetime.now(timezone.utc),
+        "complainant_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "complainant_email": (report.reporter_email if not report.is_anonymous else None),
+        "complainant_phone": (report.reporter_phone if not report.is_anonymous else None),
+        "department": report.department,
+        "source_form_id": "portal_complaint_v1",
+        "source_type": "portal",
+        "reporter_submission": reporter_submission or None,
+        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+    }
+
+
+def build_rta_portal_fields(
+    report: QuickReportCreate,
+    rta_severity: RTASeverity,
+    reporter_submission: dict[str, Any],
+) -> dict[str, Any]:
+    collision_occurred_at = parse_portal_datetime(
+        reporter_submission.get("accident_date"),
+        reporter_submission.get("accident_time"),
+    ) or datetime.now(timezone.utc)
+    vehicle_registration = reporter_submission.get("pe_vehicle")
+    if vehicle_registration == "other":
+        vehicle_registration = reporter_submission.get("pe_vehicle_other")
+    witness_details = reporter_submission.get("witness_details")
+    third_party_entries = reporter_submission.get("third_parties")
+    witness_structured = None
+    if isinstance(witness_details, str) and witness_details.strip():
+        witness_structured = {
+            "witnesses": [
+                {
+                    "name": witness_details.strip(),
+                    "statement": "Reporter-provided witness/contact details from portal intake.",
+                }
+            ]
+        }
+
+    return {
+        "severity": rta_severity,
+        "status": RTAStatus.REPORTED,
+        "location": report.location or "Not specified",
+        "collision_date": collision_occurred_at,
+        "collision_time": reporter_submission.get("accident_time"),
+        "reported_date": datetime.now(timezone.utc),
+        "weather_conditions": reporter_submission.get("weather"),
+        "road_conditions": reporter_submission.get("road_condition"),
+        "company_vehicle_registration": vehicle_registration,
+        "company_vehicle_damage": reporter_submission.get("damage_description"),
+        "reporter_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "reporter_email": report.reporter_email if not report.is_anonymous else None,
+        "driver_name": (report.reporter_name if not report.is_anonymous else "Anonymous"),
+        "driver_email": report.reporter_email if not report.is_anonymous else None,
+        "third_parties": {"parties": third_party_entries}
+        if isinstance(third_party_entries, list) and third_party_entries
+        else None,
+        "vehicles_involved_count": max(
+            1,
+            int(reporter_submission.get("vehicle_count") or 0) + 1,
+        ),
+        "witnesses": witness_details if isinstance(witness_details, str) else None,
+        "witnesses_structured": witness_structured,
+        "police_attended": bool(reporter_submission.get("police_ref")),
+        "police_reference": reporter_submission.get("police_ref"),
+        "cctv_available": bool(reporter_submission.get("has_cctv")),
+        "dashcam_footage_available": bool(reporter_submission.get("has_dashcam")),
+        "footage_notes": "Portal submission indicated available footage."
+        if reporter_submission.get("has_cctv") or reporter_submission.get("has_dashcam")
+        else None,
+        "source_form_id": "portal_rta_v1",
+        "reporter_submission": reporter_submission or None,
+        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+    }
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -194,6 +336,7 @@ async def submit_quick_report(
     _ = hash_tracking_code(tracking_code)  # noqa: F841
 
     incident_severity, complaint_priority = map_severity(report.severity)
+    reporter_submission = report.reporter_submission or {}
 
     if report.report_type.lower() == "incident":
         # Generate reference number
@@ -203,23 +346,11 @@ async def submit_quick_report(
         count = result.scalar() or 0
         ref_number = f"INC-{year}-{count + 1:04d}"
 
-        # Create incident with reporter info for "My Reports" linkage
         incident = Incident(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            incident_type=IncidentType.OTHER,
-            severity=incident_severity,
-            status=IncidentStatus.REPORTED,
-            location=report.location,
-            department=report.department,
-            incident_date=datetime.now(timezone.utc),
-            reported_date=datetime.now(timezone.utc),
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            reporter_email=report.reporter_email if not report.is_anonymous else None,
-            source_form_id="portal_incident_v1",
-            source_type="portal",
-            tenant_id=DEFAULT_PORTAL_TENANT_ID,
+            **build_incident_portal_fields(report, incident_severity, reporter_submission),
         )
 
         db.add(incident)
@@ -243,21 +374,11 @@ async def submit_quick_report(
         count = result.scalar() or 0
         ref_number = f"COMP-{year}-{count + 1:04d}"
 
-        # Create complaint
         complaint = Complaint(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            complaint_type=ComplaintType.OTHER,
-            priority=complaint_priority,
-            status=ComplaintStatus.RECEIVED,
-            received_date=datetime.now(timezone.utc),
-            complainant_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            complainant_email=(report.reporter_email if not report.is_anonymous else None),
-            complainant_phone=(report.reporter_phone if not report.is_anonymous else None),
-            source_form_id="portal_complaint_v1",
-            source_type="portal",
-            tenant_id=DEFAULT_PORTAL_TENANT_ID,
+            **build_complaint_portal_fields(report, complaint_priority, reporter_submission),
         )
 
         db.add(complaint)
@@ -290,21 +411,11 @@ async def submit_quick_report(
         }
         rta_severity = rta_severity_map.get(report.severity.lower(), RTASeverity.DAMAGE_ONLY)
 
-        # Create RTA record
         rta = RoadTrafficCollision(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            severity=rta_severity,
-            status=RTAStatus.REPORTED,
-            location=report.location or "Not specified",
-            collision_date=datetime.now(timezone.utc),
-            reported_date=datetime.now(timezone.utc),
-            reporter_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            reporter_email=report.reporter_email if not report.is_anonymous else None,
-            driver_name=(report.reporter_name if not report.is_anonymous else "Anonymous"),
-            source_form_id="portal_rta_v1",
-            tenant_id=DEFAULT_PORTAL_TENANT_ID,
+            **build_rta_portal_fields(report, rta_severity, reporter_submission),
         )
 
         db.add(rta)
