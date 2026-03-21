@@ -527,6 +527,24 @@ export interface ThirdParty {
   is_at_fault?: boolean
 }
 
+export interface Witness {
+  name?: string
+  phone?: string
+  email?: string
+  statement?: string
+  willing_to_provide_statement?: boolean
+}
+
+export interface RunningSheetEntry {
+  id: number
+  rta_id: number
+  content: string
+  entry_type: string
+  author_id?: number
+  author_email?: string
+  created_at: string
+}
+
 export interface RTA {
   id: number
   reference_number: string
@@ -539,16 +557,34 @@ export interface RTA {
   location: string
   road_name?: string
   postcode?: string
+  collision_time?: string
   weather_conditions?: string
   road_conditions?: string
+  lighting_conditions?: string
   company_vehicle_registration?: string
+  company_vehicle_make_model?: string
+  company_vehicle_damage?: string
   driver_name?: string
+  driver_id?: number
+  driver_email?: string
+  driver_statement?: string
   driver_injured: boolean
+  driver_injury_details?: string
   police_attended: boolean
   police_reference?: string
+  police_station?: string
   insurance_notified: boolean
+  insurance_reference?: string
+  insurance_notes?: string
+  estimated_cost?: number
   third_parties?: { parties?: ThirdParty[] }
+  witnesses?: string
+  witnesses_structured?: { witnesses?: Witness[] }
+  fault_determination?: string
+  investigation_notes?: string
+  root_cause?: string
   created_at: string
+  updated_at?: string
 }
 
 export interface RTACreate {
@@ -575,11 +611,32 @@ export interface RTAUpdate {
   severity?: string
   status?: string
   location?: string
+  road_name?: string
+  postcode?: string
+  collision_time?: string
+  weather_conditions?: string
+  road_conditions?: string
+  lighting_conditions?: string
   company_vehicle_registration?: string
+  company_vehicle_make_model?: string
+  company_vehicle_damage?: string
   driver_name?: string
+  driver_id?: number
+  driver_email?: string
+  driver_statement?: string
   driver_injured?: boolean
+  driver_injury_details?: string
   police_attended?: boolean
+  police_reference?: string
+  police_station?: string
+  insurance_notified?: boolean
+  insurance_reference?: string
+  insurance_notes?: string
+  estimated_cost?: number
   third_parties?: { parties?: ThirdParty[] }
+  witnesses?: string
+  witnesses_structured?: { witnesses?: Witness[] }
+  fault_determination?: string
 }
 
 // ============ Complaint Types ============
@@ -1227,6 +1284,12 @@ export const rtasApi = {
   create: (data: RTACreate) => api.post<RTA>('/api/v1/rtas/', data),
   get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
   update: (id: number, data: RTAUpdate) => api.patch<RTA>(`/api/v1/rtas/${id}`, data),
+  listRunningSheet: (rtaId: number) =>
+    api.get<RunningSheetEntry[]>(`/api/v1/rtas/${rtaId}/running-sheet`),
+  addRunningSheetEntry: (rtaId: number, data: { content: string; entry_type?: string }) =>
+    api.post<RunningSheetEntry>(`/api/v1/rtas/${rtaId}/running-sheet`, data),
+  deleteRunningSheetEntry: (rtaId: number, entryId: number) =>
+    api.delete(`/api/v1/rtas/${rtaId}/running-sheet/${entryId}`),
 }
 
 export const complaintsApi = {

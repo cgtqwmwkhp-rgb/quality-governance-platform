@@ -19,7 +19,7 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
-from src.domain.models.rta import RoadTrafficCollision, RTAAction
+from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 
@@ -477,3 +477,101 @@ async def list_rta_investigations(
         "page_size": page_size,
         "pages": total_pages,
     }
+
+
+# ---------------------------------------------------------------------------
+# Running Sheet Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{rta_id}/running-sheet")
+async def list_running_sheet_entries(
+    rta_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List all running sheet entries for an RTA, newest first."""
+    await _get_rta_or_404(db, rta_id, current_user)
+
+    result = await db.execute(
+        select(RunningSheetEntry)
+        .where(RunningSheetEntry.rta_id == rta_id)
+        .order_by(RunningSheetEntry.created_at.desc())
+    )
+    entries = result.scalars().all()
+
+    return [
+        {
+            "id": e.id,
+            "rta_id": e.rta_id,
+            "content": e.content,
+            "entry_type": e.entry_type,
+            "author_id": e.author_id,
+            "author_email": e.author_email,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+        }
+        for e in entries
+    ]
+
+
+@router.post("/{rta_id}/running-sheet", status_code=status.HTTP_201_CREATED)
+async def add_running_sheet_entry(
+    rta_id: int,
+    payload: dict,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Add a timestamped entry to the RTA running sheet."""
+    await _get_rta_or_404(db, rta_id, current_user)
+
+    content = (payload.get("content") or "").strip()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Content is required",
+        )
+
+    entry = RunningSheetEntry(
+        rta_id=rta_id,
+        content=content,
+        entry_type=payload.get("entry_type", "note"),
+        author_id=current_user.id,
+        author_email=current_user.email,
+    )
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+
+    return {
+        "id": entry.id,
+        "rta_id": entry.rta_id,
+        "content": entry.content,
+        "entry_type": entry.entry_type,
+        "author_id": entry.author_id,
+        "author_email": entry.author_email,
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+@router.delete("/{rta_id}/running-sheet/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_running_sheet_entry(
+    rta_id: int,
+    entry_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Delete a running sheet entry."""
+    await _get_rta_or_404(db, rta_id, current_user)
+
+    result = await db.execute(
+        select(RunningSheetEntry).where(
+            RunningSheetEntry.id == entry_id,
+            RunningSheetEntry.rta_id == rta_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Running sheet entry not found")
+
+    await db.delete(entry)
+    await db.commit()

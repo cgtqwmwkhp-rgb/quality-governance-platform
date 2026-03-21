@@ -35,6 +35,7 @@ class RTABase(BaseModel):
     driver_injury_details: Optional[str] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
+    witnesses_structured: Optional[dict] = None
     police_attended: bool = False
     police_reference: Optional[str] = Field(None, max_length=100)
     police_station: Optional[str] = Field(None, max_length=200)
@@ -94,6 +95,7 @@ class RTAUpdate(BaseModel):
     driver_injury_details: Optional[str] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
+    witnesses_structured: Optional[dict] = None
     police_attended: Optional[bool] = None
     police_reference: Optional[str] = Field(None, max_length=100)
     police_station: Optional[str] = Field(None, max_length=200)
@@ -153,6 +155,7 @@ class RTAResponse(BaseModel):
     driver_injury_details: Optional[str] = None
     third_parties: Optional[dict] = None
     witnesses: Optional[str] = None
+    witnesses_structured: Optional[dict] = None
     police_attended: bool = False
     police_reference: Optional[str] = None
     police_station: Optional[str] = None

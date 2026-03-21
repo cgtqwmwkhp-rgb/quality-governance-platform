@@ -186,3 +186,34 @@ class RTAAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     def __repr__(self) -> str:
         return f"<RTAAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"
+
+
+class RunningSheetEntry(Base, TimestampMixin):
+    """Timestamped narrative entry for an RTA running sheet.
+
+    Simpler than a formal Action — just add-to-the-story notes
+    with automatic timestamps. Every entry records who wrote it and when.
+    """
+
+    __tablename__ = "rta_running_sheet_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rta_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    entry_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="note",
+    )
+    author_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True,
+    )
+    author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    rta: Mapped["RoadTrafficCollision"] = relationship("RoadTrafficCollision", backref="running_sheet_entries")
+
+    def __repr__(self) -> str:
+        return f"<RunningSheetEntry(id={self.id}, rta_id={self.rta_id})>"
