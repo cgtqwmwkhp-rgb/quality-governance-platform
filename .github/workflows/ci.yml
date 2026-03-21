@@ -1209,6 +1209,12 @@ jobs:
         working-directory: frontend
         run: npx size-limit
 
+      - name: Lighthouse CI audit
+        working-directory: frontend
+        run: npx @lhci/cli autorun
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+
   contract-tests:
     name: API Contract Tests
     runs-on: ubuntu-latest

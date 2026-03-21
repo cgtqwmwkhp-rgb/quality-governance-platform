@@ -94,3 +94,37 @@ class AuditTrailMixin:
 
     created_by_id: Mapped[Optional[int]] = mapped_column(nullable=True)
     updated_by_id: Mapped[Optional[int]] = mapped_column(nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# Data Classification (DPIA / docs/privacy/data-classification.md)
+# ---------------------------------------------------------------------------
+
+class DataClassification:
+    """Declarative data classification levels for domain models.
+
+    Apply to any SQLAlchemy model to declare its classification tier
+    per docs/privacy/data-classification.md (C1–C4).
+
+    Usage on a model class::
+
+        class Incident(Base, TimestampMixin, ...):
+            __data_classification__ = DataClassification.C4_RESTRICTED
+    """
+
+    C1_PUBLIC = "C1_PUBLIC"
+    C2_INTERNAL = "C2_INTERNAL"
+    C3_CONFIDENTIAL = "C3_CONFIDENTIAL"
+    C4_RESTRICTED = "C4_RESTRICTED"
+
+    HANDLING = {
+        "C1_PUBLIC": "No special handling required.",
+        "C2_INTERNAL": "Internal use only. No external sharing without approval.",
+        "C3_CONFIDENTIAL": "Access limited to authorised users. Encrypted at rest.",
+        "C4_RESTRICTED": "PII/special-category. Encrypted, pseudonymised on erasure, audit-logged.",
+    }
+
+
+def get_model_classification(model_class) -> str:
+    """Return the data classification level for a model, defaulting to C2."""
+    return getattr(model_class, "__data_classification__", DataClassification.C2_INTERNAL)

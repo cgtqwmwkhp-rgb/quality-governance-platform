@@ -76,18 +76,18 @@ class QGPUser(HttpUser):
 
     def on_start(self):
         """Login and get auth token at start of user session."""
-        response = self.client.post(
-            "/api/auth/login",
-            json={
-                "username": "testuser@plantexpand.com",
-                "password": "testpassword123",
-            },
-        )
-        if response.status_code == 200:
-            self.token = response.json().get("access_token")
-        else:
-            # Use a dummy token for unauthenticated testing
-            self.token = None
+        for path in ["/api/v1/auth/login", "/api/auth/login"]:
+            response = self.client.post(
+                path,
+                json={
+                    "username": "testuser@plantexpand.com",
+                    "password": "testpassword123",
+                },
+            )
+            if response.status_code == 200:
+                self.token = response.json().get("access_token")
+                return
+        self.token = None
 
     @property
     def auth_headers(self) -> dict:

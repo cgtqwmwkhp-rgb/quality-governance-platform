@@ -7,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -36,6 +36,7 @@ class RoadTrafficCollision(Base, TimestampMixin, ReferenceNumberMixin, AuditTrai
     """Road Traffic Collision model for vehicle accident management."""
 
     __tablename__ = "road_traffic_collisions"
+    __data_classification__ = DataClassification.C4_RESTRICTED
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

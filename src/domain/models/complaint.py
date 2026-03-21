@@ -7,7 +7,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 
@@ -52,6 +52,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Complaint model for external complaint management."""
 
     __tablename__ = "complaints"
+    __data_classification__ = DataClassification.C4_RESTRICTED
     __table_args__ = (
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),

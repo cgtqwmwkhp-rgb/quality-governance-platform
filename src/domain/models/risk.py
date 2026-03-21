@@ -6,7 +6,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.enums import RiskStatus
 from src.infrastructure.database import Base
 
@@ -15,6 +15,7 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     """Risk model for the risk register."""
 
     __tablename__ = "risks"
+    __data_classification__ = DataClassification.C3_CONFIDENTIAL
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

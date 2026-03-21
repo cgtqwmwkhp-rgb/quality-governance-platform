@@ -287,22 +287,18 @@ def portal_report_data():
 # ============================================================================
 
 
+_test_ref_counter = 0
+
+
 def generate_test_reference(prefix: str = "TEST") -> str:
-    """Generate a unique reference number for tests.
+    """Generate a unique, deterministic reference number for tests.
 
-    Args:
-        prefix: The prefix for the reference (default: "TEST")
-
-    Returns:
-        A unique reference string like "TEST-20260121-ABC123"
+    Uses a monotonic counter instead of random characters so that
+    test output is reproducible across runs.
     """
-    import random
-    import string
-    from datetime import datetime
-
-    date_part = datetime.now().strftime("%Y%m%d")
-    random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"{prefix}-{date_part}-{random_part}"
+    global _test_ref_counter
+    _test_ref_counter += 1
+    return f"{prefix}-20260115-{_test_ref_counter:06d}"
 
 
 # ============================================================================
