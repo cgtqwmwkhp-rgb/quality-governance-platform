@@ -14,6 +14,7 @@ from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.domain.models.assessment import AssessmentRun
+from src.domain.models.audit import AuditFinding
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
@@ -149,6 +150,18 @@ async def _resolve_owner_email(db: Any, owner_id: Optional[int]) -> Optional[str
         return None
 
 
+def _parse_capa_priority(priority: Optional[str]) -> CAPAPriority:
+    """Map a user-supplied priority string to the CAPA enum."""
+    normalized = (priority or "medium").lower()
+    if normalized == "critical":
+        return CAPAPriority.CRITICAL
+    if normalized == "high":
+        return CAPAPriority.HIGH
+    if normalized == "low":
+        return CAPAPriority.LOW
+    return CAPAPriority.MEDIUM
+
+
 def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
     """Convert a CAPA action (from assessment/induction) to unified action response."""
     capa_status = capa.status.value if hasattr(capa.status, "value") else str(capa.status)
@@ -257,6 +270,14 @@ async def _count_for_source(
         if source_type == "induction" and source_reference:
             q = q.where(CAPAAction.source_reference == source_reference)
         total += await _safe_scalar(db, q, "induction")
+
+    if not source_type or source_type == "audit_finding":
+        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.AUDIT_FINDING)
+        if status_filter:
+            q = _apply_capa_status_filter(q, status_filter)
+        if source_type == "audit_finding" and source_id:
+            q = q.where(CAPAAction.source_id == source_id)
+        total += await _safe_scalar(db, q, "audit_finding")
 
     return total
 
@@ -414,6 +435,27 @@ async def list_actions(
         except Exception:
             logger.warning("list_actions: induction query failed", exc_info=True)
 
+    if not source_type or source_type == "audit_finding":
+        try:
+            q = (
+                select(CAPAAction)
+                .where(CAPAAction.source_type == CAPASource.AUDIT_FINDING)
+                .order_by(CAPAAction.created_at.desc())
+            )
+            if status_filter:
+                q = _apply_capa_status_filter(q, status_filter)
+            if source_type == "audit_finding" and source_id:
+                q = q.where(CAPAAction.source_id == source_id)
+            if source_type:
+                q = q.offset(offset).limit(page_size)
+            else:
+                q = q.limit(_cross_source_cap)
+            result = await db.execute(q)
+            for a in result.scalars().all():
+                actions_list.append(_capa_to_response(a, "audit_finding"))
+        except Exception:
+            logger.warning("list_actions: audit_finding query failed", exc_info=True)
+
     # When listing across ALL source types, merge-sort and slice in Python
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
     if not source_type:
@@ -435,10 +477,10 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     db: DbSession,
     current_user: CurrentUser,
 ) -> ActionResponse:
-    """Create a new action for an incident, RTA, complaint, investigation, assessment, or induction."""
+    """Create a new action for an incident, RTA, complaint, investigation, assessment, induction, or audit finding."""
     src_type = action_data.source_type.lower()
 
-    # Assessment and induction use source_reference (UUID); others use source_id
+    # Assessment and induction use source_reference (UUID); others use source_id.
     if src_type in ("assessment", "induction"):
         src_id = 0
         source_ref = action_data.source_reference
@@ -542,6 +584,17 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 ),
             )
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
+    elif src_type == "audit_finding":
+        result = await db.execute(select(AuditFinding).where(AuditFinding.id == src_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=api_error(
+                    ErrorCode.ENTITY_NOT_FOUND,
+                    "Audit finding not found",
+                    details={"entity": "audit_finding", "id": src_id},
+                ),
+            )
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -550,7 +603,15 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 "Invalid source_type",
                 details={
                     "source_type": src_type,
-                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                    "allowed": [
+                        "incident",
+                        "rta",
+                        "complaint",
+                        "investigation",
+                        "assessment",
+                        "induction",
+                        "audit_finding",
+                    ],
                 },
             ),
         )
@@ -581,7 +642,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         count_result = await db.execute(select(func.count()).select_from(InvestigationAction))
         count = count_result.scalar() or 0
         ref_number = f"INVACT-{year}-{count + 1:04d}"
-    elif src_type in ("assessment", "induction"):
+    elif src_type in ("assessment", "induction", "audit_finding"):
         from src.domain.services.reference_number import ReferenceNumberService
 
         ref_number = await ReferenceNumberService.generate(db, "capa", CAPAAction)
@@ -639,15 +700,22 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             source_type=CAPASource.INDUCTION,
             source_id=None,
             source_reference=source_ref,
-            priority=(
-                CAPAPriority.MEDIUM
-                if action_data.priority == "medium"
-                else (
-                    CAPAPriority.HIGH
-                    if action_data.priority == "high"
-                    else (CAPAPriority.CRITICAL if action_data.priority == "critical" else CAPAPriority.LOW)
-                )
-            ),
+            priority=_parse_capa_priority(action_data.priority),
+            assigned_to_id=owner_id,
+            created_by_id=current_user.id,
+            due_date=parsed_due_date,
+        )
+    elif src_type == "audit_finding":
+        action = CAPAAction(
+            reference_number=ref_number,
+            title=action_data.title,
+            description=action_data.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            source_type=CAPASource.AUDIT_FINDING,
+            source_id=src_id,
+            source_reference=None,
+            priority=_parse_capa_priority(action_data.priority),
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=parsed_due_date,
@@ -709,7 +777,15 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                 "Invalid source_type",
                 details={
                     "source_type": src_type,
-                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                    "allowed": [
+                        "incident",
+                        "rta",
+                        "complaint",
+                        "investigation",
+                        "assessment",
+                        "induction",
+                        "audit_finding",
+                    ],
                 },
             ),
         )
@@ -786,7 +862,7 @@ async def get_action(
     current_user: CurrentUser,
     source_type: str = Query(
         ...,
-        description="Type of source: incident, rta, complaint, investigation, assessment, or induction",
+        description="Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
     ),
 ) -> ActionResponse:
     """Get a specific action by ID."""
@@ -812,6 +888,16 @@ async def get_action(
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_action:
             return _capa_to_response(capa_action, "induction")
+    elif src_type == "audit_finding":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+            )
+        )
+        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if capa_action:
+            return _capa_to_response(capa_action, "audit_finding")
     elif src_type == "incident":
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -856,7 +942,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     current_user: CurrentUser,
     source_type: str = Query(
         ...,
-        description="Type of source: incident, rta, complaint, investigation, assessment, or induction",
+        description="Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
     ),
 ) -> ActionResponse:
     """Update an existing action by ID.
@@ -874,6 +960,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         "investigation",
         "assessment",
         "induction",
+        "audit_finding",
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -882,7 +969,15 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 "Invalid source_type",
                 details={
                     "source_type": src_type,
-                    "allowed": ["incident", "rta", "complaint", "investigation", "assessment", "induction"],
+                    "allowed": [
+                        "incident",
+                        "rta",
+                        "complaint",
+                        "investigation",
+                        "assessment",
+                        "induction",
+                        "audit_finding",
+                    ],
                 },
             ),
         )
@@ -939,6 +1034,16 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.INDUCTION,
+            )
+        )
+        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if action:
+            source_id = action.source_id or 0
+    elif src_type == "audit_finding":
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == action_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
             )
         )
         action = cast(Optional[CAPAAction], result.scalar_one_or_none())

@@ -226,6 +226,8 @@ export default function Actions() {
     switch (type) {
       case 'incident':
         return '🔥'
+      case 'audit_finding':
+        return '📋'
       case 'audit':
         return '📋'
       case 'rta':
@@ -595,6 +597,7 @@ export default function Actions() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="incident">Incident</SelectItem>
+                      <SelectItem value="audit_finding">Audit Finding</SelectItem>
                       <SelectItem value="rta">RTA</SelectItem>
                       <SelectItem value="complaint">Complaint</SelectItem>
                     </SelectContent>
