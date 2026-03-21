@@ -1,0 +1,36 @@
+name: Nightly Contract Probe
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  contract-probe:
+    name: Contract Probe (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, production]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run required contract probe
+        run: |
+          python3 scripts/etl/contract_probe.py "${{ matrix.environment }}" REQUIRED | tee "contract-probe-${{ matrix.environment }}.log"
+
+      - name: Upload contract probe log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-probe-${{ matrix.environment }}
+          path: contract-probe-${{ matrix.environment }}.log
+          retention-days: 30

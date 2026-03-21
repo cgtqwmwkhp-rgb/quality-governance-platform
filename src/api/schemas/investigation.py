@@ -169,7 +169,7 @@ class InvestigationRunResponse(BaseModel):
     title: str
     description: Optional[str] = None
     status: str = "draft"
-    data: Dict[str, Any] = {}
+    data: Dict[str, Any] = Field(default_factory=dict)
     reference_number: str
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -238,3 +238,93 @@ class SourceRecordsResponse(BaseModel):
     page_size: int
     pages: int
     source_type: str
+
+
+class InvestigationTimelineEventResponse(BaseModel):
+    """Single investigation timeline event."""
+
+    id: int
+    event_type: str
+    field_path: Optional[str] = None
+    version: Optional[int] = None
+    created_at: datetime
+
+
+class InvestigationTimelineResponse(BaseModel):
+    """Paginated timeline response for an investigation."""
+
+    items: List[InvestigationTimelineEventResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    investigation_id: int
+
+
+class InvestigationCommentResponse(BaseModel):
+    """Single investigation comment."""
+
+    id: int
+    investigation_id: int
+    content: str
+    author_id: int
+    created_at: datetime
+    section_id: Optional[str] = None
+    field_id: Optional[str] = None
+    parent_comment_id: Optional[int] = None
+    deleted_at: Optional[datetime] = None
+
+
+class InvestigationCommentsResponse(BaseModel):
+    """Paginated investigation comments response."""
+
+    items: List[InvestigationCommentResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    investigation_id: int
+
+
+class InvestigationCustomerPackResponse(BaseModel):
+    """Single investigation customer pack metadata item."""
+
+    id: int
+    investigation_id: int
+    pack_uuid: str
+    audience: str
+    generated_at: datetime
+    checksum_sha256: Optional[str] = None
+
+
+class InvestigationPacksResponse(BaseModel):
+    """Paginated investigation customer pack metadata response."""
+
+    items: List[InvestigationCustomerPackResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    investigation_id: int
+
+
+class InvestigationPackGeneratedResponse(BaseModel):
+    """Full response returned when generating a customer pack."""
+
+    pack_id: int
+    pack_uuid: str
+    audience: str
+    investigation_id: int
+    investigation_reference: str
+    generated_at: datetime
+    content: str
+    redaction_log: List[Dict[str, Any]] = Field(default_factory=list)
+    included_assets: List[Dict[str, Any]] = Field(default_factory=list)
+    checksum_sha256: Optional[str] = None
+
+
+class InvestigationClosureValidationResponse(BaseModel):
+    """Closure-validation result for an investigation."""
+
+    can_close: bool
+    reasons: List[str]

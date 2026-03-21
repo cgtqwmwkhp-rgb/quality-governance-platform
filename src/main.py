@@ -173,9 +173,9 @@ def create_application() -> FastAPI:
         title=settings.app_name,
         description="Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management",
         version="1.0.0",
-        docs_url="/docs",  # Always enable API docs
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url=None if settings.is_production else "/docs",
+        redoc_url=None if settings.is_production else "/redoc",
+        openapi_url=None if settings.is_production else "/openapi.json",
         redirect_slashes=False,  # Disabled to prevent HTTP redirects behind HTTPS proxy
         lifespan=lifespan,
         openapi_tags=[
@@ -331,6 +331,10 @@ async def root():
     """Root endpoint: Provides basic API information and links."""
     from fastapi.responses import HTMLResponse
 
+    version_line = "Version 1.0.0 <span class=\"status\">RUNNING</span>"
+    if not settings.is_production:
+        version_line = f"Version 1.0.0 | Environment: {settings.app_env} <span class=\"status\">RUNNING</span>"
+
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -401,7 +405,7 @@ async def root():
     <body>
         <div class="container">
             <h1>{settings.app_name}</h1>
-            <div class="version">Version 1.0.0 | Environment: {settings.app_env} <span class="status">RUNNING</span></div>
+            <div class="version">{version_line}</div>
             <div class="description">
                 Enterprise-grade Quality Governance (IMS) Platform for ISO compliance management.
                 Manage standards, audits, risks, incidents, complaints, and policies in one integrated system.
@@ -410,9 +414,9 @@ async def root():
             <div class="endpoints">
                 <h2>Available Endpoints</h2>
 
-                {'<div class="endpoint"><a href="/docs">/docs</a><div class="endpoint-desc">Interactive API Documentation (Swagger UI)</div></div>' if settings.is_development else ''}
+                {'<div class="endpoint"><a href="/docs">/docs</a><div class="endpoint-desc">Interactive API Documentation (Swagger UI)</div></div>' if not settings.is_production else ''}
 
-                {'<div class="endpoint"><a href="/redoc">/redoc</a><div class="endpoint-desc">Alternative API Documentation (ReDoc)</div></div>' if settings.is_development else ''}
+                {'<div class="endpoint"><a href="/redoc">/redoc</a><div class="endpoint-desc">Alternative API Documentation (ReDoc)</div></div>' if not settings.is_production else ''}
 
                 <div class="endpoint">
                     <a href="/health">/health</a>

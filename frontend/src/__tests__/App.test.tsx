@@ -13,10 +13,6 @@ vi.mock('../lib/syncService', () => ({
   startAutoSync: vi.fn(() => vi.fn()),
 }))
 
-vi.mock('../hooks/useWebVitals', () => ({
-  useWebVitals: vi.fn(),
-}))
-
 vi.mock('../services/errorTracker', () => ({
   trackComponentError: vi.fn(),
 }))

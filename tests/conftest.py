@@ -17,6 +17,13 @@ import pytest
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+if sys.version_info < (3, 11):
+    raise RuntimeError(
+        "QGP tests require Python 3.11+. "
+        f"Detected {sys.version.split()[0]}. "
+        "Use python3.11 (or a toolchain that honors .python-version) before running pytest."
+    )
+
 
 # ============================================================================
 # Test Configuration

@@ -1595,6 +1595,7 @@ export interface CommentsResponse {
 
 export interface CustomerPackSummary {
   id: number
+  investigation_id?: number
   generated_at: string
   pack_uuid: string
   audience: string
@@ -1608,6 +1609,19 @@ export interface PacksResponse {
   page: number
   page_size: number
   investigation_id: number
+}
+
+export interface GeneratedCustomerPack {
+  pack_id: number
+  pack_uuid: string
+  audience: string
+  investigation_id: number
+  investigation_reference: string
+  generated_at: string
+  content: string
+  redaction_log: Record<string, unknown>[]
+  included_assets: Record<string, unknown>[]
+  checksum_sha256?: string
 }
 
 export interface ClosureValidation {
@@ -1707,11 +1721,12 @@ export const investigationsApi = {
    * Generate a new customer pack for an investigation.
    */
   generatePack: (id: number, audience: string) =>
-    api.post<CustomerPackSummary>(`/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`),
+    api.post<GeneratedCustomerPack>(
+      `/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`,
+    ),
 
   /**
    * Get closure validation status for an investigation.
-   * Returns OK or BLOCKED with reason codes.
    */
   getClosureValidation: (id: number) =>
     api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),

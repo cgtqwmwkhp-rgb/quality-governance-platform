@@ -58,22 +58,26 @@ jobs:
         github.event_name == 'release'
       ) && !(github.event_name == 'workflow_dispatch' && inputs.rollback == true)
     outputs:
-      approved: ${{ steps.check.outputs.approved }}
+      approved: ${{ steps.validate.outputs.approved || steps.freeze_blocked.outputs.approved }}
     
     steps:
       - name: Deploy freeze check
+        id: freeze
         env:
           FORCE_DEPLOY: ${{ github.event_name == 'workflow_dispatch' && inputs.force_deploy }}
         run: |
           set -euo pipefail
-          echo "## Deploy freeze window (UTC)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Production deploys are **frozen** from **Friday 16:00** through **Monday 09:00** (UTC), except when \`force_deploy\` is enabled on manual runs." >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Deploy freeze window (UTC)"
+            echo ""
+            echo "Production deploys are **frozen** from **Friday 16:00** through **Monday 09:00** (UTC), except when \`force_deploy\` is enabled on manual runs."
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "${FORCE_DEPLOY}" == "true" ]]; then
             echo "Deploy freeze overridden: force_deploy=true"
             echo "✅ **Deploy freeze overridden** (\`force_deploy=true\`)." >> "$GITHUB_STEP_SUMMARY"
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -92,14 +96,22 @@ jobs:
             echo "❌ BLOCKED: deploy freeze active (Fri 16:00 UTC — Mon 09:00 UTC)."
             echo "Re-run with workflow_dispatch input \`force_deploy: true\` to override."
             echo "❌ **BLOCKED** — inside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           echo "✅ Not in deploy freeze window; proceeding."
           echo "✅ **Allowed** — outside deploy freeze window." >> "$GITHUB_STEP_SUMMARY"
+          echo "allowed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Mark deploy freeze block
+        id: freeze_blocked
+        if: steps.freeze.outputs.allowed != 'true'
+        run: echo "approved=false" >> "$GITHUB_OUTPUT"
 
       - name: Validate deployment request
-        id: check
+        id: validate
+        if: steps.freeze.outputs.allowed == 'true'
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             echo "✅ Auto-deployment triggered by successful staging"
@@ -224,6 +236,11 @@ jobs:
           python3 scripts/governance/validate_release_signoff.py \
             --file docs/evidence/release_signoff.json \
             --sha "${{ env.RELEASE_SHA }}"
+
+      - name: Check out signed release SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
 
       - name: Environment guardrails
         run: |
@@ -393,7 +410,7 @@ jobs:
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
-              UAT_MODE="READ_WRITE" \
+              UAT_MODE="READ_ONLY" \
               APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
             --output none
           
@@ -510,6 +527,7 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
+          PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           az container create \
             --name qgp-revision-check-${{ github.run_number }} \
@@ -562,10 +580,10 @@ jobs:
           if echo "$CURRENT_REV" | grep -q "$EXPECTED_HEAD"; then
             echo "✅ Database revision matches expected head"
           else
-            echo "⚠️ WARNING: Database revision may not match expected head"
+            echo "❌ ERROR: Database revision does not match expected head"
             echo "Expected: $EXPECTED_HEAD"
             echo "Current output: $CURRENT_REV"
-            echo "This may indicate migration drift - manual verification recommended"
+            exit 1
           fi
 
       - name: Verify deployment - Readiness and Health checks

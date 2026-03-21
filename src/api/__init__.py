@@ -1,7 +1,5 @@
 """API module - FastAPI routes and endpoints."""
 
-import os as _os
-
 from fastapi import APIRouter
 
 from src.api.routes import (
@@ -64,6 +62,7 @@ from src.api.routes import (
     workflows,
     xml_import,
 )
+from src.core.config import settings
 
 router = APIRouter()
 
@@ -151,7 +150,7 @@ router.include_router(governance.router, prefix="/governance", tags=["Governance
 # Auditor Competence Management
 router.include_router(auditor_competence.router, tags=["Auditor Competence"])
 # CI Testing Endpoints (Staging Only) — gated by env to avoid exposure in production
-if _os.getenv("APP_ENV", "production") != "production":
+if not settings.is_production:
     router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
 router.include_router(telemetry.router, tags=["Telemetry"])

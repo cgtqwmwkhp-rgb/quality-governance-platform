@@ -123,6 +123,10 @@ export default function RTADetail() {
     assigned_to: '',
   })
 
+  const thirdPartyVehicleFieldId = (idx: number, field: string) => `rta-v2-${idx}-${field}`
+  const thirdPartyDriverFieldId = (idx: number, field: string) => `rta-d2-${idx}-${field}`
+  const witnessFieldId = (idx: number, field: string) => `rta-witness-${idx}-${field}`
+
   useEffect(() => {
     if (id) {
       loadRTA(parseInt(id))
@@ -781,26 +785,26 @@ export default function RTADetail() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Registration</label>
-                          <Input value={tp.vehicle_reg || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], vehicle_reg: e.target.value }; setEditThirdParties(u) }} placeholder="AB12 CDE" />
+                          <label htmlFor={thirdPartyVehicleFieldId(idx, 'registration')} className="block text-xs font-medium text-muted-foreground mb-1">Registration</label>
+                          <Input id={thirdPartyVehicleFieldId(idx, 'registration')} value={tp.vehicle_reg || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], vehicle_reg: e.target.value }; setEditThirdParties(u) }} placeholder="AB12 CDE" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Make / Model</label>
-                          <Input value={tp.vehicle_make_model || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], vehicle_make_model: e.target.value }; setEditThirdParties(u) }} placeholder="e.g. VW Polo" />
+                          <label htmlFor={thirdPartyVehicleFieldId(idx, 'make-model')} className="block text-xs font-medium text-muted-foreground mb-1">Make / Model</label>
+                          <Input id={thirdPartyVehicleFieldId(idx, 'make-model')} value={tp.vehicle_make_model || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], vehicle_make_model: e.target.value }; setEditThirdParties(u) }} placeholder="e.g. VW Polo" />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Damage</label>
-                        <Textarea value={tp.damage || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], damage: e.target.value }; setEditThirdParties(u) }} rows={2} placeholder="Describe damage" />
+                        <label htmlFor={thirdPartyVehicleFieldId(idx, 'damage')} className="block text-xs font-medium text-muted-foreground mb-1">Damage</label>
+                        <Textarea id={thirdPartyVehicleFieldId(idx, 'damage')} value={tp.damage || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], damage: e.target.value }; setEditThirdParties(u) }} rows={2} placeholder="Describe damage" />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Insurer</label>
-                          <Input value={tp.insurer || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], insurer: e.target.value }; setEditThirdParties(u) }} placeholder="Insurance company" />
+                          <label htmlFor={thirdPartyVehicleFieldId(idx, 'insurer')} className="block text-xs font-medium text-muted-foreground mb-1">Insurer</label>
+                          <Input id={thirdPartyVehicleFieldId(idx, 'insurer')} value={tp.insurer || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], insurer: e.target.value }; setEditThirdParties(u) }} placeholder="Insurance company" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Policy No.</label>
-                          <Input value={tp.insurer_policy_number || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], insurer_policy_number: e.target.value }; setEditThirdParties(u) }} placeholder="Policy number" />
+                          <label htmlFor={thirdPartyVehicleFieldId(idx, 'policy-number')} className="block text-xs font-medium text-muted-foreground mb-1">Policy No.</label>
+                          <Input id={thirdPartyVehicleFieldId(idx, 'policy-number')} value={tp.insurer_policy_number || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], insurer_policy_number: e.target.value }; setEditThirdParties(u) }} placeholder="Policy number" />
                         </div>
                       </div>
                     </div>
@@ -911,26 +915,26 @@ export default function RTADetail() {
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Third Party {idx + 1}</span>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
-                          <Input value={tp.name || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], name: e.target.value }; setEditThirdParties(u) }} placeholder="Full name" />
+                          <label htmlFor={thirdPartyDriverFieldId(idx, 'name')} className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
+                          <Input id={thirdPartyDriverFieldId(idx, 'name')} value={tp.name || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], name: e.target.value }; setEditThirdParties(u) }} placeholder="Full name" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Phone</label>
-                          <Input value={tp.phone || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], phone: e.target.value }; setEditThirdParties(u) }} placeholder="07xxx xxxxxx" />
+                          <label htmlFor={thirdPartyDriverFieldId(idx, 'phone')} className="block text-xs font-medium text-muted-foreground mb-1">Phone</label>
+                          <Input id={thirdPartyDriverFieldId(idx, 'phone')} value={tp.phone || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], phone: e.target.value }; setEditThirdParties(u) }} placeholder="07xxx xxxxxx" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
-                          <Input value={tp.email || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], email: e.target.value }; setEditThirdParties(u) }} placeholder="email@example.com" />
+                          <label htmlFor={thirdPartyDriverFieldId(idx, 'email')} className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
+                          <Input id={thirdPartyDriverFieldId(idx, 'email')} value={tp.email || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], email: e.target.value }; setEditThirdParties(u) }} placeholder="email@example.com" />
                         </div>
                         <div className="flex items-center gap-2 pt-5">
-                          <Switch checked={tp.injured || false} onCheckedChange={(c) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], injured: c }; setEditThirdParties(u) }} />
-                          <span className="text-sm">Injured</span>
+                          <Switch id={thirdPartyDriverFieldId(idx, 'injured')} checked={tp.injured || false} onCheckedChange={(c) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], injured: c }; setEditThirdParties(u) }} />
+                          <label htmlFor={thirdPartyDriverFieldId(idx, 'injured')} className="text-sm">Injured</label>
                         </div>
                       </div>
                       {tp.injured && (
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Injury Details</label>
-                          <Textarea value={tp.injury_details || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], injury_details: e.target.value }; setEditThirdParties(u) }} rows={2} placeholder="Describe injuries" />
+                          <label htmlFor={thirdPartyDriverFieldId(idx, 'injury-details')} className="block text-xs font-medium text-muted-foreground mb-1">Injury Details</label>
+                          <Textarea id={thirdPartyDriverFieldId(idx, 'injury-details')} value={tp.injury_details || ''} onChange={(e) => { const u = [...editThirdParties]; u[idx] = { ...u[idx], injury_details: e.target.value }; setEditThirdParties(u) }} rows={2} placeholder="Describe injuries" />
                         </div>
                       )}
                     </div>
@@ -975,25 +979,25 @@ export default function RTADetail() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
-                          <Input value={w.name || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], name: e.target.value }; setEditWitnesses(u) }} placeholder="Full name" />
+                          <label htmlFor={witnessFieldId(idx, 'name')} className="block text-xs font-medium text-muted-foreground mb-1">Name</label>
+                          <Input id={witnessFieldId(idx, 'name')} value={w.name || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], name: e.target.value }; setEditWitnesses(u) }} placeholder="Full name" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Phone</label>
-                          <Input value={w.phone || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], phone: e.target.value }; setEditWitnesses(u) }} placeholder="07xxx xxxxxx" />
+                          <label htmlFor={witnessFieldId(idx, 'phone')} className="block text-xs font-medium text-muted-foreground mb-1">Phone</label>
+                          <Input id={witnessFieldId(idx, 'phone')} value={w.phone || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], phone: e.target.value }; setEditWitnesses(u) }} placeholder="07xxx xxxxxx" />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
-                          <Input value={w.email || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], email: e.target.value }; setEditWitnesses(u) }} placeholder="email@example.com" />
+                          <label htmlFor={witnessFieldId(idx, 'email')} className="block text-xs font-medium text-muted-foreground mb-1">Email</label>
+                          <Input id={witnessFieldId(idx, 'email')} value={w.email || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], email: e.target.value }; setEditWitnesses(u) }} placeholder="email@example.com" />
                         </div>
                         <div className="flex items-center gap-2 pt-5">
-                          <Switch checked={w.willing_to_provide_statement || false} onCheckedChange={(c) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], willing_to_provide_statement: c }; setEditWitnesses(u) }} />
-                          <span className="text-sm">Willing to give statement</span>
+                          <Switch id={witnessFieldId(idx, 'statement-consent')} checked={w.willing_to_provide_statement || false} onCheckedChange={(c) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], willing_to_provide_statement: c }; setEditWitnesses(u) }} />
+                          <label htmlFor={witnessFieldId(idx, 'statement-consent')} className="text-sm">Willing to give statement</label>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Statement</label>
-                        <Textarea value={w.statement || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], statement: e.target.value }; setEditWitnesses(u) }} rows={3} placeholder="Witness account" />
+                        <label htmlFor={witnessFieldId(idx, 'statement')} className="block text-xs font-medium text-muted-foreground mb-1">Statement</label>
+                        <Textarea id={witnessFieldId(idx, 'statement')} value={w.statement || ''} onChange={(e) => { const u = [...editWitnesses]; u[idx] = { ...u[idx], statement: e.target.value }; setEditWitnesses(u) }} rows={3} placeholder="Witness account" />
                       </div>
                     </div>
                   ))}

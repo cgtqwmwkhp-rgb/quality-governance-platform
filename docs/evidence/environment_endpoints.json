@@ -94,6 +94,16 @@
         "paginated": true,
         "required_response_keys": ["items", "total", "page", "page_size"],
         "description": "RTAs list with auth enforcement"
+      },
+      "investigations": {
+        "path": "/api/v1/investigations/",
+        "method": "GET",
+        "auth_required": true,
+        "expected_status_without_auth": [401, 403],
+        "expected_status_with_auth": 200,
+        "paginated": true,
+        "required_response_keys": ["items", "total", "page", "page_size"],
+        "description": "Investigations list with auth enforcement"
       }
     },
     "enforcement": {

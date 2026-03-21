@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     def __init__(self, **kwargs):
         """Initialize settings with validation."""
         super().__init__(**kwargs)
+        if self.is_production and "uat_mode" not in self.model_fields_set:
+            self.uat_mode = "READ_ONLY"
         self._validate_production_settings()
         self._log_config_summary()
 
@@ -184,9 +186,9 @@ class Settings(BaseSettings):
     applicationinsights_connection_string: str = ""
 
     # UAT Mode for production-safe testing
-    # READ_ONLY: Block all non-idempotent operations (default for production)
-    # READ_WRITE: Allow UAT writes (for staging or with explicit override)
-    uat_mode: str = "READ_WRITE"  # Default READ_WRITE, production should set READ_ONLY
+    # READ_ONLY: Block all non-idempotent operations (default when APP_ENV=production)
+    # READ_WRITE: Allow UAT writes (default for non-production, or explicit override)
+    uat_mode: str = "READ_WRITE"
 
     # UAT admin users allowed to perform override writes (comma-separated user IDs)
     uat_admin_users: str = ""

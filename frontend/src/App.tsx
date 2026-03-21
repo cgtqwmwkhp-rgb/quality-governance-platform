@@ -1,5 +1,4 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { useWebVitals } from './hooks/useWebVitals'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { startAutoSync } from './lib/syncService'
@@ -165,7 +164,6 @@ function RouteErrorBoundary() {
 }
 
 function App() {
-  useWebVitals()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 

@@ -115,7 +115,7 @@ jobs:
       - name: Lint workflows
         uses: rhysd/actionlint@v1.7.10
         with:
-          args: ".github/workflows/ci.yml .github/workflows/deploy-staging.yml .github/workflows/deploy-production.yml"
+          args: ".github/workflows/*.yml"
 
   smoke-gate-selftest:
     name: Smoke Gate Self-Test
@@ -1031,11 +1031,7 @@ jobs:
           echo ""
           python3 scripts/check_api_path_drift.py \
             --directories tests/ \
-            --output-json api_path_drift_report.json || {
-              echo "Note: Script may need test directory adjustments"
-              echo "Creating empty report for now"
-              echo '{"violations_count": 0, "violations": []}' > api_path_drift_report.json
-            }
+            --output-json api_path_drift_report.json
           echo ""
           echo "[OK] API path drift check completed"
 
@@ -1067,6 +1063,24 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: requirements.txt
+
+      - name: Download unit test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-unit-tests
+          path: .
+
+      - name: Download integration test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-integration-tests
+          path: .
+
+      - name: Download E2E test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-e2e-tests
+          path: .
 
       - name: Generate quality trend artifact
         run: |
@@ -1424,7 +1438,7 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, config-failfast-proof, unit-tests, frontend-tests, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint]
     
     steps:
       - name: Checkout code

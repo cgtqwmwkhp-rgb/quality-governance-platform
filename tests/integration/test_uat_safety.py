@@ -41,13 +41,14 @@ class TestUATSafetyMiddlewareLogic:
         assert _is_path_always_allowed("/readyz") is True
         assert _is_path_always_allowed("/api/v1/meta/version") is True
         assert _is_path_always_allowed("/api/v1/auth/login") is True
-        assert _is_path_always_allowed("/docs") is True
+        assert _is_path_always_allowed("/") is True
 
     def test_api_paths_not_always_allowed(self):
         """Regular API paths are not in always-allowed list."""
         assert _is_path_always_allowed("/api/v1/incidents") is False
         assert _is_path_always_allowed("/api/v1/audits") is False
         assert _is_path_always_allowed("/api/v1/risks") is False
+        assert _is_path_always_allowed("/docs") is False
 
     def test_valid_override_headers(self):
         """Valid override headers pass validation."""

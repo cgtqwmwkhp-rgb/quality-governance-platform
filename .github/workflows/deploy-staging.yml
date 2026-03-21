@@ -568,6 +568,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run smoke tests
+        id: smoke
         run: |
           APP_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           echo "🧪 Running staging smoke tests"
@@ -663,11 +664,7 @@ jobs:
             echo ""
             echo "| Test | Status |"
             echo "|------|--------|"
-            echo "| Health Endpoint | ✅ |"
-            echo "| Readiness Endpoint | ✅ |"
-            echo "| Auth Guard | ✅ |"
-            echo "| OpenAPI Spec | ✅ |"
-            echo "| API Docs | ✅ |"
+            echo "| End-to-end smoke suite | ${{ steps.smoke.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Final notification

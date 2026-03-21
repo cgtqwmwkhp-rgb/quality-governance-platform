@@ -12,9 +12,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.investigation import (
     CreateFromRecordRequest,
+    InvestigationClosureValidationResponse,
+    InvestigationCommentResponse,
+    InvestigationCommentsResponse,
+    InvestigationCustomerPackResponse,
+    InvestigationPackGeneratedResponse,
+    InvestigationPacksResponse,
     InvestigationRunCreate,
     InvestigationRunListResponse,
     InvestigationRunResponse,
+    InvestigationTimelineResponse,
     InvestigationRunUpdate,
     SourceRecordItem,
     SourceRecordsResponse,
@@ -253,7 +260,7 @@ async def create_investigation(
     return investigation
 
 
-@router.get("/{investigation_id:int}/timeline")
+@router.get("/{investigation_id:int}/timeline", response_model=InvestigationTimelineResponse)
 async def get_investigation_timeline(
     investigation_id: int,
     db: DbSession,
@@ -269,7 +276,11 @@ async def get_investigation_timeline(
     if event_type:
         query = query.where(InvestigationRevisionEvent.event_type == event_type)
 
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count(InvestigationRevisionEvent.id)).where(
+        InvestigationRevisionEvent.investigation_id == investigation_id
+    )
+    if event_type:
+        count_query = count_query.where(InvestigationRevisionEvent.event_type == event_type)
     total = await db.scalar(count_query) or 0
     query = query.order_by(InvestigationRevisionEvent.created_at.desc(), InvestigationRevisionEvent.id.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -291,10 +302,11 @@ async def get_investigation_timeline(
         "page": page,
         "page_size": page_size,
         "pages": math.ceil(total / page_size) if total else 1,
+        "investigation_id": investigation_id,
     }
 
 
-@router.get("/{investigation_id:int}/comments")
+@router.get("/{investigation_id:int}/comments", response_model=InvestigationCommentsResponse)
 async def get_investigation_comments(
     investigation_id: int,
     db: DbSession,
@@ -319,25 +331,43 @@ async def get_investigation_comments(
                 },
             )
 
-    query = select(InvestigationComment).where(InvestigationComment.investigation_id == investigation_id)
+    query = select(
+        InvestigationComment.id,
+        InvestigationComment.investigation_id,
+        InvestigationComment.content,
+        InvestigationComment.author_id,
+        InvestigationComment.created_at,
+        InvestigationComment.deleted_at,
+        InvestigationComment.section_id,
+        InvestigationComment.field_id,
+        InvestigationComment.parent_comment_id,
+    ).where(InvestigationComment.investigation_id == investigation_id)
     if not include_deleted:
         query = query.where(InvestigationComment.deleted_at.is_(None))
 
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count(InvestigationComment.id)).where(
+        InvestigationComment.investigation_id == investigation_id
+    )
+    if not include_deleted:
+        count_query = count_query.where(InvestigationComment.deleted_at.is_(None))
     total = await db.scalar(count_query) or 0
     query = query.order_by(InvestigationComment.created_at.desc(), InvestigationComment.id.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
-    comments = result.scalars().all()
+    comments = result.mappings().all()
 
     return {
         "items": [
             {
-                "id": c.id,
-                "content": c.content,
-                "author_id": c.author_id,
-                "created_at": c.created_at,
-                "deleted_at": c.deleted_at,
+                "id": c["id"],
+                "investigation_id": c["investigation_id"],
+                "content": c["content"],
+                "author_id": c["author_id"],
+                "created_at": c["created_at"],
+                "section_id": c["section_id"],
+                "field_id": c["field_id"],
+                "parent_comment_id": c["parent_comment_id"],
+                "deleted_at": c["deleted_at"],
             }
             for c in comments
         ],
@@ -345,10 +375,11 @@ async def get_investigation_comments(
         "page": page,
         "page_size": page_size,
         "pages": math.ceil(total / page_size) if total else 1,
+        "investigation_id": investigation_id,
     }
 
 
-@router.get("/{investigation_id:int}/packs")
+@router.get("/{investigation_id:int}/packs", response_model=InvestigationPacksResponse)
 async def get_investigation_packs(
     investigation_id: int,
     db: DbSession,
@@ -360,7 +391,9 @@ async def get_investigation_packs(
     await _get_investigation_or_404(investigation_id, db, current_user)
 
     query = select(InvestigationCustomerPack).where(InvestigationCustomerPack.investigation_id == investigation_id)
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count(InvestigationCustomerPack.id)).where(
+        InvestigationCustomerPack.investigation_id == investigation_id
+    )
     total = await db.scalar(count_query) or 0
     query = query.order_by(InvestigationCustomerPack.created_at.desc(), InvestigationCustomerPack.id.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
@@ -371,10 +404,11 @@ async def get_investigation_packs(
         "items": [
             {
                 "id": p.id,
+                "investigation_id": p.investigation_id,
                 "pack_uuid": p.pack_uuid,
                 "audience": p.audience.value if hasattr(p.audience, "value") else str(p.audience),
                 "generated_at": p.created_at,
-                "checksum": p.checksum_sha256,
+                "checksum_sha256": p.checksum_sha256,
             }
             for p in packs
         ],
@@ -382,10 +416,14 @@ async def get_investigation_packs(
         "page": page,
         "page_size": page_size,
         "pages": math.ceil(total / page_size) if total else 1,
+        "investigation_id": investigation_id,
     }
 
 
-@router.get("/{investigation_id:int}/closure-validation")
+@router.get(
+    "/{investigation_id:int}/closure-validation",
+    response_model=InvestigationClosureValidationResponse,
+)
 async def get_closure_validation(
     investigation_id: int,
     db: DbSession,
@@ -1000,7 +1038,11 @@ class AddCommentRequest(BaseModel):
         return data
 
 
-@router.post("/{investigation_id:int}/comments", status_code=201)
+@router.post(
+    "/{investigation_id:int}/comments",
+    response_model=InvestigationCommentResponse,
+    status_code=201,
+)
 async def add_comment(
     investigation_id: int,
     payload: AddCommentRequest,
@@ -1179,7 +1221,10 @@ async def approve_investigation(
     return investigation
 
 
-@router.post("/{investigation_id:int}/customer-pack")
+@router.post(
+    "/{investigation_id:int}/customer-pack",
+    response_model=InvestigationPackGeneratedResponse,
+)
 async def generate_customer_pack(
     investigation_id: int,
     audience: str,
@@ -1287,5 +1332,5 @@ async def generate_customer_pack(
         "content": pack.content,
         "redaction_log": pack.redaction_log,
         "included_assets": pack.included_assets,
-        "checksum": pack.checksum_sha256,
+        "checksum_sha256": pack.checksum_sha256,
     }

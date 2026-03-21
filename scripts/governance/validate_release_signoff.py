@@ -67,6 +67,17 @@ def main() -> int:
         print("ERROR: governance_lead and cab_chair must be different approvers")
         return 1
 
+    for artifact_field in ("uat_report_path", "rollback_drill_path"):
+        artifact_path = Path(data[artifact_field])
+        if not artifact_path.is_absolute():
+            artifact_path = (Path.cwd() / artifact_path).resolve()
+        if not artifact_path.exists():
+            print(f"ERROR: Referenced artifact does not exist for {artifact_field}: {data[artifact_field]}")
+            return 1
+        if not artifact_path.is_file():
+            print(f"ERROR: Referenced artifact is not a file for {artifact_field}: {data[artifact_field]}")
+            return 1
+
     print("OK: release sign-off artifact valid")
     return 0
 
