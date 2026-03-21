@@ -517,8 +517,42 @@ jobs:
         run: |
           echo "Verifying database migration revision matches repo head..."
           
-          # Get expected head revision from repo
-          EXPECTED_HEAD=$(grep -r "^revision = " alembic/versions/ | grep -v down_rev | tail -1 | sed "s/.*revision = '\([^']*\)'.*/\1/")
+          # Resolve the actual Alembic head from the revision graph instead of
+          # relying on file ordering, which can drift from the active head.
+          EXPECTED_HEAD=$(python3 - <<'PY'
+          import ast
+          from pathlib import Path
+
+          versions_dir = Path("alembic/versions")
+          revisions: set[str] = set()
+          down_revisions: set[str] = set()
+
+          for path in versions_dir.glob("*.py"):
+              tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+              for node in tree.body:
+                  if not isinstance(node, ast.Assign):
+                      continue
+                  for target in node.targets:
+                      if not isinstance(target, ast.Name):
+                          continue
+                      if target.id == "revision" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                          revisions.add(node.value.value)
+                      elif target.id == "down_revision":
+                          value = node.value
+                          if isinstance(value, ast.Constant):
+                              if isinstance(value.value, str):
+                                  down_revisions.add(value.value)
+                          elif isinstance(value, ast.Tuple):
+                              for elt in value.elts:
+                                  if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                      down_revisions.add(elt.value)
+
+          heads = sorted(revisions - down_revisions)
+          if len(heads) != 1:
+              raise SystemExit(f"Expected exactly 1 Alembic head, found {len(heads)}: {heads}")
+          print(heads[0])
+          PY
+          )
           echo "Expected head revision: $EXPECTED_HEAD"
           
           # Create a container to check current revision
