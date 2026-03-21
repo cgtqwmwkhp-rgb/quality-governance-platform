@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "20260321_run_sheet"
-down_revision: Union[str, None] = "20260320_veh_reg"
+down_revision: Union[str, None] = "20260320_drivers"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
