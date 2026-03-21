@@ -816,6 +816,7 @@ export interface AuditFinding {
   id: number
   reference_number: string
   run_id: number
+  question_id?: number
   title: string
   description: string
   severity: string
@@ -1321,7 +1322,8 @@ export interface ActionCreate {
   priority?: string
   due_date?: string
   source_type: string
-  source_id: number
+  source_id?: number
+  source_reference?: string
   assigned_to_email?: string
 }
 

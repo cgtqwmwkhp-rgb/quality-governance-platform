@@ -345,4 +345,6 @@ class TestAuditsAPI:
         )
 
         assert response.status_code == 409
-        assert "modified by another user" in response.json()["detail"]
+        body = response.json()
+        message = body.get("detail") or body.get("error", {}).get("message", "")
+        assert "modified by another user" in message
