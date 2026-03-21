@@ -512,6 +512,21 @@ export interface IncidentUpdate {
 }
 
 // ============ RTA Types ============
+export interface ThirdParty {
+  name?: string
+  contact?: string
+  phone?: string
+  email?: string
+  vehicle_reg?: string
+  vehicle_make_model?: string
+  damage?: string
+  injured?: boolean
+  injury_details?: string
+  insurer?: string
+  insurer_policy_number?: string
+  is_at_fault?: boolean
+}
+
 export interface RTA {
   id: number
   reference_number: string
@@ -532,6 +547,7 @@ export interface RTA {
   police_attended: boolean
   police_reference?: string
   insurance_notified: boolean
+  third_parties?: { parties?: ThirdParty[] }
   created_at: string
 }
 
@@ -550,6 +566,7 @@ export interface RTACreate {
   driver_name?: string
   driver_injured?: boolean
   police_attended?: boolean
+  third_parties?: { parties?: ThirdParty[] }
 }
 
 export interface RTAUpdate {
@@ -562,6 +579,7 @@ export interface RTAUpdate {
   driver_name?: string
   driver_injured?: boolean
   police_attended?: boolean
+  third_parties?: { parties?: ThirdParty[] }
 }
 
 // ============ Complaint Types ============

@@ -728,6 +728,81 @@ export default function RTADetail() {
                   </div>
                 </div>
               )}
+
+              {/* Third Party / Other Vehicle Details */}
+              {(() => {
+                const tp = rta.third_parties as { parties?: Array<{
+                  name?: string; phone?: string; vehicle_reg?: string;
+                  vehicle_make_model?: string; damage?: string;
+                  insurer?: string; insurer_policy_number?: string; injured?: boolean;
+                }> } | null | undefined
+                const parties = tp?.parties
+                if (!parties || parties.length === 0) return null
+                return (
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="text-sm font-semibold text-foreground mb-3">
+                      Other Vehicle &amp; Driver Details
+                    </h4>
+                    {parties.map((party, idx) => (
+                      <div key={idx} className="border rounded-lg p-3 mb-2 bg-muted/30">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Third Party {idx + 1}
+                        </span>
+                        <div className="grid grid-cols-2 gap-3 mt-2">
+                          {party.name && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Name</span>
+                              <p className="text-sm text-foreground">{party.name}</p>
+                            </div>
+                          )}
+                          {party.phone && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Phone</span>
+                              <p className="text-sm text-foreground">{party.phone}</p>
+                            </div>
+                          )}
+                          {party.vehicle_reg && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Vehicle Reg</span>
+                              <p className="text-sm text-foreground font-mono">{party.vehicle_reg}</p>
+                            </div>
+                          )}
+                          {party.vehicle_make_model && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Make / Model</span>
+                              <p className="text-sm text-foreground">{party.vehicle_make_model}</p>
+                            </div>
+                          )}
+                          {party.damage && (
+                            <div className="col-span-2">
+                              <span className="text-xs text-muted-foreground">Damage</span>
+                              <p className="text-sm text-foreground">{party.damage}</p>
+                            </div>
+                          )}
+                          {party.insurer && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Insurer</span>
+                              <p className="text-sm text-foreground">{party.insurer}</p>
+                            </div>
+                          )}
+                          {party.insurer_policy_number && (
+                            <div>
+                              <span className="text-xs text-muted-foreground">Policy No.</span>
+                              <p className="text-sm text-foreground">{party.insurer_policy_number}</p>
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-xs text-muted-foreground">Injured</span>
+                            <p className="text-sm text-foreground">
+                              {party.injured ? 'Yes' : 'No'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
 

@@ -5,7 +5,7 @@ import { trackError } from '../utils/errorTracker'
 import { Plus, Car, Search, Loader2, AlertCircle, RefreshCw } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
-import { rtasApi, RTA, RTACreate, getApiErrorMessage } from '../api/client'
+import { rtasApi, RTA, RTACreate, ThirdParty, getApiErrorMessage } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
@@ -40,6 +40,16 @@ export default function RTAs() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const emptyThirdParty: ThirdParty = {
+    name: '',
+    vehicle_reg: '',
+    vehicle_make_model: '',
+    phone: '',
+    insurer: '',
+    insurer_policy_number: '',
+    injured: false,
+    damage: '',
+  }
   const [formData, setFormData] = useState<RTACreate>({
     title: '',
     description: '',
@@ -52,6 +62,7 @@ export default function RTAs() {
     police_attended: false,
     driver_injured: false,
   })
+  const [thirdParties, setThirdParties] = useState<ThirdParty[]>([{ ...emptyThirdParty }])
 
   useEffect(() => {
     loadRtas()
@@ -115,10 +126,15 @@ export default function RTAs() {
     setCreating(true)
     setCreateError(null)
     try {
+      const nonEmptyParties = thirdParties.filter(
+        (p) => p.name || p.vehicle_reg || p.phone,
+      )
       await rtasApi.create({
         ...formData,
         collision_date: new Date(formData.collision_date).toISOString(),
         reported_date: new Date(formData.reported_date).toISOString(),
+        third_parties:
+          nonEmptyParties.length > 0 ? { parties: nonEmptyParties } : undefined,
       })
       setShowModal(false)
       setFormData({
@@ -133,6 +149,7 @@ export default function RTAs() {
         police_attended: false,
         driver_injured: false,
       })
+      setThirdParties([{ ...emptyThirdParty }])
       loadRtas()
     } catch (err) {
       trackError(err, { component: 'RTAs', action: 'create' })
@@ -494,6 +511,187 @@ export default function RTAs() {
                 />
                 <span className="text-sm text-foreground">{t('rtas.form.driver_injured')}</span>
               </div>
+            </div>
+
+            {/* Other Vehicle / Third Party Section */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Other Vehicle &amp; Driver Details
+                </h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setThirdParties([...thirdParties, { ...emptyThirdParty }])
+                  }
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Add Party
+                </Button>
+              </div>
+
+              {thirdParties.map((party, idx) => (
+                <div
+                  key={idx}
+                  className="border rounded-lg p-4 mb-3 space-y-3 bg-muted/30"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Third Party {idx + 1}
+                    </span>
+                    {thirdParties.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive h-6 px-2 text-xs"
+                        onClick={() =>
+                          setThirdParties(thirdParties.filter((_, i) => i !== idx))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Driver / Contact Name
+                      </label>
+                      <Input
+                        type="text"
+                        value={party.name || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = { ...updated[idx], name: e.target.value }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="Full name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Phone Number
+                      </label>
+                      <Input
+                        type="tel"
+                        value={party.phone || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = { ...updated[idx], phone: e.target.value }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="07xxx xxxxxx"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Vehicle Registration
+                      </label>
+                      <Input
+                        type="text"
+                        value={party.vehicle_reg || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = { ...updated[idx], vehicle_reg: e.target.value }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="AB12 CDE"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Vehicle Make / Model
+                      </label>
+                      <Input
+                        type="text"
+                        value={party.vehicle_make_model || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = {
+                            ...updated[idx],
+                            vehicle_make_model: e.target.value,
+                          }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="e.g. Ford Transit"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">
+                      Damage Description
+                    </label>
+                    <Input
+                      type="text"
+                      value={party.damage || ''}
+                      onChange={(e) => {
+                        const updated = [...thirdParties]
+                        updated[idx] = { ...updated[idx], damage: e.target.value }
+                        setThirdParties(updated)
+                      }}
+                      placeholder="Describe damage to other vehicle"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Insurer
+                      </label>
+                      <Input
+                        type="text"
+                        value={party.insurer || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = { ...updated[idx], insurer: e.target.value }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="Insurance company"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Policy Number
+                      </label>
+                      <Input
+                        type="text"
+                        value={party.insurer_policy_number || ''}
+                        onChange={(e) => {
+                          const updated = [...thirdParties]
+                          updated[idx] = {
+                            ...updated[idx],
+                            insurer_policy_number: e.target.value,
+                          }
+                          setThirdParties(updated)
+                        }}
+                        placeholder="Policy number"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={party.injured || false}
+                      onCheckedChange={(checked) => {
+                        const updated = [...thirdParties]
+                        updated[idx] = { ...updated[idx], injured: checked }
+                        setThirdParties(updated)
+                      }}
+                    />
+                    <span className="text-sm text-foreground">
+                      Third party injured
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <DialogFooter className="gap-3 pt-4">
