@@ -122,7 +122,7 @@ const PRESET_PROMPTS = [
 // ============================================================================
 
 const generateTemplateWithAI = async (prompt: string): Promise<GeneratedSection[]> => {
-  const response = await fetch('/api/v1/ai/generate-template', {
+  const response = await fetch('/api/v1/ai-templates/generate-template', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt }),

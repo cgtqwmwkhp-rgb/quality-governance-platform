@@ -53,6 +53,55 @@ class GeminiAIService:
         return self._client
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
+    async def prompt_to_template(self, prompt_text: str) -> list[dict]:
+        """Generate template sections directly from a freeform prompt."""
+        client = self._get_client()
+        if not client:
+            raise RuntimeError("Gemini AI template generation is unavailable")
+
+        prompt = f"""Generate a structured audit template from this prompt:
+
+"{prompt_text}"
+
+Return valid JSON as an array of sections using this exact shape:
+[
+  {{
+    "id": "section-1",
+    "title": "Section title",
+    "description": "Short section description",
+    "questions": [
+      {{
+        "id": "question-1",
+        "text": "Question text",
+        "type": "yes_no|yes_no_na|pass_fail|text_short|text_long|numeric|date|scale_1_5|scale_1_10|signature|multi_choice|checklist",
+        "required": true,
+        "weight": 1,
+        "riskLevel": "critical|high|medium|low|observation",
+        "evidenceRequired": false,
+        "isoClause": null,
+        "guidance": "Assessor guidance"
+      }}
+    ]
+  }}
+]
+
+Rules:
+- Use 3 to 8 sections depending on the prompt complexity.
+- Prefer yes/no, yes/no/na, pass/fail, scale, and text questions that can be executed in the existing builder.
+- Keep IDs stable-looking strings.
+- Only return JSON, no markdown fences."""
+
+        def _run():
+            response = client.generate_content(prompt)
+            return response.text
+
+        text = await _gemini_cb.call(asyncio.to_thread, _run)
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+        return json.loads(text)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)
     async def document_to_template(self, file_content: bytes, filename: str, asset_type: Optional[str] = None) -> dict:
         """Convert an uploaded document (PDF, image, etc.) into a structured audit template.
 

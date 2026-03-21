@@ -64,6 +64,12 @@ class GapAnalysisRequest(BaseModel):
     asset_type: str = Field(..., min_length=1, max_length=200)
 
 
+class PromptTemplateRequest(BaseModel):
+    """Request for freeform prompt-to-template generation."""
+
+    prompt: str = Field(..., min_length=5, max_length=4000)
+
+
 # ============ Endpoints ============
 
 
@@ -100,6 +106,23 @@ async def from_document(
         filename=file.filename or "document",
         asset_type=asset_type,
     )
+
+
+@router.post("/generate-template")
+async def generate_template(
+    request: PromptTemplateRequest,
+    db: DbSession,
+    user: CurrentUser,
+) -> list[dict]:
+    """Generate template sections from a freeform prompt."""
+    service = GeminiAIService()
+    try:
+        return await service.prompt_to_template(request.prompt)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI template generation unavailable: {exc}",
+        ) from exc
 
 
 @router.post("/web-enrich")
