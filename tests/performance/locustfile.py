@@ -76,7 +76,7 @@ class QGPUser(HttpUser):
 
     def on_start(self):
         """Login and get auth token at start of user session."""
-        for path in ["/api/v1/auth/login", "/api/auth/login"]:
+        for path in ["/api/v1/auth/login", "/api/v1/auth/login"]:
             response = self.client.post(
                 path,
                 json={
@@ -109,7 +109,7 @@ class QGPUser(HttpUser):
     def get_dashboard(self):
         """Load main dashboard data."""
         with self.client.get(
-            "/api/incidents?page=1&page_size=10",
+            "/api/v1/incidents?page=1&page_size=10",
             headers=self.auth_headers,
             catch_response=True,
         ) as response:
@@ -125,9 +125,9 @@ class QGPUser(HttpUser):
         """List incidents with pagination."""
         page = random.randint(1, 5)
         self.client.get(
-            f"/api/incidents?page={page}&page_size=20",
+            f"/api/v1/incidents?page={page}&page_size=20",
             headers=self.auth_headers,
-            name="/api/incidents?page=[n]",
+            name="/api/v1/incidents?page=[n]",
         )
 
     @task(3)
@@ -141,7 +141,7 @@ class QGPUser(HttpUser):
             "location": f"Test Location {random.randint(1, 100)}",
         }
         self.client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json=incident_data,
             headers=self.auth_headers,
         )
@@ -151,9 +151,9 @@ class QGPUser(HttpUser):
         """Get incident details."""
         incident_id = random.randint(1, 100)
         with self.client.get(
-            f"/api/incidents/{incident_id}",
+            f"/api/v1/incidents/{incident_id}",
             headers=self.auth_headers,
-            name="/api/incidents/[id]",
+            name="/api/v1/incidents/[id]",
             catch_response=True,
         ) as response:
             if response.status_code == 404:
@@ -167,7 +167,7 @@ class QGPUser(HttpUser):
     def list_audits(self):
         """List audits."""
         self.client.get(
-            "/api/audits/runs?page=1&page_size=20",
+            "/api/v1/audits/runs?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -175,7 +175,7 @@ class QGPUser(HttpUser):
     def list_audit_templates(self):
         """List audit templates."""
         self.client.get(
-            "/api/audit-templates?page=1&page_size=20",
+            "/api/v1/audit-templates?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -183,7 +183,7 @@ class QGPUser(HttpUser):
     def get_audit_findings(self):
         """Get audit findings."""
         self.client.get(
-            "/api/audits/findings?page=1&page_size=50",
+            "/api/v1/audits/findings?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -195,7 +195,7 @@ class QGPUser(HttpUser):
     def list_risks(self):
         """List risks."""
         self.client.get(
-            "/api/risks?page=1&page_size=20",
+            "/api/v1/risks?page=1&page_size=20",
             headers=self.auth_headers,
         )
 
@@ -203,7 +203,7 @@ class QGPUser(HttpUser):
     def get_risk_heatmap(self):
         """Get risk heat map data."""
         self.client.get(
-            "/api/risk-register/heat-map",
+            "/api/v1/risk-register/heat-map",
             headers=self.auth_headers,
         )
 
@@ -215,7 +215,7 @@ class QGPUser(HttpUser):
     def list_standards(self):
         """List compliance standards."""
         self.client.get(
-            "/api/standards",
+            "/api/v1/standards",
             headers=self.auth_headers,
         )
 
@@ -223,7 +223,7 @@ class QGPUser(HttpUser):
     def get_compliance_evidence(self):
         """Get compliance evidence."""
         self.client.get(
-            "/api/compliance/evidence?page=1&page_size=50",
+            "/api/v1/compliance/evidence?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -234,7 +234,7 @@ class QGPUser(HttpUser):
     @task(6)
     def portal_stats(self):
         """Get portal statistics."""
-        self.client.get("/api/portal/stats")
+        self.client.get("/api/v1/portal/stats")
 
     @task(4)
     def submit_quick_report(self):
@@ -247,9 +247,9 @@ class QGPUser(HttpUser):
             "is_anonymous": random.choice([True, False]),
         }
         self.client.post(
-            "/api/portal/report",
+            "/api/v1/portal/report",
             json=report_data,
-            name="/api/portal/report",
+            name="/api/v1/portal/report",
         )
 
     @task(3)
@@ -258,8 +258,8 @@ class QGPUser(HttpUser):
         ref = f"INC-{datetime.now().year}-{random.randint(1, 9999):04d}"
         tracking_code = random_string(12)
         with self.client.get(
-            f"/api/portal/track/{ref}?tracking_code={tracking_code}",
-            name="/api/portal/track/[ref]",
+            f"/api/v1/portal/track/{ref}?tracking_code={tracking_code}",
+            name="/api/v1/portal/track/[ref]",
             catch_response=True,
         ) as response:
             if response.status_code == 404:
@@ -274,16 +274,16 @@ class QGPUser(HttpUser):
         """Perform global search."""
         query = random.choice(["safety", "incident", "audit", "risk", "compliance"])
         self.client.get(
-            f"/api/search?q={query}",
+            f"/api/v1/search?q={query}",
             headers=self.auth_headers,
-            name="/api/search?q=[query]",
+            name="/api/v1/search?q=[query]",
         )
 
     @task(2)
     def get_analytics(self):
         """Get analytics data."""
         self.client.get(
-            "/api/analytics/summary",
+            "/api/v1/analytics/summary",
             headers=self.auth_headers,
         )
 
@@ -298,7 +298,7 @@ class AdminUser(HttpUser):
     def on_start(self):
         """Login as admin."""
         response = self.client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={
                 "username": "admin@plantexpand.com",
                 "password": "adminpassword123",
@@ -317,7 +317,7 @@ class AdminUser(HttpUser):
     def list_users(self):
         """List all users."""
         self.client.get(
-            "/api/users?page=1&page_size=50",
+            "/api/v1/users?page=1&page_size=50",
             headers=self.auth_headers,
         )
 
@@ -325,7 +325,7 @@ class AdminUser(HttpUser):
     def get_audit_trail(self):
         """Get audit trail logs."""
         self.client.get(
-            "/api/audit-trail?page=1&page_size=100",
+            "/api/v1/audit-trail?page=1&page_size=100",
             headers=self.auth_headers,
         )
 
@@ -333,7 +333,7 @@ class AdminUser(HttpUser):
     def get_workflow_stats(self):
         """Get workflow statistics."""
         self.client.get(
-            "/api/workflows/stats",
+            "/api/v1/workflows/stats",
             headers=self.auth_headers,
         )
 
@@ -341,7 +341,7 @@ class AdminUser(HttpUser):
     def generate_report(self):
         """Generate analytics report."""
         self.client.post(
-            "/api/analytics/reports/generate",
+            "/api/v1/analytics/reports/generate",
             json={
                 "report_type": "incident_summary",
                 "date_from": (datetime.now() - timedelta(days=30)).isoformat(),
@@ -374,12 +374,12 @@ class PortalUser(HttpUser):
             "is_anonymous": False,
             "reporter_name": f"Test User {random.randint(1, 100)}",
         }
-        self.client.post("/api/portal/report", json=data)
+        self.client.post("/api/v1/portal/report", json=data)
 
     @task(5)
     def track_my_reports(self):
         """Track submitted reports."""
-        self.client.get("/api/portal/my-reports")
+        self.client.get("/api/v1/portal/my-reports")
 
     @task(3)
     def sos_emergency(self):

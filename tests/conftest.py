@@ -125,7 +125,7 @@ def auth_token(client, test_config) -> Optional[str]:
             {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
             {"username": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
         ]
-        paths = ["/api/v1/auth/login", "/api/auth/login"]
+        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
         for path in paths:
             for payload in payloads:
                 response = client.post(path, json=payload)
@@ -152,7 +152,7 @@ def admin_token(client, test_config) -> Optional[str]:
             {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
             {"username": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
         ]
-        paths = ["/api/v1/auth/login", "/api/auth/login"]
+        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
         for path in paths:
             for payload in payloads:
                 response = client.post(path, json=payload)

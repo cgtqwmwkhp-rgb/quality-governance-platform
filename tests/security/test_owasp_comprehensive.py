@@ -46,7 +46,7 @@ def client():
 def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
@@ -110,7 +110,7 @@ class TestA01BrokenAccessControl:
     def test_cors_not_wildcard(self, client):
         """CORS is not configured to allow all origins."""
         response = client.options(
-            "/api/health",
+            "/api/v1/health",
             headers={"Origin": "https://malicious-site.com"},
         )
 
@@ -124,7 +124,7 @@ class TestA01BrokenAccessControl:
             pytest.skip("Auth required")
 
         # TRACE and TRACK should be disabled
-        response = client.request("TRACE", "/api/health")
+        response = client.request("TRACE", "/api/v1/health")
         assert response.status_code in [405, 404]
 
 
@@ -148,7 +148,7 @@ class TestA02CryptographicFailures:
         if not auth_headers:
             pytest.skip("Auth required")
 
-        response = client.get("/api/users/me", headers=auth_headers)
+        response = client.get("/api/v1/users/me", headers=auth_headers)
         if response.status_code == 200:
             data = response.json()
             data_str = json.dumps(data).lower()
@@ -157,7 +157,7 @@ class TestA02CryptographicFailures:
     def test_tokens_not_logged(self, client):
         """Auth tokens are not in error responses."""
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={"username": "test@test.com", "password": "wrong"},
         )
 
@@ -216,7 +216,7 @@ class TestA03Injection:
 
         for payload in sql_payloads:
             response = client.get(
-                f"/api/incidents?search={payload}",
+                f"/api/v1/incidents?search={payload}",
                 headers=auth_headers,
             )
             # Should not cause server error
@@ -231,7 +231,7 @@ class TestA03Injection:
 
         for payload in sql_payloads:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": payload,
@@ -257,7 +257,7 @@ class TestA03Injection:
 
         for payload in cmd_payloads:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": f"Test {payload}",
@@ -281,7 +281,7 @@ class TestA03Injection:
 
         for payload in xss_payloads:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": payload,
@@ -317,7 +317,7 @@ class TestA04InsecureDesign:
         # Make multiple rapid login attempts
         for _ in range(15):
             client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={"username": "test@test.com", "password": "wrong"},
             )
 
@@ -331,7 +331,7 @@ class TestA04InsecureDesign:
 
         # Try to set admin flag via mass assignment
         response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={
                 "title": "Test",
                 "description": "Test",
@@ -362,7 +362,7 @@ class TestA05SecurityMisconfiguration:
 
     def test_no_stack_traces_in_errors(self, client):
         """Stack traces are not exposed in error responses."""
-        response = client.get("/api/nonexistent-endpoint")
+        response = client.get("/api/v1/nonexistent-endpoint")
 
         error_text = response.text.lower()
         assert "traceback" not in error_text
@@ -382,7 +382,7 @@ class TestA05SecurityMisconfiguration:
         if not auth_headers:
             pytest.skip("Auth required")
 
-        response = client.get("/api/incidents/999999999", headers=auth_headers)
+        response = client.get("/api/v1/incidents/999999999", headers=auth_headers)
 
         if response.status_code == 404:
             error_text = response.text
@@ -498,7 +498,7 @@ class TestA08IntegrityFailures:
 
         for payload in malformed_json:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 content=payload,
                 headers={"Content-Type": "application/json"},
             )
@@ -513,7 +513,7 @@ class TestA08IntegrityFailures:
             "severity": "low",
         }
 
-        response = client.post("/api/portal/report", json=large_payload)
+        response = client.post("/api/v1/portal/report", json=large_payload)
         # Should be rejected or truncated
         assert response.status_code in [404, 413, 422, 200, 201]
 
@@ -591,13 +591,13 @@ class TestAdditionalSecurity:
         ]
 
         for payload in traversal_payloads:
-            response = client.get(f"/api/documents/{payload}", headers=auth_headers)
+            response = client.get(f"/api/v1/documents/{payload}", headers=auth_headers)
             assert response.status_code in [400, 404, 422]
 
     def test_content_type_validation(self, client):
         """Content-Type is validated."""
         response = client.post(
-            "/api/portal/report",
+            "/api/v1/portal/report",
             content="title=test&description=test",
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )

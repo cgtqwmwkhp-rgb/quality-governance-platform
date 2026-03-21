@@ -29,7 +29,7 @@ export interface ProgressBarProps
   max?: number
 }
 
-const ProgressBar = React.forwardRef<HTMLProgressElement, ProgressBarProps>(
+const ProgressBar = React.forwardRef<HTMLDivElement, ProgressBarProps>(
   ({ className, value = 0, max = 100, variant, size, ...props }, ref) => {
     const safeMax = max > 0 ? max : 100
     const clamped = Math.min(Math.max(value, 0), safeMax)
@@ -37,18 +37,14 @@ const ProgressBar = React.forwardRef<HTMLProgressElement, ProgressBarProps>(
 
     return (
       <div
+        ref={ref}
+        role="progressbar"
+        aria-valuenow={clamped}
+        aria-valuemin={0}
+        aria-valuemax={safeMax}
         className={cn(progressBarTrackVariants({ variant, size }), className)}
         {...props}
       >
-        <progress
-          ref={ref}
-          className="absolute inset-0 h-full w-full cursor-default opacity-0"
-          value={clamped}
-          max={safeMax}
-          aria-valuenow={clamped}
-          aria-valuemin={0}
-          aria-valuemax={safeMax}
-        />
         <div
           data-progress-fill
           className="pointer-events-none absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-out"

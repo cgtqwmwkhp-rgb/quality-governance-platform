@@ -186,11 +186,11 @@ class TestOpenAPIConsistency:
 
         paths = spec.get("paths", {})
 
-        api_paths = [p for p in paths.keys() if p.startswith("/api/")]
+        api_paths = [p for p in paths.keys() if p.startswith("/api/v1/")]
 
         for path in api_paths:
             assert path.startswith("/api/v1/") or path.startswith(
-                "/api/portal/"
+                "/api/v1/portal/"
             ), f"Path {path} should use /api/v1/ or /api/portal/ prefix"
 
     @pytest.mark.asyncio

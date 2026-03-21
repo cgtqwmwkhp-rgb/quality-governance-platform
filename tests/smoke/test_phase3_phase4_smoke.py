@@ -32,31 +32,31 @@ class TestWorkflowCenterSmoke:
 
     def test_workflow_templates_endpoint_available(self, auth_client: Any) -> None:
         """Verify workflow templates endpoint is accessible."""
-        response = auth_client.get("/api/workflows/templates")
+        response = auth_client.get("/api/v1/workflows/templates")
         assert response.status_code in [200, 404]
         assert "templates" in response.json()
 
     def test_workflow_instances_endpoint_available(self, auth_client: Any) -> None:
         """Verify workflow instances endpoint is accessible."""
-        response = auth_client.get("/api/workflows/instances")
+        response = auth_client.get("/api/v1/workflows/instances")
         assert response.status_code in [200, 404]
         assert "instances" in response.json()
 
     def test_pending_approvals_endpoint_available(self, auth_client: Any) -> None:
         """Verify pending approvals endpoint is accessible."""
-        response = auth_client.get("/api/workflows/approvals/pending")
+        response = auth_client.get("/api/v1/workflows/approvals/pending")
         assert response.status_code in [200, 404]
         assert "approvals" in response.json()
 
     def test_delegations_endpoint_available(self, auth_client: Any) -> None:
         """Verify delegations endpoint is accessible."""
-        response = auth_client.get("/api/workflows/delegations")
+        response = auth_client.get("/api/v1/workflows/delegations")
         assert response.status_code in [200, 404]
         assert "delegations" in response.json()
 
     def test_workflow_stats_endpoint_available(self, auth_client: Any) -> None:
         """Verify workflow stats endpoint is accessible."""
-        response = auth_client.get("/api/workflows/stats")
+        response = auth_client.get("/api/v1/workflows/stats")
         assert response.status_code in [200, 404]
         stats = response.json()
         assert "active_workflows" in stats
@@ -69,7 +69,7 @@ class TestWorkflowCenterSmoke:
             "entity_type": "action",
             "entity_id": f"SMOKE-{pytest.importorskip('time').time()}",
         }
-        response = auth_client.post("/api/workflows/start", json=payload)
+        response = auth_client.post("/api/v1/workflows/start", json=payload)
         assert response.status_code in [200, 404]
         assert "id" in response.json()
 
@@ -79,25 +79,25 @@ class TestComplianceAutomationSmoke:
 
     def test_regulatory_updates_endpoint_available(self, auth_client: Any) -> None:
         """Verify regulatory updates endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/regulatory-updates")
+        response = auth_client.get("/api/v1/compliance-automation/regulatory-updates")
         assert response.status_code in [200, 404]
         assert "updates" in response.json()
 
     def test_gap_analyses_endpoint_available(self, auth_client: Any) -> None:
         """Verify gap analyses endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/gap-analyses")
+        response = auth_client.get("/api/v1/compliance-automation/gap-analyses")
         assert response.status_code in [200, 404]
         assert "analyses" in response.json()
 
     def test_certificates_endpoint_available(self, auth_client: Any) -> None:
         """Verify certificates endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/certificates")
+        response = auth_client.get("/api/v1/compliance-automation/certificates")
         assert response.status_code in [200, 404]
         assert "certificates" in response.json()
 
     def test_certificates_summary_endpoint_available(self, auth_client: Any) -> None:
         """Verify certificate expiry summary endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/certificates/expiring-summary")
+        response = auth_client.get("/api/v1/compliance-automation/certificates/expiring-summary")
         assert response.status_code in [200, 404]
         summary = response.json()
         assert "expired" in summary
@@ -105,13 +105,13 @@ class TestComplianceAutomationSmoke:
 
     def test_scheduled_audits_endpoint_available(self, auth_client: Any) -> None:
         """Verify scheduled audits endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/scheduled-audits")
+        response = auth_client.get("/api/v1/compliance-automation/scheduled-audits")
         assert response.status_code in [200, 404]
         assert "audits" in response.json()
 
     def test_compliance_score_endpoint_available(self, auth_client: Any) -> None:
         """Verify compliance score endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/score")
+        response = auth_client.get("/api/v1/compliance-automation/score")
         assert response.status_code in [200, 404]
         score = response.json()
         assert "overall_score" in score
@@ -119,14 +119,14 @@ class TestComplianceAutomationSmoke:
 
     def test_compliance_trend_endpoint_available(self, auth_client: Any) -> None:
         """Verify compliance trend endpoint is accessible."""
-        response = auth_client.get("/api/compliance-automation/score/trend")
+        response = auth_client.get("/api/v1/compliance-automation/score/trend")
         assert response.status_code in [200, 404]
         assert "trend" in response.json()
 
     def test_riddor_check_endpoint_available(self, auth_client: Any) -> None:
         """Verify RIDDOR check endpoint is accessible."""
         payload = {"injury_type": "fracture", "fatality": False}
-        response = auth_client.post("/api/compliance-automation/riddor/check", json=payload)
+        response = auth_client.post("/api/v1/compliance-automation/riddor/check", json=payload)
         assert response.status_code in [200, 404]
         assert "is_riddor" in response.json()
 
@@ -165,29 +165,29 @@ class TestIntegrationSmoke:
     def test_workflow_approval_flow(self, auth_client: Any) -> None:
         """Test basic workflow approval flow."""
         # 1. Get templates
-        templates_resp = auth_client.get("/api/workflows/templates")
+        templates_resp = auth_client.get("/api/v1/workflows/templates")
         assert templates_resp.status_code == 200
 
         # 2. Check pending approvals
-        approvals_resp = auth_client.get("/api/workflows/approvals/pending")
+        approvals_resp = auth_client.get("/api/v1/workflows/approvals/pending")
         assert approvals_resp.status_code == 200
 
         # 3. Get stats
-        stats_resp = auth_client.get("/api/workflows/stats")
+        stats_resp = auth_client.get("/api/v1/workflows/stats")
         assert stats_resp.status_code == 200
 
     def test_compliance_monitoring_flow(self, auth_client: Any) -> None:
         """Test basic compliance monitoring flow."""
         # 1. Check regulatory updates
-        updates_resp = auth_client.get("/api/compliance-automation/regulatory-updates")
+        updates_resp = auth_client.get("/api/v1/compliance-automation/regulatory-updates")
         assert updates_resp.status_code == 200
 
         # 2. Get compliance score
-        score_resp = auth_client.get("/api/compliance-automation/score")
+        score_resp = auth_client.get("/api/v1/compliance-automation/score")
         assert score_resp.status_code == 200
 
         # 3. Check certificates
-        certs_resp = auth_client.get("/api/compliance-automation/certificates")
+        certs_resp = auth_client.get("/api/v1/compliance-automation/certificates")
         assert certs_resp.status_code == 200
 
     def test_riddor_detection_flow(self, auth_client: Any) -> None:
@@ -198,14 +198,14 @@ class TestIntegrationSmoke:
             "injury_type": "fracture",
             "days_off_work": 5,
         }
-        check_resp = auth_client.post("/api/compliance-automation/riddor/check", json=check_payload)
+        check_resp = auth_client.post("/api/v1/compliance-automation/riddor/check", json=check_payload)
         assert check_resp.status_code == 200
         result = check_resp.json()
         assert result["is_riddor"] is True
 
         # 2. Prepare submission
         prep_resp = auth_client.post(
-            "/api/compliance-automation/riddor/prepare/1",
+            "/api/v1/compliance-automation/riddor/prepare/1",
             params={"riddor_type": "specified_injury"},
         )
         assert prep_resp.status_code == 200
@@ -217,7 +217,7 @@ class TestDataIntegritySmoke:
 
     def test_workflow_template_structure(self, auth_client: Any) -> None:
         """Verify workflow templates have required structure."""
-        response = auth_client.get("/api/workflows/templates")
+        response = auth_client.get("/api/v1/workflows/templates")
         assert response.status_code in [200, 404]
 
         templates = response.json()["templates"]
@@ -230,7 +230,7 @@ class TestDataIntegritySmoke:
 
     def test_compliance_score_structure(self, auth_client: Any) -> None:
         """Verify compliance score has required structure."""
-        response = auth_client.get("/api/compliance-automation/score")
+        response = auth_client.get("/api/v1/compliance-automation/score")
         assert response.status_code in [200, 404]
 
         score = response.json()
@@ -244,7 +244,7 @@ class TestDataIntegritySmoke:
 
     def test_certificate_expiry_dates_valid(self, auth_client: Any) -> None:
         """Verify certificate expiry dates are valid."""
-        response = auth_client.get("/api/compliance-automation/certificates")
+        response = auth_client.get("/api/v1/compliance-automation/certificates")
         assert response.status_code in [200, 404]
 
         certificates = response.json()["certificates"]

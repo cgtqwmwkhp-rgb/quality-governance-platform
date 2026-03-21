@@ -34,19 +34,19 @@ class TestSecurityHeaders:
 
     def test_cors_headers(self, client):
         """Test CORS is properly configured."""
-        response = client.options("/api/health")
+        response = client.options("/api/v1/health")
         # Should have CORS headers for allowed origins
         assert response.status_code in [200, 204, 405]
 
     def test_content_type_options(self, client):
         """Test X-Content-Type-Options header."""
-        response = client.get("/api/health")
+        response = client.get("/api/v1/health")
         # Should prevent MIME type sniffing
         # Note: This would be added in middleware
 
     def test_xss_protection(self, client):
         """Test XSS protection headers."""
-        response = client.get("/api/health")
+        response = client.get("/api/v1/health")
         assert response.status_code == 200
 
 
@@ -66,7 +66,7 @@ class TestAuthenticationSecurity:
         # Make many rapid requests
         for i in range(15):
             client.post(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 json={"username": "fake@test.com", "password": "wrongpassword"},
             )
 
@@ -81,7 +81,7 @@ class TestAuthenticationSecurity:
     def test_jwt_token_format(self, client):
         """Test JWT tokens have proper format and claims."""
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={
                 "username": "testuser@plantexpand.com",
                 "password": "testpassword123",
@@ -99,7 +99,7 @@ class TestAuthenticationSecurity:
         # Use an obviously expired token
         expired_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxfQ.invalid"
         response = client.get(
-            "/api/users/me",
+            "/api/v1/users/me",
             headers={"Authorization": f"Bearer {expired_token}"},
         )
         assert response.status_code in [401, 422]
@@ -127,7 +127,7 @@ class TestInputValidation:
         ]
 
         for payload in malicious_inputs:
-            response = client.get(f"/api/incidents?search={payload}")
+            response = client.get(f"/api/v1/incidents?search={payload}")
             # Should not cause server error
             assert response.status_code != 500
 
@@ -144,7 +144,7 @@ class TestInputValidation:
         for payload in xss_payloads:
             # Try to create an incident with XSS payload
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": payload,
@@ -168,7 +168,7 @@ class TestInputValidation:
         ]
 
         for payload in traversal_payloads:
-            response = client.get(f"/api/documents/{payload}")
+            response = client.get(f"/api/v1/documents/{payload}")
             assert response.status_code in [400, 404, 422]
 
     def test_command_injection_prevention(self, client):
@@ -183,7 +183,7 @@ class TestInputValidation:
 
         for payload in cmd_payloads:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": f"Test {payload}",
@@ -228,7 +228,7 @@ class TestDataProtection:
         client = TestClient(app)
 
         # Try to trigger various errors
-        response = client.get("/api/incidents/999999")
+        response = client.get("/api/v1/incidents/999999")
         if response.status_code == 404:
             error = response.json()
             # Should not contain stack traces or internal paths
@@ -254,7 +254,7 @@ class TestFileUploadSecurity:
         malicious_file = b"<?php system($_GET['cmd']); ?>"
 
         response = client.post(
-            "/api/documents/upload",
+            "/api/v1/documents/upload",
             files={"file": ("malicious.php", malicious_file, "image/jpeg")},
         )
         # Should be rejected
@@ -266,7 +266,7 @@ class TestFileUploadSecurity:
         large_content = b"x" * (11 * 1024 * 1024)
 
         response = client.post(
-            "/api/documents/upload",
+            "/api/v1/documents/upload",
             files={"file": ("large.pdf", large_content, "application/pdf")},
         )
         # Should be rejected for size
@@ -328,11 +328,11 @@ class TestAPISecurityBestPractices:
     def test_authentication_required_for_sensitive_endpoints(self, client):
         """Test that sensitive endpoints require authentication."""
         protected_endpoints = [
-            "/api/users",
-            "/api/incidents",
-            "/api/audits/runs",
-            "/api/risks",
-            "/api/documents",
+            "/api/v1/users",
+            "/api/v1/incidents",
+            "/api/v1/audits/runs",
+            "/api/v1/risks",
+            "/api/v1/documents",
         ]
 
         for endpoint in protected_endpoints:
@@ -344,7 +344,7 @@ class TestAPISecurityBestPractices:
 
     def test_no_server_version_disclosure(self, client):
         """Test that server version is not disclosed."""
-        response = client.get("/api/health")
+        response = client.get("/api/v1/health")
 
         # Check headers for version disclosure
         headers = dict(response.headers)

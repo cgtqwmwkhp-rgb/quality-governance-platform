@@ -5,11 +5,11 @@ import { startAutoSync } from './lib/syncService'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import Layout from './components/Layout'
 import PortalLayout from './components/PortalLayout'
+import Login from './pages/Login'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
 import { getPlatformToken, setAdminToken, clearTokens } from './utils/auth'
 
-const Login = lazy(() => import('./pages/Login'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
 const IncidentDetail = lazy(() => import('./pages/IncidentDetail'))
@@ -164,14 +164,7 @@ function RouteErrorBoundary() {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    const token = getPlatformToken()
-    setIsAuthenticated(!!token)
-    setIsLoading(false)
-  }, [])
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getPlatformToken()))
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -188,19 +181,6 @@ function App() {
     clearTokens()
     useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)
-  }
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="relative">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-primary/20 border-t-primary"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 rounded-lg gradient-brand"></div>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (

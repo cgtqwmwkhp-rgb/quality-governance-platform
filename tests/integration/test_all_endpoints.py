@@ -26,7 +26,7 @@ def client():
 def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
@@ -66,7 +66,7 @@ class TestAuthEndpoints:
     def test_login_with_invalid_credentials(self, client):
         """POST /api/auth/login with invalid credentials returns 401 or 422."""
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={"username": "invalid@test.com", "password": "wrongpassword"},
         )
         # Accept 401, 422 (validation), or 404 (endpoint contract mismatch)
@@ -74,13 +74,13 @@ class TestAuthEndpoints:
 
     def test_login_missing_fields(self, client):
         """POST /api/auth/login with missing fields returns 422."""
-        response = client.post("/api/auth/login", json={})
+        response = client.post("/api/v1/auth/login", json={})
         # Accept 422 (validation) or 404 (endpoint contract mismatch)
         assert response.status_code in [422, 404]
 
     def test_protected_endpoint_without_auth(self, client):
         """Protected endpoints return 401 without auth."""
-        response = client.get("/api/users/me")
+        response = client.get("/api/v1/users/me")
         # Accept 401, 403 (unauthorized), or 404 (endpoint contract mismatch)
         assert response.status_code in [401, 403, 404]
 
@@ -97,7 +97,7 @@ class TestIncidentEndpoints:
         """GET /api/incidents returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/incidents", headers=auth_headers)
+        response = client.get("/api/v1/incidents", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_incidents_with_pagination(self, client, auth_headers):
@@ -105,7 +105,7 @@ class TestIncidentEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get(
-            "/api/incidents?page=1&per_page=10",
+            "/api/v1/incidents?page=1&per_page=10",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -118,11 +118,11 @@ class TestIncidentEndpoints:
             pytest.skip("Auth required")
 
         # Filter by status
-        response = client.get("/api/incidents?status=open", headers=auth_headers)
+        response = client.get("/api/v1/incidents?status=open", headers=auth_headers)
         assert response.status_code == 200
 
         # Filter by severity
-        response = client.get("/api/incidents?severity=high", headers=auth_headers)
+        response = client.get("/api/v1/incidents?severity=high", headers=auth_headers)
         assert response.status_code == 200
 
     def test_create_incident(self, client, auth_headers):
@@ -131,7 +131,7 @@ class TestIncidentEndpoints:
             pytest.skip("Auth required")
 
         response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={
                 "title": "Integration Test Incident",
                 "description": "Created by integration test",
@@ -149,7 +149,7 @@ class TestIncidentEndpoints:
             pytest.skip("Auth required")
 
         response = client.post(
-            "/api/incidents",
+            "/api/v1/incidents",
             json={"title": ""},  # Invalid - empty title
             headers=auth_headers,
         )
@@ -168,21 +168,21 @@ class TestAuditEndpoints:
         """GET /api/audit-templates returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/audit-templates", headers=auth_headers)
+        response = client.get("/api/v1/audit-templates", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_audit_runs(self, client, auth_headers):
         """GET /api/audits/runs returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/audits/runs", headers=auth_headers)
+        response = client.get("/api/v1/audits/runs", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_audit_findings(self, client, auth_headers):
         """GET /api/audits/findings returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/audits/findings", headers=auth_headers)
+        response = client.get("/api/v1/audits/findings", headers=auth_headers)
         assert response.status_code == 200
 
     def test_audit_templates_pagination(self, client, auth_headers):
@@ -190,7 +190,7 @@ class TestAuditEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get(
-            "/api/audit-templates?page=1&per_page=10",
+            "/api/v1/audit-templates?page=1&per_page=10",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -208,14 +208,14 @@ class TestRiskEndpoints:
         """GET /api/risks returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/risks", headers=auth_headers)
+        response = client.get("/api/v1/risks", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_risks_with_filters(self, client, auth_headers):
         """GET /api/risks with filters works."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/risks?category=operational", headers=auth_headers)
+        response = client.get("/api/v1/risks?category=operational", headers=auth_headers)
         assert response.status_code == 200
 
     def test_create_risk(self, client, auth_headers):
@@ -224,7 +224,7 @@ class TestRiskEndpoints:
             pytest.skip("Auth required")
 
         response = client.post(
-            "/api/risks",
+            "/api/v1/risks",
             json={
                 "title": "Integration Test Risk",
                 "description": "Created by integration test",
@@ -249,7 +249,7 @@ class TestComplaintEndpoints:
         """GET /api/complaints returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/complaints", headers=auth_headers)
+        response = client.get("/api/v1/complaints", headers=auth_headers)
         assert response.status_code == 200
 
     def test_create_complaint(self, client, auth_headers):
@@ -258,7 +258,7 @@ class TestComplaintEndpoints:
             pytest.skip("Auth required")
 
         response = client.post(
-            "/api/complaints",
+            "/api/v1/complaints",
             json={
                 "title": "Integration Test Complaint",
                 "description": "Created by integration test",
@@ -282,7 +282,7 @@ class TestRTAEndpoints:
         """GET /api/rtas returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/rtas", headers=auth_headers)
+        response = client.get("/api/v1/rtas", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -298,14 +298,14 @@ class TestDocumentEndpoints:
         """GET /api/documents returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/documents", headers=auth_headers)
+        response = client.get("/api/v1/documents", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_policies(self, client, auth_headers):
         """GET /api/policies returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/policies", headers=auth_headers)
+        response = client.get("/api/v1/policies", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -321,7 +321,7 @@ class TestStandardsEndpoints:
         """GET /api/standards returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/standards", headers=auth_headers)
+        response = client.get("/api/v1/standards", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -337,14 +337,14 @@ class TestUserEndpoints:
         """GET /api/users/me returns current user."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/users/me", headers=auth_headers)
+        response = client.get("/api/v1/users/me", headers=auth_headers)
         assert response.status_code == 200
 
     def test_list_users(self, client, auth_headers):
         """GET /api/users returns 200 or 403."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/users", headers=auth_headers)
+        response = client.get("/api/v1/users", headers=auth_headers)
         assert response.status_code in [200, 403]
 
 
@@ -358,7 +358,7 @@ class TestPortalEndpoints:
 
     def test_portal_stats(self, client):
         """GET /api/portal/stats returns 200 or 404 if endpoint differs."""
-        response = client.get("/api/portal/stats")
+        response = client.get("/api/v1/portal/stats")
         # Accept 200 or 404 (actual endpoint may be different - see /api/portal/reports/stats)
         assert response.status_code in [200, 404]
 
@@ -366,7 +366,7 @@ class TestPortalEndpoints:
         """POST /api/portal/report or /api/portal/reports/ submits report."""
         # Try actual endpoint first
         response = client.post(
-            "/api/portal/reports/",
+            "/api/v1/portal/reports/",
             json={
                 "report_type": "incident",
                 "title": "Integration Test Portal Report",
@@ -378,7 +378,7 @@ class TestPortalEndpoints:
         # Accept 200, 201, 422 (validation), or fall back to legacy endpoint
         if response.status_code == 404:
             response = client.post(
-                "/api/portal/report",
+                "/api/v1/portal/report",
                 json={
                     "report_type": "incident",
                     "title": "Integration Test Portal Report",
@@ -392,7 +392,7 @@ class TestPortalEndpoints:
     def test_submit_report_validation(self, client):
         """POST /api/portal/reports/ validates input."""
         response = client.post(
-            "/api/portal/reports/",
+            "/api/v1/portal/reports/",
             json={"report_type": "invalid"},
         )
         # Accept 422 (validation) or 404 (endpoint contract mismatch)
@@ -411,14 +411,14 @@ class TestWorkflowEndpoints:
         """GET /api/workflows/templates returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/workflows/templates", headers=auth_headers)
+        response = client.get("/api/v1/workflows/templates", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_list_workflow_instances(self, client, auth_headers):
         """GET /api/workflows/instances returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/workflows/instances", headers=auth_headers)
+        response = client.get("/api/v1/workflows/instances", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -434,14 +434,14 @@ class TestRiskRegisterEndpoints:
         """GET /api/risk-register/heat-map returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/risk-register/heat-map", headers=auth_headers)
+        response = client.get("/api/v1/risk-register/heat-map", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_risk_register_controls(self, client, auth_headers):
         """GET /api/risk-register/controls returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/risk-register/controls", headers=auth_headers)
+        response = client.get("/api/v1/risk-register/controls", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -457,14 +457,14 @@ class TestComplianceEndpoints:
         """GET /api/compliance/evidence returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/compliance/evidence", headers=auth_headers)
+        response = client.get("/api/v1/compliance/evidence", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_compliance_gaps(self, client, auth_headers):
         """GET /api/compliance/gaps returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/compliance/gaps", headers=auth_headers)
+        response = client.get("/api/v1/compliance/gaps", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -480,14 +480,14 @@ class TestISO27001Endpoints:
         """GET /api/iso27001/assets returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/iso27001/assets", headers=auth_headers)
+        response = client.get("/api/v1/iso27001/assets", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_iso27001_controls(self, client, auth_headers):
         """GET /api/iso27001/controls returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/iso27001/controls", headers=auth_headers)
+        response = client.get("/api/v1/iso27001/controls", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -503,14 +503,14 @@ class TestUVDBEndpoints:
         """GET /api/uvdb/sections returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/uvdb/sections", headers=auth_headers)
+        response = client.get("/api/v1/uvdb/sections", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_uvdb_audits(self, client, auth_headers):
         """GET /api/uvdb/audits returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/uvdb/audits", headers=auth_headers)
+        response = client.get("/api/v1/uvdb/audits", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -526,14 +526,14 @@ class TestPlanetMarkEndpoints:
         """GET /api/planet-mark/years returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/planet-mark/years", headers=auth_headers)
+        response = client.get("/api/v1/planet-mark/years", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_planet_mark_emissions(self, client, auth_headers):
         """GET /api/planet-mark/emissions returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/planet-mark/emissions", headers=auth_headers)
+        response = client.get("/api/v1/planet-mark/emissions", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -549,14 +549,14 @@ class TestAnalyticsEndpoints:
         """GET /api/analytics/summary returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/analytics/summary", headers=auth_headers)
+        response = client.get("/api/v1/analytics/summary", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_analytics_trends(self, client, auth_headers):
         """GET /api/analytics/trends returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/analytics/trends", headers=auth_headers)
+        response = client.get("/api/v1/analytics/trends", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -572,14 +572,14 @@ class TestNotificationEndpoints:
         """GET /api/notifications returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/notifications", headers=auth_headers)
+        response = client.get("/api/v1/notifications", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_notification_preferences(self, client, auth_headers):
         """GET /api/notifications/preferences returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/notifications/preferences", headers=auth_headers)
+        response = client.get("/api/v1/notifications/preferences", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -595,14 +595,14 @@ class TestInvestigationEndpoints:
         """GET /api/investigations returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/investigations", headers=auth_headers)
+        response = client.get("/api/v1/investigations", headers=auth_headers)
         assert response.status_code == 200
 
     def test_investigation_templates(self, client, auth_headers):
         """GET /api/investigation-templates returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/investigation-templates", headers=auth_headers)
+        response = client.get("/api/v1/investigation-templates", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -618,14 +618,14 @@ class TestAIIntelligenceEndpoints:
         """GET /api/ai/predictions returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/ai-intelligence/predictions", headers=auth_headers)
+        response = client.get("/api/v1/ai-intelligence/predictions", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_ai_insights(self, client, auth_headers):
         """GET /api/ai/insights returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/ai-intelligence/insights", headers=auth_headers)
+        response = client.get("/api/v1/ai-intelligence/insights", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -641,7 +641,7 @@ class TestDocumentControlEndpoints:
         """GET /api/document-control/versions returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/document-control/versions", headers=auth_headers)
+        response = client.get("/api/v1/document-control/versions", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 
@@ -657,7 +657,7 @@ class TestComplianceAutomationEndpoints:
         """GET /api/compliance-automation/updates returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/compliance-automation/updates", headers=auth_headers)
+        response = client.get("/api/v1/compliance-automation/updates", headers=auth_headers)
         assert response.status_code in [200, 404]
 
     def test_scheduled_audits(self, client, auth_headers):
@@ -665,7 +665,7 @@ class TestComplianceAutomationEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get(
-            "/api/compliance-automation/scheduled-audits",
+            "/api/v1/compliance-automation/scheduled-audits",
             headers=auth_headers,
         )
         assert response.status_code in [200, 404]

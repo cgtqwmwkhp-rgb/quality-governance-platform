@@ -1,11 +1,16 @@
 {
   "ci": {
     "collect": {
-      "staticDistDir": "./dist",
+      "startServerCommand": "npm run preview -- --port 4173",
+      "startServerReadyPattern": "Local:",
       "url": [
-        "http://localhost/index.html"
+        "http://localhost:4173/login"
       ],
-      "numberOfRuns": 3
+      "numberOfRuns": 3,
+      "settings": {
+        "chromeFlags": "--no-sandbox --disable-gpu --headless",
+        "preset": "desktop"
+      }
     },
     "assert": {
       "assertions": {

@@ -46,7 +46,7 @@ def auth_headers(client) -> dict:
     """Get authenticated headers for API requests."""
     try:
         response = client.post(
-            "/api/auth/login",
+            "/api/v1/auth/login",
             json={
                 "username": "testuser@plantexpand.com",
                 "password": "testpassword123",

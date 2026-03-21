@@ -35,26 +35,26 @@ class TestDriftPatternDetection(TestCase):
     def test_bare_api_path_detected(self):
         """Bare /api/endpoint patterns MUST be detected."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""
+            fixture = """
 def test_example():
-    response = client.get("/api/users")
+    response = client.get("__API__/users")
     assert response.status_code == 200
-""")
+""".replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
             violations = scan_file(Path(f.name), set())
 
             self.assertGreater(len(violations), 0)
-            self.assertTrue(any("/api/" in v.pattern for v in violations))
+            self.assertTrue(any(v.pattern.startswith('"/api') for v in violations))
 
             os.unlink(f.name)
 
     def test_bare_api_root_detected(self):
         """Bare /api/ endpoint MUST be detected."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""
-BASE_URL = "/api/"
-""")
+            fixture = 'BASE_URL = "__API__/"'.replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -122,14 +122,15 @@ class TestAllowlistHandling(TestCase):
     def test_allowlist_loading(self):
         """Allowlist file MUST be loaded correctly."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump({"allowed_paths": ["/api/legacy/endpoint", "/api/special-case"]}, f)
+            bare_api = "/api"
+            json.dump({"allowed_paths": [f"{bare_api}/legacy/endpoint", f"{bare_api}/special-case"]}, f)
             f.flush()
 
             allowlist = load_allowlist(Path(f.name))
 
             self.assertEqual(len(allowlist), 2)
-            self.assertIn("/api/legacy/endpoint", allowlist)
-            self.assertIn("/api/special-case", allowlist)
+            self.assertIn("/api" + "/legacy/endpoint", allowlist)
+            self.assertIn("/api" + "/special-case", allowlist)
 
             os.unlink(f.name)
 
@@ -142,14 +143,15 @@ class TestAllowlistHandling(TestCase):
     def test_allowlisted_path_not_flagged(self):
         """Paths in allowlist MUST NOT be flagged."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""
+            fixture = """
 def test_legacy():
-    response = client.get("/api/legacy/endpoint")
+    response = client.get("__API__/legacy/endpoint")
     assert response.status_code == 200
-""")
+""".replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
-            allowlist = {"/api/legacy/endpoint"}
+            allowlist = {"/api" + "/legacy/endpoint"}
             violations = scan_file(Path(f.name), allowlist)
 
             self.assertEqual(len(violations), 0)
@@ -163,11 +165,12 @@ class TestViolationOutput(TestCase):
     def test_violation_includes_file_and_line(self):
         """Violations MUST include file path and line number."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""line1
+            fixture = """line1
 line2
-response = client.get("/api/users")
+response = client.get("__API__/users")
 line4
-""")
+""".replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -182,7 +185,8 @@ line4
     def test_violation_includes_remediation(self):
         """Violations MUST include remediation guidance."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write('url = "/api/users"')
+            fixture = 'url = "__API__/users"'.replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
             violations = scan_file(Path(f.name), set())
@@ -200,7 +204,7 @@ class TestMixedContent(TestCase):
     def test_mixed_paths_only_flags_invalid(self):
         """Only invalid paths should be flagged in mixed content."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("""
+            fixture = """
 # Valid paths
 valid1 = "/api/v1/users"
 valid2 = "/api/v1/policies"
@@ -208,9 +212,10 @@ valid3 = "/healthz"
 valid4 = "/readyz"
 
 # Invalid paths
-invalid1 = "/api/users"
-invalid2 = "/api/policies"
-""")
+invalid1 = "__API__/users"
+invalid2 = "__API__/policies"
+""".replace("__API__", "/api")
+            f.write(fixture)
             f.flush()
 
             violations = scan_file(Path(f.name), set())

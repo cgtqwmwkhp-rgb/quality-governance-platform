@@ -31,3 +31,8 @@ Object.defineProperty(navigator, 'sendBeacon', {
   writable: true,
   value: () => true,
 })
+
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+  writable: true,
+  value: () => {},
+})
