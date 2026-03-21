@@ -136,7 +136,7 @@ jobs:
         working-directory: .
 
       - name: Run Trivy vulnerability gate
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'table'
@@ -145,7 +145,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Generate Trivy SARIF report
-        uses: aquasecurity/trivy-action@0.34.2
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: 'qgp-backend:scan'
           format: 'sarif'
