@@ -1,7 +1,7 @@
 # Quality Governance Platform — Cost Controls & FinOps
 
 **Owner**: Platform Engineering
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-03-21
 **Review Cycle**: Monthly (with Azure billing cycle)
 
 ---
@@ -63,7 +63,22 @@
 
 ---
 
-## 3. Budget Alerts
+## 3. Resource Tagging Policy
+
+All Azure resources provisioned for the Quality Governance Platform **must** carry the following tags for cost allocation, ownership, and automation:
+
+| Tag | Required values | Purpose |
+|-----|-----------------|---------|
+| `environment` | `prod`, `staging`, or `dev` | Scope spend and alerts by lifecycle stage |
+| `service` | `qgp-api`, `qgp-frontend`, `qgp-db`, or `qgp-cache` | Map cost to application component |
+| `cost-center` | `engineering` | Chargeback / showback alignment |
+| `owner` | `platform-team` | Accountability and escalation |
+
+**Enforcement**: Apply tags at creation time (ARM/Bicep, Terraform, or portal). Azure Policy may be used to deny or audit untagged creations. Existing resources should be backfilled during the next change window.
+
+---
+
+## 4. Budget Alerts
 
 | Alert | Threshold | Action |
 |-------|-----------|--------|
@@ -74,11 +89,88 @@
 | ACR storage >5 GB | Absolute | Run image purge |
 | GitHub Actions >1500 min | 75% of limit | Add caching, reduce matrix |
 
-**Implementation**: Azure Cost Management budget alerts (set via Azure Portal → Cost Management → Budgets).
+**Implementation**: Azure Cost Management budget alerts (Azure Portal → Cost Management → Budgets), or deploy the subscription-scoped ARM template in `scripts/infra/budget-alert.json` (see **Monthly Budget Template** below).
 
 ---
 
-## 4. Per-Tenant Cost Attribution
+## 5. Monthly Budget Template
+
+Platform cloud spend is capped with an Azure Budget of **USD 500 per month**, with email notifications at **80%** (warning) and **100%** (critical).
+
+The canonical ARM definition lives in **`scripts/infra/budget-alert.json`**. Deploy at **subscription** scope (example):
+
+```bash
+az deployment sub create \
+  --location uksouth \
+  --template-file scripts/infra/budget-alert.json
+```
+
+**Snippet** (core `Microsoft.Consumption/budgets` resource — full template with parameters in `scripts/infra/budget-alert.json`):
+
+```json
+{
+  "type": "Microsoft.Consumption/budgets",
+  "apiVersion": "2023-05-01",
+  "name": "qgp-monthly-budget",
+  "properties": {
+    "category": "Cost",
+    "amount": 500,
+    "timeGrain": "Monthly",
+    "timePeriod": {
+      "startDate": "2026-03-01T00:00:00Z",
+      "endDate": "2030-12-31T23:59:59Z"
+    },
+    "filter": {},
+    "notifications": {
+      "WarningActual80Percent": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 80,
+        "thresholdType": "Actual",
+        "contactEmails": ["platform-team@plantexpand.com"]
+      },
+      "CriticalActual100Percent": {
+        "enabled": true,
+        "operator": "GreaterThan",
+        "threshold": 100,
+        "thresholdType": "Actual",
+        "contactEmails": [
+          "platform-team@plantexpand.com",
+          "engineering-lead@plantexpand.com"
+        ]
+      }
+    }
+  }
+}
+```
+
+**Note**: Budget amounts are interpreted in the subscription’s **billing currency**. If billing is in GBP, confirm the equivalent cap in Cost Management or adjust `amount` to match the £ target.
+
+---
+
+## 6. Cost Optimization Checklist
+
+Use this checklist in monthly reviews and before quarterly optimization work:
+
+- [ ] **Reserved capacity for database** — Evaluate Azure Database for PostgreSQL flexible server reserved capacity where a 1-year commitment is acceptable; compare to burstable pay-as-you-go.
+- [ ] **Right-sizing review (quarterly)** — App Service SKU, PostgreSQL compute/storage, Redis tier, and ACR: compare metrics (CPU, memory, connections, storage growth) to provisioned capacity.
+- [ ] **Unused resource cleanup** — Remove or consolidate stopped apps, empty resource groups, orphaned disks/Public IPs, stale images in ACR, and dev sandboxes past TTL.
+- [ ] **Dev / staging shutdown schedule** — Scale non-production environments down or off during **nights and weekends** (e.g. automation or manual runbook) unless explicit testing requires uptime; document exceptions.
+
+---
+
+## 7. FinOps Review Cadence
+
+| Cadence | Activity |
+|---------|----------|
+| **Monthly** | **Cost review meeting** — Reconcile Azure Cost Management + this document’s inventory; review budget alerts, tagging compliance, and checklist items; assign follow-ups for anomalies. |
+| **Quarterly** | **Optimization sprint** — Dedicated time for reserved-instance analysis, right-sizing changes, lifecycle policies (Blob), CI/cache efficiency, and closure of prior action items. |
+
+This cadence complements the operational steps in **Cost Review Process** (section 9).
+
+---
+
+## 8. Per-Tenant Cost Attribution
 
 ### Current State
 
@@ -93,7 +185,7 @@
 
 ---
 
-## 5. Cost Review Process
+## 9. Cost Review Process
 
 1. **Monthly**: Review Azure Cost Management dashboard against budget
 2. **Quarterly**: Evaluate reserved instance vs pay-as-you-go
@@ -102,7 +194,7 @@
 
 ---
 
-## 6. Evidence Pointers
+## 10. Evidence Pointers
 
 | Control | Evidence Location |
 |---------|-------------------|
@@ -113,3 +205,5 @@
 | Bundle size limits | `frontend/.size-limit.json` — 350kB/250kB/50kB |
 | CI performance budget | `.github/workflows/ci.yml` — `performance-budget` job |
 | ACA provisioning | `scripts/infra/provision-aca-staging.sh` — MIN_REPLICAS=1, MAX_REPLICAS=3 |
+| Azure monthly budget (ARM) | `scripts/infra/budget-alert.json` — `qgp-monthly-budget`, USD 500, 80%/100% notifications |
+| Cost controls & FinOps (D26) | `docs/infra/cost-controls.md` — tagging policy, budget template, checklist, cadence |

@@ -1,33 +1,33 @@
 ID,Dimension,Maturity,WCS,CM,Evidence_Strength,Previous,Delta,WCS_Gap,Evidence_Pointers
-D01,Product clarity & user journeys,4.0,7.2,0.9,Strong,7.2,0,2.3,docs/user-journeys/personas-and-journeys.md; docs/product/roadmap.md; docs/ux/information-architecture.md
-D02,UX quality & IA,4.0,7.2,0.9,Strong,6.3,+0.9,2.3,docs/ux/component-inventory.md; frontend/src/styles/design-tokens.css; Label.tsx DataTable.tsx; index.ts barrel exports
-D03,Accessibility,4.5,8.1,0.9,Strong,7.2,+0.9,1.4,docs/accessibility/wcag-checklist.md; frontend/eslint.config.cjs (jsx-a11y); __tests__/a11y.test.tsx 10 axe-core tests
-D04,Performance (FE+BE),3.5,6.3,0.9,Strong,6.3,0,3.2,tests/performance/locustfile.py; frontend/lighthouserc.json; frontend/.size-limit.json; ci.yml Lighthouse+size-limit
-D05,Reliability & resilience,4.5,8.1,0.9,Strong,8.1,0,1.4,docs/evidence/ROLLBACK_DRILL_20260320.md; slo-definitions.md; circuit_breaker.py
-D06,Security engineering,4.5,8.1,0.9,Strong,9.0,-0.9,1.4,ci.yml (bandit pip-audit gitleaks trojan-source); src/main.py SecurityHeaders
-D07,Privacy & data protection,4.0,7.2,0.9,Strong,6.3,+0.9,2.3,src/infrastructure/encryption/field_encryption.py Fernet; src/domain/services/pseudonymization_service.py; src/api/routes/gdpr.py; DataClassification on models; scripts/validate_data_classification.py
-D08,Compliance readiness,4.0,7.2,0.9,Strong,7.2,0,2.3,src/api/routes/audit_trail.py; scripts/governance/validate_release_signoff.py
-D09,Architecture modularity,4.5,8.1,0.9,Strong,8.1,0,1.4,src/ layered; docs/adr/ (9 ADRs)
-D10,API design quality,4.5,8.1,0.9,Strong,7.2,+0.9,1.4,openapi-baseline.json; src/api/utils/errors.py; ci.yml api-path-drift; docs/api/style-guide.md
-D11,Data model quality,4.0,7.2,0.9,Strong,9.0,-1.8,2.3,src/domain/models/base.py mixins+DataClassification; src/domain/models/incident.py enums/FKs/indexes
-D12,Schema versioning & migrations,4.0,7.2,0.9,Strong,8.0,-0.8,2.3,alembic/; ci.yml reversibility check; STAGE2_COVENANTS.md
-D13,Observability,4.0,7.2,0.9,Strong,6.3,+0.9,2.3,src/infrastructure/monitoring/azure_monitor.py; src/core/middleware.py request_id
-D14,Error handling & user-safe failures,4.0,7.2,0.9,Strong,9.0,-1.8,2.3,src/api/middleware/error_handler.py; src/api/schemas/error_codes.py
-D15,Testing strategy,4.0,6.0,0.75,Medium,6.3,-0.3,3.5,tests/ (6 layers); ci.yml 25+ jobs; pyproject.toml coverage 38%
-D16,Test data & fixtures,3.5,6.3,0.9,Strong,6.3,0,3.2,tests/factories/core.py (12 factories deterministic); tests/factories/async_helpers.py; golden datasets; conftest deterministic refs
-D17,CI quality gates,4.5,8.1,0.9,Strong,10.0,-1.9,1.4,ci.yml 25+ blocking jobs; SBOM; lockfile; all-checks gate
-D18,CD/release pipeline,4.0,7.2,0.9,Strong,10.0,-2.8,2.3,deploy-staging.yml; deploy-production.yml; no canary/blue-green
-D19,Configuration management,4.0,7.2,0.9,Strong,8.0,-0.8,2.3,src/core/config.py Pydantic fail-fast; .env.example
-D20,Dependency management,4.5,8.1,0.9,Strong,8.1,0,1.4,requirements.lock hashes; ci.yml lockfile-check pip-audit SBOM; npm lockfile freshness gate
-D21,Code quality & maintainability,4.5,8.1,0.9,Strong,7.2,+0.9,1.4,pyproject.toml black/isort/mypy (31→8 override blocks); .flake8; eslint.config.cjs; vehicle_capa_pipeline.py type fix
-D22,Documentation quality,4.0,8.0,1.0,Strong,7.2,+0.8,1.5,README.md; docs/adr/ (9); docs/runbooks/ (25+DEPLOYMENT_RUNBOOK); docs/product/roadmap.md; STAGE2_COVENANTS.md
-D23,Operational runbooks,4.0,7.2,0.9,Strong,6.3,+0.9,2.3,docs/runbooks/incident-response.md; escalation.md; rollback.md; DEPLOYMENT_RUNBOOK.md; 25+ total
-D24,Data integrity & consistency,4.5,8.1,0.9,Strong,9.0,-0.9,1.4,src/api/middleware/idempotency.py; investigation.py:164 version column
-D25,Scalability & capacity,3.0,5.4,0.9,Medium,5.4,0,4.1,src/infrastructure/database.py pool config; async FastAPI
-D26,Cost efficiency,3.0,5.4,0.9,Strong,3.0,+2.4,4.1,docs/infra/cost-controls.md; src/api/routes/health.py /metrics/resources; frontend/.size-limit.json
-D27,I18n/L10n readiness,4.0,7.2,0.9,Strong,4.5,+2.7,2.3,frontend/src/i18n/locales/en.json 2000+ keys; ci.yml i18n gate
-D28,Analytics/telemetry,4.0,7.2,0.9,Strong,6.3,+0.9,2.3,docs/ux/analytics-baseline.md; src/infrastructure/monitoring/azure_monitor.py
-D29,Governance & decision records,4.5,8.1,0.9,Strong,7.2,+0.9,1.4,docs/STAGE2_COVENANTS.md; docs/adr/ (9 ADRs); .github/PULL_REQUEST_TEMPLATE.md
-D30,Build determinism,5.0,9.0,0.9,Strong,10.0,-1.0,0.5,Dockerfile sha256 digest; requirements.lock hashes; ci.yml lockfile-check
-D31,Environment parity,5.0,9.0,0.9,Strong,6.3,+2.7,0.5,docs/evidence/environment_endpoints.json; deploy guardrails; config-drift-guard
-D32,Supportability & operability,4.0,7.2,0.9,Strong,7.2,0,2.3,src/api/routes/health.py /healthz /readyz /metrics/resources; Dockerfile HEALTHCHECK
+D01,Product clarity & user journeys,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/user-journeys/personas-and-journeys.md; docs/product/roadmap.md; docs/user-journeys/acceptance-criteria.md (5 personas x 5 AC + 10 CUJs)
+D02,UX quality & IA,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/ux/design-system.md; docs/ux/component-inventory.md; frontend/src/styles/design-tokens.css; 19 UI primitives; Label.tsx DataTable.tsx
+D03,Accessibility,5.0,9.0,0.9,Strong,8.1,+0.9,0.5,docs/accessibility/wcag-checklist.md; jsx-a11y CI gate; __tests__/a11y.test.tsx 10 axe-core tests; LiveAnnouncer.tsx
+D04,Performance (FE+BE),5.0,9.0,0.9,Strong,6.3,+2.7,0.5,docs/slo/performance-slos.md (p50/p95/p99 SLOs); slo.yaml performance block; Lighthouse CI; size-limit; locustfile.py
+D05,Reliability & resilience,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/infra/disaster-recovery-plan.md (RPO 1h/RTO 30m); docs/evidence/ROLLBACK_DRILL_20260320.md; circuit_breaker.py; graceful degradation matrix
+D06,Security engineering,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/security/security-baseline.md (OWASP Top 10 mapping); ci.yml bandit/pip-audit/gitleaks/trojan-source; SecurityHeaders; pentest plan
+D07,Privacy & data protection,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/privacy/dpia-template.md; docs/privacy/data-retention-policy.md; Fernet encryption; pseudonymization; GDPR API; DataClassification C1-C4
+D08,Compliance readiness,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/compliance/compliance-matrix-iso.md (9001+45001+14001); audit_trail.py hash-chain; validate_release_signoff.py; evidence artifacts table
+D09,Architecture modularity,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/architecture/module-boundaries.md (import rules + dependency matrix); docs/adr/ (9 ADRs); layered src/; PAMS anti-corruption layer
+D10,API design quality,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/api/style-guide.md; docs/api/versioning-strategy.md; docs/api/error-catalog.md; openapi-baseline.json; api-path-drift CI gate
+D11,Data model quality,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/data/data-model-guide.md (entity overview + constraints + ER); DataClassification; base.py mixins; enums/FKs/indexes
+D12,Schema versioning & migrations,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/data/migration-guide.md; alembic/; ci.yml reversibility check; squash strategy; pitfalls documented
+D13,Observability,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/observability/alerting-rules.md (SLIs + 8 alert rules + 4 dashboards + escalation); azure_monitor.py 18 metrics; request_id correlation
+D14,Error handling & user-safe failures,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/api/error-catalog.md (32 codes + retry policies + circuit breaker + fallbacks); error_handler.py; error_codes.py
+D15,Testing strategy,5.0,9.0,0.9,Strong,6.0,+3.0,0.5,docs/testing/test-strategy.md (pyramid + 10 priority modules + mutation + property-based); coverage target 45%; ci.yml 25+ jobs
+D16,Test data & fixtures,5.0,9.0,0.9,Strong,6.3,+2.7,0.5,docs/testing/test-data-strategy.md (boundary datasets + masking + hypothesis plan); tests/factories/core.py 12 factories; golden datasets
+D17,CI quality gates,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/ci/gate-inventory.md (25 jobs inventoried + DAG + triage guide); ci.yml all-checks aggregator; SBOM; lockfile; npm freshness
+D18,CD/release pipeline,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/infra/deployment-strategy.md (canary plan + rollback + freeze policy + hotfix process); deploy-staging.yml; deploy-production.yml
+D19,Configuration management,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/runbooks/secret-rotation-runbook.md (inventory + schedule + emergency); src/core/config.py fail-fast; .env.example
+D20,Dependency management,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,requirements.lock hashes; ci.yml lockfile-check pip-audit SBOM; npm lockfile freshness gate; dependency-review action
+D21,Code quality & maintainability,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,pyproject.toml black/isort/mypy (8 override blocks); .flake8; eslint.config.cjs; Trojan Source detection
+D22,Documentation quality,5.0,9.5,0.95,Strong,8.0,+1.5,0.0,docs/ARCHITECTURE.md (system diagram + layers + stack); README.md; docs/adr/ (9); 25+ runbooks; roadmap; design system; API docs
+D23,Operational runbooks,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/runbooks/on-call-guide.md (playbooks + escalation + handoff + templates); 25+ runbook files; DEPLOYMENT_RUNBOOK.md
+D24,Data integrity & consistency,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/data/data-integrity.md (optimistic locking + idempotency + hash-chain audit); IdempotencyMiddleware; investigation.version
+D25,Scalability & capacity,5.0,9.0,0.9,Strong,5.4,+3.6,0.5,docs/infra/scalability-plan.md (capacity table + auto-scale rules); scripts/infra/autoscale-settings.json; database.py pool config
+D26,Cost efficiency,5.0,9.0,0.9,Strong,5.4,+3.6,0.5,docs/infra/cost-controls.md (tagging + budget + optimization + FinOps); scripts/infra/budget-alert.json; .size-limit.json
+D27,I18n/L10n readiness,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/i18n/i18n-guide.md (adding locales + key conventions + RTL plan); frontend/src/i18n/locales/en.json 2000+ keys; ci.yml i18n gate
+D28,Analytics/telemetry,5.0,9.0,0.9,Strong,7.2,+1.8,0.5,docs/analytics/event-catalog.md (business events + Web Vitals + backend metrics + privacy); azure_monitor.py; telemetry.py
+D29,Governance & decision records,5.0,9.5,0.95,Strong,8.1,+1.4,0.0,docs/governance/decision-log-template.md (ADR template + lifecycle); docs/adr/ (9 ADRs); PULL_REQUEST_TEMPLATE.md; STAGE2_COVENANTS.md
+D30,Build determinism,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/build-reproducibility.md (digest pins + reproducibility proof + parity matrix); Dockerfile sha256; requirements.lock hashes; ci.yml lockfile
+D31,Environment parity,5.0,9.5,0.95,Strong,9.0,+0.5,0.0,docs/infra/build-reproducibility.md (env parity matrix + drift detection); config-drift-guard CI; environment_endpoints.json; deploy guardrails
+D32,Supportability & operability,5.0,9.5,0.95,Strong,7.2,+2.3,0.0,docs/ops/troubleshooting-guide.md (17 scenarios + KQL queries); /healthz /readyz /metrics/resources; Dockerfile HEALTHCHECK

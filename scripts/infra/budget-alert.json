@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "description": "Azure Cost Management monthly budget for Quality Governance Platform (D26). Deploy at subscription scope: az deployment sub create --location uksouth --template-file scripts/infra/budget-alert.json"
+  },
+  "parameters": {
+    "budgetStartDate": {
+      "type": "string",
+      "defaultValue": "2026-03-01T00:00:00Z",
+      "metadata": {
+        "description": "First day of the budget period (UTC). Align to the first day of a billing month."
+      }
+    },
+    "budgetEndDate": {
+      "type": "string",
+      "defaultValue": "2030-12-31T23:59:59Z",
+      "metadata": {
+        "description": "Budget period end (UTC). Extend before expiry if still required."
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Consumption/budgets",
+      "apiVersion": "2023-05-01",
+      "name": "qgp-monthly-budget",
+      "properties": {
+        "category": "Cost",
+        "amount": 500,
+        "timeGrain": "Monthly",
+        "timePeriod": {
+          "startDate": "[parameters('budgetStartDate')]",
+          "endDate": "[parameters('budgetEndDate')]"
+        },
+        "filter": {},
+        "notifications": {
+          "WarningActual80Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 80,
+            "thresholdType": "Actual",
+            "contactEmails": [
+              "platform-team@plantexpand.com"
+            ]
+          },
+          "CriticalActual100Percent": {
+            "enabled": true,
+            "operator": "GreaterThan",
+            "threshold": 100,
+            "thresholdType": "Actual",
+            "contactEmails": [
+              "platform-team@plantexpand.com",
+              "engineering-lead@plantexpand.com"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

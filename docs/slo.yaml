@@ -1,6 +1,6 @@
 # Quality Governance Platform — Service Level Objectives (SLOs)
-# Version: 1.0.0
-# Last updated: 2026-03-06
+# Version: 1.1.0
+# Last updated: 2026-03-21
 
 service: quality-governance-platform
 environment: production
@@ -86,3 +86,67 @@ escalation_policy:
   - level: 3
     condition: SLO breached for > 4 hours
     action: Escalate to CTO and initiate incident response
+
+# -----------------------------------------------------------------------------
+# D04 — Performance SLOs (detailed narrative: docs/slo/performance-slos.md)
+# -----------------------------------------------------------------------------
+performance:
+  doc: docs/slo/performance-slos.md
+  opentelemetry_metrics:
+    - name: api.response_time_ms
+      description: HTTP request duration for API routes; use for p50/p95/p99 CRUD SLOs
+    - name: db.query_time_ms
+      description: Database query duration; tag indexed vs complex join paths where possible
+
+  api_latency_crud:
+    description: Standard CRUD endpoints under normal load
+    targets_ms:
+      p50: 100
+      p95: 200
+      p99: 500
+    alert_thresholds_ms:
+      p95: 200
+      p99: 500
+      p50_warning: 100
+
+  database_queries:
+    indexed:
+      percentile: p95
+      target_ms: 50
+      alert_threshold_ms: 50
+    complex_joins:
+      percentile: p99
+      target_ms: 200
+      alert_threshold_ms: 200
+
+  frontend_budget:
+    references:
+      - frontend/lighthouserc.json
+    targets:
+      fcp_ms: 1500
+      lcp_ms: 2500
+      tbt_ms: 200
+      cls: 0.1
+
+  bundle_size:
+    references:
+      - frontend/.size-limit.json
+    targets_gzip_kb:
+      main_js: 300
+      total_initial_js: 500
+
+  backend_throughput:
+    requests_per_second_per_instance: 100
+    p99_latency_ms_while_at_load: 500
+
+  load_tests:
+    reference: tests/performance/locustfile.py
+    pass_fail:
+      p95_response_ms_max: 500
+      error_rate_pct_max: 1.0
+      throughput_rps_min: 100
+      p99_latency_ms_max_at_target_load: 500
+
+  review_cadence:
+    weekly: p99 review (API, DB, key frontend vitals)
+    monthly: trend analysis (percentiles, bundles, Lighthouse, load baselines)
