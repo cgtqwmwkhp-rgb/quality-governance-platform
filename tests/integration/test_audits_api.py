@@ -1,5 +1,7 @@
 """Integration tests for Audits API endpoints."""
 
+from datetime import timedelta
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -309,3 +311,38 @@ class TestAuditsAPI:
         assert data["total"] >= 2
         for item in data["items"]:
             assert item["category"] == "Safety"
+
+    @pytest.mark.asyncio
+    async def test_alias_route_honors_template_optimistic_lock(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Alias template route returns 409 when the caller has a stale timestamp."""
+        template = AuditTemplate(
+            name="Alias Route Lock Test",
+            description="Exercises /api/v1/audit-templates optimistic locking",
+            category="Quality",
+            audit_type="audit",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        stale_updated_at = (template.updated_at - timedelta(minutes=5)).isoformat()
+
+        response = await client.patch(
+            f"/api/v1/audit-templates/{template.id}",
+            json={
+                "name": "Alias Route Lock Test Updated",
+                "expected_updated_at": stale_updated_at,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 409
+        assert "modified by another user" in response.json()["detail"]

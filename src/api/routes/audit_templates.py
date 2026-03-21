@@ -150,8 +150,6 @@ async def update_template(
     expected = update_data.pop("expected_updated_at", None)
 
     if expected:
-        from src.domain.models.audit_template import AuditTemplate
-
         existing = await db.get(AuditTemplate, template_id)
         if existing and existing.updated_at:
             expected_dt = dt.fromisoformat(expected.replace("Z", "+00:00"))

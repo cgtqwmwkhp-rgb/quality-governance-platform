@@ -872,6 +872,7 @@ export interface AuditTemplateUpdate {
   audit_type?: string
   scoring_method?: string
   passing_score?: number
+  expected_updated_at?: string
 }
 
 export interface AuditRunDetail extends AuditRun {
@@ -944,6 +945,16 @@ export interface QuestionOptionBase {
   score?: number
   is_correct?: boolean
   triggers_finding?: boolean
+  finding_severity?: string
+}
+
+export interface EvidenceRequirement {
+  required: boolean
+  min_attachments?: number
+  max_attachments?: number
+  allowed_types?: string[]
+  require_photo?: boolean
+  require_signature?: boolean
 }
 
 export interface AuditQuestionCreate {
@@ -955,11 +966,14 @@ export interface AuditQuestionCreate {
   is_required?: boolean
   allow_na?: boolean
   max_score?: number
+  max_value?: number | null
   weight?: number
   options?: QuestionOptionBase[]
+  evidence_requirements?: EvidenceRequirement
   sort_order?: number
   risk_category?: string
   risk_weight?: number
+  failure_triggers_action?: boolean
   positive_answer?: 'yes' | 'no'
 }
 
@@ -975,12 +989,14 @@ export interface AuditQuestionUpdate {
   options?: QuestionOptionBase[]
   min_value?: number | null
   max_value?: number | null
+  evidence_requirements?: EvidenceRequirement | null
   decimal_places?: number | null
   min_length?: number | null
   max_length?: number | null
   sort_order?: number
   risk_category?: string
   risk_weight?: number
+  failure_triggers_action?: boolean
   positive_answer?: 'yes' | 'no'
   is_active?: boolean
 }
@@ -1022,6 +1038,8 @@ export interface AuditQuestion {
   sort_order: number
   risk_category?: string
   risk_weight?: number
+  evidence_requirements?: EvidenceRequirement | null
+  failure_triggers_action: boolean
   positive_answer?: 'yes' | 'no'
   criticality?: string
   created_at: string
@@ -1055,26 +1073,25 @@ export interface AuditResponseUpdate {
 
 export interface AuditFindingCreate {
   title: string
-  description?: string
-  severity: 'critical' | 'major' | 'minor' | 'observation'
+  description: string
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'observation'
+  finding_type?: 'nonconformity' | 'observation' | 'opportunity' | 'positive'
   question_id?: number
   clause_ids?: number[]
   control_ids?: number[]
   risk_ids?: number[]
-  recommended_action?: string
-  due_date?: string
+  corrective_action_required?: boolean
+  corrective_action_due_date?: string
 }
 
 export interface AuditFindingUpdate {
   title?: string
   description?: string
-  severity?: 'critical' | 'major' | 'minor' | 'observation'
-  status?: 'open' | 'in_progress' | 'resolved' | 'verified' | 'closed'
-  recommended_action?: string
-  corrective_action?: string
-  verified_by_id?: number
-  verified_at?: string
-  due_date?: string
+  severity?: 'critical' | 'high' | 'medium' | 'low' | 'observation'
+  finding_type?: 'nonconformity' | 'observation' | 'opportunity' | 'positive'
+  status?: 'open' | 'in_progress' | 'pending_verification' | 'closed' | 'deferred'
+  corrective_action_required?: boolean
+  corrective_action_due_date?: string
 }
 
 // ============ Workforce Development Types ============
