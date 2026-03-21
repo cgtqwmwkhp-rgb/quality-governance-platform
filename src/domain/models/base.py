@@ -100,6 +100,7 @@ class AuditTrailMixin:
 # Data Classification (DPIA / docs/privacy/data-classification.md)
 # ---------------------------------------------------------------------------
 
+
 class DataClassification:
     """Declarative data classification levels for domain models.
 

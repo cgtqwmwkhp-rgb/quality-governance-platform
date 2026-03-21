@@ -240,9 +240,7 @@ class CopilotService:
 
     async def get_session(self, session_id: int) -> Optional[CopilotSession]:
         """Get a session by ID."""
-        result = await self.db.execute(
-            select(CopilotSession).where(CopilotSession.id == session_id)
-        )
+        result = await self.db.execute(select(CopilotSession).where(CopilotSession.id == session_id))
         return result.scalars().first()
 
     async def get_active_session(self, user_id: int) -> Optional[CopilotSession]:
@@ -582,9 +580,7 @@ class CopilotService:
         feedback_text: Optional[str] = None,
     ) -> CopilotFeedback:
         """Submit feedback on a copilot response."""
-        result = await self.db.execute(
-            select(CopilotMessage).where(CopilotMessage.id == message_id)
-        )
+        result = await self.db.execute(select(CopilotMessage).where(CopilotMessage.id == message_id))
         message = result.scalars().first()
 
         if not message:
@@ -639,17 +635,13 @@ class CopilotService:
         stmt = select(CopilotKnowledge).where(CopilotKnowledge.is_active == True)
 
         if tenant_id:
-            stmt = stmt.where(
-                (CopilotKnowledge.tenant_id == tenant_id)
-                | (CopilotKnowledge.tenant_id == None)
-            )
+            stmt = stmt.where((CopilotKnowledge.tenant_id == tenant_id) | (CopilotKnowledge.tenant_id == None))
 
         if category:
             stmt = stmt.where(CopilotKnowledge.category == category)
 
         stmt = stmt.where(
-            CopilotKnowledge.content.ilike(f"%{query}%")
-            | CopilotKnowledge.title.ilike(f"%{query}%")
+            CopilotKnowledge.content.ilike(f"%{query}%") | CopilotKnowledge.title.ilike(f"%{query}%")
         ).limit(limit)
 
         result = await self.db.execute(stmt)

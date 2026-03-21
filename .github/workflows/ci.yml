@@ -115,7 +115,7 @@ jobs:
       - name: Lint workflows
         uses: rhysd/actionlint@v1.7.10
         with:
-          args: ".github/workflows/*.yml"
+          args: ".github/workflows"
 
   smoke-gate-selftest:
     name: Smoke Gate Self-Test

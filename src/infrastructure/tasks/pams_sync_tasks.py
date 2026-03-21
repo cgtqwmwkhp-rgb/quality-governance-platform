@@ -69,14 +69,13 @@ def _sync_table(
         db: Session = session_local_cls()
         try:
             all_pams_ids = [
-                int({k: _safe_serialize(v) for k, v in dict(r).items()}.get(pk_col.name, 0))
-                for r in pams_rows
+                int({k: _safe_serialize(v) for k, v in dict(r).items()}.get(pk_col.name, 0)) for r in pams_rows
             ]
             existing_cache_rows = (
-                db.query(cache_model_cls)
-                .filter(cache_model_cls.pams_id.in_(all_pams_ids))
-                .all()
-            ) if all_pams_ids else []
+                (db.query(cache_model_cls).filter(cache_model_cls.pams_id.in_(all_pams_ids)).all())
+                if all_pams_ids
+                else []
+            )
             cache_index = {row.pams_id: row for row in existing_cache_rows}
 
             for row in pams_rows:
@@ -174,9 +173,7 @@ def _upsert_vehicle_registry(
     if pams_van_id:
         entry.pams_van_id = pams_van_id
 
-    check_dt = _parse_datetime(
-        row_dict.get("startTimeDate") or row_dict.get("DateSubmitted") or row_dict.get("date")
-    )
+    check_dt = _parse_datetime(row_dict.get("startTimeDate") or row_dict.get("DateSubmitted") or row_dict.get("date"))
 
     if table_name == "vanchecklist":
         if check_dt and (entry.last_daily_check_at is None or check_dt > entry.last_daily_check_at):
@@ -217,12 +214,35 @@ def _upsert_vehicle_registry(
 
 
 _SKIP_KEYS_FOR_PASS = {
-    "id", "ID", "inc_id", "created_at", "updated_at", "date", "driver",
-    "vehicle", "registration", "reg", "VehicleReg", "DriverName",
-    "DateSubmitted", "userName", "vanID", "vanReg", "startTimeDate",
-    "endTimeDate", "technician", "comments", "notes", "mileage", "Mileage",
-    "bodyWorkDamage", "defects", "uploaded", "roadTaxExpiryDate",
-    "toolingCalibrationExpiryDate", "fireExtinguisherExpiryDate",
+    "id",
+    "ID",
+    "inc_id",
+    "created_at",
+    "updated_at",
+    "date",
+    "driver",
+    "vehicle",
+    "registration",
+    "reg",
+    "VehicleReg",
+    "DriverName",
+    "DateSubmitted",
+    "userName",
+    "vanID",
+    "vanReg",
+    "startTimeDate",
+    "endTimeDate",
+    "technician",
+    "comments",
+    "notes",
+    "mileage",
+    "Mileage",
+    "bodyWorkDamage",
+    "defects",
+    "uploaded",
+    "roadTaxExpiryDate",
+    "toolingCalibrationExpiryDate",
+    "fireExtinguisherExpiryDate",
 }
 
 FAIL_VALUES = {"fail", "no", "0", "false", "failed", "n"}

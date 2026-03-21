@@ -173,9 +173,7 @@ async def get_vehicle_governance(
     total_q = select(func.count(VehicleRegistry.id))
     total = (await db.execute(total_q)).scalar() or 0
 
-    active_q = select(func.count(VehicleRegistry.id)).where(
-        VehicleRegistry.fleet_status == FleetStatus.ACTIVE
-    )
+    active_q = select(func.count(VehicleRegistry.id)).where(VehicleRegistry.fleet_status == FleetStatus.ACTIVE)
     active = (await db.execute(active_q)).scalar() or 0
 
     compliant_q = select(func.count(VehicleRegistry.id)).where(
@@ -191,9 +189,7 @@ async def get_vehicle_governance(
     compliance_rate = (compliant / total * 100) if total > 0 else 100.0
 
     open_statuses = ["open", "auto_detected", "acknowledged", "action_assigned"]
-    open_defects_q = select(func.count(VehicleDefect.id)).where(
-        VehicleDefect.status.in_(open_statuses)
-    )
+    open_defects_q = select(func.count(VehicleDefect.id)).where(VehicleDefect.status.in_(open_statuses))
     open_defects = (await db.execute(open_defects_q)).scalar() or 0
 
     p1_q = select(func.count(VehicleDefect.id)).where(
@@ -213,9 +209,7 @@ async def get_vehicle_governance(
     )
     overdue_checks = (await db.execute(overdue_q)).scalar() or 0
 
-    active_drivers_q = select(func.count(DriverProfile.id)).where(
-        DriverProfile.is_active_driver == True  # noqa: E712
-    )
+    active_drivers_q = select(func.count(DriverProfile.id)).where(DriverProfile.is_active_driver == True)  # noqa: E712
     active_drivers = (await db.execute(active_drivers_q)).scalar() or 0
 
     pending_ack_q = select(func.count(DriverAcknowledgement.id)).where(

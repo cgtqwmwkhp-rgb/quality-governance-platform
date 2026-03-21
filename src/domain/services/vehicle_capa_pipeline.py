@@ -79,7 +79,11 @@ def create_capa_from_defect_sync(
     db.flush()
     logger.info(
         "Auto-created CAPA %s for defect %d (vehicle %s, priority %s, SLA %dd)",
-        ref, defect_id, vehicle_reg, defect_priority, sla_days,
+        ref,
+        defect_id,
+        vehicle_reg,
+        defect_priority,
+        sla_days,
     )
     return int(action.id)
 

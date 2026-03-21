@@ -79,9 +79,7 @@ async def create_driver_profile(
     user: CurrentUser,
 ):
     """Create a new driver profile linking a user to PAMS driver data."""
-    existing = await db.execute(
-        select(DriverProfile).where(DriverProfile.user_id == body.user_id)
-    )
+    existing = await db.execute(select(DriverProfile).where(DriverProfile.user_id == body.user_id))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Driver profile already exists for this user")
 

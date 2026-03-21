@@ -7,7 +7,13 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, DataClassification, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import (
+    AuditTrailMixin,
+    CaseInsensitiveEnum,
+    DataClassification,
+    ReferenceNumberMixin,
+    TimestampMixin,
+)
 from src.domain.models.incident import ActionStatus
 from src.infrastructure.database import Base
 

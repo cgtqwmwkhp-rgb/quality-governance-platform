@@ -21,8 +21,8 @@ from src.api.schemas.investigation import (
     InvestigationRunCreate,
     InvestigationRunListResponse,
     InvestigationRunResponse,
-    InvestigationTimelineResponse,
     InvestigationRunUpdate,
+    InvestigationTimelineResponse,
     SourceRecordItem,
     SourceRecordsResponse,
 )

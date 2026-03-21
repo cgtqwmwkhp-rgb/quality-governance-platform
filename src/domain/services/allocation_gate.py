@@ -176,7 +176,6 @@ async def allocate_vehicle_to_driver(
     return {
         "allocated": True,
         "gate": gate.to_dict(),
-        "message": f"Vehicle {vehicle_reg} allocated to driver {driver_profile_id}"
-        + (" (forced)" if force else ""),
+        "message": f"Vehicle {vehicle_reg} allocated to driver {driver_profile_id}" + (" (forced)" if force else ""),
         "warnings": gate.expiry_warnings,
     }

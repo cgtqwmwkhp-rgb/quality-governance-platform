@@ -331,9 +331,9 @@ async def root():
     """Root endpoint: Provides basic API information and links."""
     from fastapi.responses import HTMLResponse
 
-    version_line = "Version 1.0.0 <span class=\"status\">RUNNING</span>"
+    version_line = 'Version 1.0.0 <span class="status">RUNNING</span>'
     if not settings.is_production:
-        version_line = f"Version 1.0.0 | Environment: {settings.app_env} <span class=\"status\">RUNNING</span>"
+        version_line = f'Version 1.0.0 | Environment: {settings.app_env} <span class="status">RUNNING</span>'
 
     html_content = f"""
     <!DOCTYPE html>

@@ -301,7 +301,9 @@ class TestCriticalPathVersioning:
         response = test_client.get("/openapi.json")
         schema = response.json()
 
-        unversioned = [path for path in schema["paths"] if path.startswith("/api/v1/") and not path.startswith("/api/v1/")]
+        unversioned = [
+            path for path in schema["paths"] if path.startswith("/api/v1/") and not path.startswith("/api/v1/")
+        ]
         assert unversioned == [], f"Unversioned API paths found: {unversioned}"
 
     def test_openapi_has_expected_critical_paths(self, test_client):

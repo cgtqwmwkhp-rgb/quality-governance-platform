@@ -36,5 +36,19 @@
   "common.filter": "Hidlo",
   "common.export": "Allforio",
   "common.import": "Mewnforio",
-  "a11y.skip_to_content": "Neidio i'r prif gynnwys"
+  "a11y.skip_to_content": "Neidio i'r prif gynnwys",
+  "rtas.detail.completion_notes_desc": "Cofnodwch y crynodeb terfynol cyn cau'r RTA hwn.",
+  "rtas.detail.completion_notes_label": "Nodiadau Cwblhau",
+  "rtas.detail.completion_notes_placeholder": "Crynhowch y canlyniad terfynol, y penderfyniadau, a'r dystiolaeth ddilynol…",
+  "rtas.detail.completion_notes_title": "Nodiadau Cwblhau",
+  "rtas.detail.mark_complete": "Marcio'n Gyflawn",
+  "rtas.tabs.actions": "Camau Gweithredu",
+  "rtas.tabs.other_driver": "Gyrrwr Arall",
+  "rtas.tabs.overview": "Trosolwg",
+  "rtas.tabs.our_driver": "Ein Gyrrwr",
+  "rtas.tabs.photos": "Lluniau",
+  "rtas.tabs.running_sheet": "Taflen Redeg",
+  "rtas.tabs.vehicle1": "Cerbyd 1",
+  "rtas.tabs.vehicle2": "Cerbyd 2",
+  "rtas.tabs.witnesses": "Tystion"
 }

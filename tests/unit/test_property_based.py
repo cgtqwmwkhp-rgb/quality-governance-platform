@@ -5,11 +5,11 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from hypothesis import assume, given, strategies as st
+from hypothesis import assume, given
+from hypothesis import strategies as st
 
 from src.api.utils.pagination import PaginationParams
 from src.domain.models.incident import ActionStatus
-
 
 REF_PATTERN = re.compile(r"^[A-Z0-9]+-\d{8}-\d{6}$")
 

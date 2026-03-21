@@ -48,9 +48,7 @@ def _load_pams_isolated(pams_ssl_ca: str = _REAL_CA):
         sys.modules[key] = fake_config if key == "src.core.config" else types.ModuleType(key)
 
     try:
-        spec = importlib.util.spec_from_file_location(
-            "pams_database_test", str(_MOD_PATH)
-        )
+        spec = importlib.util.spec_from_file_location("pams_database_test", str(_MOD_PATH))
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         return mod, mock_settings
@@ -68,9 +66,7 @@ class TestBuildAsyncSslContext:
     def test_returns_ssl_context(self):
         mod, _ = _load_pams_isolated()
         ctx = mod._build_async_ssl_context()
-        assert isinstance(ctx, ssl.SSLContext), (
-            f"aiomysql requires ssl.SSLContext, got {type(ctx).__name__}"
-        )
+        assert isinstance(ctx, ssl.SSLContext), f"aiomysql requires ssl.SSLContext, got {type(ctx).__name__}"
 
     def test_returns_none_when_no_ca(self):
         mod, _ = _load_pams_isolated(pams_ssl_ca="")

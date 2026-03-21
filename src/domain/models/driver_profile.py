@@ -44,9 +44,7 @@ class DriverProfile(Base, TimestampMixin):
     last_check_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active_driver: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     def __repr__(self) -> str:
         return (
@@ -77,9 +75,7 @@ class DriverAcknowledgement(Base, TimestampMixin):
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     def __repr__(self) -> str:
         return (

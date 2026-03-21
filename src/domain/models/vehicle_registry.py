@@ -61,9 +61,7 @@ class VehicleRegistry(Base, TimestampMixin):
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=True, index=True
-    )
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     def __repr__(self) -> str:
         return (

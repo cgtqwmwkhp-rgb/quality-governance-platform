@@ -11,12 +11,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
-from pydantic import BaseModel
-
 from src.api.schemas.vehicle_registry import (
     ComplianceGateResponse,
     FleetHealthResponse,
@@ -103,25 +102,19 @@ async def fleet_health(db: DbSession, user: CurrentUser):
 
     total = (await db.execute(total_q)).scalar() or 0
 
-    fleet_counts_q = (
-        select(
-            VehicleRegistry.fleet_status,
-            func.count(VehicleRegistry.id).label("cnt"),
-        )
-        .group_by(VehicleRegistry.fleet_status)
-    )
+    fleet_counts_q = select(
+        VehicleRegistry.fleet_status,
+        func.count(VehicleRegistry.id).label("cnt"),
+    ).group_by(VehicleRegistry.fleet_status)
     if user.tenant_id:
         fleet_counts_q = fleet_counts_q.where(VehicleRegistry.tenant_id == user.tenant_id)
     fleet_rows = (await db.execute(fleet_counts_q)).all()
     fleet_map = {str(r[0].value if hasattr(r[0], "value") else r[0]): r[1] for r in fleet_rows}
 
-    comp_counts_q = (
-        select(
-            VehicleRegistry.compliance_status,
-            func.count(VehicleRegistry.id).label("cnt"),
-        )
-        .group_by(VehicleRegistry.compliance_status)
-    )
+    comp_counts_q = select(
+        VehicleRegistry.compliance_status,
+        func.count(VehicleRegistry.id).label("cnt"),
+    ).group_by(VehicleRegistry.compliance_status)
     if user.tenant_id:
         comp_counts_q = comp_counts_q.where(VehicleRegistry.tenant_id == user.tenant_id)
     comp_rows = (await db.execute(comp_counts_q)).all()

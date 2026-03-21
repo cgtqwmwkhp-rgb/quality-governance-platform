@@ -97,7 +97,9 @@ class Settings(BaseSettings):
         appinsights_configured = "yes" if (self.applicationinsights_connection_string or "").strip() else "no"
 
         logger.info("Configuration summary: app_env=%s", self.app_env)
-        logger.info("Configuration summary: database_url=%s://%s@%s (password ***)", parsed.scheme, db_user_masked, db_host)
+        logger.info(
+            "Configuration summary: database_url=%s://%s@%s (password ***)", parsed.scheme, db_user_masked, db_host
+        )
         logger.info("Configuration summary: redis_configured=%s", redis_configured)
         logger.info("Configuration summary: pams_configured=%s", pams_configured)
         logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)

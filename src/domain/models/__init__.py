@@ -70,6 +70,7 @@ from src.domain.models.document_control import (
     DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 from src.domain.models.engineer import (
     CompetencyLifecycleState,
     CompetencyRecord,
@@ -169,8 +170,6 @@ from src.domain.models.risk_register import (
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.user import Role, User, UserRole
-from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
-from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 
 # UVDB Achilles Verify B2 Audit Protocol
 from src.domain.models.uvdb_achilles import (
@@ -181,6 +180,7 @@ from src.domain.models.uvdb_achilles import (
     UVDBQuestion,
     UVDBSection,
 )
+from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
 
 __all__ = [
     # Base mixins
