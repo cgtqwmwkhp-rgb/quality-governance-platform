@@ -492,7 +492,6 @@ export default function RTADetail() {
   )
 
   const parties = (rta.third_parties as { parties?: ThirdParty[] })?.parties || []
-  const party = parties[0] || {} as ThirdParty
   const witnesses = (rta.witnesses_structured as { witnesses?: Witness[] })?.witnesses || []
 
   // ──────────────────────── RENDER ────────────────────────

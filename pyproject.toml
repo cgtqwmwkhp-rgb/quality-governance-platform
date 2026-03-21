@@ -42,151 +42,61 @@ warn_unused_configs = true
 exclude = ["alembic/versions", "tests"]
 
 # GOVPLAT-004 Type Safety Remediation Tracking
-# Baseline (2026-03-01): 30 overrides, ~85 suppressed error codes
-# Current  (2026-03-07): 30 overrides, ~71 suppressed error codes
-# Target   (Q2 2026):   <17 overrides
+# Baseline  (2026-03-01): 30 overrides, ~85 suppressed error codes
+# Revised   (2026-03-07): 30 overrides, ~71 suppressed error codes
+# Current   (2026-03-21):  8 override blocks (consolidated)
+# Target    (Q2 2026):    ≤5 override blocks
 
-# Per-module overrides for pre-existing issues
-# Each module with type issues is explicitly listed with specific ignores
-# This prevents masking new errors while allowing known issues
-
+# ── Group 1: AI / ML service modules (attr-defined, arg-type, return-value, union-attr, no-any-return) ──
 [[tool.mypy.overrides]]
-module = "src.domain.services.ai_predictive_service"
-# GOVPLAT-004: Incident model attribute references
-disable_error_code = ["attr-defined", "arg-type", "return-value", "union-attr"]
+module = [
+    "src.domain.services.ai_predictive_service",
+    "src.domain.services.ai_audit_service",
+    "src.domain.services.copilot_service",
+    "src.domain.services.ai_models",
+]
+disable_error_code = ["attr-defined", "arg-type", "return-value", "union-attr", "no-any-return"]
 
+# ── Group 2: Route modules needing arg-type / call-arg ──
 [[tool.mypy.overrides]]
-module = "src.domain.services.ai_audit_service"
-# GOVPLAT-004: AuditFinding model attribute references
-disable_error_code = ["attr-defined", "arg-type", "union-attr", "return-value"]
+module = [
+    "src.api.routes.rca_tools",
+    "src.api.routes.policy_acknowledgment",
+    "src.api.routes.auditor_competence",
+    "src.api.routes.form_config",
+]
+disable_error_code = ["arg-type", "call-arg"]
 
+# ── Group 3: Route modules needing attr-defined + arg-type ──
 [[tool.mypy.overrides]]
-module = "src.domain.services.copilot_service"
-# GOVPLAT-004: Copilot service return type issues
-disable_error_code = ["return-value"]
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.ai_models"
-# GOVPLAT-004: AI model type issues
-disable_error_code = ["no-any-return", "attr-defined"]
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.audit_log_service"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.abac_service"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.signature_service"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.collaboration_service"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.domain.services.tenant_service"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.services.auditor_competence"
-# GOVPLAT-004: Type assignment issues
-disable_error_code = ["assignment", "operator"]
-
-[[tool.mypy.overrides]]
-module = "src.services.policy_acknowledgment"
-# GOVPLAT-004: Return type issues
-disable_error_code = ["return-value"]
-
-[[tool.mypy.overrides]]
-module = "src.infrastructure.cache.redis_cache"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.infrastructure.monitoring.azure_monitor"
-# GOVPLAT-004: Azure monitor type issues
-disable_error_code = ["assignment"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.uvdb"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.planet_mark"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.document_control"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.risk_register"
-# GOVPLAT-004: Risk register route type issues
-disable_error_code = ["attr-defined"]
-
-[[tool.mypy.overrides]]
-module = "src.services.workflow_engine"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.services.risk_scoring"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.signatures"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.ai_intelligence"
-# GOVPLAT-004: AI intelligence route type issues
-disable_error_code = ["call-overload"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.copilot"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.push_notifications"
-# GOVPLAT-004: Push notifications route type issues
-disable_error_code = ["assignment", "arg-type"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.near_miss"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.form_config"
-# GOVPLAT-004: Form config route type issues
-disable_error_code = ["call-arg", "arg-type"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.workflow"
-# GOVPLAT-004: Workflow route type issues
-disable_error_code = ["arg-type", "attr-defined"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.rca_tools"
-# GOVPLAT-004: RCA tools route type issues
-disable_error_code = ["arg-type"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.policy_acknowledgment"
-# GOVPLAT-004: Policy acknowledgment route type issues
-disable_error_code = ["arg-type"]
-
-[[tool.mypy.overrides]]
-module = "src.api.routes.kri"
-# GOVPLAT-004: KRI route type issues
+module = [
+    "src.api.routes.workflow",
+    "src.api.routes.kri",
+    "src.api.routes.risk_register",
+]
 disable_error_code = ["attr-defined", "arg-type"]
 
+# ── Group 4: Modules needing assignment / operator ──
 [[tool.mypy.overrides]]
-module = "src.api.routes.auditor_competence"
-# GOVPLAT-004: Auditor competence route type issues
-disable_error_code = ["arg-type"]
+module = [
+    "src.services.auditor_competence",
+    "src.infrastructure.monitoring.azure_monitor",
+    "src.api.routes.push_notifications",
+]
+disable_error_code = ["assignment", "operator", "arg-type"]
 
-# GOVPLAT-005: Pre-existing type errors — remove overrides as modules are fixed
+# ── Group 5: Modules with return-value issues ──
+[[tool.mypy.overrides]]
+module = "src.services.policy_acknowledgment"
+disable_error_code = ["return-value"]
+
+# ── Group 6: AI intelligence route (call-overload) ──
+[[tool.mypy.overrides]]
+module = "src.api.routes.ai_intelligence"
+disable_error_code = ["call-overload"]
+
+# ── GOVPLAT-005: Pre-existing type errors — consolidated ignore_errors block ──
+# Remove modules from this list as they are type-fixed.
 [[tool.mypy.overrides]]
 module = [
     "src.api.middleware.audit_middleware",
@@ -199,20 +109,31 @@ module = [
     "src.api.routes.complaints",
     "src.api.routes.compliance",
     "src.api.routes.compliance_automation",
+    "src.api.routes.copilot",
+    "src.api.routes.document_control",
     "src.api.routes.feature_flags",
     "src.api.routes.health",
     "src.api.routes.investigation_templates",
     "src.api.routes.iso27001",
+    "src.api.routes.near_miss",
     "src.api.routes.notifications",
+    "src.api.routes.planet_mark",
+    "src.api.routes.signatures",
     "src.api.routes.slo",
     "src.api.routes.tenants",
+    "src.api.routes.uvdb",
+    "src.api.routes.vehicle_checklist_analytics",
+    "src.api.routes.vehicle_checklists",
     "src.api.routes.workflows",
     "src.api.routes.xml_import",
     "src.domain.models.capa",
+    "src.domain.services.abac_service",
     "src.domain.services.asset_service",
+    "src.domain.services.audit_log_service",
     "src.domain.services.audit_service",
     "src.domain.services.auth_service",
     "src.domain.services.capa_service",
+    "src.domain.services.collaboration_service",
     "src.domain.services.competency_scoring_service",
     "src.domain.services.complaint_service",
     "src.domain.services.evidence_service",
@@ -229,16 +150,19 @@ module = [
     "src.domain.services.risk_service",
     "src.domain.services.rta_service",
     "src.domain.services.search_service",
+    "src.domain.services.signature_service",
     "src.domain.services.telemetry_service",
+    "src.domain.services.tenant_service",
     "src.domain.services.user_service",
     "src.domain.services.workflow_service",
     "src.domain.services.xml_importer_service",
+    "src.infrastructure.cache.redis_cache",
     "src.infrastructure.middleware.rate_limiter",
     "src.infrastructure.tasks.notification_tasks",
-    "src.infrastructure.websocket.connection_manager",
-    "src.api.routes.vehicle_checklists",
-    "src.api.routes.vehicle_checklist_analytics",
     "src.infrastructure.tasks.pams_sync_tasks",
+    "src.infrastructure.websocket.connection_manager",
+    "src.services.risk_scoring",
+    "src.services.workflow_engine",
 ]
 ignore_errors = true
 

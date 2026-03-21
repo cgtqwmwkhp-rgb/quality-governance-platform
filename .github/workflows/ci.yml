@@ -266,6 +266,22 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Verify npm lockfile is fresh
+        working-directory: frontend
+        run: |
+          node -e "
+          const pkg = require('./package.json');
+          const lock = require('./package-lock.json');
+          const missing = Object.keys(pkg.dependencies || {})
+            .concat(Object.keys(pkg.devDependencies || {}))
+            .filter(d => !lock.packages['node_modules/' + d]);
+          if (missing.length) {
+            console.error('[FAIL] Packages in package.json but not in lockfile:', missing);
+            process.exit(1);
+          }
+          console.log('[OK] package-lock.json covers all declared dependencies');
+          "
+
       - name: Audit npm dependencies
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
