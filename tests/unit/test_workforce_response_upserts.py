@@ -5,10 +5,10 @@ import pytest
 
 from src.api.routes.assessments import create_assessment_response
 from src.api.routes.inductions import create_induction_response
-from src.domain.models.assessment import AssessmentStatus, CompetencyVerdict
-from src.domain.models.induction import InductionStatus, UnderstandingVerdict
 from src.api.schemas.assessment import AssessmentResponseCreate
 from src.api.schemas.induction import InductionResponseCreate
+from src.domain.models.assessment import AssessmentStatus, CompetencyVerdict
+from src.domain.models.induction import InductionStatus, UnderstandingVerdict
 
 
 class _FakeResult:
