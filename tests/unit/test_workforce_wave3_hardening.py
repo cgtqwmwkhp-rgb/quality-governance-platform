@@ -6,11 +6,11 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from src.api.routes.assets import create_asset_type
 from src.api.routes.assessments import create_assessment_run
+from src.api.routes.assets import create_asset_type
 from src.api.routes.inductions import create_induction_run
-from src.api.schemas.asset import AssetTypeCreate
 from src.api.schemas.assessment import AssessmentRunCreate
+from src.api.schemas.asset import AssetTypeCreate
 from src.api.schemas.induction import InductionRunCreate
 
 
