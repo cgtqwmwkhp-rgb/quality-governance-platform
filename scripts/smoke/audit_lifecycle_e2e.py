@@ -22,13 +22,16 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import requests
 
-TIMEOUT_SECONDS = 20
+TIMEOUT_SECONDS = 45
+MAX_ATTEMPTS = 3
+RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 
 @dataclass
@@ -49,11 +52,49 @@ def _request(
     token: Optional[str] = None,
     payload: Optional[dict[str, Any]] = None,
     timeout: int = TIMEOUT_SECONDS,
+    max_attempts: int = MAX_ATTEMPTS,
 ) -> requests.Response:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    return requests.request(method, url, headers=headers, json=payload, timeout=timeout)
+
+    last_error: Optional[requests.RequestException] = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.request(method, url, headers=headers, json=payload, timeout=timeout)
+        except requests.RequestException as exc:
+            last_error = exc
+            if attempt == max_attempts:
+                break
+            time.sleep(attempt)
+            continue
+
+        if response.status_code in RETRYABLE_STATUS_CODES and attempt < max_attempts:
+            time.sleep(attempt)
+            continue
+
+        return response
+
+    assert last_error is not None
+    raise RuntimeError(
+        f"Request to {url} failed after {max_attempts} attempts: " f"{last_error.__class__.__name__}: {last_error}"
+    ) from last_error
+
+
+def _request_step(
+    results: list[StepResult],
+    step_name: str,
+    method: str,
+    url: str,
+    token: Optional[str] = None,
+    payload: Optional[dict[str, Any]] = None,
+    timeout: int = TIMEOUT_SECONDS,
+) -> Optional[requests.Response]:
+    try:
+        return _request(method, url, token=token, payload=payload, timeout=timeout)
+    except RuntimeError as exc:
+        results.append(StepResult(step_name, False, str(exc)))
+        return None
 
 
 def run(base_url: str, email: str, password: str) -> list[StepResult]:
@@ -67,11 +108,15 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     action_id: Optional[int] = None
 
     # 1) Login
-    login_resp = _request(
+    login_resp = _request_step(
+        results,
+        "login",
         "POST",
         f"{base_url}/api/v1/auth/login",
         payload={"email": email, "password": password},
     )
+    if login_resp is None:
+        return results
     if login_resp.status_code != 200:
         results.append(
             StepResult(
@@ -90,7 +135,15 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     results.append(StepResult("login", True, "Authenticated"))
 
     # 1b) List findings (regression gate for findings 500)
-    findings_resp = _request("GET", f"{base_url}/api/v1/audits/findings?page=1&page_size=10", token=token)
+    findings_resp = _request_step(
+        results,
+        "list_findings",
+        "GET",
+        f"{base_url}/api/v1/audits/findings?page=1&page_size=10",
+        token=token,
+    )
+    if findings_resp is None:
+        return results
     if findings_resp.status_code != 200:
         results.append(
             StepResult(
@@ -110,11 +163,15 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     )
 
     # 2) List published templates
-    templates_resp = _request(
+    templates_resp = _request_step(
+        results,
+        "list_published_templates",
         "GET",
         f"{base_url}/api/v1/audits/templates?is_published=true&page=1&page_size=50",
         token=token,
     )
+    if templates_resp is None:
+        return results
     if templates_resp.status_code != 200:
         results.append(
             StepResult(
@@ -155,7 +212,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "scheduled_date": _now_iso(),
     }
-    run_resp = _request("POST", f"{base_url}/api/v1/audits/runs", token=token, payload=run_payload)
+    run_resp = _request_step(
+        results,
+        "schedule_run",
+        "POST",
+        f"{base_url}/api/v1/audits/runs",
+        token=token,
+        payload=run_payload,
+    )
+    if run_resp is None:
+        return results
     if run_resp.status_code != 201:
         results.append(
             StepResult(
@@ -181,7 +247,15 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     )
 
     # 4) Fetch template detail and submit one response
-    template_resp = _request("GET", f"{base_url}/api/v1/audits/templates/{template_id}", token=token)
+    template_resp = _request_step(
+        results,
+        "template_detail",
+        "GET",
+        f"{base_url}/api/v1/audits/templates/{template_id}",
+        token=token,
+    )
+    if template_resp is None:
+        return results
     if template_resp.status_code != 200:
         results.append(
             StepResult(
@@ -210,12 +284,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "max_score": 1,
         "notes": "E2E response",
     }
-    response_resp = _request(
+    response_resp = _request_step(
+        results,
+        "submit_response",
         "POST",
         f"{base_url}/api/v1/audits/runs/{run_id}/responses",
         token=token,
         payload=response_payload,
     )
+    if response_resp is None:
+        return results
     if response_resp.status_code != 201:
         results.append(
             StepResult(
@@ -229,7 +307,15 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
     results.append(StepResult("submit_response", True, "One response submitted"))
 
     # 5) Complete run
-    complete_resp = _request("POST", f"{base_url}/api/v1/audits/runs/{run_id}/complete", token=token)
+    complete_resp = _request_step(
+        results,
+        "complete_run",
+        "POST",
+        f"{base_url}/api/v1/audits/runs/{run_id}/complete",
+        token=token,
+    )
+    if complete_resp is None:
+        return results
     if complete_resp.status_code != 200:
         results.append(
             StepResult(
@@ -251,12 +337,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "corrective_action_required": True,
         "question_id": question_id,
     }
-    finding_resp = _request(
+    finding_resp = _request_step(
+        results,
+        "create_finding",
         "POST",
         f"{base_url}/api/v1/audits/runs/{run_id}/findings",
         token=token,
         payload=finding_payload,
     )
+    if finding_resp is None:
+        return results
     if finding_resp.status_code != 201:
         results.append(
             StepResult(
@@ -282,7 +372,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "location": "E2E Validation Site",
         "department": "Governance",
     }
-    incident_resp = _request("POST", f"{base_url}/api/v1/incidents/", token=token, payload=incident_payload)
+    incident_resp = _request_step(
+        results,
+        "create_incident_for_action_bridge",
+        "POST",
+        f"{base_url}/api/v1/incidents/",
+        token=token,
+        payload=incident_payload,
+    )
+    if incident_resp is None:
+        return results
     if incident_resp.status_code != 201:
         results.append(
             StepResult(
@@ -310,7 +409,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "source_id": incident_id,
         "priority": "medium",
     }
-    action_resp = _request("POST", f"{base_url}/api/v1/actions/", token=token, payload=action_payload)
+    action_resp = _request_step(
+        results,
+        "create_action",
+        "POST",
+        f"{base_url}/api/v1/actions/",
+        token=token,
+        payload=action_payload,
+    )
+    if action_resp is None:
+        return results
     if action_resp.status_code != 201:
         results.append(
             StepResult(
@@ -328,12 +436,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         "status": "completed",
         "completion_notes": "Closed by automated audit lifecycle e2e run",
     }
-    close_resp = _request(
+    close_resp = _request_step(
+        results,
+        "close_action",
         "PATCH",
         f"{base_url}/api/v1/actions/{action_id}?source_type=incident",
         token=token,
         payload=close_action_payload,
     )
+    if close_resp is None:
+        return results
     if close_resp.status_code != 200:
         results.append(
             StepResult(
