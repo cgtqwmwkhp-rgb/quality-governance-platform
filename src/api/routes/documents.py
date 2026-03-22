@@ -10,7 +10,7 @@ Enterprise document management with:
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
@@ -435,7 +435,7 @@ async def semantic_search(
     vector_service = VectorSearchService()
 
     # Build filter
-    filter_dict = None
+    filter_dict: Optional[dict[str, Any]] = None
     if document_type:
         filter_dict = {"document_type": document_type}
     if not current_user.is_superuser:

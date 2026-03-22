@@ -79,17 +79,23 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         if self.is_superuser:
             return True
         for role in self.roles:
-            permissions = role.permissions
-            if not permissions:
+            raw_permissions = role.permissions
+            if not raw_permissions:
                 continue
 
-            if isinstance(permissions, str):
+            parsed_permissions: list[str]
+            if isinstance(raw_permissions, str):
                 try:
-                    permissions = json.loads(permissions)
+                    decoded_permissions = json.loads(raw_permissions)
                 except json.JSONDecodeError:
-                    permissions = []
+                    decoded_permissions = []
+                parsed_permissions = decoded_permissions if isinstance(decoded_permissions, list) else []
+            elif isinstance(raw_permissions, list):
+                parsed_permissions = [str(item) for item in raw_permissions]
+            else:
+                parsed_permissions = []
 
-            if permission in permissions:
+            if permission in parsed_permissions:
                 return True
         return False
 
