@@ -113,8 +113,9 @@ export default function Login({ onLogin }: LoginProps) {
       })
 
       if (!response.ok) {
-        if (import.meta.env.DEV)
+        if (import.meta.env.DEV) {
           console.error('[AdminAuth] Token exchange failed:', response.status)
+        }
         return null
       }
 

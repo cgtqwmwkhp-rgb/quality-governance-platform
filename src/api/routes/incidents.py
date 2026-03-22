@@ -114,7 +114,10 @@ async def list_incidents(
         if not await svc.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only view your own incidents",
+                detail=api_error(
+                    ErrorCode.PERMISSION_DENIED,
+                    "You can only view your own incidents",
+                ),
             )
 
         await record_audit_event(
@@ -167,12 +170,18 @@ async def list_incidents(
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. Please wait for migrations to complete.",
+                detail=api_error(
+                    ErrorCode.DATABASE_ERROR,
+                    "Database migration pending. Please wait for migrations to complete.",
+                ),
             )
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing incidents: {type(e).__name__}: {str(e)[:200]}",
+            detail=api_error(
+                ErrorCode.INTERNAL_ERROR,
+                "Unable to list incidents at this time.",
+            ),
         )
 
 
