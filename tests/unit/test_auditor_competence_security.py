@@ -4,11 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from src.api.routes.auditor_competence import (
-    _assert_auditor_access,
-    create_auditor_profile,
-    CreateProfileRequest,
-)
+from src.api.routes.auditor_competence import CreateProfileRequest, _assert_auditor_access, create_auditor_profile
 from src.services.auditor_competence import AuditorCompetenceService
 
 
@@ -80,7 +76,9 @@ async def test_get_expiring_certifications_scopes_to_service_tenant():
 async def test_create_profile_rejects_cross_tenant_user(monkeypatch):
     target_user = types.SimpleNamespace(id=11, tenant_id=9, is_active=True)
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(target_user)))
-    current_user = types.SimpleNamespace(id=42, tenant_id=7, is_superuser=False, roles=[types.SimpleNamespace(name="admin")])
+    current_user = types.SimpleNamespace(
+        id=42, tenant_id=7, is_superuser=False, roles=[types.SimpleNamespace(name="admin")]
+    )
 
     create_profile = AsyncMock()
     monkeypatch.setattr(

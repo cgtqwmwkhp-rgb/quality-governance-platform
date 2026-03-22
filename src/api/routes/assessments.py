@@ -311,8 +311,8 @@ async def complete_assessment(
             ),
         )
 
-    template_query = select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(
-        AuditTemplate.id == run.template_id
+    template_query = (
+        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
     )
     template_query = apply_tenant_filter(template_query, AuditTemplate, user.tenant_id)
     template_result = await db.execute(template_query)

@@ -31,7 +31,9 @@ class GovernanceService:
         latest_records = {}
         for record in records:
             current = latest_records.get(record.asset_type_id)
-            if current is None or GovernanceService._competency_record_sort_key(record) > GovernanceService._competency_record_sort_key(current):
+            if current is None or GovernanceService._competency_record_sort_key(
+                record
+            ) > GovernanceService._competency_record_sort_key(current):
                 latest_records[record.asset_type_id] = record
         return list(latest_records.values())
 
@@ -271,7 +273,9 @@ class GovernanceService:
                     "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                     "priority": priority,
                     "suggested_action": (
-                        "Reassessment required" if effective_state == CompetencyLifecycleState.EXPIRED else "Schedule reassessment"
+                        "Reassessment required"
+                        if effective_state == CompetencyLifecycleState.EXPIRED
+                        else "Schedule reassessment"
                     ),
                 }
             )

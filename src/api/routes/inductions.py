@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.induction import (
     InductionResponseCreate,
     InductionResponseResponse,
@@ -22,7 +23,6 @@ from src.api.schemas.induction import (
     InductionRunResponse,
     InductionRunUpdate,
 )
-from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.audit import AuditQuestion, AuditTemplate
@@ -124,7 +124,9 @@ async def list_induction_runs(
             apply_tenant_filter(select(Engineer.id), Engineer, user.tenant_id).where(Engineer.user_id == user.id)
         )
         engineer_ids = engineer_id_result.scalars().all()
-        query = query.where((InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1])))
+        query = query.where(
+            (InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1]))
+        )
     if engineer_id is not None:
         query = query.where(InductionRun.engineer_id == engineer_id)
     if status is not None:
@@ -300,8 +302,8 @@ async def complete_induction(
             detail=f"Induction cannot be completed from status '{run.status.value}'",
         )
 
-    template_query = select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(
-        AuditTemplate.id == run.template_id
+    template_query = (
+        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
     )
     template_query = apply_tenant_filter(template_query, AuditTemplate, user.tenant_id)
     template_result = await db.execute(template_query)
