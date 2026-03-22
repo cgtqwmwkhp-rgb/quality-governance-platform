@@ -98,8 +98,11 @@ class GovernanceService:
         if not supervisor or not supervisor.is_active:
             return {"valid": False, "reason": "Supervisor not found or inactive"}
 
-        if tenant_id is not None and supervisor.tenant_id is not None and supervisor.tenant_id != tenant_id:
+        if tenant_id is not None and supervisor.tenant_id != tenant_id and not supervisor.is_superuser:
             return {"valid": False, "reason": "Supervisor not in tenant scope"}
+
+        if supervisor.is_superuser:
+            return {"valid": True, "reason": None}
 
         role_names = {r.name.lower() for r in supervisor.roles} if supervisor.roles else set()
         if "supervisor" not in role_names and "admin" not in role_names:

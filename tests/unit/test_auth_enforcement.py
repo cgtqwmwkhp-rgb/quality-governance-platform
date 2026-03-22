@@ -63,6 +63,15 @@ UVDB_ENDPOINTS = [
     ("GET", "/api/v1/uvdb/iso-mapping"),
 ]
 
+WORKFORCE_ENDPOINTS = [
+    ("GET", "/api/v1/assessments/"),
+    ("POST", "/api/v1/assessments/"),
+    ("GET", "/api/v1/inductions/"),
+    ("POST", "/api/v1/inductions/"),
+    ("GET", "/api/v1/engineers/"),
+    ("POST", "/api/v1/engineers/"),
+]
+
 ALL_PROTECTED = (
     TENANT_WRITE_ENDPOINTS
     + INCIDENT_ENDPOINTS
@@ -72,6 +81,7 @@ ALL_PROTECTED = (
     + NEAR_MISS_ENDPOINTS
     + PLANET_MARK_ENDPOINTS
     + UVDB_ENDPOINTS
+    + WORKFORCE_ENDPOINTS
 )
 
 
