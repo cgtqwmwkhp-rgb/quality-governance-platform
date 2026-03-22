@@ -12,6 +12,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
 import { useTranslation } from 'react-i18next'
+import { formatScheduledDate } from './dateUtils'
 
 type Verdict = 'competent' | 'not_yet_competent' | 'na'
 
@@ -78,79 +79,81 @@ export default function TrainingExecution() {
     [],
   )
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return
-      setLoading(true)
-      setError(null)
-      try {
-        const runRes = await workforceApi.getInduction(id)
-        let run = runRes.data as InductionRunWithResponses
+  const loadInduction = useCallback(async () => {
+    if (!id) return
+    setLoading(true)
+    setError(null)
+    try {
+      const runRes = await workforceApi.getInduction(id)
+      let run = runRes.data as InductionRunWithResponses
 
-        if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
-          autoStartedRunIds.current.add(id)
-          const startedRunRes = await workforceApi.startInduction(id)
-          run = {
-            ...run,
-            ...startedRunRes.data,
-            responses: run.responses,
-          }
+      if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
+        const startedRunRes = await workforceApi.startInduction(id)
+        autoStartedRunIds.current.add(id)
+        run = {
+          ...run,
+          ...startedRunRes.data,
+          responses: run.responses,
         }
-        setInduction(run)
-
-        if (Array.isArray(run.responses)) {
-          const nextResponses = new Map<number, ResponseState>()
-          for (const response of run.responses) {
-            nextResponses.set(response.question_id, {
-              responseId: response.id,
-              shownExplained: response.shown_explained ?? false,
-              verdict: response.understanding ?? null,
-              supervisorNotes: response.supervisor_notes ?? '',
-            })
-          }
-          setResponses(nextResponses)
-        }
-
-        let template: {
-          sections: { title: string; questions: AuditQuestion[] }[]
-          name: string
-        } | null = null
-        try {
-          const templateRes = await auditsApi.getTemplate(run.template_id)
-          template = templateRes.data
-        } catch {
-          // template might not exist
-        }
-
-        if (template?.sections) {
-          const flat = flattenQuestions(
-            template.sections.map((s) => ({
-              title: s.title,
-              questions: s.questions || [],
-            })),
-          )
-          setQuestions(flat)
-          setTemplateName(template.name)
-        } else {
-          setQuestions([])
-          setTemplateName(run.title || 'Training')
-        }
-
-        try {
-          const eng = await workforceApi.getEngineer(run.engineer_id)
-          const name = eng.data.employee_number || `Engineer #${run.engineer_id}`
-          setEngineerName(name)
-        } catch {
-          setEngineerName(`Engineer #${run.engineer_id}`)
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load induction')
-      } finally {
-        setLoading(false)
       }
+      setInduction(run)
+
+      if (Array.isArray(run.responses)) {
+        const nextResponses = new Map<number, ResponseState>()
+        for (const response of run.responses) {
+          nextResponses.set(response.question_id, {
+            responseId: response.id,
+            shownExplained: response.shown_explained ?? false,
+            verdict: response.understanding ?? null,
+            supervisorNotes: response.supervisor_notes ?? '',
+          })
+        }
+        setResponses(nextResponses)
+      }
+
+      let template: {
+        sections: { title: string; questions: AuditQuestion[] }[]
+        name: string
+      } | null = null
+      try {
+        const templateRes = await auditsApi.getTemplate(run.template_id)
+        template = templateRes.data
+      } catch {
+        // template might not exist
+      }
+
+      if (template?.sections) {
+        const flat = flattenQuestions(
+          template.sections.map((s) => ({
+            title: s.title,
+            questions: s.questions || [],
+          })),
+        )
+        setQuestions(flat)
+        setTemplateName(template.name)
+      } else {
+        setQuestions([])
+        setTemplateName(run.title || 'Training')
+      }
+
+      try {
+        const eng = await workforceApi.getEngineer(run.engineer_id)
+        const name = eng.data.employee_number || `Engineer #${run.engineer_id}`
+        setEngineerName(name)
+      } catch {
+        setEngineerName(`Engineer #${run.engineer_id}`)
+      }
+    } catch (e) {
+      autoStartedRunIds.current.delete(id)
+      setError(getApiErrorMessage(e))
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [id, flattenQuestions])
+  }, [flattenQuestions, id])
+
+  useEffect(() => {
+    void loadInduction()
+  }, [loadInduction])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -215,7 +218,6 @@ export default function TrainingExecution() {
     setSubmitting(true)
     setError(null)
     try {
-      const failedItems: number[] = []
       for (const [qId, resp] of responses) {
         if (resp.verdict) {
           try {
@@ -233,15 +235,13 @@ export default function TrainingExecution() {
                 supervisor_notes: resp.supervisorNotes || undefined,
               })
             }
-          } catch {
-            failedItems.push(qId)
+          } catch (e) {
+            await loadInduction()
+            setError(`Failed to save question ${qId}: ${getApiErrorMessage(e)}`)
+            setSubmitting(false)
+            return
           }
         }
-      }
-      if (failedItems.length > 0) {
-        setError(`Failed to save ${failedItems.length} response(s). Please retry.`)
-        setSubmitting(false)
-        return
       }
       await workforceApi.completeInduction(id)
       navigate('/workforce/training')
@@ -277,6 +277,9 @@ export default function TrainingExecution() {
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">{error}</p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => void loadInduction()}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -411,10 +414,7 @@ export default function TrainingExecution() {
             {induction?.reference_number ?? t('workforce.induction.title')}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {engineerName} · {templateName} ·{' '}
-            {induction?.scheduled_date
-              ? new Date(induction.scheduled_date).toLocaleDateString()
-              : '—'}
+            {engineerName} · {templateName} · {formatScheduledDate(induction?.scheduled_date)}
           </p>
         </div>
       </div>

@@ -20,6 +20,7 @@ import {
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
+import { formatScheduledDate } from './dateUtils'
 
 type Verdict = 'competent' | 'not_competent' | 'na'
 
@@ -92,84 +93,86 @@ export default function AssessmentExecution() {
     [],
   )
 
-  useEffect(() => {
-    const load = async () => {
-      if (!id) return
-      setLoading(true)
-      setError(null)
-      try {
-        const runRes = await workforceApi.getAssessment(id)
-        let run = runRes.data as AssessmentRunWithResponses
-        setDebriefNotes(run.debrief_notes ?? '')
-        setFinalSignature(run.debrief_signature ?? null)
+  const loadAssessment = useCallback(async () => {
+    if (!id) return
+    setLoading(true)
+    setError(null)
+    try {
+      const runRes = await workforceApi.getAssessment(id)
+      let run = runRes.data as AssessmentRunWithResponses
+      setDebriefNotes(run.debrief_notes ?? '')
+      setFinalSignature(run.debrief_signature ?? null)
 
-        if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
-          autoStartedRunIds.current.add(id)
-          const startedRunRes = await workforceApi.startAssessment(id)
-          run = {
-            ...run,
-            ...startedRunRes.data,
-            responses: run.responses,
-            debrief_notes: run.debrief_notes,
-            debrief_signature: run.debrief_signature,
-          }
+      if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
+        const startedRunRes = await workforceApi.startAssessment(id)
+        autoStartedRunIds.current.add(id)
+        run = {
+          ...run,
+          ...startedRunRes.data,
+          responses: run.responses,
+          debrief_notes: run.debrief_notes,
+          debrief_signature: run.debrief_signature,
         }
-        setAssessment(run)
-
-        if (Array.isArray(run.responses)) {
-          const nextResponses = new Map<number, ResponseState>()
-          for (const response of run.responses) {
-            nextResponses.set(response.question_id, {
-              responseId: response.id,
-              verdict: response.verdict ?? null,
-              feedback: response.feedback ?? '',
-              supervisorNotes: response.supervisor_notes ?? '',
-              signatureBase64: response.engineer_signature ?? null,
-            })
-          }
-          setResponses(nextResponses)
-        }
-
-        let template: {
-          sections: { title: string; questions: AuditQuestion[] }[]
-          name: string
-        } | null = null
-        try {
-          const t = await auditsApi.getTemplate(run.template_id)
-          template = t.data
-        } catch {
-          // template might not exist
-        }
-
-        if (template?.sections) {
-          const flat = flattenQuestions(
-            template.sections.map((s) => ({
-              title: s.title,
-              questions: s.questions || [],
-            })),
-          )
-          setQuestions(flat)
-          setTemplateName(template.name)
-        } else {
-          setQuestions([])
-          setTemplateName(run.title || 'Assessment')
-        }
-
-        try {
-          const eng = await workforceApi.getEngineer(run.engineer_id)
-          const name = eng.data.employee_number || `Engineer #${run.engineer_id}`
-          setEngineerName(name)
-        } catch {
-          setEngineerName(`Engineer #${run.engineer_id}`)
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load assessment')
-      } finally {
-        setLoading(false)
       }
+      setAssessment(run)
+
+      if (Array.isArray(run.responses)) {
+        const nextResponses = new Map<number, ResponseState>()
+        for (const response of run.responses) {
+          nextResponses.set(response.question_id, {
+            responseId: response.id,
+            verdict: response.verdict ?? null,
+            feedback: response.feedback ?? '',
+            supervisorNotes: response.supervisor_notes ?? '',
+            signatureBase64: response.engineer_signature ?? null,
+          })
+        }
+        setResponses(nextResponses)
+      }
+
+      let template: {
+        sections: { title: string; questions: AuditQuestion[] }[]
+        name: string
+      } | null = null
+      try {
+        const t = await auditsApi.getTemplate(run.template_id)
+        template = t.data
+      } catch {
+        // template might not exist
+      }
+
+      if (template?.sections) {
+        const flat = flattenQuestions(
+          template.sections.map((s) => ({
+            title: s.title,
+            questions: s.questions || [],
+          })),
+        )
+        setQuestions(flat)
+        setTemplateName(template.name)
+      } else {
+        setQuestions([])
+        setTemplateName(run.title || 'Assessment')
+      }
+
+      try {
+        const eng = await workforceApi.getEngineer(run.engineer_id)
+        const name = eng.data.employee_number || `Engineer #${run.engineer_id}`
+        setEngineerName(name)
+      } catch {
+        setEngineerName(`Engineer #${run.engineer_id}`)
+      }
+    } catch (e) {
+      autoStartedRunIds.current.delete(id)
+      setError(getApiErrorMessage(e))
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [id, flattenQuestions])
+  }, [flattenQuestions, id])
+
+  useEffect(() => {
+    void loadAssessment()
+  }, [loadAssessment])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -238,7 +241,6 @@ export default function AssessmentExecution() {
     setError(null)
     setSubmitting(true)
     try {
-      const failedQuestions: number[] = []
       for (const [qId, resp] of responses) {
         if (resp.verdict) {
           try {
@@ -264,15 +266,13 @@ export default function AssessmentExecution() {
                 })
               }
             }
-          } catch {
-            failedQuestions.push(qId)
+          } catch (e) {
+            await loadAssessment()
+            setError(`Failed to save question ${qId}: ${getApiErrorMessage(e)}`)
+            setSubmitting(false)
+            return
           }
         }
-      }
-      if (failedQuestions.length > 0) {
-        setError(`Failed to save ${failedQuestions.length} response(s). Please retry.`)
-        setSubmitting(false)
-        return
       }
       if (debriefNotes || finalSignature) {
         await workforceApi.updateAssessment(id, {
@@ -323,6 +323,9 @@ export default function AssessmentExecution() {
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">{error}</p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => void loadAssessment()}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -507,10 +510,7 @@ export default function AssessmentExecution() {
             {assessment?.reference_number ?? t('workforce.assessment.title')}
           </h1>
           <p className="text-muted-foreground text-sm">
-            {engineerName} · {templateName} ·{' '}
-            {assessment?.scheduled_date
-              ? new Date(assessment.scheduled_date).toLocaleDateString()
-              : '—'}
+            {engineerName} · {templateName} · {formatScheduledDate(assessment?.scheduled_date)}
           </p>
         </div>
       </div>

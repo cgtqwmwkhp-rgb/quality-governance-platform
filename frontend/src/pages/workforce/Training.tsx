@@ -15,6 +15,7 @@ import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
+import { formatScheduledDate } from './dateUtils'
 
 const STATUS_VARIANTS: Record<
   string,
@@ -223,7 +224,7 @@ export default function Training() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">
-                          {i.scheduled_date ? new Date(i.scheduled_date).toLocaleDateString() : '—'}
+                          {formatScheduledDate(i.scheduled_date)}
                         </td>
                         <td className="py-3 px-4">
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />

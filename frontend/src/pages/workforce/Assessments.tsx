@@ -16,6 +16,7 @@ import { Input } from '../../components/ui/Input'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { cn } from '../../helpers/utils'
+import { formatScheduledDate } from './dateUtils'
 
 const STATUS_VARIANTS: Record<
   string,
@@ -235,7 +236,7 @@ export default function Assessments() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground">
-                          {a.scheduled_date ? new Date(a.scheduled_date).toLocaleDateString() : '—'}
+                          {formatScheduledDate(a.scheduled_date)}
                         </td>
                         <td className="py-3 px-4">
                           {a.outcome ? (

@@ -9,6 +9,7 @@ import {
   getApiErrorMessage,
 } from '../../api/client'
 import { cn } from '../../helpers/utils'
+import { parseScheduledLocalDate } from './dateUtils'
 
 const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 
@@ -27,19 +28,6 @@ interface ScheduledWorkItem {
   scheduled_date?: string
   status: string
   type: 'assessment' | 'induction'
-}
-
-export function parseScheduledLocalDate(value?: string): Date | null {
-  if (!value) return null
-
-  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch
-    return new Date(Number(year), Number(month) - 1, Number(day))
-  }
-
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
 export default function Calendar() {

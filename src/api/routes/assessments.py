@@ -213,7 +213,12 @@ async def get_assessment_run(
     user: CurrentUser,
 ):
     """Get an assessment run by ID."""
-    query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
+    query = (
+        select(AssessmentRun)
+        .options(selectinload(AssessmentRun.responses))
+        .where(AssessmentRun.id == run_id)
+        .with_for_update()
+    )
     query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -306,8 +311,8 @@ async def complete_assessment(
             ),
         )
 
-    template_query = (
-        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
+    template_query = select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(
+        AuditTemplate.id == run.template_id
     )
     template_query = apply_tenant_filter(template_query, AuditTemplate, user.tenant_id)
     template_result = await db.execute(template_query)
@@ -355,22 +360,36 @@ async def complete_assessment(
         from datetime import timedelta
 
         expiry = datetime.now(timezone.utc) + timedelta(days=365) if score_result.outcome == "pass" else None
-        competency = CompetencyRecord(
-            engineer_id=run.engineer_id,
-            asset_type_id=run.asset_type_id,
-            template_id=run.template_id,
-            source_type="assessment",
-            source_run_id=run.id,
-            state=(
-                CompetencyLifecycleState.ACTIVE if score_result.outcome == "pass" else CompetencyLifecycleState.FAILED
-            ),
-            outcome=score_result.outcome,
-            assessed_at=datetime.now(timezone.utc),
-            assessed_by_id=run.supervisor_id,
-            expires_at=expiry,
-            tenant_id=run.tenant_id,
+        competency_query = select(CompetencyRecord).where(
+            CompetencyRecord.source_type == "assessment",
+            CompetencyRecord.source_run_id == run.id,
         )
-        db.add(competency)
+        if run.tenant_id is None:
+            competency_query = competency_query.where(CompetencyRecord.tenant_id.is_(None))
+        else:
+            competency_query = competency_query.where(CompetencyRecord.tenant_id == run.tenant_id)
+        competency_result = await db.execute(competency_query)
+        competency = competency_result.scalar_one_or_none()
+        if competency is None:
+            competency = CompetencyRecord(
+                engineer_id=run.engineer_id,
+                asset_type_id=run.asset_type_id,
+                template_id=run.template_id,
+                source_type="assessment",
+                source_run_id=run.id,
+                tenant_id=run.tenant_id,
+            )
+            db.add(competency)
+        competency.engineer_id = run.engineer_id
+        competency.asset_type_id = run.asset_type_id
+        competency.template_id = run.template_id
+        competency.state = (
+            CompetencyLifecycleState.ACTIVE if score_result.outcome == "pass" else CompetencyLifecycleState.FAILED
+        )
+        competency.outcome = score_result.outcome
+        competency.assessed_at = datetime.now(timezone.utc)
+        competency.assessed_by_id = run.supervisor_id
+        competency.expires_at = expiry
 
     if score_result.outcome in ("fail", "conditional"):
         failed_questions = []
@@ -408,6 +427,7 @@ async def complete_assessment(
             engineer_user_id=engineer.user_id if engineer else None,
             supervisor_id=run.supervisor_id,
             outcome=score_result.outcome,
+            tenant_id=run.tenant_id,
         )
     except Exception:
         logger.exception("Failed to send assessment completion notification for run %s", run.id)

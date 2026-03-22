@@ -31,9 +31,7 @@ class GovernanceService:
         latest_records = {}
         for record in records:
             current = latest_records.get(record.asset_type_id)
-            if current is None or GovernanceService._competency_record_sort_key(
-                record
-            ) > GovernanceService._competency_record_sort_key(current):
+            if current is None or GovernanceService._competency_record_sort_key(record) > GovernanceService._competency_record_sort_key(current):
                 latest_records[record.asset_type_id] = record
         return list(latest_records.values())
 
@@ -273,9 +271,7 @@ class GovernanceService:
                     "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                     "priority": priority,
                     "suggested_action": (
-                        "Reassessment required"
-                        if effective_state == CompetencyLifecycleState.EXPIRED
-                        else "Schedule reassessment"
+                        "Reassessment required" if effective_state == CompetencyLifecycleState.EXPIRED else "Schedule reassessment"
                     ),
                 }
             )
@@ -293,6 +289,7 @@ class NotificationService:
         engineer_user_id: int | None,
         supervisor_id: int,
         outcome: str,
+        tenant_id: int | None = None,
     ) -> None:
         """Create notifications when an assessment is completed."""
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
@@ -305,6 +302,7 @@ class NotificationService:
 
         if engineer_user_id is not None:
             notification = Notification(
+                tenant_id=tenant_id,
                 user_id=engineer_user_id,
                 type=NotificationType.AUDIT_COMPLETED,
                 priority=NotificationPriority.MEDIUM,
@@ -317,6 +315,7 @@ class NotificationService:
             db.add(notification)
 
         supervisor_notification = Notification(
+            tenant_id=tenant_id,
             user_id=supervisor_id,
             type=NotificationType.AUDIT_COMPLETED,
             priority=NotificationPriority.MEDIUM,
@@ -337,6 +336,7 @@ class NotificationService:
         engineer_user_id: int | None,
         supervisor_id: int,
         not_yet_competent_count: int,
+        tenant_id: int | None = None,
     ) -> None:
         """Create notifications when an induction is completed."""
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
@@ -348,6 +348,7 @@ class NotificationService:
 
         if engineer_user_id is not None:
             notification = Notification(
+                tenant_id=tenant_id,
                 user_id=engineer_user_id,
                 type=NotificationType.COMPLIANCE_ALERT,
                 priority=NotificationPriority.MEDIUM,
@@ -361,6 +362,27 @@ class NotificationService:
                 },
             )
             db.add(notification)
+
+        supervisor_notification = Notification(
+            tenant_id=tenant_id,
+            user_id=supervisor_id,
+            type=NotificationType.COMPLIANCE_ALERT,
+            priority=NotificationPriority.MEDIUM,
+            title="Induction Submitted",
+            message=(
+                f"Induction {induction_run_id} completed with {not_yet_competent_count} item(s) marked as "
+                "'Not Yet Competent'."
+                if not_yet_competent_count > 0
+                else f"Induction {induction_run_id} completed successfully."
+            ),
+            entity_type="induction",
+            entity_id=induction_run_id,
+            extra_data={
+                "notification_type": "induction_complete",
+                "not_yet_competent_count": not_yet_competent_count,
+            },
+        )
+        db.add(supervisor_notification)
 
         logger.info("Notification created for induction %s", induction_run_id)
 

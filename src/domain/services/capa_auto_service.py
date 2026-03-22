@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
@@ -18,6 +19,26 @@ logger = logging.getLogger(__name__)
 
 class CAPAAutoService:
     """Automatically generates CAPA actions from WDP outcomes."""
+
+    @staticmethod
+    async def _existing_action(
+        db: AsyncSession,
+        *,
+        source_type: CAPASource,
+        source_reference: str,
+        source_id: int,
+        tenant_id: Optional[int],
+    ) -> CAPAAction | None:
+        stmt = select(CAPAAction).where(
+            CAPAAction.source_type == source_type,
+            CAPAAction.source_reference == source_reference,
+            CAPAAction.source_id == source_id,
+        )
+        if tenant_id is None:
+            stmt = stmt.where(CAPAAction.tenant_id.is_(None))
+        else:
+            stmt = stmt.where(CAPAAction.tenant_id == tenant_id)
+        return (await db.execute(stmt)).scalar_one_or_none()
 
     @staticmethod
     async def create_from_assessment(
@@ -39,6 +60,19 @@ class CAPAAutoService:
 
         created = []
         for fq in failed_questions:
+            question_id = int(fq.get("question_id") or 0)
+            if question_id <= 0:
+                continue
+            existing = await CAPAAutoService._existing_action(
+                db,
+                source_type=CAPASource.JOB_ASSESSMENT,
+                source_reference=assessment_run_id,
+                source_id=question_id,
+                tenant_id=tenant_id,
+            )
+            if existing is not None:
+                created.append(existing)
+                continue
             criticality = fq.get("criticality", "good_to_have")
             priority = CAPAPriority.CRITICAL if criticality == "essential" else CAPAPriority.HIGH
 
@@ -59,7 +93,7 @@ class CAPAAutoService:
                 capa_type=CAPAType.CORRECTIVE,
                 status=CAPAStatus.OPEN,
                 source_type=CAPASource.JOB_ASSESSMENT,
-                source_id=None,
+                source_id=question_id,
                 source_reference=assessment_run_id,
                 priority=priority,
                 assigned_to_id=supervisor_id,
@@ -96,6 +130,19 @@ class CAPAAutoService:
 
         created = []
         for item in not_competent_items:
+            question_id = int(item.get("question_id") or 0)
+            if question_id <= 0:
+                continue
+            existing = await CAPAAutoService._existing_action(
+                db,
+                source_type=CAPASource.INDUCTION,
+                source_reference=induction_run_id,
+                source_id=question_id,
+                tenant_id=tenant_id,
+            )
+            if existing is not None:
+                created.append(existing)
+                continue
             ref = await ReferenceNumberService.generate(db, "capa", CAPAAction)
             capa = CAPAAction(
                 reference_number=ref,
@@ -110,7 +157,7 @@ class CAPAAutoService:
                 capa_type=CAPAType.CORRECTIVE,
                 status=CAPAStatus.OPEN,
                 source_type=CAPASource.INDUCTION,
-                source_id=None,
+                source_id=question_id,
                 source_reference=induction_run_id,
                 priority=CAPAPriority.HIGH,
                 assigned_to_id=supervisor_id,

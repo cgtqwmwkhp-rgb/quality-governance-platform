@@ -9,9 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import CurrentUser, get_current_user, get_db
+from src.domain.models.user import User
 from src.services.auditor_competence import AuditorCompetenceService
 
 router = APIRouter(prefix="/auditor-competence", tags=["Auditor Competence"])
@@ -88,6 +90,20 @@ def _assert_auditor_access(user: CurrentUser, target_user_id: int, *, manager_on
     raise HTTPException(status_code=403, detail="You do not have permission to access this auditor record")
 
 
+async def _validate_auditor_user_assignment(
+    db: AsyncSession,
+    current_user: CurrentUser,
+    target_user_id: int,
+) -> None:
+    result = await db.execute(select(User).where(User.id == target_user_id, User.is_active.is_(True)))
+    target_user = result.scalar_one_or_none()
+    if target_user is None:
+        raise HTTPException(status_code=400, detail="Assigned auditor user was not found or is inactive")
+
+    if current_user.tenant_id is not None and target_user.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=400, detail="Assigned auditor user is not in tenant scope")
+
+
 # =============================================================================
 # PROFILE ENDPOINTS
 # =============================================================================
@@ -101,6 +117,7 @@ async def create_auditor_profile(
 ):
     """Create an auditor profile for a user."""
     _assert_auditor_access(current_user, request.user_id, manager_only=True)
+    await _validate_auditor_user_assignment(db, current_user, request.user_id)
     service = _auditor_service(db, current_user)
     profile = await service.create_profile(
         user_id=request.user_id,
