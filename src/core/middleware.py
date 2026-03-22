@@ -7,6 +7,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
+from src.core.security import decode_token
+
 
 class RequestStateMiddleware(BaseHTTPMiddleware):
     """
@@ -23,6 +25,10 @@ class RequestStateMiddleware(BaseHTTPMiddleware):
     The request_id is then:
     - Stored in request.state.request_id for handler access
     - Added to response headers as X-Request-ID
+
+    When a valid Bearer token is present, the authenticated user id is also
+    exposed via request.state.user_id so trusted middleware can make
+    authorization decisions without relying on client-supplied identity headers.
     """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
@@ -34,6 +40,15 @@ class RequestStateMiddleware(BaseHTTPMiddleware):
 
         # Store in request.state for reliable access by handlers
         request.state.request_id = request_id
+        request.state.user_id = None
+
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            payload = decode_token(token)
+            user_id = payload.get("sub") if payload else None
+            if user_id is not None:
+                request.state.user_id = str(user_id)
 
         # Process request (handlers can now access request.state.request_id)
         response = await call_next(request)

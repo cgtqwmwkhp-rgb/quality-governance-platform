@@ -140,6 +140,28 @@ class AnnotationResponse(BaseModel):
         from_attributes = True
 
 
+def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
+    """Apply tenant scoping unless the caller is a superuser."""
+    if current_user.is_superuser:
+        return stmt
+    return stmt.where(tenant_column == current_user.tenant_id)
+
+
+async def _get_document_or_404(
+    db: DbSession,
+    document_id: int,
+    current_user: CurrentUser,
+) -> Document:
+    """Load a document visible to the current user or raise 404."""
+    query = select(Document).where(Document.id == document_id)
+    query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
+    result = await db.execute(query)
+    document = result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
 # =============================================================================
 # UPLOAD & CREATE
 # =============================================================================
@@ -208,7 +230,8 @@ async def upload_document(
             else SensitivityLevel.INTERNAL
         ),
         status=DocumentStatus.PROCESSING,
-        created_by_id=current_user.id if current_user else None,
+        created_by_id=current_user.id,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(doc)
@@ -261,6 +284,7 @@ async def upload_document(
             for chunk in chunks:
                 db_chunk = DocumentChunk(
                     document_id=doc.id,
+                    tenant_id=doc.tenant_id,
                     content=chunk.content,
                     chunk_index=chunk.index,
                     token_count=chunk.token_count,
@@ -323,6 +347,7 @@ async def list_documents(
     """List documents with filtering and pagination."""
 
     query = select(Document).where(Document.is_active == True)
+    query = _scope_stmt_to_current_tenant(query, Document.tenant_id, current_user)
 
     # Apply filters
     if search:
@@ -378,11 +403,7 @@ async def get_document(
 ):
     """Get document details."""
 
-    result = await db.execute(select(Document).where(Document.id == document_id))
-    document = result.scalar_one_or_none()
-
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await _get_document_or_404(db, document_id, current_user)
 
     # Increment view count
     document.view_count += 1
@@ -417,6 +438,8 @@ async def semantic_search(
     filter_dict = None
     if document_type:
         filter_dict = {"document_type": document_type}
+    if not current_user.is_superuser:
+        filter_dict = {**(filter_dict or {}), "tenant_id": current_user.tenant_id}
 
     # Search vectors
     matches = await vector_service.search(q, top_k=top_k, filter_dict=filter_dict)
@@ -430,8 +453,10 @@ async def semantic_search(
             doc_ids.add(doc_id)
 
             # Get document info
-            doc_result = await db.execute(select(Document).where(Document.id == doc_id))
-            doc = doc_result.scalar_one_or_none()
+            try:
+                doc = await _get_document_or_404(db, doc_id, current_user)
+            except HTTPException:
+                doc = None
 
             if doc:
                 results.append(
@@ -454,7 +479,8 @@ async def semantic_search(
         query_type="semantic",
         result_count=len(results),
         result_document_ids=[r.document_id for r in results],
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
+        tenant_id=current_user.tenant_id,
         latency_ms=latency_ms,
     )
     db.add(log)
@@ -480,8 +506,10 @@ async def list_annotations(
     current_user: CurrentUser,
 ):
     """List annotations for a document."""
+    document = await _get_document_or_404(db, document_id, current_user)
 
     query = select(DocumentAnnotation).where(DocumentAnnotation.document_id == document_id)
+    query = query.where(DocumentAnnotation.tenant_id == document.tenant_id)
 
     # Show user's own annotations + shared annotations
     query = query.where(
@@ -511,12 +539,11 @@ async def create_annotation(
     """Create an annotation on a document."""
 
     # Verify document exists
-    doc_result = await db.execute(select(Document).where(Document.id == document_id))
-    if not doc_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await _get_document_or_404(db, document_id, current_user)
 
     annotation = DocumentAnnotation(
         document_id=document_id,
+        tenant_id=document.tenant_id,
         user_id=current_user.id,
         page_number=annotation_data.page_number,
         section_id=annotation_data.section_id,
@@ -547,25 +574,37 @@ async def get_document_stats(
     """Get document library statistics."""
 
     # Total documents
-    total_result = await db.execute(select(func.count(Document.id)))
+    total_query = _scope_stmt_to_current_tenant(select(func.count(Document.id)), Document.tenant_id, current_user)
+    total_result = await db.execute(total_query)
     total = total_result.scalar() or 0
 
     # By status
-    status_result = await db.execute(select(Document.status, func.count(Document.id)).group_by(Document.status))
+    status_query = _scope_stmt_to_current_tenant(
+        select(Document.status, func.count(Document.id)).group_by(Document.status),
+        Document.tenant_id,
+        current_user,
+    )
+    status_result = await db.execute(status_query)
     by_status = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in status_result.all()}
 
     # By type
-    type_result = await db.execute(
-        select(Document.document_type, func.count(Document.id)).group_by(Document.document_type)
+    type_query = _scope_stmt_to_current_tenant(
+        select(Document.document_type, func.count(Document.id)).group_by(Document.document_type),
+        Document.tenant_id,
+        current_user,
     )
+    type_result = await db.execute(type_query)
     by_type = {row[0].value if hasattr(row[0], "value") else row[0]: row[1] for row in type_result.all()}
 
     # Indexed count
-    indexed_result = await db.execute(select(func.count(Document.id)).where(Document.indexed_at.isnot(None)))
+    indexed_query = select(func.count(Document.id)).where(Document.indexed_at.isnot(None))
+    indexed_query = _scope_stmt_to_current_tenant(indexed_query, Document.tenant_id, current_user)
+    indexed_result = await db.execute(indexed_query)
     indexed = indexed_result.scalar() or 0
 
     # Total chunks
-    chunk_result = await db.execute(select(func.count(DocumentChunk.id)))
+    chunk_query = _scope_stmt_to_current_tenant(select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user)
+    chunk_result = await db.execute(chunk_query)
     total_chunks = chunk_result.scalar() or 0
 
     return {

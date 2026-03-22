@@ -24,8 +24,6 @@ from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatu
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.rta import RoadTrafficCollision, RTASeverity, RTAStatus
 
-DEFAULT_PORTAL_TENANT_ID = getattr(settings, "default_tenant_id", 1)
-
 router = APIRouter(tags=["Employee Portal"])
 
 
@@ -193,10 +191,29 @@ def parse_portal_datetime(date_value: Any, time_value: Any | None = None) -> dat
     return parsed.astimezone(timezone.utc)
 
 
+def get_default_portal_tenant_id() -> int:
+    """Resolve the tenant used for unauthenticated portal intake.
+
+    Fail closed when the portal tenant is not configured so public submissions
+    cannot silently land in the wrong tenant.
+    """
+    tenant_id = settings.default_tenant_id
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=api_error(
+                ErrorCode.CONFIGURATION_ERROR,
+                "Portal intake tenant is not configured.",
+            ),
+        )
+    return tenant_id
+
+
 def build_incident_portal_fields(
     report: QuickReportCreate,
     incident_severity: IncidentSeverity,
     reporter_submission: dict[str, Any],
+    tenant_id: int,
 ) -> dict[str, Any]:
     incident_occurred_at = parse_portal_datetime(
         reporter_submission.get("incident_date"),
@@ -222,7 +239,7 @@ def build_incident_portal_fields(
         "source_form_id": "portal_incident_v1",
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+        "tenant_id": tenant_id,
     }
 
 
@@ -230,6 +247,7 @@ def build_complaint_portal_fields(
     report: QuickReportCreate,
     complaint_priority: ComplaintPriority,
     reporter_submission: dict[str, Any],
+    tenant_id: int,
 ) -> dict[str, Any]:
     return {
         "complaint_type": ComplaintType.OTHER,
@@ -243,7 +261,7 @@ def build_complaint_portal_fields(
         "source_form_id": "portal_complaint_v1",
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+        "tenant_id": tenant_id,
     }
 
 
@@ -251,6 +269,7 @@ def build_rta_portal_fields(
     report: QuickReportCreate,
     rta_severity: RTASeverity,
     reporter_submission: dict[str, Any],
+    tenant_id: int,
 ) -> dict[str, Any]:
     collision_occurred_at = parse_portal_datetime(
         reporter_submission.get("accident_date"),
@@ -307,7 +326,7 @@ def build_rta_portal_fields(
         ),
         "source_form_id": "portal_rta_v1",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": DEFAULT_PORTAL_TENANT_ID,
+        "tenant_id": tenant_id,
     }
 
 
@@ -339,6 +358,7 @@ async def submit_quick_report(
 
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
+    portal_tenant_id = get_default_portal_tenant_id()
 
     if report.report_type.lower() == "incident":
         # Generate reference number
@@ -352,7 +372,7 @@ async def submit_quick_report(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_incident_portal_fields(report, incident_severity, reporter_submission),
+            **build_incident_portal_fields(report, incident_severity, reporter_submission, portal_tenant_id),
         )
 
         db.add(incident)
@@ -380,7 +400,7 @@ async def submit_quick_report(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_complaint_portal_fields(report, complaint_priority, reporter_submission),
+            **build_complaint_portal_fields(report, complaint_priority, reporter_submission, portal_tenant_id),
         )
 
         db.add(complaint)
@@ -417,7 +437,7 @@ async def submit_quick_report(
             reference_number=ref_number,
             title=report.title,
             description=report.description,
-            **build_rta_portal_fields(report, rta_severity, reporter_submission),
+            **build_rta_portal_fields(report, rta_severity, reporter_submission, portal_tenant_id),
         )
 
         db.add(rta)
@@ -463,7 +483,7 @@ async def submit_quick_report(
             status="REPORTED",
             priority=priority,
             source_form_id="portal_near_miss_v1",
-            tenant_id=DEFAULT_PORTAL_TENANT_ID,
+            tenant_id=portal_tenant_id,
         )
 
         db.add(near_miss)
