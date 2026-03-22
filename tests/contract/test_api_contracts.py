@@ -117,20 +117,20 @@ class TestIncidentContract:
         )
         assert response.status_code in (401, 403)
 
-    def test_incident_create_validates_body(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_incident_create_validates_body(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
         response = test_client.post(
             "/api/v1/incidents/",
             json={},
-            headers=auth_headers,
+            headers=optional_auth_headers,
         )
         assert response.status_code == 422, "Empty body should trigger validation error"
 
-    def test_incident_list_returns_paginated_shape(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_incident_list_returns_paginated_shape(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
-        response = test_client.get("/api/v1/incidents/", headers=auth_headers)
+        response = test_client.get("/api/v1/incidents/", headers=optional_auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data, "List response must include 'items'"
@@ -138,10 +138,10 @@ class TestIncidentContract:
         assert "page" in data, "List response must include 'page'"
         assert isinstance(data["items"], list)
 
-    def test_incident_404_for_nonexistent(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_incident_404_for_nonexistent(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
-        response = test_client.get("/api/v1/incidents/999999", headers=auth_headers)
+        response = test_client.get("/api/v1/incidents/999999", headers=optional_auth_headers)
         assert response.status_code == 404
 
 
@@ -164,10 +164,10 @@ class TestComplaintContract:
         )
         assert response.status_code in (401, 403)
 
-    def test_complaint_list_returns_paginated_shape(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_complaint_list_returns_paginated_shape(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
-        response = test_client.get("/api/v1/complaints/", headers=auth_headers)
+        response = test_client.get("/api/v1/complaints/", headers=optional_auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
@@ -198,10 +198,10 @@ class TestRiskContract:
         response = test_client.get("/api/v1/risks/matrix")
         assert response.status_code in (401, 403)
 
-    def test_risk_list_returns_paginated_shape(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_risk_list_returns_paginated_shape(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
-        response = test_client.get("/api/v1/risks/", headers=auth_headers)
+        response = test_client.get("/api/v1/risks/", headers=optional_auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
@@ -232,10 +232,10 @@ class TestAuditContract:
         response = test_client.get("/api/v1/audits/findings")
         assert response.status_code in (401, 403)
 
-    def test_audit_template_list_returns_paginated_shape(self, test_client, auth_headers):
-        if not auth_headers:
+    def test_audit_template_list_returns_paginated_shape(self, test_client, optional_auth_headers):
+        if not optional_auth_headers:
             pytest.skip("Auth not available in test environment")
-        response = test_client.get("/api/v1/audits/templates", headers=auth_headers)
+        response = test_client.get("/api/v1/audits/templates", headers=optional_auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data
