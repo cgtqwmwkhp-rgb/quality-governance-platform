@@ -209,7 +209,12 @@ async def get_induction_run(
     user: CurrentUser,
 ):
     """Get an induction run by ID."""
-    query = select(InductionRun).options(selectinload(InductionRun.responses)).where(InductionRun.id == run_id)
+    query = (
+        select(InductionRun)
+        .options(selectinload(InductionRun.responses))
+        .where(InductionRun.id == run_id)
+        .with_for_update()
+    )
     query = apply_tenant_filter(query, InductionRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -353,20 +358,34 @@ async def complete_induction(
 
         all_competent = score_result.not_yet_competent_count == 0
         expiry = datetime.now(timezone.utc) + timedelta(days=365) if all_competent else None
-        competency = CompetencyRecord(
-            engineer_id=run.engineer_id,
-            asset_type_id=run.asset_type_id,
-            template_id=run.template_id,
-            source_type="induction",
-            source_run_id=run.id,
-            state=(CompetencyLifecycleState.ACTIVE if all_competent else CompetencyLifecycleState.FAILED),
-            outcome="pass" if all_competent else "not_yet_competent",
-            assessed_at=datetime.now(timezone.utc),
-            assessed_by_id=run.supervisor_id,
-            expires_at=expiry,
-            tenant_id=run.tenant_id,
+        competency_query = select(CompetencyRecord).where(
+            CompetencyRecord.source_type == "induction",
+            CompetencyRecord.source_run_id == run.id,
         )
-        db.add(competency)
+        if run.tenant_id is None:
+            competency_query = competency_query.where(CompetencyRecord.tenant_id.is_(None))
+        else:
+            competency_query = competency_query.where(CompetencyRecord.tenant_id == run.tenant_id)
+        competency_result = await db.execute(competency_query)
+        competency = competency_result.scalar_one_or_none()
+        if competency is None:
+            competency = CompetencyRecord(
+                engineer_id=run.engineer_id,
+                asset_type_id=run.asset_type_id,
+                template_id=run.template_id,
+                source_type="induction",
+                source_run_id=run.id,
+                tenant_id=run.tenant_id,
+            )
+            db.add(competency)
+        competency.engineer_id = run.engineer_id
+        competency.asset_type_id = run.asset_type_id
+        competency.template_id = run.template_id
+        competency.state = CompetencyLifecycleState.ACTIVE if all_competent else CompetencyLifecycleState.FAILED
+        competency.outcome = "pass" if all_competent else "not_yet_competent"
+        competency.assessed_at = datetime.now(timezone.utc)
+        competency.assessed_by_id = run.supervisor_id
+        competency.expires_at = expiry
 
     if score_result.items_needing_capa:
         not_competent_items = []
@@ -395,6 +414,7 @@ async def complete_induction(
             engineer_user_id=engineer.user_id if engineer else None,
             supervisor_id=run.supervisor_id,
             not_yet_competent_count=score_result.not_yet_competent_count,
+            tenant_id=run.tenant_id,
         )
     except Exception:
         logger.exception("Failed to send induction completion notification for run %s", run.id)
