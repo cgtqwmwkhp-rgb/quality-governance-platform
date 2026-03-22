@@ -16,8 +16,8 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
-from xml.etree import ElementTree as ET
 
+from defusedxml import ElementTree as ET
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -279,14 +279,20 @@ def _extract_xlsx_text(content: bytes, file_name: str) -> ExtractedDocumentConte
                             continue
                         cell_type = cell.attrib.get("t")
                         value = ""
-                        inline_value = next((node.text for node in cell.iter() if node.tag.endswith("}t") and node.text), None)
+                        inline_value = next(
+                            (node.text for node in cell.iter() if node.tag.endswith("}t") and node.text), None
+                        )
                         if inline_value:
                             value = inline_value
                         else:
-                            raw_value = next((node.text for node in cell.iter() if node.tag.endswith("}v") and node.text), "")
+                            raw_value = next(
+                                (node.text for node in cell.iter() if node.tag.endswith("}v") and node.text), ""
+                            )
                             if cell_type == "s" and raw_value.isdigit():
                                 shared_index = int(raw_value)
-                                value = shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
+                                value = (
+                                    shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
+                                )
                             else:
                                 value = raw_value
                         value = value.strip()
@@ -834,7 +840,9 @@ async def get_document_stats(
     indexed = indexed_result.scalar() or 0
 
     # Total chunks
-    chunk_query = _scope_stmt_to_current_tenant(select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user)
+    chunk_query = _scope_stmt_to_current_tenant(
+        select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user
+    )
     chunk_result = await db.execute(chunk_query)
     total_chunks = chunk_result.scalar() or 0
 

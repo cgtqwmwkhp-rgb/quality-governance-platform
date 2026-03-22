@@ -213,11 +213,7 @@ async def _load_evidence_links(
         query = query.where(ComplianceEvidenceLink.tenant_id == tenant_id)
 
     if standard is not None:
-        clause_ids = {
-            clause.id
-            for clause in iso_compliance_service.get_all_clauses(standard)
-            if clause.level == 2
-        }
+        clause_ids = {clause.id for clause in iso_compliance_service.get_all_clauses(standard) if clause.level == 2}
         query = query.where(ComplianceEvidenceLink.clause_id.in_(clause_ids))
 
     if entity_type:
@@ -243,9 +239,7 @@ async def _load_canonical_standard_rows(
             canonical_rows[matched_standard] = record
 
     clause_count_rows = await db.execute(
-        select(Clause.standard_id, func.count(Clause.id))
-        .where(Clause.is_active == True)
-        .group_by(Clause.standard_id)
+        select(Clause.standard_id, func.count(Clause.id)).where(Clause.is_active == True).group_by(Clause.standard_id)
     )
     db_clause_counts = {standard_id: count for standard_id, count in clause_count_rows.all()}
 

@@ -295,7 +295,7 @@ export default function PlanetMark() {
         setLoadState('error')
       }
     },
-    [loadYearDetails, retryCount],
+    [retryCount],
   )
 
   useEffect(() => {

@@ -11,6 +11,7 @@ from src.api.routes.telemetry import WebVitalsPayload, receive_web_vitals
 from src.core.middleware import RequestStateMiddleware
 from src.core.security import create_access_token
 from src.core.uat_safety import _get_user_id_from_request
+from src.domain.models.document import DocumentStatus
 from src.domain.models.user import User
 
 
@@ -88,16 +89,32 @@ def test_get_default_portal_tenant_id_fails_closed_when_missing(monkeypatch):
 async def test_upload_document_sets_document_tenant(monkeypatch):
     added = []
 
+    async def flush():
+        for obj in added:
+            obj.id = 1
+            obj.reference_number = "DOC-0001"
+
     async def refresh(doc):
         doc.id = 1
         doc.reference_number = "DOC-0001"
 
     db = types.SimpleNamespace(
         add=lambda obj: added.append(obj),
+        flush=AsyncMock(side_effect=flush),
         commit=AsyncMock(),
         refresh=AsyncMock(side_effect=refresh),
+        rollback=AsyncMock(),
     )
     current_user = types.SimpleNamespace(id=7, tenant_id=81, is_superuser=False)
+    monkeypatch.setattr(
+        "src.api.routes.documents.storage_service",
+        lambda: types.SimpleNamespace(upload=AsyncMock()),
+    )
+
+    async def fake_process(*args, **kwargs):
+        args[1].status = DocumentStatus.APPROVED
+
+    monkeypatch.setattr("src.api.routes.documents._process_uploaded_document", fake_process)
 
     response = await upload_document(
         db,

@@ -410,7 +410,9 @@ class SearchService:
                         title=finding.title or "Untitled Audit Finding",
                         description=(finding.description or "")[:200],
                         module="Audits",
-                        status=str(finding.status.value if hasattr(finding.status, "value") else finding.status or "Open"),
+                        status=str(
+                            finding.status.value if hasattr(finding.status, "value") else finding.status or "Open"
+                        ),
                         date=str(finding.created_at or ""),
                         relevance=self._simple_relevance(query, finding.title, finding.description),
                         highlights=self._highlight_words(query, finding.title, finding.description),
@@ -425,7 +427,9 @@ class SearchService:
             )
         return results
 
-    async def _search_actions(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
+    async def _search_actions(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         search_filter = f"%{query}%"
 
@@ -486,11 +490,12 @@ class SearchService:
                             title=action.title or "Untitled Action",
                             description=(action.description or "")[:200],
                             module="Actions",
-                            status=str(action.status.value if hasattr(action.status, "value") else action.status or "Open"),
+                            status=str(
+                                action.status.value if hasattr(action.status, "value") else action.status or "Open"
+                            ),
                             date=str(date_builder(action) or ""),
                             relevance=self._simple_relevance(query, action.title, action.description),
-                            highlights=self._highlight_words(query, action.title, action.description)
-                            + [action_type],
+                            highlights=self._highlight_words(query, action.title, action.description) + [action_type],
                         )
                     )
         except (SQLAlchemyError, ValueError) as e:
@@ -502,7 +507,9 @@ class SearchService:
             )
         return results
 
-    async def _search_documents(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
+    async def _search_documents(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
         results: list[SearchResultItem] = []
         try:
             from src.domain.models.document import Document
@@ -531,7 +538,9 @@ class SearchService:
                         description=((document.ai_summary or document.description or "")[:200]),
                         module="Documents",
                         status=str(
-                            document.status.value if hasattr(document.status, "value") else document.status or "Available"
+                            document.status.value
+                            if hasattr(document.status, "value")
+                            else document.status or "Available"
                         ),
                         date=str(document.created_at or ""),
                         relevance=self._simple_relevance(

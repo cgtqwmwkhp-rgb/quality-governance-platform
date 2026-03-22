@@ -177,7 +177,9 @@ async def test_get_document_signed_url_increments_download_count(monkeypatch: py
         lambda: SimpleNamespace(get_signed_url=lambda **kwargs: "/api/v1/evidence-assets/download?key=test"),
     )
 
-    response = await documents.get_document_signed_url(document_id=15, db=db, current_user=current_user, expires_in=3600)
+    response = await documents.get_document_signed_url(
+        document_id=15, db=db, current_user=current_user, expires_in=3600
+    )
 
     assert response.document_id == 15
     assert response.signed_url.endswith("key=test")

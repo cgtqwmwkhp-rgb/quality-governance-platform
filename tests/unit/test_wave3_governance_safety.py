@@ -85,11 +85,11 @@ def test_user_has_permission_normalizes_json_and_csv_payloads() -> None:
     json_role = Role(name="json-role", permissions='["incident:read", "incident:update"]')
     csv_role = Role(name="csv-role", permissions=" complaint:read , complaint:update ")
     user = User(
-      email="test@example.com",
-      hashed_password="hash",
-      first_name="Test",
-      last_name="User",
-      roles=[json_role, csv_role],
+        email="test@example.com",
+        hashed_password="hash",
+        first_name="Test",
+        last_name="User",
+        roles=[json_role, csv_role],
     )
 
     assert user.has_permission("INCIDENT:READ") is True
