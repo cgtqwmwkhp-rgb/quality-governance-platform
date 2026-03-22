@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.auth import (
@@ -21,6 +22,7 @@ from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
+    build_access_token_claims,
     create_access_token,
     create_password_reset_token,
     create_refresh_token,
@@ -35,6 +37,16 @@ from src.domain.services.email_service import email_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _access_token_for_user(user: User) -> str:
+    return create_access_token(
+        subject=user.id,
+        additional_claims=build_access_token_claims(
+            is_superuser=user.is_superuser,
+            roles=[role.name for role in user.roles or []],
+        ),
+    )
 
 
 # =============================================================================
@@ -96,7 +108,7 @@ async def exchange_azure_token(
     azure_oid = user_info.get("oid")
 
     # Find or create user
-    result = await db.execute(select(User).where(User.email == email))
+    result = await db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -132,7 +144,7 @@ async def exchange_azure_token(
         await db.commit()
 
     # Generate platform tokens
-    access_token = create_access_token(subject=user.id)
+    access_token = _access_token_for_user(user)
     refresh_token = create_refresh_token(subject=user.id)
 
     return AzureTokenExchangeResponse(
@@ -151,7 +163,7 @@ async def exchange_azure_token(
 async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     """Authenticate user and return access and refresh tokens."""
     # Find user by email
-    result = await db.execute(select(User).where(User.email == request.email))
+    result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(request.password, user.hashed_password):
@@ -172,7 +184,7 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     await db.commit()
 
     # Generate tokens
-    access_token = create_access_token(subject=user.id)
+    access_token = _access_token_for_user(user)
     refresh_token = create_refresh_token(subject=user.id)
 
     return TokenResponse(
@@ -201,7 +213,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
         )
 
     # Verify user still exists and is active
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
@@ -211,7 +223,7 @@ async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenRes
         )
 
     # Generate new tokens
-    access_token = create_access_token(subject=user.id)
+    access_token = _access_token_for_user(user)
     new_refresh_token = create_refresh_token(subject=user.id)
 
     return TokenResponse(
