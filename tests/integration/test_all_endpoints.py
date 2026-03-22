@@ -27,7 +27,7 @@ def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+        json={"email": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -67,22 +67,19 @@ class TestAuthEndpoints:
         """POST /api/auth/login with invalid credentials returns 401 or 422."""
         response = client.post(
             "/api/v1/auth/login",
-            json={"username": "invalid@test.com", "password": "wrongpassword"},
+            json={"email": "invalid@test.com", "password": "wrongpassword"},
         )
-        # Accept 401, 422 (validation), or 404 (endpoint contract mismatch)
-        assert response.status_code in [401, 422, 404]
+        assert response.status_code in [401, 422]
 
     def test_login_missing_fields(self, client):
         """POST /api/auth/login with missing fields returns 422."""
         response = client.post("/api/v1/auth/login", json={})
-        # Accept 422 (validation) or 404 (endpoint contract mismatch)
-        assert response.status_code in [422, 404]
+        assert response.status_code == 422
 
     def test_protected_endpoint_without_auth(self, client):
         """Protected endpoints return 401 without auth."""
         response = client.get("/api/v1/users/me")
-        # Accept 401, 403 (unauthorized), or 404 (endpoint contract mismatch)
-        assert response.status_code in [401, 403, 404]
+        assert response.status_code in [401, 403]
 
 
 # ============================================================================
@@ -356,11 +353,20 @@ class TestUserEndpoints:
 class TestPortalEndpoints:
     """Tests for employee portal endpoints."""
 
-    def test_portal_stats(self, client):
-        """GET /api/portal/stats returns 200 or 404 if endpoint differs."""
-        response = client.get("/api/v1/portal/stats")
-        # Accept 200 or 404 (actual endpoint may be different - see /api/portal/reports/stats)
-        assert response.status_code in [200, 404]
+    def test_portal_stats_requires_auth(self, client):
+        """GET /api/portal/stats enforces authentication."""
+        response = client.get("/api/v1/portal/stats/")
+        assert response.status_code in [401, 403]
+
+    def test_portal_stats(self, client, auth_headers):
+        """GET /api/portal/stats returns the portal transparency contract."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/portal/stats/", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert "total_reports_today" in payload
+        assert "reports_resolved_this_week" in payload
 
     def test_submit_report(self, client):
         """POST /api/portal/report or /api/portal/reports/ submits report."""
@@ -375,7 +381,7 @@ class TestPortalEndpoints:
                 "is_anonymous": True,
             },
         )
-        # Accept 200, 201, 422 (validation), or fall back to legacy endpoint
+        # Accept success, validation failure, or explicit configuration failure.
         if response.status_code == 404:
             response = client.post(
                 "/api/v1/portal/report",
@@ -387,7 +393,7 @@ class TestPortalEndpoints:
                     "is_anonymous": True,
                 },
             )
-        assert response.status_code in [200, 201, 404, 422]
+        assert response.status_code in [200, 201, 404, 422, 503]
 
     def test_submit_report_validation(self, client):
         """POST /api/portal/reports/ validates input."""
@@ -404,7 +410,7 @@ class TestPortalEndpoints:
 # ============================================================================
 
 
-class TestWorkflowEndpoints:
+class WorkflowEndpointSmoke:
     """Tests for workflow endpoints."""
 
     def test_list_workflow_templates(self, client, auth_headers):
@@ -412,14 +418,14 @@ class TestWorkflowEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/workflows/templates", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
     def test_list_workflow_instances(self, client, auth_headers):
         """GET /api/workflows/instances returns 200."""
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/workflows/instances", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
 
 # ============================================================================
@@ -458,14 +464,14 @@ class TestComplianceEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/compliance/evidence", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
     def test_compliance_gaps(self, client, auth_headers):
         """GET /api/compliance/gaps returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/compliance/gaps", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
 
 
 # ============================================================================
@@ -504,14 +510,17 @@ class TestUVDBEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/uvdb/sections", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
+        assert "sections" in response.json()
 
     def test_uvdb_audits(self, client, auth_headers):
         """GET /api/uvdb/audits returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/uvdb/audits", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
+        payload = response.json()
+        assert "audits" in payload or payload.get("error_class") == "SETUP_REQUIRED"
 
 
 # ============================================================================
@@ -527,14 +536,18 @@ class TestPlanetMarkEndpoints:
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/planet-mark/years", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        assert response.status_code == 200
+        payload = response.json()
+        assert "years" in payload or payload.get("error_class") == "SETUP_REQUIRED"
 
-    def test_planet_mark_emissions(self, client, auth_headers):
-        """GET /api/planet-mark/emissions returns data."""
+    def test_planet_mark_dashboard(self, client, auth_headers):
+        """GET /api/planet-mark/dashboard returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/v1/planet-mark/emissions", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        response = client.get("/api/v1/planet-mark/dashboard", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert "current_year" in payload or payload.get("error_class") == "SETUP_REQUIRED"
 
 
 # ============================================================================
@@ -669,3 +682,54 @@ class TestComplianceAutomationEndpoints:
             headers=auth_headers,
         )
         assert response.status_code in [200, 404]
+
+
+# ============================================================================
+# Workflow And Search Endpoints
+# ============================================================================
+
+
+class TestWorkflowEndpoints:
+    """Tests for workflow center endpoints."""
+
+    def test_workflow_templates(self, client, auth_headers):
+        """GET /api/workflows/templates returns the live workflow surface."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/workflows/templates", headers=auth_headers)
+        assert response.status_code == 200
+        assert "templates" in response.json()
+
+    def test_workflow_instances(self, client, auth_headers):
+        """GET /api/workflows/instances returns the live workflow surface."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/workflows/instances", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert "instances" in payload
+        assert "total" in payload
+
+    def test_workflow_pending_approvals(self, client, auth_headers):
+        """GET /api/workflows/approvals/pending returns the live approvals surface."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/workflows/approvals/pending", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert "approvals" in payload
+        assert "total" in payload
+
+
+class TestGlobalSearchEndpoints:
+    """Tests for global search endpoints."""
+
+    def test_global_search(self, client, auth_headers):
+        """GET /api/search returns the mounted search contract."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/search?q=test", headers=auth_headers)
+        assert response.status_code == 200
+        payload = response.json()
+        assert "results" in payload
+        assert "total" in payload

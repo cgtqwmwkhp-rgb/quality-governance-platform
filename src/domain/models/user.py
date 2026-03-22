@@ -1,6 +1,7 @@
 """User, Role, and Permission models."""
 
 import json
+
 from typing import List, Optional
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Table, Text
@@ -78,6 +79,7 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         """Check if user has a specific permission."""
         if self.is_superuser:
             return True
+        normalized_permission = permission.strip().lower()
         for role in self.roles:
             raw_permissions = role.permissions
             if not raw_permissions:
@@ -88,14 +90,15 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
                 try:
                     decoded_permissions = json.loads(raw_permissions)
                 except json.JSONDecodeError:
-                    decoded_permissions = []
+                    decoded_permissions = [part.strip() for part in raw_permissions.split(",") if part.strip()]
                 parsed_permissions = decoded_permissions if isinstance(decoded_permissions, list) else []
             elif isinstance(raw_permissions, list):
                 parsed_permissions = [str(item) for item in raw_permissions]
             else:
                 parsed_permissions = []
 
-            if permission in parsed_permissions:
+            normalized_permissions = {str(item).strip().lower() for item in parsed_permissions if str(item).strip()}
+            if normalized_permission in normalized_permissions:
                 return True
         return False
 

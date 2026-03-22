@@ -9,14 +9,17 @@ Provides endpoints for:
 - ISO cross-mapping
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -27,6 +30,7 @@ from src.domain.models.uvdb_achilles import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # ============ UVDB B2 Protocol Structure ============
@@ -575,13 +579,21 @@ async def list_audits(
     if company_name:
         filters.append(UVDBAudit.company_name.ilike(f"%{company_name}%"))
 
-    count_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*filters))
-    total = count_result.scalar()
+    try:
+        count_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*filters))
+        total = count_result.scalar()
 
-    rows_result = await db.execute(
-        select(UVDBAudit).where(*filters).order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit)
-    )
-    audits = rows_result.scalars().all()
+        rows_result = await db.execute(
+            select(UVDBAudit).where(*filters).order_by(UVDBAudit.audit_date.desc()).offset(skip).limit(limit)
+        )
+        audits = rows_result.scalars().all()
+    except (ProgrammingError, OperationalError) as e:
+        logger.warning("UVDB audits query failed (likely missing schema): %s", str(e)[:200])
+        return setup_required_response(
+            module="uvdb",
+            message="UVDB audit tables are not initialized in this environment.",
+            next_action="Apply the latest UVDB database migrations before using live audits.",
+        )
 
     return {
         "total": total,

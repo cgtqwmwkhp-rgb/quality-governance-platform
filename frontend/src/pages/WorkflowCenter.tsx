@@ -1,82 +1,46 @@
-/**
- * Workflow Center
- *
- * Features:
- * - Pending approvals management
- * - Bulk actions
- * - Workflow tracking
- * - Delegation management
- * - Template library
- */
-
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { toast } from '../contexts/ToastContext'
 import {
-  GitBranch,
-  CheckCircle,
-  XCircle,
-  Clock,
-  AlertTriangle,
-  User,
-  Filter,
-  RefreshCw,
-  CheckSquare,
-  Square,
-  FileText,
-  MoreVertical,
-  Eye,
-  UserPlus,
   BarChart3,
+  CheckCircle,
+  CheckSquare,
+  Clock,
+  Eye,
+  FileText,
+  Filter,
+  GitBranch,
+  MoreVertical,
+  RefreshCw,
+  Square,
+  User,
+  UserPlus,
+  XCircle,
+  AlertTriangle,
 } from 'lucide-react'
-import { cn } from '../helpers/utils'
-import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
-import { Card, CardHeader, CardContent } from '../components/ui/Card'
+
+import {
+  getApiErrorMessage,
+  type UserDetail,
+  type WorkflowApprovalRecord,
+  type WorkflowDelegationRecord,
+  type WorkflowInstanceRecord,
+  type WorkflowTemplateRecord,
+  workflowsApi,
+  usersApi,
+} from '../api/client'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent, CardHeader } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '../components/ui/Select'
-
-interface Approval {
-  id: string
-  workflow_id: string
-  workflow_name: string
-  step_name: string
-  entity_type: string
-  entity_id: string
-  entity_title: string
-  requested_at: string
-  due_at: string
-  priority: string
-  sla_status: string
-}
-
-interface WorkflowInstance {
-  id: string
-  template_code: string
-  template_name: string
-  entity_type: string
-  entity_id: string
-  status: string
-  priority: string
-  current_step: string
-  progress: number
-  sla_status: string
-  started_at: string
-}
-
-interface WorkflowTemplate {
-  code: string
-  name: string
-  description: string
-  category: string
-  steps_count: number
-}
+import { toast } from '../contexts/ToastContext'
+import { cn } from '../helpers/utils'
 
 const priorityVariants: Record<string, 'destructive' | 'warning' | 'info' | 'default'> = {
   critical: 'destructive',
@@ -108,144 +72,114 @@ export default function WorkflowCenter() {
   const [activeTab, setActiveTab] = useState<
     'approvals' | 'workflows' | 'templates' | 'delegation'
   >('approvals')
-  const [approvals, setApprovals] = useState<Approval[]>([])
-  const [workflows, setWorkflows] = useState<WorkflowInstance[]>([])
-  const [templates, setTemplates] = useState<WorkflowTemplate[]>([])
+  const [approvals, setApprovals] = useState<WorkflowApprovalRecord[]>([])
+  const [workflows, setWorkflows] = useState<WorkflowInstanceRecord[]>([])
+  const [templates, setTemplates] = useState<WorkflowTemplateRecord[]>([])
+  const [delegations, setDelegations] = useState<WorkflowDelegationRecord[]>([])
+  const [colleagues, setColleagues] = useState<UserDetail[]>([])
   const [selectedApprovals, setSelectedApprovals] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [stats, setStats] = useState({
     pending_approvals: 0,
     active_workflows: 0,
     overdue: 0,
     completed_today: 0,
   })
+  const [delegationForm, setDelegationForm] = useState({
+    delegate_id: '',
+    reason: '',
+    start_date: '',
+    end_date: '',
+  })
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    setRefreshing(true)
 
-    setApprovals([
-      {
-        id: 'APR-001',
-        workflow_id: 'WF-20260119001',
-        workflow_name: 'RIDDOR Reporting',
-        step_name: 'Management Sign-off',
-        entity_type: 'incident',
-        entity_id: 'INC-2026-0042',
-        entity_title: 'Slip and fall incident - Site A',
-        requested_at: '2026-01-19T10:00:00Z',
-        due_at: '2026-01-19T14:00:00Z',
-        priority: 'high',
-        sla_status: 'warning',
-      },
-      {
-        id: 'APR-002',
-        workflow_id: 'WF-20260119002',
-        workflow_name: 'Document Approval',
-        step_name: 'Quality Review',
-        entity_type: 'document',
-        entity_id: 'DOC-POL-012',
-        entity_title: 'Updated Safety Policy v2.1',
-        requested_at: '2026-01-18T15:00:00Z',
-        due_at: '2026-01-20T15:00:00Z',
-        priority: 'normal',
-        sla_status: 'ok',
-      },
-      {
-        id: 'APR-003',
-        workflow_id: 'WF-20260118003',
-        workflow_name: 'CAPA Workflow',
-        step_name: 'Effectiveness Verification',
-        entity_type: 'action',
-        entity_id: 'ACT-2026-0089',
-        entity_title: 'Update PPE inspection procedure',
-        requested_at: '2026-01-17T09:00:00Z',
-        due_at: '2026-01-19T09:00:00Z',
-        priority: 'critical',
-        sla_status: 'breached',
-      },
+    const [
+      approvalsResult,
+      workflowsResult,
+      templatesResult,
+      statsResult,
+      delegationsResult,
+      colleaguesResult,
+    ] = await Promise.allSettled([
+      workflowsApi.getPendingApprovals(),
+      workflowsApi.listInstances(),
+      workflowsApi.listTemplates(),
+      workflowsApi.getStats(),
+      workflowsApi.getDelegations(),
+      usersApi.list(1, 50),
     ])
 
-    setWorkflows([
-      {
-        id: 'WF-20260119001',
-        template_code: 'RIDDOR',
-        template_name: 'RIDDOR Reporting',
-        entity_type: 'incident',
-        entity_id: 'INC-2026-0042',
-        status: 'awaiting_approval',
-        priority: 'high',
-        current_step: 'Management Sign-off',
-        progress: 75,
-        sla_status: 'warning',
-        started_at: '2026-01-19T08:00:00Z',
-      },
-      {
-        id: 'WF-20260118002',
-        template_code: 'CAPA',
-        template_name: 'Corrective/Preventive Action',
-        entity_type: 'action',
-        entity_id: 'ACT-2026-0105',
-        status: 'in_progress',
-        priority: 'normal',
-        current_step: 'Implementation',
-        progress: 50,
-        sla_status: 'ok',
-        started_at: '2026-01-18T10:00:00Z',
-      },
-    ])
+    if (approvalsResult.status === 'fulfilled') {
+      setApprovals(approvalsResult.value.data.approvals)
+    } else {
+      setApprovals([])
+    }
 
-    setTemplates([
-      {
-        code: 'RIDDOR',
-        name: 'RIDDOR Reporting',
-        description: 'Mandatory HSE notification',
-        category: 'regulatory',
-        steps_count: 4,
-      },
-      {
-        code: 'CAPA',
-        name: 'Corrective/Preventive Action',
-        description: 'Track corrective actions',
-        category: 'quality',
-        steps_count: 4,
-      },
-      {
-        code: 'NCR',
-        name: 'Non-Conformance Report',
-        description: 'Handle non-conformances',
-        category: 'quality',
-        steps_count: 4,
-      },
-      {
-        code: 'INCIDENT_INVESTIGATION',
-        name: 'Incident Investigation',
-        description: 'Structured investigation',
-        category: 'safety',
-        steps_count: 6,
-      },
-      {
-        code: 'DOCUMENT_APPROVAL',
-        name: 'Document Approval',
-        description: 'Review and approve documents',
-        category: 'documents',
-        steps_count: 3,
-      },
-    ])
+    if (workflowsResult.status === 'fulfilled') {
+      setWorkflows(workflowsResult.value.data.instances)
+    } else {
+      setWorkflows([])
+    }
 
-    setStats({
-      pending_approvals: 3,
-      active_workflows: 12,
-      overdue: 1,
-      completed_today: 5,
-    })
+    if (templatesResult.status === 'fulfilled') {
+      setTemplates(templatesResult.value.data.templates)
+    } else {
+      setTemplates([])
+    }
+
+    if (statsResult.status === 'fulfilled') {
+      setStats({
+        pending_approvals: statsResult.value.data.pending_approvals,
+        active_workflows: statsResult.value.data.active_workflows,
+        overdue: statsResult.value.data.overdue,
+        completed_today: statsResult.value.data.completed_today,
+      })
+    } else {
+      setStats({
+        pending_approvals: 0,
+        active_workflows: 0,
+        overdue: 0,
+        completed_today: 0,
+      })
+    }
+
+    if (delegationsResult.status === 'fulfilled') {
+      setDelegations(delegationsResult.value.data.delegations)
+    } else {
+      setDelegations([])
+    }
+
+    if (colleaguesResult.status === 'fulfilled') {
+      setColleagues(colleaguesResult.value.data.items)
+    } else {
+      setColleagues([])
+    }
+
+    const rejected = [
+      approvalsResult,
+      workflowsResult,
+      templatesResult,
+      statsResult,
+      delegationsResult,
+      colleaguesResult,
+    ].filter((result) => result.status === 'rejected')
+
+    if (rejected.length > 0) {
+      const firstError = rejected[0]
+      toast.error(getApiErrorMessage(firstError.reason))
+    }
 
     setLoading(false)
-  }
+    setRefreshing(false)
+  }, [])
+
+  useEffect(() => {
+    void loadData()
+  }, [loadData])
 
   const toggleApprovalSelection = (id: string) => {
     const newSelection = new Set(selectedApprovals)
@@ -265,10 +199,109 @@ export default function WorkflowCenter() {
     }
   }
 
-  const handleBulkApprove = () => {
-    toast.success(`Approving ${selectedApprovals.size} items...`)
+  const handleBulkApprove = async () => {
+    if (selectedApprovals.size === 0) return
+    try {
+      await workflowsApi.bulkApprove(Array.from(selectedApprovals))
+      toast.success(`Approved ${selectedApprovals.size} workflow items`)
+      await loadData()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    }
     setSelectedApprovals(new Set())
   }
+
+  const handleApprove = async (approvalId: string) => {
+    try {
+      await workflowsApi.approveRequest(approvalId)
+      toast.success('Approval completed')
+      await loadData()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    }
+  }
+
+  const handleReject = async (approvalId: string) => {
+    const reason = window.prompt('Enter a rejection reason')
+    if (!reason) return
+
+    try {
+      await workflowsApi.rejectRequest(approvalId, { reason })
+      toast.success('Approval rejected')
+      await loadData()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    }
+  }
+
+  const handleSetDelegation = async () => {
+    if (!delegationForm.delegate_id || !delegationForm.start_date || !delegationForm.end_date) {
+      toast.error('Select a delegate and both dates before saving')
+      return
+    }
+
+    try {
+      await workflowsApi.setDelegation({
+        delegate_id: Number(delegationForm.delegate_id),
+        start_date: new Date(`${delegationForm.start_date}T00:00:00`).toISOString(),
+        end_date: new Date(`${delegationForm.end_date}T23:59:59`).toISOString(),
+        reason: delegationForm.reason || undefined,
+      })
+      toast.success('Delegation saved')
+      setDelegationForm({
+        delegate_id: '',
+        reason: '',
+        start_date: '',
+        end_date: '',
+      })
+      await loadData()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    }
+  }
+
+  const handleCancelDelegation = async (delegationId: string) => {
+    try {
+      await workflowsApi.cancelDelegation(delegationId)
+      toast.success('Delegation cancelled')
+      await loadData()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error))
+    }
+  }
+
+  const workflowCards = useMemo(
+    () =>
+      workflows.map((workflow) => {
+        const totalSteps = workflow.total_steps || 1
+        const currentStepIndex =
+          typeof workflow.current_step === 'number'
+            ? workflow.current_step + 1
+            : Number.parseInt(String(workflow.current_step), 10) || 1
+        const progress = Math.max(0, Math.min(100, Math.round((currentStepIndex / totalSteps) * 100)))
+
+        let slaStatus = 'ok'
+        if (workflow.sla_breached) {
+          slaStatus = 'breached'
+        } else if (workflow.sla_due_at) {
+          const dueAt = new Date(workflow.sla_due_at).getTime()
+          const now = Date.now()
+          if (dueAt < now) {
+            slaStatus = 'breached'
+          } else if (dueAt - now < 24 * 60 * 60 * 1000) {
+            slaStatus = 'warning'
+          }
+        }
+
+        return {
+          ...workflow,
+          progress,
+          currentStepLabel: workflow.current_step_name || `Step ${currentStepIndex} of ${totalSteps}`,
+          slaStatus,
+        }
+      }),
+    [workflows],
+  )
 
   const tabs = [
     {
@@ -303,8 +336,8 @@ export default function WorkflowCenter() {
           <h1 className="text-2xl font-bold text-foreground">{t('workflows.title')}</h1>
           <p className="text-muted-foreground mt-1">{t('workflows.subtitle')}</p>
         </div>
-        <Button variant="secondary" onClick={loadData}>
-          <RefreshCw className="w-4 h-4" />
+        <Button variant="secondary" onClick={() => void loadData()}>
+          <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
           Refresh
         </Button>
       </div>
@@ -439,6 +472,11 @@ export default function WorkflowCenter() {
             </CardHeader>
 
             <div className="divide-y divide-border">
+              {approvals.length === 0 && (
+                <div className="p-8 text-sm text-muted-foreground">
+                  No pending approvals are assigned to you right now.
+                </div>
+              )}
               {approvals.map((approval) => (
                 <div key={approval.id} className="p-4 hover:bg-muted/30 transition-colors">
                   <div className="flex items-start gap-4">
@@ -461,7 +499,7 @@ export default function WorkflowCenter() {
                             {approval.workflow_name} • {approval.step_name}
                           </p>
                         </div>
-                        <Badge variant={priorityVariants[approval.priority]}>
+                        <Badge variant={priorityVariants[approval.priority] || 'default'}>
                           {approval.priority}
                         </Badge>
                       </div>
@@ -471,7 +509,7 @@ export default function WorkflowCenter() {
                           Requested: {new Date(approval.requested_at).toLocaleDateString()}
                         </span>
                         <span
-                          className={cn('flex items-center gap-1', slaColors[approval.sla_status])}
+                          className={cn('flex items-center gap-1', slaColors[approval.sla_status] || '')}
                         >
                           <Clock className="w-4 h-4" />
                           Due: {new Date(approval.due_at).toLocaleString()}
@@ -479,11 +517,19 @@ export default function WorkflowCenter() {
                       </div>
 
                       <div className="flex items-center gap-2 mt-3">
-                        <Button variant="success" size="sm">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => void handleApprove(approval.id)}
+                        >
                           <CheckCircle className="w-4 h-4" />
                           Approve
                         </Button>
-                        <Button variant="destructive" size="sm">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => void handleReject(approval.id)}
+                        >
                           <XCircle className="w-4 h-4" />
                           Reject
                         </Button>
@@ -504,17 +550,24 @@ export default function WorkflowCenter() {
       {/* Workflows Tab */}
       {activeTab === 'workflows' && (
         <div className="space-y-4">
-          {workflows.map((workflow) => (
+          {workflowCards.length === 0 && (
+            <Card>
+              <CardContent className="p-8 text-sm text-muted-foreground">
+                No active workflow instances are currently visible.
+              </CardContent>
+            </Card>
+          )}
+          {workflowCards.map((workflow) => (
             <Card key={workflow.id} className="hover:border-border transition-colors">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <div className="flex items-center gap-3 mb-1">
                       <h3 className="font-medium text-foreground">{workflow.template_name}</h3>
-                      <Badge variant={statusVariants[workflow.status]}>
+                      <Badge variant={statusVariants[workflow.status] || 'default'}>
                         {workflow.status.replace(/_/g, ' ')}
                       </Badge>
-                      <Badge variant={priorityVariants[workflow.priority]}>
+                      <Badge variant={priorityVariants[workflow.priority] || 'default'}>
                         {workflow.priority}
                       </Badge>
                     </div>
@@ -531,9 +584,9 @@ export default function WorkflowCenter() {
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-muted-foreground">
-                      Current Step: {workflow.current_step}
+                      Current Step: {workflow.currentStepLabel}
                     </span>
-                    <span className={cn('text-sm', slaColors[workflow.sla_status])}>
+                    <span className={cn('text-sm', slaColors[workflow.slaStatus] || '')}>
                       {workflow.progress}% complete
                     </span>
                   </div>
@@ -541,9 +594,9 @@ export default function WorkflowCenter() {
                     <div
                       className={cn(
                         'h-full rounded-full transition-all',
-                        workflow.sla_status === 'breached'
+                        workflow.slaStatus === 'breached'
                           ? 'bg-destructive'
-                          : workflow.sla_status === 'warning'
+                          : workflow.slaStatus === 'warning'
                             ? 'bg-warning'
                             : 'bg-success',
                       )}
@@ -571,6 +624,13 @@ export default function WorkflowCenter() {
       {/* Templates Tab */}
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {templates.length === 0 && (
+            <Card>
+              <CardContent className="p-5 text-sm text-muted-foreground">
+                No workflow templates were returned by the backend.
+              </CardContent>
+            </Card>
+          )}
           {templates.map((template) => (
             <Card
               key={template.code}
@@ -622,14 +682,21 @@ export default function WorkflowCenter() {
                   >
                     {t('workflows.delegate_to')}
                   </label>
-                  <Select>
+                  <Select
+                    value={delegationForm.delegate_id}
+                    onValueChange={(value) =>
+                      setDelegationForm((current) => ({ ...current, delegate_id: value }))
+                    }
+                  >
                     <SelectTrigger id="workflowcenter-field-0">
                       <SelectValue placeholder="Select a colleague..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="2">Jane Smith - Safety Manager</SelectItem>
-                      <SelectItem value="3">Bob Johnson - Quality Manager</SelectItem>
-                      <SelectItem value="4">Alice Brown - Operations Director</SelectItem>
+                      {colleagues.map((colleague) => (
+                        <SelectItem key={colleague.id} value={String(colleague.id)}>
+                          {colleague.full_name} - {colleague.department || colleague.job_title || 'User'}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -640,7 +707,15 @@ export default function WorkflowCenter() {
                   >
                     {t('workflows.reason')}
                   </label>
-                  <Input id="workflowcenter-field-1" type="text" placeholder="e.g., Annual leave" />
+                  <Input
+                    id="workflowcenter-field-1"
+                    type="text"
+                    placeholder="e.g., Annual leave"
+                    value={delegationForm.reason}
+                    onChange={(event) =>
+                      setDelegationForm((current) => ({ ...current, reason: event.target.value }))
+                    }
+                  />
                 </div>
                 <div>
                   <label
@@ -649,7 +724,14 @@ export default function WorkflowCenter() {
                   >
                     Start Date
                   </label>
-                  <Input id="workflowcenter-field-2" type="date" />
+                  <Input
+                    id="workflowcenter-field-2"
+                    type="date"
+                    value={delegationForm.start_date}
+                    onChange={(event) =>
+                      setDelegationForm((current) => ({ ...current, start_date: event.target.value }))
+                    }
+                  />
                 </div>
                 <div>
                   <label
@@ -658,11 +740,18 @@ export default function WorkflowCenter() {
                   >
                     End Date
                   </label>
-                  <Input id="workflowcenter-field-3" type="date" />
+                  <Input
+                    id="workflowcenter-field-3"
+                    type="date"
+                    value={delegationForm.end_date}
+                    onChange={(event) =>
+                      setDelegationForm((current) => ({ ...current, end_date: event.target.value }))
+                    }
+                  />
                 </div>
               </div>
 
-              <Button>
+              <Button onClick={() => void handleSetDelegation()}>
                 <UserPlus className="w-4 h-4" />
                 {t('workflows.set_delegation')}
               </Button>
@@ -675,19 +764,44 @@ export default function WorkflowCenter() {
               <h3 className="font-medium text-foreground">{t('workflows.current_delegations')}</h3>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-info/20 rounded-full flex items-center justify-center">
-                    <User className="w-5 h-5 text-info" />
+              <div className="space-y-3">
+                {delegations.length === 0 && (
+                  <div className="text-sm text-muted-foreground">No active delegations are configured.</div>
+                )}
+                {delegations.map((delegation) => (
+                  <div
+                    key={delegation.id}
+                    className="flex items-center justify-between p-4 bg-muted/30 rounded-lg"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-info/20 rounded-full flex items-center justify-center">
+                        <User className="w-5 h-5 text-info" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {delegation.delegate_name || `User ${delegation.delegate_id}`}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(delegation.start_date).toLocaleDateString()} -{' '}
+                          {new Date(delegation.end_date).toLocaleDateString()}
+                          {delegation.reason ? ` • ${delegation.reason}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="submitted" className="capitalize">
+                        {delegation.status}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void handleCancelDelegation(delegation.id)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground">Jane Smith</p>
-                    <p className="text-sm text-muted-foreground">
-                      Jan 20 - Jan 27, 2026 • Annual leave
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="submitted">Scheduled</Badge>
+                ))}
               </div>
             </CardContent>
           </Card>

@@ -19,6 +19,7 @@ from src.api.routes import (
     compliance,
     compliance_automation,
     copilot,
+    cross_standard_mappings,
     document_control,
     documents,
     drivers,
@@ -28,6 +29,7 @@ from src.api.routes import (
     executive_dashboard,
     feature_flags,
     form_config,
+    global_search,
     governance,
     health,
     incidents,
@@ -86,8 +88,14 @@ router.include_router(investigations.router, prefix="/investigations", tags=["In
 router.include_router(complaints.router, prefix="/complaints", tags=["Complaints"])
 router.include_router(policies.router, prefix="/policies", tags=["Policy Library"])
 router.include_router(documents.router, prefix="/documents", tags=["Document Library"])
+router.include_router(global_search.router, prefix="/search", tags=["Global Search"])
 router.include_router(employee_portal.router, prefix="/portal", tags=["Employee Portal"])
 router.include_router(compliance.router, prefix="/compliance", tags=["ISO Compliance & Evidence"])
+router.include_router(
+    cross_standard_mappings.router,
+    prefix="/cross-standard-mappings",
+    tags=["Cross-Standard Mappings"],
+)
 router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 router.include_router(realtime.router, prefix="/realtime", tags=["Real-Time & WebSocket"])
 router.include_router(analytics.router, prefix="/analytics", tags=["Analytics & Reporting"])

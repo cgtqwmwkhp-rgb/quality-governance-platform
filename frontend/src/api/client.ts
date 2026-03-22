@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import type { SetupRequiredResponse } from '../components/ui/SetupRequiredPanel'
 import {
   getPlatformToken,
   getPlatformRefreshToken,
@@ -1908,45 +1909,157 @@ export interface CarbonReportingYear {
   created_at: string
 }
 
-export interface EmissionSource {
+export interface PlanetMarkDashboardResponse {
+  current_year: {
+    id: number
+    label: string
+    total_emissions: number
+    emissions_per_fte: number
+    fte: number
+    yoy_change_percent: number | null
+    on_track: boolean
+  }
+  emissions_breakdown: {
+    scope_1: { value: number; label: string }
+    scope_2: { value: number; label: string }
+    scope_3: { value: number; label: string }
+  }
+  data_quality: {
+    scope_1_2: number
+    scope_3: number
+    target: number
+  }
+  certification: {
+    status: string
+    expiry_date: string | null
+  }
+  actions: {
+    total: number
+    completed: number
+    overdue: number
+  }
+  targets: {
+    reduction_percent: number | null
+    target_per_fte: number | null
+  }
+  historical_years: { label: string; total: number; per_fte: number }[]
+}
+
+export interface PlanetMarkReportingYearRecord {
   id: number
-  year_id: number
-  scope: 1 | 2 | 3
-  category: string
-  source_name: string
-  quantity: number
-  unit: string
-  emission_factor: number
-  calculated_tco2e: number
-}
-
-export interface ImprovementAction {
-  id: number
-  year_id: number
-  title: string
-  description: string
-  target_reduction_tco2e: number
-  status: 'planned' | 'in_progress' | 'completed' | 'cancelled'
-  due_date?: string
-}
-
-export interface Scope3Category {
-  category_number: number
-  category_name: string
-  emissions_tco2e: number
-  percentage: number
-  data_quality: 'high' | 'medium' | 'low'
-}
-
-export interface CarbonDashboard {
-  current_year: number
+  year_label: string
+  year_number: number
+  period: string
+  average_fte: number
   total_emissions: number
-  reduction_vs_baseline: number
-  scope1_pct: number
-  scope2_pct: number
-  scope3_pct: number
+  emissions_per_fte: number
+  scope_1: number
+  scope_2_market: number
+  scope_3: number
+  data_quality: number
   certification_status: string
-  years: CarbonReportingYear[]
+  is_baseline: boolean
+}
+
+export interface PlanetMarkReportingYearsResponse {
+  total: number
+  years: PlanetMarkReportingYearRecord[]
+}
+
+export interface PlanetMarkEmissionSourceRecord {
+  id: number
+  source_name: string
+  source_category: string
+  scope: string
+  activity_value: number
+  activity_unit: string
+  co2e_tonnes: number
+  percentage: number
+  data_quality: string
+}
+
+export interface PlanetMarkEmissionSourcesResponse {
+  year_id: number
+  total_co2e: number
+  sources: PlanetMarkEmissionSourceRecord[]
+}
+
+export interface PlanetMarkScope3CategoryRecord {
+  number: number
+  name: string
+  description?: string
+  is_relevant?: boolean
+  is_measured: boolean
+  total_co2e: number
+  percentage: number
+  data_quality_score?: number | null
+  calculation_method?: string | null
+  exclusion_reason?: string | null
+}
+
+export interface PlanetMarkScope3Response {
+  year_id: number
+  measured_count: number
+  total_measured?: number
+  total_co2e: number
+  categories: PlanetMarkScope3CategoryRecord[]
+}
+
+export interface PlanetMarkActionRecord {
+  id: number
+  action_id: string
+  action_title: string
+  owner: string
+  deadline: string
+  scheduled_month: string
+  status: string
+  progress_percent: number
+  target_scope?: string | null
+  expected_reduction_pct?: number | null
+  is_overdue: boolean
+}
+
+export interface PlanetMarkActionsResponse {
+  year_id: number
+  summary: {
+    total: number
+    completed: number
+    in_progress: number
+    overdue: number
+    completion_rate: number
+  }
+  actions: PlanetMarkActionRecord[]
+}
+
+export interface PlanetMarkCertificationResponse {
+  year_id: number
+  year_label: string
+  status: string
+  certificate_number: string | null
+  certification_date: string | null
+  expiry_date: string | null
+  readiness_percent: number
+  evidence_checklist: Array<{
+    type: string
+    category: string
+    description: string
+    required: boolean
+    uploaded: boolean
+    verified: boolean
+  }>
+  actions_completed: number
+  actions_total: number
+  data_quality_met: boolean
+  next_steps: string[]
+}
+
+export interface PlanetMarkDataQualityResponse {
+  year_id: number
+  overall_score: number
+  max_score: number
+  scopes: Record<string, { score: number; actual_pct: number; source_count?: number; recommendations: string[] }>
+  priority_improvements: Array<{ action: string; impact: string }>
+  target_scores: Record<string, string>
 }
 
 /**
@@ -1957,12 +2070,13 @@ export const planetMarkApi = {
   /**
    * Get carbon management dashboard summary.
    */
-  getDashboard: () => api.get<CarbonDashboard>('/api/v1/planet-mark/dashboard'),
+  getDashboard: () => api.get<PlanetMarkDashboardResponse | SetupRequiredResponse>('/api/v1/planet-mark/dashboard'),
 
   /**
    * List all carbon reporting years.
    */
-  listYears: () => api.get<CarbonReportingYear[]>('/api/v1/planet-mark/years'),
+  listYears: () =>
+    api.get<PlanetMarkReportingYearsResponse | SetupRequiredResponse>('/api/v1/planet-mark/years'),
 
   /**
    * Get detailed data for a specific reporting year.
@@ -1972,28 +2086,37 @@ export const planetMarkApi = {
   /**
    * List emission sources for a year.
    */
-  listSources: (yearId: number) =>
-    api.get<EmissionSource[]>(`/api/v1/planet-mark/years/${yearId}/sources`),
+  listSources: (yearId: number, scope?: string) => {
+    const sp = new URLSearchParams()
+    if (scope) sp.set('scope', scope)
+    const query = sp.toString()
+    return api.get<PlanetMarkEmissionSourcesResponse>(
+      `/api/v1/planet-mark/years/${yearId}/sources${query ? `?${query}` : ''}`,
+    )
+  },
 
   /**
    * Get Scope 3 category breakdown for a year.
    */
-  getScope3: (yearId: number) =>
-    api.get<Scope3Category[]>(`/api/v1/planet-mark/years/${yearId}/scope3`),
+  getScope3: (yearId: number) => api.get<PlanetMarkScope3Response>(`/api/v1/planet-mark/years/${yearId}/scope3`),
 
   /**
    * List improvement actions for a year.
    */
   listActions: (yearId: number) =>
-    api.get<ImprovementAction[]>(`/api/v1/planet-mark/years/${yearId}/actions`),
+    api.get<PlanetMarkActionsResponse>(`/api/v1/planet-mark/years/${yearId}/actions`),
 
   /**
    * Get certification status for a year.
    */
   getCertification: (yearId: number) =>
-    api.get<{ status: string; evidence_checklist: Record<string, boolean> }>(
-      `/api/v1/planet-mark/years/${yearId}/certification`,
-    ),
+    api.get<PlanetMarkCertificationResponse>(`/api/v1/planet-mark/years/${yearId}/certification`),
+
+  /**
+   * Get the data quality assessment for a reporting year.
+   */
+  getDataQuality: (yearId: number) =>
+    api.get<PlanetMarkDataQualityResponse>(`/api/v1/planet-mark/years/${yearId}/data-quality`),
 
   /**
    * Add an emission source to a reporting year.
@@ -2038,12 +2161,12 @@ export const planetMarkApi = {
 
 // ============ UVDB Achilles Types ============
 
-export interface UVDBSection {
-  section_number: number
+export interface UVDBSectionRecord {
+  number: string
   title: string
-  description: string
+  max_score: number
   question_count: number
-  weight: number
+  iso_mapping: Record<string, string>
 }
 
 export interface UVDBQuestion {
@@ -2056,16 +2179,15 @@ export interface UVDBQuestion {
   guidance?: string
 }
 
-export interface UVDBAudit {
+export interface UVDBAuditListItem {
   id: number
-  reference_number: string
-  audit_year: number
-  status: 'draft' | 'in_progress' | 'submitted' | 'verified'
-  percentage_score?: number
-  total_questions: number
-  answered_questions: number
-  created_at: string
-  submitted_at?: string
+  audit_reference: string
+  company_name: string
+  audit_type: string
+  audit_date: string | null
+  status: string
+  percentage_score: number | null
+  lead_auditor: string | null
 }
 
 export interface UVDBAuditResponse {
@@ -2077,12 +2199,45 @@ export interface UVDBAuditResponse {
   notes?: string
 }
 
-export interface UVDBDashboard {
-  current_audit?: UVDBAudit
-  historical_scores: { year: number; score: number }[]
-  section_scores: { section: string; score: number }[]
-  total_audits: number
-  average_score: number
+export interface UVDBDashboardResponse {
+  summary: {
+    total_audits: number
+    active_audits: number
+    completed_audits: number
+    average_score: number
+  }
+  protocol: {
+    name: string
+    version: string
+    sections: number
+  }
+  certification_alignment: Record<string, string>
+}
+
+export interface UVDBSectionsResponse {
+  total_sections: number
+  sections: UVDBSectionRecord[]
+}
+
+export interface UVDBAuditsResponse {
+  total: number
+  audits: UVDBAuditListItem[]
+}
+
+export interface UVDBIsoMappingRecord {
+  uvdb_section: string
+  uvdb_question: string
+  uvdb_text: string
+  iso_9001: string[]
+  iso_14001: string[]
+  iso_45001: string[]
+  iso_27001: string[]
+}
+
+export interface UVDBIsoMappingResponse {
+  description: string
+  total_mappings: number
+  mappings: UVDBIsoMappingRecord[]
 }
 
 /**
@@ -2093,18 +2248,18 @@ export const uvdbApi = {
   /**
    * Get UVDB dashboard summary.
    */
-  getDashboard: () => api.get<UVDBDashboard>('/api/v1/uvdb/dashboard'),
+  getDashboard: () => api.get<UVDBDashboardResponse>('/api/v1/uvdb/dashboard'),
 
   /**
    * Get complete UVDB B2 protocol structure.
    */
   getProtocol: () =>
-    api.get<{ sections: UVDBSection[]; total_questions: number }>('/api/v1/uvdb/protocol'),
+    api.get<{ sections: UVDBSectionRecord[]; total_questions: number }>('/api/v1/uvdb/protocol'),
 
   /**
    * List all UVDB sections.
    */
-  listSections: () => api.get<UVDBSection[]>('/api/v1/uvdb/sections'),
+  listSections: () => api.get<UVDBSectionsResponse>('/api/v1/uvdb/sections'),
 
   /**
    * Get questions for a specific section.
@@ -2115,13 +2270,20 @@ export const uvdbApi = {
   /**
    * List UVDB audits.
    */
-  listAudits: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<UVDBAudit>>(`/api/v1/uvdb/audits?page=${page}&page_size=${pageSize}`),
+  listAudits: (params?: { skip?: number; limit?: number; status?: string; company_name?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.skip !== undefined) sp.set('skip', String(params.skip))
+    if (params?.limit !== undefined) sp.set('limit', String(params.limit))
+    if (params?.status) sp.set('status', params.status)
+    if (params?.company_name) sp.set('company_name', params.company_name)
+    const query = sp.toString()
+    return api.get<UVDBAuditsResponse>(`/api/v1/uvdb/audits${query ? `?${query}` : ''}`)
+  },
 
   /**
    * Get a specific audit by ID.
    */
-  getAudit: (auditId: number) => api.get<UVDBAudit>(`/api/v1/uvdb/audits/${auditId}`),
+  getAudit: (auditId: number) => api.get<Record<string, unknown>>(`/api/v1/uvdb/audits/${auditId}`),
 
   /**
    * Get responses for an audit.
@@ -2132,10 +2294,7 @@ export const uvdbApi = {
   /**
    * Get ISO cross-mapping for UVDB sections.
    */
-  getISOMapping: () =>
-    api.get<{ mappings: { uvdb_section: string; iso_clauses: string[] }[] }>(
-      '/api/v1/uvdb/iso-mapping',
-    ),
+  getISOMapping: () => api.get<UVDBIsoMappingResponse>('/api/v1/uvdb/iso-mapping'),
 
   /**
    * Create a new UVDB audit.
@@ -2658,12 +2817,94 @@ export interface EvidenceLinkRecord {
   created_by_email: string | null
 }
 
+export interface ComplianceClauseRecord {
+  id: string
+  standard: string
+  clause_number: string
+  title: string
+  description: string
+  keywords: string[]
+  parent_clause?: string | null
+  level: number
+}
+
+export interface ComplianceCoverageResponse {
+  total_clauses: number
+  full_coverage: number
+  partial_coverage: number
+  gaps: number
+  coverage_percentage: number
+  gap_clauses?: Array<{
+    clause_id: string
+    clause_number: string
+    title: string
+    standard: string
+  }>
+  by_standard?: Record<
+    string,
+    {
+      total: number
+      covered: number
+      percentage: number
+    }
+  >
+}
+
+export interface ComplianceReportResponse {
+  generated_at: string
+  summary: ComplianceCoverageResponse
+  persisted_evidence_links: number
+  clauses: Array<{
+    clause_id: string
+    clause_number: string
+    title: string
+    description: string
+    standard: string
+    status: 'full' | 'partial' | 'gap'
+    evidence_count: number
+    evidence?: Array<{
+      entity_type: string
+      entity_id: string
+      linked_by: string
+      confidence?: number | null
+    }>
+  }>
+}
+
+export interface ComplianceStandardRecord {
+  id: string
+  code: string
+  name: string
+  description: string
+  clause_count: number
+  db_standard_id?: number | null
+  db_standard_code?: string | null
+  db_standard_name?: string | null
+  db_clause_count: number
+  ims_requirement_count: number
+  covered_clauses: number
+  coverage_percentage: number
+  has_canonical_standard: boolean
+}
+
+export interface CrossStandardMappingRecord {
+  id: number
+  primary_standard: string
+  primary_clause: string
+  mapped_standard: string
+  mapped_clause: string
+  mapping_type: string
+  mapping_strength: number
+  mapping_notes?: string | null
+  annex_sl_element?: string | null
+}
+
 export const complianceApi = {
   listClauses: (standard?: string, search?: string) => {
     const sp = new URLSearchParams()
     if (standard) sp.set('standard', standard)
     if (search) sp.set('search', search)
-    return api.get<unknown[]>(`/api/v1/compliance/clauses?${sp}`)
+    return api.get<ComplianceClauseRecord[]>(`/api/v1/compliance/clauses?${sp}`)
   },
   autoTag: (content: string, useAi = false) =>
     api.post<AutoTagResult[]>('/api/v1/compliance/auto-tag', {
@@ -2701,7 +2942,7 @@ export const complianceApi = {
   deleteEvidenceLink: (linkId: number) =>
     api.delete<{ status: string }>(`/api/v1/compliance/evidence/link/${linkId}`),
   getCoverage: (standard?: string) =>
-    api.get<Record<string, unknown>>(
+    api.get<ComplianceCoverageResponse>(
       `/api/v1/compliance/coverage${standard ? `?standard=${standard}` : ''}`,
     ),
   getGaps: (standard?: string) =>
@@ -2709,8 +2950,22 @@ export const complianceApi = {
       `/api/v1/compliance/gaps${standard ? `?standard=${standard}` : ''}`,
     ),
   getReport: (standard?: string) =>
-    api.get<unknown>(`/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`),
-  listStandards: () => api.get<unknown[]>('/api/v1/compliance/standards'),
+    api.get<ComplianceReportResponse>(`/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`),
+  listStandards: () => api.get<ComplianceStandardRecord[]>('/api/v1/compliance/standards'),
+}
+
+export const crossStandardMappingsApi = {
+  list: (params?: { source_standard?: string; target_standard?: string; clause?: string }) => {
+    const sp = new URLSearchParams()
+    if (params?.source_standard) sp.set('source_standard', params.source_standard)
+    if (params?.target_standard) sp.set('target_standard', params.target_standard)
+    if (params?.clause) sp.set('clause', params.clause)
+    return api.get<CrossStandardMappingRecord[]>(`/api/v1/cross-standard-mappings?${sp}`)
+  },
+  listStandards: () =>
+    api.get<{
+      standards: string[]
+    }>('/api/v1/cross-standard-mappings/standards'),
 }
 
 // ============ Compliance Automation API ============
@@ -2930,24 +3185,40 @@ export const imsDashboardApi = {
 
 export const searchApi = {
   search: (
-    query: string,
+    queryOrParams:
+      | string
+      | {
+          q: string
+          module?: string
+          type?: string
+          status?: string
+          date_from?: string
+          date_to?: string
+          page?: number
+          page_size?: number
+        },
     filters?: {
       module?: string
       type?: string
+      status?: string
       date_from?: string
       date_to?: string
     },
   ) => {
-    const sp = new URLSearchParams({ q: query })
-    if (filters?.module) sp.set('module', filters.module)
-    if (filters?.type) sp.set('type', filters.type)
-    if (filters?.date_from) sp.set('date_from', filters.date_from)
-    if (filters?.date_to) sp.set('date_to', filters.date_to)
-    return api.get<{
-      results: unknown[]
-      total: number
-      facets?: Record<string, unknown>
-    }>(`/api/v1/search?${sp}`)
+    const params =
+      typeof queryOrParams === 'string'
+        ? { q: queryOrParams, ...filters }
+        : queryOrParams
+
+    const sp = new URLSearchParams({ q: params.q })
+    if (params.module) sp.set('module', params.module)
+    if (params.type) sp.set('type', params.type)
+    if (params.status) sp.set('status', params.status)
+    if (params.date_from) sp.set('date_from', params.date_from)
+    if (params.date_to) sp.set('date_to', params.date_to)
+    if (params.page) sp.set('page', String(params.page))
+    if (params.page_size) sp.set('page_size', String(params.page_size))
+    return api.get<GlobalSearchResponse>(`/api/v1/search?${sp}`)
   },
 }
 
@@ -3098,36 +3369,121 @@ export const evidenceAssetsApi = {
 
 // ============ Workflows ============
 
+export interface WorkflowApprovalRecord {
+  id: string
+  workflow_id: string
+  workflow_name: string
+  step_name: string
+  entity_type: string
+  entity_id: string
+  entity_title: string
+  requested_at: string
+  due_at: string
+  priority: string
+  sla_status: string
+}
+
+export interface WorkflowInstanceRecord {
+  id: string
+  template_code: string
+  template_name: string
+  entity_type: string
+  entity_id: string
+  status: string
+  priority: string
+  current_step: number | string
+  current_step_name?: string | null
+  total_steps?: number
+  started_at: string
+  sla_due_at?: string | null
+  sla_breached?: boolean
+}
+
+export interface WorkflowTemplateRecord {
+  code: string
+  name: string
+  description: string
+  category: string
+  trigger_entity_type: string
+  sla_hours?: number | null
+  steps_count: number
+}
+
+export interface WorkflowDelegationRecord {
+  id: string
+  delegate_id: number
+  delegate_name?: string | null
+  start_date: string
+  end_date: string
+  reason?: string | null
+  status: string
+  workflow_types?: string[]
+}
+
+export interface WorkflowStatsResponse {
+  active_workflows: number
+  pending_approvals: number
+  overdue: number
+  completed_today: number
+  completed_this_week?: number
+  average_completion_time_hours?: number
+  sla_compliance_rate?: number
+  by_template?: Record<string, { active: number; completed: number; avg_hours: number }>
+  by_priority?: Record<string, number>
+}
+
+export interface GlobalSearchResultRecord {
+  id: string
+  type: 'incident' | 'rta' | 'complaint' | 'risk' | 'audit' | 'action' | 'document'
+  title: string
+  description: string
+  module: string
+  status: string
+  date: string
+  relevance: number
+  highlights: string[]
+}
+
+export interface GlobalSearchResponse {
+  results: GlobalSearchResultRecord[]
+  total: number
+  query: string
+  facets: {
+    modules: Record<string, number>
+  }
+}
+
 export const workflowsApi = {
   getPendingApprovals: () =>
-    api.get<Record<string, unknown>[]>('/api/v1/workflows/approvals/pending'),
-  approveRequest: (approvalId: number, data?: { comments?: string }) =>
+    api.get<{ approvals: WorkflowApprovalRecord[]; total: number }>('/api/v1/workflows/approvals/pending'),
+  approveRequest: (approvalId: string, data?: { notes?: string }) =>
     api.post(`/api/v1/workflows/approvals/${approvalId}/approve`, data),
-  rejectRequest: (approvalId: number, data?: { comments?: string; reason?: string }) =>
+  rejectRequest: (approvalId: string, data?: { notes?: string; reason?: string }) =>
     api.post(`/api/v1/workflows/approvals/${approvalId}/reject`, data),
-  bulkApprove: (approvalIds: number[], data?: { comments?: string }) =>
+  bulkApprove: (approvalIds: string[], data?: { notes?: string }) =>
     api.post('/api/v1/workflows/approvals/bulk-approve', {
       approval_ids: approvalIds,
       ...data,
     }),
-  listInstances: (params?: { page?: number; size?: number }) => {
+  listInstances: (params?: { status?: string; entity_type?: string }) => {
     const sp = new URLSearchParams()
-    if (params?.page) sp.set('page', String(params.page))
-    if (params?.size) sp.set('size', String(params.size))
-    return api.get<{ items: Record<string, unknown>[]; total: number }>(
+    if (params?.status) sp.set('status', params.status)
+    if (params?.entity_type) sp.set('entity_type', params.entity_type)
+    return api.get<{ instances: WorkflowInstanceRecord[]; total: number }>(
       `/api/v1/workflows/instances?${sp}`,
     )
   },
-  listTemplates: () => api.get<Record<string, unknown>[]>('/api/v1/workflows/templates'),
-  getStats: () => api.get<Record<string, unknown>>('/api/v1/workflows/stats'),
-  getDelegations: () => api.get<Record<string, unknown>[]>('/api/v1/workflows/delegations'),
+  listTemplates: () => api.get<{ templates: WorkflowTemplateRecord[] }>('/api/v1/workflows/templates'),
+  getStats: () => api.get<WorkflowStatsResponse>('/api/v1/workflows/stats'),
+  getDelegations: () => api.get<{ delegations: WorkflowDelegationRecord[] }>('/api/v1/workflows/delegations'),
   setDelegation: (data: {
-    delegate_to: number
-    entity_type?: string
-    start_date?: string
-    end_date?: string
+    delegate_id: number
+    start_date: string
+    end_date: string
+    reason?: string
+    workflow_types?: string[]
   }) => api.post('/api/v1/workflows/delegations', data),
-  cancelDelegation: (delegationId: number) =>
+  cancelDelegation: (delegationId: string) =>
     api.delete(`/api/v1/workflows/delegations/${delegationId}`),
 }
 

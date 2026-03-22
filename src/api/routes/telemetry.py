@@ -87,6 +87,13 @@ ALLOWED_ACTIONS = {"retry", "clear_session"}
 ALLOWED_WEB_VITAL_NAMES = {"CLS", "FID", "LCP", "TTFB", "INP", "FCP"}
 ALLOWED_WEB_VITAL_RATINGS = {"good", "needs-improvement", "poor"}
 ALLOWED_NAVIGATION_TYPES = {"navigate", "reload", "back_forward", "prerender"}
+BOOLEAN_DIMENSIONS = {"flagEnabled", "hasDraft", "hadDraft", "error"}
+INTEGER_DIMENSION_LIMITS = {
+    "step": (0, 25),
+    "stepCount": (1, 25),
+    "lastStep": (0, 25),
+    "draftAgeSeconds": (0, 604800),
+}
 
 # Local aggregation file (for evaluator)
 # Default to a subdirectory in the project rather than hardcoded /tmp
@@ -104,8 +111,8 @@ class TelemetryEvent(BaseModel):
 
     name: str = Field(..., description="Event name (must be allowlisted)")
     timestamp: str = Field(..., description="ISO timestamp")
-    sessionId: str = Field(..., description="Anonymous session ID")
-    dimensions: dict = Field(default_factory=dict, description="Event dimensions")
+    sessionId: str = Field(..., min_length=1, max_length=128, description="Anonymous session ID")
+    dimensions: dict[str, str | int | bool] = Field(default_factory=dict, description="Event dimensions")
 
     @validator("name")
     def validate_event_name(cls, v):
@@ -140,6 +147,17 @@ class TelemetryEvent(BaseModel):
 
         if "action" in v and v["action"] not in ALLOWED_ACTIONS:
             raise ValueError(f"action '{v['action']}' not in allowlist")
+
+        for key in BOOLEAN_DIMENSIONS:
+            if key in v and not isinstance(v[key], bool):
+                raise ValueError(f"{key} must be a boolean")
+
+        for key, (min_value, max_value) in INTEGER_DIMENSION_LIMITS.items():
+            if key in v:
+                if not isinstance(v[key], int):
+                    raise ValueError(f"{key} must be an integer")
+                if v[key] < min_value or v[key] > max_value:
+                    raise ValueError(f"{key} must be between {min_value} and {max_value}")
 
         return v
 

@@ -8,9 +8,15 @@ Enterprise document management with:
 - Access control
 """
 
+import csv
+import io
+import logging
 import uuid
+import zipfile
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
+from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
@@ -28,8 +34,10 @@ from src.domain.models.document import (
     SensitivityLevel,
 )
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -140,6 +148,27 @@ class AnnotationResponse(BaseModel):
         from_attributes = True
 
 
+class DocumentSignedUrlResponse(BaseModel):
+    """Time-limited document download URL."""
+
+    document_id: int
+    signed_url: str
+    expires_in_seconds: int
+    filename: str
+    content_type: Optional[str]
+
+
+@dataclass
+class ExtractedDocumentContent:
+    """Structured extraction result before AI indexing."""
+
+    text: str
+    page_count: Optional[int] = None
+    sheet_count: Optional[int] = None
+    has_tables: bool = False
+    note: Optional[str] = None
+
+
 def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
     """Apply tenant scoping unless the caller is a superuser."""
     if current_user.is_superuser:
@@ -160,6 +189,228 @@ async def _get_document_or_404(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
+
+
+def _safe_filename(filename: Optional[str]) -> str:
+    """Prevent path traversal within storage keys."""
+    return (filename or "unnamed").replace("/", "_").replace("\\", "_")
+
+
+def _extract_pdf_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
+    """Extract searchable text from PDF evidence."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        logger.warning("PDF extraction dependency missing for %s", file_name)
+        return ExtractedDocumentContent(
+            text="",
+            note="Stored successfully but PDF extraction is unavailable in this environment.",
+        )
+
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        page_text = [(page.extract_text() or "").strip() for page in reader.pages]
+        text = "\n\n".join(part for part in page_text if part)
+        return ExtractedDocumentContent(text=text, page_count=len(reader.pages))
+    except Exception as exc:
+        logger.warning("PDF extraction failed for %s: %s", file_name, type(exc).__name__)
+        return ExtractedDocumentContent(
+            text="",
+            note=f"Stored successfully but PDF extraction failed for {file_name}.",
+        )
+
+
+def _extract_docx_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
+    """Extract text from DOCX packages without optional dependencies."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            document_xml = archive.read("word/document.xml")
+    except Exception as exc:
+        logger.warning("DOCX extraction failed for %s: %s", file_name, type(exc).__name__)
+        return ExtractedDocumentContent(
+            text="",
+            note=f"Stored successfully but DOCX extraction failed for {file_name}.",
+        )
+
+    root = ET.fromstring(document_xml)
+    paragraphs: list[str] = []
+    for paragraph in root.iter():
+        if paragraph.tag.endswith("}p"):
+            runs = [node.text or "" for node in paragraph.iter() if node.tag.endswith("}t") and node.text]
+            joined = "".join(runs).strip()
+            if joined:
+                paragraphs.append(joined)
+    return ExtractedDocumentContent(text="\n".join(paragraphs))
+
+
+def _read_xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:
+    """Load workbook shared strings for cell lookup."""
+    try:
+        raw = archive.read("xl/sharedStrings.xml")
+    except KeyError:
+        return []
+
+    root = ET.fromstring(raw)
+    values: list[str] = []
+    for string_item in root.iter():
+        if string_item.tag.endswith("}si"):
+            parts = [node.text or "" for node in string_item.iter() if node.tag.endswith("}t") and node.text]
+            values.append("".join(parts))
+    return values
+
+
+def _extract_xlsx_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
+    """Extract text rows from XLSX packages for indexing."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            shared_strings = _read_xlsx_shared_strings(archive)
+            sheet_paths = sorted(name for name in archive.namelist() if name.startswith("xl/worksheets/sheet"))
+            sheet_lines: list[str] = []
+
+            for idx, sheet_path in enumerate(sheet_paths, start=1):
+                root = ET.fromstring(archive.read(sheet_path))
+                rows: list[str] = []
+                for row in root.iter():
+                    if not row.tag.endswith("}row"):
+                        continue
+                    values: list[str] = []
+                    for cell in row:
+                        if not cell.tag.endswith("}c"):
+                            continue
+                        cell_type = cell.attrib.get("t")
+                        value = ""
+                        inline_value = next((node.text for node in cell.iter() if node.tag.endswith("}t") and node.text), None)
+                        if inline_value:
+                            value = inline_value
+                        else:
+                            raw_value = next((node.text for node in cell.iter() if node.tag.endswith("}v") and node.text), "")
+                            if cell_type == "s" and raw_value.isdigit():
+                                shared_index = int(raw_value)
+                                value = shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
+                            else:
+                                value = raw_value
+                        value = value.strip()
+                        if value:
+                            values.append(value)
+                    if values:
+                        rows.append(", ".join(values))
+
+                if rows:
+                    sheet_lines.append(f"Sheet {idx}")
+                    sheet_lines.extend(rows)
+
+        return ExtractedDocumentContent(
+            text="\n".join(sheet_lines),
+            sheet_count=len(sheet_paths),
+            has_tables=bool(sheet_lines),
+        )
+    except Exception as exc:
+        logger.warning("XLSX extraction failed for %s: %s", file_name, type(exc).__name__)
+        return ExtractedDocumentContent(
+            text="",
+            note=f"Stored successfully but XLSX extraction failed for {file_name}.",
+        )
+
+
+def _extract_document_content(file_type: FileType, file_name: str, content: bytes) -> ExtractedDocumentContent:
+    """Return searchable text for supported document formats."""
+    if file_type in {FileType.TXT, FileType.MD}:
+        return ExtractedDocumentContent(text=content.decode("utf-8", errors="ignore"))
+
+    if file_type == FileType.CSV:
+        decoded = content.decode("utf-8", errors="ignore")
+        rows = [", ".join(cell.strip() for cell in row if cell.strip()) for row in csv.reader(io.StringIO(decoded))]
+        filtered_rows = [row for row in rows if row]
+        return ExtractedDocumentContent(text="\n".join(filtered_rows), has_tables=bool(filtered_rows))
+
+    if file_type == FileType.PDF:
+        return _extract_pdf_text(content, file_name)
+
+    if file_type == FileType.DOCX:
+        return _extract_docx_text(content, file_name)
+
+    if file_type == FileType.XLSX:
+        return _extract_xlsx_text(content, file_name)
+
+    unsupported_notes = {
+        FileType.DOC: "Stored successfully but legacy .doc extraction is not supported yet.",
+        FileType.XLS: "Stored successfully but legacy .xls extraction is not supported yet.",
+        FileType.PNG: "Stored successfully but image OCR is not supported yet.",
+        FileType.JPG: "Stored successfully but image OCR is not supported yet.",
+        FileType.JPEG: "Stored successfully but image OCR is not supported yet.",
+    }
+    return ExtractedDocumentContent(text="", note=unsupported_notes.get(file_type))
+
+
+async def _process_uploaded_document(
+    db: DbSession,
+    doc: Document,
+    content: bytes,
+    file_name: str,
+    file_ext: str,
+    file_type: FileType,
+) -> None:
+    """Isolate upload processing behind a single async boundary."""
+    ai_service = DocumentAIService()
+    extraction = _extract_document_content(file_type, file_name, content)
+
+    doc.page_count = extraction.page_count
+    doc.sheet_count = extraction.sheet_count
+    doc.has_tables = extraction.has_tables
+    doc.indexing_error = extraction.note
+
+    text_content = extraction.text.strip()
+    if not text_content:
+        doc.status = DocumentStatus.APPROVED
+        return
+
+    analysis = await ai_service.analyze_document(text_content, file_name, file_ext)
+    doc.ai_summary = analysis.summary
+    doc.ai_tags = analysis.tags
+    doc.ai_keywords = analysis.keywords
+    doc.ai_topics = analysis.topics
+    doc.ai_entities = analysis.entities
+    doc.ai_confidence = analysis.confidence
+    doc.ai_processed_at = datetime.now(timezone.utc)
+    doc.has_tables = doc.has_tables or analysis.has_tables
+    doc.has_images = analysis.has_images
+    doc.word_count = len(text_content.split())
+
+    chunks = await ai_service.generate_chunks(text_content)
+    doc.chunk_count = len(chunks)
+
+    for chunk in chunks:
+        db.add(
+            DocumentChunk(
+                document_id=doc.id,
+                tenant_id=doc.tenant_id,
+                content=chunk.content,
+                chunk_index=chunk.index,
+                token_count=chunk.token_count,
+                heading=chunk.heading,
+                char_start=chunk.char_start,
+                char_end=chunk.char_end,
+            )
+        )
+
+    embedding_service = EmbeddingService()
+    vector_service = VectorSearchService()
+    embeddings = await embedding_service.generate_embeddings([chunk.content for chunk in chunks])
+
+    if embeddings and await vector_service.upsert_chunks(
+        doc.id,
+        chunks,
+        embeddings,
+        extra_metadata={
+            "tenant_id": doc.tenant_id or 0,
+            "document_type": doc.document_type.value if hasattr(doc.document_type, "value") else str(doc.document_type),
+        },
+    ):
+        doc.indexed_at = datetime.now(timezone.utc)
+        doc.status = DocumentStatus.INDEXED
+        doc.indexing_error = None
+    else:
+        doc.status = DocumentStatus.APPROVED
 
 
 # =============================================================================
@@ -207,14 +458,15 @@ async def upload_document(
             detail=f"File size ({file_size // (1024*1024)}MB) exceeds maximum allowed size (50MB).",
         )
 
-    # Generate unique file path (for Azure Blob Storage)
-    file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{file.filename}"
+    safe_filename = _safe_filename(file.filename)
+    file_name = file.filename or safe_filename
+    file_path = f"documents/{datetime.now(timezone.utc).strftime('%Y/%m')}/{uuid.uuid4()}/{safe_filename}"
 
     # Create document record
     doc = Document(
         title=title,
         description=description,
-        file_name=file.filename,
+        file_name=file_name,
         file_type=file_type,
         file_size=file_size,
         file_path=file_path,
@@ -235,87 +487,36 @@ async def upload_document(
     )
 
     db.add(doc)
-    await db.commit()
-    await db.refresh(doc)
+    await db.flush()
 
-    # Future: upload to Azure Blob Storage
-    # await azure_blob_service.upload(file_path, content)
-
-    # Trigger AI processing (async background job)
-    # For now, do inline processing
     try:
-        ai_service = DocumentAIService()
+        await storage_service().upload(
+            storage_key=file_path,
+            content=content,
+            content_type=file.content_type or "application/octet-stream",
+            metadata={
+                "document_id": str(doc.id),
+                "tenant_id": str(current_user.tenant_id or ""),
+                "uploaded_by": str(current_user.id),
+                "file_name": file_name,
+            },
+        )
+    except StorageError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to store document content: {exc}",
+        ) from exc
 
-        # Extract text content based on file type
-        text_content = ""
-        if file_type in [FileType.TXT, FileType.MD]:
-            text_content = content.decode("utf-8", errors="ignore")
-        elif file_type == FileType.PDF:
-            # Future: integrate pdf-parse or pdfplumber
-            text_content = f"[PDF content extraction not implemented for {file.filename}]"
-        elif file_type in [FileType.DOCX, FileType.DOC]:
-            # Future: integrate python-docx
-            text_content = f"[Word content extraction not implemented for {file.filename}]"
-        elif file_type in [FileType.XLSX, FileType.XLS, FileType.CSV]:
-            # Future: integrate openpyxl/pandas
-            text_content = f"[Spreadsheet content extraction not implemented for {file.filename}]"
-
-        if text_content and not text_content.startswith("["):
-            # Analyze with AI
-            filename = file.filename or "document"
-            analysis = await ai_service.analyze_document(text_content, filename, file_ext)
-
-            doc.ai_summary = analysis.summary
-            doc.ai_tags = analysis.tags
-            doc.ai_keywords = analysis.keywords
-            doc.ai_topics = analysis.topics
-            doc.ai_entities = analysis.entities
-            doc.ai_confidence = analysis.confidence
-            doc.ai_processed_at = datetime.now(timezone.utc)
-            doc.has_tables = analysis.has_tables
-            doc.has_images = analysis.has_images
-            doc.word_count = len(text_content.split())
-
-            # Generate chunks
-            chunks = await ai_service.generate_chunks(text_content)
-            doc.chunk_count = len(chunks)
-
-            # Save chunks
-            for chunk in chunks:
-                db_chunk = DocumentChunk(
-                    document_id=doc.id,
-                    tenant_id=doc.tenant_id,
-                    content=chunk.content,
-                    chunk_index=chunk.index,
-                    token_count=chunk.token_count,
-                    heading=chunk.heading,
-                    char_start=chunk.char_start,
-                    char_end=chunk.char_end,
-                )
-                db.add(db_chunk)
-
-            # Generate embeddings and index
-            embedding_service = EmbeddingService()
-            vector_service = VectorSearchService()
-
-            chunk_texts = [c.content for c in chunks]
-            embeddings = await embedding_service.generate_embeddings(chunk_texts)
-
-            if embeddings:
-                await vector_service.upsert_chunks(doc.id, chunks, embeddings)
-                doc.indexed_at = datetime.now(timezone.utc)
-                doc.status = DocumentStatus.INDEXED
-            else:
-                doc.status = DocumentStatus.APPROVED
-        else:
-            doc.status = DocumentStatus.APPROVED
-
+    try:
+        await _process_uploaded_document(db, doc, content, file_name, file_ext, file_type)
         await db.commit()
-
     except Exception as e:
         doc.status = DocumentStatus.FAILED
         doc.indexing_error = str(e)
         await db.commit()
+
+    await db.refresh(doc)
 
     return DocumentUploadResponse(
         id=doc.id,
@@ -411,6 +612,36 @@ async def get_document(
     await db.commit()
 
     return DocumentResponse.model_validate(document)
+
+
+@router.get("/{document_id}/signed-url", response_model=DocumentSignedUrlResponse)
+async def get_document_signed_url(
+    document_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    expires_in: int = Query(3600, ge=60, le=86400),
+    download: bool = Query(True, description="Set attachment disposition when true."),
+):
+    """Get a signed document URL for inline viewing or download."""
+    document = await _get_document_or_404(db, document_id, current_user)
+    document.download_count += 1
+    document.last_accessed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    filename = document.file_name or "download"
+    content_disposition = f'attachment; filename="{filename}"' if download else None
+    signed_url = storage_service().get_signed_url(
+        storage_key=document.file_path,
+        expires_in_seconds=expires_in,
+        content_disposition=content_disposition,
+    )
+    return DocumentSignedUrlResponse(
+        document_id=document.id,
+        signed_url=signed_url,
+        expires_in_seconds=expires_in,
+        filename=filename,
+        content_type=document.mime_type,
+    )
 
 
 # =============================================================================
@@ -603,9 +834,7 @@ async def get_document_stats(
     indexed = indexed_result.scalar() or 0
 
     # Total chunks
-    chunk_query = _scope_stmt_to_current_tenant(
-        select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user
-    )
+    chunk_query = _scope_stmt_to_current_tenant(select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user)
     chunk_result = await db.execute(chunk_query)
     total_chunks = chunk_result.scalar() or 0
 

@@ -1,41 +1,32 @@
-import { useState, useEffect, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import {
-  Search,
-  X,
-  Filter,
-  FileText,
   AlertTriangle,
-  Car,
-  MessageSquare,
-  Shield,
-  ClipboardCheck,
-  Zap,
-  Clock,
-  ChevronRight,
-  History,
-  Sparkles,
-  Command,
   ArrowRight,
-  Tag,
   Calendar,
+  Car,
+  ChevronRight,
+  ClipboardCheck,
+  Clock,
+  Command,
+  FileText,
+  Filter,
+  History,
+  MessageSquare,
+  Search,
+  Shield,
+  Sparkles,
+  Tag,
+  X,
+  Zap,
 } from 'lucide-react'
-import { cn } from '../helpers/utils'
-import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
-import { Card, CardContent } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
 
-interface SearchResult {
-  id: string
-  type: 'incident' | 'rta' | 'complaint' | 'risk' | 'audit' | 'action' | 'document'
-  title: string
-  description: string
-  module: string
-  status: string
-  date: string
-  relevance: number
-  highlights: string[]
-}
+import { getApiErrorMessage, type GlobalSearchResultRecord, searchApi } from '../api/client'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card, CardContent } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+import { toast } from '../contexts/ToastContext'
+import { cn } from '../helpers/utils'
 
 interface SearchFilter {
   modules: string[]
@@ -46,7 +37,8 @@ interface SearchFilter {
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [results, setResults] = useState<SearchResult[]>([])
+  const [rawResults, setRawResults] = useState<GlobalSearchResultRecord[]>([])
+  const [results, setResults] = useState<GlobalSearchResultRecord[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<SearchFilter>({
     modules: [],
@@ -54,11 +46,10 @@ export default function GlobalSearch() {
     dateRange: 'all',
   })
   const [searchHistory, setSearchHistory] = useState<string[]>([])
+  const [totalResults, setTotalResults] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const mockResults: SearchResult[] = []
-
-  const moduleIcons: Record<string, React.ReactNode> = {
+  const moduleIcons: Record<string, ReactNode> = {
     Incidents: <AlertTriangle className="w-5 h-5" />,
     RTAs: <Car className="w-5 h-5" />,
     Complaints: <MessageSquare className="w-5 h-5" />,
@@ -82,38 +73,89 @@ export default function GlobalSearch() {
     string,
     'warning' | 'info' | 'acknowledged' | 'default' | 'destructive' | 'resolved'
   > = {
-    Open: 'warning',
-    'In Progress': 'info',
-    'Under Investigation': 'acknowledged',
-    Monitoring: 'info',
-    Scheduled: 'default',
-    Overdue: 'destructive',
-    Closed: 'resolved',
+    open: 'warning',
+    in_progress: 'info',
+    under_investigation: 'acknowledged',
+    monitoring: 'info',
+    scheduled: 'default',
+    overdue: 'destructive',
+    closed: 'resolved',
+    completed: 'resolved',
   }
 
-  const handleSearch = () => {
-    if (!query.trim()) return
+  const applyClientFilters = (
+    items: GlobalSearchResultRecord[],
+    activeFilters: SearchFilter,
+  ): GlobalSearchResultRecord[] => {
+    const now = new Date()
+    return items.filter((item) => {
+      if (activeFilters.modules.length > 0 && !activeFilters.modules.includes(item.module)) {
+        return false
+      }
+
+      if (
+        activeFilters.status.length > 0 &&
+        !activeFilters.status.some((status) => item.status.toLowerCase() === status.toLowerCase().replace(/\s+/g, '_'))
+      ) {
+        return false
+      }
+
+      if (activeFilters.dateRange !== 'all') {
+        const itemDate = new Date(item.date)
+        if (Number.isNaN(itemDate.getTime())) return false
+
+        if (activeFilters.dateRange === 'today') {
+          if (itemDate.toDateString() !== now.toDateString()) return false
+        }
+
+        if (activeFilters.dateRange === 'week') {
+          const weekAgo = new Date(now)
+          weekAgo.setDate(now.getDate() - 7)
+          if (itemDate < weekAgo) return false
+        }
+
+        if (activeFilters.dateRange === 'month') {
+          const monthAgo = new Date(now)
+          monthAgo.setMonth(now.getMonth() - 1)
+          if (itemDate < monthAgo) return false
+        }
+      }
+
+      return true
+    })
+  }
+
+  const handleSearch = async (overrideQuery?: string) => {
+    const activeQuery = (overrideQuery ?? query).trim()
+    if (!activeQuery) return
 
     setIsSearching(true)
 
-    if (!searchHistory.includes(query)) {
-      setSearchHistory([query, ...searchHistory.slice(0, 4)])
+    if (!searchHistory.includes(activeQuery)) {
+      setSearchHistory([activeQuery, ...searchHistory.filter((term) => term !== activeQuery).slice(0, 4)])
     }
 
-    setTimeout(() => {
-      setResults(
-        mockResults.filter(
-          (r) =>
-            r.title.toLowerCase().includes(query.toLowerCase()) ||
-            r.description.toLowerCase().includes(query.toLowerCase()) ||
-            r.module.toLowerCase().includes(query.toLowerCase()),
-        ),
-      )
+    try {
+      const response = await searchApi.search({
+        q: activeQuery,
+        page: 1,
+        page_size: 100,
+      })
+      const filtered = applyClientFilters(response.data.results, filters)
+      setRawResults(response.data.results)
+      setResults(filtered)
+      setTotalResults(response.data.total)
+    } catch (error) {
+      setRawResults([])
+      setResults([])
+      setTotalResults(0)
+      toast.error(getApiErrorMessage(error))
+    } finally {
       setIsSearching(false)
-    }, 500)
+    }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSearch()
     }
@@ -121,7 +163,9 @@ export default function GlobalSearch() {
 
   const clearSearch = () => {
     setQuery('')
+    setRawResults([])
     setResults([])
+    setTotalResults(0)
     inputRef.current?.focus()
   }
 
@@ -141,6 +185,10 @@ export default function GlobalSearch() {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    setResults(applyClientFilters(rawResults, filters))
+  }, [filters, rawResults])
 
   return (
     <div className="space-y-6">
@@ -179,12 +227,13 @@ export default function GlobalSearch() {
 
           <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-4">
             {query && (
-              <Button variant="ghost" size="sm" onClick={clearSearch}>
+              <Button variant="ghost" size="sm" onClick={clearSearch} aria-label="Clear search">
                 <X className="w-5 h-5" />
               </Button>
             )}
 
             <Button
+              aria-label="Toggle filters"
               variant={showFilters ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setShowFilters(!showFilters)}
@@ -192,7 +241,7 @@ export default function GlobalSearch() {
               <Filter className="w-5 h-5" />
             </Button>
 
-            <Button onClick={handleSearch}>
+            <Button onClick={() => void handleSearch()}>
               Search
               <ArrowRight className="w-4 h-4" />
             </Button>
@@ -298,7 +347,7 @@ export default function GlobalSearch() {
                     key={i}
                     onClick={() => {
                       setQuery(term)
-                      handleSearch()
+                      void handleSearch(term)
                     }}
                     className="px-4 py-2 bg-card border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-all flex items-center gap-2"
                   >
@@ -325,7 +374,10 @@ export default function GlobalSearch() {
               ].map((suggestion, i) => (
                 <button
                   key={i}
-                  onClick={() => setQuery(suggestion)}
+                  onClick={() => {
+                    setQuery(suggestion)
+                    void handleSearch(suggestion)
+                  }}
                   className="p-3 bg-card rounded-lg text-left text-foreground hover:bg-primary/20 transition-all flex items-center justify-between group"
                 >
                   <span>{suggestion}</span>
@@ -342,7 +394,8 @@ export default function GlobalSearch() {
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <p className="text-muted-foreground">
-              Found <span className="text-foreground font-medium">{results.length}</span> results
+              Showing <span className="text-foreground font-medium">{results.length}</span> of{' '}
+              <span className="text-foreground font-medium">{totalResults}</span> results
               for "{query}"
             </p>
           </div>
@@ -369,10 +422,12 @@ export default function GlobalSearch() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Badge variant={statusVariants[result.status] || 'default'}>
-                            {result.status}
+                          <Badge variant={statusVariants[result.status.toLowerCase()] || 'default'}>
+                            {result.status.replace(/_/g, ' ')}
                           </Badge>
-                          <span className="text-xs text-muted-foreground">{result.date}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(result.date).toLocaleDateString()}
+                          </span>
                         </div>
                       </div>
 
@@ -394,7 +449,7 @@ export default function GlobalSearch() {
                         </div>
                         <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
                           <Sparkles className="w-3 h-3 text-primary" />
-                          {result.relevance}% match
+                          {Math.round(result.relevance)}% match
                         </div>
                       </div>
                     </div>

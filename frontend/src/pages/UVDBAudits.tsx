@@ -17,7 +17,6 @@ import {
   Filter,
   Download,
   Calendar,
-  TrendingUp,
   Award,
   ClipboardList,
   ExternalLink,
@@ -25,7 +24,14 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { uvdbApi, ErrorClass, createApiError } from '../api/client'
+import {
+  uvdbApi,
+  ErrorClass,
+  createApiError,
+  isSetupRequired,
+  SetupRequiredResponse,
+} from '../api/client'
+import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface UVDBSection {
   number: string
@@ -46,8 +52,27 @@ interface UVDBAudit {
   lead_auditor: string | null
 }
 
+interface UVDBDashboardState {
+  total_audits: number
+  active_audits: number
+  completed_audits: number
+  average_score: number
+  protocol_name: string
+  protocol_version: string
+}
+
+interface UVDBIsoMappingRow {
+  uvdb_section: string
+  uvdb_question: string
+  uvdb_text: string
+  iso_9001: string[]
+  iso_14001: string[]
+  iso_45001: string[]
+  iso_27001: string[]
+}
+
 // Bounded error state for deterministic UX
-type LoadState = 'idle' | 'loading' | 'success' | 'error'
+type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function UVDBAudits() {
   const { t } = useTranslation()
@@ -56,45 +81,47 @@ export default function UVDBAudits() {
   )
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
+  const [isoMappings, setIsoMappings] = useState<UVDBIsoMappingRow[]>([])
+  const [dashboard, setDashboard] = useState<UVDBDashboardState | null>(null)
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
+  const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
   // Transform API section to component type
   const transformSection = (apiSection: {
-    section_number: number
+    number: string
     title: string
-    description: string
+    max_score: number
     question_count: number
-    weight: number
+    iso_mapping: Record<string, string>
   }): UVDBSection => ({
-    number: String(apiSection.section_number),
+    number: apiSection.number,
     title: apiSection.title,
-    max_score: apiSection.weight,
+    max_score: apiSection.max_score,
     question_count: apiSection.question_count,
-    iso_mapping: {}, // Will be populated from ISO mapping endpoint if available
+    iso_mapping: apiSection.iso_mapping || {},
   })
 
   // Transform API audit to component type
   const transformAudit = (apiAudit: {
     id: number
-    reference_number: string
-    audit_year: number
+    audit_reference: string
+    company_name: string
+    audit_type: string
+    audit_date: string | null
     status: string
-    percentage_score?: number
-    total_questions: number
-    answered_questions: number
-    created_at: string
-    submitted_at?: string
+    percentage_score: number | null
+    lead_auditor: string | null
   }): UVDBAudit => ({
     id: apiAudit.id,
-    audit_reference: apiAudit.reference_number,
-    company_name: 'Plantexpand Limited', // Default company
-    audit_type: 'B2',
-    audit_date: apiAudit.submitted_at || null,
+    audit_reference: apiAudit.audit_reference,
+    company_name: apiAudit.company_name,
+    audit_type: apiAudit.audit_type,
+    audit_date: apiAudit.audit_date,
     status: apiAudit.status,
-    percentage_score: apiAudit.percentage_score || null,
-    lead_auditor: null,
+    percentage_score: apiAudit.percentage_score,
+    lead_auditor: apiAudit.lead_auditor,
   })
 
   const loadData = useCallback(
@@ -106,45 +133,60 @@ export default function UVDBAudits() {
 
       setLoadState('loading')
       setErrorClass(null)
+      setSetupRequired(null)
 
       try {
-        // Fetch sections from API
-        const sectionsResponse = await uvdbApi.listSections()
-        const transformedSections = sectionsResponse.data.map(transformSection)
-        // Sort by section number for deterministic ordering
-        transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
-        setSections(transformedSections)
+        const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse] = await Promise.all([
+          uvdbApi.getDashboard(),
+          uvdbApi.listSections(),
+          uvdbApi.listAudits({ skip: 0, limit: 50 }),
+          uvdbApi.getISOMapping(),
+        ])
 
-        // Fetch audits from API
-        const auditsResponse = await uvdbApi.listAudits(1, 50)
-        const transformedAudits = auditsResponse.data.items.map(transformAudit)
-        // Sort by id descending for deterministic ordering (most recent first)
+        if (isSetupRequired(dashboardResponse.data)) {
+          setSetupRequired(dashboardResponse.data)
+          setLoadState('setup_required')
+          setRetryCount(0)
+          return
+        }
+        if (isSetupRequired(auditsResponse.data)) {
+          setSetupRequired(auditsResponse.data)
+          setLoadState('setup_required')
+          setRetryCount(0)
+          return
+        }
+
+        setDashboard({
+          total_audits: dashboardResponse.data.summary.total_audits,
+          active_audits: dashboardResponse.data.summary.active_audits,
+          completed_audits: dashboardResponse.data.summary.completed_audits,
+          average_score: dashboardResponse.data.summary.average_score,
+          protocol_name: dashboardResponse.data.protocol.name,
+          protocol_version: dashboardResponse.data.protocol.version,
+        })
+
+        const transformedSections = sectionsResponse.data.sections.map(transformSection)
+        transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
+        const mappings = mappingResponse.data.mappings
+        const enrichedSections = transformedSections.map((section) => {
+          const sectionMappings = mappings.filter((mapping) => mapping.uvdb_section === section.number)
+          if (sectionMappings.length === 0) return section
+          return {
+            ...section,
+            iso_mapping: {
+              ...(sectionMappings.some((mapping) => mapping.iso_9001.length > 0) ? { '9001': 'aligned' } : {}),
+              ...(sectionMappings.some((mapping) => mapping.iso_14001.length > 0) ? { '14001': 'aligned' } : {}),
+              ...(sectionMappings.some((mapping) => mapping.iso_45001.length > 0) ? { '45001': 'aligned' } : {}),
+              ...(sectionMappings.some((mapping) => mapping.iso_27001.length > 0) ? { '27001': 'aligned' } : {}),
+            },
+          }
+        })
+        setSections(enrichedSections)
+
+        const transformedAudits = auditsResponse.data.audits.map(transformAudit)
         transformedAudits.sort((a, b) => b.id - a.id)
         setAudits(transformedAudits)
-
-        // Try to get ISO mapping to enrich sections
-        try {
-          const mappingResponse = await uvdbApi.getISOMapping()
-          const mappings = mappingResponse.data.mappings
-          // Enrich sections with ISO mapping
-          const enrichedSections = transformedSections.map((section) => {
-            const mapping = mappings.find((m) => m.uvdb_section === section.number)
-            if (mapping) {
-              const isoMapping: Record<string, string> = {}
-              mapping.iso_clauses.forEach((clause) => {
-                const [isoStandard, isoClause] = clause.split(':')
-                if (isoStandard && isoClause) {
-                  isoMapping[isoStandard] = isoClause
-                }
-              })
-              return { ...section, iso_mapping: isoMapping }
-            }
-            return section
-          })
-          setSections(enrichedSections)
-        } catch {
-          // ISO mapping endpoint may not exist, sections still usable
-        }
+        setIsoMappings(mappings)
 
         setLoadState('success')
         setRetryCount(0)
@@ -232,6 +274,29 @@ export default function UVDBAudits() {
     return colors[number] || 'bg-gray-500'
   }
 
+  if (loadState === 'setup_required' && setupRequired) {
+    return (
+      <div className="min-h-screen bg-background text-foreground p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2 flex items-center gap-3">
+              <Award className="w-8 h-8 text-warning" />
+              {t('uvdb.title')}
+            </h1>
+            <p className="text-muted-foreground">{t('uvdb.subtitle')}</p>
+          </div>
+        </div>
+        <SetupRequiredPanel
+          response={setupRequired}
+          onRetry={() => {
+            setRetryCount(0)
+            loadData()
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       {/* Header */}
@@ -260,9 +325,11 @@ export default function UVDBAudits() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-primary-foreground mb-1">
-              {t('uvdb.protocol_ref')}
+              {dashboard?.protocol_name || t('uvdb.protocol_ref')}
             </h2>
-            <p className="text-primary-foreground/80">{t('uvdb.protocol_version')}</p>
+            <p className="text-primary-foreground/80">
+              {dashboard ? `${t('uvdb.protocol_version')} ${dashboard.protocol_version}` : t('uvdb.protocol_version')}
+            </p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
             <div className="text-center">
@@ -274,8 +341,8 @@ export default function UVDBAudits() {
               <div className="text-primary-foreground/80 text-sm">{t('uvdb.max_score')}</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">4</div>
-              <div className="text-primary-foreground/80 text-sm">{t('uvdb.iso_aligned')}</div>
+              <div className="text-3xl font-bold text-primary-foreground">{dashboard?.active_audits ?? 0}</div>
+              <div className="text-primary-foreground/80 text-sm">Active audits</div>
             </div>
           </div>
         </div>
@@ -464,36 +531,18 @@ export default function UVDBAudits() {
               {/* KPI Summary */}
               <div className="bg-slate-800 rounded-xl border border-slate-700">
                 <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">{t('uvdb.kpi_summary')}</h3>
+                  <h3 className="font-bold text-white">{t('uvdb.audit_status')}</h3>
                 </div>
-                <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Man Hours', value: '1.2M', trend: 'up' },
-                    { label: 'Fatalities', value: '0', trend: 'stable' },
-                    { label: 'RIDDOR', value: '2', trend: 'down' },
-                    { label: 'LTI', value: '3', trend: 'down' },
-                    { label: 'Near Misses', value: '45', trend: 'up' },
-                    { label: 'Env Incidents', value: '1', trend: 'stable' },
-                    { label: 'LTIFR', value: '2.5', trend: 'down' },
-                  ].map((kpi, i) => (
-                    <div key={i} className="bg-slate-700/50 rounded-lg p-4 text-center">
+                    { label: 'Total audits', value: dashboard?.total_audits ?? audits.length },
+                    { label: 'Active', value: dashboard?.active_audits ?? 0 },
+                    { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
+                    { label: 'Average score', value: `${dashboard?.average_score ?? 0}%` },
+                  ].map((kpi) => (
+                    <div key={kpi.label} className="bg-slate-700/50 rounded-lg p-4 text-center">
                       <div className="text-2xl font-bold text-white">{kpi.value}</div>
                       <div className="text-xs text-gray-400">{kpi.label}</div>
-                      <div
-                        className={`flex items-center justify-center gap-1 mt-1 text-xs ${
-                          kpi.trend === 'up'
-                            ? 'text-emerald-400'
-                            : kpi.trend === 'down'
-                              ? 'text-red-400'
-                              : 'text-gray-400'
-                        }`}
-                      >
-                        {kpi.trend === 'up' && <TrendingUp className="w-3 h-3" />}
-                        {kpi.trend === 'down' && (
-                          <TrendingUp className="w-3 h-3 transform rotate-180" />
-                        )}
-                        {kpi.trend === 'stable' && <span>—</span>}
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -683,153 +732,50 @@ export default function UVDBAudits() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
-                    {[
-                      {
-                        section: '1.1',
-                        topic: 'Quality Management Systems',
-                        iso9001: '4.4, 5.1, 9.2',
-                        iso14001: '',
-                        iso45001: '',
-                        iso27001: '',
-                      },
-                      {
-                        section: '1.2',
-                        topic: 'Health and Safety Management Systems',
-                        iso9001: '',
-                        iso14001: '',
-                        iso45001: '4.4, 5.1, 9.2',
-                        iso27001: '',
-                      },
-                      {
-                        section: '1.3',
-                        topic: 'Environmental Management Systems',
-                        iso9001: '',
-                        iso14001: '4.4, 5.1, 9.2',
-                        iso45001: '',
-                        iso27001: '',
-                      },
-                      {
-                        section: '1.4',
-                        topic: 'CDM Regulations 2015',
-                        iso9001: '',
-                        iso14001: '',
-                        iso45001: '6.1, 8.1',
-                        iso27001: '',
-                      },
-                      {
-                        section: '1.5',
-                        topic: 'Permits and Licensing',
-                        iso9001: '',
-                        iso14001: '6.1.3',
-                        iso45001: '6.1.3',
-                        iso27001: '',
-                      },
-                      {
-                        section: '2.1',
-                        topic: 'Top Management Quality Assurance',
-                        iso9001: '5.1, 5.2, 5.3',
-                        iso14001: '',
-                        iso45001: '',
-                        iso27001: '',
-                      },
-                      {
-                        section: '2.2',
-                        topic: 'Document Control',
-                        iso9001: '7.5',
-                        iso14001: '',
-                        iso45001: '',
-                        iso27001: '7.5',
-                      },
-                      {
-                        section: '2.3',
-                        topic: 'Information Security',
-                        iso9001: '',
-                        iso14001: '',
-                        iso45001: '',
-                        iso27001: '5.1, 8.1, A.8',
-                      },
-                      {
-                        section: '2.4',
-                        topic: 'Service Provision & Handover',
-                        iso9001: '8.5, 8.6',
-                        iso14001: '',
-                        iso45001: '',
-                        iso27001: '',
-                      },
-                      {
-                        section: '2.5',
-                        topic: 'Internal Auditing',
-                        iso9001: '9.2',
-                        iso14001: '9.2',
-                        iso45001: '9.2',
-                        iso27001: '',
-                      },
-                      {
-                        section: '12',
-                        topic: 'Sub-contractor Management',
-                        iso9001: '8.4',
-                        iso14001: '',
-                        iso45001: '8.1.4',
-                        iso27001: '',
-                      },
-                      {
-                        section: '13',
-                        topic: 'Sourcing (CFSI, Sustainability)',
-                        iso9001: '8.4.2',
-                        iso14001: '8.1',
-                        iso45001: '',
-                        iso27001: '',
-                      },
-                      {
-                        section: '14',
-                        topic: 'Work Equipment & Vehicles',
-                        iso9001: '',
-                        iso14001: '',
-                        iso45001: '7.1.3, 8.1',
-                        iso27001: '',
-                      },
-                      {
-                        section: '15',
-                        topic: 'Key Performance Indicators',
-                        iso9001: '',
-                        iso14001: '9.1',
-                        iso45001: '9.1',
-                        iso27001: '',
-                      },
-                    ].map((row, i) => (
-                      <tr key={i} className="hover:bg-slate-700/50">
-                        <td className="px-4 py-3 font-medium text-white">{row.section}</td>
-                        <td className="px-4 py-3 text-gray-300">{row.topic}</td>
+                    {isoMappings.map((row) => (
+                      <tr
+                        key={`${row.uvdb_section}-${row.uvdb_question}`}
+                        className="hover:bg-slate-700/50"
+                      >
+                        <td className="px-4 py-3 font-medium text-white">{row.uvdb_section}</td>
+                        <td className="px-4 py-3 text-gray-300">{row.uvdb_text}</td>
                         <td className="px-4 py-3 text-center">
-                          {row.iso9001 && (
+                          {row.iso_9001.length > 0 && (
                             <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
-                              {row.iso9001}
+                              {row.iso_9001.join(', ')}
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {row.iso14001 && (
+                          {row.iso_14001.length > 0 && (
                             <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs">
-                              {row.iso14001}
+                              {row.iso_14001.join(', ')}
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {row.iso45001 && (
+                          {row.iso_45001.length > 0 && (
                             <span className="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">
-                              {row.iso45001}
+                              {row.iso_45001.join(', ')}
                             </span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {row.iso27001 && (
+                          {row.iso_27001.length > 0 && (
                             <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">
-                              {row.iso27001}
+                              {row.iso_27001.join(', ')}
                             </span>
                           )}
                         </td>
                       </tr>
                     ))}
+                    {isoMappings.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                          No ISO cross-mapping data is available yet.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
