@@ -21,7 +21,10 @@ from src.api.schemas.induction import (
     InductionRunResponse,
     InductionRunUpdate,
 )
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
+from src.domain.models.audit import AuditQuestion, AuditTemplate
 from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
 from src.domain.models.induction import (
     InductionResponse,
@@ -37,6 +40,45 @@ from src.domain.services.governance_service import GovernanceService, Notificati
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _is_workforce_admin(user: CurrentUser) -> bool:
+    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
+    return bool(getattr(user, "is_superuser", False) or "admin" in role_names)
+
+
+async def _induction_engineer_user_id(db: DbSession, engineer_id: int) -> int | None:
+    return await db.scalar(select(Engineer.user_id).where(Engineer.id == engineer_id))
+
+
+def _missing_induction_question_ids(run: InductionRun, template: AuditTemplate) -> list[int]:
+    expected_question_ids = {q.id for q in template.questions if getattr(q, "is_active", True)}
+    answered_question_ids = {r.question_id for r in run.responses if getattr(r, "understanding", None) is not None}
+    return sorted(expected_question_ids - answered_question_ids)
+
+
+async def _assert_induction_access(
+    db: DbSession,
+    user: CurrentUser,
+    run: InductionRun,
+    *,
+    allow_engineer_read: bool = False,
+) -> None:
+    if _is_workforce_admin(user) or run.supervisor_id == user.id:
+        return
+
+    if allow_engineer_read:
+        engineer_user_id = await _induction_engineer_user_id(db, run.engineer_id)
+        if engineer_user_id == user.id:
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail=api_error(
+            ErrorCode.PERMISSION_DENIED,
+            "You do not have permission to access this induction run",
+        ),
+    )
 
 
 async def _generate_induction_reference_number(db: DbSession) -> str:
@@ -75,6 +117,12 @@ async def list_induction_runs(
     """List induction runs with filtering and pagination."""
     query = select(InductionRun).options(selectinload(InductionRun.responses))
     query = apply_tenant_filter(query, InductionRun, user.tenant_id)
+    if not _is_workforce_admin(user):
+        engineer_id_result = await db.execute(
+            apply_tenant_filter(select(Engineer.id), Engineer, user.tenant_id).where(Engineer.user_id == user.id)
+        )
+        engineer_ids = engineer_id_result.scalars().all()
+        query = query.where((InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1])))
     if engineer_id is not None:
         query = query.where(InductionRun.engineer_id == engineer_id)
     if status is not None:
@@ -150,6 +198,7 @@ async def get_induction_run(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run, allow_engineer_read=True)
     return InductionRunResponse.model_validate(run)
 
 
@@ -167,12 +216,19 @@ async def update_induction_run(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run)
 
     updates = data.model_dump(exclude_unset=True)
     if "stage" in updates and updates["stage"] is not None:
         updates["stage"] = InductionStage(updates["stage"])
     if "status" in updates and updates["status"] is not None:
-        updates["status"] = InductionStatus(updates["status"])
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Induction status can only be changed via workflow actions",
+            ),
+        )
     for k, v in updates.items():
         setattr(run, k, v)
     await db.commit()
@@ -193,6 +249,7 @@ async def start_induction(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run)
     if run.status != InductionStatus.DRAFT:
         raise HTTPException(status_code=400, detail="Induction can only be started from draft status")
     run.status = InductionStatus.IN_PROGRESS
@@ -215,6 +272,7 @@ async def complete_induction(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run)
 
     if run.status not in (InductionStatus.DRAFT, InductionStatus.IN_PROGRESS):
         raise HTTPException(
@@ -222,7 +280,45 @@ async def complete_induction(
             detail=f"Induction cannot be completed from status '{run.status.value}'",
         )
 
+    template_result = await db.execute(
+        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
+    )
+    template = template_result.scalar_one_or_none()
+    if template is None:
+        raise HTTPException(
+            status_code=404,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"),
+        )
+
     score_result = CompetencyScoringService.score_induction(run.responses)
+    missing_question_ids = _missing_induction_question_ids(run, template)
+    if missing_question_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "All active induction questions must be answered before completion",
+                details={
+                    "run_id": run.id,
+                    "template_id": run.template_id,
+                    "missing_question_ids": missing_question_ids,
+                },
+            ),
+        )
+    if score_result.scorable_items == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "At least one competency item must be assessed before completing induction",
+                details={
+                    "run_id": run.id,
+                    "response_count": len(run.responses),
+                    "scorable_items": score_result.scorable_items,
+                },
+            ),
+        )
+
     run.status = InductionStatus.COMPLETED
     run.completed_at = datetime.now(timezone.utc)
     run.total_items = score_result.scorable_items
@@ -274,11 +370,10 @@ async def complete_induction(
         )
 
     try:
-        engineer_user_id = engineer.user_id if engineer else run.engineer_id
         await NotificationService.notify_induction_complete(
             db=db,
             induction_run_id=run.id,
-            engineer_id=engineer_user_id,
+            engineer_user_id=engineer.user_id if engineer else None,
             supervisor_id=run.supervisor_id,
             not_yet_competent_count=score_result.not_yet_competent_count,
         )
@@ -308,6 +403,7 @@ async def create_induction_response(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run)
 
     if run.status == InductionStatus.COMPLETED or run.status == InductionStatus.CANCELLED:
         raise HTTPException(
@@ -315,15 +411,45 @@ async def create_induction_response(
             detail="Cannot add responses to a completed or cancelled induction",
         )
 
-    understanding_val = UnderstandingVerdict(data.understanding) if data.understanding else None
-    response = InductionResponse(
-        run_id=run_id,
-        question_id=data.question_id,
-        shown_explained=data.shown_explained,
-        understanding=understanding_val,
-        supervisor_notes=data.supervisor_notes,
+    question_id = await db.scalar(
+        select(AuditQuestion.id).where(
+            AuditQuestion.template_id == run.template_id,
+            AuditQuestion.id == data.question_id,
+            AuditQuestion.is_active.is_(True),
+        )
     )
-    db.add(response)
+    if question_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Question does not belong to this induction template",
+                details={"run_id": run.id, "template_id": run.template_id, "question_id": data.question_id},
+            ),
+        )
+
+    understanding_val = UnderstandingVerdict(data.understanding) if data.understanding else None
+    existing_query = select(InductionResponse).where(
+        InductionResponse.run_id == run_id,
+        InductionResponse.question_id == data.question_id,
+    )
+    existing_result = await db.execute(existing_query)
+    response = existing_result.scalar_one_or_none()
+
+    if response is None:
+        response = InductionResponse(
+            run_id=run_id,
+            question_id=data.question_id,
+            shown_explained=data.shown_explained,
+            understanding=understanding_val,
+            supervisor_notes=data.supervisor_notes,
+        )
+        db.add(response)
+    else:
+        response.shown_explained = data.shown_explained
+        response.understanding = understanding_val
+        response.supervisor_notes = data.supervisor_notes
+
     await db.commit()
     await db.refresh(response)
     return InductionResponseResponse.model_validate(response)
@@ -350,8 +476,18 @@ async def update_induction_response(
     query_run = select(InductionRun).where(InductionRun.id == response.run_id)
     query_run = apply_tenant_filter(query_run, InductionRun, user.tenant_id)
     run_result = await db.execute(query_run)
-    if run_result.scalar_one_or_none() is None:
+    run = run_result.scalar_one_or_none()
+    if run is None:
         raise HTTPException(status_code=404, detail="Induction run not found")
+    await _assert_induction_access(db, user, run)
+    if run.status in (InductionStatus.COMPLETED, InductionStatus.CANCELLED):
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Cannot update responses for a completed or cancelled induction",
+            ),
+        )
 
     updates = data.model_dump(exclude_unset=True)
     if "understanding" in updates and updates["understanding"] is not None:

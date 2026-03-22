@@ -5,6 +5,7 @@ and supervisor validation for assessments and inductions.
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import or_, select
@@ -16,6 +17,37 @@ logger = logging.getLogger(__name__)
 
 class GovernanceService:
     """Enforces governance rules for the Workforce Development Platform."""
+
+    @staticmethod
+    def _competency_record_sort_key(record) -> tuple[datetime, int]:
+        baseline = datetime.min.replace(tzinfo=timezone.utc)
+        return (
+            getattr(record, "assessed_at", None) or getattr(record, "created_at", None) or baseline,
+            getattr(record, "id", 0),
+        )
+
+    @staticmethod
+    def _latest_records_by_asset_type(records: list) -> list:
+        latest_records = {}
+        for record in records:
+            current = latest_records.get(record.asset_type_id)
+            if current is None or GovernanceService._competency_record_sort_key(record) > GovernanceService._competency_record_sort_key(current):
+                latest_records[record.asset_type_id] = record
+        return list(latest_records.values())
+
+    @staticmethod
+    def _effective_competency_state(record):
+        from src.domain.models.engineer import CompetencyLifecycleState
+
+        state = record.state
+        expires_at = getattr(record, "expires_at", None)
+        if expires_at is not None and expires_at <= datetime.now(timezone.utc):
+            if state in (
+                CompetencyLifecycleState.ACTIVE,
+                CompetencyLifecycleState.DUE,
+            ):
+                return CompetencyLifecycleState.EXPIRED
+        return state
 
     @staticmethod
     async def validate_supervisor(
@@ -171,28 +203,33 @@ class GovernanceService:
                 "records": [],
             }
 
-        active = [r for r in records if r.state == CompetencyLifecycleState.ACTIVE]
-        expired = [r for r in records if r.state == CompetencyLifecycleState.EXPIRED]
-        failed = [r for r in records if r.state == CompetencyLifecycleState.FAILED]
+        current_record = max(records, key=GovernanceService._competency_record_sort_key)
+        current_state = GovernanceService._effective_competency_state(current_record)
+        current_state_value = current_state.value if hasattr(current_state, "value") else str(current_state)
 
-        if failed:
+        if current_state == CompetencyLifecycleState.FAILED:
             return {
                 "cleared": False,
-                "reason": "Engineer has failed competency records for this asset type",
-                "records": [{"id": r.id, "state": r.state.value} for r in failed],
+                "reason": "Engineer's latest competency assessment for this asset type is failed",
+                "records": [{"id": current_record.id, "state": current_state_value}],
             }
 
-        if expired and not active:
+        if current_state in (
+            CompetencyLifecycleState.DUE,
+            CompetencyLifecycleState.EXPIRED,
+            CompetencyLifecycleState.NOT_ASSESSED,
+        ):
             return {
                 "cleared": False,
-                "reason": "All competencies for this asset type have expired",
-                "records": [{"id": r.id, "state": r.state.value} for r in expired],
+                "reason": "Engineer requires reassessment before work on this asset type",
+                "records": [{"id": current_record.id, "state": current_state_value}],
             }
 
         return {
             "cleared": True,
             "reason": None,
-            "active_count": len(active),
+            "records": [{"id": current_record.id, "state": current_state_value}],
+            "active_count": 1,
         }
 
     @staticmethod
@@ -203,15 +240,7 @@ class GovernanceService:
         """
         from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord
 
-        stmt = select(CompetencyRecord).where(
-            CompetencyRecord.engineer_id == engineer_id,
-            CompetencyRecord.state.in_(
-                [
-                    CompetencyLifecycleState.DUE,
-                    CompetencyLifecycleState.EXPIRED,
-                ]
-            ),
-        )
+        stmt = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
         if tenant_id is not None:
             from sqlalchemy import or_
 
@@ -226,21 +255,23 @@ class GovernanceService:
         records = result.scalars().all()
 
         suggestions = []
-        for r in records:
-            priority = "high" if r.state == CompetencyLifecycleState.EXPIRED else "medium"
+        for r in GovernanceService._latest_records_by_asset_type(records):
+            effective_state = GovernanceService._effective_competency_state(r)
+            if effective_state not in (CompetencyLifecycleState.DUE, CompetencyLifecycleState.EXPIRED):
+                continue
+            effective_state_value = effective_state.value if hasattr(effective_state, "value") else str(effective_state)
+            priority = "high" if effective_state == CompetencyLifecycleState.EXPIRED else "medium"
             suggestions.append(
                 {
                     "competency_record_id": r.id,
                     "engineer_id": r.engineer_id,
                     "asset_type_id": r.asset_type_id,
                     "template_id": r.template_id,
-                    "state": r.state.value,
+                    "state": effective_state_value,
                     "expires_at": r.expires_at.isoformat() if r.expires_at else None,
                     "priority": priority,
                     "suggested_action": (
-                        "Reassessment required"
-                        if r.state == CompetencyLifecycleState.EXPIRED
-                        else "Schedule reassessment"
+                        "Reassessment required" if effective_state == CompetencyLifecycleState.EXPIRED else "Schedule reassessment"
                     ),
                 }
             )
@@ -255,7 +286,7 @@ class NotificationService:
     async def notify_assessment_complete(
         db: AsyncSession,
         assessment_run_id: str,
-        engineer_user_id: int,
+        engineer_user_id: int | None,
         supervisor_id: int,
         outcome: str,
     ) -> None:
@@ -268,17 +299,18 @@ class NotificationService:
             "conditional": "Your competency assessment has been marked as CONDITIONAL. Follow-up required.",
         }
 
-        notification = Notification(
-            user_id=engineer_user_id,
-            type=NotificationType.AUDIT_COMPLETED,
-            priority=NotificationPriority.MEDIUM,
-            title="Assessment Complete",
-            message=messages.get(outcome, f"Assessment completed with outcome: {outcome}"),
-            entity_type="assessment",
-            entity_id=assessment_run_id,
-            extra_data={"notification_type": "assessment_complete", "outcome": outcome},
-        )
-        db.add(notification)
+        if engineer_user_id is not None:
+            notification = Notification(
+                user_id=engineer_user_id,
+                type=NotificationType.AUDIT_COMPLETED,
+                priority=NotificationPriority.MEDIUM,
+                title="Assessment Complete",
+                message=messages.get(outcome, f"Assessment completed with outcome: {outcome}"),
+                entity_type="assessment",
+                entity_id=assessment_run_id,
+                extra_data={"notification_type": "assessment_complete", "outcome": outcome},
+            )
+            db.add(notification)
 
         supervisor_notification = Notification(
             user_id=supervisor_id,
@@ -298,7 +330,7 @@ class NotificationService:
     async def notify_induction_complete(
         db: AsyncSession,
         induction_run_id: str,
-        engineer_id: int,
+        engineer_user_id: int | None,
         supervisor_id: int,
         not_yet_competent_count: int,
     ) -> None:
@@ -310,35 +342,39 @@ class NotificationService:
         else:
             msg = "Congratulations! Your induction has been completed successfully."
 
-        notification = Notification(
-            user_id=engineer_id,
-            type=NotificationType.COMPLIANCE_ALERT,
-            priority=NotificationPriority.MEDIUM,
-            title="Induction Complete",
-            message=msg,
-            entity_type="induction",
-            entity_id=induction_run_id,
-            extra_data={
-                "notification_type": "induction_complete",
-                "not_yet_competent_count": not_yet_competent_count,
-            },
-        )
-        db.add(notification)
+        if engineer_user_id is not None:
+            notification = Notification(
+                user_id=engineer_user_id,
+                type=NotificationType.COMPLIANCE_ALERT,
+                priority=NotificationPriority.MEDIUM,
+                title="Induction Complete",
+                message=msg,
+                entity_type="induction",
+                entity_id=induction_run_id,
+                extra_data={
+                    "notification_type": "induction_complete",
+                    "not_yet_competent_count": not_yet_competent_count,
+                },
+            )
+            db.add(notification)
 
         logger.info("Notification created for induction %s", induction_run_id)
 
     @staticmethod
     async def notify_competency_expiry(
         db: AsyncSession,
-        engineer_id: int,
+        engineer_user_id: int | None,
         asset_type_id: int,
         days_until_expiry: int,
     ) -> None:
         """Create notification for upcoming competency expiry."""
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
 
+        if engineer_user_id is None:
+            return
+
         notification = Notification(
-            user_id=engineer_id,
+            user_id=engineer_user_id,
             type=NotificationType.CERTIFICATE_EXPIRING,
             priority=NotificationPriority.MEDIUM,
             title="Competency Expiring Soon",
