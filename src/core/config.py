@@ -134,6 +134,9 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = ""
     azure_storage_container_name: str = "attachments"
 
+    # Default tenant for unauthenticated/public portal intake
+    default_tenant_id: Optional[int] = None
+
     # Email Ingestion
     email_imap_server: str = ""
     email_imap_port: int = 993

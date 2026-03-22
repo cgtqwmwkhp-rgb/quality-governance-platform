@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentUser
@@ -84,6 +84,9 @@ ALLOWED_ERROR_CODES = {
     "UNKNOWN",
 }
 ALLOWED_ACTIONS = {"retry", "clear_session"}
+ALLOWED_WEB_VITAL_NAMES = {"CLS", "FID", "LCP", "TTFB", "INP", "FCP"}
+ALLOWED_WEB_VITAL_RATINGS = {"good", "needs-improvement", "poor"}
+ALLOWED_NAVIGATION_TYPES = {"navigate", "reload", "back_forward", "prerender"}
 
 # Local aggregation file (for evaluator)
 # Default to a subdirectory in the project rather than hardcoded /tmp
@@ -156,6 +159,36 @@ class MetricsAggregation(BaseModel):
     samples: int
     events: dict
     dimensions: dict
+
+
+class WebVitalsPayload(BaseModel):
+    """Bounded web-vitals payload accepted from the frontend."""
+
+    name: str = Field(..., description="Core Web Vital metric name")
+    value: float = Field(..., ge=0)
+    delta: float = Field(..., ge=0)
+    id: str = Field(..., min_length=1, max_length=200)
+    rating: str = Field(..., description="Metric rating bucket")
+    navigationType: Optional[str] = Field(default=None, max_length=32)
+    timestamp: Optional[str] = None
+
+    @validator("name")
+    def validate_metric_name(cls, v):
+        if v not in ALLOWED_WEB_VITAL_NAMES:
+            raise ValueError(f"Metric name '{v}' not in allowlist")
+        return v
+
+    @validator("rating")
+    def validate_rating(cls, v):
+        if v not in ALLOWED_WEB_VITAL_RATINGS:
+            raise ValueError(f"Metric rating '{v}' not in allowlist")
+        return v
+
+    @validator("navigationType")
+    def validate_navigation_type(cls, v):
+        if v is not None and v not in ALLOWED_NAVIGATION_TYPES:
+            raise ValueError(f"Navigation type '{v}' not in allowlist")
+        return v
 
 
 # ============================================================================
@@ -314,12 +347,12 @@ async def receive_events_batch(batch: TelemetryBatch):
 
 
 @router.post("/web-vitals")
-async def receive_web_vitals(request_body: dict = Body(default={})):
+async def receive_web_vitals(payload: WebVitalsPayload):
     """Accept web-vitals metrics from the frontend.
 
     Fault-tolerant: always returns 200 so client telemetry is never blocked.
     """
-    logger.info("WEB_VITALS", extra={"payload": request_body})
+    logger.info("WEB_VITALS", extra={"payload": payload.model_dump(exclude_none=True)})
     return {"status": "ok"}
 
 

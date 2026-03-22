@@ -112,12 +112,10 @@ def _validate_override_headers(request: Request) -> tuple[bool, Optional[str]]:
 
 def _get_user_id_from_request(request: Request) -> Optional[str]:
     """Extract user ID from request (non-PII identifier)."""
-    # Try to get from state (set by auth middleware)
-    if hasattr(request.state, "user_id"):
-        return str(request.state.user_id)
-    # Try to get from headers
-    if "X-User-ID" in request.headers:
-        return request.headers["X-User-ID"]
+    # Only trust middleware-populated request state, never caller-controlled headers.
+    user_id = getattr(request.state, "user_id", None)
+    if user_id is not None:
+        return str(user_id)
     return None
 
 
@@ -211,13 +209,16 @@ class UATSafetyMiddleware(BaseHTTPMiddleware):
 
         # Check if user is UAT admin
         if not _is_user_uat_admin(user_id):
+            reason = "Authenticated UAT admin identity not available"
+            if user_id:
+                reason = "User not in UAT admin list"
             _log_uat_write_attempt(
                 request,
                 allowed=False,
                 user_id=user_id,
                 issue_id=issue_id,
                 owner=owner,
-                reason="User not in UAT admin list",
+                reason=reason,
             )
             return UATWriteBlockedResponse.create("User not authorized for UAT writes. Contact platform admin.")
 
