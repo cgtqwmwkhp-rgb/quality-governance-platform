@@ -603,7 +603,9 @@ async def get_document_stats(
     indexed = indexed_result.scalar() or 0
 
     # Total chunks
-    chunk_query = _scope_stmt_to_current_tenant(select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user)
+    chunk_query = _scope_stmt_to_current_tenant(
+        select(func.count(DocumentChunk.id)), DocumentChunk.tenant_id, current_user
+    )
     chunk_result = await db.execute(chunk_query)
     total_chunks = chunk_result.scalar() or 0
 
