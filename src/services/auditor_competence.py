@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.auditor_competence import (
@@ -28,8 +28,14 @@ logger = logging.getLogger(__name__)
 class AuditorCompetenceService:
     """Service for managing auditor competence."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, tenant_id: Optional[int] = None):
         self.db = db
+        self.tenant_id = tenant_id
+
+    def _scope_stmt(self, stmt, model):
+        if self.tenant_id is None:
+            return stmt
+        return stmt.where(model.tenant_id == self.tenant_id)
 
     # =============================================================================
     # PROFILE MANAGEMENT
@@ -50,6 +56,7 @@ class AuditorCompetenceService:
             years_audit_experience=years_experience,
             competence_level=CompetenceLevel.TRAINEE,
             is_active=True,
+            tenant_id=self.tenant_id,
         )
         self.db.add(profile)
         await self.db.commit()
@@ -58,7 +65,8 @@ class AuditorCompetenceService:
 
     async def get_profile(self, user_id: int) -> Optional[AuditorProfile]:
         """Get auditor profile by user ID."""
-        result = await self.db.execute(select(AuditorProfile).where(AuditorProfile.user_id == user_id))
+        stmt = select(AuditorProfile).where(AuditorProfile.user_id == user_id)
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorProfile))
         return result.scalar_one_or_none()
 
     async def update_profile(
@@ -93,7 +101,7 @@ class AuditorCompetenceService:
             return 0.0
 
         # Get competency areas for weights
-        area_result = await self.db.execute(select(CompetencyArea))
+        area_result = await self.db.execute(self._scope_stmt(select(CompetencyArea), CompetencyArea))
         areas = {a.id: a for a in area_result.scalars().all()}
 
         total_weighted_score = 0
@@ -144,6 +152,7 @@ class AuditorCompetenceService:
 
         cert = AuditorCertification(
             profile_id=profile.id,
+            tenant_id=profile.tenant_id,
             certification_name=certification_name,
             certification_body=certification_body,
             certification_number=certification_number,
@@ -164,11 +173,12 @@ class AuditorCompetenceService:
         if not profile:
             return []
 
-        result = await self.db.execute(
+        stmt = (
             select(AuditorCertification)
             .where(AuditorCertification.profile_id == profile.id)
             .order_by(AuditorCertification.expiry_date)
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorCertification))
         return list(result.scalars().all())
 
     async def get_expiring_certifications(
@@ -178,7 +188,7 @@ class AuditorCompetenceService:
         """Get certifications expiring within specified days."""
         cutoff = datetime.now(timezone.utc) + timedelta(days=days_ahead)
 
-        result = await self.db.execute(
+        stmt = (
             select(AuditorCertification)
             .where(
                 and_(
@@ -188,6 +198,7 @@ class AuditorCompetenceService:
             )
             .order_by(AuditorCertification.expiry_date)
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorCertification))
         certs = result.scalars().all()
 
         expiring = []
@@ -208,14 +219,13 @@ class AuditorCompetenceService:
         """Update status of expired certifications."""
         now = datetime.now(timezone.utc)
 
-        result = await self.db.execute(
-            select(AuditorCertification).where(
-                and_(
-                    AuditorCertification.expiry_date < now,
-                    AuditorCertification.status == CertificationStatus.ACTIVE,
-                )
+        stmt = select(AuditorCertification).where(
+            and_(
+                AuditorCertification.expiry_date < now,
+                AuditorCertification.status == CertificationStatus.ACTIVE,
             )
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorCertification))
         expired = result.scalars().all()
 
         for cert in expired:
@@ -246,6 +256,7 @@ class AuditorCompetenceService:
 
         training = AuditorTraining(
             profile_id=profile.id,
+            tenant_id=profile.tenant_id,
             training_name=training_name,
             training_type=training_type,
             training_provider=training_provider,
@@ -266,7 +277,8 @@ class AuditorCompetenceService:
         cpd_hours_earned: Optional[float] = None,
     ) -> AuditorTraining:
         """Mark a training as completed."""
-        result = await self.db.execute(select(AuditorTraining).where(AuditorTraining.id == training_id))
+        stmt = select(AuditorTraining).where(AuditorTraining.id == training_id)
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorTraining))
         training = result.scalar_one_or_none()
 
         if not training:
@@ -289,15 +301,14 @@ class AuditorCompetenceService:
 
     async def _update_cpd_hours(self, profile_id: int, hours: float) -> None:
         """Update CPD hours on active certifications."""
-        result = await self.db.execute(
-            select(AuditorCertification).where(
-                and_(
-                    AuditorCertification.profile_id == profile_id,
-                    AuditorCertification.status == CertificationStatus.ACTIVE,
-                    AuditorCertification.cpd_hours_required.isnot(None),
-                )
+        stmt = select(AuditorCertification).where(
+            and_(
+                AuditorCertification.profile_id == profile_id,
+                AuditorCertification.status == CertificationStatus.ACTIVE,
+                AuditorCertification.cpd_hours_required.isnot(None),
             )
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorCertification))
         certs = result.scalars().all()
 
         for cert in certs:
@@ -324,14 +335,13 @@ class AuditorCompetenceService:
             raise ValueError(f"No auditor profile found for user {user_id}")
 
         # Check if competency record exists
-        result = await self.db.execute(
-            select(AuditorCompetency).where(
-                and_(
-                    AuditorCompetency.profile_id == profile.id,
-                    AuditorCompetency.competency_area_id == competency_area_id,
-                )
+        stmt = select(AuditorCompetency).where(
+            and_(
+                AuditorCompetency.profile_id == profile.id,
+                AuditorCompetency.competency_area_id == competency_area_id,
             )
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorCompetency))
         competency = result.scalar_one_or_none()
 
         if competency:
@@ -343,6 +353,7 @@ class AuditorCompetenceService:
         else:
             competency = AuditorCompetency(
                 profile_id=profile.id,
+                tenant_id=profile.tenant_id,
                 competency_area_id=competency_area_id,
                 current_level=current_level,
                 last_assessed=datetime.now(timezone.utc),
@@ -370,11 +381,14 @@ class AuditorCompetenceService:
         level_key = profile.competence_level.value
 
         # Get all competency areas
-        area_result = await self.db.execute(select(CompetencyArea).where(CompetencyArea.is_active == True))
+        area_result = await self.db.execute(
+            self._scope_stmt(select(CompetencyArea).where(CompetencyArea.is_active == True), CompetencyArea)
+        )
         areas = area_result.scalars().all()
 
         # Get current competencies
-        comp_result = await self.db.execute(select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id))
+        comp_stmt = select(AuditorCompetency).where(AuditorCompetency.profile_id == profile.id)
+        comp_result = await self.db.execute(self._scope_stmt(comp_stmt, AuditorCompetency))
         competencies = {c.competency_area_id: c for c in comp_result.scalars().all()}
 
         gaps = []
@@ -408,38 +422,35 @@ class AuditorCompetenceService:
     ) -> List[Dict[str, Any]]:
         """Find auditors qualified for a specific audit type."""
         # Get assignment criteria
-        criteria_result = await self.db.execute(
-            select(AuditAssignmentCriteria).where(
-                and_(
-                    AuditAssignmentCriteria.audit_type == audit_type,
-                    AuditAssignmentCriteria.is_active == True,
-                )
+        criteria_stmt = select(AuditAssignmentCriteria).where(
+            and_(
+                AuditAssignmentCriteria.audit_type == audit_type,
+                AuditAssignmentCriteria.is_active == True,
             )
         )
+        criteria_result = await self.db.execute(self._scope_stmt(criteria_stmt, AuditAssignmentCriteria))
         criteria = criteria_result.scalar_one_or_none()
 
         if not criteria:
             # No specific criteria - return all active auditors
-            result = await self.db.execute(
-                select(AuditorProfile).where(
-                    and_(
-                        AuditorProfile.is_active == True,
-                        AuditorProfile.is_available == True,
-                    )
-                )
-            )
-            profiles = result.scalars().all()
-            return [{"profile": p, "qualified": True, "gaps": []} for p in profiles]
-
-        # Get all active, available auditors
-        result = await self.db.execute(
-            select(AuditorProfile).where(
+            stmt = select(AuditorProfile).where(
                 and_(
                     AuditorProfile.is_active == True,
                     AuditorProfile.is_available == True,
                 )
             )
+            result = await self.db.execute(self._scope_stmt(stmt, AuditorProfile))
+            profiles = result.scalars().all()
+            return [{"profile": p, "qualified": True, "gaps": []} for p in profiles]
+
+        # Get all active, available auditors
+        stmt = select(AuditorProfile).where(
+            and_(
+                AuditorProfile.is_active == True,
+                AuditorProfile.is_available == True,
+            )
         )
+        result = await self.db.execute(self._scope_stmt(stmt, AuditorProfile))
         profiles = result.scalars().all()
 
         qualified_auditors = []
@@ -468,14 +479,13 @@ class AuditorCompetenceService:
 
             # Check certifications
             if criteria.required_certifications:
-                cert_result = await self.db.execute(
-                    select(AuditorCertification).where(
-                        and_(
-                            AuditorCertification.profile_id == profile.id,
-                            AuditorCertification.status == CertificationStatus.ACTIVE,
-                        )
+                cert_stmt = select(AuditorCertification).where(
+                    and_(
+                        AuditorCertification.profile_id == profile.id,
+                        AuditorCertification.status == CertificationStatus.ACTIVE,
                     )
                 )
+                cert_result = await self.db.execute(self._scope_stmt(cert_stmt, AuditorCertification))
                 certs = cert_result.scalars().all()
                 cert_names = [c.certification_name for c in certs]
 
@@ -506,11 +516,14 @@ class AuditorCompetenceService:
         level_counts = {}
         for level in CompetenceLevel:
             result = await self.db.execute(
-                select(func.count(AuditorProfile.id)).where(
-                    and_(
-                        AuditorProfile.competence_level == level,
-                        AuditorProfile.is_active == True,
-                    )
+                self._scope_stmt(
+                    select(func.count(AuditorProfile.id)).where(
+                        and_(
+                            AuditorProfile.competence_level == level,
+                            AuditorProfile.is_active == True,
+                        )
+                    ),
+                    AuditorProfile,
                 )
             )
             level_counts[level.value] = result.scalar() or 0
@@ -520,13 +533,19 @@ class AuditorCompetenceService:
 
         # Average competence score
         avg_result = await self.db.execute(
-            select(func.avg(AuditorProfile.competence_score)).where(AuditorProfile.is_active == True)
+            self._scope_stmt(
+                select(func.avg(AuditorProfile.competence_score)).where(AuditorProfile.is_active == True),
+                AuditorProfile,
+            )
         )
         avg_score = avg_result.scalar() or 0
 
         # Total active auditors
         total_result = await self.db.execute(
-            select(func.count(AuditorProfile.id)).where(AuditorProfile.is_active == True)
+            self._scope_stmt(
+                select(func.count(AuditorProfile.id)).where(AuditorProfile.is_active == True),
+                AuditorProfile,
+            )
         )
         total_active = total_result.scalar() or 0
 

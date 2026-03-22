@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,6 +42,7 @@ from src.domain.services.governance_service import GovernanceService, Notificati
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_REFERENCE_RETRY_LIMIT = 3
 
 
 def _is_workforce_admin(user: CurrentUser) -> bool:
@@ -170,25 +172,38 @@ async def create_assessment_run(
             status_code=400, detail=api_error(ErrorCode.VALIDATION_ERROR, "Template approval check failed")
         )
 
-    reference_number = await _generate_assessment_reference_number(db)
-    run = AssessmentRun(
-        reference_number=reference_number,
-        template_id=data.template_id,
-        engineer_id=data.engineer_id,
-        supervisor_id=user.id,
-        asset_type_id=data.asset_type_id,
-        asset_id=data.asset_id,
-        title=data.title,
-        location=data.location,
-        notes=data.notes,
-        scheduled_date=data.scheduled_date,
-        status=AssessmentStatus.DRAFT,
-        tenant_id=user.tenant_id,
+    for attempt in range(_REFERENCE_RETRY_LIMIT):
+        reference_number = await _generate_assessment_reference_number(db)
+        run = AssessmentRun(
+            reference_number=reference_number,
+            template_id=data.template_id,
+            engineer_id=data.engineer_id,
+            supervisor_id=user.id,
+            asset_type_id=data.asset_type_id,
+            asset_id=data.asset_id,
+            title=data.title,
+            location=data.location,
+            notes=data.notes,
+            scheduled_date=data.scheduled_date,
+            status=AssessmentStatus.DRAFT,
+            tenant_id=user.tenant_id,
+        )
+        db.add(run)
+        try:
+            await db.commit()
+            await db.refresh(run)
+            return AssessmentRunResponse.model_validate(run)
+        except IntegrityError as exc:
+            await db.rollback()
+            if "reference_number" in str(exc).lower() and attempt < (_REFERENCE_RETRY_LIMIT - 1):
+                logger.warning("Retrying assessment reference allocation after conflict", exc_info=exc)
+                continue
+            raise
+
+    raise HTTPException(
+        status_code=409,
+        detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Unable to allocate a unique assessment reference number"),
     )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
-    return AssessmentRunResponse.model_validate(run)
 
 
 @router.get("/{run_id}", response_model=AssessmentRunResponse)
@@ -291,9 +306,11 @@ async def complete_assessment(
             ),
         )
 
-    template_result = await db.execute(
+    template_query = (
         select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
     )
+    template_query = apply_tenant_filter(template_query, AuditTemplate, user.tenant_id)
+    template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
     if template is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"))
