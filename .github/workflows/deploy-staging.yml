@@ -42,7 +42,7 @@ jobs:
           echo "📋 Deployment ID: $DEPLOYMENT_ID"
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Log deployment info
         run: |
@@ -86,7 +86,7 @@ jobs:
           echo "✅ Guardrail: environment targeting validated"
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -161,10 +161,14 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          images: ${{ env.IMAGE_DIGEST_REF }}
+        run: |
+          echo "🚀 Updating Azure Web App container image..."
+          az webapp config container set \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --container-image-name "${{ env.IMAGE_DIGEST_REF }}" \
+            --output none
+          echo "✅ Azure Web App container updated"
 
       - name: Configure App Service environment
         run: |
@@ -524,7 +528,7 @@ jobs:
 
       - name: Upload deploy evidence artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: deploy-evidence-staging-${{ github.run_id }}
           path: |
@@ -565,7 +569,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run smoke tests
         id: smoke

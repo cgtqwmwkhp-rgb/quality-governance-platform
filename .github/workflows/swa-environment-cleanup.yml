@@ -38,7 +38,7 @@ jobs:
       cleanup_report: ${{ steps.cleanup.outputs.report }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Check Safety Switch
         if: env.DISABLE_CLEANUP == 'true'
@@ -67,7 +67,7 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
       
       - name: Azure Login
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_PROD }}
       
@@ -265,7 +265,7 @@ jobs:
           cat artifacts/cleanup-report.md
       
       - name: Upload Cleanup Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: swa-cleanup-report-${{ github.run_id }}
           path: artifacts/

@@ -164,10 +164,10 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -211,7 +211,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve release SHA
         id: release_sha
@@ -238,7 +238,7 @@ jobs:
             --sha "${{ env.RELEASE_SHA }}"
 
       - name: Check out signed release SHA
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ env.RELEASE_SHA }}
 
@@ -272,7 +272,7 @@ jobs:
           echo "✅ Guardrail: environment targeting validated (app: $app_lower)"
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -375,10 +375,14 @@ jobs:
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
       - name: Deploy to Azure Web App
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          images: ${{ env.IMAGE_DIGEST_REF }}
+        run: |
+          echo "🚀 Updating Azure Web App container image..."
+          az webapp config container set \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --container-image-name "${{ env.IMAGE_DIGEST_REF }}" \
+            --output none
+          echo "✅ Azure Web App container updated"
 
       - name: Configure App Service environment
         run: |
@@ -1289,7 +1293,7 @@ jobs:
 
       - name: Upload deploy proof artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: deploy-proof-${{ github.run_id }}
           path: |
@@ -1392,10 +1396,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.rollback == true
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Login to Azure
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
