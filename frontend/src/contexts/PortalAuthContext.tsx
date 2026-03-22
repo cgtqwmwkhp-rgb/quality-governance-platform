@@ -79,6 +79,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     // Restore platform token from sessionStorage on mount
     return sessionStorage.getItem('platform_access_token')
   })
+  const isAuthenticated = Boolean(user && (user.isDemoUser || platformToken))
 
   // Exchange Azure AD id_token for platform JWT
   const exchangeToken = async (idToken: string): Promise<TokenExchangeResponse | null> => {
@@ -208,17 +209,17 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
                   parsedUser.email,
                 )
               } else {
-                // User info exists but no platform token (new tab/window)
-                // Set user for display but warn that re-login is needed for full access
-                setUser(parsedUser)
+                // Fail closed instead of restoring a misleading partial session.
+                localStorage.removeItem('portal_user')
+                localStorage.removeItem('portal_session_time')
                 console.warn(
-                  '[PortalAuth] User restored but no platform token - My Reports requires re-login',
+                  '[PortalAuth] Discarded portal session without platform token - re-login required',
                 )
-                // Don't clear localStorage - user can still submit reports
-                // But set a visible warning for the user
                 setError(
                   'Your session needs to be refreshed. Please sign out and sign in again to view your reports.',
                 )
+                setUser(null)
+                setPlatformToken(null)
               }
             } else {
               // Session expired - clear everything
@@ -335,7 +336,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     <PortalAuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        isAuthenticated,
         isLoading,
         login,
         loginWithDemo,

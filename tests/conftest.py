@@ -120,55 +120,43 @@ def module_client(app):
 @pytest.fixture(scope="session")
 def auth_token(client, test_config) -> Optional[str]:
     """Get authentication token for test user."""
-    try:
-        payloads = [
-            {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
-            {"username": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
-        ]
-        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
-        for path in paths:
-            for payload in payloads:
-                response = client.post(path, json=payload)
-                if response.status_code == 200:
-                    return response.json().get("access_token")
-    except Exception:
-        pass
-    return None
+    payload = {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD}
+    response = client.post("/api/v1/auth/login", json=payload)
+    if response.status_code != 200:
+        raise AssertionError(
+            f"Failed to obtain test user auth token: status={response.status_code}, body={response.text}"
+        )
+    token = response.json().get("access_token")
+    if not token:
+        raise AssertionError("Auth login succeeded but access_token was missing from the response")
+    return token
 
 
 @pytest.fixture(scope="session")
 def auth_headers(auth_token) -> dict:
     """Get authenticated headers."""
-    if auth_token:
-        return {"Authorization": f"Bearer {auth_token}"}
-    return {}
+    return {"Authorization": f"Bearer {auth_token}"}
 
 
 @pytest.fixture(scope="session")
 def admin_token(client, test_config) -> Optional[str]:
     """Get authentication token for admin user."""
-    try:
-        payloads = [
-            {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
-            {"username": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
-        ]
-        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
-        for path in paths:
-            for payload in payloads:
-                response = client.post(path, json=payload)
-                if response.status_code == 200:
-                    return response.json().get("access_token")
-    except Exception:
-        pass
-    return None
+    payload = {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD}
+    response = client.post("/api/v1/auth/login", json=payload)
+    if response.status_code != 200:
+        raise AssertionError(
+            f"Failed to obtain admin auth token: status={response.status_code}, body={response.text}"
+        )
+    token = response.json().get("access_token")
+    if not token:
+        raise AssertionError("Admin login succeeded but access_token was missing from the response")
+    return token
 
 
 @pytest.fixture(scope="session")
 def admin_headers(admin_token) -> dict:
     """Get admin authenticated headers."""
-    if admin_token:
-        return {"Authorization": f"Bearer {admin_token}"}
-    return {}
+    return {"Authorization": f"Bearer {admin_token}"}
 
 
 @pytest.fixture(scope="module")
