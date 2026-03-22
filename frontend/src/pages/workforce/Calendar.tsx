@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { trackError } from '../../utils/errorTracker'
 import { ChevronLeft, ChevronRight, AlertTriangle, GraduationCap } from 'lucide-react'
@@ -7,8 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   workforceApi,
   getApiErrorMessage,
-  type AssessmentRun,
-  type InductionRun,
 } from '../../api/client'
 import { cn } from '../../helpers/utils'
 
@@ -22,16 +20,38 @@ interface CalendarEvent {
   id: string
 }
 
+interface ScheduledWorkItem {
+  id: string
+  reference_number: string
+  engineer_id: number
+  scheduled_date?: string
+  status: string
+  type: 'assessment' | 'induction'
+}
+
+export function parseScheduledLocalDate(value?: string): Date | null {
+  if (!value) return null
+
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch
+    return new Date(Number(year), Number(month) - 1, Number(day))
+  }
+
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export default function Calendar() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [month, setMonth] = useState(() => new Date().getMonth())
-  const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const [engineerMap, setEngineerMap] = useState<Record<number, string>>({})
+  const [scheduledItems, setScheduledItems] = useState<ScheduledWorkItem[]>([])
 
   useEffect(() => {
     workforceApi
@@ -57,51 +77,45 @@ export default function Calendar() {
         const assessments = assessRes.data?.items || []
         const inductions = inductRes.data?.items || []
 
-        const monthStart = new Date(year, month, 1)
-        const monthEnd = new Date(year, month + 1, 0)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-
-        const mapToEvents = (
-          items: (AssessmentRun | InductionRun)[],
-          type: 'assessment' | 'induction',
-        ): CalendarEvent[] => {
-          return items
-            .filter((i) => {
-              const d = i.scheduled_date ? new Date(i.scheduled_date) : null
-              if (!d) return false
-              return d >= monthStart && d <= monthEnd
-            })
-            .map((i) => {
-              const d = i.scheduled_date ? new Date(i.scheduled_date) : new Date()
-              const dayOfMonth = d.getDate()
-              const overdue = d < today && i.status !== 'completed'
-              const engName = engineerMap[i.engineer_id] ?? `#${i.engineer_id}`
-              const title = `${i.reference_number} - ${engName}`
-              return {
-                date: dayOfMonth,
-                type,
-                title,
-                overdue,
-                id: i.id,
-              }
-            })
-        }
-
-        setEvents([
-          ...mapToEvents(assessments, 'assessment'),
-          ...mapToEvents(inductions, 'induction'),
+        setScheduledItems([
+          ...assessments.map((assessment) => ({ ...assessment, type: 'assessment' as const })),
+          ...inductions.map((induction) => ({ ...induction, type: 'induction' as const })),
         ])
       } catch (err) {
         trackError(err, { component: 'Calendar', action: 'load' })
         setError(getApiErrorMessage(err))
-        setEvents([])
+        setScheduledItems([])
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [year, month, engineerMap])
+  }, [year, month])
+
+  const events = useMemo(() => {
+    const monthStart = new Date(year, month, 1)
+    const monthEnd = new Date(year, month + 1, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    return scheduledItems
+      .filter((item) => {
+        const date = parseScheduledLocalDate(item.scheduled_date)
+        if (!date) return false
+        return date >= monthStart && date <= monthEnd
+      })
+      .map<CalendarEvent>((item) => {
+        const date = parseScheduledLocalDate(item.scheduled_date) ?? new Date()
+        const engineerName = engineerMap[item.engineer_id] ?? `#${item.engineer_id}`
+        return {
+          date: date.getDate(),
+          type: item.type,
+          title: `${item.reference_number} - ${engineerName}`,
+          overdue: date < today && item.status !== 'completed',
+          id: item.id,
+        }
+      })
+  }, [engineerMap, month, scheduledItems, year])
 
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()

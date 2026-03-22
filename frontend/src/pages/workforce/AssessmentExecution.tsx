@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ interface QuestionWithSection {
 }
 
 interface ResponseState {
+  responseId?: string
   verdict: Verdict | null
   feedback: string
   supervisorNotes: string
@@ -39,6 +40,7 @@ interface ResponseState {
 }
 
 interface ExistingAssessmentResponse {
+  id: string
   question_id: number
   verdict?: Verdict | null
   feedback?: string | null
@@ -69,6 +71,7 @@ export default function AssessmentExecution() {
   const [finalSignature, setFinalSignature] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [guidanceOpen, setGuidanceOpen] = useState(false)
+  const autoStartedRunIds = useRef<Set<string>>(new Set())
 
   const flattenQuestions = useCallback(
     (sections: { title: string; questions: AuditQuestion[] }[]): QuestionWithSection[] => {
@@ -96,19 +99,28 @@ export default function AssessmentExecution() {
       setError(null)
       try {
         const runRes = await workforceApi.getAssessment(id)
-        const run = runRes.data as AssessmentRunWithResponses
-        setAssessment(run)
+        let run = runRes.data as AssessmentRunWithResponses
         setDebriefNotes(run.debrief_notes ?? '')
         setFinalSignature(run.debrief_signature ?? null)
 
-        if (run.status === 'draft') {
-          await workforceApi.startAssessment(id)
+        if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
+          autoStartedRunIds.current.add(id)
+          const startedRunRes = await workforceApi.startAssessment(id)
+          run = {
+            ...run,
+            ...startedRunRes.data,
+            responses: run.responses,
+            debrief_notes: run.debrief_notes,
+            debrief_signature: run.debrief_signature,
+          }
         }
+        setAssessment(run)
 
         if (Array.isArray(run.responses)) {
           const nextResponses = new Map<number, ResponseState>()
           for (const response of run.responses) {
             nextResponses.set(response.question_id, {
+              responseId: response.id,
               verdict: response.verdict ?? null,
               feedback: response.feedback ?? '',
               supervisorNotes: response.supervisor_notes ?? '',
@@ -140,7 +152,7 @@ export default function AssessmentExecution() {
           setTemplateName(template.name)
         } else {
           setQuestions([])
-          setTemplateName(run.title || t('workforce.assessment.title'))
+          setTemplateName(run.title || 'Assessment')
         }
 
         try {
@@ -157,7 +169,7 @@ export default function AssessmentExecution() {
       }
     }
     load()
-  }, [id, flattenQuestions, t])
+  }, [id, flattenQuestions])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -169,6 +181,7 @@ export default function AssessmentExecution() {
   const getResponse = (qId: number): ResponseState => {
     return (
       responses.get(qId) ?? {
+        responseId: undefined,
         verdict: null,
         feedback: '',
         supervisorNotes: '',
@@ -181,6 +194,7 @@ export default function AssessmentExecution() {
     setResponses((prev) => {
       const next = new Map(prev)
       const cur = next.get(qId) ?? {
+        responseId: undefined,
         verdict: null,
         feedback: '',
         supervisorNotes: '',
@@ -228,17 +242,27 @@ export default function AssessmentExecution() {
       for (const [qId, resp] of responses) {
         if (resp.verdict) {
           try {
-            const savedResponse = await workforceApi.createAssessmentResponse(id, {
-              question_id: qId,
-              verdict: resp.verdict,
-              feedback: resp.feedback || undefined,
-              supervisor_notes: resp.supervisorNotes || undefined,
-            })
-            if (resp.signatureBase64) {
-              await workforceApi.updateAssessmentResponse(savedResponse.data.id, {
-                engineer_signature: resp.signatureBase64,
-                engineer_signed_at: new Date().toISOString(),
+            if (resp.responseId) {
+              await workforceApi.updateAssessmentResponse(resp.responseId, {
+                verdict: resp.verdict,
+                feedback: resp.feedback || undefined,
+                supervisor_notes: resp.supervisorNotes || undefined,
+                engineer_signature: resp.signatureBase64 || undefined,
+                engineer_signed_at: resp.signatureBase64 ? new Date().toISOString() : undefined,
               })
+            } else {
+              const savedResponse = await workforceApi.createAssessmentResponse(id, {
+                question_id: qId,
+                verdict: resp.verdict,
+                feedback: resp.feedback || undefined,
+                supervisor_notes: resp.supervisorNotes || undefined,
+              })
+              if (resp.signatureBase64) {
+                await workforceApi.updateAssessmentResponse(savedResponse.data.id, {
+                  engineer_signature: resp.signatureBase64,
+                  engineer_signed_at: new Date().toISOString(),
+                })
+              }
             }
           } catch {
             failedQuestions.push(qId)
