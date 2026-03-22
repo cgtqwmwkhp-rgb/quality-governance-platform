@@ -199,6 +199,8 @@ def get_default_portal_tenant_id() -> int:
     """
     tenant_id = settings.default_tenant_id
     if tenant_id is None:
+        if not settings.is_production:
+            return 1
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=api_error(
@@ -213,8 +215,9 @@ def build_incident_portal_fields(
     report: QuickReportCreate,
     incident_severity: IncidentSeverity,
     reporter_submission: dict[str, Any],
-    tenant_id: int,
+    tenant_id: Optional[int] = None,
 ) -> dict[str, Any]:
+    resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     incident_occurred_at = parse_portal_datetime(
         reporter_submission.get("incident_date"),
         reporter_submission.get("incident_time"),
@@ -239,7 +242,7 @@ def build_incident_portal_fields(
         "source_form_id": "portal_incident_v1",
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": tenant_id,
+        "tenant_id": resolved_tenant_id,
     }
 
 
@@ -247,8 +250,9 @@ def build_complaint_portal_fields(
     report: QuickReportCreate,
     complaint_priority: ComplaintPriority,
     reporter_submission: dict[str, Any],
-    tenant_id: int,
+    tenant_id: Optional[int] = None,
 ) -> dict[str, Any]:
+    resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     return {
         "complaint_type": ComplaintType.OTHER,
         "priority": complaint_priority,
@@ -261,7 +265,7 @@ def build_complaint_portal_fields(
         "source_form_id": "portal_complaint_v1",
         "source_type": "portal",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": tenant_id,
+        "tenant_id": resolved_tenant_id,
     }
 
 
@@ -269,8 +273,9 @@ def build_rta_portal_fields(
     report: QuickReportCreate,
     rta_severity: RTASeverity,
     reporter_submission: dict[str, Any],
-    tenant_id: int,
+    tenant_id: Optional[int] = None,
 ) -> dict[str, Any]:
+    resolved_tenant_id = tenant_id if tenant_id is not None else get_default_portal_tenant_id()
     collision_occurred_at = parse_portal_datetime(
         reporter_submission.get("accident_date"),
         reporter_submission.get("accident_time"),
@@ -326,7 +331,7 @@ def build_rta_portal_fields(
         ),
         "source_form_id": "portal_rta_v1",
         "reporter_submission": reporter_submission or None,
-        "tenant_id": tenant_id,
+        "tenant_id": resolved_tenant_id,
     }
 
 
