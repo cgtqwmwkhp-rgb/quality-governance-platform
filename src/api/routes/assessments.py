@@ -84,6 +84,38 @@ async def _assert_assessment_access(
     )
 
 
+async def _assert_assessment_response_update_access(
+    db: AsyncSession,
+    user: CurrentUser,
+    run: AssessmentRun,
+    updates: dict,
+) -> None:
+    if _is_workforce_admin(user) or run.supervisor_id == user.id:
+        return
+
+    engineer_user_id = await _assessment_engineer_user_id(db, run.engineer_id)
+    if engineer_user_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail=api_error(
+                ErrorCode.PERMISSION_DENIED,
+                "You do not have permission to update this assessment response",
+            ),
+        )
+
+    engineer_only_fields = {"engineer_signature", "engineer_signed_at"}
+    disallowed_fields = set(updates) - engineer_only_fields
+    if disallowed_fields:
+        raise HTTPException(
+            status_code=403,
+            detail=api_error(
+                ErrorCode.PERMISSION_DENIED,
+                "Engineers may only update their own assessment sign-off",
+                details={"fields": sorted(disallowed_fields)},
+            ),
+        )
+
+
 async def _generate_assessment_reference_number(db: AsyncSession) -> str:
     """Generate next sequential reference number: ASM-YYYY-NNNN."""
     year = datetime.now(timezone.utc).year
@@ -213,12 +245,7 @@ async def get_assessment_run(
     user: CurrentUser,
 ):
     """Get an assessment run by ID."""
-    query = (
-        select(AssessmentRun)
-        .options(selectinload(AssessmentRun.responses))
-        .where(AssessmentRun.id == run_id)
-        .with_for_update()
-    )
+    query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
     query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
     result = await db.execute(query)
     run = result.scalar_one_or_none()
@@ -497,12 +524,14 @@ async def create_assessment_response(
             verdict=verdict_val,
             feedback=data.feedback,
             supervisor_notes=data.supervisor_notes,
+            tenant_id=run.tenant_id,
         )
         db.add(response)
     else:
         response.verdict = verdict_val
         response.feedback = data.feedback
         response.supervisor_notes = data.supervisor_notes
+        response.tenant_id = run.tenant_id
 
     await db.commit()
     await db.refresh(response)
@@ -535,7 +564,8 @@ async def update_assessment_response(
     run = run_result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
-    await _assert_assessment_access(db, user, run)
+    updates = data.model_dump(exclude_unset=True)
+    await _assert_assessment_response_update_access(db, user, run, updates)
     if run.status in (AssessmentStatus.COMPLETED, AssessmentStatus.CANCELLED):
         raise HTTPException(
             status_code=400,
@@ -545,11 +575,11 @@ async def update_assessment_response(
             ),
         )
 
-    updates = data.model_dump(exclude_unset=True)
     if "verdict" in updates and updates["verdict"] is not None:
         updates["verdict"] = CompetencyVerdict(updates["verdict"])
     for k, v in updates.items():
         setattr(response, k, v)
+    response.tenant_id = run.tenant_id
     await db.commit()
     await db.refresh(response)
     return AssessmentResponseResponse.model_validate(response)

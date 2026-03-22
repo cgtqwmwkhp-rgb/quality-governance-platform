@@ -21,7 +21,13 @@ class _FakeResult:
 
 @pytest.mark.asyncio
 async def test_create_assessment_response_updates_existing_response():
-    run = types.SimpleNamespace(id="asm-run-1", supervisor_id=42, template_id=501, status=AssessmentStatus.IN_PROGRESS)
+    run = types.SimpleNamespace(
+        id="asm-run-1",
+        supervisor_id=42,
+        template_id=501,
+        status=AssessmentStatus.IN_PROGRESS,
+        tenant_id=1,
+    )
     existing = types.SimpleNamespace(
         id="resp-1",
         run_id="asm-run-1",
@@ -29,6 +35,7 @@ async def test_create_assessment_response_updates_existing_response():
         verdict=CompetencyVerdict.COMPETENT,
         feedback="old feedback",
         supervisor_notes="old notes",
+        tenant_id=None,
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
@@ -53,12 +60,19 @@ async def test_create_assessment_response_updates_existing_response():
     assert existing.verdict == CompetencyVerdict.NOT_COMPETENT
     assert existing.feedback == "new feedback"
     assert existing.supervisor_notes == "new notes"
+    assert existing.tenant_id == 1
     db.add.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_create_induction_response_updates_existing_response():
-    run = types.SimpleNamespace(id="ind-run-1", supervisor_id=42, template_id=601, status=InductionStatus.IN_PROGRESS)
+    run = types.SimpleNamespace(
+        id="ind-run-1",
+        supervisor_id=42,
+        template_id=601,
+        status=InductionStatus.IN_PROGRESS,
+        tenant_id=1,
+    )
     existing = types.SimpleNamespace(
         id="resp-2",
         run_id="ind-run-1",
@@ -66,6 +80,7 @@ async def test_create_induction_response_updates_existing_response():
         shown_explained=False,
         understanding=UnderstandingVerdict.COMPETENT,
         supervisor_notes="old notes",
+        tenant_id=None,
         created_at="2026-01-01T00:00:00Z",
         updated_at="2026-01-01T00:00:00Z",
     )
@@ -90,4 +105,5 @@ async def test_create_induction_response_updates_existing_response():
     assert existing.shown_explained is True
     assert existing.understanding == UnderstandingVerdict.NOT_YET_COMPETENT
     assert existing.supervisor_notes == "new notes"
+    assert existing.tenant_id == 1
     db.add.assert_not_called()
