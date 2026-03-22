@@ -12,10 +12,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.config import settings
 from src.core.security import (
+    build_access_token_claims,
     create_access_token,
     create_password_reset_token,
     create_refresh_token,
@@ -35,6 +37,16 @@ MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_SECONDS = 15 * 60  # 15 minutes
 
 _failed_login_attempts: dict[str, list[float]] = {}
+
+
+def _access_token_for_user(user: User) -> str:
+    return create_access_token(
+        subject=user.id,
+        additional_claims=build_access_token_claims(
+            is_superuser=user.is_superuser,
+            roles=[role.name for role in user.roles or []],
+        ),
+    )
 
 
 class AuthService:
@@ -69,7 +81,7 @@ class AuthService:
                 f"Try again in {unlock_in} seconds."
             )
 
-        result = await self.db.execute(select(User).where(User.email == email))
+        result = await self.db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
         user = result.scalar_one_or_none()
 
         if user is None or not verify_password(password, user.hashed_password):
@@ -84,7 +96,7 @@ class AuthService:
         user.last_login = datetime.now(timezone.utc).isoformat()
         await self.db.commit()
 
-        access_token = create_access_token(subject=user.id)
+        access_token = _access_token_for_user(user)
         refresh_token = create_refresh_token(subject=user.id)
 
         return user, access_token, refresh_token
@@ -114,7 +126,7 @@ class AuthService:
         if user_id is None:
             raise ValueError("Invalid refresh token: missing subject")
 
-        result = await self.db.execute(select(User).where(User.id == int(user_id)))
+        result = await self.db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
         user = result.scalar_one_or_none()
 
         if user is None or not user.is_active:
@@ -130,7 +142,7 @@ class AuthService:
             reason="token_refresh",
         )
 
-        new_access = create_access_token(subject=user.id)
+        new_access = _access_token_for_user(user)
         new_refresh = create_refresh_token(subject=user.id)
 
         return new_access, new_refresh
@@ -267,7 +279,7 @@ class AuthService:
         email = user_info["email"].lower()
         azure_oid = user_info.get("oid")
 
-        result = await self.db.execute(select(User).where(User.email == email))
+        result = await self.db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
         user = result.scalar_one_or_none()
 
         if user is None:
@@ -301,7 +313,7 @@ class AuthService:
             user.last_login = datetime.now(timezone.utc).isoformat()
             await self.db.commit()
 
-        access_token = create_access_token(subject=user.id)
+        access_token = _access_token_for_user(user)
         refresh_token = create_refresh_token(subject=user.id)
 
         return user, access_token, refresh_token

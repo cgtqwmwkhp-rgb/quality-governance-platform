@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from src.core.security import (
+    build_access_token_claims,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -116,3 +117,19 @@ class TestJWTTokens:
 
         assert payload is not None
         assert payload["role"] == "admin"
+
+    def test_build_access_token_claims_preserves_roles(self):
+        """Explicit roles should be mirrored into JWT claims."""
+        claims = build_access_token_claims(is_superuser=False, roles=["admin", "supervisor"])
+
+        assert claims["role"] == "admin"
+        assert claims["roles"] == ["admin", "supervisor"]
+        assert claims["is_superuser"] is False
+
+    def test_build_access_token_claims_maps_superuser_to_admin_role(self):
+        """Superusers should receive admin-equivalent UI claims."""
+        claims = build_access_token_claims(is_superuser=True, roles=[])
+
+        assert claims["role"] == "admin"
+        assert claims["roles"] == ["admin"]
+        assert claims["is_superuser"] is True

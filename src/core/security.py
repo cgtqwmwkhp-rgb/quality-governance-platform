@@ -12,6 +12,34 @@ from src.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def build_access_token_claims(*, is_superuser: bool = False, roles: list[str] | None = None) -> dict[str, Any]:
+    """Build normalized role claims for frontend and API consumers."""
+    normalized_roles: list[str] = []
+    seen_roles: set[str] = set()
+
+    for role in roles or []:
+        clean_role = role.strip()
+        if not clean_role:
+            continue
+        role_key = clean_role.lower()
+        if role_key in seen_roles:
+            continue
+        seen_roles.add(role_key)
+        normalized_roles.append(clean_role)
+
+    # Frontend menu gating treats admins as workforce managers.
+    if is_superuser and "admin" not in seen_roles:
+        normalized_roles.append("admin")
+
+    claims: dict[str, Any] = {
+        "is_superuser": is_superuser,
+        "roles": normalized_roles,
+    }
+    if normalized_roles:
+        claims["role"] = normalized_roles[0]
+    return claims
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hashed password."""
     return bool(pwd_context.verify(plain_password, hashed_password))
