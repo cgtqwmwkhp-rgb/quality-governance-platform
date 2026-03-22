@@ -197,6 +197,22 @@ function isAuthEndpoint(url?: string): boolean {
   )
 }
 
+function isPortalPath(pathname: string): boolean {
+  return pathname === '/portal' || pathname.startsWith('/portal/')
+}
+
+function isLoginPagePath(pathname: string): boolean {
+  return pathname === '/login' || pathname === '/portal' || pathname === '/portal/login'
+}
+
+function getLoginRedirectPath(pathname: string): string {
+  return isPortalPath(pathname) ? '/portal/login' : '/login'
+}
+
+function isLocalDevHost(url: string): boolean {
+  return url.includes('localhost') || url.includes('127.0.0.1')
+}
+
 async function doRefreshToken(): Promise<string | null> {
   const refreshToken = getPlatformRefreshToken()
   if (!refreshToken) {
@@ -240,7 +256,7 @@ api.interceptors.request.use((config) => {
   activeRequests++
   useAppStore.getState().setLoading(true)
   // Force HTTPS on baseURL
-  if (config.baseURL && !config.baseURL.startsWith('https://')) {
+  if (config.baseURL && !isLocalDevHost(config.baseURL) && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:')
     if (!config.baseURL.startsWith('https://')) {
       config.baseURL = 'https://' + config.baseURL.replace(/^\/\//, '')
@@ -248,7 +264,7 @@ api.interceptors.request.use((config) => {
   }
 
   // Force HTTPS on URL if it's absolute
-  if (config.url && config.url.startsWith('http:')) {
+  if (config.url && config.url.startsWith('http:') && !isLocalDevHost(config.url)) {
     config.url = config.url.replace(/^http:/, 'https:')
   }
 
@@ -275,10 +291,9 @@ api.interceptors.request.use((config) => {
       clearTokens()
       // Only redirect if not already on login page and not an auth endpoint
       const currentPath = window.location.pathname
-      const isLoginPage =
-        currentPath === '/login' || currentPath === '/portal' || currentPath === '/portal/login'
+      const isLoginPage = isLoginPagePath(currentPath)
       if (!isLoginPage && !isAuthEndpoint) {
-        window.location.href = '/login'
+        window.location.href = getLoginRedirectPath(currentPath)
         // Return a rejected promise to stop the request
         return Promise.reject(new Error('Token expired - redirecting to login'))
       }
@@ -316,8 +331,7 @@ api.interceptors.response.use(
     // Classify the error for better user messaging
     const status = error.response?.status
     const currentPath = window.location.pathname
-    const isLoginPage =
-      currentPath === '/login' || currentPath === '/portal' || currentPath === '/portal/login'
+    const isLoginPage = isLoginPagePath(currentPath)
 
     if (status === 401) {
       const requestUrl = error.config?.url ?? ''
@@ -326,7 +340,7 @@ api.interceptors.response.use(
       // Auth endpoints (login, token-exchange, refresh): never try refresh; clear and redirect
       if (isAuth && !isLoginPage) {
         clearTokens()
-        window.location.href = '/login'
+        window.location.href = getLoginRedirectPath(currentPath)
         return Promise.reject(error)
       }
 
@@ -340,7 +354,7 @@ api.interceptors.response.use(
         const refreshToken = getPlatformRefreshToken()
         if (!refreshToken) {
           clearTokens()
-          if (!isLoginPage) window.location.href = '/login'
+          if (!isLoginPage) window.location.href = getLoginRedirectPath(currentPath)
           ;(error as ClassifiedAxiosError).classifiedMessage =
             'Session expired. Please sign in again.'
           return Promise.reject(error)
@@ -358,7 +372,7 @@ api.interceptors.response.use(
         }
 
         clearTokens()
-        if (!isLoginPage) window.location.href = '/login'
+        if (!isLoginPage) window.location.href = getLoginRedirectPath(currentPath)
       }
 
       ;(error as ClassifiedAxiosError).classifiedMessage = 'Session expired. Please sign in again.'

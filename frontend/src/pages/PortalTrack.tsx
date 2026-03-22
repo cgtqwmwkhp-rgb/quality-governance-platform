@@ -347,7 +347,9 @@ export default function PortalTrack() {
     setSelectedReport(null)
 
     try {
-      const response = await fetch(`/api/v1/portal/reports/${ref}/`)
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/portal/reports/${encodeURIComponent(ref.trim())}/`,
+      )
       if (response.ok) {
         const data = await response.json()
         setSelectedReport(data)

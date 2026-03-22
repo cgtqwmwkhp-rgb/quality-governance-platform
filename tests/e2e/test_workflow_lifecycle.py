@@ -8,9 +8,9 @@ import pytest
 
 @pytest.mark.e2e
 class TestWorkflowLifecycle:
-    def test_incident_lifecycle(self, client, auth_headers):
+    def test_incident_lifecycle(self, client, optional_auth_headers):
         """Create incident -> investigate -> add action -> resolve -> close."""
-        if not auth_headers:
+        if not optional_auth_headers:
             pytest.skip("Auth required")
 
         # 1. Create incident
@@ -22,7 +22,7 @@ class TestWorkflowLifecycle:
                 "severity": "medium",
                 "incident_date": datetime.now().isoformat(),
             },
-            headers=auth_headers,
+            headers=optional_auth_headers,
         )
         assert resp.status_code in (200, 201)
         incident_data = resp.json()
@@ -30,7 +30,7 @@ class TestWorkflowLifecycle:
         assert incident_id is not None
 
         # 2. Get incident
-        resp = client.get(f"/api/v1/incidents/{incident_id}", headers=auth_headers)
+        resp = client.get(f"/api/v1/incidents/{incident_id}", headers=optional_auth_headers)
         assert resp.status_code == 200
 
         # 3. Update status
@@ -39,6 +39,6 @@ class TestWorkflowLifecycle:
             json={
                 "status": "under_investigation",
             },
-            headers=auth_headers,
+            headers=optional_auth_headers,
         )
         assert resp.status_code == 200

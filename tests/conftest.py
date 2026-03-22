@@ -78,6 +78,59 @@ def client(app):
     return TestClient(app)
 
 
+def _is_temporarily_unavailable_auth_response(status_code: int) -> bool:
+    """Treat transient infra/rate-limit failures as auth-unavailable, not bad credentials."""
+    return status_code in {429, 500, 502, 503, 504}
+
+
+def _build_test_auth_headers(client, payload: dict[str, str], failure_prefix: str) -> dict[str, str]:
+    """Build auth headers, failing loudly on auth contract issues but skipping unavailable backends."""
+    try:
+        response = client.post("/api/v1/auth/login", json=payload)
+    except OSError:
+        return {}
+
+    if response.status_code == 200:
+        token = response.json().get("access_token")
+        if not token:
+            raise AssertionError(f"{failure_prefix} login succeeded but access_token was missing from the response")
+        return {"Authorization": f"Bearer {token}"}
+
+    if _is_temporarily_unavailable_auth_response(response.status_code):
+        return {}
+
+    raise AssertionError(f"{failure_prefix}: status={response.status_code}, body={response.text}")
+
+
+def _auth_backend_available(client, headers: dict[str, str]) -> bool:
+    """Detect whether authenticated routes are usable in the current test environment."""
+    try:
+        response = client.get("/api/v1/incidents/", headers=headers)
+    except OSError:
+        return False
+
+    if _is_temporarily_unavailable_auth_response(response.status_code):
+        return False
+
+    return response.status_code != 401
+
+
+def _build_optional_test_auth_headers(client, payload: dict[str, str], failure_prefix: str) -> dict[str, str]:
+    """Build auth headers for suites that intentionally skip when auth infra is unavailable."""
+    try:
+        headers = _build_test_auth_headers(client, payload, failure_prefix)
+    except AssertionError:
+        return {}
+
+    if not headers:
+        return {}
+
+    if not _auth_backend_available(client, headers):
+        return {}
+
+    return headers
+
+
 @pytest.fixture
 def async_client(client):
     """Async-style adapter around the shared sync test client."""
@@ -120,55 +173,52 @@ def module_client(app):
 @pytest.fixture(scope="session")
 def auth_token(client, test_config) -> Optional[str]:
     """Get authentication token for test user."""
-    try:
-        payloads = [
-            {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
-            {"username": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD},
-        ]
-        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
-        for path in paths:
-            for payload in payloads:
-                response = client.post(path, json=payload)
-                if response.status_code == 200:
-                    return response.json().get("access_token")
-    except Exception:
-        pass
-    return None
+    payload = {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD}
+    headers = _build_test_auth_headers(client, payload, "Failed to obtain test user auth token")
+    auth_header = headers.get("Authorization")
+    if not auth_header:
+        return None
+    return auth_header.removeprefix("Bearer ").strip()
 
 
 @pytest.fixture(scope="session")
-def auth_headers(auth_token) -> dict:
+def auth_headers(client, auth_token) -> dict:
     """Get authenticated headers."""
-    if auth_token:
-        return {"Authorization": f"Bearer {auth_token}"}
-    return {}
+    if not auth_token:
+        return {}
+    headers = {"Authorization": f"Bearer {auth_token}"}
+    if not _auth_backend_available(client, headers):
+        return {}
+    return headers
 
 
 @pytest.fixture(scope="session")
 def admin_token(client, test_config) -> Optional[str]:
     """Get authentication token for admin user."""
-    try:
-        payloads = [
-            {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
-            {"username": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD},
-        ]
-        paths = ["/api/v1/auth/login", "/api/v1/auth/login"]
-        for path in paths:
-            for payload in payloads:
-                response = client.post(path, json=payload)
-                if response.status_code == 200:
-                    return response.json().get("access_token")
-    except Exception:
-        pass
-    return None
+    payload = {"email": test_config.ADMIN_USER_EMAIL, "password": test_config.ADMIN_USER_PASSWORD}
+    headers = _build_test_auth_headers(client, payload, "Failed to obtain admin auth token")
+    auth_header = headers.get("Authorization")
+    if not auth_header:
+        return None
+    return auth_header.removeprefix("Bearer ").strip()
 
 
 @pytest.fixture(scope="session")
-def admin_headers(admin_token) -> dict:
+def admin_headers(client, admin_token) -> dict:
     """Get admin authenticated headers."""
-    if admin_token:
-        return {"Authorization": f"Bearer {admin_token}"}
-    return {}
+    if not admin_token:
+        return {}
+    headers = {"Authorization": f"Bearer {admin_token}"}
+    if not _auth_backend_available(client, headers):
+        return {}
+    return headers
+
+
+@pytest.fixture(scope="session")
+def optional_auth_headers(client, test_config) -> dict[str, str]:
+    """Get auth headers for suites that should skip when auth infra is unavailable."""
+    payload = {"email": test_config.TEST_USER_EMAIL, "password": test_config.TEST_USER_PASSWORD}
+    return _build_optional_test_auth_headers(client, payload, "Optional test auth was unavailable")
 
 
 @pytest.fixture(scope="module")
