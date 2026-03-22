@@ -1,10 +1,10 @@
 {
-  "release_sha": "6322416f724b10aa21bde53f9f31127770646ba1",
+  "release_sha": "a861ff6cab64c3724718215b17fe3d130acb1763",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/assessments/world-class-scorecard-2026-03-20.md",
   "rollback_drill_path": "docs/evidence/ROLLBACK_DRILL_20260320.md",
-  "approved_at_utc": "2026-03-22T11:55:27Z"
+  "approved_at_utc": "2026-03-22T12:46:27Z"
 }
