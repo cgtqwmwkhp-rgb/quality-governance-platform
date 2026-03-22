@@ -14,6 +14,24 @@ vi.mock('../../api/client', () => ({
   incidentsApi: {
     list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
   },
+  rtasApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  complaintsApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  risksApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  actionsApi: {
+    list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  auditsApi: {
+    listRuns: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+  notificationsApi: {
+    getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
+  },
 }))
 
 vi.mock('../../config/apiBase', () => ({

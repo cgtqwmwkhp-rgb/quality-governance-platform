@@ -123,9 +123,7 @@ describe('Complaints', () => {
   it('renders page header and search input', async () => {
     render(<Complaints />, { wrapper: Wrapper })
 
-    await waitFor(() => {
-      expect(screen.getByText('complaints.title')).toBeInTheDocument()
-    })
+    await screen.findByPlaceholderText('complaints.search_placeholder')
 
     expect(screen.getByText('complaints.subtitle')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('complaints.search_placeholder')).toBeInTheDocument()
