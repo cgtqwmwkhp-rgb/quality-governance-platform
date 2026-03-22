@@ -1,17 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
-  Camera,
   Check,
   X,
   Minus,
   ChevronDown,
 } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, type AssessmentRun, type AuditQuestion } from '../../api/client'
+import {
+  workforceApi,
+  auditsApi,
+  getApiErrorMessage,
+  type AssessmentRun,
+  type AuditQuestion,
+} from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
@@ -30,8 +35,21 @@ interface ResponseState {
   verdict: Verdict | null
   feedback: string
   supervisorNotes: string
-  photoPreview: string | null
   signatureBase64: string | null
+}
+
+interface ExistingAssessmentResponse {
+  question_id: number
+  verdict?: Verdict | null
+  feedback?: string | null
+  supervisor_notes?: string | null
+  engineer_signature?: string | null
+}
+
+type AssessmentRunWithResponses = AssessmentRun & {
+  responses?: ExistingAssessmentResponse[]
+  debrief_notes?: string | null
+  debrief_signature?: string | null
 }
 
 export default function AssessmentExecution() {
@@ -51,7 +69,6 @@ export default function AssessmentExecution() {
   const [finalSignature, setFinalSignature] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [guidanceOpen, setGuidanceOpen] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const flattenQuestions = useCallback(
     (sections: { title: string; questions: AuditQuestion[] }[]): QuestionWithSection[] => {
@@ -79,11 +96,26 @@ export default function AssessmentExecution() {
       setError(null)
       try {
         const runRes = await workforceApi.getAssessment(id)
-        const run = runRes.data
+        const run = runRes.data as AssessmentRunWithResponses
         setAssessment(run)
+        setDebriefNotes(run.debrief_notes ?? '')
+        setFinalSignature(run.debrief_signature ?? null)
 
         if (run.status === 'draft') {
           await workforceApi.startAssessment(id)
+        }
+
+        if (Array.isArray(run.responses)) {
+          const nextResponses = new Map<number, ResponseState>()
+          for (const response of run.responses) {
+            nextResponses.set(response.question_id, {
+              verdict: response.verdict ?? null,
+              feedback: response.feedback ?? '',
+              supervisorNotes: response.supervisor_notes ?? '',
+              signatureBase64: response.engineer_signature ?? null,
+            })
+          }
+          setResponses(nextResponses)
         }
 
         let template: {
@@ -131,6 +163,8 @@ export default function AssessmentExecution() {
   const totalQuestions = questions.length
   const answeredCount = Array.from(responses.values()).filter((r) => r.verdict !== null).length
   const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0
+  const isTerminalRun =
+    assessment?.status === 'completed' || assessment?.status === 'cancelled'
 
   const getResponse = (qId: number): ResponseState => {
     return (
@@ -138,7 +172,6 @@ export default function AssessmentExecution() {
         verdict: null,
         feedback: '',
         supervisorNotes: '',
-        photoPreview: null,
         signatureBase64: null,
       }
     )
@@ -151,20 +184,11 @@ export default function AssessmentExecution() {
         verdict: null,
         feedback: '',
         supervisorNotes: '',
-        photoPreview: null,
         signatureBase64: null,
       }
       next.set(qId, { ...cur, ...patch })
       return next
     })
-  }
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>, qId: number) => {
-    const file = e.target.files?.[0]
-    if (!file?.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = () => setResponse(qId, { photoPreview: reader.result as string })
-    reader.readAsDataURL(file)
   }
 
   const handlePrev = () => {
@@ -178,18 +202,44 @@ export default function AssessmentExecution() {
 
   const handleSubmit = async () => {
     if (!id) return
+    if (isTerminalRun) {
+      setError('This assessment can no longer be edited.')
+      return
+    }
+    if (totalQuestions === 0) {
+      setError('This assessment template has no active questions to complete.')
+      return
+    }
+    if (answeredCount !== totalQuestions) {
+      setError('All assessment questions must be answered before completion.')
+      return
+    }
+    const missingFeedbackCount = Array.from(responses.values()).filter(
+      (resp) => resp.verdict === 'not_competent' && resp.feedback.trim().length === 0,
+    ).length
+    if (missingFeedbackCount > 0) {
+      setError('Feedback is required for every not competent assessment item.')
+      return
+    }
+    setError(null)
     setSubmitting(true)
     try {
       const failedQuestions: number[] = []
       for (const [qId, resp] of responses) {
         if (resp.verdict) {
           try {
-            await workforceApi.createAssessmentResponse(id, {
+            const savedResponse = await workforceApi.createAssessmentResponse(id, {
               question_id: qId,
               verdict: resp.verdict,
               feedback: resp.feedback || undefined,
               supervisor_notes: resp.supervisorNotes || undefined,
             })
+            if (resp.signatureBase64) {
+              await workforceApi.updateAssessmentResponse(savedResponse.data.id, {
+                engineer_signature: resp.signatureBase64,
+                engineer_signed_at: new Date().toISOString(),
+              })
+            }
           } catch {
             failedQuestions.push(qId)
           }
@@ -209,8 +259,8 @@ export default function AssessmentExecution() {
       }
       await workforceApi.completeAssessment(id)
       navigate('/workforce/assessments')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to submit')
+    } catch (e: unknown) {
+      setError(getApiErrorMessage(e))
     } finally {
       setSubmitting(false)
     }
@@ -249,6 +299,24 @@ export default function AssessmentExecution() {
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (assessment && isTerminalRun) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/workforce/assessments')}>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <Card className="border-border">
+          <CardContent className="pt-6">
+            <p className="text-foreground">
+              This assessment is <span className="font-medium">{assessment.status}</span> and is no longer
+              available in execution mode.
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -547,59 +615,11 @@ export default function AssessmentExecution() {
             </label>
             <textarea
               id="assessmentexecution-field-2"
-              value={resp.feedback || resp.supervisorNotes}
-              onChange={(e) =>
-                setResponse(question.id, {
-                  feedback: e.target.value,
-                  supervisorNotes: e.target.value,
-                })
-              }
+              value={resp.feedback}
+              onChange={(e) => setResponse(question.id, { feedback: e.target.value })}
               placeholder={t('workforce.assessments.feedback_placeholder')}
               className="w-full min-h-[80px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
-          </div>
-
-          <div>
-            <span className="block text-sm font-medium text-foreground mb-2">
-              {t('workforce.assessments.photo_evidence')}
-            </span>
-            <div className="flex gap-4 flex-wrap">
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => fileInputRef.current?.click()}
-                onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
-                className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 bg-muted/20 min-w-[140px] cursor-pointer hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <Camera className="w-8 h-8 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">
-                  {t('workforce.common.upload')}
-                </span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => handlePhotoUpload(e, question.id)}
-              />
-              {resp.photoPreview && (
-                <div className="relative">
-                  <img
-                    src={resp.photoPreview}
-                    alt={t('workforce.common.evidence')}
-                    className="w-24 h-24 object-cover rounded-lg border border-border"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setResponse(question.id, { photoPreview: null })}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
           <div>
@@ -607,11 +627,27 @@ export default function AssessmentExecution() {
               htmlFor="assessmentexecution-field-3"
               className="block text-sm font-medium text-foreground mb-2"
             >
+              {t('workforce.assessments.supervisor_notes')}
+            </label>
+            <textarea
+              id="assessmentexecution-field-3"
+              value={resp.supervisorNotes}
+              onChange={(e) => setResponse(question.id, { supervisorNotes: e.target.value })}
+              placeholder={t('workforce.assessments.feedback_placeholder')}
+              className="w-full min-h-[80px] rounded-lg border border-border bg-card px-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="assessmentexecution-field-4"
+              className="block text-sm font-medium text-foreground mb-2"
+            >
               {t('workforce.assessments.engineer_signoff')}
             </label>
             <div className="rounded-lg border border-dashed border-border bg-muted/20 min-h-[60px] flex items-center justify-center p-3">
               <input
-                id="assessmentexecution-field-3"
+                id="assessmentexecution-field-4"
                 type="text"
                 value={resp.signatureBase64 ?? ''}
                 onChange={(e) =>

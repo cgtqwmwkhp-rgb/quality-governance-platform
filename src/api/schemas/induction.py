@@ -54,6 +54,7 @@ class InductionRunResponse(BaseModel):
     total_items: int
     competent_count: int
     not_yet_competent_count: int
+    responses: List["InductionResponseResponse"] = []
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -106,3 +107,6 @@ class InductionResponseResponse(BaseModel):
     engineer_signed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+InductionRunResponse.model_rebuild()

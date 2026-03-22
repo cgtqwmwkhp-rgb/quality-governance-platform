@@ -1,10 +1,14 @@
 """Workforce Development Platform analytics endpoints."""
 
-from fastapi import APIRouter
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import case, func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.analytics import WDPAnalyticsSummaryResponse, WDPEngineerMatrixResponse, WDPTrendsResponse
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 
 router = APIRouter()
 
@@ -17,9 +21,70 @@ def _tenant_filter(model, tenant_id):
     )
 
 
+def _is_workforce_manager(user: CurrentUser) -> bool:
+    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
+    return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
+
+
+def _assert_wdp_analytics_access(user: CurrentUser) -> None:
+    if _is_workforce_manager(user):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=api_error(
+            ErrorCode.PERMISSION_DENIED,
+            "You do not have permission to access workforce analytics",
+        ),
+    )
+
+
+def _latest_records_by_asset_type(records):
+    baseline = datetime.min.replace(tzinfo=timezone.utc)
+
+    def sort_key(record):
+        return (
+            getattr(record, "assessed_at", None) or getattr(record, "created_at", None) or baseline,
+            getattr(record, "id", 0),
+        )
+
+    latest = {}
+    for record in records:
+        current = latest.get(record.asset_type_id)
+        if current is None or sort_key(record) > sort_key(current):
+            latest[record.asset_type_id] = record
+    return latest
+
+
+def _latest_records_by_engineer_asset(records):
+    baseline = datetime.min.replace(tzinfo=timezone.utc)
+
+    def sort_key(record):
+        return (
+            getattr(record, "assessed_at", None) or getattr(record, "created_at", None) or baseline,
+            getattr(record, "id", 0),
+        )
+
+    latest = {}
+    for record in records:
+        key = (record.engineer_id, record.asset_type_id)
+        current = latest.get(key)
+        if current is None or sort_key(record) > sort_key(current):
+            latest[key] = record
+    return latest.values()
+
+
+def _effective_competency_state(record):
+    state = record.state.value if hasattr(record.state, "value") else str(record.state)
+    expires_at = getattr(record, "expires_at", None)
+    if expires_at is not None and expires_at <= datetime.now(timezone.utc) and state in {"active", "due"}:
+        return "expired"
+    return state
+
+
 @router.get("/summary", response_model=WDPAnalyticsSummaryResponse)
 async def get_wdp_summary(db: DbSession, user: CurrentUser):
     """Get summary KPIs for the workforce development dashboard."""
+    _assert_wdp_analytics_access(user)
     from src.domain.models.assessment import AssessmentRun, AssessmentStatus
     from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
     from src.domain.models.induction import InductionRun, InductionStatus
@@ -35,15 +100,12 @@ async def get_wdp_summary(db: DbSession, user: CurrentUser):
     )
 
     # Competency counts by state
-    comp_counts = {}
-    for state in CompetencyLifecycleState:
-        count = (
-            await db.scalar(
-                select(func.count(CompetencyRecord.id)).where(CompetencyRecord.state == state).where(tenant_filter_comp)
-            )
-            or 0
-        )
-        comp_counts[state.value] = count
+    competency_records = (await db.execute(select(CompetencyRecord).where(tenant_filter_comp))).scalars().all()
+    latest_competency_records = _latest_records_by_engineer_asset(competency_records)
+    comp_counts = {state.value: 0 for state in CompetencyLifecycleState}
+    for record in latest_competency_records:
+        state_value = _effective_competency_state(record)
+        comp_counts[state_value] = comp_counts.get(state_value, 0) + 1
 
     # Assessment counts by status
     assessment_total = await db.scalar(select(func.count(AssessmentRun.id)).where(tenant_filter_assess)) or 0
@@ -78,6 +140,7 @@ async def get_wdp_summary(db: DbSession, user: CurrentUser):
 @router.get("/engineer-matrix", response_model=WDPEngineerMatrixResponse)
 async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
     """Get a competency matrix: engineer x asset type with status."""
+    _assert_wdp_analytics_access(user)
     from src.domain.models.asset import AssetType
     from src.domain.models.engineer import CompetencyRecord, Engineer
 
@@ -105,7 +168,10 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
             .all()
         )
 
-        record_map = {r.asset_type_id: (r.state.value if hasattr(r.state, "value") else str(r.state)) for r in records}
+        latest_records = _latest_records_by_asset_type(records)
+        record_map = {
+            asset_type_id: _effective_competency_state(record) for asset_type_id, record in latest_records.items()
+        }
 
         row = {
             "engineer_id": eng.id,
@@ -131,6 +197,7 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
 @router.get("/trends", response_model=WDPTrendsResponse)
 async def get_competency_trends(db: DbSession, user: CurrentUser):
     """Get assessment and competency trends over time (last 12 months)."""
+    _assert_wdp_analytics_access(user)
     from src.domain.models.assessment import AssessmentOutcome, AssessmentRun
     from src.domain.models.induction import InductionRun, InductionStatus
 

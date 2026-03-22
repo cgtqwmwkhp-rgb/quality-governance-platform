@@ -55,6 +55,9 @@ class AssessmentRunResponse(BaseModel):
     outcome: Optional[str] = None
     overall_notes: Optional[str] = None
     debrief_notes: Optional[str] = None
+    debrief_signature: Optional[str] = None
+    debrief_signed_at: Optional[datetime] = None
+    responses: List["AssessmentResponseResponse"] = []
     tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -107,3 +110,6 @@ class AssessmentResponseResponse(BaseModel):
     engineer_signed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+AssessmentRunResponse.model_rebuild()

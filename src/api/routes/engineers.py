@@ -3,6 +3,7 @@
 REST endpoints for engineer profiles and competency tracking.
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -19,11 +20,90 @@ from src.api.schemas.engineer import (
     SkillsMatrixEntry,
     SkillsMatrixResponse,
 )
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.asset import AssetType
 from src.domain.models.engineer import CompetencyRecord, Engineer
+from src.domain.models.user import User
 
 router = APIRouter()
+
+
+def _is_workforce_manager(user: CurrentUser) -> bool:
+    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
+    return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
+
+
+def _assert_engineer_access(user: CurrentUser, engineer: Engineer, *, allow_self_read: bool = False) -> None:
+    if _is_workforce_manager(user):
+        return
+    if allow_self_read and engineer.user_id == user.id:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=api_error(
+            ErrorCode.PERMISSION_DENIED,
+            "You do not have permission to access this engineer record",
+        ),
+    )
+
+
+def _latest_competency_records(records: list[CompetencyRecord]) -> list[CompetencyRecord]:
+    baseline = datetime.min.replace(tzinfo=timezone.utc)
+
+    def sort_key(record: CompetencyRecord) -> tuple[datetime, int]:
+        return (
+            getattr(record, "assessed_at", None) or getattr(record, "created_at", None) or baseline,
+            getattr(record, "id", 0),
+        )
+
+    latest_by_asset_type: dict[int, CompetencyRecord] = {}
+    for record in records:
+        current = latest_by_asset_type.get(record.asset_type_id)
+        if current is None or sort_key(record) > sort_key(current):
+            latest_by_asset_type[record.asset_type_id] = record
+
+    return sorted(latest_by_asset_type.values(), key=lambda record: record.asset_type_id)
+
+
+def _effective_competency_state(record: CompetencyRecord) -> str:
+    state = record.state.value if hasattr(record.state, "value") else str(record.state)
+    expires_at = getattr(record, "expires_at", None)
+    if expires_at is not None and expires_at <= datetime.now(timezone.utc) and state in {"active", "due"}:
+        return "expired"
+    return state
+
+
+async def _validate_engineer_user_assignment(db: DbSession, user: CurrentUser, target_user_id: int) -> None:
+    user_query = select(User).where(User.id == target_user_id, User.is_active.is_(True))
+    user_result = await db.execute(user_query)
+    target_user = user_result.scalar_one_or_none()
+    if target_user is None:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Assigned user was not found or is inactive"),
+        )
+
+    if user.tenant_id is not None and target_user.tenant_id != user.tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(ErrorCode.TENANT_ACCESS_DENIED, "Assigned user is not in tenant scope"),
+        )
+
+    existing_query = select(Engineer.id).where(Engineer.user_id == target_user_id)
+    existing_query = apply_tenant_filter(existing_query, Engineer, user.tenant_id)
+    existing_result = await db.execute(existing_query)
+    existing_engineer_id = existing_result.scalar_one_or_none()
+    if existing_engineer_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=api_error(
+                ErrorCode.DUPLICATE_ENTITY,
+                "An engineer profile already exists for this user",
+                details={"engineer_id": existing_engineer_id, "user_id": target_user_id},
+            ),
+        )
 
 
 @router.get("/", response_model=EngineerListResponse)
@@ -38,6 +118,8 @@ async def list_engineers(
     """List engineers with filtering and pagination."""
     query = select(Engineer)
     query = apply_tenant_filter(query, Engineer, user.tenant_id)
+    if not _is_workforce_manager(user):
+        query = query.where(Engineer.user_id == user.id)
     if is_active is not None:
         query = query.where(Engineer.is_active == is_active)
     if search:
@@ -74,6 +156,12 @@ async def create_engineer(
     user: CurrentUser,
 ):
     """Create a new engineer."""
+    if not _is_workforce_manager(user):
+        raise HTTPException(
+            status_code=403,
+            detail=api_error(ErrorCode.PERMISSION_DENIED, "You do not have permission to create engineer records"),
+        )
+    await _validate_engineer_user_assignment(db, user, data.user_id)
     engineer = Engineer(
         user_id=data.user_id,
         employee_number=data.employee_number,
@@ -104,6 +192,7 @@ async def get_engineer(
     engineer = result.scalar_one_or_none()
     if engineer is None:
         raise HTTPException(status_code=404, detail="Engineer not found")
+    _assert_engineer_access(user, engineer, allow_self_read=True)
     return EngineerResponse.model_validate(engineer)
 
 
@@ -121,8 +210,17 @@ async def update_engineer(
     engineer = result.scalar_one_or_none()
     if engineer is None:
         raise HTTPException(status_code=404, detail="Engineer not found")
+    _assert_engineer_access(user, engineer)
 
     updates = data.model_dump(exclude_unset=True)
+    if "user_id" in updates and updates["user_id"] != engineer.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Engineer user assignment cannot be changed via update",
+            ),
+        )
     if "specialisations" in updates:
         updates["specialisations_json"] = updates.pop("specialisations")
     if "certifications" in updates:
@@ -141,6 +239,14 @@ async def list_engineer_competencies(
     user: CurrentUser,
 ):
     """List competency records for an engineer."""
+    engineer_query = select(Engineer).where(Engineer.id == engineer_id)
+    engineer_query = apply_tenant_filter(engineer_query, Engineer, user.tenant_id)
+    engineer_result = await db.execute(engineer_query)
+    engineer = engineer_result.scalar_one_or_none()
+    if engineer is None:
+        raise HTTPException(status_code=404, detail="Engineer not found")
+    _assert_engineer_access(user, engineer, allow_self_read=True)
+
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
     query = apply_tenant_filter(query, CompetencyRecord, user.tenant_id)
     result = await db.execute(query)
@@ -155,6 +261,14 @@ async def get_skills_matrix(
     user: CurrentUser,
 ):
     """Get skills matrix: engineer competency across asset types."""
+    engineer_query = select(Engineer).where(Engineer.id == engineer_id)
+    engineer_query = apply_tenant_filter(engineer_query, Engineer, user.tenant_id)
+    engineer_result = await db.execute(engineer_query)
+    engineer = engineer_result.scalar_one_or_none()
+    if engineer is None:
+        raise HTTPException(status_code=404, detail="Engineer not found")
+    _assert_engineer_access(user, engineer, allow_self_read=True)
+
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
     query = apply_tenant_filter(query, CompetencyRecord, user.tenant_id)
     result = await db.execute(query)
@@ -162,19 +276,19 @@ async def get_skills_matrix(
     if not records:
         return SkillsMatrixResponse(engineer_id=engineer_id, matrix=[])
 
-    asset_type_ids = list({r.asset_type_id for r in records})
+    latest_records = _latest_competency_records(records)
+    asset_type_ids = list({r.asset_type_id for r in latest_records})
     at_result = await db.execute(select(AssetType).where(AssetType.id.in_(asset_type_ids)))
     asset_types = {at.id: at for at in at_result.scalars().all()}
 
     matrix = []
-    for r in records:
+    for r in latest_records:
         at = asset_types.get(r.asset_type_id)
-        state_val = r.state.value if hasattr(r.state, "value") else str(r.state)
         matrix.append(
             SkillsMatrixEntry(
                 asset_type_id=r.asset_type_id,
                 asset_type_name=at.name if at else None,
-                state=state_val,
+                state=_effective_competency_state(r),
                 outcome=r.outcome,
                 assessed_at=r.assessed_at,
                 expires_at=r.expires_at,

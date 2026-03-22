@@ -32,7 +32,7 @@ from src.domain.models.assessment import (
     AssessmentStatus,
     CompetencyVerdict,
 )
-from src.domain.models.audit import AuditTemplate
+from src.domain.models.audit import AuditQuestion, AuditTemplate
 from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
@@ -41,6 +41,45 @@ from src.domain.services.governance_service import GovernanceService, Notificati
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _is_workforce_admin(user: CurrentUser) -> bool:
+    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
+    return bool(getattr(user, "is_superuser", False) or "admin" in role_names)
+
+
+async def _assessment_engineer_user_id(db: AsyncSession, engineer_id: int) -> int | None:
+    return await db.scalar(select(Engineer.user_id).where(Engineer.id == engineer_id))
+
+
+def _missing_assessment_question_ids(run: AssessmentRun, template: AuditTemplate) -> list[int]:
+    expected_question_ids = {q.id for q in template.questions if getattr(q, "is_active", True)}
+    answered_question_ids = {r.question_id for r in run.responses if getattr(r, "verdict", None) is not None}
+    return sorted(expected_question_ids - answered_question_ids)
+
+
+async def _assert_assessment_access(
+    db: AsyncSession,
+    user: CurrentUser,
+    run: AssessmentRun,
+    *,
+    allow_engineer_read: bool = False,
+) -> None:
+    if _is_workforce_admin(user) or run.supervisor_id == user.id:
+        return
+
+    if allow_engineer_read:
+        engineer_user_id = await _assessment_engineer_user_id(db, run.engineer_id)
+        if engineer_user_id == user.id:
+            return
+
+    raise HTTPException(
+        status_code=403,
+        detail=api_error(
+            ErrorCode.PERMISSION_DENIED,
+            "You do not have permission to access this assessment run",
+        ),
+    )
 
 
 async def _generate_assessment_reference_number(db: AsyncSession) -> str:
@@ -79,6 +118,14 @@ async def list_assessment_runs(
     """List assessment runs with filtering and pagination."""
     query = select(AssessmentRun).options(selectinload(AssessmentRun.responses))
     query = apply_tenant_filter(query, AssessmentRun, user.tenant_id)
+    if not _is_workforce_admin(user):
+        engineer_id_result = await db.execute(
+            apply_tenant_filter(select(Engineer.id), Engineer, user.tenant_id).where(Engineer.user_id == user.id)
+        )
+        engineer_ids = engineer_id_result.scalars().all()
+        query = query.where(
+            (AssessmentRun.supervisor_id == user.id) | (AssessmentRun.engineer_id.in_(engineer_ids or [-1]))
+        )
     if engineer_id is not None:
         query = query.where(AssessmentRun.engineer_id == engineer_id)
     if status is not None:
@@ -157,6 +204,7 @@ async def get_assessment_run(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run, allow_engineer_read=True)
     return AssessmentRunResponse.model_validate(run)
 
 
@@ -174,10 +222,17 @@ async def update_assessment_run(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run)
 
     updates = data.model_dump(exclude_unset=True)
     if "status" in updates:
-        updates["status"] = AssessmentStatus(updates["status"])
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Assessment status can only be changed via workflow actions",
+            ),
+        )
     for k, v in updates.items():
         setattr(run, k, v)
     await db.commit()
@@ -198,6 +253,7 @@ async def start_assessment(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run)
     if run.status != AssessmentStatus.DRAFT:
         raise HTTPException(
             status_code=400,
@@ -223,6 +279,7 @@ async def complete_assessment(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run)
 
     if run.status not in (AssessmentStatus.DRAFT, AssessmentStatus.IN_PROGRESS):
         raise HTTPException(
@@ -242,6 +299,33 @@ async def complete_assessment(
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"))
 
     score_result = CompetencyScoringService.score_assessment(run.responses, template.questions)
+    missing_question_ids = _missing_assessment_question_ids(run, template)
+    if missing_question_ids:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "All active assessment questions must be answered before completion",
+                details={
+                    "run_id": run.id,
+                    "template_id": run.template_id,
+                    "missing_question_ids": missing_question_ids,
+                },
+            ),
+        )
+    if score_result.scorable_items == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "At least one competency item must be assessed before completing assessment",
+                details={
+                    "run_id": run.id,
+                    "response_count": len(run.responses),
+                    "scorable_items": score_result.scorable_items,
+                },
+            ),
+        )
     run.status = AssessmentStatus.COMPLETED
     run.completed_at = datetime.now(timezone.utc)
     run.outcome = AssessmentOutcome(score_result.outcome)
@@ -301,11 +385,10 @@ async def complete_assessment(
             )
 
     try:
-        engineer_user_id = engineer.user_id if engineer else run.engineer_id
         await NotificationService.notify_assessment_complete(
             db=db,
             assessment_run_id=run.id,
-            engineer_user_id=engineer_user_id,
+            engineer_user_id=engineer.user_id if engineer else None,
             supervisor_id=run.supervisor_id,
             outcome=score_result.outcome,
         )
@@ -335,6 +418,7 @@ async def create_assessment_response(
     run = result.scalar_one_or_none()
     if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run)
 
     if run.status == AssessmentStatus.COMPLETED or run.status == AssessmentStatus.CANCELLED:
         raise HTTPException(
@@ -344,15 +428,45 @@ async def create_assessment_response(
             ),
         )
 
-    verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
-    response = AssessmentResponse(
-        run_id=run_id,
-        question_id=data.question_id,
-        verdict=verdict_val,
-        feedback=data.feedback,
-        supervisor_notes=data.supervisor_notes,
+    question_id = await db.scalar(
+        select(AuditQuestion.id).where(
+            AuditQuestion.template_id == run.template_id,
+            AuditQuestion.id == data.question_id,
+            AuditQuestion.is_active.is_(True),
+        )
     )
-    db.add(response)
+    if question_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "Question does not belong to this assessment template",
+                details={"run_id": run.id, "template_id": run.template_id, "question_id": data.question_id},
+            ),
+        )
+
+    verdict_val = CompetencyVerdict(data.verdict) if data.verdict else None
+    existing_query = select(AssessmentResponse).where(
+        AssessmentResponse.run_id == run_id,
+        AssessmentResponse.question_id == data.question_id,
+    )
+    existing_result = await db.execute(existing_query)
+    response = existing_result.scalar_one_or_none()
+
+    if response is None:
+        response = AssessmentResponse(
+            run_id=run_id,
+            question_id=data.question_id,
+            verdict=verdict_val,
+            feedback=data.feedback,
+            supervisor_notes=data.supervisor_notes,
+        )
+        db.add(response)
+    else:
+        response.verdict = verdict_val
+        response.feedback = data.feedback
+        response.supervisor_notes = data.supervisor_notes
+
     await db.commit()
     await db.refresh(response)
     return AssessmentResponseResponse.model_validate(response)
@@ -381,8 +495,18 @@ async def update_assessment_response(
     query_run = select(AssessmentRun).where(AssessmentRun.id == response.run_id)
     query_run = apply_tenant_filter(query_run, AssessmentRun, user.tenant_id)
     run_result = await db.execute(query_run)
-    if run_result.scalar_one_or_none() is None:
+    run = run_result.scalar_one_or_none()
+    if run is None:
         raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment run not found"))
+    await _assert_assessment_access(db, user, run)
+    if run.status in (AssessmentStatus.COMPLETED, AssessmentStatus.CANCELLED):
+        raise HTTPException(
+            status_code=400,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Cannot update responses for a completed or cancelled assessment",
+            ),
+        )
 
     updates = data.model_dump(exclude_unset=True)
     if "verdict" in updates and updates["verdict"] is not None:

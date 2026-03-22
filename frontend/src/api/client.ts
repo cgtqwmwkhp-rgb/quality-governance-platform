@@ -1501,6 +1501,7 @@ export interface AssessmentResponseUpdate {
   feedback?: string
   supervisor_notes?: string
   engineer_signature?: string
+  engineer_signed_at?: string
 }
 
 export interface InductionResponseCreate {
@@ -1512,6 +1513,27 @@ export interface InductionResponseCreate {
 
 export interface InductionResponseUpdate {
   shown_explained?: boolean
+  understanding?: 'competent' | 'not_yet_competent' | 'na'
+  supervisor_notes?: string
+  engineer_signature?: string
+  engineer_signed_at?: string
+}
+
+export interface AssessmentResponseRecord {
+  id: string
+  run_id: string
+  question_id: number
+  verdict?: 'competent' | 'not_competent' | 'na'
+  feedback?: string
+  supervisor_notes?: string
+  engineer_signature?: string
+}
+
+export interface InductionResponseRecord {
+  id: string
+  run_id: string
+  question_id: number
+  shown_explained: boolean
   understanding?: 'competent' | 'not_yet_competent' | 'na'
   supervisor_notes?: string
   engineer_signature?: string
@@ -1534,9 +1556,9 @@ export const workforceApi = {
   updateAssessment: (id: string, data: Record<string, unknown>) =>
     api.patch<AssessmentRun>(`/api/v1/assessments/${id}`, data),
   createAssessmentResponse: (runId: string, data: AssessmentResponseCreate) =>
-    api.post<unknown>(`/api/v1/assessments/${runId}/responses`, data),
+    api.post<AssessmentResponseRecord>(`/api/v1/assessments/${runId}/responses`, data),
   updateAssessmentResponse: (responseId: string, data: AssessmentResponseUpdate) =>
-    api.patch<unknown>(`/api/v1/assessments/responses/${responseId}`, data),
+    api.patch<AssessmentResponseRecord>(`/api/v1/assessments/responses/${responseId}`, data),
 
   // Inductions
   listInductions: (params?: Record<string, unknown>) =>
@@ -1554,9 +1576,9 @@ export const workforceApi = {
   updateInduction: (id: string, data: Record<string, unknown>) =>
     api.patch<InductionRun>(`/api/v1/inductions/${id}`, data),
   createInductionResponse: (runId: string, data: InductionResponseCreate) =>
-    api.post<unknown>(`/api/v1/inductions/${runId}/responses`, data),
+    api.post<InductionResponseRecord>(`/api/v1/inductions/${runId}/responses`, data),
   updateInductionResponse: (responseId: string, data: InductionResponseUpdate) =>
-    api.patch<unknown>(`/api/v1/inductions/responses/${responseId}`, data),
+    api.patch<InductionResponseRecord>(`/api/v1/inductions/responses/${responseId}`, data),
 
   // Engineers
   listEngineers: (params?: Record<string, unknown>) =>

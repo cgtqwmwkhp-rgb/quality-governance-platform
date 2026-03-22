@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Minus, ChevronDown } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { workforceApi, auditsApi, type InductionRun, type AuditQuestion } from '../../api/client'
+import {
+  workforceApi,
+  auditsApi,
+  getApiErrorMessage,
+  type InductionRun,
+  type AuditQuestion,
+} from '../../api/client'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { cn } from '../../helpers/utils'
@@ -21,6 +27,17 @@ interface ResponseState {
   shownExplained: boolean
   verdict: Verdict | null
   supervisorNotes: string
+}
+
+interface ExistingInductionResponse {
+  question_id: number
+  shown_explained?: boolean
+  understanding?: Verdict | null
+  supervisor_notes?: string | null
+}
+
+type InductionRunWithResponses = InductionRun & {
+  responses?: ExistingInductionResponse[]
 }
 
 export default function TrainingExecution() {
@@ -65,11 +82,23 @@ export default function TrainingExecution() {
       setError(null)
       try {
         const runRes = await workforceApi.getInduction(id)
-        const run = runRes.data
+        const run = runRes.data as InductionRunWithResponses
         setInduction(run)
 
         if (run.status === 'draft') {
           await workforceApi.startInduction(id)
+        }
+
+        if (Array.isArray(run.responses)) {
+          const nextResponses = new Map<number, ResponseState>()
+          for (const response of run.responses) {
+            nextResponses.set(response.question_id, {
+              shownExplained: response.shown_explained ?? false,
+              verdict: response.understanding ?? null,
+              supervisorNotes: response.supervisor_notes ?? '',
+            })
+          }
+          setResponses(nextResponses)
         }
 
         let template: {
@@ -117,6 +146,8 @@ export default function TrainingExecution() {
   const totalQuestions = questions.length
   const answeredCount = Array.from(responses.values()).filter((r) => r.verdict !== null).length
   const progress = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0
+  const isTerminalRun =
+    induction?.status === 'completed' || induction?.status === 'cancelled'
 
   const getResponse = (qId: number): ResponseState => {
     return (
@@ -152,7 +183,25 @@ export default function TrainingExecution() {
 
   const handleSubmit = async () => {
     if (!id) return
+    if (isTerminalRun) {
+      setError('This induction can no longer be edited.')
+      return
+    }
+    if (totalQuestions === 0) {
+      setError('This training template has no active questions to complete.')
+      return
+    }
+    if (answeredCount !== totalQuestions) {
+      setError('All training questions must be answered before completion.')
+      return
+    }
+    const missingShownExplainedCount = questions.filter((q) => !getResponse(q.id).shownExplained).length
+    if (missingShownExplainedCount > 0) {
+      setError('Each training item must be shown and explained before completion.')
+      return
+    }
     setSubmitting(true)
+    setError(null)
     try {
       const failedItems: number[] = []
       for (const [qId, resp] of responses) {
@@ -176,8 +225,8 @@ export default function TrainingExecution() {
       }
       await workforceApi.completeInduction(id)
       navigate('/workforce/training')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to submit')
+    } catch (e: unknown) {
+      setError(getApiErrorMessage(e))
     } finally {
       setSubmitting(false)
     }
@@ -208,6 +257,24 @@ export default function TrainingExecution() {
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">{error}</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (induction && isTerminalRun) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/workforce/training')}>
+          <ArrowLeft className="w-4 h-4" />
+        </Button>
+        <Card className="border-border">
+          <CardContent className="pt-6">
+            <p className="text-foreground">
+              This induction is <span className="font-medium">{induction.status}</span> and is no longer
+              available in execution mode.
+            </p>
           </CardContent>
         </Card>
       </div>

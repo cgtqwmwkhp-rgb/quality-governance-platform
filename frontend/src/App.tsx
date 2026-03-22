@@ -303,22 +303,86 @@ function App() {
 
               {/* Workforce routes */}
               <Route element={<RouteErrorBoundary />}>
-                <Route path="workforce/assessments" element={<WorkforceAssessments />} />
-                <Route path="workforce/assessments/new" element={<WorkforceAssessmentCreate />} />
+                <Route
+                  path="workforce/assessments"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceAssessments />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/assessments/new"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceAssessmentCreate />
+                    </RequireRole>
+                  }
+                />
                 <Route
                   path="workforce/assessments/:id/execute"
-                  element={<WorkforceAssessmentExecution />}
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceAssessmentExecution />
+                    </RequireRole>
+                  }
                 />
-                <Route path="workforce/training" element={<WorkforceTraining />} />
-                <Route path="workforce/training/new" element={<WorkforceInductionCreate />} />
+                <Route
+                  path="workforce/training"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceTraining />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/training/new"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceInductionCreate />
+                    </RequireRole>
+                  }
+                />
                 <Route
                   path="workforce/training/:id/execute"
-                  element={<WorkforceTrainingExecution />}
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceTrainingExecution />
+                    </RequireRole>
+                  }
                 />
-                <Route path="workforce/engineers" element={<WorkforceEngineers />} />
-                <Route path="workforce/engineers/:id" element={<WorkforceEngineerProfile />} />
-                <Route path="workforce/calendar" element={<WorkforceCalendar />} />
-                <Route path="workforce/dashboard" element={<WorkforceCompetencyDashboard />} />
+                <Route
+                  path="workforce/engineers"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceEngineers />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/engineers/:id"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceEngineerProfile />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/calendar"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceCalendar />
+                    </RequireRole>
+                  }
+                />
+                <Route
+                  path="workforce/dashboard"
+                  element={
+                    <RequireRole allowed={['admin', 'supervisor']}>
+                      <WorkforceCompetencyDashboard />
+                    </RequireRole>
+                  }
+                />
               </Route>
 
               {/* Admin & enterprise routes */}

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from src.domain.models.engineer import Engineer
     from src.domain.models.user import User
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
@@ -105,6 +105,7 @@ class AssessmentResponse(Base, TimestampMixin):
     """Response to a single question during a competency assessment."""
 
     __tablename__ = "assessment_responses"
+    __table_args__ = (UniqueConstraint("run_id", "question_id", name="uq_assessment_responses_run_question"),)
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
