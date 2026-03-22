@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import case, func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.analytics import WDPAnalyticsSummaryResponse, WDPEngineerMatrixResponse, WDPTrendsResponse
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 
 router = APIRouter()
