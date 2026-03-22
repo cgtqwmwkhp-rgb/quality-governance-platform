@@ -57,7 +57,7 @@ export function hasToken(): boolean {
 export function clearTokens(): void {
   localStorage.removeItem(ADMIN_TOKEN_KEY)
   sessionStorage.removeItem(PORTAL_TOKEN_KEY)
-  sessionStorage.removeItem('platform_refresh_token')
+  sessionStorage.removeItem(PORTAL_REFRESH_TOKEN_KEY)
 }
 
 /**

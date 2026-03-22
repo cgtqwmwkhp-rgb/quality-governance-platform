@@ -43,6 +43,7 @@ import OfflineIndicator from './OfflineIndicator'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
+import { hasRole } from '../utils/auth'
 
 interface LayoutProps {
   onLogout: () => void
@@ -50,6 +51,7 @@ interface LayoutProps {
 
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
+  const canAccessWorkforce = hasRole('admin', 'supervisor')
 
   const navSections = [
     {
@@ -127,7 +129,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
       ],
     },
-  ]
+  ].filter((section) => canAccessWorkforce || section.title !== t('nav.workforce'))
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)

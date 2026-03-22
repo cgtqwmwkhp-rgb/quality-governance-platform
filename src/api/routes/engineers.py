@@ -278,7 +278,9 @@ async def get_skills_matrix(
 
     latest_records = _latest_competency_records(records)
     asset_type_ids = list({r.asset_type_id for r in latest_records})
-    at_result = await db.execute(select(AssetType).where(AssetType.id.in_(asset_type_ids)))
+    at_query = select(AssetType).where(AssetType.id.in_(asset_type_ids))
+    at_query = apply_tenant_filter(at_query, AssetType, user.tenant_id)
+    at_result = await db.execute(at_query)
     asset_types = {at.id: at for at in at_result.scalars().all()}
 
     matrix = []

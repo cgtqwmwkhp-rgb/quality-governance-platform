@@ -8,7 +8,7 @@ import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
-import { getPlatformToken, setAdminToken, clearTokens } from './utils/auth'
+import { getValidPlatformToken, setAdminToken, clearTokens } from './utils/auth'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
@@ -163,7 +163,7 @@ function RouteErrorBoundary() {
 }
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getPlatformToken()))
+  const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
 
   useEffect(() => {
     if (isAuthenticated) {

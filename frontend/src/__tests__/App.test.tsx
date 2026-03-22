@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, act } from '@testing-library/react'
 
+function createToken(expOffsetSeconds: number): string {
+  const payload = btoa(JSON.stringify({ sub: '1', exp: Math.floor(Date.now() / 1000) + expOffsetSeconds }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+  return `header.${payload}.signature`
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -148,7 +156,7 @@ describe('App', () => {
   })
 
   it('does not show login page when token exists in localStorage', async () => {
-    localStorage.setItem('access_token', 'test-jwt-token')
+    localStorage.setItem('access_token', createToken(3600))
 
     const App = (await import('../App')).default
 
@@ -157,5 +165,17 @@ describe('App', () => {
     })
 
     expect(screen.queryByTestId('login-page')).not.toBeInTheDocument()
+  })
+
+  it('renders login page when token is expired', async () => {
+    localStorage.setItem('access_token', createToken(-3600))
+
+    const App = (await import('../App')).default
+
+    await act(async () => {
+      render(<App />)
+    })
+
+    expect(screen.getByTestId('login-page')).toBeInTheDocument()
   })
 })

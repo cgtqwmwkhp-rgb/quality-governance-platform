@@ -5,9 +5,11 @@ REST endpoints for asset types, equipment assets, and template-asset-type linkag
 
 from typing import Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
 from src.api.schemas.asset import (
     AssetCreate,
     AssetListResponse,
@@ -24,6 +26,23 @@ from src.domain.models.asset import AssetType
 from src.domain.services.asset_service import AssetService
 
 router = APIRouter()
+
+
+def _is_asset_manager(user: CurrentUser) -> bool:
+    role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
+    return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
+
+
+def _assert_asset_write_access(user: CurrentUser) -> None:
+    if _is_asset_manager(user):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=api_error(
+            ErrorCode.PERMISSION_DENIED,
+            "You do not have permission to modify asset registry data",
+        ),
+    )
 
 
 # ============== Asset Type endpoints ==============
@@ -70,6 +89,7 @@ async def create_asset_type(
     user: CurrentUser,
 ):
     """Create a new asset type."""
+    _assert_asset_write_access(user)
     service = AssetService(db)
     asset_type = await service.create_asset_type(
         data=data.model_dump(exclude_unset=True),
@@ -99,6 +119,7 @@ async def update_asset_type(
     user: CurrentUser,
 ):
     """Update an existing asset type."""
+    _assert_asset_write_access(user)
     service = AssetService(db)
     asset_type = await service.update_asset_type(
         asset_type_id=asset_type_id,
@@ -116,6 +137,7 @@ async def delete_asset_type(
     user: CurrentUser,
 ):
     """Delete an asset type."""
+    _assert_asset_write_access(user)
     service = AssetService(db)
     await service.delete_asset_type(
         asset_type_id=asset_type_id,
@@ -182,6 +204,7 @@ async def create_asset(
     user: CurrentUser,
 ):
     """Create a new asset."""
+    _assert_asset_write_access(user)
     service = AssetService(db)
     asset = await service.create_asset(
         data=data.model_dump(exclude_unset=True),
@@ -214,6 +237,7 @@ async def update_asset(
     user: CurrentUser,
 ):
     """Update an existing asset."""
+    _assert_asset_write_access(user)
     service = AssetService(db)
     asset = await service.update_asset(
         asset_id=asset_id,

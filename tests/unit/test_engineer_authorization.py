@@ -179,3 +179,37 @@ async def test_skills_matrix_uses_effective_expired_state():
 
     assert len(result.matrix) == 1
     assert result.matrix[0].state == "expired"
+
+
+@pytest.mark.asyncio
+async def test_skills_matrix_applies_tenant_scope_to_asset_types():
+    from src.api.routes.engineers import get_skills_matrix
+    from src.domain.models.engineer import CompetencyLifecycleState
+
+    engineer = types.SimpleNamespace(id=10, user_id=42)
+    record = types.SimpleNamespace(
+        id=3,
+        engineer_id=10,
+        asset_type_id=7,
+        template_id=100,
+        state=CompetencyLifecycleState.ACTIVE,
+        outcome="pass",
+        assessed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        expires_at=None,
+    )
+    asset_type = types.SimpleNamespace(id=7, name="Transformer")
+    db = types.SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                _FakeResult(engineer),
+                _FakeResult([record]),
+                _FakeResult([asset_type]),
+            ]
+        )
+    )
+    user = types.SimpleNamespace(id=42, tenant_id=5, is_superuser=False, roles=[])
+
+    await get_skills_matrix(10, db, user)
+
+    asset_type_query = db.execute.await_args_list[2].args[0]
+    assert "asset_types.tenant_id" in str(asset_type_query)

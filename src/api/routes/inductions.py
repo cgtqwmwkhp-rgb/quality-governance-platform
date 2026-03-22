@@ -9,10 +9,10 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.induction import (
     InductionResponseCreate,
     InductionResponseResponse,
@@ -22,6 +22,7 @@ from src.api.schemas.induction import (
     InductionRunResponse,
     InductionRunUpdate,
 )
+from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
 from src.domain.models.audit import AuditQuestion, AuditTemplate
@@ -40,6 +41,7 @@ from src.domain.services.governance_service import GovernanceService, Notificati
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+_REFERENCE_RETRY_LIMIT = 3
 
 
 def _is_workforce_admin(user: CurrentUser) -> bool:
@@ -122,9 +124,7 @@ async def list_induction_runs(
             apply_tenant_filter(select(Engineer.id), Engineer, user.tenant_id).where(Engineer.user_id == user.id)
         )
         engineer_ids = engineer_id_result.scalars().all()
-        query = query.where(
-            (InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1]))
-        )
+        query = query.where((InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1])))
     if engineer_id is not None:
         query = query.where(InductionRun.engineer_id == engineer_id)
     if status is not None:
@@ -165,26 +165,39 @@ async def create_induction_run(
     if not template_check["approved"]:
         raise HTTPException(status_code=400, detail=template_check["reason"])
 
-    reference_number = await _generate_induction_reference_number(db)
     stage = InductionStage(data.stage) if data.stage else InductionStage.STAGE_1_ONSITE
-    run = InductionRun(
-        reference_number=reference_number,
-        template_id=data.template_id,
-        engineer_id=data.engineer_id,
-        supervisor_id=user.id,
-        asset_type_id=data.asset_type_id,
-        title=data.title,
-        location=data.location,
-        notes=data.notes,
-        stage=stage,
-        scheduled_date=data.scheduled_date,
-        status=InductionStatus.DRAFT,
-        tenant_id=user.tenant_id,
+    for attempt in range(_REFERENCE_RETRY_LIMIT):
+        reference_number = await _generate_induction_reference_number(db)
+        run = InductionRun(
+            reference_number=reference_number,
+            template_id=data.template_id,
+            engineer_id=data.engineer_id,
+            supervisor_id=user.id,
+            asset_type_id=data.asset_type_id,
+            title=data.title,
+            location=data.location,
+            notes=data.notes,
+            stage=stage,
+            scheduled_date=data.scheduled_date,
+            status=InductionStatus.DRAFT,
+            tenant_id=user.tenant_id,
+        )
+        db.add(run)
+        try:
+            await db.commit()
+            await db.refresh(run)
+            return InductionRunResponse.model_validate(run)
+        except IntegrityError as exc:
+            await db.rollback()
+            if "reference_number" in str(exc).lower() and attempt < (_REFERENCE_RETRY_LIMIT - 1):
+                logger.warning("Retrying induction reference allocation after conflict", exc_info=exc)
+                continue
+            raise
+
+    raise HTTPException(
+        status_code=409,
+        detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Unable to allocate a unique induction reference number"),
     )
-    db.add(run)
-    await db.commit()
-    await db.refresh(run)
-    return InductionRunResponse.model_validate(run)
 
 
 @router.get("/{run_id}", response_model=InductionRunResponse)
@@ -282,9 +295,11 @@ async def complete_induction(
             detail=f"Induction cannot be completed from status '{run.status.value}'",
         )
 
-    template_result = await db.execute(
-        select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(AuditTemplate.id == run.template_id)
+    template_query = select(AuditTemplate).options(selectinload(AuditTemplate.questions)).where(
+        AuditTemplate.id == run.template_id
     )
+    template_query = apply_tenant_filter(template_query, AuditTemplate, user.tenant_id)
+    template_result = await db.execute(template_query)
     template = template_result.scalar_one_or_none()
     if template is None:
         raise HTTPException(
