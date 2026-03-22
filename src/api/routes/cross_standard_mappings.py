@@ -5,7 +5,6 @@ import logging
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
@@ -69,7 +68,7 @@ async def list_mappings(
     """List cross-standard mappings with optional filters."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    query = select(CrossStandardMapping)
+    query = select(CrossStandardMapping).where(CrossStandardMapping.tenant_id == current_user.tenant_id)
     if source_standard:
         query = query.where(CrossStandardMapping.primary_standard == source_standard)
     if target_standard:
@@ -93,8 +92,16 @@ async def list_standards(
     """List all available ISO standards in the mapping database."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    primaries = await db.execute(select(CrossStandardMapping.primary_standard).distinct())
-    mapped = await db.execute(select(CrossStandardMapping.mapped_standard).distinct())
+    primaries = await db.execute(
+        select(CrossStandardMapping.primary_standard)
+        .where(CrossStandardMapping.tenant_id == current_user.tenant_id)
+        .distinct()
+    )
+    mapped = await db.execute(
+        select(CrossStandardMapping.mapped_standard)
+        .where(CrossStandardMapping.tenant_id == current_user.tenant_id)
+        .distinct()
+    )
     all_standards = sorted({s for (s,) in primaries.all()} | {s for (s,) in mapped.all()})
     return {"standards": all_standards}
 
@@ -108,7 +115,7 @@ async def create_mapping(
     """Create a new cross-standard mapping."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    mapping = CrossStandardMapping(**data.model_dump())
+    mapping = CrossStandardMapping(**data.model_dump(), tenant_id=current_user.tenant_id)
     db.add(mapping)
     await db.commit()
     await db.refresh(mapping)

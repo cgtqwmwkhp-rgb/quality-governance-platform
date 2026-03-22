@@ -29,7 +29,7 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/Dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/Dialog'
 import {
   Select,
   SelectContent,
@@ -84,6 +84,9 @@ interface SearchResult {
 }
 
 type ViewMode = 'grid' | 'list'
+const UPLOAD_TIMEOUT_MS = 120000
+const ALL_TYPES_VALUE = 'all-types'
+const ALL_STATUS_VALUE = 'all-status'
 
 const FILE_ICONS: Record<string, typeof FileText> = {
   pdf: FileText,
@@ -130,8 +133,8 @@ export default function Documents() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragActive, setDragActive] = useState(false)
-  const [filterType, setFilterType] = useState<string>('')
-  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterType, setFilterType] = useState<string>(ALL_TYPES_VALUE)
+  const [filterStatus, setFilterStatus] = useState<string>(ALL_STATUS_VALUE)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
@@ -161,7 +164,10 @@ export default function Documents() {
   }, [loadData])
 
   useEffect(() => {
-    loadData(filterType || undefined, filterStatus || undefined)
+    loadData(
+      filterType === ALL_TYPES_VALUE ? undefined : filterType,
+      filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+    )
   }, [filterType, filterStatus, loadData])
 
   const handleSemanticSearch = useCallback(async (query: string) => {
@@ -218,6 +224,7 @@ export default function Documents() {
   const handleFileUpload = async (file: File) => {
     setUploading(true)
     setUploadProgress(0)
+    setUploadError(null)
 
     const formData = new FormData()
     formData.append('file', file)
@@ -233,11 +240,15 @@ export default function Documents() {
 
       await api.post('/api/v1/documents/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: UPLOAD_TIMEOUT_MS,
       })
 
       setUploadProgress(100)
 
-      await loadData(filterType || undefined, filterStatus || undefined)
+      await loadData(
+        filterType === ALL_TYPES_VALUE ? undefined : filterType,
+        filterStatus === ALL_STATUS_VALUE ? undefined : filterStatus,
+      )
       setShowUploadModal(false)
     } catch (err) {
       trackError(err, { component: 'Documents', action: 'upload' })
@@ -248,6 +259,35 @@ export default function Documents() {
       setUploadProgress(0)
     }
   }
+
+  const resolveSignedUrl = useCallback(async (documentId: number, download = true) => {
+    const response = await api.get(`/api/v1/documents/${documentId}/signed-url`, {
+      params: { download },
+    })
+    const rawUrl = response.data.signed_url as string
+    return new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
+  }, [])
+
+  const handleDocumentOpen = useCallback(
+    async (documentId: number, download = true) => {
+      try {
+        const signedUrl = await resolveSignedUrl(documentId, download)
+        if (download) {
+          const link = window.document.createElement('a')
+          link.href = signedUrl
+          link.target = '_blank'
+          link.rel = 'noopener noreferrer'
+          link.click()
+          return
+        }
+        window.open(signedUrl, '_blank', 'noopener,noreferrer')
+      } catch (err) {
+        trackError(err, { component: 'Documents', action: download ? 'download' : 'open' })
+        setLoadError(getApiErrorMessage(err))
+      }
+    },
+    [resolveSignedUrl],
+  )
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`
@@ -377,7 +417,7 @@ export default function Documents() {
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Types</SelectItem>
+              <SelectItem value={ALL_TYPES_VALUE}>All Types</SelectItem>
               <SelectItem value="policy">Policies</SelectItem>
               <SelectItem value="procedure">Procedures</SelectItem>
               <SelectItem value="sop">SOPs</SelectItem>
@@ -391,7 +431,7 @@ export default function Documents() {
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Status</SelectItem>
+              <SelectItem value={ALL_STATUS_VALUE}>All Status</SelectItem>
               <SelectItem value="indexed">Indexed</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
@@ -628,6 +668,7 @@ export default function Documents() {
         >
           <DialogHeader>
             <DialogTitle>{t('documents.upload')}</DialogTitle>
+            <DialogDescription>Upload governance evidence for durable storage and semantic indexing.</DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
@@ -699,12 +740,23 @@ export default function Documents() {
                     </p>
                   </div>
                 </div>
+                <DialogDescription>
+                  Review extracted metadata and open the stored source document.
+                </DialogDescription>
                 <div className="flex items-center gap-2 mt-2">
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleDocumentOpen(selectedDocument.id, true)}
+                  >
                     <Download size={16} />
                     {t('common.download')}
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleDocumentOpen(selectedDocument.id, false)}
+                  >
                     <ExternalLink size={16} />
                     Open
                   </Button>

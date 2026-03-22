@@ -67,10 +67,12 @@ class TestEmployeePortalWorkflows:
         # First submit a report
         submit_response = await client.post("/api/v1/portal/reports/", json=valid_incident_report)
         assert submit_response.status_code == 201
-        ref_number = submit_response.json()["reference_number"]
+        payload = submit_response.json()
+        ref_number = payload["reference_number"]
+        tracking_code = payload["tracking_code"]
 
         # Then track it
-        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
 
         assert track_response.status_code == 200
         data = track_response.json()

@@ -7,6 +7,7 @@ Provides simplified, mobile-first endpoints for:
 """
 
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -14,6 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import String, cast, func, literal, select, union_all
+from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.schemas.error_codes import ErrorCode
@@ -122,14 +124,29 @@ class MyReportsResponse(BaseModel):
 # ============================================================================
 
 
-def generate_tracking_code() -> str:
-    """Generate a secure tracking code for anonymous report access."""
-    return secrets.token_urlsafe(16)
+def generate_tracking_code(reference_number: str) -> str:
+    """Generate a deterministic tracking code tied to a reference number."""
+    message = f"portal-track:{reference_number}"
+    return hmac.new(settings.secret_key.encode(), message.encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def generate_portal_reference(prefix: str) -> str:
+    """Generate a collision-resistant portal reference number."""
+    year = datetime.now(timezone.utc).year
+    return f"{prefix}-{year}-{secrets.token_hex(4).upper()}"
 
 
 def hash_tracking_code(code: str) -> str:
     """Hash tracking code for storage."""
     return hashlib.sha256(code.encode()).hexdigest()
+
+
+def validate_tracking_code(reference_number: str, provided_code: Optional[str]) -> bool:
+    """Validate a tracking code without storing sensitive portal state."""
+    if not provided_code:
+        return False
+    expected_code = generate_tracking_code(reference_number)
+    return hmac.compare_digest(expected_code, provided_code)
 
 
 def map_severity(severity: str) -> tuple:
@@ -335,6 +352,21 @@ def build_rta_portal_fields(
     }
 
 
+async def commit_portal_record(db: DbSession, record_label: str) -> None:
+    """Persist a portal record with an explicit configuration failure on schema drift."""
+    try:
+        await db.commit()
+    except (ProgrammingError, OperationalError) as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=api_error(
+                ErrorCode.CONFIGURATION_ERROR,
+                f"Portal {record_label} intake is not available until the latest database schema is applied.",
+            ),
+        ) from exc
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -357,21 +389,13 @@ async def submit_quick_report(
     This endpoint is public and doesn't require authentication.
     Anonymous reports can be tracked using the returned tracking_code.
     """
-    tracking_code = generate_tracking_code()
-    # Hash stored for future secure lookup functionality
-    _ = hash_tracking_code(tracking_code)  # noqa: F841
-
     incident_severity, complaint_priority = map_severity(report.severity)
     reporter_submission = report.reporter_submission or {}
     portal_tenant_id = get_default_portal_tenant_id()
 
     if report.report_type.lower() == "incident":
-        # Generate reference number
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(Incident)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"INC-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("INC")
+        tracking_code = generate_tracking_code(ref_number)
 
         incident = Incident(
             reference_number=ref_number,
@@ -381,7 +405,7 @@ async def submit_quick_report(
         )
 
         db.add(incident)
-        await db.commit()
+        await commit_portal_record(db, "incident")
         await db.refresh(incident)
 
         return QuickReportResponse(
@@ -394,12 +418,8 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "complaint":
-        # Generate reference number
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(Complaint)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"COMP-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("COMP")
+        tracking_code = generate_tracking_code(ref_number)
 
         complaint = Complaint(
             reference_number=ref_number,
@@ -409,7 +429,7 @@ async def submit_quick_report(
         )
 
         db.add(complaint)
-        await db.commit()
+        await commit_portal_record(db, "complaint")
         await db.refresh(complaint)
 
         return QuickReportResponse(
@@ -422,12 +442,8 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "rta":
-        # Generate reference number for Road Traffic Collision
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(RoadTrafficCollision)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"RTA-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("RTA")
+        tracking_code = generate_tracking_code(ref_number)
 
         # Map severity
         rta_severity_map = {
@@ -446,7 +462,7 @@ async def submit_quick_report(
         )
 
         db.add(rta)
-        await db.commit()
+        await commit_portal_record(db, "RTA")
         await db.refresh(rta)
 
         return QuickReportResponse(
@@ -459,12 +475,8 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "near_miss":
-        # Generate reference number for Near Miss
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(NearMiss)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"NM-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("NM")
+        tracking_code = generate_tracking_code(ref_number)
 
         # Map severity to priority
         priority_map = {
@@ -492,7 +504,7 @@ async def submit_quick_report(
         )
 
         db.add(near_miss)
-        await db.commit()
+        await commit_portal_record(db, "near miss")
         await db.refresh(near_miss)
 
         return QuickReportResponse(
@@ -528,8 +540,14 @@ async def track_report(
     """
     Track a report's status by reference number.
 
-    For anonymous reports, the tracking_code is required.
+    Portal tracking requires the reference-specific tracking code.
     """
+    if not validate_tracking_code(reference_number, tracking_code):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference details."),
+        )
+
     # Determine report type from reference number prefix
     if reference_number.startswith("INC-"):
         inc_query = select(Incident).where(Incident.reference_number == reference_number)
@@ -775,7 +793,10 @@ async def generate_qr_code(reference_number: str):
     # Return QR code data (frontend will render it)
     from src.core.config import settings
 
-    tracking_url = f"{settings.frontend_url}/portal/track/{reference_number}"
+    tracking_url = (
+        f"{settings.frontend_url}/portal/track/{reference_number}"
+        f"?tracking_code={generate_tracking_code(reference_number)}"
+    )
 
     return {
         "reference_number": reference_number,

@@ -499,12 +499,20 @@ async def get_scope3_breakdown(
     current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get Scope 3 category breakdown"""
-    result = await db.execute(
-        select(Scope3CategoryData)
-        .where(Scope3CategoryData.reporting_year_id == year_id)
-        .order_by(Scope3CategoryData.category_number)
-    )
-    categories = result.scalars().all()
+    try:
+        result = await db.execute(
+            select(Scope3CategoryData)
+            .where(Scope3CategoryData.reporting_year_id == year_id)
+            .order_by(Scope3CategoryData.category_number)
+        )
+        categories = result.scalars().all()
+    except (ProgrammingError, OperationalError) as e:
+        logger.warning("Planet Mark scope 3 query failed (likely missing schema): %s", str(e)[:200])
+        return setup_required_response(
+            module="planet-mark",
+            message="Planet Mark Scope 3 categories are not initialized in this environment.",
+            next_action="Apply the latest Planet Mark database migrations before using Scope 3 breakdowns.",
+        )
 
     if not categories:
         # Return default categories
@@ -552,13 +560,21 @@ async def list_improvement_actions(
     current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
-    stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
+    try:
+        stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
 
-    if status:
-        stmt = stmt.where(ImprovementAction.status == status)
+        if status:
+            stmt = stmt.where(ImprovementAction.status == status)
 
-    result = await db.execute(stmt.order_by(ImprovementAction.time_bound))
-    actions = result.scalars().all()
+        result = await db.execute(stmt.order_by(ImprovementAction.time_bound))
+        actions = result.scalars().all()
+    except (ProgrammingError, OperationalError) as e:
+        logger.warning("Planet Mark actions query failed (likely missing schema): %s", str(e)[:200])
+        return setup_required_response(
+            module="planet-mark",
+            message="Planet Mark improvement actions are not initialized in this environment.",
+            next_action="Apply the latest Planet Mark database migrations before using live actions.",
+        )
 
     # Summary
     completed = len([a for a in actions if a.status == "completed"])

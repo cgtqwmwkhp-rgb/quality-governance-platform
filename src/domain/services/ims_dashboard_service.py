@@ -290,10 +290,13 @@ class IMSDashboardService:
         coverage = iso_compliance_service.calculate_compliance_coverage(links, None)
         return {
             "total_clauses": coverage.get("total_clauses", 0),
-            "covered_clauses": coverage.get("covered_clauses", 0),
+            "covered_clauses": coverage.get("full_coverage", 0) + coverage.get("partial_coverage", 0),
+            "full_coverage": coverage.get("full_coverage", 0),
+            "partial_coverage": coverage.get("partial_coverage", 0),
             "coverage_percentage": coverage.get("coverage_percentage", 0),
             "gaps": coverage.get("gaps", 0),
             "total_evidence_links": len(links),
+            "by_standard": coverage.get("by_standard", {}),
         }
 
     # ------------------------------------------------------------------

@@ -96,7 +96,7 @@ class TestMultiStepEntityWorkflows:
         assert ref_number.startswith("INC-"), f"Invalid reference format: {ref_number}"
 
         # Step 3: Track the report
-        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
 
         if track_response.status_code != 200:
             TestResult.record("SUAT-001", "PARTIAL", "Submission works but tracking fails")
@@ -128,10 +128,12 @@ class TestMultiStepEntityWorkflows:
         # Submit
         submit_response = await client.post("/api/v1/portal/reports/", json=complaint)
         assert submit_response.status_code == 201
-        ref_number = submit_response.json()["reference_number"]
+        submit_data = submit_response.json()
+        ref_number = submit_data["reference_number"]
+        tracking_code = submit_data["tracking_code"]
 
         # Track
-        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
         assert track_response.status_code == 200
 
         data = track_response.json()
@@ -157,10 +159,12 @@ class TestMultiStepEntityWorkflows:
 
         submit_response = await client.post("/api/v1/portal/reports/", json=anonymous_report)
         assert submit_response.status_code == 201
-        ref_number = submit_response.json()["reference_number"]
+        submit_data = submit_response.json()
+        ref_number = submit_data["reference_number"]
+        tracking_code = submit_data["tracking_code"]
 
         # Track the report
-        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
+        track_response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
         assert track_response.status_code == 200
 
         data = track_response.json()
@@ -313,10 +317,11 @@ class TestConcurrentOperations:
         assert submit_response.status_code == 201, submit_response.text
         submit_data = submit_response.json()
         ref_number = submit_data.get("reference_number") or submit_data.get("reference") or submit_data.get("id")
+        tracking_code = submit_data["tracking_code"]
         assert ref_number, f"Missing tracking reference in response: {submit_data}"
 
         async def track_report():
-            response = await client.get(f"/api/v1/portal/reports/{ref_number}/")
+            response = await client.get(f"/api/v1/portal/reports/{ref_number}/?tracking_code={tracking_code}")
             return response.status_code, response.json()
 
         tasks = [track_report() for _ in range(10)]
@@ -400,9 +405,10 @@ class TestErrorHandlingEdgeCases:
         if response.status_code == 201:
             data = response.json()
             ref = data["reference_number"]
+            tracking_code = data["tracking_code"]
 
             # Verify we can track the report
-            track = await client.get(f"/api/v1/portal/reports/{ref}/")
+            track = await client.get(f"/api/v1/portal/reports/{ref}/?tracking_code={tracking_code}")
             assert track.status_code == 200
 
             # Verify response is valid JSON (special chars properly escaped in JSON)
@@ -438,8 +444,10 @@ class TestErrorHandlingEdgeCases:
 
         assert response.status_code == 201, f"Unicode submission failed: {response.text}"
 
-        ref = response.json()["reference_number"]
-        track = await client.get(f"/api/v1/portal/reports/{ref}/")
+        payload = response.json()
+        ref = payload["reference_number"]
+        tracking_code = payload["tracking_code"]
+        track = await client.get(f"/api/v1/portal/reports/{ref}/?tracking_code={tracking_code}")
 
         assert track.status_code == 200
         # Title should contain unicode

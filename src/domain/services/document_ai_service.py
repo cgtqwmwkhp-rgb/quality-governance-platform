@@ -416,6 +416,7 @@ class VectorSearchService:
         document_id: int,
         chunks: list[DocumentChunk],
         embeddings: list[list[float]],
+        extra_metadata: Optional[dict[str, object]] = None,
     ) -> bool:
         """Upsert document chunks to Pinecone."""
 
@@ -425,17 +426,20 @@ class VectorSearchService:
         try:
             vectors = []
             for chunk, embedding in zip(chunks, embeddings):
+                metadata = {
+                    "document_id": document_id,
+                    "chunk_index": chunk.index,
+                    "heading": chunk.heading or "",
+                    "page_number": chunk.page_number or 0,
+                    "content_preview": chunk.content[:200],
+                }
+                if extra_metadata:
+                    metadata.update(extra_metadata)
                 vectors.append(
                     {
                         "id": f"doc_{document_id}_chunk_{chunk.index}",
                         "values": embedding,
-                        "metadata": {
-                            "document_id": document_id,
-                            "chunk_index": chunk.index,
-                            "heading": chunk.heading or "",
-                            "page_number": chunk.page_number or 0,
-                            "content_preview": chunk.content[:200],
-                        },
+                        "metadata": metadata,
                     }
                 )
 

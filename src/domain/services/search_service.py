@@ -99,6 +99,9 @@ class SearchService:
         all_results.extend(await self._search_rtas(query, tenant_id, request_id))
         all_results.extend(await self._search_complaints(query, tenant_id, request_id))
         all_results.extend(await self._search_risks(query, tenant_id, request_id))
+        all_results.extend(await self._search_audits(query, tenant_id, request_id))
+        all_results.extend(await self._search_actions(query, tenant_id, request_id))
+        all_results.extend(await self._search_documents(query, tenant_id, request_id))
 
         if module:
             all_results = [r for r in all_results if r.module.lower() == module.lower()]
@@ -146,6 +149,23 @@ class SearchService:
     @staticmethod
     def _trgm_score(col, query: str):
         return func.similarity(col, query)
+
+    @staticmethod
+    def _highlight_words(query: str, *values: str | None) -> list[str]:
+        words = query.lower().split()
+        haystack = " ".join(value or "" for value in values).lower()
+        return [word for word in words if word in haystack]
+
+    @staticmethod
+    def _simple_relevance(query: str, *values: str | None) -> float:
+        normalized_query = query.lower()
+        lowered_values = [value.lower() for value in values if value]
+        bonus = 0
+        if any(normalized_query in value for value in lowered_values):
+            bonus += 20
+        bonus += min(20, sum(value.count(normalized_query) for value in lowered_values) * 5)
+        bonus += min(15, len(SearchService._highlight_words(query, *values)) * 5)
+        return min(95.0, 55.0 + bonus)
 
     # ------------------------------------------------------------------
     # Per-entity search helpers
@@ -362,6 +382,184 @@ class SearchService:
         except (SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: risk query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    async def _search_audits(self, query: str, tenant_id: int | None, request_id: str | None) -> list[SearchResultItem]:
+        results: list[SearchResultItem] = []
+        try:
+            from src.domain.models.audit import AuditFinding
+
+            search_filter = f"%{query}%"
+            stmt = (
+                select(AuditFinding)
+                .where(AuditFinding.tenant_id == tenant_id)
+                .where(or_(AuditFinding.title.ilike(search_filter), AuditFinding.description.ilike(search_filter)))
+                .order_by(AuditFinding.created_at.desc())
+                .limit(10)
+            )
+            db_result = await self.db.execute(stmt)
+            for finding in db_result.scalars().all():
+                results.append(
+                    SearchResultItem(
+                        id=finding.reference_number or f"AUD-{finding.id}",
+                        type="audit",
+                        title=finding.title or "Untitled Audit Finding",
+                        description=(finding.description or "")[:200],
+                        module="Audits",
+                        status=str(
+                            finding.status.value if hasattr(finding.status, "value") else finding.status or "Open"
+                        ),
+                        date=str(finding.created_at or ""),
+                        relevance=self._simple_relevance(query, finding.title, finding.description),
+                        highlights=self._highlight_words(query, finding.title, finding.description),
+                    )
+                )
+        except (SQLAlchemyError, ValueError) as e:
+            logger.warning(
+                "Search: audit query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    async def _search_actions(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
+        results: list[SearchResultItem] = []
+        search_filter = f"%{query}%"
+
+        try:
+            from src.domain.models.capa import CAPAAction
+            from src.domain.models.complaint import ComplaintAction
+            from src.domain.models.incident import IncidentAction
+            from src.domain.models.investigation import InvestigationAction
+            from src.domain.models.rta import RTAAction
+
+            action_sources = [
+                (
+                    IncidentAction,
+                    "incident_action",
+                    lambda action: action.reference_number or f"ACT-{action.id}",
+                    lambda action: action.created_at,
+                ),
+                (
+                    RTAAction,
+                    "rta_action",
+                    lambda action: action.reference_number or f"ACT-{action.id}",
+                    lambda action: action.created_at,
+                ),
+                (
+                    ComplaintAction,
+                    "complaint_action",
+                    lambda action: action.reference_number or f"ACT-{action.id}",
+                    lambda action: action.created_at,
+                ),
+                (
+                    InvestigationAction,
+                    "investigation_action",
+                    lambda action: action.reference_number or f"ACT-{action.id}",
+                    lambda action: action.created_at,
+                ),
+                (
+                    CAPAAction,
+                    "capa_action",
+                    lambda action: action.reference_number or f"CAPA-{action.id}",
+                    lambda action: action.created_at,
+                ),
+            ]
+
+            for model, action_type, id_builder, date_builder in action_sources:
+                stmt = (
+                    select(model)
+                    .where(model.tenant_id == tenant_id)
+                    .where(or_(model.title.ilike(search_filter), model.description.ilike(search_filter)))
+                    .order_by(model.created_at.desc())
+                    .limit(5)
+                )
+                db_result = await self.db.execute(stmt)
+                for action in db_result.scalars().all():
+                    results.append(
+                        SearchResultItem(
+                            id=id_builder(action),
+                            type="action",
+                            title=action.title or "Untitled Action",
+                            description=(action.description or "")[:200],
+                            module="Actions",
+                            status=str(
+                                action.status.value if hasattr(action.status, "value") else action.status or "Open"
+                            ),
+                            date=str(date_builder(action) or ""),
+                            relevance=self._simple_relevance(query, action.title, action.description),
+                            highlights=self._highlight_words(query, action.title, action.description) + [action_type],
+                        )
+                    )
+        except (SQLAlchemyError, ValueError) as e:
+            logger.warning(
+                "Search: action query failed [request_id=%s]: %s",
+                request_id,
+                type(e).__name__,
+                exc_info=True,
+            )
+        return results
+
+    async def _search_documents(
+        self, query: str, tenant_id: int | None, request_id: str | None
+    ) -> list[SearchResultItem]:
+        results: list[SearchResultItem] = []
+        try:
+            from src.domain.models.document import Document
+
+            search_filter = f"%{query}%"
+            stmt = (
+                select(Document)
+                .where(Document.tenant_id == tenant_id)
+                .where(
+                    or_(
+                        Document.title.ilike(search_filter),
+                        Document.description.ilike(search_filter),
+                        Document.ai_summary.ilike(search_filter),
+                    )
+                )
+                .order_by(Document.created_at.desc())
+                .limit(10)
+            )
+            db_result = await self.db.execute(stmt)
+            for document in db_result.scalars().all():
+                results.append(
+                    SearchResultItem(
+                        id=document.reference_number or f"DOC-{document.id}",
+                        type="document",
+                        title=document.title or "Untitled Document",
+                        description=((document.ai_summary or document.description or "")[:200]),
+                        module="Documents",
+                        status=str(
+                            document.status.value
+                            if hasattr(document.status, "value")
+                            else document.status or "Available"
+                        ),
+                        date=str(document.created_at or ""),
+                        relevance=self._simple_relevance(
+                            query,
+                            document.title,
+                            document.description,
+                            document.ai_summary,
+                        ),
+                        highlights=self._highlight_words(
+                            query,
+                            document.title,
+                            document.description,
+                            document.ai_summary,
+                        ),
+                    )
+                )
+        except (SQLAlchemyError, ValueError) as e:
+            logger.warning(
+                "Search: document query failed [request_id=%s]: %s",
                 request_id,
                 type(e).__name__,
                 exc_info=True,
