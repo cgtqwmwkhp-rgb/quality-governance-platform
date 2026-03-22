@@ -122,7 +122,9 @@ async def list_induction_runs(
             apply_tenant_filter(select(Engineer.id), Engineer, user.tenant_id).where(Engineer.user_id == user.id)
         )
         engineer_ids = engineer_id_result.scalars().all()
-        query = query.where((InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1])))
+        query = query.where(
+            (InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1]))
+        )
     if engineer_id is not None:
         query = query.where(InductionRun.engineer_id == engineer_id)
     if status is not None:

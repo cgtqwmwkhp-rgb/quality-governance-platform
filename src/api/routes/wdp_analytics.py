@@ -100,9 +100,7 @@ async def get_wdp_summary(db: DbSession, user: CurrentUser):
     )
 
     # Competency counts by state
-    competency_records = (
-        (await db.execute(select(CompetencyRecord).where(tenant_filter_comp))).scalars().all()
-    )
+    competency_records = (await db.execute(select(CompetencyRecord).where(tenant_filter_comp))).scalars().all()
     latest_competency_records = _latest_records_by_engineer_asset(competency_records)
     comp_counts = {state.value: 0 for state in CompetencyLifecycleState}
     for record in latest_competency_records:
@@ -172,8 +170,7 @@ async def get_engineer_competency_matrix(db: DbSession, user: CurrentUser):
 
         latest_records = _latest_records_by_asset_type(records)
         record_map = {
-            asset_type_id: _effective_competency_state(record)
-            for asset_type_id, record in latest_records.items()
+            asset_type_id: _effective_competency_state(record) for asset_type_id, record in latest_records.items()
         }
 
         row = {
