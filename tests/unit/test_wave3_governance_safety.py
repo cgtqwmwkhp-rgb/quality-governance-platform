@@ -5,7 +5,12 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from src.api.routes.employee_portal import generate_tracking_code, track_report, validate_tracking_code
+from src.api.routes.employee_portal import (
+    generate_portal_reference,
+    generate_tracking_code,
+    track_report,
+    validate_tracking_code,
+)
 from src.api.routes.telemetry import TelemetryEvent
 from src.domain.models.incident import IncidentSeverity, IncidentStatus
 from src.domain.models.user import Role, User
@@ -32,6 +37,13 @@ def test_tracking_code_is_reference_bound() -> None:
 
     assert validate_tracking_code("INC-2026-0001", code) is True
     assert validate_tracking_code("INC-2026-0002", code) is False
+
+
+def test_portal_reference_generation_is_unique() -> None:
+    references = {generate_portal_reference("INC") for _ in range(20)}
+
+    assert len(references) == 20
+    assert all(reference.startswith("INC-") for reference in references)
 
 
 @pytest.mark.asyncio

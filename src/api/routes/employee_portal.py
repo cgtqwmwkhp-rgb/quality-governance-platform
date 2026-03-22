@@ -8,6 +8,7 @@ Provides simplified, mobile-first endpoints for:
 
 import hashlib
 import hmac
+import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -127,6 +128,12 @@ def generate_tracking_code(reference_number: str) -> str:
     """Generate a deterministic tracking code tied to a reference number."""
     message = f"portal-track:{reference_number}"
     return hmac.new(settings.secret_key.encode(), message.encode(), hashlib.sha256).hexdigest()[:24]
+
+
+def generate_portal_reference(prefix: str) -> str:
+    """Generate a collision-resistant portal reference number."""
+    year = datetime.now(timezone.utc).year
+    return f"{prefix}-{year}-{secrets.token_hex(4).upper()}"
 
 
 def hash_tracking_code(code: str) -> str:
@@ -387,12 +394,7 @@ async def submit_quick_report(
     portal_tenant_id = get_default_portal_tenant_id()
 
     if report.report_type.lower() == "incident":
-        # Generate reference number
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(Incident)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"INC-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("INC")
         tracking_code = generate_tracking_code(ref_number)
 
         incident = Incident(
@@ -416,12 +418,7 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "complaint":
-        # Generate reference number
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(Complaint)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"COMP-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("COMP")
         tracking_code = generate_tracking_code(ref_number)
 
         complaint = Complaint(
@@ -445,12 +442,7 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "rta":
-        # Generate reference number for Road Traffic Collision
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(RoadTrafficCollision)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"RTA-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("RTA")
         tracking_code = generate_tracking_code(ref_number)
 
         # Map severity
@@ -483,12 +475,7 @@ async def submit_quick_report(
         )
 
     elif report.report_type.lower() == "near_miss":
-        # Generate reference number for Near Miss
-        year = datetime.now(timezone.utc).year
-        count_query = select(func.count()).select_from(NearMiss)
-        result = await db.execute(count_query)
-        count = result.scalar() or 0
-        ref_number = f"NM-{year}-{count + 1:04d}"
+        ref_number = generate_portal_reference("NM")
         tracking_code = generate_tracking_code(ref_number)
 
         # Map severity to priority
