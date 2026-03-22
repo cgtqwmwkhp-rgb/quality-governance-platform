@@ -38,9 +38,17 @@ export default function EngineerProfile() {
   }, [])
 
   useEffect(() => {
-    if (!id) return
+    if (!id) {
+      setLoading(false)
+      setError(t('workforce.engineers.not_found'))
+      return
+    }
     const numId = parseInt(id, 10)
-    if (isNaN(numId)) return
+    if (isNaN(numId)) {
+      setLoading(false)
+      setError(t('workforce.engineers.not_found'))
+      return
+    }
 
     const load = async () => {
       setLoading(true)
@@ -60,7 +68,7 @@ export default function EngineerProfile() {
       }
     }
     load()
-  }, [id])
+  }, [id, t])
 
   if (loading) {
     return (

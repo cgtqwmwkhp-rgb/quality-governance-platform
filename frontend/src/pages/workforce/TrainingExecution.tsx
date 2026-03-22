@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, X, Minus, ChevronDown } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -24,12 +24,14 @@ interface QuestionWithSection {
 }
 
 interface ResponseState {
+  responseId?: string
   shownExplained: boolean
   verdict: Verdict | null
   supervisorNotes: string
 }
 
 interface ExistingInductionResponse {
+  id: string
   question_id: number
   shown_explained?: boolean
   understanding?: Verdict | null
@@ -55,6 +57,7 @@ export default function TrainingExecution() {
   const [showSummary, setShowSummary] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guidanceOpen, setGuidanceOpen] = useState(false)
+  const autoStartedRunIds = useRef<Set<string>>(new Set())
 
   const flattenQuestions = useCallback(
     (sections: { title: string; questions: AuditQuestion[] }[]): QuestionWithSection[] => {
@@ -82,17 +85,24 @@ export default function TrainingExecution() {
       setError(null)
       try {
         const runRes = await workforceApi.getInduction(id)
-        const run = runRes.data as InductionRunWithResponses
-        setInduction(run)
+        let run = runRes.data as InductionRunWithResponses
 
-        if (run.status === 'draft') {
-          await workforceApi.startInduction(id)
+        if (run.status === 'draft' && !autoStartedRunIds.current.has(id)) {
+          autoStartedRunIds.current.add(id)
+          const startedRunRes = await workforceApi.startInduction(id)
+          run = {
+            ...run,
+            ...startedRunRes.data,
+            responses: run.responses,
+          }
         }
+        setInduction(run)
 
         if (Array.isArray(run.responses)) {
           const nextResponses = new Map<number, ResponseState>()
           for (const response of run.responses) {
             nextResponses.set(response.question_id, {
+              responseId: response.id,
               shownExplained: response.shown_explained ?? false,
               verdict: response.understanding ?? null,
               supervisorNotes: response.supervisor_notes ?? '',
@@ -123,7 +133,7 @@ export default function TrainingExecution() {
           setTemplateName(template.name)
         } else {
           setQuestions([])
-          setTemplateName(run.title || t('workforce.induction.title'))
+          setTemplateName(run.title || 'Training')
         }
 
         try {
@@ -140,7 +150,7 @@ export default function TrainingExecution() {
       }
     }
     load()
-  }, [id, flattenQuestions, t])
+  }, [id, flattenQuestions])
 
   const question = questions[currentIndex]
   const totalQuestions = questions.length
@@ -152,6 +162,7 @@ export default function TrainingExecution() {
   const getResponse = (qId: number): ResponseState => {
     return (
       responses.get(qId) ?? {
+        responseId: undefined,
         shownExplained: false,
         verdict: null,
         supervisorNotes: '',
@@ -163,6 +174,7 @@ export default function TrainingExecution() {
     setResponses((prev) => {
       const next = new Map(prev)
       const cur = next.get(qId) ?? {
+        responseId: undefined,
         shownExplained: false,
         verdict: null,
         supervisorNotes: '',
@@ -207,12 +219,20 @@ export default function TrainingExecution() {
       for (const [qId, resp] of responses) {
         if (resp.verdict) {
           try {
-            await workforceApi.createInductionResponse(id, {
-              question_id: qId,
-              shown_explained: resp.shownExplained,
-              understanding: resp.verdict,
-              supervisor_notes: resp.supervisorNotes || undefined,
-            })
+            if (resp.responseId) {
+              await workforceApi.updateInductionResponse(resp.responseId, {
+                shown_explained: resp.shownExplained,
+                understanding: resp.verdict,
+                supervisor_notes: resp.supervisorNotes || undefined,
+              })
+            } else {
+              await workforceApi.createInductionResponse(id, {
+                question_id: qId,
+                shown_explained: resp.shownExplained,
+                understanding: resp.verdict,
+                supervisor_notes: resp.supervisorNotes || undefined,
+              })
+            }
           } catch {
             failedItems.push(qId)
           }

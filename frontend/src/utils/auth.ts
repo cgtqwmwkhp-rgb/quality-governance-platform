@@ -131,22 +131,49 @@ export function getValidPlatformToken(): string | null {
   return token
 }
 
+function normalizeRoleClaims(payload: Record<string, unknown> | null): string[] {
+  if (!payload) return []
+
+  const rawRole = payload.role
+  const rawRoles = payload.roles
+  const candidates: unknown[] = []
+
+  if (typeof rawRole === 'string') {
+    candidates.push(rawRole)
+  }
+  if (typeof rawRoles === 'string') {
+    candidates.push(...rawRoles.split(','))
+  } else if (Array.isArray(rawRoles)) {
+    candidates.push(...rawRoles)
+  }
+
+  return candidates
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+export function getUserRoles(): string[] {
+  const token = getPlatformToken()
+  if (!token) return ['viewer']
+
+  const payload = decodeTokenPayload(token)
+  const roles = normalizeRoleClaims(payload)
+  return roles.length > 0 ? roles : ['viewer']
+}
+
 /**
  * Extract the user's role from the JWT token.
  * Falls back to 'viewer' if no role claim is present.
  */
 export function getUserRole(): string {
-  const token = getPlatformToken()
-  if (!token) return 'viewer'
-  const payload = decodeTokenPayload(token)
-  if (!payload) return 'viewer'
-  return (payload.role as string) || (payload.roles as string) || 'viewer'
+  return getUserRoles()[0] || 'viewer'
 }
 
 /**
  * Check if the current user has one of the allowed roles.
  */
 export function hasRole(...allowedRoles: string[]): boolean {
-  const role = getUserRole().toLowerCase()
-  return allowedRoles.some((r) => r.toLowerCase() === role)
+  const roles = getUserRoles().map((role) => role.toLowerCase())
+  return allowedRoles.some((allowedRole) => roles.includes(allowedRole.toLowerCase()))
 }
