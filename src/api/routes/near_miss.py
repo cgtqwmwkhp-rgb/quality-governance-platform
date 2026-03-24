@@ -10,8 +10,10 @@ from sqlalchemy import select
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
+from src.api.utils.errors import api_error
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -29,7 +31,7 @@ async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser
     if not near_miss:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Near Miss with ID {near_miss_id} not found"),
         )
     return near_miss
 
@@ -275,13 +277,15 @@ async def list_near_miss_running_sheet_entries(
     current_user: CurrentUser,
 ):
     """List near-miss runner-sheet entries, newest first."""
-    await _get_near_miss_or_404(db, near_miss_id, current_user)
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
 
-    result = await db.execute(
-        select(NearMissRunningSheetEntry)
-        .where(NearMissRunningSheetEntry.near_miss_id == near_miss_id)
-        .order_by(NearMissRunningSheetEntry.created_at.desc(), NearMissRunningSheetEntry.id.asc())
-    )
+    query = select(NearMissRunningSheetEntry).where(NearMissRunningSheetEntry.near_miss_id == near_miss_id)
+    if near_miss.tenant_id is None:
+        query = query.where(NearMissRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(NearMissRunningSheetEntry.tenant_id == near_miss.tenant_id)
+
+    result = await db.execute(query.order_by(NearMissRunningSheetEntry.created_at.desc(), NearMissRunningSheetEntry.id.asc()))
     return result.scalars().all()
 
 
@@ -343,13 +347,14 @@ async def delete_near_miss_running_sheet_entry(
         select(NearMissRunningSheetEntry).where(
             NearMissRunningSheetEntry.id == entry_id,
             NearMissRunningSheetEntry.near_miss_id == near_miss_id,
+            NearMissRunningSheetEntry.tenant_id == near_miss.tenant_id,
         )
     )
     entry = result.scalar_one_or_none()
     if entry is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Runner-sheet entry not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
         )
 
     assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "near_miss")

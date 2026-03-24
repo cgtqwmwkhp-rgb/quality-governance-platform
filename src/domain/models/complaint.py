@@ -193,9 +193,7 @@ class ComplaintRunningSheetEntry(Base, TimestampMixin):
 
     __tablename__ = "complaint_running_sheet_entries"
     __data_classification__ = DataClassification.C4_RESTRICTED
-    __table_args__ = (
-        Index("ix_cmp_run_sheet_tenant_complaint", "tenant_id", "complaint_id"),
-    )
+    __table_args__ = (Index("ix_cmp_run_sheet_tenant_complaint", "tenant_id", "complaint_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

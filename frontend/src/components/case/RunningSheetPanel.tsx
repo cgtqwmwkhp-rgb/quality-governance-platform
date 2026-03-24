@@ -1,4 +1,5 @@
 import { Loader2, MessageSquare, Plus, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card'
 import { Textarea } from '../ui/Textarea'
@@ -31,6 +32,9 @@ export function RunningSheetPanel({
   onAddEntry,
   onDeleteEntry,
 }: RunningSheetPanelProps) {
+  const { t } = useTranslation()
+  const composerId = 'running-sheet-entry'
+
   return (
     <Card>
       <CardHeader>
@@ -41,7 +45,11 @@ export function RunningSheetPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-3">
+          <label htmlFor={composerId} className="sr-only">
+            {title}
+          </label>
           <Textarea
+            id={composerId}
             value={newEntry}
             onChange={(e) => onNewEntryChange(e.target.value)}
             placeholder={placeholder}
@@ -54,7 +62,7 @@ export function RunningSheetPanel({
             ) : (
               <Plus className="w-4 h-4 mr-1" />
             )}
-            Add
+            {t('common.add')}
           </Button>
         </div>
 
@@ -83,7 +91,7 @@ export function RunningSheetPanel({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive"
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 h-6 w-6 p-0 text-destructive"
                       onClick={() => onDeleteEntry(entry.id)}
                       aria-label="Delete running sheet entry"
                     >

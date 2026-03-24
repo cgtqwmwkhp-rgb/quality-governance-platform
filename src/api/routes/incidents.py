@@ -266,7 +266,7 @@ async def list_incident_running_sheet_entries(
     """List incident runner-sheet entries, newest first."""
     svc = IncidentService(db)
     try:
-        await svc.get_incident(
+        incident = await svc.get_incident(
             incident_id,
             current_user.tenant_id,
             skip_tenant_check=current_user.is_superuser,
@@ -277,11 +277,13 @@ async def list_incident_running_sheet_entries(
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
         )
 
-    result = await db.execute(
-        select(IncidentRunningSheetEntry)
-        .where(IncidentRunningSheetEntry.incident_id == incident_id)
-        .order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc())
-    )
+    query = select(IncidentRunningSheetEntry).where(IncidentRunningSheetEntry.incident_id == incident_id)
+    if incident.tenant_id is None:
+        query = query.where(IncidentRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(IncidentRunningSheetEntry.tenant_id == incident.tenant_id)
+
+    result = await db.execute(query.order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc()))
     return result.scalars().all()
 
 
@@ -365,6 +367,7 @@ async def delete_incident_running_sheet_entry(
         select(IncidentRunningSheetEntry).where(
             IncidentRunningSheetEntry.id == entry_id,
             IncidentRunningSheetEntry.incident_id == incident_id,
+            IncidentRunningSheetEntry.tenant_id == incident.tenant_id,
         )
     )
     entry = result.scalar_one_or_none()

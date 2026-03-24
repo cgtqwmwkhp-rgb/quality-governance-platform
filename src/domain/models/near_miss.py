@@ -106,9 +106,7 @@ class NearMissRunningSheetEntry(Base, TimestampMixin):
 
     __tablename__ = "near_miss_running_sheet_entries"
     __data_classification__ = DataClassification.C4_RESTRICTED
-    __table_args__ = (
-        Index("ix_nm_run_sheet_tenant_near_miss", "tenant_id", "near_miss_id"),
-    )
+    __table_args__ = (Index("ix_nm_run_sheet_tenant_near_miss", "tenant_id", "near_miss_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)

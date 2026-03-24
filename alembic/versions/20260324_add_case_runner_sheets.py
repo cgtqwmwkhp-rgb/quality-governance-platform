@@ -55,7 +55,9 @@ def upgrade() -> None:
         "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
         ")"
     )
-    op.execute("ALTER TABLE rta_running_sheet_entries ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)")
+    op.execute(
+        "ALTER TABLE rta_running_sheet_entries ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)"
+    )
     op.execute(
         "UPDATE rta_running_sheet_entries e "
         "SET tenant_id = r.tenant_id "
@@ -67,8 +69,7 @@ def upgrade() -> None:
         "ON incident_running_sheet_entries(incident_id)"
     )
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_incident_running_sheet_created "
-        "ON incident_running_sheet_entries(created_at)"
+        "CREATE INDEX IF NOT EXISTS ix_incident_running_sheet_created " "ON incident_running_sheet_entries(created_at)"
     )
     op.execute(
         "CREATE INDEX IF NOT EXISTS ix_inc_run_sheet_tenant_incident "
@@ -100,8 +101,7 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX IF NOT EXISTS ix_rta_running_sheet_tenant ON rta_running_sheet_entries(tenant_id)")
     op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_rta_running_sheet_tenant_rta "
-        "ON rta_running_sheet_entries(tenant_id, rta_id)"
+        "CREATE INDEX IF NOT EXISTS ix_rta_running_sheet_tenant_rta " "ON rta_running_sheet_entries(tenant_id, rta_id)"
     )
 
 

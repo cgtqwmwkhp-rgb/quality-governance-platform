@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
-from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.rta import (
     RTAActionCreate,
     RTAActionListResponse,
@@ -21,6 +21,8 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
+from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
+from src.api.utils.errors import api_error
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -39,7 +41,7 @@ async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision
     if not rta:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"RTA with id {rta_id} not found"),
         )
     return rta
 
@@ -493,13 +495,15 @@ async def list_running_sheet_entries(
     current_user: CurrentUser,
 ):
     """List all running sheet entries for an RTA, newest first."""
-    await _get_rta_or_404(db, rta_id, current_user)
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
-    result = await db.execute(
-        select(RunningSheetEntry)
-        .where(RunningSheetEntry.rta_id == rta_id)
-        .order_by(RunningSheetEntry.created_at.desc(), RunningSheetEntry.id.asc())
-    )
+    query = select(RunningSheetEntry).where(RunningSheetEntry.rta_id == rta_id)
+    if rta.tenant_id is None:
+        query = query.where(RunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(RunningSheetEntry.tenant_id == rta.tenant_id)
+
+    result = await db.execute(query.order_by(RunningSheetEntry.created_at.desc(), RunningSheetEntry.id.asc()))
     return result.scalars().all()
 
 
@@ -561,11 +565,15 @@ async def delete_running_sheet_entry(
         select(RunningSheetEntry).where(
             RunningSheetEntry.id == entry_id,
             RunningSheetEntry.rta_id == rta_id,
+            RunningSheetEntry.tenant_id == rta.tenant_id,
         )
     )
     entry = result.scalar_one_or_none()
     if not entry:
-        raise HTTPException(status_code=404, detail="Running sheet entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Running sheet entry not found"),
+        )
 
     assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "rta")
 

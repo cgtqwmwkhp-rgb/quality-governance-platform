@@ -314,7 +314,7 @@ async def list_complaint_running_sheet_entries(
     """List complaint runner-sheet entries, newest first."""
     svc = ComplaintService(db)
     try:
-        await svc.get_complaint(
+        complaint = await svc.get_complaint(
             complaint_id,
             current_user.tenant_id,
             skip_tenant_check=current_user.is_superuser,
@@ -325,11 +325,13 @@ async def list_complaint_running_sheet_entries(
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
         )
 
-    result = await db.execute(
-        select(ComplaintRunningSheetEntry)
-        .where(ComplaintRunningSheetEntry.complaint_id == complaint_id)
-        .order_by(ComplaintRunningSheetEntry.created_at.desc(), ComplaintRunningSheetEntry.id.asc())
-    )
+    query = select(ComplaintRunningSheetEntry).where(ComplaintRunningSheetEntry.complaint_id == complaint_id)
+    if complaint.tenant_id is None:
+        query = query.where(ComplaintRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(ComplaintRunningSheetEntry.tenant_id == complaint.tenant_id)
+
+    result = await db.execute(query.order_by(ComplaintRunningSheetEntry.created_at.desc(), ComplaintRunningSheetEntry.id.asc()))
     return result.scalars().all()
 
 
@@ -413,6 +415,7 @@ async def delete_complaint_running_sheet_entry(
         select(ComplaintRunningSheetEntry).where(
             ComplaintRunningSheetEntry.id == entry_id,
             ComplaintRunningSheetEntry.complaint_id == complaint_id,
+            ComplaintRunningSheetEntry.tenant_id == complaint.tenant_id,
         )
     )
     entry = result.scalar_one_or_none()

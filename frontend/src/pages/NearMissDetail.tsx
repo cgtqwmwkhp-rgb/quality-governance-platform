@@ -45,11 +45,23 @@ export default function NearMissDetail() {
   const [editForm, setEditForm] = useState<NearMissUpdate>({})
   const [investigationTitle, setInvestigationTitle] = useState('')
   const [investigationError, setInvestigationError] = useState('')
+  const nearMissId = Number(id)
+  const hasValidNearMissId = Number.isInteger(nearMissId) && nearMissId > 0
 
   useEffect(() => {
-    if (id) {
-      loadNearMiss(parseInt(id))
+    setLoading(true)
+    setError(null)
+    setNearMiss(null)
+    setInvestigations([])
+    setRunningSheet([])
+
+    if (!id || !hasValidNearMissId) {
+      setError(t('near_misses.feedback.invalid_id', 'Invalid near-miss ID'))
+      setLoading(false)
+      return
     }
+
+    loadNearMiss(nearMissId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
@@ -104,7 +116,7 @@ export default function NearMissDetail() {
       const response = await nearMissesApi.update(nearMiss.id, editForm)
       setNearMiss(response.data)
       setIsEditing(false)
-      toast.success('Changes saved')
+      toast.success(t('near_misses.feedback.saved', 'Changes saved'))
     } catch (err) {
       trackError(err, { component: 'NearMissDetail', action: 'saveEdit' })
       toast.error(getApiErrorMessage(err))
@@ -169,7 +181,7 @@ export default function NearMissDetail() {
       setShowInvestigationModal(false)
       setInvestigationTitle('')
       loadInvestigations(nearMiss.id)
-      toast.success('Investigation created')
+      toast.success(t('near_misses.feedback.investigation_created', 'Investigation created'))
     } catch (err) {
       const apiErr = err as { response?: { data?: CreateFromRecordError } }
       setInvestigationError(apiErr.response?.data?.message || getApiErrorMessage(err))
@@ -187,10 +199,10 @@ export default function NearMissDetail() {
       <div className="space-y-4">
         <Button variant="ghost" onClick={() => navigate('/near-misses')}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Near Misses
+          {t('near_misses.actions.back', 'Back to Near Misses')}
         </Button>
         <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
-          {error || 'Near miss not found'}
+          {error || t('near_misses.feedback.not_found', 'Near miss not found')}
         </div>
       </div>
     )
@@ -209,7 +221,7 @@ export default function NearMissDetail() {
         <div>
           <Button variant="ghost" size="sm" onClick={() => navigate('/near-misses')} className="mb-3">
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Near Misses
+            {t('near_misses.actions.back', 'Back to Near Misses')}
           </Button>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -218,6 +230,7 @@ export default function NearMissDetail() {
             <div>
               <h1 className="text-3xl font-bold text-foreground">{nearMiss.reference_number}</h1>
               <p className="text-muted-foreground mt-1">{nearMiss.contract} near miss</p>
+              
             </div>
           </div>
         </div>
@@ -227,22 +240,22 @@ export default function NearMissDetail() {
             <>
               <Button variant="outline" onClick={handleCancelEdit}>
                 <X className="w-4 h-4 mr-2" />
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving}>
                 <Save className="w-4 h-4 mr-2" />
-                {saving ? 'Saving...' : 'Save'}
+                {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
               </Button>
             </>
           ) : (
             <>
               <Button variant="outline" onClick={() => setShowInvestigationModal(true)}>
                 <FlaskConical className="w-4 h-4 mr-2" />
-                Create Investigation
+                {t('near_misses.actions.create_investigation', 'Create Investigation')}
               </Button>
               <Button onClick={() => setIsEditing(true)}>
                 <Pencil className="w-4 h-4 mr-2" />
-                Edit
+                {t('common.edit', 'Edit')}
               </Button>
             </>
           )}
@@ -251,24 +264,40 @@ export default function NearMissDetail() {
 
       <CaseSummaryRail
         items={[
-          { label: 'Reporter', value: nearMiss.reporter_name, icon: <AlertTriangle className="w-4 h-4" /> },
-          { label: 'Contract', value: nearMiss.contract, icon: <FileText className="w-4 h-4" /> },
-          { label: 'Location', value: nearMiss.location, icon: <FileText className="w-4 h-4" /> },
           {
-            label: 'Event date',
+            label: t('near_misses.summary.reporter', 'Reporter'),
+            value: nearMiss.reporter_name,
+            icon: <AlertTriangle className="w-4 h-4" />,
+          },
+          {
+            label: t('near_misses.summary.contract', 'Contract'),
+            value: nearMiss.contract,
+            icon: <FileText className="w-4 h-4" />,
+          },
+          { label: t('common.location'), value: nearMiss.location, icon: <FileText className="w-4 h-4" /> },
+          {
+            label: t('near_misses.summary.event_date', 'Event date'),
             value: new Date(nearMiss.event_date).toLocaleString(),
             icon: <Calendar className="w-4 h-4" />,
           },
-          { label: 'Status', value: nearMiss.status, icon: <AlertTriangle className="w-4 h-4" /> },
-          { label: 'Priority', value: nearMiss.priority, icon: <AlertTriangle className="w-4 h-4" /> },
-          { label: 'Investigations', value: `${investigations.length}`, icon: <FlaskConical className="w-4 h-4" /> },
+          { label: t('common.status', 'Status'), value: nearMiss.status, icon: <AlertTriangle className="w-4 h-4" /> },
+          {
+            label: t('common.priority', 'Priority'),
+            value: nearMiss.priority,
+            icon: <AlertTriangle className="w-4 h-4" />,
+          },
+          {
+            label: t('near_misses.summary.investigations', 'Investigations'),
+            value: `${investigations.length}`,
+            icon: <FlaskConical className="w-4 h-4" />,
+          },
         ]}
       />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
+          <TabsTrigger value="overview">{t('common.overview', 'Overview')}</TabsTrigger>
+          <TabsTrigger value="running-sheet">{t('common.running_sheet', 'Running Sheet')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -278,15 +307,21 @@ export default function NearMissDetail() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-primary" />
-                    Near miss details
+                    {t('near_misses.detail.title', 'Near miss details')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {isEditing ? (
                     <>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Description</label>
+                        <label
+                          htmlFor="near-miss-detail-description"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('common.description')}
+                        </label>
                         <Textarea
+                          id="near-miss-detail-description"
                           value={editForm.description || ''}
                           onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
                           rows={4}
@@ -294,10 +329,14 @@ export default function NearMissDetail() {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Potential consequences
+                        <label
+                          htmlFor="near-miss-detail-potential-consequences"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('near_misses.form.potential_consequences', 'Potential consequences')}
                         </label>
                         <Textarea
+                          id="near-miss-detail-potential-consequences"
                           value={editForm.potential_consequences || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, potential_consequences: e.target.value })
@@ -307,10 +346,14 @@ export default function NearMissDetail() {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">
-                          Preventive action suggested
+                        <label
+                          htmlFor="near-miss-detail-preventive-action"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('near_misses.form.preventive_action', 'Preventive action suggested')}
                         </label>
                         <Textarea
+                          id="near-miss-detail-preventive-action"
                           value={editForm.preventive_action_suggested || ''}
                           onChange={(e) =>
                             setEditForm({ ...editForm, preventive_action_suggested: e.target.value })
@@ -320,16 +363,28 @@ export default function NearMissDetail() {
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Status</label>
+                        <label
+                          htmlFor="near-miss-detail-status"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('common.status', 'Status')}
+                        </label>
                         <Input
+                          id="near-miss-detail-status"
                           value={editForm.status || ''}
                           onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                           className="mt-1"
                         />
                       </div>
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Priority</label>
+                        <label
+                          htmlFor="near-miss-detail-priority"
+                          className="text-sm font-medium text-muted-foreground"
+                        >
+                          {t('common.priority', 'Priority')}
+                        </label>
                         <Input
+                          id="near-miss-detail-priority"
                           value={editForm.priority || ''}
                           onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
                           className="mt-1"
@@ -339,21 +394,23 @@ export default function NearMissDetail() {
                   ) : (
                     <>
                       <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">Description</h3>
+                        <h3 className="text-sm font-medium text-muted-foreground mb-2">{t('common.description')}</h3>
                         <p className="text-foreground whitespace-pre-wrap">{nearMiss.description}</p>
                       </div>
                       <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">Potential consequences</h3>
+                        <h3 className="text-sm font-medium text-muted-foreground mb-2">
+                          {t('near_misses.form.potential_consequences', 'Potential consequences')}
+                        </h3>
                         <p className="text-foreground whitespace-pre-wrap">
-                          {nearMiss.potential_consequences || 'Not recorded'}
+                          {nearMiss.potential_consequences || t('near_misses.detail.not_recorded', 'Not recorded')}
                         </p>
                       </div>
                       <div>
                         <h3 className="text-sm font-medium text-muted-foreground mb-2">
-                          Preventive action suggested
+                          {t('near_misses.form.preventive_action', 'Preventive action suggested')}
                         </h3>
                         <p className="text-foreground whitespace-pre-wrap">
-                          {nearMiss.preventive_action_suggested || 'Not recorded'}
+                          {nearMiss.preventive_action_suggested || t('near_misses.detail.not_recorded', 'Not recorded')}
                         </p>
                       </div>
                     </>
@@ -367,12 +424,14 @@ export default function NearMissDetail() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FlaskConical className="w-5 h-5 text-primary" />
-                    Investigations
+                    {t('near_misses.summary.investigations', 'Investigations')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {investigations.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No investigations linked yet.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('near_misses.detail.no_investigations', 'No investigations linked yet.')}
+                    </p>
                   ) : (
                     <div className="space-y-3">
                       {investigations.map((investigation) => (
@@ -388,20 +447,24 @@ export default function NearMissDetail() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Status summary</CardTitle>
+                  <CardTitle>{t('near_misses.detail.status_summary', 'Status summary')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Status</span>
+                    <span className="text-sm text-muted-foreground">{t('common.status', 'Status')}</span>
                     <Badge variant="outline">{nearMiss.status}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Priority</span>
+                    <span className="text-sm text-muted-foreground">{t('common.priority', 'Priority')}</span>
                     <Badge variant="secondary">{nearMiss.priority}</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">Potential severity</span>
-                    <span className="text-sm text-foreground">{nearMiss.potential_severity || 'Not set'}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {t('near_misses.form.potential_severity', 'Potential severity')}
+                    </span>
+                    <span className="text-sm text-foreground">
+                      {nearMiss.potential_severity || t('near_misses.detail.not_set', 'Not set')}
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -417,7 +480,10 @@ export default function NearMissDetail() {
             title={t('common.running_sheet', 'Running Sheet')}
             placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
             emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
-            emptyDescription="Add notes to build the near-miss narrative over time"
+            emptyDescription={t(
+              'near_misses.detail.running_sheet_empty_description',
+              'Add notes to build the near-miss narrative over time',
+            )}
             onNewEntryChange={setNewEntry}
             onAddEntry={handleAddEntry}
             onDeleteEntry={handleDeleteEntry}
@@ -428,15 +494,21 @@ export default function NearMissDetail() {
       <Dialog open={showInvestigationModal} onOpenChange={setShowInvestigationModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create investigation</DialogTitle>
+            <DialogTitle>{t('near_misses.actions.create_investigation', 'Create Investigation')}</DialogTitle>
             <DialogDescription>
-              Start a formal investigation for this near miss.
+              {t('near_misses.detail.create_investigation_description', 'Start a formal investigation for this near miss.')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateInvestigation} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Investigation title</label>
+              <label
+                htmlFor="near-miss-investigation-title"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                {t('near_misses.detail.investigation_title', 'Investigation title')}
+              </label>
               <Input
+                id="near-miss-investigation-title"
                 value={investigationTitle}
                 onChange={(e) => setInvestigationTitle(e.target.value)}
                 className="mt-1"
@@ -446,10 +518,12 @@ export default function NearMissDetail() {
             {investigationError && <div className="text-sm text-destructive">{investigationError}</div>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowInvestigationModal(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={creatingInvestigation}>
-                {creatingInvestigation ? 'Creating…' : 'Create Investigation'}
+                {creatingInvestigation
+                  ? t('near_misses.creating', 'Creating…')
+                  : t('near_misses.actions.create_investigation', 'Create Investigation')}
               </Button>
             </DialogFooter>
           </form>

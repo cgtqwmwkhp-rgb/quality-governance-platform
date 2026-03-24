@@ -48,6 +48,7 @@ export default function NearMisses() {
     was_involved: true,
     witnesses_present: false,
   })
+  const eventDateInput = formData.event_date ? formData.event_date.slice(0, 16) : ''
 
   useEffect(() => {
     let cancelled = false
@@ -88,7 +89,7 @@ export default function NearMisses() {
         was_involved: true,
         witnesses_present: false,
       })
-      toast.success('Near miss created')
+      toast.success(t('near_misses.feedback.created', 'Near miss created'))
     } catch (err) {
       trackError(err, { component: 'NearMisses', action: 'create' })
       setCreateError(getApiErrorMessage(err))
@@ -170,7 +171,7 @@ export default function NearMisses() {
                     {t('near_misses.table.reference')}
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    {t('near_misses.table.title')}
+                    {t('near_misses.table.details', 'Details')}
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">
                     {t('near_misses.table.date')}
@@ -221,8 +222,14 @@ export default function NearMisses() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Reporter name</label>
+                <label
+                  htmlFor="near-miss-reporter-name"
+                  className="text-sm font-medium text-muted-foreground"
+                >
+                  {t('near_misses.form.reporter_name', 'Reporter name')}
+                </label>
                 <Input
+                  id="near-miss-reporter-name"
                   value={formData.reporter_name}
                   onChange={(e) => setFormData({ ...formData, reporter_name: e.target.value })}
                   className="mt-1"
@@ -230,8 +237,11 @@ export default function NearMisses() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Contract</label>
+                <label htmlFor="near-miss-contract" className="text-sm font-medium text-muted-foreground">
+                  {t('near_misses.form.contract', 'Contract')}
+                </label>
                 <Input
+                  id="near-miss-contract"
                   value={formData.contract}
                   onChange={(e) => setFormData({ ...formData, contract: e.target.value })}
                   className="mt-1"
@@ -241,8 +251,11 @@ export default function NearMisses() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Location</label>
+              <label htmlFor="near-miss-location" className="text-sm font-medium text-muted-foreground">
+                {t('common.location')}
+              </label>
               <Input
+                id="near-miss-location"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 className="mt-1"
@@ -252,24 +265,37 @@ export default function NearMisses() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Event date</label>
+                <label htmlFor="near-miss-event-date" className="text-sm font-medium text-muted-foreground">
+                  {t('near_misses.form.event_date', 'Event date')}
+                </label>
                 <Input
+                  id="near-miss-event-date"
                   type="datetime-local"
-                  value={formData.event_date.slice(0, 16)}
+                  value={eventDateInput}
                   onChange={(e) =>
-                    setFormData({ ...formData, event_date: new Date(e.target.value).toISOString() })
+                    setFormData({
+                      ...formData,
+                      event_date: e.target.value
+                        ? new Date(e.target.value).toISOString()
+                        : formData.event_date,
+                    })
                   }
                   className="mt-1"
                   required
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Potential severity</label>
+                <label
+                  htmlFor="near-miss-potential-severity"
+                  className="text-sm font-medium text-muted-foreground"
+                >
+                  {t('near_misses.form.potential_severity', 'Potential severity')}
+                </label>
                 <Select
                   value={formData.potential_severity}
                   onValueChange={(value) => setFormData({ ...formData, potential_severity: value })}
                 >
-                  <SelectTrigger className="mt-1">
+                  <SelectTrigger id="near-miss-potential-severity" className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -283,8 +309,11 @@ export default function NearMisses() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Description</label>
+              <label htmlFor="near-miss-description" className="text-sm font-medium text-muted-foreground">
+                {t('common.description')}
+              </label>
               <Textarea
+                id="near-miss-description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={4}
@@ -294,8 +323,14 @@ export default function NearMisses() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Potential consequences</label>
+              <label
+                htmlFor="near-miss-potential-consequences"
+                className="text-sm font-medium text-muted-foreground"
+              >
+                {t('near_misses.form.potential_consequences', 'Potential consequences')}
+              </label>
               <Textarea
+                id="near-miss-potential-consequences"
                 value={formData.potential_consequences || ''}
                 onChange={(e) =>
                   setFormData({ ...formData, potential_consequences: e.target.value || undefined })
@@ -309,7 +344,7 @@ export default function NearMisses() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={creating}>
                 {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : t('near_misses.create')}

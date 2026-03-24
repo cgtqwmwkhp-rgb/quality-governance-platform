@@ -6,7 +6,7 @@ from fastapi import HTTPException
 
 from src.api.routes.complaints import delete_complaint_running_sheet_entry
 from src.api.routes.incidents import add_incident_running_sheet_entry
-from src.api.routes.near_miss import add_near_miss_running_sheet_entry
+from src.api.routes.near_miss import add_near_miss_running_sheet_entry, delete_near_miss_running_sheet_entry
 from src.api.routes.rtas import delete_running_sheet_entry
 from src.api.schemas.running_sheet import RunningSheetEntryCreate
 
@@ -36,9 +36,10 @@ async def test_add_incident_running_sheet_entry_records_audit_and_tenant() -> No
     )
     current_user = SimpleNamespace(id=5, email="owner@example.com", tenant_id=22, is_superuser=False)
 
-    with patch("src.api.routes.incidents.IncidentService", return_value=service), patch(
-        "src.api.routes.incidents.record_audit_event", AsyncMock()
-    ) as audit_mock:
+    with (
+        patch("src.api.routes.incidents.IncidentService", return_value=service),
+        patch("src.api.routes.incidents.record_audit_event", AsyncMock()) as audit_mock,
+    ):
         entry = await add_incident_running_sheet_entry(
             incident_id=7,
             payload=RunningSheetEntryCreate(content="Initial note"),
@@ -109,6 +110,37 @@ async def test_add_near_miss_running_sheet_entry_records_audit_and_tenant() -> N
 
 
 @pytest.mark.asyncio
+async def test_delete_near_miss_running_sheet_entry_allows_update_permission() -> None:
+    near_miss = SimpleNamespace(id=4, tenant_id=9, reference_number="NM-4")
+    entry = SimpleNamespace(id=12, near_miss_id=4, tenant_id=9, author_id=77, entry_type="note")
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_FakeResult(near_miss), _FakeResult(entry)]),
+        delete=AsyncMock(),
+        commit=AsyncMock(),
+    )
+    current_user = SimpleNamespace(
+        id=2,
+        email="safety@example.com",
+        tenant_id=9,
+        is_superuser=False,
+        has_permission=lambda permission: permission == "near_miss:update",
+    )
+
+    with patch("src.api.routes.near_miss.record_audit_event", AsyncMock()) as audit_mock:
+        await delete_near_miss_running_sheet_entry(
+            near_miss_id=4,
+            entry_id=12,
+            db=db,
+            current_user=current_user,
+            request_id="req-3b",
+        )
+
+    db.delete.assert_awaited_once_with(entry)
+    audit_mock.assert_awaited_once()
+    assert audit_mock.await_args.kwargs["event_type"] == "near_miss.runner_sheet_entry.deleted"
+
+
+@pytest.mark.asyncio
 async def test_delete_rta_running_sheet_entry_allows_author_and_audits() -> None:
     rta = SimpleNamespace(id=3, tenant_id=17, reference_number="RTA-3")
     entry = SimpleNamespace(id=6, rta_id=3, author_id=41, entry_type="note")
@@ -125,9 +157,10 @@ async def test_delete_rta_running_sheet_entry_allows_author_and_audits() -> None
         has_permission=lambda permission: False,
     )
 
-    with patch("src.api.routes.rtas._get_rta_or_404", AsyncMock(return_value=rta)), patch(
-        "src.api.routes.rtas.record_audit_event", AsyncMock()
-    ) as audit_mock:
+    with (
+        patch("src.api.routes.rtas._get_rta_or_404", AsyncMock(return_value=rta)),
+        patch("src.api.routes.rtas.record_audit_event", AsyncMock()) as audit_mock,
+    ):
         await delete_running_sheet_entry(
             rta_id=3,
             entry_id=6,

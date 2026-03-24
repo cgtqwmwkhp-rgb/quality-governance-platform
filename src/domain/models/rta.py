@@ -207,9 +207,7 @@ class RunningSheetEntry(Base, TimestampMixin):
 
     __tablename__ = "rta_running_sheet_entries"
     __data_classification__ = DataClassification.C4_RESTRICTED
-    __table_args__ = (
-        Index("ix_rta_running_sheet_tenant_rta", "tenant_id", "rta_id"),
-    )
+    __table_args__ = (Index("ix_rta_running_sheet_tenant_rta", "tenant_id", "rta_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
