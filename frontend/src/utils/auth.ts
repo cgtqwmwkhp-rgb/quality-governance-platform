@@ -9,6 +9,7 @@
  */
 
 const ADMIN_TOKEN_KEY = 'access_token'
+const ADMIN_REFRESH_TOKEN_KEY = 'refresh_token'
 const PORTAL_TOKEN_KEY = 'platform_access_token'
 const PORTAL_REFRESH_TOKEN_KEY = 'platform_refresh_token'
 
@@ -16,7 +17,7 @@ const PORTAL_REFRESH_TOKEN_KEY = 'platform_refresh_token'
  * Get the platform refresh token (portal/SSO only).
  */
 export function getPlatformRefreshToken(): string | null {
-  return sessionStorage.getItem(PORTAL_REFRESH_TOKEN_KEY)
+  return localStorage.getItem(ADMIN_REFRESH_TOKEN_KEY) || sessionStorage.getItem(PORTAL_REFRESH_TOKEN_KEY)
 }
 
 /**
@@ -56,6 +57,7 @@ export function hasToken(): boolean {
  */
 export function clearTokens(): void {
   localStorage.removeItem(ADMIN_TOKEN_KEY)
+  localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY)
   sessionStorage.removeItem(PORTAL_TOKEN_KEY)
   sessionStorage.removeItem(PORTAL_REFRESH_TOKEN_KEY)
 }
@@ -63,8 +65,11 @@ export function clearTokens(): void {
 /**
  * Set the admin token (used by admin login flow).
  */
-export function setAdminToken(token: string): void {
+export function setAdminToken(token: string, refreshToken?: string): void {
   localStorage.setItem(ADMIN_TOKEN_KEY, token)
+  if (refreshToken) {
+    localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, refreshToken)
+  }
 }
 
 /**
@@ -176,4 +181,11 @@ export function getUserRole(): string {
 export function hasRole(...allowedRoles: string[]): boolean {
   const roles = getUserRoles().map((role) => role.toLowerCase())
   return allowedRoles.some((allowedRole) => roles.includes(allowedRole.toLowerCase()))
+}
+
+export function isSuperuser(): boolean {
+  const token = getPlatformToken()
+  if (!token) return false
+  const payload = decodeTokenPayload(token)
+  return payload?.is_superuser === true
 }

@@ -9,6 +9,7 @@ import Login from './pages/Login'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
 import { getValidPlatformToken, setAdminToken, clearTokens } from './utils/auth'
+import { useFeatureFlag } from './hooks/useFeatureFlag'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
@@ -41,7 +42,6 @@ const PortalNearMissForm = lazy(() => import('./pages/PortalNearMissForm'))
 const PortalDynamicForm = lazy(() => import('./pages/PortalDynamicForm'))
 const Analytics = lazy(() => import('./pages/Analytics'))
 const GlobalSearch = lazy(() => import('./pages/GlobalSearch'))
-const UserManagement = lazy(() => import('./pages/UserManagement'))
 const AuditTrail = lazy(() => import('./pages/AuditTrail'))
 const CalendarView = lazy(() => import('./pages/CalendarView'))
 const Notifications = lazy(() => import('./pages/Notifications'))
@@ -164,6 +164,7 @@ function RouteErrorBoundary() {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
+  const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -171,8 +172,8 @@ function App() {
     }
   }, [isAuthenticated])
 
-  const handleLogin = (token: string) => {
-    setAdminToken(token)
+  const handleLogin = (token: string, refreshToken?: string) => {
+    setAdminToken(token, refreshToken)
     setIsAuthenticated(true)
   }
 
@@ -387,7 +388,7 @@ function App() {
 
               {/* Admin & enterprise routes */}
               <Route element={<RouteErrorBoundary />}>
-                <Route path="users" element={<UserManagement />} />
+                <Route path="users" element={<Navigate to="/admin/users" replace />} />
                 <Route path="audit-trail" element={<AuditTrail />} />
                 <Route path="workflows" element={<WorkflowCenter />} />
                 <Route path="compliance-automation" element={<ComplianceAutomation />} />
@@ -445,9 +446,13 @@ function App() {
                 <Route
                   path="admin/users"
                   element={
-                    <RequireRole allowed={['admin']}>
-                      <AdminUserManagement />
-                    </RequireRole>
+                    adminUserManagementEnabled ? (
+                      <RequireRole allowed={['admin']} requireSuperuser>
+                        <AdminUserManagement />
+                      </RequireRole>
+                    ) : (
+                      <Navigate to="/admin" replace />
+                    )
                   }
                 />
                 <Route

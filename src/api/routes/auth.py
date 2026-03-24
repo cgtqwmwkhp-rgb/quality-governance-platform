@@ -1,12 +1,9 @@
 """Authentication API routes."""
 
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.auth import (
@@ -20,32 +17,21 @@ from src.api.schemas.auth import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
-from src.core.azure_auth import extract_user_info_from_azure_token, validate_azure_id_token
 from src.core.security import (
-    build_access_token_claims,
-    create_access_token,
-    create_password_reset_token,
-    create_refresh_token,
     decode_token,
-    get_password_hash,
-    verify_password,
-    verify_password_reset_token,
 )
-from src.domain.models.user import User
+from src.domain.services.auth_service import AuthService
 from src.domain.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
-def _access_token_for_user(user: User) -> str:
-    return create_access_token(
-        subject=user.id,
-        additional_claims=build_access_token_claims(
-            is_superuser=user.is_superuser,
-            roles=[role.name for role in user.roles or []],
-        ),
+def _auth_http_error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status_code,
+        detail=api_error(code, message),
+        headers={"WWW-Authenticate": "Bearer"} if status_code == status.HTTP_401_UNAUTHORIZED else None,
     )
 
 
@@ -85,67 +71,16 @@ async def exchange_azure_token(
         - Creates or updates user in database
         - Issues platform JWT with user's database ID
     """
-    # Validate the Azure AD token
-    payload = validate_azure_id_token(request.id_token)
-
-    if payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Invalid or expired Azure AD token"),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Extract user info
-    user_info = extract_user_info_from_azure_token(payload)
-
-    if not user_info.get("email"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, "Token does not contain email claim"),
-        )
-
-    email = user_info["email"].lower()
-    azure_oid = user_info.get("oid")
-
-    # Find or create user
-    result = await db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        # Create new user from Azure AD profile
-        name_parts = (user_info.get("name") or email.split("@")[0]).split(" ", 1)
-        first_name = name_parts[0] if name_parts else "User"
-        last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-        user = User(
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-            hashed_password="",  # No password - Azure AD auth only
-            is_active=True,
-            is_superuser=False,
-            azure_oid=azure_oid,
-            department=user_info.get("department"),
-            job_title=user_info.get("job_title"),
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-        masked = email[:3] + "***@" + (email.split("@")[1] if "@" in email else "***")
-        logger.info("Created new user from Azure AD: %s", masked)
-    else:
-        # Update Azure OID if not set
-        if azure_oid and not user.azure_oid:
-            user.azure_oid = azure_oid
-            await db.commit()
-
-        # Update last login
-        user.last_login = datetime.now(timezone.utc).isoformat()
-        await db.commit()
-
-    # Generate platform tokens
-    access_token = _access_token_for_user(user)
-    refresh_token = create_refresh_token(subject=user.id)
+    service = AuthService(db)
+    try:
+        user, access_token, refresh_token = await service.exchange_azure_token(request.id_token)
+    except ValueError as exc:
+        message = str(exc)
+        if "missing email" in message.lower():
+            raise _auth_http_error(status.HTTP_400_BAD_REQUEST, ErrorCode.VALIDATION_ERROR, message) from exc
+        raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, message) from exc
+    except PermissionError as exc:
+        raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, str(exc)) from exc
 
     return AzureTokenExchangeResponse(
         access_token=access_token,
@@ -162,74 +97,29 @@ async def exchange_azure_token(
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     """Authenticate user and return access and refresh tokens."""
-    # Find user by email
-    result = await db.execute(select(User).where(User.email == request.email).options(selectinload(User.roles)))
-    user = result.scalar_one_or_none()
+    service = AuthService(db)
+    try:
+        _user, access_token, refresh_token = await service.authenticate(request.email, request.password)
+    except PermissionError as exc:
+        raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, str(exc)) from exc
+    except ValueError as exc:
+        raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, str(exc)) from exc
 
-    if user is None or not verify_password(request.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Incorrect email or password"),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=api_error(ErrorCode.ACCOUNT_LOCKED, "User account is disabled"),
-        )
-
-    # Update last login
-    user.last_login = datetime.now(timezone.utc).isoformat()
-    await db.commit()
-
-    # Generate tokens
-    access_token = _access_token_for_user(user)
-    refresh_token = create_refresh_token(subject=user.id)
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(request: RefreshTokenRequest, db: DbSession) -> TokenResponse:
     """Refresh access token using refresh token."""
-    payload = decode_token(request.refresh_token)
+    service = AuthService(db)
+    try:
+        access_token, new_refresh_token = await service.refresh_tokens(request.refresh_token)
+    except ValueError as exc:
+        message = str(exc)
+        code = ErrorCode.TOKEN_REVOKED if "revoked" in message.lower() else ErrorCode.TOKEN_EXPIRED
+        raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, code, message) from exc
 
-    if payload is None or payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid refresh token"),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid refresh token"),
-        )
-
-    # Verify user still exists and is active
-    result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
-    user = result.scalar_one_or_none()
-
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=api_error(ErrorCode.AUTHENTICATION_REQUIRED, "User not found or inactive"),
-        )
-
-    # Generate new tokens
-    access_token = _access_token_for_user(user)
-    new_refresh_token = create_refresh_token(subject=user.id)
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-    )
+    return TokenResponse(access_token=access_token, refresh_token=new_refresh_token)
 
 
 @router.get("/me", response_model=UserResponse)
@@ -284,15 +174,14 @@ async def change_password(
     db: DbSession,
 ) -> dict:
     """Change current user's password."""
-    if not verify_password(request.current_password, current_user.hashed_password):
+    service = AuthService(db)
+    try:
+        await service.change_password(current_user, request.current_password, request.new_password)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.INVALID_CREDENTIALS, "Incorrect current password"),
-        )
-
-    current_user.hashed_password = get_password_hash(request.new_password)
-    await db.commit()
-
+            detail=api_error(ErrorCode.INVALID_CREDENTIALS, str(exc)),
+        ) from exc
     return {"message": "Password changed successfully"}
 
 
@@ -314,31 +203,8 @@ async def request_password_reset(
         - Token expires in 1 hour
         - Email is masked in logs
     """
-    # Find user by email
-    result = await db.execute(select(User).where(User.email == request.email.lower()))
-    user = result.scalar_one_or_none()
-
-    if user is not None and user.is_active:
-        # Generate password reset token
-        reset_token = create_password_reset_token(user.id)
-
-        from src.core.config import settings
-
-        reset_url = f"{settings.frontend_url}/reset-password?token={reset_token}"
-
-        # Send password reset email
-        try:
-            await email_service.send_password_reset_email(
-                to=user.email,
-                reset_url=reset_url,
-                user_name=user.first_name or user.email.split("@")[0],
-            )
-            # Mask email for logging (show first 3 chars and domain)
-            masked_email = user.email[:3] + "***@" + user.email.split("@")[1]
-            logger.info(f"Password reset email sent to {masked_email}")
-        except Exception as e:
-            # Log error but don't reveal to user
-            logger.error(f"Failed to send password reset email: {e}")
+    service = AuthService(db)
+    await service.request_password_reset(request.email)
 
     # Always return success to prevent email enumeration
     return {"message": "If an account with that email exists, a password reset link has been sent."}
@@ -357,29 +223,12 @@ async def confirm_password_reset(
         - Token must be of type 'password_reset'
         - User must exist and be active
     """
-    # Verify the reset token
-    user_id = verify_password_reset_token(request.token)
-
-    if user_id is None:
+    service = AuthService(db)
+    try:
+        await service.confirm_password_reset(request.token, request.new_password)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid or expired password reset token"),
-        )
-
-    # Find user
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.TOKEN_EXPIRED, "Invalid or expired password reset token"),
-        )
-
-    # Update password
-    user.hashed_password = get_password_hash(request.new_password)
-    await db.commit()
-
-    logger.info(f"Password reset successful for user ID {user_id}")
-
+            detail=api_error(ErrorCode.TOKEN_EXPIRED, str(exc)),
+        ) from exc
     return {"message": "Password has been reset successfully"}

@@ -119,6 +119,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     if (hash && hash.includes('id_token')) {
       const params = new URLSearchParams(hash.substring(1))
       const idToken = params.get('id_token')
+      const state = params.get('state')
       const errorParam = params.get('error')
       const errorDesc = params.get('error_description')
 
@@ -126,6 +127,15 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
         console.error('OAuth error:', errorParam, errorDesc)
         setError(errorDesc || 'Authentication failed')
         // Clear the hash
+        window.history.replaceState(null, '', window.location.pathname)
+        return false
+      }
+
+      const expectedState = sessionStorage.getItem('oauth_state')
+      sessionStorage.removeItem('oauth_state')
+      sessionStorage.removeItem('oauth_nonce')
+      if (!state || !expectedState || state !== expectedState) {
+        setError('Authentication state could not be verified. Please sign in again.')
         window.history.replaceState(null, '', window.location.pathname)
         return false
       }
@@ -259,8 +269,8 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
       }
 
       // Generate state and nonce for security
-      const state = Math.random().toString(36).substring(7)
-      const nonce = Math.random().toString(36).substring(7)
+      const state = crypto.randomUUID()
+      const nonce = crypto.randomUUID()
 
       // Store state for validation on return
       sessionStorage.setItem('oauth_state', state)

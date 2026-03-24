@@ -2,9 +2,12 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from uuid import uuid4
 
 import jwt
 from passlib.context import CryptContext
+from passlib.exc import InvalidHashError, UnknownHashError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 
@@ -42,7 +45,12 @@ def build_access_token_claims(*, is_superuser: bool = False, roles: list[str] | 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against a hashed password."""
-    return bool(pwd_context.verify(plain_password, hashed_password))
+    if not hashed_password:
+        return False
+    try:
+        return bool(pwd_context.verify(plain_password, hashed_password))
+    except (InvalidHashError, UnknownHashError, ValueError):
+        return False
 
 
 def get_password_hash(password: str) -> str:
@@ -66,6 +74,7 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "access",
+        "jti": str(uuid4()),
     }
 
     if additional_claims:
@@ -88,6 +97,7 @@ def create_refresh_token(subject: str | Any) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "refresh",
+        "jti": str(uuid4()),
     }
 
     encoded_jwt = jwt.encode(
@@ -129,6 +139,7 @@ def create_password_reset_token(user_id: int, expires_hours: int = 1) -> str:
         "exp": expire,
         "iat": datetime.now(timezone.utc),
         "type": "password_reset",
+        "jti": str(uuid4()),
     }
 
     encoded_jwt = jwt.encode(
@@ -168,3 +179,10 @@ def verify_password_reset_token(token: str) -> Optional[int]:
         return int(user_id_str)
     except (jwt.PyJWTError, ValueError):
         return None
+
+
+async def is_token_revoked(jti: str, db: AsyncSession) -> bool:
+    """Check whether a token identifier has been revoked."""
+    from src.domain.services.token_service import TokenService
+
+    return await TokenService.is_revoked(db, jti)

@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -19,9 +20,29 @@ from src.api.schemas.user import (
 )
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
+from src.domain.services.feature_flag_service import FeatureFlagService
 from src.domain.models.user import Role, User
 
 router = APIRouter()
+USER_MANAGEMENT_FLAG_KEY = "admin_user_management"
+
+
+async def _active_superuser_count(db: DbSession) -> int:
+    count = await db.scalar(select(func.count()).select_from(User).where(User.is_superuser == True, User.is_active == True))  # noqa: E712
+    return int(count or 0)
+
+
+async def _ensure_user_management_enabled(db: DbSession) -> None:
+    service = FeatureFlagService(db)
+    try:
+        flag = await service._get_flag(USER_MANAGEMENT_FLAG_KEY)
+    except (OperationalError, ProgrammingError):
+        return
+    if flag is not None and not flag.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.CONFIGURATION_ERROR, "User management is currently unavailable"),
+        )
 
 
 # ============== User Endpoints ==============
@@ -72,6 +93,7 @@ async def list_users(
     is_active: Optional[bool] = None,
 ) -> UserListResponse:
     """List all users with pagination and filtering."""
+    await _ensure_user_management_enabled(db)
     # Build query
     query = select(User).options(selectinload(User.roles))
 
@@ -115,23 +137,34 @@ async def create_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Create a new user (superuser only)."""
+    await _ensure_user_management_enabled(db)
     # Check if email already exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    normalized_email = user_data.email.lower()
+    result = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=api_error(ErrorCode.DUPLICATE_ENTITY, "Email already registered"),
         )
 
+    if user_data.auth_provider == "local" and not user_data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Password is required for local accounts"),
+        )
+
     # Create user
     user = User(
-        email=user_data.email,
-        hashed_password=get_password_hash(user_data.password),
+        email=normalized_email,
+        hashed_password=get_password_hash(user_data.password) if user_data.password else "",
         first_name=user_data.first_name,
         last_name=user_data.last_name,
         job_title=user_data.job_title,
         department=user_data.department,
         phone=user_data.phone,
+        is_active=user_data.is_active,
+        is_superuser=user_data.is_superuser,
+        tenant_id=user_data.tenant_id,
     )
 
     # Assign roles if provided
@@ -154,6 +187,13 @@ async def get_user(
     current_user: CurrentUser,
 ) -> UserResponse:
     """Get a specific user by ID."""
+    await _ensure_user_management_enabled(db)
+    if current_user.id != user_id and not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=api_error(ErrorCode.PERMISSION_DENIED, "Not enough permissions to view this user"),
+        )
+
     result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
@@ -174,6 +214,7 @@ async def update_user(
     current_user: CurrentSuperuser,
 ) -> UserResponse:
     """Update a user (superuser only)."""
+    await _ensure_user_management_enabled(db)
     result = await db.execute(select(User).options(selectinload(User.roles)).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
@@ -182,6 +223,9 @@ async def update_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "User not found"),
         )
+
+    previous_is_superuser = user.is_superuser
+    previous_is_active = user.is_active
 
     # Update fields
     update_data = user_data.model_dump(exclude_unset=True)
@@ -197,6 +241,29 @@ async def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
 
+    if user.id == current_user.id and user.is_superuser is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "Cannot remove your own superuser access"),
+        )
+
+    if user.id == current_user.id and user.is_active is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "Cannot deactivate your own account"),
+        )
+
+    if (
+        previous_is_superuser
+        and previous_is_active
+        and (not user.is_superuser or not user.is_active)
+        and await _active_superuser_count(db) <= 1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "At least one active superuser must remain"),
+        )
+
     await db.commit()
     await db.refresh(user)
 
@@ -210,6 +277,7 @@ async def delete_user(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a user (superuser only)."""
+    await _ensure_user_management_enabled(db)
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
@@ -225,6 +293,12 @@ async def delete_user(
             detail=api_error(ErrorCode.VALIDATION_ERROR, "Cannot delete your own account"),
         )
 
+    if user.is_superuser and await _active_superuser_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, "At least one active superuser must remain"),
+        )
+
     user.is_active = False
     await db.commit()
 
@@ -238,6 +312,7 @@ async def list_roles(
     current_user: CurrentUser,
 ) -> list[RoleResponse]:
     """List all roles."""
+    await _ensure_user_management_enabled(db)
     result = await db.execute(select(Role).order_by(Role.name))
     roles = result.scalars().all()
     return [RoleResponse.model_validate(r) for r in roles]
@@ -250,6 +325,7 @@ async def create_role(
     current_user: CurrentSuperuser,
 ) -> RoleResponse:
     """Create a new role (superuser only)."""
+    await _ensure_user_management_enabled(db)
     # Check if role name already exists
     result = await db.execute(select(Role).where(Role.name == role_data.name))
     if result.scalar_one_or_none():
@@ -274,6 +350,7 @@ async def update_role(
     current_user: CurrentSuperuser,
 ) -> RoleResponse:
     """Update a role (superuser only)."""
+    await _ensure_user_management_enabled(db)
     result = await db.execute(select(Role).where(Role.id == role_id))
     role = result.scalar_one_or_none()
 

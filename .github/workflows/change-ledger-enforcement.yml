@@ -1,0 +1,66 @@
+name: Change Ledger Enforcement
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+jobs:
+  enforce-change-ledger:
+    name: Enforce PR Change Ledger + Gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR description contains required sections
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = (pr.body || "").toLowerCase();
+
+            const required = [
+              "change ledger",
+              "summary",
+              "impact map",
+              "compatibility",
+              "acceptance criteria",
+              "testing evidence",
+              "critical journeys",
+              "observability",
+              "release plan",
+              "rollback plan",
+              "evidence pack",
+              "gate checklist"
+            ];
+
+            const missing = required.filter(k => !body.includes(k));
+            if (missing.length) {
+              core.setFailed(`Missing required PR sections: ${missing.join(", ")}`);
+              return;
+            }
+
+            const acMatches = body.match(/ac-\d+/g) || [];
+            if (acMatches.length < 3) {
+              core.setFailed("Acceptance Criteria: include at least AC-01, AC-02, AC-03.");
+              return;
+            }
+
+            const cujMatches = body.match(/cuj-\d+/g) || [];
+            if (cujMatches.length < 2) {
+              core.setFailed("Critical Journeys: include at least CUJ-01 and CUJ-02.");
+              return;
+            }
+
+            const gateMatches = body.match(/gate\s[0-5]/g) || [];
+            if (gateMatches.length < 4) {
+              core.setFailed("Gate checklist appears missing/incomplete (Gate 0–5).");
+              return;
+            }
+
+            // Require rollback owner and steps to be non-empty (heuristic)
+            if (body.includes("rollback steps:") && body.trim().endsWith("rollback steps:")) {
+              core.setFailed("Rollback steps appear empty.");
+              return;
+            }
+            if (body.includes("owner:") && body.trim().endsWith("owner:")) {
+              core.setFailed("Rollback owner appears empty.");
+              return;
+            }
+
+            core.info("Change Ledger checks passed.");

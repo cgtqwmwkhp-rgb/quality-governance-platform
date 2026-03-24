@@ -9,7 +9,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -49,11 +49,44 @@ def _access_token_for_user(user: User) -> str:
     )
 
 
+def _mask_email(email: str) -> str:
+    local, _, domain = email.partition("@")
+    return f"{local[:3]}***@{domain or '***'}"
+
+
 class AuthService:
     """Handles authentication, token lifecycle, and password management."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_user_by_email(self, email: str) -> User | None:
+        result = await self.db.execute(
+            select(User)
+            .where(func.lower(User.email) == email.lower())
+            .options(selectinload(User.roles))
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_user_by_azure_oid(self, azure_oid: str | None) -> User | None:
+        if not azure_oid:
+            return None
+        result = await self.db.execute(
+            select(User).where(User.azure_oid == azure_oid).options(selectinload(User.roles))
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _split_name(name: str | None, email: str) -> tuple[str, str]:
+        parts = (name or email.split("@")[0]).strip().split(" ", 1)
+        first_name = parts[0] if parts and parts[0] else "User"
+        last_name = parts[1] if len(parts) > 1 else ""
+        return first_name, last_name
+
+    async def _stamp_last_login(self, user: User) -> None:
+        user.last_login = datetime.now(timezone.utc).isoformat()
+        await self.db.commit()
+        await self.db.refresh(user)
 
     async def authenticate(self, email: str, password: str) -> tuple[User, str, str]:
         """Authenticate user with email/password credentials.
@@ -81,8 +114,7 @@ class AuthService:
                 f"Try again in {unlock_in} seconds."
             )
 
-        result = await self.db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
-        user = result.scalar_one_or_none()
+        user = await self._get_user_by_email(normalized_email)
 
         if user is None or not verify_password(password, user.hashed_password):
             _failed_login_attempts.setdefault(normalized_email, []).append(now)
@@ -93,8 +125,7 @@ class AuthService:
 
         _failed_login_attempts.pop(normalized_email, None)
 
-        user.last_login = datetime.now(timezone.utc).isoformat()
-        await self.db.commit()
+        await self._stamp_last_login(user)
 
         access_token = _access_token_for_user(user)
         refresh_token = create_refresh_token(subject=user.id)
@@ -278,14 +309,23 @@ class AuthService:
 
         email = user_info["email"].lower()
         azure_oid = user_info.get("oid")
-
-        result = await self.db.execute(select(User).where(User.email == email).options(selectinload(User.roles)))
-        user = result.scalar_one_or_none()
+        user = await self._get_user_by_azure_oid(azure_oid)
 
         if user is None:
-            name_parts = (user_info.get("name") or email.split("@")[0]).split(" ", 1)
-            first_name = name_parts[0] if name_parts else "User"
-            last_name = name_parts[1] if len(name_parts) > 1 else ""
+            user = await self._get_user_by_email(email)
+            if user is not None and azure_oid and user.azure_oid and user.azure_oid != azure_oid:
+                logger.warning(
+                    "Azure identity conflict for %s",
+                    _mask_email(email),
+                    extra={
+                        "existing_azure_oid": user.azure_oid,
+                        "incoming_azure_oid": azure_oid,
+                    },
+                )
+                raise PermissionError("Microsoft identity conflict detected for this account")
+
+        if user is None:
+            first_name, last_name = self._split_name(user_info.get("name"), email)
 
             user = User(
                 email=email,
@@ -297,21 +337,30 @@ class AuthService:
                 azure_oid=azure_oid,
                 department=user_info.get("department"),
                 job_title=user_info.get("job_title"),
+                last_login=datetime.now(timezone.utc).isoformat(),
             )
             self.db.add(user)
             await self.db.commit()
             await self.db.refresh(user)
-            logger.info(f"Created new user from Azure AD: {email}")
+            logger.info(
+                "Created new user from Azure AD",
+                extra={"email_masked": _mask_email(email), "azure_oid": azure_oid or "missing"},
+            )
         else:
             if not user.is_active:
                 raise PermissionError("User account is inactive")
 
-            if azure_oid and not user.azure_oid:
+            if azure_oid and user.azure_oid != azure_oid:
                 user.azure_oid = azure_oid
-                await self.db.commit()
+            if user.email != email:
+                user.email = email
+            first_name, last_name = self._split_name(user_info.get("name"), email)
+            user.first_name = first_name
+            user.last_name = last_name
+            user.department = user_info.get("department") or user.department
+            user.job_title = user_info.get("job_title") or user.job_title
 
-            user.last_login = datetime.now(timezone.utc).isoformat()
-            await self.db.commit()
+            await self._stamp_last_login(user)
 
         access_token = _access_token_for_user(user)
         refresh_token = create_refresh_token(subject=user.id)

@@ -31,8 +31,9 @@ async def test_login_embeds_user_roles_in_access_token(monkeypatch):
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(user)),
         commit=AsyncMock(),
+        refresh=AsyncMock(),
     )
-    monkeypatch.setattr("src.api.routes.auth.verify_password", lambda _plain, _hashed: True)
+    monkeypatch.setattr("src.domain.services.auth_service.verify_password", lambda _plain, _hashed: True)
 
     response = await login(
         LoginRequest(email="david.harris@plantexpand.com", password="secret"),
@@ -58,6 +59,8 @@ async def test_refresh_embeds_superuser_admin_claim(monkeypatch):
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(user)),
     )
+    monkeypatch.setattr("src.domain.services.auth_service.is_token_revoked", AsyncMock(return_value=False))
+    monkeypatch.setattr("src.domain.services.auth_service.TokenService.revoke_token", AsyncMock())
 
     response = await refresh_access_token(
         RefreshTokenRequest(refresh_token=create_refresh_token(subject=42)),
@@ -81,15 +84,18 @@ async def test_token_exchange_embeds_existing_user_roles(monkeypatch):
         is_superuser=False,
         roles=[types.SimpleNamespace(name="admin"), types.SimpleNamespace(name="supervisor")],
         azure_oid="abc",
+        department=None,
+        job_title=None,
         last_login=None,
     )
     db = types.SimpleNamespace(
         execute=AsyncMock(return_value=_FakeResult(user)),
         commit=AsyncMock(),
+        refresh=AsyncMock(),
     )
-    monkeypatch.setattr("src.api.routes.auth.validate_azure_id_token", lambda _token: {"sub": "azure"})
+    monkeypatch.setattr("src.domain.services.auth_service.validate_azure_id_token", lambda _token: {"sub": "azure"})
     monkeypatch.setattr(
-        "src.api.routes.auth.extract_user_info_from_azure_token",
+        "src.domain.services.auth_service.extract_user_info_from_azure_token",
         lambda _payload: {"email": "david.harris@plantexpand.com", "oid": "abc", "name": "David Harris"},
     )
 

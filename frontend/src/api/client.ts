@@ -2333,6 +2333,8 @@ export interface UserDetail {
   is_active: boolean
   is_superuser: boolean
   last_login?: string
+  azure_oid?: string | null
+  tenant_id?: number | null
   created_at: string
   roles: RoleDetail[]
 }
@@ -2341,28 +2343,35 @@ export interface RoleDetail {
   id: number
   name: string
   description?: string
-  permissions: string[]
+  permissions?: string | null
   is_system_role: boolean
 }
 
 export interface UserCreatePayload {
   email: string
-  password: string
+  auth_provider?: 'microsoft_sso' | 'local'
+  password?: string
   first_name: string
   last_name: string
   department?: string
   phone?: string
   job_title?: string
+  is_active?: boolean
+  is_superuser?: boolean
+  tenant_id?: number | null
   role_ids?: number[]
 }
 
 export interface UserUpdatePayload {
+  email?: string
   first_name?: string
   last_name?: string
   department?: string
   phone?: string
   job_title?: string
   is_active?: boolean
+  is_superuser?: boolean
+  tenant_id?: number | null
   role_ids?: number[]
 }
 
@@ -2400,8 +2409,8 @@ export const usersApi = {
   update: (id: number, data: UserUpdatePayload) =>
     api.patch<UserDetail>(`/api/v1/users/${id}`, data),
   delete: (id: number) => api.delete<void>(`/api/v1/users/${id}`),
-  listRoles: () => api.get<RoleDetail[]>('/api/v1/users/roles'),
-  createRole: (data: RoleCreatePayload) => api.post<RoleDetail>('/api/v1/users/roles', data),
+  listRoles: () => api.get<RoleDetail[]>('/api/v1/users/roles/'),
+  createRole: (data: RoleCreatePayload) => api.post<RoleDetail>('/api/v1/users/roles/', data),
   updateRole: (id: number, data: RoleUpdatePayload) =>
     api.patch<RoleDetail>(`/api/v1/users/roles/${id}`, data),
 }
