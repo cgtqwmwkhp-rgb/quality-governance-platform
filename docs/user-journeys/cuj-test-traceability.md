@@ -47,6 +47,6 @@
 
 ## Follow-up actions
 
-1. Add **CUJ-02**, **CUJ-03**, **CUJ-05–CUJ-07**, **CUJ-06** targeted tests (E2E or UAT) with stable API contracts.  
+1. Add **CUJ-02**, **CUJ-03**, **CUJ-05–CUJ-07**, **CUJ-06** targeted tests (E2E or UAT) with stable API contracts, including the expanded runner-sheet flows for incidents, complaints, and near misses.  
 2. Remove or update **404-tolerant** assertions on RTA portal routes once `/api/v1/portal/rta` is final.  
 3. Re-baseline E2E counts in `docs/evidence/e2e_baseline.json` after new CUJ tests land.

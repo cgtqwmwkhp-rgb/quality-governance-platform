@@ -26,6 +26,7 @@ import {
   Incident,
   IncidentUpdate,
   Investigation,
+  RunningSheetEntry,
   investigationsApi,
   actionsApi,
   Action,
@@ -57,6 +58,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { SubmissionSections } from '../components/case/SubmissionSections'
+import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import {
   buildIncidentSubmissionSections,
   getSubmissionPhotoSummary,
@@ -111,6 +113,9 @@ export default function IncidentDetail() {
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [runningSheet, setRunningSheet] = useState<RunningSheetEntry[]>([])
+  const [newEntry, setNewEntry] = useState('')
+  const [addingEntry, setAddingEntry] = useState(false)
 
   // Completion dialog state
   const [showCompletionDialog, setShowCompletionDialog] = useState(false)
@@ -164,6 +169,7 @@ export default function IncidentDetail() {
       })
       loadActions()
       loadInvestigations(incidentId)
+      loadRunningSheet(incidentId)
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadIncident' })
       setError(t('incidents.detail.failed_to_load'))
@@ -188,6 +194,15 @@ export default function IncidentDetail() {
       setInvestigations(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'IncidentDetail', action: 'loadInvestigations' })
+    }
+  }
+
+  const loadRunningSheet = async (incidentId: number) => {
+    try {
+      const response = await incidentsApi.listRunningSheet(incidentId)
+      setRunningSheet(response.data)
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'loadRunningSheet' })
     }
   }
 
@@ -218,6 +233,32 @@ export default function IncidentDetail() {
       })
     }
     setIsEditing(false)
+  }
+
+  const handleAddEntry = async () => {
+    if (!incident || !newEntry.trim()) return
+    setAddingEntry(true)
+    try {
+      await incidentsApi.addRunningSheetEntry(incident.id, { content: newEntry.trim() })
+      setNewEntry('')
+      loadRunningSheet(incident.id)
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'addRunningSheetEntry' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setAddingEntry(false)
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: number) => {
+    if (!incident) return
+    try {
+      await incidentsApi.deleteRunningSheetEntry(incident.id, entryId)
+      loadRunningSheet(incident.id)
+    } catch (err) {
+      trackError(err, { component: 'IncidentDetail', action: 'deleteRunningSheetEntry' })
+      toast.error(getApiErrorMessage(err))
+    }
   }
 
   const [investigationError, setInvestigationError] = useState('')
@@ -547,6 +588,7 @@ export default function IncidentDetail() {
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
+          <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -976,6 +1018,24 @@ export default function IncidentDetail() {
           <SubmissionSections
             sections={incidentSubmissionSections}
             emptyMessage="No preserved reporter submission is available for this incident yet."
+          />
+        </TabsContent>
+
+        <TabsContent value="running-sheet" className="mt-6">
+          <RunningSheetPanel
+            entries={runningSheet}
+            newEntry={newEntry}
+            addingEntry={addingEntry}
+            title={t('common.running_sheet', 'Running Sheet')}
+            placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
+            emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
+            emptyDescription={t(
+              'incidents.detail.running_sheet_empty_description',
+              'Add notes to build the incident narrative over time',
+            )}
+            onNewEntryChange={setNewEntry}
+            onAddEntry={handleAddEntry}
+            onDeleteEntry={handleDeleteEntry}
           />
         </TabsContent>
       </Tabs>

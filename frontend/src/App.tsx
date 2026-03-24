@@ -14,6 +14,8 @@ import { useFeatureFlag } from './hooks/useFeatureFlag'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
 const IncidentDetail = lazy(() => import('./pages/IncidentDetail'))
+const NearMisses = lazy(() => import('./pages/NearMisses'))
+const NearMissDetail = lazy(() => import('./pages/NearMissDetail'))
 const RTAs = lazy(() => import('./pages/RTAs'))
 const RTADetail = lazy(() => import('./pages/RTADetail'))
 const Complaints = lazy(() => import('./pages/Complaints'))
@@ -262,6 +264,8 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="incidents" element={<Incidents />} />
                 <Route path="incidents/:id" element={<IncidentDetail />} />
+                <Route path="near-misses" element={<NearMisses />} />
+                <Route path="near-misses/:id" element={<NearMissDetail />} />
                 <Route path="rtas" element={<RTAs />} />
                 <Route path="rtas/:id" element={<RTADetail />} />
                 <Route path="complaints" element={<Complaints />} />

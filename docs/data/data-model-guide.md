@@ -51,6 +51,9 @@ The following table lists the primary domain models requested for governance cov
 | **RoadTrafficCollision** | `RoadTrafficCollision` | `road_traffic_collisions` | RTA / vehicle collision records |
 | **RTAAction** | `RTAAction` | `rta_actions` | Actions linked to an RTA |
 | **RunningSheetEntry** | `RunningSheetEntry` | `rta_running_sheet_entries` | Chronological RTA running-sheet notes |
+| **IncidentRunningSheetEntry** | `IncidentRunningSheetEntry` | `incident_running_sheet_entries` | Chronological incident running-sheet notes |
+| **ComplaintRunningSheetEntry** | `ComplaintRunningSheetEntry` | `complaint_running_sheet_entries` | Chronological complaint running-sheet notes |
+| **NearMissRunningSheetEntry** | `NearMissRunningSheetEntry` | `near_miss_running_sheet_entries` | Chronological near-miss running-sheet notes |
 | **Investigation** | `InvestigationRun` | `investigation_runs` | Template-based investigations (domain name “Investigation”) |
 | **InvestigationAction** | — | — | No dedicated `investigation_actions` table; investigation activity is captured via `investigation_comments`, `investigation_revision_events`, and actions on the linked source entity |
 | **CAPAAction** | — | — | CAPA-style work is represented by corrective/preventive **actions** on incidents, complaints, and RTAs (`incident_actions`, `complaint_actions`, `rta_actions`) and corrective-action fields on `audit_findings` |
@@ -83,6 +86,9 @@ Representative cardinality and foreign keys (not exhaustive):
 | **Complaint** → **ComplaintAction** | `complaints.id` | `complaint_actions.complaint_id` (**1 : many**, `ON DELETE CASCADE`) |
 | **RoadTrafficCollision** → **RTAAction** | `road_traffic_collisions.id` | `rta_actions.rta_id` (**1 : many**, `ON DELETE CASCADE`) |
 | **RoadTrafficCollision** → **RunningSheetEntry** | `road_traffic_collisions.id` | `rta_running_sheet_entries.rta_id` (**1 : many**, `ON DELETE CASCADE`) |
+| **Incident** → **IncidentRunningSheetEntry** | `incidents.id` | `incident_running_sheet_entries.incident_id` (**1 : many**, `ON DELETE CASCADE`) |
+| **Complaint** → **ComplaintRunningSheetEntry** | `complaints.id` | `complaint_running_sheet_entries.complaint_id` (**1 : many**, `ON DELETE CASCADE`) |
+| **NearMiss** → **NearMissRunningSheetEntry** | `near_misses.id` | `near_miss_running_sheet_entries.near_miss_id` (**1 : many**, `ON DELETE CASCADE`) |
 | **User** → **RunningSheetEntry** | `users.id` | `rta_running_sheet_entries.author_id` |
 | **AuditTemplate** → **AuditRun** | `audit_templates.id` | `audit_runs.template_id` (**1 : many**) |
 | **AuditRun** → **AuditFinding** | `audit_runs.id` | `audit_findings.run_id` (**1 : many**, `ON DELETE CASCADE`) |
@@ -153,7 +159,7 @@ Patterns observed across key tables; always confirm against the latest Alembic r
 
 ### Foreign keys and `ON DELETE` policies (examples)
 
-- **CASCADE**: child actions (`incident_actions`, `complaint_actions`, `rta_actions`, `rta_running_sheet_entries`) when parent case is removed; template children (`audit_sections`, `audit_questions`, `clauses`, `policy_versions`) where declared.  
+- **CASCADE**: child actions (`incident_actions`, `complaint_actions`, `rta_actions`) and runner-sheet tables (`incident_running_sheet_entries`, `complaint_running_sheet_entries`, `near_miss_running_sheet_entries`, `rta_running_sheet_entries`) when parent case is removed; template children (`audit_sections`, `audit_questions`, `clauses`, `policy_versions`) where declared.  
 - **SET NULL**: nullable links (e.g. `clauses.parent_clause_id`, `vehicle_registry.asset_id`, `driver_profiles.allocated_vehicle_reg`) where the parent may disappear but the row should remain.
 
 ### Check / server constraints

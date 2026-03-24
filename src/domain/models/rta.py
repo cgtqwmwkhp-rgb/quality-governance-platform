@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
@@ -206,8 +206,13 @@ class RunningSheetEntry(Base, TimestampMixin):
     """
 
     __tablename__ = "rta_running_sheet_entries"
+    __data_classification__ = DataClassification.C4_RESTRICTED
+    __table_args__ = (
+        Index("ix_rta_running_sheet_tenant_rta", "tenant_id", "rta_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     rta_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"),

@@ -3,9 +3,10 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.domain.models.base import DataClassification, TimestampMixin
 from src.infrastructure.database import Base
 
 
@@ -98,3 +99,26 @@ class NearMiss(Base):
 
     def __repr__(self) -> str:
         return f"<NearMiss(id={self.id}, ref={self.reference_number}, status={self.status})>"
+
+
+class NearMissRunningSheetEntry(Base, TimestampMixin):
+    """Timestamped runner-sheet entry for a near miss."""
+
+    __tablename__ = "near_miss_running_sheet_entries"
+    __data_classification__ = DataClassification.C4_RESTRICTED
+    __table_args__ = (
+        Index("ix_nm_run_sheet_tenant_near_miss", "tenant_id", "near_miss_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    near_miss_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("near_misses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    entry_type: Mapped[str] = mapped_column(String(50), nullable=False, default="note")
+    author_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
