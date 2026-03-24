@@ -164,6 +164,7 @@ class TestReadYourWritesGuarantee:
                 last_name="User",
                 hashed_password="not-used",
                 is_active=True,
+                tenant_id=1,
             )
             session.add(user)
             await session.commit()
