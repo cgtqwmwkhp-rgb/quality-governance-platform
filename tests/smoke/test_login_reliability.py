@@ -135,9 +135,10 @@ class TestLoginErrorCodes:
 
     def test_401_response_has_proper_structure(self, client):
         """401 response should have bounded error structure."""
+        submitted_password = "WrongPass1!"
         response = client.post(
             "/api/v1/auth/login",
-            json={"email": "test@example.com", "password": "WrongPass1!"},
+            json={"email": "test@example.com", "password": submitted_password},
         )
 
         assert response.status_code == 401
@@ -151,7 +152,7 @@ class TestLoginErrorCodes:
 
         # Must NOT contain PII
         response_str = str(data).lower()
-        assert "password" not in response_str or "incorrect" in response_str, "Response should not echo password"
+        assert submitted_password.lower() not in response_str, "Response should not echo submitted password"
 
     def test_missing_fields_returns_422(self, client):
         """Missing required fields should return 422 with details."""

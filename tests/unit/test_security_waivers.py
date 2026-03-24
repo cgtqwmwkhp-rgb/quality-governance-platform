@@ -1,9 +1,6 @@
 from datetime import datetime
 
-from scripts.validate_security_waivers import (
-    build_pip_audit_ignore_args,
-    get_active_waiver_ids,
-)
+from scripts.validate_security_waivers import build_pip_audit_ignore_args, get_active_waiver_ids
 
 
 def test_get_active_waiver_ids_filters_expired_entries():
