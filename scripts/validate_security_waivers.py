@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
-"""
-Security Waiver Validation Script
+"""Validate security waivers and emit active pip-audit ignore args."""
 
-This script enforces the SECURITY_WAIVERS policy by:
-1. Running pip-audit to detect vulnerabilities
-2. Parsing docs/SECURITY_WAIVERS.md to extract waived CVEs and expiry dates
-3. Failing if any vulnerability is found that is not waived or has an expired waiver
-4. Providing clear output for CI logs
-
-This makes security scans a blocking gate with controlled, time-boxed exceptions.
-"""
-
+import argparse
 import json
 import re
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional
 
 
 def run_pip_audit() -> List[Dict]:
@@ -99,10 +90,41 @@ def parse_waivers(waiver_file: Path) -> Dict[str, datetime]:
     return waivers
 
 
-def main():
+def get_active_waiver_ids(waivers: Dict[str, datetime], now: Optional[datetime] = None) -> List[str]:
+    """Return non-expired waiver IDs sorted for stable output."""
+    current_time = now or datetime.now()
+    return sorted(cve_id for cve_id, expiry in waivers.items() if current_time <= expiry)
+
+
+def build_pip_audit_ignore_args(waivers: Dict[str, datetime], now: Optional[datetime] = None) -> List[str]:
+    """Build pip-audit ignore args from active waiver IDs."""
+    args: List[str] = []
+    for cve_id in get_active_waiver_ids(waivers, now=now):
+        args.extend(["--ignore-vuln", cve_id])
+    return args
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(description="Validate security waivers and pip-audit ignores")
+    parser.add_argument(
+        "--emit-pip-audit-args",
+        action="store_true",
+        help="Print active pip-audit ignore args and exit",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
     """Main validation logic."""
+    args = parse_args()
     repo_root = Path(__file__).parent.parent
     waiver_file = repo_root / "docs" / "SECURITY_WAIVERS.md"
+
+    if args.emit_pip_audit_args:
+        waivers = parse_waivers(waiver_file)
+        print(" ".join(build_pip_audit_ignore_args(waivers)))
+        return 0
 
     print("🔍 Running security waiver validation...")
     print()
@@ -114,7 +136,7 @@ def main():
     if not vulnerabilities:
         print("✅ No vulnerabilities detected by pip-audit")
         print()
-        sys.exit(0)
+        return 0
 
     print(f"⚠️  Found {len(vulnerabilities)} vulnerability/vulnerabilities")
     print()
@@ -130,7 +152,7 @@ def main():
         print("  1. Fixed by upgrading dependencies, OR")
         print("  2. Documented in docs/SECURITY_WAIVERS.md with expiry date")
         print()
-        sys.exit(1)
+        return 1
 
     print(f"✓ Found {len(waivers)} waived CVE(s)")
     print()
@@ -195,7 +217,7 @@ def main():
     if has_violations:
         print("❌ Security gate FAILED")
         print()
-        sys.exit(1)
+        return 1
 
     print("✅ Security waiver validation passed!")
     print()
@@ -204,8 +226,8 @@ def main():
     print(f"  - {len(waived_ok)} properly waived")
     print(f"  - 0 unwaived or expired")
     print()
-    sys.exit(0)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
