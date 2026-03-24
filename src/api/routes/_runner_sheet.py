@@ -15,7 +15,9 @@ def assert_can_delete_runner_sheet_entry(current_user, author_id: int | None, mo
     permission_names = (f"{module_name}:delete", *_DELETE_PERMISSION_FALLBACKS.get(module_name, ()))
     has_delete_permission = False
     if hasattr(current_user, "has_permission"):
-        has_delete_permission = any(current_user.has_permission(permission_name) for permission_name in permission_names)
+        has_delete_permission = any(
+            current_user.has_permission(permission_name) for permission_name in permission_names
+        )
 
     if is_superuser or is_author or has_delete_permission:
         return

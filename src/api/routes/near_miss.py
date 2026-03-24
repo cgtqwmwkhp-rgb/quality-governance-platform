@@ -285,7 +285,9 @@ async def list_near_miss_running_sheet_entries(
     else:
         query = query.where(NearMissRunningSheetEntry.tenant_id == near_miss.tenant_id)
 
-    result = await db.execute(query.order_by(NearMissRunningSheetEntry.created_at.desc(), NearMissRunningSheetEntry.id.asc()))
+    result = await db.execute(
+        query.order_by(NearMissRunningSheetEntry.created_at.desc(), NearMissRunningSheetEntry.id.asc())
+    )
     return result.scalars().all()
 
 

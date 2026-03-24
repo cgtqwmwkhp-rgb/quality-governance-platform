@@ -283,7 +283,9 @@ async def list_incident_running_sheet_entries(
     else:
         query = query.where(IncidentRunningSheetEntry.tenant_id == incident.tenant_id)
 
-    result = await db.execute(query.order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc()))
+    result = await db.execute(
+        query.order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc())
+    )
     return result.scalars().all()
 
 

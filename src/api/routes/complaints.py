@@ -331,7 +331,9 @@ async def list_complaint_running_sheet_entries(
     else:
         query = query.where(ComplaintRunningSheetEntry.tenant_id == complaint.tenant_id)
 
-    result = await db.execute(query.order_by(ComplaintRunningSheetEntry.created_at.desc(), ComplaintRunningSheetEntry.id.asc()))
+    result = await db.execute(
+        query.order_by(ComplaintRunningSheetEntry.created_at.desc(), ComplaintRunningSheetEntry.id.asc())
+    )
     return result.scalars().all()
 
 
