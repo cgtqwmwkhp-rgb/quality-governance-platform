@@ -4,6 +4,39 @@ This document tracks security vulnerabilities that have been reviewed and accept
 
 ## Active Waivers
 
+### CVE-2026-4539 (pygments 2.19.2)
+
+**Package**: `pygments` (transitive development dependency)
+
+**Vulnerability**: CVE-2026-4539 reported against `pygments` 2.19.2.
+
+**Severity**: Medium
+
+**Status**: **ACCEPTED WITH MITIGATION**
+
+**Rationale**:
+1. `pygments` is pulled in through developer tooling and documentation dependencies, not the production runtime dependency set.
+2. The production container installs `requirements.txt`/`requirements.lock`, while the vulnerable package is introduced through the CI `requirements-dev.txt` toolchain.
+3. There is no newer upstream `pygments` release available than 2.19.2, so an immediate package upgrade is not currently possible.
+
+**Mitigation**:
+- Keep the vulnerability explicitly documented and time-boxed through this waiver.
+- Continue validating that the production image installs runtime dependencies only.
+- Monitor upstream for a patched `pygments` release and upgrade immediately when available.
+
+**Alternative Considered**:
+- Pinning an older `pygments` release would not remediate the reported CVE and could destabilize the docs/tooling stack.
+
+**Owner**: Security Team
+
+**Review Date**: 2026-03-24
+
+**Expiry Date**: 2026-06-22 (90 days)
+
+**Action Required**: Upgrade `pygments` to a patched version when released, then remove this waiver.
+
+---
+
 ### CVE-2026-0994 (protobuf 6.33.4)
 
 **Package**: `protobuf` (transitive dependency)

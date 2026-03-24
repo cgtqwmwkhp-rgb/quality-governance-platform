@@ -515,7 +515,12 @@ jobs:
       - name: Dependency audit with pip-audit
         run: |
           echo "=== pip-audit: Dependency Vulnerability Check ==="
-          pip-audit --strict
+          IGNORE_ARGS="$(python3 scripts/validate_security_waivers.py --emit-pip-audit-args)"
+          if [ -n "$IGNORE_ARGS" ]; then
+            echo "Using active security waivers: $IGNORE_ARGS"
+          fi
+          # shellcheck disable=SC2086
+          pip-audit --strict $IGNORE_ARGS
           echo ""
           echo "[OK] pip-audit passed: No known vulnerabilities"
 
