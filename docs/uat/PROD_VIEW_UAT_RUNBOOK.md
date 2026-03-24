@@ -14,7 +14,7 @@ This runbook describes how to perform User Acceptance Testing (UAT) on the **pro
 
 | Feature | Default | Description |
 |---------|---------|-------------|
-| **UAT Mode** | `READ_ONLY` in production | Blocks all write operations by default |
+| **UAT Mode** | `READ_WRITE` in normal production | Production is fully operational by default; switch to `READ_ONLY` only for controlled view-only exercises or incident protection |
 | **Override Headers** | Required for writes | Explicit, audited override mechanism |
 | **Admin Allowlist** | Required | Only designated UAT admins can enable writes |
 | **Audit Logging** | Always | All write attempts logged (no payload/PII) |
@@ -52,15 +52,17 @@ curl -s https://${PROD_URL}/healthz
 curl -s https://${PROD_URL}/readyz
 ```
 
-### 3. UAT Mode Active
+### 3. UAT Mode Confirmed
 
-Production should have `UAT_MODE=READ_ONLY` environment variable set.
+For normal production operations, `UAT_MODE` should be set to `READ_WRITE`.
+
+Use `READ_ONLY` only when you intentionally want to freeze writes for controlled production-view UAT or emergency protection.
 
 ---
 
-## Read-Only UAT Flows (Safe by Default)
+## Read-Only UAT Flows (When Read-Only Is Intentionally Enabled)
 
-In read-only mode, testers can safely perform all **read operations**:
+If production is intentionally placed into read-only mode, testers can safely perform all **read operations**:
 
 ### What You CAN Do
 

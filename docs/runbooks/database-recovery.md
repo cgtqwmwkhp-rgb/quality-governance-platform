@@ -55,7 +55,7 @@
 4. If persistent: contact Azure Support (SEV-A ticket)
 
 ### 4.3 Point-in-Time Recovery (Data Loss/Corruption)
-1. **Stop writes**: Enable UAT_MODE=READ_ONLY in production environment variables
+1. **Stop writes**: Set UAT_MODE=READ_ONLY in production environment variables as a temporary protection control
 2. **Identify recovery point**: Determine the last known good timestamp
 3. **Azure PITR**: Azure Portal → PostgreSQL → Point-in-Time Restore
    - Select target timestamp (up to 35 days back)
@@ -63,7 +63,7 @@
 4. **Validate restored data**: Connect to restored instance; verify data integrity
 5. **Swap connection**: Update DATABASE_URL in Key Vault to point to restored instance
 6. **Restart application**: Deploy restart to pick up new connection string
-7. **Re-enable writes**: Set UAT_MODE=READ_WRITE
+7. **Re-enable writes**: Restore UAT_MODE=READ_WRITE for normal production operation
 
 ### 4.4 Migration Rollback
 1. Identify the problematic migration from `alembic history`
