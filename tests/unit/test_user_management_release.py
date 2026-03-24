@@ -6,11 +6,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import OperationalError
 
-from src.api.routes.users import (
-    _ensure_user_management_enabled,
-    create_user,
-    update_user,
-)
+from src.api.routes.users import _ensure_user_management_enabled, create_user, update_user
 from src.api.schemas.user import UserCreate, UserUpdate
 from src.domain.models.user import Role
 

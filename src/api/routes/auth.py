@@ -17,15 +17,14 @@ from src.api.schemas.auth import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
-from src.core.security import (
-    decode_token,
-)
+from src.core.security import decode_token
 from src.domain.services.auth_service import AuthService
 from src.domain.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
 
 def _auth_http_error(status_code: int, code: str, message: str) -> HTTPException:
     return HTTPException(

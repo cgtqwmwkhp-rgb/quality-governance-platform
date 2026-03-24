@@ -62,9 +62,7 @@ class AuthService:
 
     async def _get_user_by_email(self, email: str) -> User | None:
         result = await self.db.execute(
-            select(User)
-            .where(func.lower(User.email) == email.lower())
-            .options(selectinload(User.roles))
+            select(User).where(func.lower(User.email) == email.lower()).options(selectinload(User.roles))
         )
         return result.scalar_one_or_none()
 

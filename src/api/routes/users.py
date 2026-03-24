@@ -20,15 +20,17 @@ from src.api.schemas.user import (
 )
 from src.api.utils.errors import api_error
 from src.core.security import get_password_hash
-from src.domain.services.feature_flag_service import FeatureFlagService
 from src.domain.models.user import Role, User
+from src.domain.services.feature_flag_service import FeatureFlagService
 
 router = APIRouter()
 USER_MANAGEMENT_FLAG_KEY = "admin_user_management"
 
 
 async def _active_superuser_count(db: DbSession) -> int:
-    count = await db.scalar(select(func.count()).select_from(User).where(User.is_superuser == True, User.is_active == True))  # noqa: E712
+    count = await db.scalar(
+        select(func.count()).select_from(User).where(User.is_superuser == True, User.is_active == True)
+    )  # noqa: E712
     return int(count or 0)
 
 

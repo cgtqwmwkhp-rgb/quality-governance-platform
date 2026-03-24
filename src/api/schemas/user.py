@@ -61,7 +61,7 @@ class UserCreate(UserBase):
     """Schema for creating a User."""
 
     auth_provider: Literal["microsoft_sso", "local"] = "microsoft_sso"
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
+    password: str = Field("", min_length=0, max_length=100)
     is_active: bool = True
     is_superuser: bool = False
     tenant_id: Optional[int] = None
@@ -96,7 +96,7 @@ class UserResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
-    full_name: str
+    full_name: Optional[str] = None
     job_title: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
@@ -108,6 +108,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     roles: List[RoleResponse] = []
+
 
 class UserListResponse(BaseModel):
     """Schema for paginated user list response."""
