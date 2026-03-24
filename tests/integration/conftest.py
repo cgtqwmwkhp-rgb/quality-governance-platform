@@ -19,13 +19,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 # Force test-mode DB engine settings (e.g., NullPool) during imports.
 os.environ.setdefault("TESTING", "1")
 
-from src.api.dependencies import get_current_user, security  # noqa: E402
+from src.api.dependencies import get_current_user, get_db, security  # noqa: E402
 from src.core.config import settings  # noqa: E402
 from src.core.security import decode_token  # noqa: E402
+from src.domain.models.user import User  # noqa: E402
 from src.main import app  # noqa: E402
 
 # Align with the application's JWT secret so decode_token() succeeds.
@@ -61,11 +63,13 @@ class _MockUser:
         is_superuser: bool = False,
         is_active: bool = True,
         tenant_id: int = 1,
+        first_name: str = "Test",
+        last_name: str = "User",
     ):
         self.id = user_id
         self.email = email
-        self.first_name = "Test"
-        self.last_name = "User"
+        self.first_name = first_name
+        self.last_name = last_name
         self.hashed_password = "unused"
         self.job_title = None
         self.department = None
@@ -185,7 +189,7 @@ def _generate_test_jwt(
     return jwt.encode(payload, TEST_JWT_SECRET, algorithm=TEST_JWT_ALGORITHM)
 
 
-def _mock_user_from_jwt(payload: dict) -> _MockUser:
+def _mock_user_from_jwt(payload: dict, db_user: object | None = None) -> _MockUser:
     """Build a ``_MockUser`` from decoded JWT claims."""
     role = payload.get("role", "viewer")
     is_superuser = payload.get("is_superuser", False)
@@ -201,13 +205,24 @@ def _mock_user_from_jwt(payload: dict) -> _MockUser:
         perms = _ADMIN_PERMS
     else:
         perms = _VIEWER_PERMS
+    user_id = int(payload.get("sub", "1"))
+    email = getattr(db_user, "email", f"{role}@test.example.com")
+    tenant_id = getattr(db_user, "tenant_id", payload.get("tenant_id", 1))
+    first_name = getattr(db_user, "first_name", "Test")
+    last_name = getattr(db_user, "last_name", "User")
+    is_active = getattr(db_user, "is_active", True)
+    effective_superuser = bool(getattr(db_user, "is_superuser", is_superuser) or is_superuser)
+
     return _MockUser(
-        user_id=int(payload.get("sub", "1")),
-        email=f"{role}@test.example.com",
+        user_id=user_id,
+        email=email,
         role_name=role,
         permissions=perms,
-        is_superuser=is_superuser,
-        tenant_id=payload.get("tenant_id", 1),
+        is_superuser=effective_superuser,
+        is_active=is_active,
+        tenant_id=tenant_id,
+        first_name=first_name,
+        last_name=last_name,
     )
 
 
@@ -218,6 +233,7 @@ def _mock_user_from_jwt(payload: dict) -> _MockUser:
 
 async def _test_get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
+    db=Depends(get_db),
 ) -> _MockUser:
     """Test-only override for ``get_current_user``.
 
@@ -235,6 +251,20 @@ async def _test_get_current_user(
         raise cred_exc
     if not payload.get("jti"):
         raise cred_exc
+
+    user_id_raw = payload.get("sub")
+    if user_id_raw is None:
+        raise cred_exc
+
+    from sqlalchemy.orm import selectinload
+
+    result = await db.execute(select(User).where(User.id == int(user_id_raw)).options(selectinload(User.roles)))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+        return _mock_user_from_jwt(payload, db_user=user)
+
     return _mock_user_from_jwt(payload)
 
 

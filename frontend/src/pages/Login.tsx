@@ -70,7 +70,7 @@ const SLOW_WARNING_MS = 3000 // Show "Still working..." after 3s
 // Note: REQUEST_TIMEOUT_MS (15000) is handled by the API client's AbortController
 
 interface LoginProps {
-  onLogin: (token: string) => void
+  onLogin: (token: string, refreshToken?: string) => void
 }
 
 // Telemetry wrappers (uses centralized service)
@@ -104,7 +104,9 @@ export default function Login({ onLogin }: LoginProps) {
   const slowWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Exchange Azure AD id_token for platform JWT
-  const exchangeToken = async (idToken: string): Promise<string | null> => {
+  const exchangeToken = async (
+    idToken: string,
+  ): Promise<{ accessToken: string; refreshToken?: string } | null> => {
     try {
       const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
         method: 'POST',
@@ -120,7 +122,10 @@ export default function Login({ onLogin }: LoginProps) {
       }
 
       const data = await response.json()
-      return data.access_token
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+      }
     } catch (err) {
       if (import.meta.env.DEV) console.error('[AdminAuth] Token exchange error:', err)
       return null
@@ -134,6 +139,7 @@ export default function Login({ onLogin }: LoginProps) {
       setSsoLoading(true)
       const params = new URLSearchParams(hash.substring(1))
       const idToken = params.get('id_token')
+      const state = params.get('state')
       const errorParam = params.get('error')
       const errorDesc = params.get('error_description')
 
@@ -146,14 +152,23 @@ export default function Login({ onLogin }: LoginProps) {
         return false
       }
 
-      if (idToken) {
-        const accessToken = await exchangeToken(idToken)
+      const expectedState = sessionStorage.getItem('oauth_state')
+      sessionStorage.removeItem('oauth_state')
+      sessionStorage.removeItem('oauth_nonce')
+      if (!state || !expectedState || state !== expectedState) {
+        setSsoError('Microsoft authentication state could not be verified. Please try again.')
+        setSsoLoading(false)
+        return false
+      }
 
-        if (accessToken) {
+      if (idToken) {
+        const tokens = await exchangeToken(idToken)
+
+        if (tokens) {
           const durationMs = Date.now() - (requestStartRef.current || Date.now())
           emitLoginTelemetry('success', durationMs)
           setLoginState('success')
-          onLogin(accessToken)
+          onLogin(tokens.accessToken, tokens.refreshToken)
           setSsoLoading(false)
           return true
         } else {
@@ -263,7 +278,7 @@ export default function Login({ onLogin }: LoginProps) {
 
       setLoginState('success')
       announce('Signed in successfully')
-      onLogin(response.data.access_token)
+      onLogin(response.data.access_token, response.data.refresh_token)
     } catch (err: unknown) {
       const code = classifyLoginError(err)
       const durationMs = Date.now() - requestStartRef.current

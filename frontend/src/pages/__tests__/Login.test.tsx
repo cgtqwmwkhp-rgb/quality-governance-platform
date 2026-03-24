@@ -94,7 +94,9 @@ describe('Login', () => {
 
   it('calls authApi.login and invokes onLogin on success', async () => {
     const { authApi } = await import('../../api/client')
-    vi.mocked(authApi.login).mockResolvedValueOnce({ data: { access_token: 'real-jwt-token' } })
+    vi.mocked(authApi.login).mockResolvedValueOnce({
+      data: { access_token: 'real-jwt-token', refresh_token: 'refresh-token' },
+    })
 
     const user = userEvent.setup()
     render(<Login onLogin={onLogin} />, { wrapper: Wrapper })
@@ -111,6 +113,6 @@ describe('Login', () => {
       expect(onLogin).toHaveBeenCalledOnce()
     })
 
-    expect(onLogin).toHaveBeenCalledWith('real-jwt-token')
+    expect(onLogin).toHaveBeenCalledWith('real-jwt-token', 'refresh-token')
   })
 })

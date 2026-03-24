@@ -18,6 +18,7 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   portal_offline_mode: false,
   admin_ai_copilot: false,
   advanced_analytics: false,
+  admin_user_management: true,
 }
 
 // Type for window augmentation

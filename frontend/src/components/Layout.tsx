@@ -43,7 +43,8 @@ import OfflineIndicator from './OfflineIndicator'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
-import { hasRole } from '../utils/auth'
+import { hasRole, isSuperuser } from '../utils/auth'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
 interface LayoutProps {
   onLogout: () => void
@@ -52,6 +53,8 @@ interface LayoutProps {
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
   const canAccessWorkforce = hasRole('admin', 'supervisor')
+  const canManageUsers = isSuperuser()
+  const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
 
   const navSections = [
     {
@@ -125,7 +128,9 @@ export default function Layout({ onLogout }: LayoutProps) {
     {
       title: t('nav.admin'),
       items: [
-        { path: '/users', icon: Users, label: t('nav.user_management') },
+        ...(canManageUsers && adminUserManagementEnabled
+          ? [{ path: '/admin/users', icon: Users, label: t('nav.user_management') }]
+          : []),
         { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
       ],
     },
@@ -208,7 +213,7 @@ export default function Layout({ onLogout }: LayoutProps) {
           </NavLink>
 
           <NavLink
-            to="/users"
+            to={canManageUsers && adminUserManagementEnabled ? '/admin/users' : '/dashboard'}
             className="p-2 text-muted-foreground hover:text-foreground hover:bg-surface rounded-lg transition-colors"
           >
             <Settings className="w-5 h-5" />

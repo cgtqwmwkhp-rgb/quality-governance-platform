@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 
 const hasRoleMock = vi.fn(() => true)
+const isSuperuserMock = vi.fn(() => true)
+const useFeatureFlagMock = vi.fn(() => true)
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -24,6 +26,11 @@ vi.mock('../../config/apiBase', () => ({
 
 vi.mock('../../utils/auth', () => ({
   hasRole: (...roles: string[]) => hasRoleMock(...roles),
+  isSuperuser: () => isSuperuserMock(),
+}))
+
+vi.mock('../../hooks/useFeatureFlag', () => ({
+  useFeatureFlag: (flagName: string) => useFeatureFlagMock(flagName),
 }))
 
 vi.mock('../copilot/AICopilot', () => ({
@@ -45,6 +52,10 @@ describe('Layout', () => {
     onLogout.mockClear()
     hasRoleMock.mockReset()
     hasRoleMock.mockReturnValue(true)
+    isSuperuserMock.mockReset()
+    isSuperuserMock.mockReturnValue(true)
+    useFeatureFlagMock.mockReset()
+    useFeatureFlagMock.mockReturnValue(true)
   })
 
   it('renders navigation sidebar with nav sections', async () => {
@@ -88,6 +99,7 @@ describe('Layout', () => {
 
   it('hides workforce navigation for unauthorized roles', async () => {
     hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(false)
     const Layout = (await import('../Layout')).default
 
     render(

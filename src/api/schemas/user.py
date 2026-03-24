@@ -1,7 +1,7 @@
 """Pydantic schemas for User API."""
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -60,7 +60,11 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """Schema for creating a User."""
 
-    password: str = Field(..., min_length=8, max_length=100)
+    auth_provider: Literal["microsoft_sso", "local"] = "microsoft_sso"
+    password: str = Field("", min_length=0, max_length=100)
+    is_active: bool = True
+    is_superuser: bool = False
+    tenant_id: Optional[int] = None
     role_ids: Optional[List[int]] = None
 
 
@@ -74,6 +78,8 @@ class UserUpdate(BaseModel):
     department: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+    tenant_id: Optional[int] = None
     role_ids: Optional[List[int]] = None
 
 
@@ -90,18 +96,18 @@ class UserResponse(BaseModel):
     email: str
     first_name: str
     last_name: str
+    full_name: Optional[str] = None
     job_title: Optional[str] = None
     department: Optional[str] = None
     phone: Optional[str] = None
     is_active: bool
     is_superuser: bool
+    azure_oid: Optional[str] = None
+    tenant_id: Optional[int] = None
+    last_login: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     roles: List[RoleResponse] = []
-
-    @property
-    def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
 
 
 class UserListResponse(BaseModel):
