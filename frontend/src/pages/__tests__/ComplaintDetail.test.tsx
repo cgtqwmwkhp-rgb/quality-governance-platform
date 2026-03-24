@@ -47,6 +47,9 @@ vi.mock('../../api/client', () => ({
     get: vi.fn(),
     update: vi.fn(),
     listInvestigations: vi.fn(),
+    listRunningSheet: vi.fn(),
+    addRunningSheetEntry: vi.fn(),
+    deleteRunningSheetEntry: vi.fn(),
   },
   investigationsApi: {
     createFromRecord: vi.fn(),
@@ -104,6 +107,7 @@ describe('ComplaintDetail', () => {
     client.complaintsApi.listInvestigations.mockResolvedValue({
       data: { items: [{ id: 25, reference_number: 'INV-25', title: 'Complaint investigation' }], total: 1 },
     })
+    client.complaintsApi.listRunningSheet.mockResolvedValue({ data: [] })
     client.actionsApi.list.mockResolvedValue({
       data: { items: [{ id: 3, title: 'Acknowledge complainant', status: 'open' }] },
     })

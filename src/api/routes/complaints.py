@@ -7,10 +7,12 @@ from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
 from src.api.schemas.error_codes import ErrorCode
+from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
-from src.domain.models.complaint import Complaint
+from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.complaint_service import ComplaintService
 
@@ -301,3 +303,143 @@ async def list_complaint_investigations(
         "page_size": page_size,
         "pages": total_pages,
     }
+
+
+@router.get("/{complaint_id}/running-sheet", response_model=list[RunningSheetEntryResponse])
+async def list_complaint_running_sheet_entries(
+    complaint_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List complaint runner-sheet entries, newest first."""
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
+        )
+
+    query = select(ComplaintRunningSheetEntry).where(ComplaintRunningSheetEntry.complaint_id == complaint_id)
+    if complaint.tenant_id is None:
+        query = query.where(ComplaintRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(ComplaintRunningSheetEntry.tenant_id == complaint.tenant_id)
+
+    result = await db.execute(
+        query.order_by(ComplaintRunningSheetEntry.created_at.desc(), ComplaintRunningSheetEntry.id.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/{complaint_id}/running-sheet",
+    response_model=RunningSheetEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_complaint_running_sheet_entry(
+    complaint_id: int,
+    payload: RunningSheetEntryCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+):
+    """Add a timestamped entry to the complaint runner sheet."""
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
+        )
+
+    entry = ComplaintRunningSheetEntry(
+        tenant_id=complaint.tenant_id,
+        complaint_id=complaint.id,
+        content=payload.content,
+        entry_type=payload.entry_type.value,
+        author_id=current_user.id,
+        author_email=current_user.email,
+    )
+    db.add(entry)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="complaint.runner_sheet_entry.created",
+        entity_type="complaint",
+        entity_id=str(complaint.id),
+        action="create",
+        description=f"Runner-sheet entry added to complaint {complaint.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+@router.delete("/{complaint_id}/running-sheet/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_complaint_running_sheet_entry(
+    complaint_id: int,
+    entry_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+) -> None:
+    """Delete a complaint runner-sheet entry."""
+    svc = ComplaintService(db)
+    try:
+        complaint = await svc.get_complaint(
+            complaint_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
+        )
+
+    result = await db.execute(
+        select(ComplaintRunningSheetEntry).where(
+            ComplaintRunningSheetEntry.id == entry_id,
+            ComplaintRunningSheetEntry.complaint_id == complaint_id,
+            ComplaintRunningSheetEntry.tenant_id == complaint.tenant_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
+        )
+
+    assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "complaint")
+
+    await record_audit_event(
+        db=db,
+        event_type="complaint.runner_sheet_entry.deleted",
+        entity_type="complaint",
+        entity_id=str(complaint.id),
+        action="delete",
+        description=f"Runner-sheet entry deleted from complaint {complaint.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(entry)
+    await db.commit()

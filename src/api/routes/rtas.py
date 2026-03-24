@@ -9,6 +9,8 @@ from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.rta import (
     RTAActionCreate,
     RTAActionListResponse,
@@ -19,6 +21,8 @@ from src.api.schemas.rta import (
     RTAResponse,
     RTAUpdate,
 )
+from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
+from src.api.utils.errors import api_error
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -37,7 +41,7 @@ async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision
     if not rta:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"RTA with id {rta_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"RTA with id {rta_id} not found"),
         )
     return rta
 
@@ -484,73 +488,66 @@ async def list_rta_investigations(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/{rta_id}/running-sheet")
+@router.get("/{rta_id}/running-sheet", response_model=list[RunningSheetEntryResponse])
 async def list_running_sheet_entries(
     rta_id: int,
     db: DbSession,
     current_user: CurrentUser,
 ):
     """List all running sheet entries for an RTA, newest first."""
-    await _get_rta_or_404(db, rta_id, current_user)
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
-    result = await db.execute(
-        select(RunningSheetEntry)
-        .where(RunningSheetEntry.rta_id == rta_id)
-        .order_by(RunningSheetEntry.created_at.desc())
-    )
-    entries = result.scalars().all()
+    query = select(RunningSheetEntry).where(RunningSheetEntry.rta_id == rta_id)
+    if rta.tenant_id is None:
+        query = query.where(RunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(RunningSheetEntry.tenant_id == rta.tenant_id)
 
-    return [
-        {
-            "id": e.id,
-            "rta_id": e.rta_id,
-            "content": e.content,
-            "entry_type": e.entry_type,
-            "author_id": e.author_id,
-            "author_email": e.author_email,
-            "created_at": e.created_at.isoformat() if e.created_at else None,
-        }
-        for e in entries
-    ]
+    result = await db.execute(query.order_by(RunningSheetEntry.created_at.desc(), RunningSheetEntry.id.asc()))
+    return result.scalars().all()
 
 
-@router.post("/{rta_id}/running-sheet", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{rta_id}/running-sheet",
+    response_model=RunningSheetEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_running_sheet_entry(
     rta_id: int,
-    payload: dict,
+    payload: RunningSheetEntryCreate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ):
     """Add a timestamped entry to the RTA running sheet."""
-    await _get_rta_or_404(db, rta_id, current_user)
-
-    content = (payload.get("content") or "").strip()
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Content is required",
-        )
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
     entry = RunningSheetEntry(
+        tenant_id=rta.tenant_id,
         rta_id=rta_id,
-        content=content,
-        entry_type=payload.get("entry_type", "note"),
+        content=payload.content,
+        entry_type=payload.entry_type.value,
         author_id=current_user.id,
         author_email=current_user.email,
     )
     db.add(entry)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="rta.runner_sheet_entry.created",
+        entity_type="rta",
+        entity_id=str(rta.id),
+        action="create",
+        description=f"Runner-sheet entry added to RTA {rta.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
     await db.commit()
     await db.refresh(entry)
-
-    return {
-        "id": entry.id,
-        "rta_id": entry.rta_id,
-        "content": entry.content,
-        "entry_type": entry.entry_type,
-        "author_id": entry.author_id,
-        "author_email": entry.author_email,
-        "created_at": entry.created_at.isoformat() if entry.created_at else None,
-    }
+    return entry
 
 
 @router.delete("/{rta_id}/running-sheet/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -559,19 +556,38 @@ async def delete_running_sheet_entry(
     entry_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ):
     """Delete a running sheet entry."""
-    await _get_rta_or_404(db, rta_id, current_user)
+    rta = await _get_rta_or_404(db, rta_id, current_user)
 
     result = await db.execute(
         select(RunningSheetEntry).where(
             RunningSheetEntry.id == entry_id,
             RunningSheetEntry.rta_id == rta_id,
+            RunningSheetEntry.tenant_id == rta.tenant_id,
         )
     )
     entry = result.scalar_one_or_none()
     if not entry:
-        raise HTTPException(status_code=404, detail="Running sheet entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Running sheet entry not found"),
+        )
+
+    assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "rta")
+
+    await record_audit_event(
+        db=db,
+        event_type="rta.runner_sheet_entry.deleted",
+        entity_type="rta",
+        entity_id=str(rta.id),
+        action="delete",
+        description=f"Runner-sheet entry deleted from RTA {rta.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
 
     await db.delete(entry)
     await db.commit()

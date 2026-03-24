@@ -9,12 +9,31 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
+from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
-from src.domain.models.near_miss import NearMiss
+from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
+from src.api.utils.errors import api_error
+from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Near Misses"])
+
+
+async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser) -> NearMiss:
+    query = select(NearMiss).where(NearMiss.id == near_miss_id)
+    if not current_user.is_superuser:
+        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
+    near_miss = result.scalar_one_or_none()
+
+    if not near_miss:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Near Miss with ID {near_miss_id} not found"),
+        )
+    return near_miss
 
 
 @router.post("/", response_model=NearMissResponse, status_code=status.HTTP_201_CREATED)
@@ -124,19 +143,7 @@ async def get_near_miss(
     current_user: CurrentUser,
 ) -> NearMiss:
     """Get a near miss by ID."""
-    query = select(NearMiss).where(NearMiss.id == near_miss_id)
-    if not current_user.is_superuser:
-        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
-
-    return near_miss
+    return await _get_near_miss_or_404(db, near_miss_id, current_user)
 
 
 @router.patch("/{near_miss_id}", response_model=NearMissResponse)
@@ -148,17 +155,7 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    query = select(NearMiss).where(NearMiss.id == near_miss_id)
-    if not current_user.is_superuser:
-        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
 
     update_data = data.model_dump(exclude_unset=True)
     old_status = near_miss.status
@@ -207,17 +204,7 @@ async def delete_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
-    query = select(NearMiss).where(NearMiss.id == near_miss_id)
-    if not current_user.is_superuser:
-        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
 
     await record_audit_event(
         db=db,
@@ -249,17 +236,7 @@ async def list_near_miss_investigations(
     from src.api.schemas.investigation import InvestigationRunResponse
     from src.domain.models.investigation import AssignedEntityType, InvestigationRun
 
-    query = select(NearMiss).where(NearMiss.id == near_miss_id)
-    if not current_user.is_superuser:
-        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
-    result = await db.execute(query)
-    near_miss = result.scalar_one_or_none()
-
-    if not near_miss:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Near Miss with ID {near_miss_id} not found",
-        )
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
 
     # Get investigations
     count_query = (
@@ -291,3 +268,110 @@ async def list_near_miss_investigations(
         "page_size": page_size,
         "pages": ceil(total / page_size) if total > 0 else 1,
     }
+
+
+@router.get("/{near_miss_id}/running-sheet", response_model=list[RunningSheetEntryResponse])
+async def list_near_miss_running_sheet_entries(
+    near_miss_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List near-miss runner-sheet entries, newest first."""
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
+
+    query = select(NearMissRunningSheetEntry).where(NearMissRunningSheetEntry.near_miss_id == near_miss_id)
+    if near_miss.tenant_id is None:
+        query = query.where(NearMissRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(NearMissRunningSheetEntry.tenant_id == near_miss.tenant_id)
+
+    result = await db.execute(
+        query.order_by(NearMissRunningSheetEntry.created_at.desc(), NearMissRunningSheetEntry.id.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/{near_miss_id}/running-sheet",
+    response_model=RunningSheetEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_near_miss_running_sheet_entry(
+    near_miss_id: int,
+    payload: RunningSheetEntryCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+):
+    """Add a timestamped entry to the near-miss runner sheet."""
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
+
+    entry = NearMissRunningSheetEntry(
+        tenant_id=near_miss.tenant_id,
+        near_miss_id=near_miss.id,
+        content=payload.content,
+        entry_type=payload.entry_type.value,
+        author_id=current_user.id,
+        author_email=current_user.email,
+    )
+    db.add(entry)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="near_miss.runner_sheet_entry.created",
+        entity_type="near_miss",
+        entity_id=str(near_miss.id),
+        action="create",
+        description=f"Runner-sheet entry added to near miss {near_miss.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+@router.delete("/{near_miss_id}/running-sheet/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_near_miss_running_sheet_entry(
+    near_miss_id: int,
+    entry_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+) -> None:
+    """Delete a near-miss runner-sheet entry."""
+    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
+
+    result = await db.execute(
+        select(NearMissRunningSheetEntry).where(
+            NearMissRunningSheetEntry.id == entry_id,
+            NearMissRunningSheetEntry.near_miss_id == near_miss_id,
+            NearMissRunningSheetEntry.tenant_id == near_miss.tenant_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
+        )
+
+    assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "near_miss")
+
+    await record_audit_event(
+        db=db,
+        event_type="near_miss.runner_sheet_entry.deleted",
+        entity_type="near_miss",
+        entity_id=str(near_miss.id),
+        action="delete",
+        description=f"Runner-sheet entry deleted from near miss {near_miss.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(entry)
+    await db.commit()

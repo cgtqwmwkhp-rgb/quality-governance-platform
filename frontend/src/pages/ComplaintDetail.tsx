@@ -29,6 +29,7 @@ import {
   Complaint,
   ComplaintUpdate,
   Investigation,
+  RunningSheetEntry,
   investigationsApi,
   actionsApi,
   Action,
@@ -59,6 +60,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
 import { SubmissionSections } from '../components/case/SubmissionSections'
+import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import {
   buildComplaintSubmissionSections,
   getSubmissionPhotoSummary,
@@ -87,6 +89,9 @@ export default function ComplaintDetail() {
   const [showActionDetailModal, setShowActionDetailModal] = useState(false)
   const [updatingAction, setUpdatingAction] = useState(false)
   const [actionUpdateError, setActionUpdateError] = useState('')
+  const [runningSheet, setRunningSheet] = useState<RunningSheetEntry[]>([])
+  const [newEntry, setNewEntry] = useState('')
+  const [addingEntry, setAddingEntry] = useState(false)
 
   // Investigation form
   const [investigationForm, setInvestigationForm] = useState({
@@ -138,6 +143,7 @@ export default function ComplaintDetail() {
       })
       loadActions()
       loadInvestigations(complaintId)
+      loadRunningSheet(complaintId)
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadComplaint' })
       setError(t('complaints.detail.load_error'))
@@ -164,6 +170,15 @@ export default function ComplaintDetail() {
       setInvestigations(response.data.items || [])
     } catch (err) {
       trackError(err, { component: 'ComplaintDetail', action: 'loadInvestigations' })
+    }
+  }
+
+  const loadRunningSheet = async (complaintId: number) => {
+    try {
+      const response = await complaintsApi.listRunningSheet(complaintId)
+      setRunningSheet(response.data)
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'loadRunningSheet' })
     }
   }
 
@@ -196,6 +211,32 @@ export default function ComplaintDetail() {
       })
     }
     setIsEditing(false)
+  }
+
+  const handleAddEntry = async () => {
+    if (!complaint || !newEntry.trim()) return
+    setAddingEntry(true)
+    try {
+      await complaintsApi.addRunningSheetEntry(complaint.id, { content: newEntry.trim() })
+      setNewEntry('')
+      loadRunningSheet(complaint.id)
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'addRunningSheetEntry' })
+      toast.error(getApiErrorMessage(err))
+    } finally {
+      setAddingEntry(false)
+    }
+  }
+
+  const handleDeleteEntry = async (entryId: number) => {
+    if (!complaint) return
+    try {
+      await complaintsApi.deleteRunningSheetEntry(complaint.id, entryId)
+      loadRunningSheet(complaint.id)
+    } catch (err) {
+      trackError(err, { component: 'ComplaintDetail', action: 'deleteRunningSheetEntry' })
+      toast.error(getApiErrorMessage(err))
+    }
   }
 
   const [investigationError, setInvestigationError] = useState('')
@@ -561,6 +602,7 @@ export default function ComplaintDetail() {
         <TabsList className="w-full justify-start flex-wrap h-auto gap-1 p-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="submission">Reporter Submission</TabsTrigger>
+          <TabsTrigger value="running-sheet">Running Sheet</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6">
@@ -1087,6 +1129,24 @@ export default function ComplaintDetail() {
           <SubmissionSections
             sections={complaintSubmissionSections}
             emptyMessage="No preserved reporter submission is available for this complaint yet."
+          />
+        </TabsContent>
+
+        <TabsContent value="running-sheet" className="mt-6">
+          <RunningSheetPanel
+            entries={runningSheet}
+            newEntry={newEntry}
+            addingEntry={addingEntry}
+            title={t('common.running_sheet', 'Running Sheet')}
+            placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
+            emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
+            emptyDescription={t(
+              'complaints.detail.running_sheet_empty_description',
+              'Add notes to build the complaint narrative over time',
+            )}
+            onNewEntryChange={setNewEntry}
+            onAddEntry={handleAddEntry}
+            onDeleteEntry={handleDeleteEntry}
           />
         </TabsContent>
       </Tabs>

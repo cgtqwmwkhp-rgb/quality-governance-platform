@@ -62,6 +62,7 @@ export default function Layout({ onLogout }: LayoutProps) {
       items: [
         { path: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
         { path: '/incidents', icon: AlertTriangle, label: t('nav.incidents') },
+        { path: '/near-misses', icon: AlertTriangle, label: t('nav.near_misses') },
         { path: '/rtas', icon: Car, label: t('nav.rtas') },
         { path: '/complaints', icon: MessageSquare, label: t('nav.complaints') },
         { path: '/vehicle-checklists', icon: Truck, label: t('nav.vehicle_checklists') },

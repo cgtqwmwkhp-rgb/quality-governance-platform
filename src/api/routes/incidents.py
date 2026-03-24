@@ -9,11 +9,13 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.dependencies.request_context import get_request_id
+from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.incident import IncidentCreate, IncidentListResponse, IncidentResponse, IncidentUpdate
+from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
-from src.domain.models.incident import Incident
+from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.incident_service import IncidentService
 
@@ -253,6 +255,146 @@ async def list_incident_investigations(
         "page_size": page_size,
         "pages": total_pages,
     }
+
+
+@router.get("/{incident_id}/running-sheet", response_model=list[RunningSheetEntryResponse])
+async def list_incident_running_sheet_entries(
+    incident_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """List incident runner-sheet entries, newest first."""
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
+        )
+
+    query = select(IncidentRunningSheetEntry).where(IncidentRunningSheetEntry.incident_id == incident_id)
+    if incident.tenant_id is None:
+        query = query.where(IncidentRunningSheetEntry.tenant_id.is_(None))
+    else:
+        query = query.where(IncidentRunningSheetEntry.tenant_id == incident.tenant_id)
+
+    result = await db.execute(
+        query.order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post(
+    "/{incident_id}/running-sheet",
+    response_model=RunningSheetEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_incident_running_sheet_entry(
+    incident_id: int,
+    payload: RunningSheetEntryCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+):
+    """Add a timestamped entry to the incident runner sheet."""
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
+        )
+
+    entry = IncidentRunningSheetEntry(
+        tenant_id=incident.tenant_id,
+        incident_id=incident.id,
+        content=payload.content,
+        entry_type=payload.entry_type.value,
+        author_id=current_user.id,
+        author_email=current_user.email,
+    )
+    db.add(entry)
+    await db.flush()
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.runner_sheet_entry.created",
+        entity_type="incident",
+        entity_id=str(incident.id),
+        action="create",
+        description=f"Runner-sheet entry added to incident {incident.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+@router.delete("/{incident_id}/running-sheet/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_incident_running_sheet_entry(
+    incident_id: int,
+    entry_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+) -> None:
+    """Delete an incident runner-sheet entry."""
+    svc = IncidentService(db)
+    try:
+        incident = await svc.get_incident(
+            incident_id,
+            current_user.tenant_id,
+            skip_tenant_check=current_user.is_superuser,
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
+        )
+
+    result = await db.execute(
+        select(IncidentRunningSheetEntry).where(
+            IncidentRunningSheetEntry.id == entry_id,
+            IncidentRunningSheetEntry.incident_id == incident_id,
+            IncidentRunningSheetEntry.tenant_id == incident.tenant_id,
+        )
+    )
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
+        )
+
+    assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "incident")
+
+    await record_audit_event(
+        db=db,
+        event_type="incident.runner_sheet_entry.deleted",
+        entity_type="incident",
+        entity_id=str(incident.id),
+        action="delete",
+        description=f"Runner-sheet entry deleted from incident {incident.reference_number}",
+        payload={"entry_id": entry.id, "entry_type": entry.entry_type},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+
+    await db.delete(entry)
+    await db.commit()
 
 
 @router.patch("/{incident_id}", response_model=IncidentResponse)

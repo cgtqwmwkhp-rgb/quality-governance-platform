@@ -53,6 +53,7 @@ import { Input } from '../components/ui/Input'
 import { Switch } from '../components/ui/Switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { CaseSummaryRail } from '../components/case/CaseSummaryRail'
+import { RunningSheetPanel } from '../components/case/RunningSheetPanel'
 import { SubmissionSections } from '../components/case/SubmissionSections'
 import {
   buildRtaSubmissionSections,
@@ -1156,47 +1157,21 @@ export default function RTADetail() {
 
         {/* ────── RUNNING SHEET TAB ────── */}
         <TabsContent value="running-sheet">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><MessageSquare className="w-5 h-5 text-primary" />Running Sheet</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-3">
-                <Textarea value={newEntry} onChange={(e) => setNewEntry(e.target.value)} placeholder="Add to the story... (auto-timestamped)" rows={2} className="flex-1" />
-                <Button onClick={handleAddEntry} disabled={addingEntry || !newEntry.trim()} className="self-end">
-                  {addingEntry ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
-                  Add
-                </Button>
-              </div>
-
-              {runningSheet.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No entries yet</p>
-                  <p className="text-sm mt-1">Add notes to build the incident narrative over time</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {runningSheet.map((entry) => (
-                    <div key={entry.id} className="group border rounded-lg p-4 bg-muted/30 relative">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-mono font-semibold text-primary">
-                          {new Date(entry.created_at).toLocaleString()}
-                        </span>
-                        {entry.author_email && (
-                          <span className="text-xs text-muted-foreground">— {entry.author_email}</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{entry.content}</p>
-                      <Button variant="ghost" size="sm" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-destructive" onClick={() => handleDeleteEntry(entry.id)} aria-label="Delete running sheet entry">
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <RunningSheetPanel
+            entries={runningSheet}
+            newEntry={newEntry}
+            addingEntry={addingEntry}
+            title={t('common.running_sheet', 'Running Sheet')}
+            placeholder={t('common.running_sheet_placeholder', 'Add to the story... (auto-timestamped)')}
+            emptyTitle={t('common.running_sheet_empty_title', 'No entries yet')}
+            emptyDescription={t(
+              'rtas.detail.running_sheet_empty_description',
+              'Add notes to build the incident narrative over time',
+            )}
+            onNewEntryChange={setNewEntry}
+            onAddEntry={handleAddEntry}
+            onDeleteEntry={handleDeleteEntry}
+          />
         </TabsContent>
 
         {/* ────── ACTIONS TAB ────── */}

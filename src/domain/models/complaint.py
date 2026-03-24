@@ -186,3 +186,23 @@ class ComplaintAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixi
 
     def __repr__(self) -> str:
         return f"<ComplaintAction(id={self.id}, ref='{self.reference_number}', status='{self.status}')>"
+
+
+class ComplaintRunningSheetEntry(Base, TimestampMixin):
+    """Timestamped runner-sheet entry for a complaint."""
+
+    __tablename__ = "complaint_running_sheet_entries"
+    __data_classification__ = DataClassification.C4_RESTRICTED
+    __table_args__ = (Index("ix_cmp_run_sheet_tenant_complaint", "tenant_id", "complaint_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    complaint_id: Mapped[int] = mapped_column(
+        ForeignKey("complaints.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    entry_type: Mapped[str] = mapped_column(String(50), nullable=False, default="note")
+    author_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    author_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
