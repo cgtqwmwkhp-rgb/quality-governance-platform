@@ -530,7 +530,6 @@ export default function UVDBAudits() {
           </p>
           <button
             onClick={() => {
-              setRetryCount(0)
               loadData()
             }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
