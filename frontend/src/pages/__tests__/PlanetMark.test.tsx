@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const mockGetDashboard = vi.fn()
 const mockListYears = vi.fn()
@@ -8,6 +8,8 @@ const mockListActions = vi.fn()
 const mockGetScope3 = vi.fn()
 const mockGetCertification = vi.fn()
 const mockGetDataQuality = vi.fn()
+const mockCreateReportingYear = vi.fn()
+const mockCreateApiError = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -20,6 +22,7 @@ vi.mock('../../api/client', () => ({
   planetMarkApi: {
     getDashboard: (...args: unknown[]) => mockGetDashboard(...args),
     listYears: (...args: unknown[]) => mockListYears(...args),
+    createReportingYear: (...args: unknown[]) => mockCreateReportingYear(...args),
     listSources: (...args: unknown[]) => mockListSources(...args),
     listActions: (...args: unknown[]) => mockListActions(...args),
     getScope3: (...args: unknown[]) => mockGetScope3(...args),
@@ -33,12 +36,12 @@ vi.mock('../../api/client', () => ({
     NOT_FOUND: 'NOT_FOUND',
     UNKNOWN: 'UNKNOWN',
   },
-  createApiError: () => ({ error_class: 'UNKNOWN' }),
+  createApiError: (...args: unknown[]) => mockCreateApiError(...args),
   isSetupRequired: (payload: Record<string, unknown>) => payload?.error_class === 'SETUP_REQUIRED',
 }))
 
 vi.mock('../../components/ui/SetupRequiredPanel', () => ({
-  SetupRequiredPanel: () => <div>setup required</div>,
+  SetupRequiredPanel: ({ response }: { response: { message: string } }) => <div>{response.message}</div>,
 }))
 
 describe('PlanetMark', () => {
@@ -167,6 +170,14 @@ describe('PlanetMark', () => {
         target_scores: {},
       },
     })
+    mockCreateReportingYear.mockResolvedValue({
+      data: {
+        id: 2,
+        year_label: 'YE2026',
+        message: 'Reporting year created',
+      },
+    })
+    mockCreateApiError.mockReturnValue({ error_class: 'UNKNOWN' })
   })
 
   it('renders live Planet Mark data from the aligned API envelopes', async () => {
@@ -180,5 +191,162 @@ describe('PlanetMark', () => {
       expect(mockListActions).toHaveBeenCalledWith(1)
       expect(mockGetCertification).toHaveBeenCalledWith(1)
     })
+  })
+
+  it('allows first-time setup by creating a reporting year from setup-required state', async () => {
+    mockGetDashboard
+      .mockResolvedValueOnce({
+        data: {
+          error_class: 'SETUP_REQUIRED',
+          setup_required: true,
+          module: 'planet-mark',
+          message: 'No carbon reporting years configured',
+          next_action: 'Create a reporting year via POST /api/v1/planet-mark/years',
+        },
+      })
+      .mockResolvedValue({
+        data: {
+          current_year: {
+            id: 1,
+            label: 'YE2026',
+            total_emissions: 22.1,
+            emissions_per_fte: 1.1,
+            fte: 20,
+            yoy_change_percent: -5.5,
+            on_track: true,
+          },
+          emissions_breakdown: {
+            scope_1: { value: 10, label: 'Direct' },
+            scope_2: { value: 5, label: 'Indirect' },
+            scope_3: { value: 7.1, label: 'Value Chain' },
+          },
+          data_quality: { scope_1_2: 12, scope_3: 10, target: 12 },
+          certification: { status: 'in_progress', expiry_date: null },
+          actions: { total: 2, completed: 1, overdue: 0 },
+          targets: { reduction_percent: 5, target_per_fte: 1.0 },
+          historical_years: [{ label: 'YE2026', total: 22.1, per_fte: 1.1 }],
+        },
+      })
+    mockListYears
+      .mockResolvedValueOnce({
+        data: {
+          error_class: 'SETUP_REQUIRED',
+          setup_required: true,
+          module: 'planet-mark',
+          message: 'No carbon reporting years configured',
+          next_action: 'Create a reporting year via POST /api/v1/planet-mark/years',
+        },
+      })
+      .mockResolvedValue({
+        data: {
+          total: 1,
+          years: [
+            {
+              id: 1,
+              year_label: 'YE2026',
+              year_number: 2026,
+              period: '01 Jan 2026 - 31 Dec 2026',
+              average_fte: 20,
+              total_emissions: 22.1,
+              emissions_per_fte: 1.1,
+              scope_1: 10,
+              scope_2_market: 5,
+              scope_3: 7.1,
+              data_quality: 12,
+              certification_status: 'in_progress',
+              is_baseline: false,
+            },
+          ],
+        },
+      })
+
+    const PlanetMark = (await import('../PlanetMark')).default
+    render(<PlanetMark />)
+
+    expect(await screen.findByText('No carbon reporting years configured')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Reporting Year' }))
+
+    await waitFor(() => {
+      expect(mockCreateReportingYear).toHaveBeenCalledWith(
+        expect.objectContaining({
+          year_label: 'YE2026',
+          year_number: 2026,
+          average_fte: 1,
+          organization_name: 'Plantexpand Limited',
+        }),
+      )
+    })
+
+    expect(await screen.findByText('Fleet Diesel')).toBeInTheDocument()
+  })
+
+  it('retries the initial dashboard load only once after a transient failure', async () => {
+    mockCreateApiError.mockReturnValue({ error_class: 'NETWORK_ERROR' })
+    mockGetDashboard
+      .mockRejectedValueOnce(new Error('temporary outage'))
+      .mockResolvedValue({
+        data: {
+          current_year: {
+            id: 1,
+            label: 'YE2026',
+            total_emissions: 22.1,
+            emissions_per_fte: 1.1,
+            fte: 20,
+            yoy_change_percent: -5.5,
+            on_track: true,
+          },
+          emissions_breakdown: {
+            scope_1: { value: 10, label: 'Direct' },
+            scope_2: { value: 5, label: 'Indirect' },
+            scope_3: { value: 7.1, label: 'Value Chain' },
+          },
+          data_quality: { scope_1_2: 12, scope_3: 10, target: 12 },
+          certification: { status: 'in_progress', expiry_date: null },
+          actions: { total: 2, completed: 1, overdue: 0 },
+          targets: { reduction_percent: 5, target_per_fte: 1.0 },
+          historical_years: [{ label: 'YE2026', total: 22.1, per_fte: 1.1 }],
+        },
+      })
+
+    const PlanetMark = (await import('../PlanetMark')).default
+    render(<PlanetMark />)
+
+    expect(await screen.findByText('Fleet Diesel')).toBeInTheDocument()
+    expect(mockGetDashboard).toHaveBeenCalledTimes(2)
+    expect(mockListYears).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows backend detail when reporting year creation fails', async () => {
+    mockCreateApiError.mockReturnValue({
+      error_class: 'SERVER_ERROR',
+      detail: 'Reporting year already exists for 2026',
+    })
+    mockCreateReportingYear.mockRejectedValueOnce(new Error('duplicate'))
+    mockGetDashboard.mockResolvedValueOnce({
+      data: {
+        error_class: 'SETUP_REQUIRED',
+        setup_required: true,
+        module: 'planet-mark',
+        message: 'No carbon reporting years configured',
+        next_action: 'Create a reporting year via POST /api/v1/planet-mark/years',
+      },
+    })
+    mockListYears.mockResolvedValueOnce({
+      data: {
+        error_class: 'SETUP_REQUIRED',
+        setup_required: true,
+        module: 'planet-mark',
+        message: 'No carbon reporting years configured',
+        next_action: 'Create a reporting year via POST /api/v1/planet-mark/years',
+      },
+    })
+
+    const PlanetMark = (await import('../PlanetMark')).default
+    render(<PlanetMark />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Create Reporting Year' }))
+
+    expect(await screen.findByText('Reporting year already exists for 2026')).toBeInTheDocument()
   })
 })

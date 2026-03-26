@@ -86,7 +86,16 @@ export default function UVDBAudits() {
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
+  const [showCreateAuditForm, setShowCreateAuditForm] = useState(false)
+  const [isCreatingAudit, setIsCreatingAudit] = useState(false)
+  const [createAuditError, setCreateAuditError] = useState<string | null>(null)
+  const [createAuditSuccess, setCreateAuditSuccess] = useState<string | null>(null)
+  const [createAuditForm, setCreateAuditForm] = useState({
+    company_name: 'Plantexpand Limited',
+    audit_type: 'B2',
+    audit_date: new Date().toISOString().split('T')[0] ?? '',
+    lead_auditor: '',
+  })
 
   // Transform API section to component type
   const transformSection = (apiSection: {
@@ -124,16 +133,11 @@ export default function UVDBAudits() {
     lead_auditor: apiAudit.lead_auditor,
   })
 
-  const loadData = useCallback(
-    async (isRetry = false) => {
-      if (isRetry && retryCount >= 1) {
-        // Max 1 retry for transient errors
-        return
-      }
-
+  const loadData = useCallback(async (isRetry = false) => {
       setLoadState('loading')
       setErrorClass(null)
       setSetupRequired(null)
+      setCreateAuditError(null)
 
       try {
         const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse] = await Promise.all([
@@ -146,13 +150,21 @@ export default function UVDBAudits() {
         if (isSetupRequired(dashboardResponse.data)) {
           setSetupRequired(dashboardResponse.data)
           setLoadState('setup_required')
-          setRetryCount(0)
           return
         }
         if (isSetupRequired(auditsResponse.data)) {
           setSetupRequired(auditsResponse.data)
           setLoadState('setup_required')
-          setRetryCount(0)
+          return
+        }
+        if (isSetupRequired(sectionsResponse.data)) {
+          setSetupRequired(sectionsResponse.data)
+          setLoadState('setup_required')
+          return
+        }
+        if (isSetupRequired(mappingResponse.data)) {
+          setSetupRequired(mappingResponse.data)
+          setLoadState('setup_required')
           return
         }
 
@@ -189,7 +201,6 @@ export default function UVDBAudits() {
         setIsoMappings(mappings)
 
         setLoadState('success')
-        setRetryCount(0)
       } catch (err) {
         const apiError = createApiError(err)
         setErrorClass(apiError.error_class)
@@ -200,16 +211,53 @@ export default function UVDBAudits() {
           (apiError.error_class === ErrorClass.NETWORK_ERROR ||
             apiError.error_class === ErrorClass.SERVER_ERROR)
         ) {
-          setRetryCount((prev) => prev + 1)
-          loadData(true)
+          await loadData(true)
           return
         }
 
         setLoadState('error')
       }
-    },
-    [retryCount],
-  )
+    }, [])
+
+  const handleOpenCreateAuditForm = () => {
+    setCreateAuditError(null)
+    setCreateAuditSuccess(null)
+    setCreateAuditForm((prev) => ({
+      ...prev,
+      company_name: audits[0]?.company_name || prev.company_name || 'Plantexpand Limited',
+    }))
+    setShowCreateAuditForm(true)
+  }
+
+  const handleCreateAudit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setCreateAuditError(null)
+    setCreateAuditSuccess(null)
+
+    if (!createAuditForm.company_name.trim()) {
+      setCreateAuditError('Company name is required.')
+      return
+    }
+
+    setIsCreatingAudit(true)
+    try {
+      const response = await uvdbApi.createAudit({
+        company_name: createAuditForm.company_name.trim(),
+        audit_type: createAuditForm.audit_type.trim() || 'B2',
+        audit_date: createAuditForm.audit_date || undefined,
+        lead_auditor: createAuditForm.lead_auditor.trim() || undefined,
+      })
+      setCreateAuditSuccess(`Audit ${response.data.audit_reference} created successfully.`)
+      setShowCreateAuditForm(false)
+      setActiveTab('audits')
+      await loadData()
+    } catch (err) {
+      const apiError = createApiError(err)
+      setCreateAuditError(apiError.detail || 'Failed to create UVDB audit.')
+    } finally {
+      setIsCreatingAudit(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -289,7 +337,6 @@ export default function UVDBAudits() {
         <SetupRequiredPanel
           response={setupRequired}
           onRetry={() => {
-            setRetryCount(0)
             loadData()
           }}
         />
@@ -313,12 +360,99 @@ export default function UVDBAudits() {
             <Download className="w-4 h-4" />
             {t('uvdb.export_protocol')}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={handleOpenCreateAuditForm}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             {t('uvdb.new_audit')}
           </button>
         </div>
       </div>
+
+      {createAuditSuccess ? (
+        <div className="mb-6 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+          {createAuditSuccess}
+        </div>
+      ) : null}
+
+      {showCreateAuditForm ? (
+        <div className="mb-6 rounded-xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Create UVDB Audit</h2>
+              <p className="text-sm text-muted-foreground">
+                Create a new Achilles Verify B2 audit and refresh the audit history automatically.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCreateAuditForm(false)}
+              className="rounded-lg p-2 text-muted-foreground hover:bg-surface hover:text-foreground"
+              aria-label="Close create UVDB audit form"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCreateAudit}>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Company Name</span>
+              <input
+                className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                value={createAuditForm.company_name}
+                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, company_name: e.target.value }))}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Audit Type</span>
+              <input
+                className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                value={createAuditForm.audit_type}
+                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, audit_type: e.target.value }))}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Audit Date</span>
+              <input
+                type="date"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                value={createAuditForm.audit_date}
+                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, audit_date: e.target.value }))}
+              />
+            </label>
+            <label className="space-y-2 text-sm text-foreground">
+              <span className="font-medium">Lead Auditor</span>
+              <input
+                className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                value={createAuditForm.lead_auditor}
+                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, lead_auditor: e.target.value }))}
+              />
+            </label>
+            <div className="md:col-span-2 flex flex-col gap-3">
+              {createAuditError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {createAuditError}
+                </div>
+              ) : null}
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateAuditForm(false)}
+                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-surface"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingAudit}
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+                >
+                  {isCreatingAudit ? 'Creating audit...' : 'Create Audit'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       {/* Protocol Info Banner */}
       <div className="bg-gradient-to-r from-primary to-primary-hover rounded-xl p-6 mb-8">
@@ -413,7 +547,10 @@ export default function UVDBAudits() {
           <Award className="w-12 h-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">{t('uvdb.no_data')}</h3>
           <p className="text-muted-foreground mb-4">{t('uvdb.no_data_description')}</p>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={handleOpenCreateAuditForm}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             {t('uvdb.new_audit')}
           </button>
@@ -508,7 +645,7 @@ export default function UVDBAudits() {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
-                        {audit.percentage_score && (
+                        {audit.percentage_score != null && (
                           <div className="text-right">
                             <div className="text-2xl font-bold text-emerald-400">
                               {audit.percentage_score}%
@@ -669,7 +806,7 @@ export default function UVDBAudits() {
                         <td className="px-4 py-3 text-gray-300">{audit.audit_date || 'TBD'}</td>
                         <td className="px-4 py-3 text-gray-300">{audit.lead_auditor}</td>
                         <td className="px-4 py-3 text-center">
-                          {audit.percentage_score ? (
+                          {audit.percentage_score != null ? (
                             <span className="text-emerald-400 font-bold">
                               {audit.percentage_score}%
                             </span>

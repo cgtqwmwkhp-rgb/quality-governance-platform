@@ -80,7 +80,7 @@ class QGPUser(HttpUser):
             response = self.client.post(
                 path,
                 json={
-                    "username": "testuser@plantexpand.com",
+                    "email": "testuser@plantexpand.com",
                     "password": "testpassword123",
                 },
             )
@@ -201,9 +201,9 @@ class QGPUser(HttpUser):
 
     @task(2)
     def get_risk_heatmap(self):
-        """Get risk heat map data."""
+        """Get risk heatmap data."""
         self.client.get(
-            "/api/v1/risk-register/heat-map",
+            "/api/v1/risk-register/heatmap",
             headers=self.auth_headers,
         )
 
@@ -215,7 +215,7 @@ class QGPUser(HttpUser):
     def list_standards(self):
         """List compliance standards."""
         self.client.get(
-            "/api/v1/standards",
+            "/api/v1/compliance/standards",
             headers=self.auth_headers,
         )
 
@@ -223,7 +223,7 @@ class QGPUser(HttpUser):
     def get_compliance_evidence(self):
         """Get compliance evidence."""
         self.client.get(
-            "/api/v1/compliance/evidence?page=1&page_size=50",
+            "/api/v1/compliance/evidence/links?page=1&size=50",
             headers=self.auth_headers,
         )
 
@@ -300,7 +300,7 @@ class AdminUser(HttpUser):
         response = self.client.post(
             "/api/v1/auth/login",
             json={
-                "username": "admin@plantexpand.com",
+                "email": "admin@plantexpand.com",
                 "password": "adminpassword123",
             },
         )

@@ -67,7 +67,7 @@ class TestAuthenticationSecurity:
         for i in range(15):
             client.post(
                 "/api/v1/auth/login",
-                json={"username": "fake@test.com", "password": "wrongpassword"},
+                json={"email": "fake@test.com", "password": "wrongpassword"},
             )
 
         # Should eventually get rate limited (429)
@@ -83,7 +83,7 @@ class TestAuthenticationSecurity:
         response = client.post(
             "/api/v1/auth/login",
             json={
-                "username": "testuser@plantexpand.com",
+                "email": "testuser@plantexpand.com",
                 "password": "testpassword123",
             },
         )

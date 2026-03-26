@@ -42,7 +42,7 @@ def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+        json={"email": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -55,7 +55,7 @@ def admin_headers(client) -> dict:
     """Get admin headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "admin@plantexpand.com", "password": "adminpassword123"},
+        json={"email": "admin@plantexpand.com", "password": "adminpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -332,9 +332,9 @@ class TestRiskManagementE2E:
             error_data = err_data.get("error", err_data)
             assert "message" in error_data or "detail" in err_data
 
-        # === Step 3: View risk register heat map ===
+        # === Step 3: View risk register heatmap ===
         heatmap_response = client.get(
-            "/api/v1/risk-register/heat-map",
+            "/api/v1/risk-register/heatmap",
             headers=auth_headers,
         )
         # TODO: Remove 404 when endpoint is implemented
@@ -384,14 +384,14 @@ class TestComplianceE2E:
             pytest.skip("Auth required")
 
         # === Step 1: List standards ===
-        standards_response = client.get("/api/v1/standards", headers=auth_headers)
+        standards_response = client.get("/api/v1/compliance/standards", headers=auth_headers)
         assert standards_response.status_code == 200
         standards_data = standards_response.json()
         assert isinstance(standards_data, (list, dict))
 
         # === Step 2: Get compliance evidence ===
         evidence_response = client.get(
-            "/api/v1/compliance/evidence",
+            "/api/v1/compliance/evidence/links",
             headers=auth_headers,
         )
         # TODO: Remove 404 when endpoint is implemented

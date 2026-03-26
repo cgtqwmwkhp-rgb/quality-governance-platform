@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.routes.compliance import get_compliance_coverage, link_evidence, list_standards
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
@@ -129,6 +130,42 @@ async def test_list_standards_bridges_db_standard_and_ims_counts():
     assert iso9001.ims_requirement_count == 9
     assert iso9001.covered_clauses == 1
     assert iso9001.has_canonical_standard is True
+    assert iso9001.canonical_data_degraded is False
+    assert iso9001.canonical_data_message is None
+
+
+@pytest.mark.asyncio
+async def test_list_standards_falls_back_to_static_defaults_when_canonical_queries_fail():
+    persisted_link = ComplianceEvidenceLink(
+        tenant_id=44,
+        entity_type="policy",
+        entity_id="POL-7",
+        clause_id="9001-7.5",
+        linked_by=EvidenceLinkMethod.MANUAL,
+        confidence=75.0,
+    )
+
+    async def execute(statement):
+        sql = str(statement)
+        if "FROM compliance_evidence_links" in sql:
+            return _FakeExecuteResult([persisted_link])
+        if "FROM standards" in sql:
+            raise SQLAlchemyError("standards unavailable")
+        raise AssertionError(f"Unexpected statement: {sql}")
+
+    db = types.SimpleNamespace(execute=AsyncMock(side_effect=execute))
+    current_user = types.SimpleNamespace(id=8, email="ims@example.com", tenant_id=44)
+
+    standards = await list_standards(db, current_user)
+    iso9001 = next(item for item in standards if item.id == "iso9001")
+
+    assert iso9001.db_standard_id is None
+    assert iso9001.db_clause_count == 0
+    assert iso9001.ims_requirement_count == 0
+    assert iso9001.covered_clauses == 1
+    assert iso9001.has_canonical_standard is False
+    assert iso9001.canonical_data_degraded is True
+    assert "Canonical compliance enrichment is temporarily unavailable" in iso9001.canonical_data_message
 
 
 @pytest.mark.asyncio

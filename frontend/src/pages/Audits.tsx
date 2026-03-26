@@ -8,6 +8,7 @@ import {
   MapPin,
   Target,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   BarChart3,
@@ -160,6 +161,7 @@ export default function Audits() {
   const [formError, setFormError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [successTone, setSuccessTone] = useState<'success' | 'warning'>('success')
   const [showVersionSelector, setShowVersionSelector] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reportFile, setReportFile] = useState<File | null>(null)
@@ -262,6 +264,7 @@ export default function Audits() {
     setFormData(buildDefaultForm(mode))
     setFormError(null)
     setSuccessMessage(null)
+    setSuccessTone('success')
     setShowVersionSelector(false)
     setReportFile(null)
     setShowModal(true)
@@ -272,6 +275,8 @@ export default function Audits() {
     setModalMode('schedule')
     setFormData(buildDefaultForm('schedule'))
     setFormError(null)
+    setSuccessMessage(null)
+    setSuccessTone('success')
     setShowVersionSelector(false)
     setReportFile(null)
   }
@@ -366,15 +371,17 @@ export default function Audits() {
         } catch (uploadErr: unknown) {
           reportUploadFailed = true
           const axiosErr = uploadErr as { response?: { data?: { detail?: string } } }
+          const uploadErrorDetail = axiosErr.response?.data?.detail
           successDetail +=
             ' Audit created, but the source report upload failed. You can add the report from Evidence Assets.'
-          if (import.meta.env.DEV) console.error('Failed to upload audit source document:', uploadErr)
-          if (axiosErr.response?.data?.detail) {
-            setFormError(String(axiosErr.response.data.detail))
+          if (uploadErrorDetail) {
+            successDetail += ` Upload error: ${String(uploadErrorDetail)}`
           }
+          if (import.meta.env.DEV) console.error('Failed to upload audit source document:', uploadErr)
         }
       }
 
+      setSuccessTone(reportUploadFailed ? 'warning' : 'success')
       setSuccessMessage(successDetail)
 
       await loadData()
@@ -947,7 +954,7 @@ export default function Audits() {
 
       {/* Create Audit Modal */}
       <Dialog open={showModal} onOpenChange={handleCloseModal}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className={modalMode === 'import' ? 'sm:max-w-3xl' : 'sm:max-w-lg'}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-primary" />
@@ -962,11 +969,27 @@ export default function Audits() {
 
           {successMessage ? (
             <div className="py-8 text-center">
-              <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="w-8 h-8 text-success" />
+              <div
+                className={cn(
+                  'w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4',
+                  successTone === 'warning' ? 'bg-warning/10' : 'bg-success/10',
+                )}
+              >
+                {successTone === 'warning' ? (
+                  <AlertTriangle className="w-8 h-8 text-warning" />
+                ) : (
+                  <CheckCircle2 className="w-8 h-8 text-success" />
+                )}
               </div>
-              <p className="text-lg font-semibold text-foreground mb-2">
-                {t('audits.scheduled_success')}
+              <p
+                className={cn(
+                  'text-lg font-semibold mb-2',
+                  successTone === 'warning' ? 'text-warning' : 'text-foreground',
+                )}
+              >
+                {successTone === 'warning'
+                  ? 'Audit created with follow-up required'
+                  : t('audits.scheduled_success')}
               </p>
               <p className="text-muted-foreground">{successMessage}</p>
             </div>
@@ -1256,7 +1279,7 @@ export default function Audits() {
                       scheduled_date: e.target.value,
                     }))
                   }
-                  min={new Date().toISOString().split('T')[0]}
+                  min={modalMode === 'schedule' ? new Date().toISOString().split('T')[0] : undefined}
                 />
               </div>
 

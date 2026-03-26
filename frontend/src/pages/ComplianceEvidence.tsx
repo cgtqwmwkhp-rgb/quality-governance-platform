@@ -84,6 +84,11 @@ export default function ComplianceEvidence() {
   const [loadingMappings, setLoadingMappings] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const canonicalDataWarning = useMemo(
+    () => standards.find((standard) => standard.canonical_data_degraded)?.canonical_data_message ?? null,
+    [standards],
+  )
+
   useEffect(() => {
     let cancelled = false
 
@@ -392,6 +397,16 @@ export default function ComplianceEvidence() {
           </div>
         )}
 
+        {canonicalDataWarning && (
+          <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Compliance data is running in degraded mode</p>
+              <p>{canonicalDataWarning}</p>
+            </div>
+          </div>
+        )}
+
         {/* Compliance Score Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {standards.map((standard) => {
@@ -434,7 +449,11 @@ export default function ComplianceEvidence() {
                       <h3 className="font-bold text-foreground">{standard.code}</h3>
                       <p className="text-xs text-muted-foreground">
                         {standard.name}
-                        {standard.has_canonical_standard ? ' • live canonical' : ' • fallback'}
+                        {standard.canonical_data_degraded
+                          ? ' • canonical enrichment degraded'
+                          : standard.has_canonical_standard
+                            ? ' • live canonical'
+                            : ' • fallback'}
                       </p>
                     </div>
                   </div>

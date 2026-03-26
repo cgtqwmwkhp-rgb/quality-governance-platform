@@ -165,4 +165,57 @@ describe('Audits external import flow', () => {
     expect(await screen.findByText('Please upload the external audit report')).toBeInTheDocument()
     expect(mockCreateRun).not.toHaveBeenCalled()
   })
+
+  it('allows historical dates for imported audits while retaining schedule-date guardrails', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const importDialog = await screen.findByRole('dialog')
+    const importDateInput = within(importDialog).getByLabelText(/Scheduled Date/i)
+    expect(importDateInput).not.toHaveAttribute('min')
+    expect(importDialog.className).toContain('sm:max-w-3xl')
+    expect(importDialog.className).toContain('max-h-[85vh]')
+
+    fireEvent.click(within(importDialog).getByRole('button', { name: /close/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schedule Audit' }))
+
+    const scheduleDialog = await screen.findByRole('dialog')
+    const scheduleDateInput = within(scheduleDialog).getByLabelText(/Scheduled Date/i)
+    expect(scheduleDateInput).toHaveAttribute('min', new Date().toISOString().split('T')[0])
+  })
+
+  it('shows a visible warning when the audit is created but report upload fails', async () => {
+    mockUpload.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: 'Blob storage is temporarily unavailable',
+        },
+      },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+      target: { value: 'achilles_uvdb' },
+    })
+
+    const file = new File(['audit pdf'], 'achilles-audit.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Import External Audit' }).at(-1)!)
+
+    expect(await screen.findByText('Audit created with follow-up required')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Blob storage is temporarily unavailable/),
+    ).toBeInTheDocument()
+    expect(mockUpdateRun).not.toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
 })

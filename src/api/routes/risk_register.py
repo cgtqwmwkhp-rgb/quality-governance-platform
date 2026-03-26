@@ -201,196 +201,6 @@ async def create_risk(
     }
 
 
-@router.get("/{risk_id}", response_model=dict)
-async def get_risk(
-    current_user: CurrentUser,
-    risk_id: int,
-    db: DbSession,
-) -> dict[str, Any]:
-    """Get detailed risk information"""
-    result = await db.execute(
-        select(EnterpriseRisk).where(
-            EnterpriseRisk.id == risk_id,
-            EnterpriseRisk.tenant_id == current_user.tenant_id,
-        )
-    )
-    risk = result.scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-
-    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
-    control_mappings = result.scalars().all()
-    control_ids = [m.control_id for m in control_mappings]
-
-    if control_ids:
-        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
-        controls = result.scalars().all()
-    else:
-        controls = []
-
-    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
-    kris = result.scalars().all()
-
-    result = await db.execute(
-        select(RiskAssessmentHistory)
-        .where(RiskAssessmentHistory.risk_id == risk_id)
-        .order_by(RiskAssessmentHistory.assessment_date.desc())
-        .limit(10)
-    )
-    history = result.scalars().all()
-
-    return {
-        "id": risk.id,
-        "reference": risk.reference,
-        "title": risk.title,
-        "description": risk.description,
-        "category": risk.category,
-        "subcategory": risk.subcategory,
-        "department": risk.department,
-        "location": risk.location,
-        "process": risk.process,
-        "inherent_likelihood": risk.inherent_likelihood,
-        "inherent_impact": risk.inherent_impact,
-        "inherent_score": risk.inherent_score,
-        "residual_likelihood": risk.residual_likelihood,
-        "residual_impact": risk.residual_impact,
-        "residual_score": risk.residual_score,
-        "target_score": risk.target_score,
-        "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
-        "risk_color": RiskScoringEngine.get_risk_color(risk.residual_score),
-        "risk_appetite": risk.risk_appetite,
-        "appetite_threshold": risk.appetite_threshold,
-        "is_within_appetite": risk.is_within_appetite,
-        "treatment_strategy": risk.treatment_strategy,
-        "treatment_plan": risk.treatment_plan,
-        "treatment_status": risk.treatment_status,
-        "status": risk.status,
-        "risk_owner_id": risk.risk_owner_id,
-        "risk_owner_name": risk.risk_owner_name,
-        "review_frequency_days": risk.review_frequency_days,
-        "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
-        "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
-        "review_notes": risk.review_notes,
-        "is_escalated": risk.is_escalated,
-        "escalation_reason": risk.escalation_reason,
-        "linked_audits": risk.linked_audits or [],
-        "linked_incidents": risk.linked_incidents or [],
-        "linked_actions": risk.linked_actions or [],
-        "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
-        "controls": [
-            {
-                "id": c.id,
-                "reference": c.reference,
-                "name": c.name,
-                "control_type": c.control_type,
-                "effectiveness": c.effectiveness,
-            }
-            for c in controls
-        ],
-        "kris": [
-            {
-                "id": k.id,
-                "name": k.name,
-                "current_value": k.current_value,
-                "current_status": k.current_status,
-                "last_updated": k.last_updated.isoformat() if k.last_updated else None,
-            }
-            for k in kris
-        ],
-        "assessment_history": [
-            {
-                "date": h.assessment_date.isoformat() if h.assessment_date else None,
-                "inherent_score": h.inherent_score,
-                "residual_score": h.residual_score,
-                "status": h.status,
-            }
-            for h in history
-        ],
-    }
-
-
-@router.put("/{risk_id}", response_model=dict)
-async def update_risk(
-    current_user: CurrentUser,
-    risk_id: int,
-    risk_data: RiskUpdate,
-    db: DbSession,
-) -> dict[str, Any]:
-    """Update risk details (not scores)"""
-    result = await db.execute(
-        select(EnterpriseRisk).where(
-            EnterpriseRisk.id == risk_id,
-            EnterpriseRisk.tenant_id == current_user.tenant_id,
-        )
-    )
-    risk = result.scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-
-    update_data = risk_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(risk, key, value)
-
-    risk.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-    await db.refresh(risk)
-
-    return {"message": "EnterpriseRisk updated successfully", "id": risk.id}
-
-
-@router.post("/{risk_id}/assess", response_model=dict)
-async def assess_risk(
-    current_user: CurrentUser,
-    risk_id: int,
-    assessment: RiskAssessmentUpdate,
-    db: DbSession,
-) -> dict[str, Any]:
-    """Update risk assessment scores"""
-    result = await db.execute(
-        select(EnterpriseRisk).where(
-            EnterpriseRisk.id == risk_id,
-            EnterpriseRisk.tenant_id == current_user.tenant_id,
-        )
-    )
-    risk = result.scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-    service = RiskService(db)
-    try:
-        risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
-        return {
-            "message": "EnterpriseRisk assessment updated",
-            "inherent_score": risk.inherent_score,
-            "residual_score": risk.residual_score,
-            "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
-            "is_within_appetite": risk.is_within_appetite,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-
-@router.delete("/{risk_id}", status_code=204)
-async def delete_risk(
-    current_user: CurrentUser,
-    risk_id: int,
-    db: DbSession,
-) -> None:
-    """Delete a risk (soft delete by changing status)"""
-    result = await db.execute(
-        select(EnterpriseRisk).where(
-            EnterpriseRisk.id == risk_id,
-            EnterpriseRisk.tenant_id == current_user.tenant_id,
-        )
-    )
-    risk = result.scalar_one_or_none()
-    if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
-
-    risk.status = "closed"
-    risk.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-
-
 # ============ Heat Map & Matrix Endpoints ============
 
 
@@ -862,3 +672,194 @@ async def get_risk_summary(
         "escalated": escalated,
         "by_category": {cat: count for cat, count in categories},
     }
+
+
+@router.get("/{risk_id}", response_model=dict)
+async def get_risk(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Get detailed risk information"""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+
+    result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
+    control_mappings = result.scalars().all()
+    control_ids = [m.control_id for m in control_mappings]
+
+    if control_ids:
+        result = await db.execute(select(EnterpriseRiskControl).where(EnterpriseRiskControl.id.in_(control_ids)))
+        controls = result.scalars().all()
+    else:
+        controls = []
+
+    result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.risk_id == risk_id))
+    kris = result.scalars().all()
+
+    result = await db.execute(
+        select(RiskAssessmentHistory)
+        .where(RiskAssessmentHistory.risk_id == risk_id)
+        .order_by(RiskAssessmentHistory.assessment_date.desc())
+        .limit(10)
+    )
+    history = result.scalars().all()
+
+    return {
+        "id": risk.id,
+        "reference": risk.reference,
+        "title": risk.title,
+        "description": risk.description,
+        "category": risk.category,
+        "subcategory": risk.subcategory,
+        "department": risk.department,
+        "location": risk.location,
+        "process": risk.process,
+        "inherent_likelihood": risk.inherent_likelihood,
+        "inherent_impact": risk.inherent_impact,
+        "inherent_score": risk.inherent_score,
+        "residual_likelihood": risk.residual_likelihood,
+        "residual_impact": risk.residual_impact,
+        "residual_score": risk.residual_score,
+        "target_score": risk.target_score,
+        "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
+        "risk_color": RiskScoringEngine.get_risk_color(risk.residual_score),
+        "risk_appetite": risk.risk_appetite,
+        "appetite_threshold": risk.appetite_threshold,
+        "is_within_appetite": risk.is_within_appetite,
+        "treatment_strategy": risk.treatment_strategy,
+        "treatment_plan": risk.treatment_plan,
+        "treatment_status": risk.treatment_status,
+        "status": risk.status,
+        "risk_owner_id": risk.risk_owner_id,
+        "risk_owner_name": risk.risk_owner_name,
+        "review_frequency_days": risk.review_frequency_days,
+        "last_review_date": (risk.last_review_date.isoformat() if risk.last_review_date else None),
+        "next_review_date": (risk.next_review_date.isoformat() if risk.next_review_date else None),
+        "review_notes": risk.review_notes,
+        "is_escalated": risk.is_escalated,
+        "escalation_reason": risk.escalation_reason,
+        "linked_audits": risk.linked_audits or [],
+        "linked_incidents": risk.linked_incidents or [],
+        "linked_actions": risk.linked_actions or [],
+        "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
+        "controls": [
+            {
+                "id": c.id,
+                "reference": c.reference,
+                "name": c.name,
+                "control_type": c.control_type,
+                "effectiveness": c.effectiveness,
+            }
+            for c in controls
+        ],
+        "kris": [
+            {
+                "id": k.id,
+                "name": k.name,
+                "current_value": k.current_value,
+                "current_status": k.current_status,
+                "last_updated": k.last_updated.isoformat() if k.last_updated else None,
+            }
+            for k in kris
+        ],
+        "assessment_history": [
+            {
+                "date": h.assessment_date.isoformat() if h.assessment_date else None,
+                "inherent_score": h.inherent_score,
+                "residual_score": h.residual_score,
+                "status": h.status,
+            }
+            for h in history
+        ],
+    }
+
+
+@router.put("/{risk_id}", response_model=dict)
+async def update_risk(
+    current_user: CurrentUser,
+    risk_id: int,
+    risk_data: RiskUpdate,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Update risk details (not scores)"""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+
+    update_data = risk_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(risk, key, value)
+
+    risk.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(risk)
+
+    return {"message": "EnterpriseRisk updated successfully", "id": risk.id}
+
+
+@router.post("/{risk_id}/assess", response_model=dict)
+async def assess_risk(
+    current_user: CurrentUser,
+    risk_id: int,
+    assessment: RiskAssessmentUpdate,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Update risk assessment scores"""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+    service = RiskService(db)
+    try:
+        risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
+        return {
+            "message": "EnterpriseRisk assessment updated",
+            "inherent_score": risk.inherent_score,
+            "residual_score": risk.residual_score,
+            "risk_level": RiskScoringEngine.get_risk_level(risk.residual_score),
+            "is_within_appetite": risk.is_within_appetite,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{risk_id}", status_code=204)
+async def delete_risk(
+    current_user: CurrentUser,
+    risk_id: int,
+    db: DbSession,
+) -> None:
+    """Delete a risk (soft delete by changing status)"""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+
+    risk.status = "closed"
+    risk.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
