@@ -862,4 +862,3 @@ async def delete_risk(
     risk.status = "closed"
     risk.updated_at = datetime.now(timezone.utc)
     await db.commit()
-

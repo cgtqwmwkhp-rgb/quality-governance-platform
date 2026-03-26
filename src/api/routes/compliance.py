@@ -245,7 +245,9 @@ async def _load_canonical_standard_rows(
                 canonical_rows[matched_standard] = record
 
         clause_count_rows = await db.execute(
-            select(Clause.standard_id, func.count(Clause.id)).where(Clause.is_active == True).group_by(Clause.standard_id)
+            select(Clause.standard_id, func.count(Clause.id))
+            .where(Clause.is_active == True)
+            .group_by(Clause.standard_id)
         )
         db_clause_counts = {standard_id: count for standard_id, count in clause_count_rows.all()}
 
