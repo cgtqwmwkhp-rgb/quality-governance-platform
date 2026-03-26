@@ -256,6 +256,16 @@ jobs:
             --output none
           
           echo "   ✅ Application settings configured"
+
+          echo "   🔧 Aligning App Service runtime configuration..."
+          az webapp config set \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group rg-qgp-staging \
+            --startup-file "uvicorn src.main:app --host 0.0.0.0 --port 8000" \
+            --always-on true \
+            --generic-configurations '{"healthCheckPath":"/healthz"}' \
+            --output none
+          echo "   ✅ App Service runtime configuration aligned"
           
           # Restart the app to apply new settings
           echo "   🔄 Restarting application..."
