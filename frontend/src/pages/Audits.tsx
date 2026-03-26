@@ -23,6 +23,7 @@ import {
   AuditFinding,
   AuditTemplate,
   AuditRunCreate,
+  ExternalAuditType,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -42,6 +43,7 @@ import { ToastContainer, useToast } from '../components/ui/Toast'
 import { cn, decodeHtmlEntities } from '../helpers/utils'
 
 type ViewMode = 'kanban' | 'list' | 'findings'
+type AuditModalMode = 'schedule' | 'import'
 
 // Form state for creating a new audit
 interface CreateAuditForm {
@@ -49,6 +51,7 @@ interface CreateAuditForm {
   title: string
   location: string
   scheduled_date: string
+  external_audit_type: ExternalAuditType | ''
   source_origin: string
   assurance_scheme: string
   external_body_name: string
@@ -83,11 +86,56 @@ const KANBAN_COLUMNS = [
   },
 ]
 
+const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
+  value: ExternalAuditType
+  label: string
+  description: string
+  sourceOrigin: string
+  defaultScheme: string
+}> = [
+  {
+    value: 'customer',
+    label: 'Customer Audit',
+    description: 'Audits raised directly by a customer or client team.',
+    sourceOrigin: 'customer',
+    defaultScheme: 'Customer Audit',
+  },
+  {
+    value: 'iso',
+    label: 'ISO Audit',
+    description: 'Certification or surveillance audits such as ISO 9001, 14001, or 45001.',
+    sourceOrigin: 'certification',
+    defaultScheme: '',
+  },
+  {
+    value: 'planet_mark',
+    label: 'Planet Mark',
+    description: 'Planet Mark assessments and certification reviews.',
+    sourceOrigin: 'certification',
+    defaultScheme: 'Planet Mark',
+  },
+  {
+    value: 'achilles_uvdb',
+    label: 'Achilles / UVDB',
+    description: 'Achilles, UVDB, or Verify-style external assurance audits.',
+    sourceOrigin: 'third_party',
+    defaultScheme: 'Achilles UVDB',
+  },
+  {
+    value: 'other',
+    label: 'Other External Audit',
+    description: 'Any external audit that does not fit the main categories above.',
+    sourceOrigin: 'third_party',
+    defaultScheme: '',
+  },
+]
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
   location: '',
   scheduled_date: new Date().toISOString().split('T')[0]!,
+  external_audit_type: '',
   source_origin: 'internal',
   assurance_scheme: '',
   external_body_name: '',
@@ -104,6 +152,7 @@ export default function Audits() {
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('kanban')
   const [searchTerm, setSearchTerm] = useState('')
+  const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
 
   // Form state
@@ -192,32 +241,61 @@ export default function Audits() {
   const latestSelectedTemplate =
     selectedTemplateFamily?.versions[0] ?? latestPublishedTemplates[0] ?? null
 
-  const buildDefaultForm = (): CreateAuditForm => {
+  const buildDefaultForm = (mode: AuditModalMode): CreateAuditForm => {
     if (!latestPublishedTemplates.length) {
-      return INITIAL_FORM_STATE
+      return {
+        ...INITIAL_FORM_STATE,
+        source_origin: mode === 'import' ? '' : 'internal',
+      }
     }
     const preferred = latestPublishedTemplates[0]!
     return {
       ...INITIAL_FORM_STATE,
       template_id: preferred.id,
       title: decodeHtmlEntities(preferred.name),
+      source_origin: mode === 'import' ? '' : 'internal',
     }
   }
 
-  const handleOpenModal = () => {
-    setFormData(buildDefaultForm())
+  const handleOpenModal = (mode: AuditModalMode) => {
+    setModalMode(mode)
+    setFormData(buildDefaultForm(mode))
     setFormError(null)
     setSuccessMessage(null)
     setShowVersionSelector(false)
+    setReportFile(null)
     setShowModal(true)
   }
 
   const handleCloseModal = () => {
     setShowModal(false)
-    setFormData(buildDefaultForm())
+    setModalMode('schedule')
+    setFormData(buildDefaultForm('schedule'))
     setFormError(null)
     setShowVersionSelector(false)
     setReportFile(null)
+  }
+
+  const selectedExternalAuditType = useMemo(
+    () =>
+      EXTERNAL_AUDIT_TYPE_OPTIONS.find((option) => option.value === formData.external_audit_type) ?? null,
+    [formData.external_audit_type],
+  )
+
+  const handleExternalAuditTypeChange = (value: string) => {
+    const selectedOption =
+      EXTERNAL_AUDIT_TYPE_OPTIONS.find((option) => option.value === value) ?? null
+
+    setFormData((prev) => ({
+      ...prev,
+      external_audit_type: (selectedOption?.value ?? '') as CreateAuditForm['external_audit_type'],
+      source_origin: selectedOption?.sourceOrigin ?? prev.source_origin,
+      assurance_scheme: selectedOption?.defaultScheme || '',
+      external_body_name:
+        selectedOption?.value === 'customer'
+          ? prev.external_body_name
+          : selectedOption?.defaultScheme || prev.external_body_name,
+    }))
   }
 
   const handleSubmitAudit = async (e: React.FormEvent) => {
@@ -229,6 +307,21 @@ export default function Audits() {
       return
     }
 
+    if (modalMode === 'import') {
+      if (!formData.external_audit_type) {
+        setFormError('Please choose the external audit type')
+        return
+      }
+      if (!formData.assurance_scheme.trim()) {
+        setFormError('Please enter the audit scheme or standard')
+        return
+      }
+      if (!reportFile) {
+        setFormError('Please upload the external audit report')
+        return
+      }
+    }
+
     setIsSubmitting(true)
     try {
       const payload: AuditRunCreate = {
@@ -236,6 +329,7 @@ export default function Audits() {
         title: formData.title || undefined,
         location: formData.location || undefined,
         scheduled_date: formData.scheduled_date || undefined,
+        external_audit_type: formData.external_audit_type || undefined,
         source_origin: formData.source_origin || undefined,
         assurance_scheme: formData.assurance_scheme || undefined,
         external_body_name: formData.external_body_name || undefined,
@@ -246,7 +340,11 @@ export default function Audits() {
       const res = await auditsApi.createRun(payload)
       const result = res.data
 
-      let successDetail = `Audit scheduled successfully! Reference: ${result.reference_number}`
+      const isImportFlow = modalMode === 'import'
+      let reportUploadFailed = false
+      let successDetail = isImportFlow
+        ? `External audit imported successfully. Reference: ${result.reference_number}`
+        : `Audit scheduled successfully! Reference: ${result.reference_number}`
       if (reportFile) {
         try {
           const uploadRes = await evidenceAssetsApi.upload(reportFile, {
@@ -255,8 +353,8 @@ export default function Audits() {
             title: formData.external_reference || reportFile.name,
             description:
               formData.assurance_scheme || formData.external_body_name
-                ? `Uploaded customer audit report for ${formData.assurance_scheme || 'external audit'}`
-                : 'Uploaded customer audit report',
+                ? `Uploaded source audit report for ${formData.assurance_scheme || 'external audit'}`
+                : 'Uploaded source audit report',
             visibility: 'internal_customer',
           })
 
@@ -266,6 +364,7 @@ export default function Audits() {
           })
           successDetail += ` Report linked: ${uploadRes.data.original_filename}`
         } catch (uploadErr: unknown) {
+          reportUploadFailed = true
           const axiosErr = uploadErr as { response?: { data?: { detail?: string } } }
           successDetail +=
             ' Audit created, but the source report upload failed. You can add the report from Evidence Assets.'
@@ -279,6 +378,11 @@ export default function Audits() {
       setSuccessMessage(successDetail)
 
       await loadData()
+
+      if (isImportFlow && !reportUploadFailed) {
+        navigate(`/audits/${result.id}/execute`)
+        return
+      }
 
       // STATIC_UI_CONFIG_OK: UX delay to show success before closing modal
       setTimeout(() => {
@@ -391,7 +495,7 @@ export default function Audits() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Audit Management</h1>
           <p className="text-muted-foreground mt-1">
-            Internal audits, inspections & compliance checks
+            Internal audits, imported external audits, inspections, and compliance checks
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -413,9 +517,13 @@ export default function Audits() {
               </button>
             ))}
           </div>
-          <Button onClick={handleOpenModal}>
+          <Button variant="outline" onClick={() => handleOpenModal('import')}>
+            <FileText size={20} />
+            Import External Audit
+          </Button>
+          <Button onClick={() => handleOpenModal('schedule')}>
             <Plus size={20} />
-            {t('audits.new')}
+            Schedule Audit
           </Button>
         </div>
       </div>
@@ -843,10 +951,12 @@ export default function Audits() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-primary" />
-              Schedule New Audit
+              {modalMode === 'import' ? 'Import External Audit' : 'Schedule New Audit'}
             </DialogTitle>
             <DialogDescription>
-              Select a published template and schedule an audit run.
+              {modalMode === 'import'
+                ? 'Choose the external audit type, upload the report, and create a linked audit record.'
+                : 'Select a published template and schedule an audit run.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -1006,110 +1116,130 @@ export default function Audits() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="audit-source-origin" className="text-sm font-medium text-foreground">
-                    Audit Source
-                  </label>
-                  <select
-                    id="audit-source-origin"
-                    value={formData.source_origin}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, source_origin: e.target.value }))
-                    }
-                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  >
-                    <option value="internal">Internal</option>
-                    <option value="customer">Customer</option>
-                    <option value="third_party">Third Party</option>
-                    <option value="certification">Certification Body</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="audit-scheme" className="text-sm font-medium text-foreground">
-                    Assurance Scheme
-                  </label>
-                  <Input
-                    id="audit-scheme"
-                    type="text"
-                    placeholder="e.g., Customer Audit, Achilles, Planet Mark"
-                    value={formData.assurance_scheme}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, assurance_scheme: e.target.value }))
-                    }
-                    maxLength={100}
-                  />
-                </div>
-              </div>
+              {modalMode === 'import' ? (
+                <>
+                  <div className="rounded-xl border border-border bg-surface p-4 space-y-4">
+                    <div className="space-y-2">
+                      <label htmlFor="audit-import-type" className="text-sm font-medium text-foreground">
+                        Import Type <span className="text-destructive">*</span>
+                      </label>
+                      <select
+                        id="audit-import-type"
+                        value={formData.external_audit_type}
+                        onChange={(e) => handleExternalAuditTypeChange(e.target.value)}
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Select external audit type...</option>
+                        {EXTERNAL_AUDIT_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedExternalAuditType?.description ||
+                          'This controls the source metadata and keeps imported audits searchable.'}
+                      </p>
+                    </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label htmlFor="audit-external-body" className="text-sm font-medium text-foreground">
-                    External Body
-                  </label>
-                  <Input
-                    id="audit-external-body"
-                    type="text"
-                    placeholder="e.g., Customer, Achilles, Planet Mark"
-                    value={formData.external_body_name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, external_body_name: e.target.value }))
-                    }
-                    maxLength={255}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="audit-external-auditor" className="text-sm font-medium text-foreground">
-                    External Auditor
-                  </label>
-                  <Input
-                    id="audit-external-auditor"
-                    type="text"
-                    placeholder="Auditor or assessor name"
-                    value={formData.external_auditor_name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, external_auditor_name: e.target.value }))
-                    }
-                    maxLength={255}
-                  />
-                </div>
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="audit-source-origin" className="text-sm font-medium text-foreground">
+                          Source Origin
+                        </label>
+                        <Input
+                          id="audit-source-origin"
+                          type="text"
+                          value={formData.source_origin}
+                          readOnly
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="audit-scheme" className="text-sm font-medium text-foreground">
+                          Audit Scheme / Standard <span className="text-destructive">*</span>
+                        </label>
+                        <Input
+                          id="audit-scheme"
+                          type="text"
+                          placeholder="e.g., ISO 9001 Surveillance, Planet Mark, Achilles UVDB"
+                          value={formData.assurance_scheme}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, assurance_scheme: e.target.value }))
+                          }
+                          maxLength={100}
+                        />
+                      </div>
+                    </div>
 
-              <div className="space-y-2">
-                <label htmlFor="audit-external-reference" className="text-sm font-medium text-foreground">
-                  External Reference
-                </label>
-                <Input
-                  id="audit-external-reference"
-                  type="text"
-                  placeholder="Certificate number, report reference, or customer audit ID"
-                  value={formData.external_reference}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, external_reference: e.target.value }))
-                  }
-                  maxLength={100}
-                />
-              </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label htmlFor="audit-external-body" className="text-sm font-medium text-foreground">
+                          External Body / Customer
+                        </label>
+                        <Input
+                          id="audit-external-body"
+                          type="text"
+                          placeholder="e.g., National Grid, BSI, Achilles, Planet Mark"
+                          value={formData.external_body_name}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, external_body_name: e.target.value }))
+                          }
+                          maxLength={255}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="audit-external-auditor" className="text-sm font-medium text-foreground">
+                          External Auditor / Assessor
+                        </label>
+                        <Input
+                          id="audit-external-auditor"
+                          type="text"
+                          placeholder="Auditor or assessor name"
+                          value={formData.external_auditor_name}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, external_auditor_name: e.target.value }))
+                          }
+                          maxLength={255}
+                        />
+                      </div>
+                    </div>
 
-              <div className="space-y-2">
-                <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
-                  Source Audit Report
-                </label>
-                <Input
-                  id="audit-report-file"
-                  type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx"
-                  onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Upload the customer or certification audit report so it is linked into the shared evidence layer.
-                </p>
-                {reportFile && (
-                  <p className="text-xs text-primary">
-                    Selected file: {reportFile.name}
-                  </p>
-                )}
-              </div>
+                    <div className="space-y-2">
+                      <label htmlFor="audit-external-reference" className="text-sm font-medium text-foreground">
+                        External Reference
+                      </label>
+                      <Input
+                        id="audit-external-reference"
+                        type="text"
+                        placeholder="Certificate number, report reference, or customer audit ID"
+                        value={formData.external_reference}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, external_reference: e.target.value }))
+                        }
+                        maxLength={100}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
+                        Source Audit Report <span className="text-destructive">*</span>
+                      </label>
+                      <Input
+                        id="audit-report-file"
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx"
+                        onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Upload the source report so the imported audit is linked into the shared evidence layer from day one.
+                      </p>
+                      {reportFile && (
+                        <p className="text-xs text-primary">Selected file: {reportFile.name}</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               {/* Scheduled Date */}
               <div className="space-y-2">
@@ -1155,12 +1285,16 @@ export default function Audits() {
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {t('audits.scheduling')}
+                      {modalMode === 'import' ? 'Importing audit...' : t('audits.scheduling')}
                     </>
                   ) : (
                     <>
-                      <Calendar className="w-4 h-4" />
-                      Schedule Audit
+                      {modalMode === 'import' ? (
+                        <FileText className="w-4 h-4" />
+                      ) : (
+                        <Calendar className="w-4 h-4" />
+                      )}
+                      {modalMode === 'import' ? 'Import External Audit' : 'Schedule Audit'}
                     </>
                   )}
                 </Button>

@@ -890,6 +890,8 @@ export interface RiskCreate {
 }
 
 // ============ Audit Types ============
+export type ExternalAuditType = 'customer' | 'iso' | 'planet_mark' | 'achilles_uvdb' | 'other'
+
 export interface AuditRun {
   id: number
   reference_number: string
@@ -997,6 +999,7 @@ export interface AuditRunCreate {
   scheduled_date?: string
   due_date?: string
   notes?: string
+  external_audit_type?: ExternalAuditType
   source_origin?: string
   assurance_scheme?: string
   external_body_name?: string

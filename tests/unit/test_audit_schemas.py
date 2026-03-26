@@ -304,6 +304,35 @@ class TestAuditRunCreate:
         assert run.location == "Building A"
         assert run.latitude == 51.5074
 
+    def test_external_import_accepts_supported_type(self):
+        """Test importing an external audit with a supported type."""
+        run = AuditRunCreate(
+            template_id=1,
+            external_audit_type="planet_mark",
+            source_origin="certification",
+            assurance_scheme="Planet Mark",
+        )
+        assert run.external_audit_type == "planet_mark"
+        assert run.source_origin == "certification"
+
+    def test_external_import_rejects_invalid_source_origin(self):
+        """Test source_origin rejects values outside the bounded contract."""
+        with pytest.raises(ValidationError):
+            AuditRunCreate(
+                template_id=1,
+                external_audit_type="customer",
+                source_origin="supplier",
+            )
+
+    def test_iso_import_requires_assurance_scheme(self):
+        """Test ISO imports require the standard or scheme to be specified."""
+        with pytest.raises(ValidationError):
+            AuditRunCreate(
+                template_id=1,
+                external_audit_type="iso",
+                source_origin="certification",
+            )
+
 
 class TestAuditResponseCreate:
     """Tests for AuditResponseCreate schema."""
