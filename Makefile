@@ -1,4 +1,4 @@
-.PHONY: dev test lint build docker lockfile clean help
+.PHONY: dev test lint build docker lockfile clean help pr-ready start-branch pr-template
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -34,6 +34,16 @@ lint: ## Run all linters
 lint-fix: ## Auto-fix linting issues
 	black src/ tests/
 	isort --settings-path pyproject.toml src/ tests/
+
+pr-ready: ## Run local PR preflight checks
+	./scripts/governance/pr-ready.sh
+
+start-branch: ## Create a new branch from origin/main (usage: make start-branch BRANCH=fix/my-change)
+	@if [ -z "$(BRANCH)" ]; then echo "Usage: make start-branch BRANCH=fix/my-change"; exit 1; fi
+	./scripts/governance/start-branch.sh "$(BRANCH)"
+
+pr-template: ## Show the CLI-safe PR body template path
+	@echo "Use: gh pr create --body-file scripts/governance/pr_body_template.md"
 
 build: ## Build frontend for production
 	cd frontend && npm run build

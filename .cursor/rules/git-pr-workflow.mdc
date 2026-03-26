@@ -1,0 +1,13 @@
+---
+description: Keep git branching and PR governance aligned with repo workflow
+alwaysApply: true
+---
+
+# Git And PR Workflow
+
+- Never start new work from local `main`.
+- Create branches from `origin/main` with `make start-branch BRANCH=fix/my-change` or `git fetch origin && git switch -c <branch> --track origin/main`.
+- Treat local `main` as sync-only. Do not commit or push feature work from it.
+- Before opening or updating a PR, run `make pr-ready`.
+- When using GitHub CLI, create PRs with `gh pr create --body-file scripts/governance/pr_body_template.md`.
+- Do not replace the PR body with ad hoc text that drops the required Change Ledger sections.

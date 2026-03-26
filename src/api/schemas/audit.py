@@ -1,9 +1,9 @@
 """Pydantic schemas for Audit & Inspection API."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ============== Question Types & Options ==============
 
@@ -407,6 +407,15 @@ class PurgeExpiredTemplatesResponse(BaseModel):
 
 # ============== Audit Run Schemas ==============
 
+ALLOWED_AUDIT_SOURCE_ORIGINS = {"internal", "customer", "third_party", "certification"}
+EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN = {
+    "customer": "customer",
+    "iso": "certification",
+    "planet_mark": "certification",
+    "achilles_uvdb": "third_party",
+    "other": "third_party",
+}
+
 
 class AuditRunBase(BaseModel):
     """Base schema for Audit Run."""
@@ -429,12 +438,39 @@ class AuditRunBase(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    @field_validator("source_origin")
+    @classmethod
+    def validate_source_origin(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if value not in ALLOWED_AUDIT_SOURCE_ORIGINS:
+            raise ValueError(f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}")
+        return value
+
 
 class AuditRunCreate(AuditRunBase):
     """Schema for creating an Audit Run."""
 
     template_id: int
     assigned_to_id: Optional[int] = None
+    external_audit_type: Optional[Literal["customer", "iso", "planet_mark", "achilles_uvdb", "other"]] = None
+
+    @model_validator(mode="after")
+    def validate_external_import_fields(self) -> "AuditRunCreate":
+        if self.external_audit_type is None:
+            return self
+
+        expected_source_origin = EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN[self.external_audit_type]
+        if self.source_origin and self.source_origin != expected_source_origin:
+            raise ValueError(
+                f"source_origin must be '{expected_source_origin}' when external_audit_type is "
+                f"'{self.external_audit_type}'"
+            )
+
+        if self.external_audit_type == "iso" and not (self.assurance_scheme or "").strip():
+            raise ValueError("assurance_scheme is required when external_audit_type is 'iso'")
+
+        return self
 
 
 class AuditRunUpdate(BaseModel):
@@ -455,6 +491,15 @@ class AuditRunUpdate(BaseModel):
     external_reference: Optional[str] = Field(None, max_length=100)
     source_document_asset_id: Optional[int] = None
     source_document_label: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("source_origin")
+    @classmethod
+    def validate_source_origin(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        if value not in ALLOWED_AUDIT_SOURCE_ORIGINS:
+            raise ValueError(f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}")
+        return value
 
 
 class AuditRunResponse(BaseModel):

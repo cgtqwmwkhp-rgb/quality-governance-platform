@@ -150,6 +150,42 @@ class TestAuditsAPI:
         assert data["status"] == "scheduled"
 
     @pytest.mark.asyncio
+    async def test_create_external_audit_run_normalizes_import_type(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test external import types map into the canonical audit metadata fields."""
+        template = AuditTemplate(
+            name="External Audit Intake",
+            category="Compliance",
+            audit_type="audit",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles follow-up audit",
+                "external_audit_type": "achilles_uvdb",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["source_origin"] == "third_party"
+        assert data["assurance_scheme"] == "Achilles UVDB"
+
+    @pytest.mark.asyncio
     async def test_start_audit_run(
         self,
         client: AsyncClient,

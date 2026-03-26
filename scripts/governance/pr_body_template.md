@@ -1,11 +1,8 @@
-> If you open PRs with GitHub CLI, use `gh pr create --body-file scripts/governance/pr_body_template.md`.
-> Passing a custom `--body` can bypass this template and fail `Change Ledger Enforcement`.
-
 # Change Ledger (CL-001)
 
 ## 1) Summary
 - **Feature / Change name:**
-- **User goal (1–2 lines):**
+- **User goal (1-2 lines):**
 - **In scope:**
 - **Out of scope:**
 - **Feature flag / kill switch:** (name + default state)
@@ -51,7 +48,7 @@
 - **Alerts:**
 - **Runbook updates:** link(s)
 
-## 8) Release Plan (Local → Staging → Canary → Prod)
+## 8) Release Plan (Local -> Staging -> Canary -> Prod)
 - **Staging verification:**
 - **Canary plan:** traffic %, duration, thresholds, rollback triggers
 - **Prod post-deploy checks:**

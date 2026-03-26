@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import (
+    EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN,
     ArchiveTemplateResponse,
     AuditFindingCreate,
     AuditFindingListResponse,
@@ -136,6 +137,29 @@ def _record_audit_endpoint_event(
         duration_ms=round(duration_ms, 2),
         error_class=error_class or "none",
     )
+
+
+EXTERNAL_AUDIT_TYPE_DEFAULT_SCHEME = {
+    "customer": "Customer Audit",
+    "planet_mark": "Planet Mark",
+    "achilles_uvdb": "Achilles UVDB",
+}
+
+
+def _normalize_run_create_payload(run_data: AuditRunCreate) -> dict[str, Any]:
+    payload = run_data.model_dump(exclude={"external_audit_type"})
+    if run_data.external_audit_type is None:
+        return payload
+
+    payload["source_origin"] = (
+        payload.get("source_origin") or EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN[run_data.external_audit_type]
+    )
+
+    default_scheme = EXTERNAL_AUDIT_TYPE_DEFAULT_SCHEME.get(run_data.external_audit_type)
+    if default_scheme and not payload.get("assurance_scheme"):
+        payload["assurance_scheme"] = default_scheme
+
+    return payload
 
 
 # ============== Template Endpoints ==============
@@ -849,7 +873,7 @@ async def create_run(
         )
 
     run = AuditRun(
-        **run_data.model_dump(),
+        **_normalize_run_create_payload(run_data),
         template_version=template.version,
         status=AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
