@@ -320,9 +320,7 @@ class AuditService:
         """Raise ValidationError when a template is incomplete for publishing."""
         if not (template.name or "").strip():
             raise ValidationError("Template name is required before publishing")
-        if not template.sections:
-            raise ValidationError("Template must contain at least one section to publish")
-        if not template.questions:
+        if not template.sections or not template.questions:
             raise ValidationError("Template must have at least one question to publish")
 
         for section in template.sections:
