@@ -79,14 +79,21 @@ chore(ci): add coverage threshold to test pipeline
 
 ## Pull Request Process
 
-1. **Create your branch** from `main` using the naming convention above.
-2. **Write a clear PR description** covering:
+1. **Never start new work from local `main`.** Create your branch from `origin/main`:
+   - `make start-branch BRANCH=fix/my-change`
+   - or `git fetch origin && git switch -c fix/my-change --track origin/main`
+2. **Treat local `main` as sync-only.** Do not commit feature work on local `main`, and do not push local `main` unless it is first aligned with `origin/main`.
+3. **Run local preflight before you push:** `make pr-ready`
+4. **Use the repo PR template when opening PRs via GitHub CLI:**
+   - `gh pr create --body-file scripts/governance/pr_body_template.md`
+   - Do not pass an ad hoc `--body`, because that can bypass the required Change Ledger sections.
+5. **Write a clear PR description** covering:
    - What changed and why
    - How to test it
    - Screenshots for UI changes
-3. **All CI checks must pass** before review — linting, tests, build.
-4. **At least one approval** is required to merge.
-5. **Squash merge** into `main`. The PR title becomes the commit message, so make it descriptive.
+6. **All CI checks must pass** before review — linting, tests, build.
+7. **At least one approval** is required to merge.
+8. **Squash merge** into `main`. The PR title becomes the commit message, so make it descriptive.
 
 ## Code Style
 
@@ -108,7 +115,7 @@ chore(ci): add coverage threshold to test pipeline
 - **New features must include tests.** PRs adding functionality without tests will be sent back.
 - Backend tests live in `tests/unit/` and `tests/integration/`.
 - Frontend tests use Vitest; place them next to the component as `*.test.tsx`.
-- Run `make test` (backend) or `make test-frontend` (frontend) locally before pushing.
+- Run `make pr-ready` before pushing to catch the same formatting, lint, mypy, unit-test, and frontend-test issues that commonly fail CI.
 
 ## Documentation
 
