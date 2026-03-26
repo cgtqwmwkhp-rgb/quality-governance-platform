@@ -573,7 +573,7 @@ async def update_section(
 async def delete_section(
     section_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
 ) -> None:
     """Soft delete an audit section."""
     service = AuditService(db)
@@ -731,7 +731,7 @@ async def update_question(
 async def delete_question(
     question_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: CurrentUser,
 ) -> None:
     """Soft delete an audit question."""
     service = AuditService(db)

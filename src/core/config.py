@@ -95,6 +95,7 @@ class Settings(BaseSettings):
         redis_configured = "yes" if (self.redis_url or "").strip() else "no"
         pams_configured = "yes" if (self.pams_database_url or "").strip() else "no"
         appinsights_configured = "yes" if (self.applicationinsights_connection_string or "").strip() else "no"
+        azure_storage_configured = "yes" if (self.azure_storage_connection_string or "").strip() else "no"
 
         logger.info("Configuration summary: app_env=%s", self.app_env)
         logger.info(
@@ -102,6 +103,8 @@ class Settings(BaseSettings):
         )
         logger.info("Configuration summary: redis_configured=%s", redis_configured)
         logger.info("Configuration summary: pams_configured=%s", pams_configured)
+        logger.info("Configuration summary: azure_storage_configured=%s", azure_storage_configured)
+        logger.info("Configuration summary: azure_storage_container=%s", self.azure_storage_container_name or "(unset)")
         logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)
         logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 

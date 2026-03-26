@@ -52,6 +52,118 @@ const ISO_STANDARDS = [
   { id: 'iso50001', label: 'ISO 50001:2018', description: 'Energy Management' },
 ]
 
+const CHOICE_BASED_TYPES = new Set<Question['type']>(['multi_choice', 'checklist'])
+
+function getQuestionValidationErrors(question: Question): string[] {
+  const errors: string[] = []
+  if (!question.text.trim()) {
+    errors.push('Question text is required.')
+  }
+  if (question.weight <= 0) {
+    errors.push('Question weight must be greater than zero.')
+  }
+  if (CHOICE_BASED_TYPES.has(question.type)) {
+    const options = question.options || []
+    const populatedOptions = options.filter((option) => option.label.trim() && option.value.trim())
+    if (populatedOptions.length < 2) {
+      errors.push('Choice questions need at least two answer options.')
+    }
+    if (options.some((option) => !option.label.trim() || !option.value.trim())) {
+      errors.push('Every answer option needs both a label and a value.')
+    }
+  }
+  return errors
+}
+
+function getSectionValidationErrors(section: Section): string[] {
+  const errors: string[] = []
+  if (!section.title.trim()) {
+    errors.push('Section title is required.')
+  }
+  if (section.questions.length === 0) {
+    errors.push('Add at least one question to this section before publishing.')
+  }
+  return errors
+}
+
+function renderPreviewControl(question: Question) {
+  switch (question.type) {
+    case 'yes_no':
+    case 'yes_no_na':
+    case 'pass_fail': {
+      const values =
+        question.type === 'pass_fail'
+          ? ['Pass', 'Fail']
+          : question.type === 'yes_no_na'
+            ? ['Yes', 'No', 'N/A']
+            : ['Yes', 'No']
+      return (
+        <div className="flex flex-wrap gap-3">
+          {values.map((value) => (
+            <label key={value} className="flex items-center gap-2 text-sm text-foreground">
+              <input type="radio" name={`preview-${question.id}`} disabled />
+              {value}
+            </label>
+          ))}
+        </div>
+      )
+    }
+    case 'multi_choice':
+      return (
+        <div className="space-y-2">
+          {(question.options || []).map((option) => (
+            <label key={option.id} className="flex items-center gap-2 text-sm text-foreground">
+              <input type="radio" name={`preview-${question.id}`} disabled />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      )
+    case 'checklist':
+      return (
+        <div className="space-y-2">
+          {(question.options || []).map((option) => (
+            <label key={option.id} className="flex items-center gap-2 text-sm text-foreground">
+              <input type="checkbox" disabled />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      )
+    case 'text_long':
+      return <textarea disabled rows={3} className="w-full rounded-lg border border-border bg-secondary px-3 py-2" />
+    case 'numeric':
+      return <input disabled type="number" className="w-full rounded-lg border border-border bg-secondary px-3 py-2" />
+    case 'date':
+      return <input disabled type="date" className="w-full rounded-lg border border-border bg-secondary px-3 py-2" />
+    case 'scale_1_10':
+    case 'scale_1_5': {
+      const max = question.type === 'scale_1_10' ? 10 : 5
+      return (
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: max }, (_, index) => index + 1).map((value) => (
+            <button
+              key={value}
+              type="button"
+              disabled
+              className="h-9 w-9 rounded-lg border border-border bg-secondary text-sm text-foreground"
+            >
+              {value}
+            </button>
+          ))}
+        </div>
+      )
+    }
+    case 'photo':
+      return <div className="rounded-lg border border-dashed border-border bg-secondary px-3 py-6 text-sm text-muted-foreground">Photo evidence upload</div>
+    case 'signature':
+      return <div className="rounded-lg border border-dashed border-border bg-secondary px-3 py-6 text-sm text-muted-foreground">Signature capture</div>
+    case 'text_short':
+    default:
+      return <input disabled type="text" className="w-full rounded-lg border border-border bg-secondary px-3 py-2" />
+  }
+}
+
 export default function AuditTemplateBuilder() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -89,7 +201,48 @@ export default function AuditTemplateBuilder() {
   const [isLoading, setIsLoading] = useState(!!templateId)
   const sectionIdMap = useRef<Record<string, number>>({})
   const questionIdMap = useRef<Record<string, number>>({})
+  const deletedSectionIds = useRef<number[]>([])
+  const deletedQuestionIds = useRef<number[]>([])
   const allQuestions = template.sections.flatMap((s) => s.questions)
+  const validation = (() => {
+    const questionErrors: Record<string, string[]> = {}
+    const sectionErrors: Record<string, string[]> = {}
+    const publishErrors: string[] = []
+
+    if (!template.name.trim()) {
+      publishErrors.push('Template name is required.')
+    }
+    if (template.sections.length === 0) {
+      publishErrors.push('Add at least one section before publishing.')
+    }
+    if (allQuestions.length === 0) {
+      publishErrors.push('Add at least one question before publishing.')
+    }
+
+    template.sections.forEach((section, index) => {
+      const sectionValidationErrors = getSectionValidationErrors(section)
+      if (sectionValidationErrors.length > 0) {
+        sectionErrors[section.id] = sectionValidationErrors
+        publishErrors.push(`Section ${index + 1}: ${sectionValidationErrors[0]}`)
+      }
+      section.questions.forEach((question, questionIndex) => {
+        const questionValidationErrors = getQuestionValidationErrors(question)
+        if (questionValidationErrors.length > 0) {
+          questionErrors[question.id] = questionValidationErrors
+          publishErrors.push(
+            `${section.title || `Section ${index + 1}`}, question ${questionIndex + 1}: ${questionValidationErrors[0]}`,
+          )
+        }
+      })
+    })
+
+    return {
+      questionErrors,
+      sectionErrors,
+      publishErrors,
+      hasBlockingPublishErrors: publishErrors.length > 0,
+    }
+  })()
 
   useEffect(() => {
     if (!templateId) return
@@ -100,6 +253,8 @@ export default function AuditTemplateBuilder() {
         const { data } = await auditsApi.getTemplate(numericId)
         sectionIdMap.current = {}
         questionIdMap.current = {}
+        deletedSectionIds.current = []
+        deletedQuestionIds.current = []
         setTemplate(mapApiToTemplate(data, sectionIdMap.current, questionIdMap.current))
         setBackendId(data.id)
       } catch (error) {
@@ -116,7 +271,20 @@ export default function AuditTemplateBuilder() {
   const handleAddSection = () => updateSections((ss) => [...ss, createNewSection(ss.length + 1)])
   const handleUpdateSection = (id: string, updates: Partial<Section>) =>
     updateSections((ss) => ss.map((s) => (s.id === id ? { ...s, ...updates } : s)))
-  const handleDeleteSection = (id: string) => updateSections((ss) => ss.filter((s) => s.id !== id))
+  const handleDeleteSection = (id: string) => {
+    const backendSectionId = sectionIdMap.current[id]
+    if (backendSectionId) {
+      deletedSectionIds.current.push(backendSectionId)
+    }
+    const section = template.sections.find((entry) => entry.id === id)
+    section?.questions.forEach((question) => {
+      const backendQuestionId = questionIdMap.current[question.id]
+      if (backendQuestionId) {
+        deletedQuestionIds.current.push(backendQuestionId)
+      }
+    })
+    updateSections((ss) => ss.filter((s) => s.id !== id))
+  }
   const handleAddQuestion = (sid: string) => {
     const q = createNewQuestion()
     updateSections((ss) =>
@@ -131,12 +299,17 @@ export default function AuditTemplateBuilder() {
           : s,
       ),
     )
-  const handleDeleteQuestion = (sid: string, qid: string) =>
+  const handleDeleteQuestion = (sid: string, qid: string) => {
+    const backendQuestionId = questionIdMap.current[qid]
+    if (backendQuestionId) {
+      deletedQuestionIds.current.push(backendQuestionId)
+    }
     updateSections((ss) =>
       ss.map((s) =>
         s.id === sid ? { ...s, questions: s.questions.filter((q) => q.id !== qid) } : s,
       ),
     )
+  }
   const handleDuplicateQuestion = (sid: string, qid: string) =>
     updateSections((ss) =>
       ss.map((s) => {
@@ -166,6 +339,8 @@ export default function AuditTemplateBuilder() {
         category: template.category || undefined,
         scoring_method: template.scoringMethod,
         passing_score: template.passThreshold,
+        pass_threshold: template.passThreshold,
+        estimated_duration: template.estimatedDuration,
       }
       let tid = backendId
       if (tid) await auditsApi.updateTemplate(tid, payload)
@@ -201,6 +376,16 @@ export default function AuditTemplateBuilder() {
           }
         }
       }
+
+      for (const deletedQuestionId of [...new Set(deletedQuestionIds.current)]) {
+        await auditsApi.deleteQuestion(deletedQuestionId)
+      }
+      deletedQuestionIds.current = []
+
+      for (const deletedSectionId of [...new Set(deletedSectionIds.current)]) {
+        await auditsApi.deleteSection(deletedSectionId)
+      }
+      deletedSectionIds.current = []
     } catch (error) {
       const msg = getApiErrorMessage(error)
       setSaveError(msg)
@@ -211,6 +396,17 @@ export default function AuditTemplateBuilder() {
   }
 
   const handlePublish = async () => {
+    if (validation.hasBlockingPublishErrors) {
+      const msg =
+        validation.publishErrors.length === 1
+          ? validation.publishErrors[0]
+          : `Fix ${validation.publishErrors.length} validation issues before publishing.`
+      setSaveError(msg)
+      announce(msg, 'assertive')
+      setActiveTab('builder')
+      setShowPublishDialog(false)
+      return
+    }
     if (!backendId) {
       const msg = 'Please save the template before publishing'
       setSaveError(msg)
@@ -263,6 +459,14 @@ export default function AuditTemplateBuilder() {
           </div>
         ) : (
           <>
+            {validation.publishErrors.length > 0 && (
+              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Template validation</p>
+                <p className="mt-1">
+                  Fix the highlighted authoring issues before publishing this template.
+                </p>
+              </div>
+            )}
             {activeTab === 'builder' && (
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-1 space-y-4">
@@ -376,6 +580,8 @@ export default function AuditTemplateBuilder() {
                         }
                         onDeleteQuestion={(qId) => handleDeleteQuestion(section.id, qId)}
                         onDuplicateQuestion={(qId) => handleDuplicateQuestion(section.id, qId)}
+                        sectionValidationErrors={validation.sectionErrors[section.id] || []}
+                        questionValidationErrors={validation.questionErrors}
                       />
                     ))}
                     <button
@@ -644,6 +850,7 @@ export default function AuditTemplateBuilder() {
                                   </span>
                                 )}
                               </div>
+                              <div className="mt-3">{renderPreviewControl(question)}</div>
                             </div>
                           </div>
                         ))}

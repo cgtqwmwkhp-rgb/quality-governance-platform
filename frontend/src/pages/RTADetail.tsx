@@ -78,6 +78,10 @@ import {
 import { cn } from '../helpers/utils'
 import { UserEmailSearch } from '../components/UserEmailSearch'
 
+const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
+const SUPPORTED_EVIDENCE_MIME_PREFIXES = ['image/', 'video/']
+const SUPPORTED_EVIDENCE_MIME_TYPES = ['application/pdf']
+
 export default function RTADetail() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
@@ -301,6 +305,15 @@ export default function RTADetail() {
     setUploading(true)
     try {
       for (const file of Array.from(e.target.files)) {
+        const isSupportedType =
+          SUPPORTED_EVIDENCE_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)) ||
+          SUPPORTED_EVIDENCE_MIME_TYPES.includes(file.type)
+        if (!isSupportedType) {
+          throw new Error(`${file.name} is not a supported file type. Use JPG, PNG, WebP, HEIC, MP4, or PDF.`)
+        }
+        if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+          throw new Error(`${file.name} exceeds the 50MB upload limit.`)
+        }
         await evidenceAssetsApi.upload(file, {
           source_module: 'road_traffic_collision',
           source_id: rta.id,

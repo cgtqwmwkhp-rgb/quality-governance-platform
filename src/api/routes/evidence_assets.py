@@ -8,6 +8,7 @@ Provides endpoints for evidence asset management including:
 """
 
 import hashlib
+import logging
 import math
 import uuid
 from datetime import datetime, timezone
@@ -35,6 +36,7 @@ from src.domain.models.evidence_asset import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Allowed content types for upload (security: content-type allowlist)
 ALLOWED_CONTENT_TYPES = {
@@ -212,7 +214,7 @@ async def upload_evidence_asset(
     storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
 
     # Upload to blob storage
-    from src.infrastructure.storage import StorageError, storage_service
+    from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
 
     try:
         await storage_service().upload(
@@ -225,12 +227,28 @@ async def upload_evidence_asset(
                 "uploaded_by": str(current_user.id),
             },
         )
+    except StorageDependencyError:
+        logger.exception(
+            "Evidence upload blocked by storage dependency failure",
+            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "STORAGE_DEPENDENCY_UNAVAILABLE",
+                "message": "Evidence upload is temporarily unavailable. Please try again later or contact support.",
+            },
+        )
     except StorageError as e:
+        logger.exception(
+            "Evidence upload failed",
+            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+        )
         raise HTTPException(
             status_code=500,
             detail={
                 "error_code": "STORAGE_UPLOAD_FAILED",
-                "message": f"Failed to upload file to storage: {e}",
+                "message": "Failed to upload evidence. Please retry, and contact support if the issue continues.",
             },
         )
 

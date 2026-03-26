@@ -31,6 +31,18 @@ class StorageNotConfiguredError(StorageError):
     pass
 
 
+class StorageDependencyError(StorageError):
+    """Raised when a required storage dependency is unavailable."""
+
+    pass
+
+
+class StorageContainerMissingError(StorageDependencyError):
+    """Raised when the configured container does not exist."""
+
+    pass
+
+
 class BlobStorageService(ABC):
     """Abstract base class for blob storage operations."""
 
@@ -117,6 +129,11 @@ class BlobStorageService(ABC):
         Returns:
             True if exists, False otherwise
         """
+        pass
+
+    @abstractmethod
+    async def validate_dependencies(self) -> None:
+        """Validate backing storage dependencies."""
         pass
 
 
@@ -240,6 +257,10 @@ class LocalFileStorageService(BlobStorageService):
         full_path = self._get_full_path(storage_key)
         return full_path.exists()
 
+    async def validate_dependencies(self) -> None:
+        """Local storage dependencies are created on demand."""
+        self.base_path.mkdir(parents=True, exist_ok=True)
+
 
 class AzureBlobStorageService(BlobStorageService):
     """Azure Blob Storage service for production.
@@ -277,6 +298,32 @@ class AzureBlobStorageService(BlobStorageService):
         """Get blob client for a specific key."""
         return self._get_container_client().get_blob_client(storage_key)
 
+    async def _ensure_container_available(self, auto_create: bool = False) -> None:
+        """Ensure the configured Azure Blob container exists."""
+        try:
+            container_client = self._get_container_client()
+            if container_client.exists():
+                return
+            if auto_create:
+                try:
+                    container_client.create_container()
+                    logger.warning(
+                        "Azure Storage container %s was missing and has been created automatically",
+                        self.container_name,
+                    )
+                    return
+                except Exception as create_error:
+                    raise StorageContainerMissingError(
+                        f"Configured storage container '{self.container_name}' is missing and could not be created"
+                    ) from create_error
+            raise StorageContainerMissingError(f"Configured storage container '{self.container_name}' does not exist")
+        except StorageDependencyError:
+            raise
+        except Exception as e:
+            raise StorageDependencyError(
+                f"Azure Storage dependency check failed for container '{self.container_name}'"
+            ) from e
+
     async def upload(
         self,
         storage_key: str,
@@ -286,6 +333,7 @@ class AzureBlobStorageService(BlobStorageService):
     ) -> str:
         """Upload file to Azure Blob Storage."""
         try:
+            await self._ensure_container_available(auto_create=True)
             blob_client = self._get_blob_client(storage_key)
             blob_client.upload_blob(
                 content,
@@ -295,6 +343,8 @@ class AzureBlobStorageService(BlobStorageService):
             )
             logger.info(f"Uploaded file to Azure Storage: {storage_key} ({len(content)} bytes)")
             return storage_key
+        except StorageDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Azure storage upload failed: {e}")
             raise StorageError(f"Upload failed: {e}") from e
@@ -302,9 +352,12 @@ class AzureBlobStorageService(BlobStorageService):
     async def download(self, storage_key: str) -> bytes:
         """Download file from Azure Blob Storage."""
         try:
+            await self._ensure_container_available()
             blob_client = self._get_blob_client(storage_key)
             stream = blob_client.download_blob()
             return stream.readall()
+        except StorageDependencyError:
+            raise
         except Exception as e:
             logger.error(f"Azure storage download failed: {e}")
             raise StorageError(f"Download failed: {e}") from e
@@ -312,10 +365,13 @@ class AzureBlobStorageService(BlobStorageService):
     async def delete(self, storage_key: str) -> bool:
         """Delete file from Azure Blob Storage."""
         try:
+            await self._ensure_container_available()
             blob_client = self._get_blob_client(storage_key)
             blob_client.delete_blob()
             logger.info(f"Deleted file from Azure Storage: {storage_key}")
             return True
+        except StorageDependencyError:
+            raise
         except Exception as e:
             if "BlobNotFound" in str(e):
                 return False
@@ -330,6 +386,11 @@ class AzureBlobStorageService(BlobStorageService):
     ) -> str:
         """Generate a SAS URL for secure download."""
         try:
+            container_client = self._get_container_client()
+            if not container_client.exists():
+                raise StorageContainerMissingError(
+                    f"Configured storage container '{self.container_name}' does not exist"
+                )
             from azure.storage.blob import BlobSasPermissions, generate_blob_sas
 
             expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
@@ -352,6 +413,8 @@ class AzureBlobStorageService(BlobStorageService):
             return (
                 f"https://{account_name}.blob.core.windows.net/{self.container_name}/{quote(storage_key)}?{sas_token}"
             )
+        except StorageDependencyError:
+            raise
         except ImportError:
             raise StorageError("azure-storage-blob package not installed")
         except Exception as e:
@@ -361,10 +424,15 @@ class AzureBlobStorageService(BlobStorageService):
     async def exists(self, storage_key: str) -> bool:
         """Check if blob exists in Azure Storage."""
         try:
+            await self._ensure_container_available()
             blob_client = self._get_blob_client(storage_key)
             return blob_client.exists()
         except Exception:
             return False
+
+    async def validate_dependencies(self) -> None:
+        """Validate the Azure Storage account and container are reachable."""
+        await self._ensure_container_available(auto_create=False)
 
 
 def get_storage_service() -> BlobStorageService:
@@ -391,3 +459,22 @@ def storage_service() -> BlobStorageService:
     if _storage_service is None:
         _storage_service = get_storage_service()
     return _storage_service
+
+
+async def validate_storage_dependencies(*, fail_fast: bool = False) -> None:
+    """Validate storage dependencies during startup."""
+    try:
+        await storage_service().validate_dependencies()
+        logger.info("Storage dependency validation succeeded")
+    except StorageNotConfiguredError:
+        if fail_fast:
+            raise
+        logger.warning("Storage dependency validation skipped because storage is not configured")
+    except StorageDependencyError:
+        logger.exception("Storage dependency validation failed")
+        if fail_fast:
+            raise
+    except Exception:
+        logger.exception("Unexpected storage dependency validation failure")
+        if fail_fast:
+            raise
