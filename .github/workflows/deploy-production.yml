@@ -446,7 +446,21 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
+          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+
+          if [ -z "$DB_URL" ]; then
+            echo "❌ Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
+          fi
+          if [ -z "$STORAGE_CONN" ]; then
+            echo "❌ Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
+            exit 1
+          fi
+          if [ -z "$STORAGE_CONTAINER_NAME" ]; then
+            STORAGE_CONTAINER_NAME="attachments"
+          fi
           
           # Configure app settings
           az webapp config appsettings set \
@@ -465,6 +479,8 @@ jobs:
               LOG_LEVEL="INFO" \
               DATABASE_ECHO="false" \
               WEBSITES_PORT="8000" \
+              AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
@@ -473,6 +489,12 @@ jobs:
             --output none
           
           echo "✅ Application settings configured"
+          
+          echo "🔄 Restarting application to apply updated settings..."
+          az webapp restart \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --resource-group "$AZURE_RESOURCE_GROUP"
+          echo "✅ App Service restart requested"
 
       - name: Cleanup old migration containers
         continue-on-error: true
@@ -620,6 +642,7 @@ jobs:
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
           STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           # Validate secrets - FAIL if missing (no silent skip)
@@ -632,6 +655,9 @@ jobs:
             echo "❌ ERROR: Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
             echo "migration_status=failed" >> "$GITHUB_OUTPUT"
             exit 1
+          fi
+          if [ -z "$STORAGE_CONTAINER_NAME" ]; then
+            STORAGE_CONTAINER_NAME="attachments"
           fi
           echo "Successfully retrieved secrets from Key Vault"
           
@@ -657,6 +683,7 @@ jobs:
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
@@ -834,6 +861,19 @@ jobs:
       - name: Verify deployment - Readiness and Health checks
         run: |
           APP_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          get_http_status() {
+            local url="$1"
+            local timeout="${2:-10}"
+            local output_file="${3:-/dev/null}"
+            local status
+            status=$(curl -s -o "$output_file" -w "%{http_code}" --max-time "$timeout" "$url" 2>/dev/null)
+            local curl_exit=$?
+            if [ $curl_exit -ne 0 ] || [ -z "$status" ]; then
+              echo "000"
+            else
+              echo "$status"
+            fi
+          }
           
           # Configuration: bounded exponential backoff
           # Production App Service cold starts can exceed 10 minutes
@@ -862,8 +902,8 @@ jobs:
               break
             fi
             
-            READY_RESPONSE=$(curl -s --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo '{"status":"error"}')
-            READY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/readyz" 2>/dev/null || echo "000")
+            READY_STATUS=$(get_http_status "${APP_URL}/readyz" 10 /tmp/readyz-response.txt)
+            READY_RESPONSE=$(python3 -c 'from pathlib import Path; path = Path("/tmp/readyz-response.txt"); print(path.read_text(errors="replace").strip() if path.exists() else "{\"status\":\"error\"}")')
             
             echo "[$(date -u +%H:%M:%S)] Attempt $ATTEMPT: /readyz → HTTP $READY_STATUS (elapsed: ${ELAPSED}s)"
             
@@ -894,13 +934,12 @@ jobs:
             echo ""
             echo "⚠️ Readiness check did not pass within ${TOTAL_TIMEOUT}s ($ATTEMPT attempts)"
             echo "Last response: $READY_RESPONSE"
-            echo "Continuing to SHA verification gate as deterministic proof of deployment."
           fi
           
           # Phase 2: Health check (quick, since readiness passed)
           echo ""
           echo "### Phase 2: Health Check (/healthz)"
-          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "${APP_URL}/healthz")
+          HEALTH_STATUS=$(get_http_status "${APP_URL}/healthz" 10 /tmp/healthz-response.txt)
           
           if [ "$HEALTH_STATUS" = "200" ]; then
             echo "✅ Health check passed"
@@ -912,7 +951,7 @@ jobs:
           # Phase 3: OpenAPI docs (non-blocking - timeout is acceptable)
           echo ""
           echo "### Phase 3: OpenAPI Check (/openapi.json)"
-          DOCS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${APP_URL}/openapi.json" 2>/dev/null || echo "000")
+          DOCS_STATUS=$(get_http_status "${APP_URL}/openapi.json" 15 /tmp/openapi-response.txt)
           if [ "$DOCS_STATUS" = "200" ]; then
             echo "✅ OpenAPI docs accessible"
           elif [ "$DOCS_STATUS" = "000" ]; then

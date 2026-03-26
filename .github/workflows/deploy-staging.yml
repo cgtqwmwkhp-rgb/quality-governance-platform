@@ -210,11 +210,20 @@ jobs:
           DB_URL=$(az keyvault secret show --vault-name kv-qgp-staging --name DATABASE-URL --query value -o tsv)
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
+          STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           if [ -z "$DB_URL" ]; then
             echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
             exit 1
+          fi
+          if [ -z "$STORAGE_CONN" ]; then
+            echo "   ❌ Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
+            exit 1
+          fi
+          if [ -z "$STORAGE_CONTAINER_NAME" ]; then
+            STORAGE_CONTAINER_NAME="attachments"
           fi
           echo "   ✅ Secrets retrieved successfully"
           
@@ -237,6 +246,8 @@ jobs:
               CORS_ORIGINS='["https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net"]' \
               DATABASE_ECHO="false" \
               WEBSITES_PORT="8000" \
+              AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               CI_TEST_SECRET="${{ secrets.CI_TEST_SECRET }}" \
@@ -265,6 +276,7 @@ jobs:
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name JWT-SECRET-KEY --query value -o tsv)
           STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
+          STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           
           # Validate secrets
@@ -275,6 +287,9 @@ jobs:
           if [ -z "$STORAGE_CONN" ]; then
             echo "❌ ERROR: Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
             exit 1
+          fi
+          if [ -z "$STORAGE_CONTAINER_NAME" ]; then
+            STORAGE_CONTAINER_NAME="attachments"
           fi
           echo "✅ Successfully retrieved secrets from Key Vault"
           
@@ -296,6 +311,7 @@ jobs:
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
+              AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
