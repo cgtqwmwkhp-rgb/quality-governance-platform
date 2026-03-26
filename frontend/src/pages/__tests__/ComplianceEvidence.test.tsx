@@ -42,6 +42,8 @@ const standardsResponse = {
       covered_clauses: 1,
       coverage_percentage: 100,
       has_canonical_standard: true,
+      canonical_data_degraded: false,
+      canonical_data_message: null,
     },
   ],
 }
@@ -209,5 +211,30 @@ describe('ComplianceEvidence', () => {
     })
 
     expect(await screen.findByText('Detected ISO Clauses (1)')).toBeInTheDocument()
+  })
+
+  it('shows a degraded-mode warning when canonical compliance enrichment is unavailable', async () => {
+    mockListStandards.mockResolvedValue({
+      data: [
+        {
+          ...standardsResponse.data[0],
+          canonical_data_degraded: true,
+          canonical_data_message:
+            'Canonical compliance enrichment is temporarily unavailable (OperationalError). Static ISO defaults and persisted evidence coverage are still available.',
+        },
+      ],
+    })
+
+    const ComplianceEvidence = (await import('../ComplianceEvidence')).default
+
+    render(
+      <BrowserRouter>
+        <ComplianceEvidence />
+      </BrowserRouter>,
+    )
+
+    expect(await screen.findByText('Compliance data is running in degraded mode')).toBeInTheDocument()
+    expect(screen.getByText(/Canonical compliance enrichment is temporarily unavailable/)).toBeInTheDocument()
+    expect(screen.getByText(/canonical enrichment degraded/)).toBeInTheDocument()
   })
 })

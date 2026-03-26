@@ -62,7 +62,7 @@ def auth_token(client) -> Optional[str]:
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "username": SmokeTestConfig.TEST_USER,
+            "email": SmokeTestConfig.TEST_USER,
             "password": SmokeTestConfig.TEST_PASS,
         },
     )
@@ -85,7 +85,7 @@ def admin_token(client) -> Optional[str]:
     response = client.post(
         "/api/v1/auth/login",
         json={
-            "username": SmokeTestConfig.ADMIN_USER,
+            "email": SmokeTestConfig.ADMIN_USER,
             "password": SmokeTestConfig.ADMIN_PASS,
         },
     )
@@ -397,11 +397,18 @@ class TestRiskRegisterSmoke:
     """Risk register must be operational."""
 
     def test_risk_register_heatmap(self, client, auth_headers):
-        """✓ Risk register heat map works."""
+        """✓ Risk register heatmap works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/risk-register/heat-map", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        response = client.get("/api/v1/risk-register/heatmap", headers=auth_headers)
+        assert response.status_code == 200
+
+    def test_risk_register_summary(self, client, auth_headers):
+        """✓ Risk register summary works."""
+        if not auth_headers:
+            pytest.skip("Auth not available")
+        response = client.get("/api/v1/risk-register/summary", headers=auth_headers)
+        assert response.status_code == 200
 
 
 # ============================================================================

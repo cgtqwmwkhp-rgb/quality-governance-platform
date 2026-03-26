@@ -2225,6 +2225,21 @@ export const planetMarkApi = {
     api.get<PlanetMarkReportingYearsResponse | SetupRequiredResponse>('/api/v1/planet-mark/years'),
 
   /**
+   * Create a carbon reporting year for first-time module setup.
+   */
+  createReportingYear: (data: {
+    year_label: string
+    year_number: number
+    period_start: string
+    period_end: string
+    average_fte: number
+    organization_name?: string
+    sites_included?: string[]
+    is_baseline_year?: boolean
+    reduction_target_percent?: number
+  }) => api.post<{ id: number; year_label: string; message: string }>('/api/v1/planet-mark/years', data),
+
+  /**
    * Get detailed data for a specific reporting year.
    */
   getYear: (yearId: number) => api.get<CarbonReportingYear>(`/api/v1/planet-mark/years/${yearId}`),
@@ -3047,6 +3062,8 @@ export interface ComplianceStandardRecord {
   covered_clauses: number
   coverage_percentage: number
   has_canonical_standard: boolean
+  canonical_data_degraded?: boolean
+  canonical_data_message?: string | null
 }
 
 export interface CrossStandardMappingRecord {

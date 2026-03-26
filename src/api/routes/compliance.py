@@ -8,6 +8,7 @@ Provides endpoints for:
 - Gap analysis
 """
 
+import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, List, Optional
@@ -15,6 +16,7 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
@@ -23,6 +25,7 @@ from src.domain.models.standard import Clause, Standard
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _STANDARD_DB_MATCHERS: dict[ISOStandard, tuple[str, ...]] = {
     ISOStandard.ISO_9001: ("9001",),
@@ -117,6 +120,8 @@ class ComplianceStandardResponse(BaseModel):
     covered_clauses: int = 0
     coverage_percentage: float = 0
     has_canonical_standard: bool = False
+    canonical_data_degraded: bool = False
+    canonical_data_message: Optional[str] = None
 
 
 class ComplianceSummary(BaseModel):
@@ -230,29 +235,41 @@ async def _load_evidence_links(
 
 async def _load_canonical_standard_rows(
     db: DbSession,
-) -> tuple[dict[ISOStandard, Standard], dict[int, int], dict[ISOStandard, int]]:
-    standard_result = await db.execute(select(Standard).where(Standard.is_active == True))
-    canonical_rows: dict[ISOStandard, Standard] = {}
-    for record in standard_result.scalars().all():
-        matched_standard = _match_standard_record(record)
-        if matched_standard and matched_standard not in canonical_rows:
-            canonical_rows[matched_standard] = record
+) -> tuple[dict[ISOStandard, Standard], dict[int, int], dict[ISOStandard, int], Optional[str]]:
+    try:
+        standard_result = await db.execute(select(Standard).where(Standard.is_active == True))
+        canonical_rows: dict[ISOStandard, Standard] = {}
+        for record in standard_result.scalars().all():
+            matched_standard = _match_standard_record(record)
+            if matched_standard and matched_standard not in canonical_rows:
+                canonical_rows[matched_standard] = record
 
-    clause_count_rows = await db.execute(
-        select(Clause.standard_id, func.count(Clause.id)).where(Clause.is_active == True).group_by(Clause.standard_id)
-    )
-    db_clause_counts = {standard_id: count for standard_id, count in clause_count_rows.all()}
+        clause_count_rows = await db.execute(
+            select(Clause.standard_id, func.count(Clause.id))
+            .where(Clause.is_active == True)
+            .group_by(Clause.standard_id)
+        )
+        db_clause_counts = {standard_id: count for standard_id, count in clause_count_rows.all()}
 
-    ims_requirement_rows = await db.execute(
-        select(IMSRequirement.standard, func.count(IMSRequirement.id)).group_by(IMSRequirement.standard)
-    )
-    ims_counts: dict[ISOStandard, int] = defaultdict(int)
-    for standard_name, count in ims_requirement_rows.all():
-        matched_standard = _match_ims_standard(standard_name)
-        if matched_standard:
-            ims_counts[matched_standard] += count
+        ims_requirement_rows = await db.execute(
+            select(IMSRequirement.standard, func.count(IMSRequirement.id)).group_by(IMSRequirement.standard)
+        )
+        ims_counts: dict[ISOStandard, int] = defaultdict(int)
+        for standard_name, count in ims_requirement_rows.all():
+            matched_standard = _match_ims_standard(standard_name)
+            if matched_standard:
+                ims_counts[matched_standard] += count
 
-    return canonical_rows, db_clause_counts, dict(ims_counts)
+        return canonical_rows, db_clause_counts, dict(ims_counts), None
+    except SQLAlchemyError as exc:
+        logger.exception("Compliance standards canonical enrichment unavailable; falling back to static ISO defaults")
+        return (
+            {},
+            {},
+            {},
+            f"Canonical compliance enrichment is temporarily unavailable ({type(exc).__name__}). "
+            "Static ISO defaults and persisted evidence coverage are still available.",
+        )
 
 
 # ============================================================================
@@ -501,7 +518,7 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
         [_build_evidence_link_model(link) for link in links],
         None,
     )["by_standard"]
-    canonical_rows, db_clause_counts, ims_counts = await _load_canonical_standard_rows(db)
+    canonical_rows, db_clause_counts, ims_counts, canonical_data_message = await _load_canonical_standard_rows(db)
 
     response: list[ComplianceStandardResponse] = []
     for iso_standard in ISOStandard:
@@ -523,6 +540,8 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
                 covered_clauses=canonical_coverage.get("covered", 0),
                 coverage_percentage=canonical_coverage.get("percentage", 0),
                 has_canonical_standard=canonical_row is not None,
+                canonical_data_degraded=canonical_data_message is not None,
+                canonical_data_message=canonical_data_message,
             )
         )
     return response

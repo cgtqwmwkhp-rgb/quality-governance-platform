@@ -107,6 +107,8 @@ type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function PlanetMark() {
   const { t } = useTranslation()
+  const now = new Date()
+  const defaultYear = now.getUTCFullYear()
   const [activeTab, setActiveTab] = useState<
     'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'
   >('dashboard')
@@ -120,7 +122,18 @@ export default function PlanetMark() {
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
+  const [isCreatingYear, setIsCreatingYear] = useState(false)
+  const [setupActionError, setSetupActionError] = useState<string | null>(null)
+  const [setupYearForm, setSetupYearForm] = useState({
+    year_label: `YE${defaultYear}`,
+    year_number: defaultYear,
+    period_start: `${defaultYear}-01-01`,
+    period_end: `${defaultYear}-12-31`,
+    average_fte: '1',
+    organization_name: 'Plantexpand Limited',
+    is_baseline_year: false,
+    reduction_target_percent: '5',
+  })
 
   const transformYear = (apiYear: {
     id: number
@@ -237,16 +250,11 @@ export default function PlanetMark() {
     )
   }, [])
 
-  const loadData = useCallback(
-    async (isRetry = false) => {
-      if (isRetry && retryCount >= 1) {
-        // Max 1 retry for transient errors
-        return
-      }
-
+  const loadData = useCallback(async (isRetry = false) => {
       setLoadState('loading')
       setErrorClass(null)
       setSetupRequired(null)
+      setSetupActionError(null)
 
       try {
         const [dashboardResponse, yearsResponse] = await Promise.all([
@@ -259,13 +267,11 @@ export default function PlanetMark() {
         if (isSetupRequired(dashboard)) {
           setSetupRequired(dashboard)
           setLoadState('setup_required')
-          setRetryCount(0)
           return
         }
         if (isSetupRequired(yearsPayload)) {
           setSetupRequired(yearsPayload)
           setLoadState('setup_required')
-          setRetryCount(0)
           return
         }
 
@@ -276,7 +282,6 @@ export default function PlanetMark() {
         setCurrentYear(transformedYears[0] || null)
 
         setLoadState('success')
-        setRetryCount(0)
       } catch (err) {
         const apiError = createApiError(err)
         setErrorClass(apiError.error_class)
@@ -287,16 +292,62 @@ export default function PlanetMark() {
           (apiError.error_class === ErrorClass.NETWORK_ERROR ||
             apiError.error_class === ErrorClass.SERVER_ERROR)
         ) {
-          setRetryCount((prev) => prev + 1)
-          loadData(true)
+          await loadData(true)
           return
         }
 
         setLoadState('error')
       }
-    },
-    [retryCount],
-  )
+    }, [])
+
+  const handleCreateReportingYear = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSetupActionError(null)
+
+    const averageFte = Number(setupYearForm.average_fte)
+    const reductionTarget = Number(setupYearForm.reduction_target_percent)
+    if (!setupYearForm.year_label.trim()) {
+      setSetupActionError('Reporting year label is required.')
+      return
+    }
+    if (!setupYearForm.period_start || !setupYearForm.period_end) {
+      setSetupActionError('Please provide a reporting period start and end date.')
+      return
+    }
+    if (setupYearForm.period_end < setupYearForm.period_start) {
+      setSetupActionError('Reporting period end date must be on or after the start date.')
+      return
+    }
+    if (!Number.isFinite(averageFte) || averageFte <= 0) {
+      setSetupActionError('Average FTE must be greater than zero.')
+      return
+    }
+    if (!Number.isFinite(reductionTarget) || reductionTarget < 0) {
+      setSetupActionError('Reduction target percent must be zero or greater.')
+      return
+    }
+
+    setIsCreatingYear(true)
+    try {
+      await planetMarkApi.createReportingYear({
+        year_label: setupYearForm.year_label.trim(),
+        year_number: Number(setupYearForm.year_number),
+        period_start: `${setupYearForm.period_start}T00:00:00.000Z`,
+        period_end: `${setupYearForm.period_end}T23:59:59.000Z`,
+        average_fte: averageFte,
+        organization_name: setupYearForm.organization_name.trim() || 'Plantexpand Limited',
+        is_baseline_year: setupYearForm.is_baseline_year,
+        reduction_target_percent: reductionTarget,
+      })
+      await loadData()
+    } catch (err) {
+      const apiError = createApiError(err)
+      setErrorClass(apiError.error_class)
+      setSetupActionError(apiError.detail || 'Failed to create Planet Mark reporting year.')
+    } finally {
+      setIsCreatingYear(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -353,10 +404,118 @@ export default function PlanetMark() {
         <SetupRequiredPanel
           response={setupRequired}
           onRetry={() => {
-            setRetryCount(0)
             loadData()
           }}
         />
+        {setupRequired.next_action.includes('/api/v1/planet-mark/years') ? (
+          <div className="mt-8 max-w-lg mx-auto bg-card border border-border rounded-xl shadow-lg p-6">
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Create Reporting Year</h2>
+                <p className="text-sm text-muted-foreground">
+                  Complete first-time Planet Mark setup without leaving the app.
+                </p>
+              </div>
+              <Plus className="w-5 h-5 text-primary" />
+            </div>
+            <form className="space-y-4" onSubmit={handleCreateReportingYear}>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Year Label</span>
+                  <input
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.year_label}
+                    onChange={(e) => setSetupYearForm((prev) => ({ ...prev, year_label: e.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Year Number</span>
+                  <input
+                    type="number"
+                    min="1"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.year_number}
+                    onChange={(e) =>
+                      setSetupYearForm((prev) => ({ ...prev, year_number: Number(e.target.value) || defaultYear }))
+                    }
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Period Start</span>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.period_start}
+                    onChange={(e) => setSetupYearForm((prev) => ({ ...prev, period_start: e.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Period End</span>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.period_end}
+                    onChange={(e) => setSetupYearForm((prev) => ({ ...prev, period_end: e.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Average FTE</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.1"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.average_fte}
+                    onChange={(e) => setSetupYearForm((prev) => ({ ...prev, average_fte: e.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2 text-sm text-foreground">
+                  <span className="font-medium">Reduction Target %</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                    value={setupYearForm.reduction_target_percent}
+                    onChange={(e) =>
+                      setSetupYearForm((prev) => ({ ...prev, reduction_target_percent: e.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+              <label className="space-y-2 text-sm text-foreground block">
+                <span className="font-medium">Organization Name</span>
+                <input
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                  value={setupYearForm.organization_name}
+                  onChange={(e) => setSetupYearForm((prev) => ({ ...prev, organization_name: e.target.value }))}
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={setupYearForm.is_baseline_year}
+                  onChange={(e) =>
+                    setSetupYearForm((prev) => ({ ...prev, is_baseline_year: e.target.checked }))
+                  }
+                />
+                <span>Set as baseline reporting year</span>
+              </label>
+              {setupActionError ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {setupActionError}
+                </div>
+              ) : null}
+              <button
+                type="submit"
+                disabled={isCreatingYear}
+                className="w-full rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+              >
+                {isCreatingYear ? 'Creating reporting year...' : 'Create Reporting Year'}
+              </button>
+            </form>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -506,7 +665,6 @@ export default function PlanetMark() {
           </p>
           <button
             onClick={() => {
-              setRetryCount(0)
               loadData()
             }}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"

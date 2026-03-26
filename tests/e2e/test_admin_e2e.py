@@ -24,7 +24,7 @@ def auth_headers(client):
     """Get authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "admin@plantexpand.com", "password": "adminpassword123"},
+        json={"email": "admin@plantexpand.com", "password": "adminpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -218,7 +218,7 @@ class TestCompliance:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/v1/standards", headers=auth_headers)
+        response = client.get("/api/v1/compliance/standards", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, (list, dict))
@@ -230,7 +230,7 @@ class TestCompliance:
         if not auth_headers:
             pytest.skip("Authentication required")
 
-        response = client.get("/api/v1/compliance/evidence", headers=auth_headers)
+        response = client.get("/api/v1/compliance/evidence/links", headers=auth_headers)
         # TODO: Remove 404 when endpoint is implemented
         assert response.status_code in [200, 404]
         if response.status_code == 200:

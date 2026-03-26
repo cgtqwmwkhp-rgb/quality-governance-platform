@@ -437,11 +437,18 @@ class TestRiskRegisterEndpoints:
     """Tests for risk register endpoints."""
 
     def test_risk_register_heatmap(self, client, auth_headers):
-        """GET /api/risk-register/heat-map returns data."""
+        """GET /api/risk-register/heatmap returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/v1/risk-register/heat-map", headers=auth_headers)
-        assert response.status_code in [200, 404]
+        response = client.get("/api/v1/risk-register/heatmap", headers=auth_headers)
+        assert response.status_code == 200
+
+    def test_risk_register_summary(self, client, auth_headers):
+        """GET /api/risk-register/summary returns data."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/risk-register/summary", headers=auth_headers)
+        assert response.status_code == 200
 
     def test_risk_register_controls(self, client, auth_headers):
         """GET /api/risk-register/controls returns data."""
@@ -460,10 +467,10 @@ class TestComplianceEndpoints:
     """Tests for compliance endpoints."""
 
     def test_compliance_evidence(self, client, auth_headers):
-        """GET /api/compliance/evidence returns data."""
+        """GET /api/compliance/evidence/links returns data."""
         if not auth_headers:
             pytest.skip("Auth required")
-        response = client.get("/api/v1/compliance/evidence", headers=auth_headers)
+        response = client.get("/api/v1/compliance/evidence/links", headers=auth_headers)
         assert response.status_code == 200
 
     def test_compliance_gaps(self, client, auth_headers):

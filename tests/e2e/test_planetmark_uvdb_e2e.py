@@ -48,7 +48,7 @@ def auth_headers(client) -> dict:
         response = client.post(
             "/api/v1/auth/login",
             json={
-                "username": "testuser@plantexpand.com",
+                "email": "testuser@plantexpand.com",
                 "password": "testpassword123",
             },
         )
