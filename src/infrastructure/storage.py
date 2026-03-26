@@ -316,9 +316,7 @@ class AzureBlobStorageService(BlobStorageService):
                     raise StorageContainerMissingError(
                         f"Configured storage container '{self.container_name}' is missing and could not be created"
                     ) from create_error
-            raise StorageContainerMissingError(
-                f"Configured storage container '{self.container_name}' does not exist"
-            )
+            raise StorageContainerMissingError(f"Configured storage container '{self.container_name}' does not exist")
         except StorageDependencyError:
             raise
         except Exception as e:
