@@ -67,6 +67,16 @@ export interface QuestionEditorProps {
   onUpdate: (questionId: string, updates: Partial<Question>) => void
   onDelete: (questionId: string) => void
   onDuplicate: (questionId: string) => void
+  validationErrors?: string[]
+}
+
+const CHOICE_BASED_TYPES: QuestionType[] = ['multi_choice', 'checklist']
+
+function buildDefaultOptions(): QuestionOption[] {
+  return [
+    { id: generateId(), label: 'Option 1', value: 'option_1', score: 0 },
+    { id: generateId(), label: 'Option 2', value: 'option_2', score: 0 },
+  ]
 }
 
 function QuestionTypeSelector({
@@ -127,6 +137,7 @@ export default function QuestionEditor({
   onUpdate,
   onDelete,
   onDuplicate,
+  validationErrors = [],
 }: QuestionEditorProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -150,7 +161,7 @@ export default function QuestionEditor({
     onUpdate(question.id, { options: newOptions })
   }
 
-  const needsOptions = ['multi_choice', 'checklist'].includes(question.type)
+  const needsOptions = CHOICE_BASED_TYPES.includes(question.type)
 
   return (
     <div className="bg-secondary/50 border border-border rounded-xl p-4 group">
@@ -179,7 +190,16 @@ export default function QuestionEditor({
           <div className="flex flex-wrap items-center gap-3">
             <QuestionTypeSelector
               selectedType={question.type}
-              onSelect={(type) => onUpdate(question.id, { type })}
+              onSelect={(type) =>
+                onUpdate(question.id, {
+                  type,
+                  options: CHOICE_BASED_TYPES.includes(type)
+                    ? question.options && question.options.length > 0
+                      ? question.options
+                      : buildDefaultOptions()
+                    : undefined,
+                })
+              }
             />
 
             <label
@@ -331,6 +351,14 @@ export default function QuestionEditor({
               >
                 <Plus className="w-3 h-3" /> Add Option
               </button>
+            </div>
+          )}
+
+          {validationErrors.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {validationErrors.map((error) => (
+                <p key={error}>{error}</p>
+              ))}
             </div>
           )}
 

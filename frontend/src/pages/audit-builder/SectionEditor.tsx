@@ -11,6 +11,8 @@ export interface SectionEditorProps {
   onUpdateQuestion: (questionId: string, updates: Partial<Question>) => void
   onDeleteQuestion: (questionId: string) => void
   onDuplicateQuestion: (questionId: string) => void
+  sectionValidationErrors?: string[]
+  questionValidationErrors?: Record<string, string[]>
 }
 
 export default function SectionEditor({
@@ -21,6 +23,8 @@ export default function SectionEditor({
   onUpdateQuestion,
   onDeleteQuestion,
   onDuplicateQuestion,
+  sectionValidationErrors = [],
+  questionValidationErrors = {},
 }: SectionEditorProps) {
   const { t } = useTranslation()
 
@@ -92,6 +96,13 @@ export default function SectionEditor({
 
       {section.isExpanded && (
         <div className="p-4 space-y-3">
+          {sectionValidationErrors.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              {sectionValidationErrors.map((error) => (
+                <p key={error}>{error}</p>
+              ))}
+            </div>
+          )}
           {section.questions.length === 0 ? (
             <div className="text-center py-8">
               <ListChecks className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
@@ -114,6 +125,7 @@ export default function SectionEditor({
                   onUpdate={onUpdateQuestion}
                   onDelete={onDeleteQuestion}
                   onDuplicate={onDuplicateQuestion}
+                  validationErrors={questionValidationErrors[question.id] || []}
                 />
               ))}
               <button

@@ -449,7 +449,18 @@ export function getApiErrorMessage(error: unknown): string {
       return data['message'] as string
     }
     if (data?.['detail']) {
-      return typeof data['detail'] === 'string' ? data['detail'] : JSON.stringify(data['detail'])
+      if (typeof data['detail'] === 'string') {
+        return data['detail']
+      }
+      if (
+        typeof data['detail'] === 'object' &&
+        data['detail'] !== null &&
+        'message' in data['detail'] &&
+        typeof (data['detail'] as Record<string, unknown>).message === 'string'
+      ) {
+        return (data['detail'] as Record<string, string>).message
+      }
+      return JSON.stringify(data['detail'])
     }
     // Last resort - use axios error message
     return error.message

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Truck,
@@ -47,6 +47,7 @@ import {
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 
 type TabKey = 'daily' | 'monthly' | 'defects'
+type ChecklistViewMode = 'records' | 'driver' | 'day' | 'completion'
 
 const getPriorityVariant = (p: string): BadgeVariant => {
   switch (p) {
@@ -79,6 +80,99 @@ const getStatusVariant = (s: string): BadgeVariant => {
   }
 }
 
+const TECHNICIAN_NAME_KEYS = ['technician', 'driver', 'employee', 'engineer', 'user', 'staff', 'operative']
+const TECHNICIAN_ID_KEYS = ['technicianid', 'driverid', 'employeeid', 'userid', 'staffid', 'engineerid']
+const VEHICLE_KEYS = ['vanid', 'vanreg', 'vehicle', 'registration', 'reg']
+const DATE_KEYS = ['starttimedate', 'date', 'checkdate', 'createdat', 'submittedat']
+
+const normalizeValue = (value: unknown) => String(value ?? '').trim()
+const normalizeKey = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
+
+function getRecordValue(record: Record<string, unknown>, keyHints: string[]): string {
+  for (const [key, value] of Object.entries(record)) {
+    const normalizedKey = normalizeKey(key)
+    if (keyHints.some((hint) => normalizedKey.includes(hint))) {
+      const normalized = normalizeValue(value)
+      if (normalized) return normalized
+    }
+  }
+  return ''
+}
+
+function getChecklistDate(record: Record<string, unknown>): Date | null {
+  const rawValue = getRecordValue(record, DATE_KEYS)
+  if (!rawValue) return null
+  const parsed = new Date(rawValue)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getTechnicianName(record: Record<string, unknown>): string {
+  return getRecordValue(record, TECHNICIAN_NAME_KEYS)
+}
+
+function getTechnicianId(record: Record<string, unknown>): string {
+  return getRecordValue(record, TECHNICIAN_ID_KEYS)
+}
+
+function getVehicleIdentifier(record: Record<string, unknown>): string {
+  return getRecordValue(record, VEHICLE_KEYS)
+}
+
+function getChecklistStats(record: Record<string, unknown>) {
+  let answeredCount = 0
+  let passCount = 0
+  let failCount = 0
+
+  Object.entries(record).forEach(([key, value]) => {
+    if (key.startsWith('_')) return
+    const normalized = normalizeValue(value).toLowerCase()
+    if (!normalized) return
+    if (['pass', 'yes', '1', 'true', 'ok'].includes(normalized)) {
+      answeredCount += 1
+      passCount += 1
+      return
+    }
+    if (['fail', 'no', '0', 'false'].includes(normalized)) {
+      answeredCount += 1
+      failCount += 1
+    }
+  })
+
+  const completionRate = answeredCount > 0 ? Math.round((passCount / answeredCount) * 100) : 0
+
+  return {
+    answeredCount,
+    passCount,
+    failCount,
+    completionRate,
+    hasIssues: failCount > 0,
+  }
+}
+
+function toDateInputValue(date: Date): string {
+  return date.toISOString().split('T')[0]
+}
+
+function getWeekDateRange(weekValue: string): { start: string; end: string } | null {
+  if (!weekValue) return null
+  const [yearText, weekText] = weekValue.split('-W')
+  const year = Number(yearText)
+  const week = Number(weekText)
+  if (!year || !week) return null
+
+  const firstDay = new Date(Date.UTC(year, 0, 1))
+  const dayOffset = firstDay.getUTCDay() || 7
+  const monday = new Date(firstDay)
+  monday.setUTCDate(firstDay.getUTCDate() + (week - 1) * 7 - (dayOffset - 1))
+  const sunday = new Date(monday)
+  sunday.setUTCDate(monday.getUTCDate() + 6)
+
+  return {
+    start: toDateInputValue(monday),
+    end: toDateInputValue(sunday),
+  }
+}
+
 export default function VehicleChecklists() {
   useTranslation()
 
@@ -88,7 +182,6 @@ export default function VehicleChecklists() {
 
   // Checklist data
   const [checklistItems, setChecklistItems] = useState<Record<string, unknown>[]>([])
-  const [checklistTotal, setChecklistTotal] = useState(0)
   const [checklistPage, setChecklistPage] = useState(1)
   const [checklistPages, setChecklistPages] = useState(1)
 
@@ -130,8 +223,16 @@ export default function VehicleChecklists() {
 
   // Priority filter for defects tab
   const [priorityFilter, setPriorityFilter] = useState<string>('')
+  const [viewMode, setViewMode] = useState<ChecklistViewMode>('records')
+  const [technicianFilterMode, setTechnicianFilterMode] = useState<'name' | 'id'>('name')
+  const [technicianFilter, setTechnicianFilter] = useState('')
+  const [vanFilter, setVanFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'flagged' | 'clean'>('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [selectedWeek, setSelectedWeek] = useState('')
 
-  const pageSize = 25
+  const pageSize = 250
 
   const loadChecklists = useCallback(
     async (tab: TabKey, page: number) => {
@@ -143,7 +244,6 @@ export default function VehicleChecklists() {
         const res = await fetcher(page, pageSize)
         const data = res.data
         setChecklistItems(data.items)
-        setChecklistTotal(data.total)
         setChecklistPages(data.pages)
       } catch (err) {
         const msg = getApiErrorMessage(err)
@@ -303,6 +403,18 @@ export default function VehicleChecklists() {
     setShowDetailDialog(true)
   }
 
+  const handleWeekChange = (weekValue: string) => {
+    setSelectedWeek(weekValue)
+    const range = getWeekDateRange(weekValue)
+    if (!range) {
+      setDateFrom('')
+      setDateTo('')
+      return
+    }
+    setDateFrom(range.start)
+    setDateTo(range.end)
+  }
+
   const tabs: { key: TabKey; label: string; icon: typeof Calendar }[] = [
     { key: 'daily', label: 'Daily Checklists', icon: Calendar },
     { key: 'monthly', label: 'Monthly Checklists', icon: Calendar },
@@ -312,6 +424,131 @@ export default function VehicleChecklists() {
   const checklistColumns = checklistItems.length > 0
     ? Object.keys(checklistItems[0]).filter((k) => !k.startsWith('_'))
     : []
+
+  const filteredChecklistItems = useMemo(() => {
+    return checklistItems.filter((record) => {
+      const technicianName = getTechnicianName(record).toLowerCase()
+      const technicianId = getTechnicianId(record).toLowerCase()
+      const vehicleId = getVehicleIdentifier(record).toLowerCase()
+      const checklistDate = getChecklistDate(record)
+      const stats = getChecklistStats(record)
+
+      if (technicianFilter.trim()) {
+        const target =
+          technicianFilterMode === 'name'
+            ? technicianName
+            : technicianId || `${technicianName} ${technicianId}`.trim()
+        if (!target.includes(technicianFilter.trim().toLowerCase())) {
+          return false
+        }
+      }
+
+      if (vanFilter.trim() && !vehicleId.includes(vanFilter.trim().toLowerCase())) {
+        return false
+      }
+
+      if (statusFilter === 'flagged' && !stats.hasIssues) {
+        return false
+      }
+      if (statusFilter === 'clean' && stats.hasIssues) {
+        return false
+      }
+
+      if ((dateFrom || dateTo) && checklistDate) {
+        const recordDate = toDateInputValue(checklistDate)
+        if (dateFrom && recordDate < dateFrom) return false
+        if (dateTo && recordDate > dateTo) return false
+      } else if ((dateFrom || dateTo) && !checklistDate) {
+        return false
+      }
+
+      return true
+    })
+  }, [
+    checklistItems,
+    technicianFilter,
+    technicianFilterMode,
+    vanFilter,
+    statusFilter,
+    dateFrom,
+    dateTo,
+  ])
+
+  const groupedByDriver = useMemo(() => {
+    const groups = new Map<string, { name: string; id: string; records: number; flagged: number; completionTotal: number }>()
+    filteredChecklistItems.forEach((record) => {
+      const name = getTechnicianName(record) || 'Unassigned technician'
+      const id = getTechnicianId(record)
+      const key = `${name}::${id}`
+      const stats = getChecklistStats(record)
+      const current = groups.get(key) || { name, id, records: 0, flagged: 0, completionTotal: 0 }
+      current.records += 1
+      current.flagged += stats.hasIssues ? 1 : 0
+      current.completionTotal += stats.completionRate
+      groups.set(key, current)
+    })
+    return Array.from(groups.values()).sort((a, b) => b.records - a.records)
+  }, [filteredChecklistItems])
+
+  const groupedByDay = useMemo(() => {
+    const groups = new Map<string, { date: string; records: number; flagged: number; completionTotal: number }>()
+    filteredChecklistItems.forEach((record) => {
+      const date = getChecklistDate(record)
+      const key = date ? toDateInputValue(date) : 'Unknown date'
+      const stats = getChecklistStats(record)
+      const current = groups.get(key) || { date: key, records: 0, flagged: 0, completionTotal: 0 }
+      current.records += 1
+      current.flagged += stats.hasIssues ? 1 : 0
+      current.completionTotal += stats.completionRate
+      groups.set(key, current)
+    })
+    return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date))
+  }, [filteredChecklistItems])
+
+  const completionRows = useMemo(() => {
+    return filteredChecklistItems.map((record, index) => {
+      const stats = getChecklistStats(record)
+      return {
+        id: Number(record['_pams_id'] || record['id'] || index),
+        technician: getTechnicianName(record) || 'Unassigned technician',
+        technicianId: getTechnicianId(record),
+        vehicle: getVehicleIdentifier(record) || 'Unknown vehicle',
+        date: getChecklistDate(record),
+        ...stats,
+      }
+    })
+  }, [filteredChecklistItems])
+
+  const checklistSummaryMetrics = useMemo(() => {
+    const distinctTechnicians = new Set(
+      filteredChecklistItems.map((record) => `${getTechnicianName(record)}::${getTechnicianId(record)}`),
+    )
+    const flaggedRecords = filteredChecklistItems.filter((record) => getChecklistStats(record).hasIssues).length
+    const averageCompletion = completionRows.length
+      ? Math.round(completionRows.reduce((sum, row) => sum + row.completionRate, 0) / completionRows.length)
+      : 0
+    const totalFailedChecks = completionRows.reduce((sum, row) => sum + row.failCount, 0)
+    return {
+      records: filteredChecklistItems.length,
+      technicians: distinctTechnicians.size,
+      flaggedRecords,
+      averageCompletion,
+      totalFailedChecks,
+    }
+  }, [filteredChecklistItems, completionRows])
+
+  const visibleDates = useMemo(() => {
+    return Array.from(
+      new Set(
+        filteredChecklistItems
+          .map((record) => getChecklistDate(record))
+          .filter((date): date is Date => Boolean(date))
+          .map((date) => toDateInputValue(date)),
+      ),
+    )
+      .sort()
+      .slice(-7)
+  }, [filteredChecklistItems])
 
   return (
     <div className="space-y-6">
@@ -343,52 +580,44 @@ export default function VehicleChecklists() {
       </div>
 
       {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-foreground">{summary.total_daily_checks}</p>
-              <p className="text-xs text-muted-foreground">Daily Checks</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-foreground">{summary.total_monthly_checks}</p>
-              <p className="text-xs text-muted-foreground">Monthly Checks</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-foreground">{summary.open_defects}</p>
-              <p className="text-xs text-muted-foreground">Open Defects</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-red-600">{summary.p1_defects}</p>
-              <p className="text-xs text-muted-foreground">P1 Critical</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-orange-600">{summary.p2_defects}</p>
-              <p className="text-xs text-muted-foreground">P2 High</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-yellow-600">{summary.p3_defects}</p>
-              <p className="text-xs text-muted-foreground">P3 Medium</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-destructive">{summary.overdue_actions}</p>
-              <p className="text-xs text-muted-foreground">Overdue Actions</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-foreground">{checklistSummaryMetrics.records}</p>
+            <p className="text-xs text-muted-foreground">Records Shown</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-foreground">{checklistSummaryMetrics.technicians}</p>
+            <p className="text-xs text-muted-foreground">Technicians</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-foreground">{checklistSummaryMetrics.averageCompletion}%</p>
+            <p className="text-xs text-muted-foreground">Avg Completion</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-red-600">{checklistSummaryMetrics.flaggedRecords}</p>
+            <p className="text-xs text-muted-foreground">Flagged Records</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-orange-600">{checklistSummaryMetrics.totalFailedChecks}</p>
+            <p className="text-xs text-muted-foreground">Failed Checks</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 text-center">
+            <p className="text-2xl font-bold text-destructive">{summary?.open_defects ?? 0}</p>
+            <p className="text-xs text-muted-foreground">Open Defects</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Heatmap (top failing checks) */}
       {heatmap.length > 0 && (
@@ -442,6 +671,130 @@ export default function VehicleChecklists() {
           ))}
         </div>
       </div>
+
+      {activeTab !== 'defects' && (
+        <>
+          <Card>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Technician filter</p>
+                  <Select value={technicianFilterMode} onValueChange={(value) => setTechnicianFilterMode(value as 'name' | 'id')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name">By Name</SelectItem>
+                      <SelectItem value="id">By ID</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Technician</p>
+                  <Input
+                    value={technicianFilter}
+                    onChange={(event) => setTechnicianFilter(event.target.value)}
+                    placeholder={technicianFilterMode === 'name' ? 'Search technician name' : 'Search technician ID'}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Van ID / Reg</p>
+                  <Input
+                    value={vanFilter}
+                    onChange={(event) => setVanFilter(event.target.value)}
+                    placeholder="Filter by van"
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">From</p>
+                  <Input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">To</p>
+                  <Input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+                </div>
+                <div>
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">Week</p>
+                  <Input type="week" value={selectedWeek} onChange={(event) => handleWeekChange(event.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ['records', 'Raw Records'],
+                    ['driver', 'By Driver'],
+                    ['day', 'By Day'],
+                    ['completion', 'Completion %'],
+                  ] as const).map(([mode, label]) => (
+                    <Button
+                      key={mode}
+                      variant={viewMode === mode ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setViewMode(mode)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as 'all' | 'flagged' | 'clean')}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="flagged">Flagged only</SelectItem>
+                      <SelectItem value="clean">No issues</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setTechnicianFilter('')
+                      setVanFilter('')
+                      setStatusFilter('all')
+                      setDateFrom('')
+                      setDateTo('')
+                      setSelectedWeek('')
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {visibleDates.length > 0 && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  <h3 className="text-sm font-semibold text-foreground">Visible Week / Date Coverage</h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {visibleDates.map((date) => (
+                    <button
+                      key={date}
+                      type="button"
+                      onClick={() => {
+                        setDateFrom(date)
+                        setDateTo(date)
+                        setSelectedWeek('')
+                      }}
+                      className="rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-foreground hover:border-primary"
+                    >
+                      {new Date(date).toLocaleDateString()}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* Error Banner */}
       {loadError && (
@@ -579,17 +932,102 @@ export default function VehicleChecklists() {
           <CardContent className="p-0">
             <div className="flex items-center gap-3 p-4 border-b border-border">
               <span className="text-sm text-muted-foreground">
-                {checklistTotal} record{checklistTotal !== 1 ? 's' : ''}
+                {filteredChecklistItems.length} record{filteredChecklistItems.length !== 1 ? 's' : ''}
               </span>
             </div>
 
-            {checklistItems.length === 0 ? (
+            {filteredChecklistItems.length === 0 ? (
               <div className="p-12 text-center">
                 <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-foreground">No checklist data</h3>
+                <h3 className="text-lg font-semibold text-foreground">No checklist data matches these filters</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Data will appear once PAMS is connected and synced.
+                  Adjust the technician, date, or status filters to broaden the view.
                 </p>
+              </div>
+            ) : viewMode === 'driver' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left p-3 font-medium text-muted-foreground">Driver / Technician</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">ID</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Records</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Flagged</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Avg Completion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedByDriver.map((group) => (
+                      <tr key={`${group.name}-${group.id}`} className="border-b border-border/50">
+                        <td className="p-3 font-medium text-foreground">{group.name}</td>
+                        <td className="p-3 text-muted-foreground">{group.id || '—'}</td>
+                        <td className="p-3 text-foreground">{group.records}</td>
+                        <td className="p-3 text-foreground">{group.flagged}</td>
+                        <td className="p-3 text-foreground">
+                          {group.records > 0 ? Math.round(group.completionTotal / group.records) : 0}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : viewMode === 'day' ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left p-3 font-medium text-muted-foreground">Day</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Records</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Flagged</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Avg Completion</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedByDay.map((group) => (
+                      <tr key={group.date} className="border-b border-border/50">
+                        <td className="p-3 font-medium text-foreground">
+                          {group.date === 'Unknown date' ? group.date : new Date(group.date).toLocaleDateString()}
+                        </td>
+                        <td className="p-3 text-foreground">{group.records}</td>
+                        <td className="p-3 text-foreground">{group.flagged}</td>
+                        <td className="p-3 text-foreground">
+                          {group.records > 0 ? Math.round(group.completionTotal / group.records) : 0}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : viewMode === 'completion' ? (
+              <div className="divide-y divide-border">
+                {completionRows.map((row) => (
+                  <div key={row.id} className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="font-medium text-foreground">{row.technician}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {row.technicianId || 'No technician ID'} • {row.vehicle}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.date ? row.date.toLocaleDateString() : 'Unknown date'}
+                      </p>
+                    </div>
+                    <div className="w-full md:w-72">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Completion</span>
+                        <span>{row.completionRate}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full ${row.hasIssues ? 'bg-orange-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${row.completionRate}%` }}
+                        />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {row.passCount} pass / {row.failCount} fail
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -608,7 +1046,7 @@ export default function VehicleChecklists() {
                     </tr>
                   </thead>
                   <tbody>
-                    {checklistItems.map((item, idx) => (
+                    {filteredChecklistItems.map((item, idx) => (
                       <tr
                         key={idx}
                         className="border-b border-border/50 hover:bg-muted/30 cursor-pointer"
@@ -658,7 +1096,7 @@ export default function VehicleChecklists() {
             )}
 
             {/* Checklist pagination */}
-            {checklistPages > 1 && (
+            {viewMode === 'records' && checklistPages > 1 && (
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <span className="text-sm text-muted-foreground">
                   Page {checklistPage} of {checklistPages}

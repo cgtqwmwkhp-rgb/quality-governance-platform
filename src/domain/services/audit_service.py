@@ -91,6 +91,8 @@ _FINDING_JSON_REMAPS: dict[str, str] = {
     "risk_ids": "risk_ids_json",
 }
 
+_CHOICE_QUESTION_TYPES = {"radio", "dropdown", "checkbox"}
+
 _QUESTION_CLONE_FIELDS = (
     "question_text",
     "question_type",
@@ -312,6 +314,42 @@ class AuditService:
                 setattr(entity, model_key, update_data[schema_key])
                 handled.add(schema_key)
         return handled
+
+    @staticmethod
+    def _validate_publishable_template(template: AuditTemplate) -> None:
+        """Raise ValidationError when a template is incomplete for publishing."""
+        if not (template.name or "").strip():
+            raise ValidationError("Template name is required before publishing")
+        if not template.sections:
+            raise ValidationError("Template must contain at least one section to publish")
+        if not template.questions:
+            raise ValidationError("Template must have at least one question to publish")
+
+        for section in template.sections:
+            if not (section.title or "").strip():
+                raise ValidationError("Every section must have a title before publishing")
+            if not section.questions:
+                raise ValidationError(f"Section '{section.title}' must contain at least one question")
+            for question in section.questions:
+                if not (question.question_text or "").strip():
+                    raise ValidationError("Every question must include question text before publishing")
+                if (question.weight or 0) <= 0:
+                    raise ValidationError(f"Question '{question.question_text}' must have a weight greater than zero")
+                if question.question_type in _CHOICE_QUESTION_TYPES:
+                    options = question.options_json or []
+                    if len(options) < 2:
+                        raise ValidationError(
+                            f"Question '{question.question_text}' must define at least two answer options"
+                        )
+                    for option in options:
+                        if not isinstance(option, dict):
+                            raise ValidationError(
+                                f"Question '{question.question_text}' contains an invalid answer option"
+                            )
+                        if not str(option.get("label", "")).strip() or not str(option.get("value", "")).strip():
+                            raise ValidationError(
+                                f"Question '{question.question_text}' contains an incomplete answer option"
+                            )
 
     # ==================================================================
     # Template methods
@@ -535,7 +573,10 @@ class AuditService:
     ) -> AuditTemplate:
         result = await self.db.execute(
             select(AuditTemplate)
-            .options(selectinload(AuditTemplate.questions))
+            .options(
+                selectinload(AuditTemplate.questions),
+                selectinload(AuditTemplate.sections).selectinload(AuditSection.questions),
+            )
             .where(
                 AuditTemplate.id == template_id,
                 or_(
@@ -548,9 +589,8 @@ class AuditService:
         if not template:
             raise NotFoundError(f"AuditTemplate {template_id} not found")
 
+        self._validate_publishable_template(template)
         question_count = len(template.questions)
-        if question_count == 0:
-            raise ValidationError("Template must have at least one question to publish")
 
         template.is_published = True
         await self.db.flush()

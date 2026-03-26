@@ -23,6 +23,7 @@ from src.infrastructure.database import close_db, emit_db_pool_usage_metric, ini
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 from src.infrastructure.pams_database import close_pams, init_pams
+from src.infrastructure.storage import validate_storage_dependencies
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -88,6 +89,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     if settings.is_development:
         await init_db()
+
+    try:
+        await validate_storage_dependencies(fail_fast=settings.is_production)
+    except Exception:
+        logger.exception("Storage dependency validation failed during startup")
+        raise
 
     # Initialise PAMS external database connection (non-blocking)
     try:
