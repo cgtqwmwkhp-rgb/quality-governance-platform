@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import (
+    EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN,
     ArchiveTemplateResponse,
     AuditFindingCreate,
     AuditFindingListResponse,
@@ -41,7 +42,6 @@ from src.api.schemas.audit import (
     AuditTemplateListResponse,
     AuditTemplateResponse,
     AuditTemplateUpdate,
-    EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN,
     PurgeExpiredTemplatesResponse,
 )
 from src.api.schemas.error_codes import ErrorCode
@@ -151,9 +151,9 @@ def _normalize_run_create_payload(run_data: AuditRunCreate) -> dict[str, Any]:
     if run_data.external_audit_type is None:
         return payload
 
-    payload["source_origin"] = payload.get("source_origin") or EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN[
-        run_data.external_audit_type
-    ]
+    payload["source_origin"] = (
+        payload.get("source_origin") or EXTERNAL_AUDIT_TYPE_TO_SOURCE_ORIGIN[run_data.external_audit_type]
+    )
 
     default_scheme = EXTERNAL_AUDIT_TYPE_DEFAULT_SCHEME.get(run_data.external_audit_type)
     if default_scheme and not payload.get("assurance_scheme"):

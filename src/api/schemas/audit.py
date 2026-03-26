@@ -444,9 +444,7 @@ class AuditRunBase(BaseModel):
         if value is None:
             return value
         if value not in ALLOWED_AUDIT_SOURCE_ORIGINS:
-            raise ValueError(
-                f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}"
-            )
+            raise ValueError(f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}")
         return value
 
 
@@ -500,9 +498,7 @@ class AuditRunUpdate(BaseModel):
         if value is None:
             return value
         if value not in ALLOWED_AUDIT_SOURCE_ORIGINS:
-            raise ValueError(
-                f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}"
-            )
+            raise ValueError(f"source_origin must be one of: {', '.join(sorted(ALLOWED_AUDIT_SOURCE_ORIGINS))}")
         return value
 
 
