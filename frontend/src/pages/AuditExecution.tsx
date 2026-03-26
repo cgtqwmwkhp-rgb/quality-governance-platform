@@ -22,7 +22,7 @@ import {
   ClipboardCheck,
   Loader2,
 } from 'lucide-react'
-import { actionsApi, auditsApi, getApiErrorMessage } from '../api/client'
+import { auditsApi, getApiErrorMessage } from '../api/client'
 
 // ============================================================================
 // TYPES
@@ -143,30 +143,6 @@ function serializeResponse(response: ResponseType): string | undefined {
   if (typeof response === 'number') return String(response)
   if (Array.isArray(response)) return JSON.stringify(response)
   return String(response)
-}
-
-function mapRiskLevelToSeverity(
-  riskLevel?: string,
-): 'critical' | 'high' | 'medium' | 'low' | 'observation' {
-  switch (riskLevel?.toLowerCase()) {
-    case 'critical':
-      return 'critical'
-    case 'high':
-      return 'high'
-    case 'low':
-      return 'low'
-    case 'observation':
-      return 'observation'
-    default:
-      return 'medium'
-  }
-}
-
-function mapSeverityToPriority(severity: 'critical' | 'high' | 'medium' | 'low' | 'observation') {
-  if (severity === 'critical') return 'critical'
-  if (severity === 'high') return 'high'
-  if (severity === 'low' || severity === 'observation') return 'low'
-  return 'medium'
 }
 
 // ============================================================================
@@ -435,7 +411,6 @@ export default function AuditExecution() {
   const [elapsedTime, setElapsedTime] = useState(0)
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
-  const [findingIdMap, setFindingIdMap] = useState<Record<string, number>>({})
   const [runCompleted, setRunCompleted] = useState(false)
 
   const runIdNum = runId ? Number(runId) : null
@@ -526,13 +501,6 @@ export default function AuditExecution() {
           idMap[qId] = r.id
         }
 
-        const existingFindings: Record<string, number> = {}
-        for (const finding of runData.findings || []) {
-          if (finding.question_id != null) {
-            existingFindings[String(finding.question_id)] = finding.id
-          }
-        }
-
         setAudit({
           id: String(runData.id),
           templateId: String(runData.template_id),
@@ -545,7 +513,6 @@ export default function AuditExecution() {
         })
         setResponses(existingResponses)
         setResponseIdMap(idMap)
-        setFindingIdMap(existingFindings)
         setRunCompleted(runData.status === 'completed')
 
         if (runData.status === 'scheduled') {
@@ -617,63 +584,6 @@ export default function AuditExecution() {
     await saveAllResponses()
   }
 
-  const buildFindingDescription = (question: AuditQuestion, response: QuestionResponse): string => {
-    const notes = response.notes?.trim()
-    if (notes) {
-      return `${question.text} failed. Auditor notes: ${notes}`
-    }
-    return `${question.text} failed during audit execution and requires follow-up.`
-  }
-
-  const generateActionPlan = async (): Promise<number> => {
-    if (!runIdNum) return 0
-
-    const failedResponses = Object.values(responses).filter(isFindingResponse)
-    if (failedResponses.length === 0) return 0
-
-    const nextFindingIdMap = { ...findingIdMap }
-    let createdActions = 0
-
-    for (const response of failedResponses) {
-      const question = allQuestions.find((candidate) => candidate.id === response.questionId)
-      if (!question) continue
-
-      let findingId = nextFindingIdMap[question.id]
-      const severity = mapRiskLevelToSeverity(question.riskLevel)
-
-      if (!findingId) {
-        const findingRes = await auditsApi.createFinding(runIdNum, {
-          title: question.text,
-          description: buildFindingDescription(question, response),
-          severity,
-          finding_type: 'nonconformity',
-          question_id: Number(question.id),
-          corrective_action_required: question.failureTriggersAction,
-        })
-        findingId = findingRes.data.id
-        nextFindingIdMap[question.id] = findingId
-      }
-
-      if (!question.failureTriggersAction) continue
-
-      const existingActions = await actionsApi.list(1, 1, undefined, 'audit_finding', findingId)
-      if ((existingActions.data.items || []).length > 0) continue
-
-      await actionsApi.create({
-        title: `Action plan: ${question.text}`,
-        description: buildFindingDescription(question, response),
-        source_type: 'audit_finding',
-        source_id: findingId,
-        action_type: 'corrective',
-        priority: mapSeverityToPriority(severity),
-      })
-      createdActions += 1
-    }
-
-    setFindingIdMap(nextFindingIdMap)
-    return createdActions
-  }
-
   const handleSubmitAudit = async () => {
     if (!runIdNum) return
 
@@ -687,8 +597,11 @@ export default function AuditExecution() {
         setRunCompleted(true)
       }
 
-      const createdActions = await generateActionPlan()
-      navigate(createdActions > 0 ? '/actions' : '/audits')
+      const refreshedRun = await auditsApi.getRunDetail(runIdNum)
+      const hasFollowUp = (refreshedRun.data.findings || []).some(
+        (finding) => finding.corrective_action_required,
+      )
+      navigate(hasFollowUp ? '/actions' : '/audits')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {

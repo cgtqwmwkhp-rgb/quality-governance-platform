@@ -897,6 +897,15 @@ export interface AuditRun {
   template_version: number
   title?: string
   location?: string
+  location_details?: string
+  notes?: string
+  source_origin?: string
+  assurance_scheme?: string
+  external_body_name?: string
+  external_auditor_name?: string
+  external_reference?: string
+  source_document_asset_id?: number
+  source_document_label?: string
   status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
   scheduled_date?: string
   due_date?: string
@@ -984,17 +993,35 @@ export interface AuditRunCreate {
   template_id: number
   title?: string
   location?: string
+  location_details?: string
   scheduled_date?: string
   due_date?: string
+  notes?: string
+  source_origin?: string
+  assurance_scheme?: string
+  external_body_name?: string
+  external_auditor_name?: string
+  external_reference?: string
+  source_document_asset_id?: number
+  source_document_label?: string
 }
 
 export interface AuditRunUpdate {
   title?: string
   location?: string
+  location_details?: string
   status?: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
   scheduled_date?: string
   due_date?: string
   assigned_to_id?: number
+  notes?: string
+  source_origin?: string
+  assurance_scheme?: string
+  external_body_name?: string
+  external_auditor_name?: string
+  external_reference?: string
+  source_document_asset_id?: number
+  source_document_label?: string
 }
 
 export interface AuditTemplateDetail {
@@ -1406,6 +1433,10 @@ export interface Action {
   completion_notes?: string
   source_type: string
   source_id: number
+  source_reference?: string
+  source_title?: string
+  source_scheme?: string
+  clause_reference?: string
   owner_id?: number
   owner_email?: string
   assigned_to_email?: string
@@ -2612,6 +2643,7 @@ export const auditTrailApi = {
 
 export interface RiskEntry {
   id: number
+  reference?: string
   title: string
   description?: string
   category?: string
@@ -2627,6 +2659,7 @@ export interface RiskEntry {
   treatment_strategy?: string
   treatment_plan?: string
   review_date?: string
+  next_review_date?: string
   created_at: string
   updated_at?: string
   risk_owner_name?: string
@@ -2634,6 +2667,11 @@ export interface RiskEntry {
   inherent_likelihood?: number
   inherent_impact?: number
   inherent_score?: number
+  is_within_appetite?: boolean
+  is_escalated?: boolean
+  escalation_reason?: string
+  linked_audits?: string[]
+  linked_actions?: string[]
 }
 
 export interface RiskHeatmapData {
@@ -3118,7 +3156,7 @@ export const complianceAutomationApi = {
   },
   listGapAnalyses: (status?: string) => {
     const sp = new URLSearchParams()
-    if (status) sp.set('status_filter', status)
+    if (status) sp.set('status', status)
     return api.get<{ analyses: unknown[]; total: number }>(
       `/api/v1/compliance-automation/gap-analyses?${sp}`,
     )
@@ -3132,7 +3170,7 @@ export const complianceAutomationApi = {
     const sp = new URLSearchParams()
     if (params?.certificate_type) sp.set('certificate_type', params.certificate_type)
     if (params?.entity_type) sp.set('entity_type', params.entity_type)
-    if (params?.status) sp.set('status_filter', params.status)
+    if (params?.status) sp.set('status', params.status)
     if (params?.expiring_within_days)
       sp.set('expiring_within_days', String(params.expiring_within_days))
     return api.get<{ certificates: unknown[]; total: number }>(

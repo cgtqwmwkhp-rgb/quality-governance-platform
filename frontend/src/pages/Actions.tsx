@@ -126,7 +126,10 @@ export default function Actions() {
   // Transform API response to UI model
   const transformAction = (apiAction: ApiAction): Action => ({
     ...apiAction,
-    source_ref: `${apiAction.source_type.toUpperCase()}-${apiAction.source_id}`,
+    source_ref:
+      apiAction.source_reference ||
+      apiAction.source_title ||
+      `${apiAction.source_type.toUpperCase()}-${apiAction.source_id}`,
     owner: apiAction.owner_email || undefined,
   })
 
@@ -251,7 +254,9 @@ export default function Actions() {
     if (
       deferredSearch &&
       !action.title.toLowerCase().includes(deferredSearch.toLowerCase()) &&
-      !action.reference_number?.toLowerCase().includes(deferredSearch.toLowerCase())
+      !action.reference_number?.toLowerCase().includes(deferredSearch.toLowerCase()) &&
+      !action.source_ref.toLowerCase().includes(deferredSearch.toLowerCase()) &&
+      !(action.source_scheme || '').toLowerCase().includes(deferredSearch.toLowerCase())
     ) {
       return false
     }
@@ -476,6 +481,25 @@ export default function Actions() {
                         <p className="text-sm text-muted-foreground line-clamp-1">
                           {action.description}
                         </p>
+                        {(action.source_scheme || action.clause_reference || action.source_title) && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {action.source_scheme && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {action.source_scheme}
+                              </Badge>
+                            )}
+                            {action.clause_reference && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {action.clause_reference}
+                              </Badge>
+                            )}
+                            {action.source_title && (
+                              <span className="text-xs text-muted-foreground">
+                                {action.source_title}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap lg:flex-col items-start lg:items-end gap-2 lg:gap-1 lg:w-48 flex-shrink-0">

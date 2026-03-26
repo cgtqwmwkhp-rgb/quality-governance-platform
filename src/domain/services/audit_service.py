@@ -31,6 +31,8 @@ from src.domain.models.audit import (
     FindingStatus,
 )
 from src.domain.models.audit_log import AuditEvent
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.services.audit_scoring_service import AuditScoringService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -1108,15 +1110,299 @@ class AuditService:
         await self.db.refresh(run)
         return run
 
+    @staticmethod
+    def _response_display_value(response: AuditResponse) -> str:
+        if response.response_value:
+            return response.response_value
+        if response.response_text:
+            return response.response_text
+        if response.response_number is not None:
+            return str(response.response_number)
+        if response.response_bool is not None:
+            return "yes" if response.response_bool else "no"
+        if response.response_date is not None:
+            return response.response_date.isoformat()
+        return ""
+
+    @classmethod
+    def _response_creates_finding(cls, question: AuditQuestion, response: AuditResponse) -> bool:
+        if response.is_na:
+            return False
+
+        answer = cls._response_display_value(response).strip().lower()
+        question_type = (question.question_type or "").lower()
+        positive_answer = (question.positive_answer or "yes").lower()
+
+        if question_type == "pass_fail":
+            return answer == "fail"
+
+        if question_type in {"yes_no", "checkbox"}:
+            negative_answer = "no" if positive_answer == "yes" else "yes"
+            return answer == negative_answer
+
+        if response.score is not None and response.max_score is not None and response.score < response.max_score:
+            return True
+
+        options = question.options_json or []
+        for option in options:
+            if not isinstance(option, dict):
+                continue
+            option_value = str(option.get("value", "")).strip().lower()
+            option_label = str(option.get("label", "")).strip().lower()
+            if option.get("triggers_finding") and answer in {option_value, option_label}:
+                return True
+
+        return False
+
+    @staticmethod
+    def _derive_finding_severity(question: AuditQuestion, response: AuditResponse) -> str:
+        answer = AuditService._response_display_value(response).strip().lower()
+        for option in question.options_json or []:
+            if not isinstance(option, dict):
+                continue
+            option_value = str(option.get("value", "")).strip().lower()
+            option_label = str(option.get("label", "")).strip().lower()
+            if answer in {option_value, option_label} and option.get("finding_severity"):
+                return str(option["finding_severity"]).lower()
+
+        if question.risk_weight is not None:
+            if question.risk_weight >= 5:
+                return "critical"
+            if question.risk_weight >= 4:
+                return "high"
+            if question.risk_weight >= 2.5:
+                return "medium"
+            return "low"
+
+        if question.criticality == "essential":
+            return "high"
+        return "medium"
+
+    @staticmethod
+    def _priority_from_severity(severity: str) -> CAPAPriority:
+        if severity == "critical":
+            return CAPAPriority.CRITICAL
+        if severity == "high":
+            return CAPAPriority.HIGH
+        if severity == "low":
+            return CAPAPriority.LOW
+        return CAPAPriority.MEDIUM
+
+    @staticmethod
+    def _build_finding_description(run: AuditRun, question: AuditQuestion, response: AuditResponse) -> str:
+        response_value = AuditService._response_display_value(response) or "No response captured"
+        context_bits = []
+        if run.assurance_scheme:
+            context_bits.append(f"Scheme: {run.assurance_scheme}")
+        if run.external_reference:
+            context_bits.append(f"Reference: {run.external_reference}")
+        if run.external_body_name:
+            context_bits.append(f"Audited by: {run.external_body_name}")
+
+        lines = [
+            f"Question: {question.question_text}",
+            f"Observed response: {response_value}",
+        ]
+        if response.notes:
+            lines.append(f"Response notes: {response.notes}")
+        if context_bits:
+            lines.append(" | ".join(context_bits))
+        return "\n".join(lines)
+
+    async def _ensure_action_for_finding(
+        self,
+        *,
+        run: AuditRun,
+        finding: AuditFinding,
+        actor_user_id: int,
+    ) -> CAPAAction | None:
+        if not finding.corrective_action_required:
+            return None
+
+        existing_result = await self.db.execute(
+            select(CAPAAction).where(
+                CAPAAction.tenant_id == run.tenant_id,
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.source_id == finding.id,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
+        action = CAPAAction(
+            tenant_id=run.tenant_id,
+            reference_number=await ReferenceNumberService.generate(self.db, "capa", CAPAAction),
+            title=f"Action plan: {finding.title}"[:255],
+            description=finding.description,
+            capa_type=CAPAType.CORRECTIVE,
+            status=CAPAStatus.OPEN,
+            priority=self._priority_from_severity(finding.severity),
+            source_type=CAPASource.AUDIT_FINDING,
+            source_id=finding.id,
+            created_by_id=actor_user_id,
+            assigned_to_id=run.assigned_to_id,
+            due_date=finding.corrective_action_due_date,
+            iso_standard=run.assurance_scheme,
+            clause_reference=run.external_reference,
+        )
+        self.db.add(action)
+        await self.db.flush()
+        return action
+
+    async def _ensure_risk_for_finding(
+        self,
+        *,
+        run: AuditRun,
+        finding: AuditFinding,
+        action: CAPAAction | None,
+        actor_user_id: int,
+    ) -> EnterpriseRisk | None:
+        if finding.severity not in {"critical", "high"}:
+            return None
+
+        title = f"Audit escalation: {run.reference_number} / {finding.reference_number}"[:255]
+        existing_result = await self.db.execute(
+            select(EnterpriseRisk).where(
+                EnterpriseRisk.tenant_id == run.tenant_id,
+                EnterpriseRisk.title == title,
+            )
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing is not None:
+            linked_audits = set(existing.linked_audits or [])
+            linked_audits.update([run.reference_number, finding.reference_number])
+            existing.linked_audits = sorted(linked_audits)
+            if action is not None:
+                linked_actions = set(existing.linked_actions or [])
+                linked_actions.add(action.reference_number)
+                existing.linked_actions = sorted(linked_actions)
+            if finding.id not in (finding.risk_ids_json or []):
+                finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
+            return existing
+
+        likelihood = 4 if finding.severity == "critical" else 3
+        impact = 5 if finding.severity == "critical" else 4
+        score = likelihood * impact
+
+        risk = EnterpriseRisk(
+            tenant_id=run.tenant_id,
+            reference=await ReferenceNumberService.generate(self.db, "risk", EnterpriseRisk),
+            title=title,
+            description=finding.description,
+            category="compliance",
+            subcategory="audit_finding",
+            source="audit_finding",
+            context=f"{run.assurance_scheme or 'audit'}:{run.reference_number}",
+            department="quality",
+            location=run.location,
+            process="audit remediation",
+            inherent_likelihood=likelihood,
+            inherent_impact=impact,
+            inherent_score=score,
+            residual_likelihood=max(1, likelihood - 1),
+            residual_impact=impact,
+            residual_score=max(1, (likelihood - 1) * impact),
+            risk_appetite="cautious",
+            appetite_threshold=12,
+            is_within_appetite=score <= 12,
+            treatment_strategy="treat",
+            treatment_plan="Raised automatically from an audit finding requiring remediation.",
+            risk_owner_id=run.assigned_to_id,
+            status="open",
+            review_frequency_days=30,
+            next_review_date=datetime.now(timezone.utc) + timedelta(days=30),
+            is_escalated=True,
+            escalation_reason=f"Auto-escalated from {finding.reference_number}",
+            escalation_date=datetime.now(timezone.utc),
+            linked_audits=[run.reference_number, finding.reference_number],
+            linked_actions=[action.reference_number] if action is not None else [],
+            created_by=actor_user_id,
+        )
+        self.db.add(risk)
+        await self.db.flush()
+        finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), risk.id})
+        return risk
+
+    async def _auto_generate_findings_actions_and_risks(
+        self,
+        *,
+        run: AuditRun,
+        template: AuditTemplate | None,
+        actor_user_id: int,
+    ) -> None:
+        if template is None or not template.auto_create_findings:
+            return
+
+        question_result = await self.db.execute(
+            select(AuditQuestion).where(
+                AuditQuestion.template_id == run.template_id,
+                AuditQuestion.is_active == True,  # noqa: E712
+            )
+        )
+        question_map = {question.id: question for question in question_result.scalars().all()}
+        existing_by_question = {
+            finding.question_id: finding for finding in run.findings if finding.question_id is not None
+        }
+
+        for response in run.responses:
+            question = question_map.get(response.question_id)
+            if question is None or not self._response_creates_finding(question, response):
+                continue
+
+            finding = existing_by_question.get(question.id)
+            if finding is None:
+                finding = AuditFinding(
+                    run_id=run.id,
+                    question_id=question.id,
+                    title=question.question_text[:300],
+                    description=self._build_finding_description(run, question, response),
+                    severity=self._derive_finding_severity(question, response),
+                    finding_type="nonconformity",
+                    status=FindingStatus.OPEN,
+                    corrective_action_required=question.failure_triggers_action,
+                    corrective_action_due_date=datetime.now(timezone.utc) + timedelta(days=30),
+                    created_by_id=actor_user_id,
+                    tenant_id=run.tenant_id,
+                    clause_ids_json_legacy=question.clause_ids_json,
+                    control_ids_json=question.control_ids_json,
+                )
+                finding.reference_number = await ReferenceNumberService.generate(
+                    self.db,
+                    "audit_finding",
+                    AuditFinding,
+                )
+                self.db.add(finding)
+                await self.db.flush()
+                run.findings.append(finding)
+                existing_by_question[question.id] = finding
+
+            action = await self._ensure_action_for_finding(
+                run=run,
+                finding=finding,
+                actor_user_id=actor_user_id,
+            )
+            await self._ensure_risk_for_finding(
+                run=run,
+                finding=finding,
+                action=action,
+                actor_user_id=actor_user_id,
+            )
+
     async def complete_run(
         self,
         run_id: int,
         *,
         tenant_id: int,
+        actor_user_id: int | None = None,
     ) -> AuditRun:
         result = await self.db.execute(
             select(AuditRun)
-            .options(selectinload(AuditRun.responses))
+            .options(
+                selectinload(AuditRun.responses),
+                selectinload(AuditRun.findings),
+                selectinload(AuditRun.template),
+            )
             .where(
                 AuditRun.id == run_id,
                 or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
@@ -1134,16 +1420,25 @@ class AuditService:
         run.max_score = score.max_score
         run.score_percentage = score.score_percentage
 
-        template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
-        template = template_result.scalar_one_or_none()
+        template = run.template
+        if template is None:
+            template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
+            template = template_result.scalar_one_or_none()
         if template and template.passing_score is not None:
             run.passed = run.score_percentage >= template.passing_score
+
+        await self._auto_generate_findings_actions_and_risks(
+            run=run,
+            template=template,
+            actor_user_id=actor_user_id or run.created_by_id or 1,
+        )
 
         run.status = AuditStatus.COMPLETED
         run.completed_at = datetime.now(timezone.utc)
 
         await self.db.flush()
         await self.db.refresh(run)
+        await invalidate_tenant_cache(tenant_id, "audits")
         track_metric("audits.completed")
         return run
 
@@ -1255,7 +1550,7 @@ class AuditService:
         user_id: int,
         tenant_id: int,
     ) -> AuditFinding:
-        await self._get_entity(AuditRun, run_id, tenant_id=tenant_id)
+        run: AuditRun = await self._get_entity(AuditRun, run_id, tenant_id=tenant_id)
 
         finding_dict = self._remap_json_fields(data, _FINDING_JSON_REMAPS)
 
@@ -1275,6 +1570,17 @@ class AuditService:
 
         self.db.add(finding)
         await self.db.flush()
+        action = await self._ensure_action_for_finding(
+            run=run,
+            finding=finding,
+            actor_user_id=user_id,
+        )
+        await self._ensure_risk_for_finding(
+            run=run,
+            finding=finding,
+            action=action,
+            actor_user_id=user_id,
+        )
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
         track_metric("audits.findings")
@@ -1286,6 +1592,7 @@ class AuditService:
         update_data: dict[str, Any],
         *,
         tenant_id: int,
+        actor_user_id: int | None = None,
     ) -> AuditFinding:
         finding: AuditFinding = await self._get_entity(
             AuditFinding,
@@ -1300,6 +1607,18 @@ class AuditService:
         )
         self._apply_dict(finding, update_data, exclude=handled)
 
+        run: AuditRun = await self._get_entity(AuditRun, finding.run_id, tenant_id=tenant_id)
+        action = await self._ensure_action_for_finding(
+            run=run,
+            finding=finding,
+            actor_user_id=actor_user_id or finding.created_by_id or run.created_by_id or 1,
+        )
+        await self._ensure_risk_for_finding(
+            run=run,
+            finding=finding,
+            action=action,
+            actor_user_id=actor_user_id or finding.created_by_id or run.created_by_id or 1,
+        )
         await self.db.flush()
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")

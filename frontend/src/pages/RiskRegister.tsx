@@ -37,6 +37,10 @@ interface Risk {
   is_within_appetite: boolean
   risk_owner_name: string
   next_review_date: string | null
+  is_escalated?: boolean
+  escalation_reason?: string
+  linked_audits?: string[]
+  linked_actions?: string[]
 }
 
 interface MatrixCell {
@@ -128,7 +132,7 @@ export default function RiskRegister() {
 
         return {
           id: r.id,
-          reference: r.title ? `RISK-${String(r.id).padStart(4, '0')}` : `RISK-${r.id}`,
+          reference: r.reference ?? (r.title ? `RISK-${String(r.id).padStart(4, '0')}` : `RISK-${r.id}`),
           title: r.title,
           category: r.category ?? 'operational',
           department: r.department ?? '',
@@ -138,9 +142,13 @@ export default function RiskRegister() {
           risk_color: riskColor,
           treatment_strategy: r.treatment_strategy ?? 'treat',
           status: r.status ?? 'monitoring',
-          is_within_appetite: true,
+          is_within_appetite: r.is_within_appetite ?? true,
           risk_owner_name: r.risk_owner_name ?? r.risk_owner ?? '',
-          next_review_date: r.review_date ?? null,
+          next_review_date: r.next_review_date ?? r.review_date ?? null,
+          is_escalated: r.is_escalated ?? false,
+          escalation_reason: r.escalation_reason,
+          linked_audits: r.linked_audits ?? [],
+          linked_actions: r.linked_actions ?? [],
         }
       })
       setRisks(mappedRisks)
@@ -154,9 +162,10 @@ export default function RiskRegister() {
           medium: s?.medium ?? 0,
           low: s?.low ?? 0,
         },
-        outside_appetite: 0,
+        outside_appetite:
+          mappedRisks.filter((risk) => risk.is_within_appetite === false).length,
         overdue_review: 0,
-        escalated: 0,
+        escalated: mappedRisks.filter((risk) => risk.is_escalated).length,
       })
 
       const heatmap = heatmapResponse.data
@@ -454,6 +463,25 @@ export default function RiskRegister() {
                         )}
                         <span className="text-foreground">{risk.title}</span>
                       </div>
+                      {(risk.is_escalated || (risk.linked_audits?.length ?? 0) > 0 || (risk.linked_actions?.length ?? 0) > 0) && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {risk.is_escalated && (
+                            <Badge variant="destructive" className="text-[10px] uppercase">
+                              Escalated
+                            </Badge>
+                          )}
+                          {(risk.linked_audits?.length ?? 0) > 0 && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {risk.linked_audits?.length} audit links
+                            </Badge>
+                          )}
+                          {(risk.linked_actions?.length ?? 0) > 0 && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              {risk.linked_actions?.length} action links
+                            </Badge>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-4">
                       <Badge variant="default">

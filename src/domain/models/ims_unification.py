@@ -76,6 +76,10 @@ class CrossStandardMapping(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Primary clause
+    primary_clause_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clauses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     primary_requirement_id: Mapped[int] = mapped_column(
         ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
     )
@@ -83,6 +87,10 @@ class CrossStandardMapping(Base):
     primary_clause: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Mapped clause
+    mapped_clause_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("clauses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     mapped_requirement_id: Mapped[int] = mapped_column(
         ForeignKey("ims_requirements.id", ondelete="CASCADE"), nullable=False
     )
