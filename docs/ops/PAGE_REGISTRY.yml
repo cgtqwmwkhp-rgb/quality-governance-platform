@@ -136,6 +136,24 @@ admin_routes:
     expected_degraded_state: "404 if incident not found"
     description: "Incident detail view"
 
+  - pageId: near-misses-list
+    route: /near-misses
+    auth: jwt_admin
+    criticality: P1
+    component: NearMisses
+    expected_empty_state: "Empty table with 'No near misses' message"
+    expected_degraded_state: null
+    description: "Near misses list view"
+
+  - pageId: near-miss-detail
+    route: /near-misses/:id
+    auth: jwt_admin
+    criticality: P1
+    component: NearMissDetail
+    expected_empty_state: null
+    expected_degraded_state: "404 if near miss not found"
+    description: "Near miss detail view"
+
   - pageId: rtas-list
     route: /rtas
     auth: jwt_admin
@@ -397,6 +415,15 @@ admin_routes:
     expected_degraded_state: null
     description: "Digital signatures"
 
+  - pageId: vehicle-checklists
+    route: /vehicle-checklists
+    auth: jwt_admin
+    criticality: P2
+    component: VehicleChecklists
+    expected_empty_state: "Checklist records and defect summary visible"
+    expected_degraded_state: null
+    description: "Vehicle checklists and defects workspace"
+
   - pageId: workforce-dashboard
     route: /workforce/dashboard
     auth: jwt_admin
@@ -500,7 +527,7 @@ admin_routes:
 # SUMMARY
 # ==============================================================================
 summary:
-  total_routes: 55
+  total_routes: 58
   p0_routes: 12
-  p1_routes: 22
-  p2_routes: 21
+  p1_routes: 24
+  p2_routes: 22
