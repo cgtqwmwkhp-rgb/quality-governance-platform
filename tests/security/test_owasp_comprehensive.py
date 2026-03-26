@@ -47,7 +47,7 @@ def auth_headers(client) -> dict:
     """Get authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+        json={"email": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -158,7 +158,7 @@ class TestA02CryptographicFailures:
         """Auth tokens are not in error responses."""
         response = client.post(
             "/api/v1/auth/login",
-            json={"username": "test@test.com", "password": "wrong"},
+            json={"email": "test@test.com", "password": "wrong"},
         )
 
         if response.status_code == 401:
@@ -318,7 +318,7 @@ class TestA04InsecureDesign:
         for _ in range(15):
             client.post(
                 "/api/v1/auth/login",
-                json={"username": "test@test.com", "password": "wrong"},
+                json={"email": "test@test.com", "password": "wrong"},
             )
 
         # Should eventually be rate limited

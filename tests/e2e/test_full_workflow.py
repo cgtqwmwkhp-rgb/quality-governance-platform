@@ -32,7 +32,7 @@ def auth_headers(client):
     """Get authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "testuser@plantexpand.com", "password": "testpassword123"},
+        json={"email": "testuser@plantexpand.com", "password": "testpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -45,7 +45,7 @@ def admin_headers(client):
     """Get admin authenticated headers."""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "admin@plantexpand.com", "password": "adminpassword123"},
+        json={"email": "admin@plantexpand.com", "password": "adminpassword123"},
     )
     if response.status_code == 200:
         token = response.json().get("access_token")
@@ -318,9 +318,9 @@ class TestRiskManagementWorkflow:
         if isinstance(risks_data, dict):
             assert "items" in risks_data or "results" in risks_data or "data" in risks_data
 
-        # Step 2: Get risk register heat map
+        # Step 2: Get risk register heatmap
         heatmap_response = client.get(
-            "/api/v1/risk-register/heat-map",
+            "/api/v1/risk-register/heatmap",
             headers=auth_headers,
         )
         # TODO: Remove 404 when endpoint is implemented
@@ -362,7 +362,7 @@ class TestComplianceWorkflow:
 
         # Step 1: Get standards
         standards_response = client.get(
-            "/api/v1/standards",
+            "/api/v1/compliance/standards",
             headers=auth_headers,
         )
         assert standards_response.status_code == 200
@@ -371,7 +371,7 @@ class TestComplianceWorkflow:
 
         # Step 2: Get compliance evidence
         evidence_response = client.get(
-            "/api/v1/compliance/evidence",
+            "/api/v1/compliance/evidence/links",
             headers=auth_headers,
         )
         # TODO: Remove 404 when endpoint is implemented

@@ -232,7 +232,8 @@ export default function VehicleChecklists() {
   const [dateTo, setDateTo] = useState('')
   const [selectedWeek, setSelectedWeek] = useState('')
 
-  const pageSize = 250
+  // Keep client pagination aligned with backend validation (page_size <= 100).
+  const pageSize = 100
 
   const loadChecklists = useCallback(
     async (tab: TabKey, page: number) => {
