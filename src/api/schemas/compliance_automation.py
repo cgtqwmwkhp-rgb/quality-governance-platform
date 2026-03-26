@@ -182,6 +182,7 @@ class AddCertificateResponse(BaseModel):
     reminder_sent_at: Optional[datetime] = None
     status: str = "valid"
     is_critical: bool = False
+    primary_evidence_asset_id: Optional[int] = None
     document_url: Optional[str] = None
     notes: Optional[str] = None
     created_at: Optional[datetime] = None

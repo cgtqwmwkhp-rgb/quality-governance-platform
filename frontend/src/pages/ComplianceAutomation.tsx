@@ -35,6 +35,7 @@ import {
   Zap,
   BookOpen,
 } from 'lucide-react'
+import { complianceAutomationApi, getApiErrorMessage } from '../api/client'
 import { cn } from '../helpers/utils'
 import { Button } from '../components/ui/Button'
 
@@ -99,7 +100,8 @@ export default function ComplianceAutomation() {
   const [certificates, setCertificates] = useState<Certificate[]>([])
   const [audits, setAudits] = useState<ScheduledAudit[]>([])
   const [loading, setLoading] = useState(true)
-  const [complianceScore] = useState({
+  const [error, setError] = useState<string | null>(null)
+  const [complianceScore, setComplianceScore] = useState({
     overall: 87.5,
     previous: 85.2,
     change: 2.3,
@@ -110,79 +112,61 @@ export default function ComplianceAutomation() {
   }, [])
 
   const loadData = async () => {
-    setLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    try {
+      setLoading(true)
+      setError(null)
+      const [updatesRes, certificatesRes, auditsRes, scoreRes, trendRes] = await Promise.all([
+        complianceAutomationApi.listRegulatoryUpdates(),
+        complianceAutomationApi.listCertificates(),
+        complianceAutomationApi.listScheduledAudits(),
+        complianceAutomationApi.getComplianceScore({ scope_type: 'organization' }),
+        complianceAutomationApi.getComplianceTrend({ scope_type: 'organization', months: 12 }),
+      ])
 
-    setUpdates([
-      {
-        id: 1,
-        source: 'hse_uk',
-        source_reference: 'HSE/2026/001',
-        title: 'Updated guidance on workplace first aid requirements',
-        summary:
-          'New requirements for first aid training and equipment in workplaces with 50+ employees.',
-        category: 'health_safety',
-        impact: 'high',
-        affected_standards: ['ISO 45001'],
-        published_date: '2026-01-15',
-        effective_date: '2026-04-01',
-        is_reviewed: false,
-        requires_action: true,
-      },
-      {
-        id: 2,
-        source: 'iso',
-        source_reference: 'ISO/TC 176/2026',
-        title: 'Amendment to ISO 9001:2015 - Clause 4.4.1',
-        summary: 'Clarification on process interaction requirements.',
-        category: 'quality',
-        impact: 'medium',
-        affected_standards: ['ISO 9001'],
-        published_date: '2026-01-10',
-        effective_date: '2026-07-01',
-        is_reviewed: true,
-        requires_action: false,
-      },
-      {
-        id: 3,
-        source: 'hse_uk',
-        source_reference: 'HSE/2026/002',
-        title: 'RIDDOR amendment - digital submission requirements',
-        summary: 'All RIDDOR submissions must be made digitally from March 2026.',
-        category: 'regulatory',
-        impact: 'critical',
-        affected_standards: ['ISO 45001'],
-        published_date: '2026-01-18',
-        effective_date: '2026-03-01',
-        is_reviewed: false,
-        requires_action: true,
-      },
-    ])
+      setUpdates((updatesRes.data.updates as RegulatoryUpdate[]) || [])
 
-    setCertificates([])
+      const now = new Date()
+      const certs = ((certificatesRes.data.certificates as Certificate[]) || []).map((certificate) => {
+        const expiry = certificate.expiry_date ? new Date(certificate.expiry_date) : null
+        let status = certificate.status
+        if (expiry) {
+          if (expiry < now) status = 'expired'
+          else if (expiry.getTime() - now.getTime() <= 30 * 24 * 60 * 60 * 1000) status = 'expiring_soon'
+        }
+        return { ...certificate, status }
+      })
+      setCertificates(certs)
 
-    setAudits([
-      {
-        id: 1,
-        name: 'Monthly H&S Inspection - Site A',
-        audit_type: 'safety_inspection',
-        frequency: 'monthly',
-        next_due_date: '2026-01-24',
-        status: 'scheduled',
-        standards: ['ISO 45001'],
-      },
-      {
-        id: 2,
-        name: 'Quarterly ISO 9001 Internal Audit',
-        audit_type: 'internal_audit',
-        frequency: 'quarterly',
-        next_due_date: '2026-01-16',
-        status: 'overdue',
-        standards: ['ISO 9001'],
-      },
-    ])
+      const scheduledAudits = ((auditsRes.data.audits as ScheduledAudit[]) || []).map((audit) => {
+        const dueDate = audit.next_due_date ? new Date(audit.next_due_date) : null
+        return {
+          ...audit,
+          status: dueDate && dueDate < now ? 'overdue' : 'scheduled',
+          standards: (audit.standards || (audit as { standard_ids?: string[] }).standard_ids || []) as string[],
+        }
+      })
+      setAudits(scheduledAudits)
 
-    setLoading(false)
+      const trend = ((trendRes.data.trend as Array<{ score: number }>) || []).filter(
+        (entry) => typeof entry.score === 'number',
+      )
+      const scoreData = scoreRes.data as { overall_score?: number }
+      const previous = trend.length > 1 ? trend[trend.length - 2]!.score : scoreData.overall_score ?? 0
+      const overall = scoreData.overall_score ?? 0
+      setComplianceScore({
+        overall,
+        previous,
+        change: Number((overall - previous).toFixed(1)),
+      })
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+      setUpdates([])
+      setCertificates([])
+      setAudits([])
+      setComplianceScore({ overall: 0, previous: 0, change: 0 })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const tabs = [
@@ -218,6 +202,11 @@ export default function ComplianceAutomation() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -226,7 +215,7 @@ export default function ComplianceAutomation() {
             Monitor regulations, track certificates, and automate compliance
           </p>
         </div>
-        <Button onClick={loadData} variant="outline">
+        <Button onClick={() => void loadData()} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
           Refresh
         </Button>

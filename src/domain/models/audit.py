@@ -280,6 +280,16 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     location_details: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    source_origin: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    assurance_scheme: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    external_body_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    external_auditor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    external_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    source_document_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("evidence_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    source_document_label: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # GPS coordinates
     latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

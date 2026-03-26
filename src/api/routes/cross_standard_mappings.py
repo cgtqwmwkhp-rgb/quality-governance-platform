@@ -2,13 +2,15 @@
 
 import logging
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
+from src.domain.models.ims_unification import IMSRequirement
+from src.domain.models.standard import Clause, Standard
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -18,8 +20,10 @@ router = APIRouter()
 
 class MappingResponse(BaseModel):
     id: int
+    primary_clause_id: int | None = None
     primary_standard: str
     primary_clause: str
+    mapped_clause_id: int | None = None
     mapped_standard: str
     mapped_clause: str
     mapping_type: str
@@ -57,6 +61,86 @@ class StandardsListResponse(BaseModel):
     standards: list[str]
 
 
+def _normalize_standard(value: str) -> str:
+    return "".join(ch.lower() for ch in value if ch.isalnum())
+
+
+def _standard_filters(value: str):
+    normalized = _normalize_standard(value)
+    return or_(
+        Standard.code.ilike(f"%{value}%"),
+        Standard.name.ilike(f"%{value}%"),
+        Standard.full_name.ilike(f"%{value}%"),
+        Standard.code.ilike(f"%{normalized}%"),
+    )
+
+
+async def _resolve_canonical_clause(
+    db: DbSession,
+    *,
+    standard_name: str,
+    clause_number: str,
+    tenant_id: int | None,
+) -> tuple["Standard", "Clause"]:
+    standard_result = await db.execute(
+        select(Standard).where(
+            Standard.is_active == True,  # noqa: E712
+            or_(Standard.tenant_id == tenant_id, Standard.tenant_id.is_(None)),
+            _standard_filters(standard_name),
+        )
+    )
+    standard = standard_result.scalars().first()
+    if standard is None:
+        raise HTTPException(status_code=404, detail=f"Standard not found: {standard_name}")
+
+    clause_result = await db.execute(
+        select(Clause).where(
+            Clause.standard_id == standard.id,
+            Clause.clause_number == clause_number,
+            Clause.is_active == True,  # noqa: E712
+            or_(Clause.tenant_id == tenant_id, Clause.tenant_id.is_(None)),
+        )
+    )
+    clause = clause_result.scalars().first()
+    if clause is None:
+        raise HTTPException(status_code=404, detail=f"Clause not found: {standard.name} {clause_number}")
+
+    return standard, clause
+
+
+async def _get_or_create_ims_requirement(
+    db: DbSession,
+    *,
+    standard: "Standard",
+    clause: "Clause",
+    tenant_id: int | None,
+) -> "IMSRequirement":
+    requirement_result = await db.execute(
+        select(IMSRequirement).where(
+            IMSRequirement.standard == standard.name,
+            IMSRequirement.clause_number == clause.clause_number,
+            IMSRequirement.tenant_id == tenant_id,
+        )
+    )
+    requirement = requirement_result.scalars().first()
+    if requirement is not None:
+        return requirement
+
+    requirement = IMSRequirement(
+        tenant_id=tenant_id,
+        clause_number=clause.clause_number,
+        clause_title=clause.title,
+        clause_text=clause.description or clause.title,
+        standard=standard.name,
+        level=clause.level,
+        parent_clause=None,
+        keywords=[clause.title],
+    )
+    db.add(requirement)
+    await db.flush()
+    return requirement
+
+
 @router.get("", response_model=list[MappingResponse])
 async def list_mappings(
     db: DbSession,
@@ -90,19 +174,17 @@ async def list_standards(
     current_user: CurrentUser,
 ) -> dict:
     """List all available ISO standards in the mapping database."""
-    from src.domain.models.ims_unification import CrossStandardMapping
+    from src.domain.models.standard import Standard
 
-    primaries = await db.execute(
-        select(CrossStandardMapping.primary_standard)
-        .where(CrossStandardMapping.tenant_id == current_user.tenant_id)
-        .distinct()
+    standards_result = await db.execute(
+        select(Standard.name)
+        .where(
+            Standard.is_active == True,  # noqa: E712
+            or_(Standard.tenant_id == current_user.tenant_id, Standard.tenant_id.is_(None)),
+        )
+        .order_by(Standard.name.asc())
     )
-    mapped = await db.execute(
-        select(CrossStandardMapping.mapped_standard)
-        .where(CrossStandardMapping.tenant_id == current_user.tenant_id)
-        .distinct()
-    )
-    all_standards = sorted({s for (s,) in primaries.all()} | {s for (s,) in mapped.all()})
+    all_standards = [name for (name,) in standards_result.all()]
     return {"standards": all_standards}
 
 
@@ -115,7 +197,58 @@ async def create_mapping(
     """Create a new cross-standard mapping."""
     from src.domain.models.ims_unification import CrossStandardMapping
 
-    mapping = CrossStandardMapping(**data.model_dump(), tenant_id=current_user.tenant_id)
+    primary_standard, primary_clause = await _resolve_canonical_clause(
+        db,
+        standard_name=data.primary_standard,
+        clause_number=data.primary_clause,
+        tenant_id=current_user.tenant_id,
+    )
+    mapped_standard, mapped_clause = await _resolve_canonical_clause(
+        db,
+        standard_name=data.mapped_standard,
+        clause_number=data.mapped_clause,
+        tenant_id=current_user.tenant_id,
+    )
+
+    existing_result = await db.execute(
+        select(CrossStandardMapping).where(
+            CrossStandardMapping.tenant_id == current_user.tenant_id,
+            CrossStandardMapping.primary_clause_id == primary_clause.id,
+            CrossStandardMapping.mapped_clause_id == mapped_clause.id,
+        )
+    )
+    existing = existing_result.scalars().first()
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="Cross-standard mapping already exists")
+
+    primary_requirement = await _get_or_create_ims_requirement(
+        db,
+        standard=primary_standard,
+        clause=primary_clause,
+        tenant_id=current_user.tenant_id,
+    )
+    mapped_requirement = await _get_or_create_ims_requirement(
+        db,
+        standard=mapped_standard,
+        clause=mapped_clause,
+        tenant_id=current_user.tenant_id,
+    )
+
+    mapping = CrossStandardMapping(
+        tenant_id=current_user.tenant_id,
+        primary_clause_id=primary_clause.id,
+        primary_requirement_id=primary_requirement.id,
+        primary_standard=primary_standard.name,
+        primary_clause=primary_clause.clause_number,
+        mapped_clause_id=mapped_clause.id,
+        mapped_requirement_id=mapped_requirement.id,
+        mapped_standard=mapped_standard.name,
+        mapped_clause=mapped_clause.clause_number,
+        mapping_type=data.mapping_type,
+        mapping_strength=data.mapping_strength,
+        mapping_notes=data.mapping_notes,
+        annex_sl_element=data.annex_sl_element,
+    )
     db.add(mapping)
     await db.commit()
     await db.refresh(mapping)

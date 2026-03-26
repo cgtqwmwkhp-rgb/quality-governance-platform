@@ -205,6 +205,28 @@ export default function ComplianceEvidence() {
   const getEvidenceForClause = (clauseId: string): EvidenceLinkRecord[] =>
     evidenceLinks.filter((evidence) => evidence.clause_id === clauseId)
 
+  const selectedClauseEvidence = useMemo(
+    () =>
+      selectedClause
+        ? evidenceLinks.filter((evidence) => evidence.clause_id === selectedClause.id)
+        : [],
+    [evidenceLinks, selectedClause],
+  )
+
+  const selectedClauseProvenance = useMemo(() => {
+    const counts = selectedClauseEvidence.reduce<Record<string, number>>((acc, evidence) => {
+      acc[evidence.entity_type] = (acc[evidence.entity_type] || 0) + 1
+      return acc
+    }, {})
+    return {
+      auditLinks: counts.audit || 0,
+      actionLinks: counts.action || 0,
+      riskLinks: counts.risk || 0,
+      totalLinks: selectedClauseEvidence.length,
+      mappedFrameworks: mappings.length,
+    }
+  }, [mappings.length, selectedClauseEvidence])
+
   // Filter clauses based on search and selected standard
   const filteredClauses = clauses
 
@@ -728,17 +750,38 @@ export default function ComplianceEvidence() {
                   })()}
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-slate-700/40 p-3">
+                    <p className="text-xs text-gray-400">Linked Remediation</p>
+                    <p className="mt-1 text-sm text-white">
+                      {selectedClauseProvenance.actionLinks} action link(s)
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {selectedClauseProvenance.riskLinks} risk link(s)
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-slate-700/40 p-3">
+                    <p className="text-xs text-gray-400">Framework Reach</p>
+                    <p className="mt-1 text-sm text-white">
+                      {selectedClauseProvenance.mappedFrameworks} mapped framework link(s)
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {selectedClauseProvenance.auditLinks} audit evidence item(s)
+                    </p>
+                  </div>
+                </div>
+
                 {/* Linked Evidence */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-medium text-gray-400">Linked Evidence</h4>
                     <span className="text-xs text-gray-400">
-                      {clauseDetailsById.get(selectedClause.id)?.evidence_count ?? 0} live link(s)
+                      {selectedClauseProvenance.totalLinks} live link(s)
                     </span>
                   </div>
-                  {getEvidenceForClause(selectedClause.id).length > 0 ? (
+                  {selectedClauseEvidence.length > 0 ? (
                     <div className="space-y-2">
-                      {getEvidenceForClause(selectedClause.id).map((evidence) => {
+                      {selectedClauseEvidence.map((evidence) => {
                         const config =
                           evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                         const Icon = config.icon

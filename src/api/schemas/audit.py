@@ -417,6 +417,13 @@ class AuditRunBase(BaseModel):
     scheduled_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     notes: Optional[str] = None
+    source_origin: Optional[str] = Field(None, max_length=50)
+    assurance_scheme: Optional[str] = Field(None, max_length=100)
+    external_body_name: Optional[str] = Field(None, max_length=255)
+    external_auditor_name: Optional[str] = Field(None, max_length=255)
+    external_reference: Optional[str] = Field(None, max_length=100)
+    source_document_asset_id: Optional[int] = None
+    source_document_label: Optional[str] = Field(None, max_length=255)
 
     # GPS coordinates
     latitude: Optional[float] = None
@@ -441,6 +448,13 @@ class AuditRunUpdate(BaseModel):
     assigned_to_id: Optional[int] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    source_origin: Optional[str] = Field(None, max_length=50)
+    assurance_scheme: Optional[str] = Field(None, max_length=100)
+    external_body_name: Optional[str] = Field(None, max_length=255)
+    external_auditor_name: Optional[str] = Field(None, max_length=255)
+    external_reference: Optional[str] = Field(None, max_length=100)
+    source_document_asset_id: Optional[int] = None
+    source_document_label: Optional[str] = Field(None, max_length=255)
 
 
 class AuditRunResponse(BaseModel):
@@ -462,6 +476,13 @@ class AuditRunResponse(BaseModel):
     scheduled_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
     notes: Optional[str] = None
+    source_origin: Optional[str] = None
+    assurance_scheme: Optional[str] = None
+    external_body_name: Optional[str] = None
+    external_auditor_name: Optional[str] = None
+    external_reference: Optional[str] = None
+    source_document_asset_id: Optional[int] = None
+    source_document_label: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     status: str

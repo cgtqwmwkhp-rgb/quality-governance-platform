@@ -46,6 +46,7 @@ from src.api.schemas.audit import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import NotFoundError, ValidationError
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -920,20 +921,14 @@ async def complete_run(
 ) -> AuditRunResponse:
     """Complete an audit run and calculate scores."""
     started = time.perf_counter()
-    result = await db.execute(
-        select(AuditRun)
-        .options(selectinload(AuditRun.responses))
-        .where(
-            AuditRun.id == run_id,
-            or_(
-                AuditRun.tenant_id == current_user.tenant_id,
-                AuditRun.tenant_id.is_(None),
-            ),
+    service = AuditService(db)
+    try:
+        run = await service.complete_run(
+            run_id,
+            tenant_id=current_user.tenant_id,
+            actor_user_id=current_user.id,
         )
-    )
-    run = result.scalar_one_or_none()
-
-    if not run:
+    except NotFoundError:
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/complete",
             404,
@@ -944,8 +939,7 @@ async def complete_run(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
         )
-
-    if run.status != AuditStatus.IN_PROGRESS:
+    except ValidationError as exc:
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/complete",
             400,
@@ -956,27 +950,9 @@ async def complete_run(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=api_error(
                 ErrorCode.INVALID_STATE_TRANSITION,
-                "Audit run must be in progress to complete",
+                str(exc),
             ),
         )
-
-    scored_responses = [r for r in run.responses if not getattr(r, "is_na", False)]
-    total_score = sum(r.score or 0 for r in scored_responses)
-    max_score = sum(r.max_score or 0 for r in scored_responses)
-
-    run.score = total_score
-    run.max_score = max_score
-    run.score_percentage = (total_score / max_score * 100) if max_score > 0 else 0
-
-    # Get template to check passing score
-    template_result = await db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
-    template = template_result.scalar_one_or_none()
-
-    if template and template.passing_score is not None:
-        run.passed = run.score_percentage >= template.passing_score
-
-    run.status = AuditStatus.COMPLETED
-    run.completed_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(run)
@@ -1271,5 +1247,6 @@ async def update_finding(
         finding_id,
         finding_data.model_dump(exclude_unset=True),
         tenant_id=current_user.tenant_id,
+        actor_user_id=current_user.id,
     )
     return AuditFindingResponse.model_validate(finding)

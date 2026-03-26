@@ -14,7 +14,7 @@ from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.domain.models.assessment import AssessmentRun
-from src.domain.models.audit import AuditFinding
+from src.domain.models.audit import AuditFinding, AuditRun
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
@@ -91,6 +91,9 @@ class ActionResponse(BaseModel):
     source_type: str
     source_id: int
     source_reference: Optional[str] = None
+    source_title: Optional[str] = None
+    source_scheme: Optional[str] = None
+    clause_reference: Optional[str] = None
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
     assigned_to_email: Optional[str] = None
@@ -131,6 +134,9 @@ def _action_to_response(
         source_type=source_type,
         source_id=source_id,
         source_reference=None,
+        source_title=None,
+        source_scheme=None,
+        clause_reference=None,
         owner_id=action.owner_id,
         owner_email=owner_email,
         assigned_to_email=owner_email,
@@ -162,9 +168,45 @@ def _parse_capa_priority(priority: Optional[str]) -> CAPAPriority:
     return CAPAPriority.MEDIUM
 
 
-def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
-    """Convert a CAPA action (from assessment/induction) to unified action response."""
+async def _build_capa_provenance(
+    db: "DbSession",
+    capa: CAPAAction,
+    source_type: str,
+) -> dict[str, Optional[str]]:
+    source_reference = capa.source_reference
+    source_title: Optional[str] = None
+    source_scheme: Optional[str] = None
+    clause_reference: Optional[str] = capa.clause_reference
+
+    if source_type == "audit_finding" and capa.source_id:
+        result = await db.execute(
+            select(AuditFinding).where(AuditFinding.id == capa.source_id)
+        )
+        finding = cast(Optional[AuditFinding], result.scalar_one_or_none())
+        if finding is not None:
+            source_reference = finding.reference_number
+            source_title = finding.title
+            if clause_reference is None and finding.clause_ids_json_legacy:
+                clause_reference = ", ".join(str(value) for value in finding.clause_ids_json_legacy[:3])
+            run_result = await db.execute(select(AuditRun).where(AuditRun.id == finding.run_id))
+            run = cast(Optional[AuditRun], run_result.scalar_one_or_none())
+            if run is not None:
+                source_scheme = run.assurance_scheme
+                if clause_reference is None:
+                    clause_reference = run.external_reference
+
+    return {
+        "source_reference": source_reference,
+        "source_title": source_title,
+        "source_scheme": source_scheme,
+        "clause_reference": clause_reference,
+    }
+
+
+async def _capa_to_response(db: "DbSession", capa: CAPAAction, source_type: str) -> ActionResponse:
+    """Convert a CAPA action to unified action response."""
     capa_status = capa.status.value if hasattr(capa.status, "value") else str(capa.status)
+    provenance = await _build_capa_provenance(db, capa, source_type)
     return ActionResponse(
         id=capa.id,
         reference_number=capa.reference_number,
@@ -178,7 +220,10 @@ def _capa_to_response(capa: CAPAAction, source_type: str) -> ActionResponse:
         completion_notes=capa.verification_result,
         source_type=source_type,
         source_id=capa.source_id or 0,
-        source_reference=capa.source_reference,
+        source_reference=provenance["source_reference"],
+        source_title=provenance["source_title"],
+        source_scheme=provenance["source_scheme"],
+        clause_reference=provenance["clause_reference"],
         owner_id=capa.assigned_to_id,
         owner_email=None,
         created_at=capa.created_at.isoformat() if capa.created_at else "",
@@ -410,7 +455,7 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_capa_to_response(a, "assessment"))
+                actions_list.append(await _capa_to_response(db, a, "assessment"))
         except Exception:
             logger.warning("list_actions: assessment query failed", exc_info=True)
 
@@ -431,7 +476,7 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_capa_to_response(a, "induction"))
+                actions_list.append(await _capa_to_response(db, a, "induction"))
         except Exception:
             logger.warning("list_actions: induction query failed", exc_info=True)
 
@@ -452,7 +497,7 @@ async def list_actions(
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
             for a in result.scalars().all():
-                actions_list.append(_capa_to_response(a, "audit_finding"))
+                actions_list.append(await _capa_to_response(db, a, "audit_finding"))
         except Exception:
             logger.warning("list_actions: audit_finding query failed", exc_info=True)
 
@@ -831,7 +876,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         )
 
     if isinstance(action, CAPAAction):
-        return _capa_to_response(action, src_type)
+        return await _capa_to_response(db, action, src_type)
 
     resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
     return ActionResponse(
@@ -848,6 +893,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         source_type=src_type,
         source_id=src_id,
         source_reference=None,
+        source_title=None,
+        source_scheme=None,
+        clause_reference=None,
         owner_id=action.owner_id,
         owner_email=resolved_email,
         assigned_to_email=resolved_email,
@@ -877,7 +925,7 @@ async def get_action(
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_action:
-            return _capa_to_response(capa_action, "assessment")
+            return await _capa_to_response(db, capa_action, "assessment")
     elif src_type == "induction":
         result = await db.execute(
             select(CAPAAction).where(
@@ -887,7 +935,7 @@ async def get_action(
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_action:
-            return _capa_to_response(capa_action, "induction")
+            return await _capa_to_response(db, capa_action, "induction")
     elif src_type == "audit_finding":
         result = await db.execute(
             select(CAPAAction).where(
@@ -897,7 +945,7 @@ async def get_action(
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
         if capa_action:
-            return _capa_to_response(capa_action, "audit_finding")
+            return await _capa_to_response(db, capa_action, "audit_finding")
     elif src_type == "incident":
         result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())

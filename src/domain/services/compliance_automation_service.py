@@ -1,122 +1,516 @@
-"""
-Compliance Automation Service
-
-Features:
-- Regulatory change monitoring
-- Gap analysis
-- Certificate expiry tracking
-- Scheduled audit management
-- Compliance score calculation
-- RIDDOR automation
-"""
+"""Compliance automation service backed by persisted platform data."""
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.domain.exceptions import NotFoundError
+from src.domain.models.compliance_automation import Certificate, GapAnalysis, RegulatoryUpdate, ScheduledAudit
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink
+from src.domain.models.standard import Clause, Standard
 
 logger = logging.getLogger(__name__)
 
 
+def _to_iso(value: Optional[datetime]) -> Optional[str]:
+    return value.isoformat() if value else None
+
+
+def _normalize_standard_text(*values: Optional[str]) -> str:
+    return " ".join(value or "" for value in values).lower()
+
+
+def _extract_standard_tokens(*values: Optional[str]) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        if not value:
+            continue
+        normalized = "".join(ch.lower() for ch in value if ch.isalnum())
+        if normalized:
+            tokens.add(normalized)
+        tokens.update(re.findall(r"\d{4,5}", value))
+    return tokens
+
+
+def _build_standard_match_clause(raw_value: str):
+    normalized = "".join(ch.lower() for ch in raw_value if ch.isalnum())
+    digit_tokens = re.findall(r"\d{4,5}", raw_value)
+    checks = [
+        Standard.code.ilike(f"%{raw_value}%"),
+        Standard.name.ilike(f"%{raw_value}%"),
+        Standard.full_name.ilike(f"%{raw_value}%"),
+    ]
+    if normalized:
+        checks.extend(
+            [
+                Standard.code.ilike(f"%{normalized}%"),
+                Standard.name.ilike(f"%{normalized}%"),
+                Standard.full_name.ilike(f"%{normalized}%"),
+            ]
+        )
+    for token in digit_tokens:
+        checks.extend(
+            [
+                Standard.code.ilike(f"%{token}%"),
+                Standard.name.ilike(f"%{token}%"),
+                Standard.full_name.ilike(f"%{token}%"),
+            ]
+        )
+    return or_(*checks)
+
+
 class ComplianceAutomationService:
-    """
-    Comprehensive compliance automation service.
+    """Persisted compliance automation service."""
 
-    Monitors regulatory changes, tracks certificates,
-    manages scheduled audits, and automates RIDDOR submissions.
-    """
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
 
-    def __init__(self) -> None:
-        pass
-
-    # ==================== Regulatory Monitoring ====================
-
-    def get_regulatory_updates(
+    async def _resolve_standard(
         self,
+        *,
+        tenant_id: int,
+        raw_value: Optional[str],
+    ) -> Optional[Standard]:
+        if not raw_value:
+            return None
+
+        result = await self.db.execute(
+            select(Standard).where(
+                or_(Standard.tenant_id == tenant_id, Standard.tenant_id.is_(None)),
+                Standard.is_active == True,  # noqa: E712
+                _build_standard_match_clause(raw_value),
+            )
+        )
+        return result.scalars().first()
+
+    async def _count_standard_coverage(
+        self,
+        *,
+        tenant_id: int,
+        standard: Standard,
+    ) -> int:
+        clause_count_result = await self.db.execute(
+            select(func.count(func.distinct(ComplianceEvidenceLink.clause_id))).where(
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+                ComplianceEvidenceLink.deleted_at.is_(None),
+            )
+        )
+        all_clause_ids = clause_count_result.scalar()
+        if all_clause_ids is None:
+            return 0
+
+        tokens = _extract_standard_tokens(standard.code, standard.name, standard.full_name)
+        if not tokens:
+            return 0
+
+        clause_patterns = []
+        for token in tokens:
+            clause_patterns.extend(
+                [
+                    ComplianceEvidenceLink.clause_id.ilike(f"{token}-%"),
+                    ComplianceEvidenceLink.clause_id.ilike(f"{token}:%"),
+                    ComplianceEvidenceLink.clause_id.ilike(f"{token}/%"),
+                    ComplianceEvidenceLink.clause_id.ilike(f"%{token} clause %"),
+                ]
+            )
+
+        result = await self.db.execute(
+            select(func.count(func.distinct(ComplianceEvidenceLink.clause_id))).where(
+                ComplianceEvidenceLink.tenant_id == tenant_id,
+                ComplianceEvidenceLink.deleted_at.is_(None),
+                or_(*clause_patterns),
+            )
+        )
+        return int(result.scalar() or 0)
+
+    async def get_regulatory_updates(
+        self,
+        *,
+        tenant_id: int,
         source: Optional[str] = None,
         since: Optional[datetime] = None,
         impact: Optional[str] = None,
         reviewed: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        """Get regulatory updates with filters."""
-        return {"updates": [], "total": 0}
+    ) -> list[dict[str, Any]]:
+        query = select(RegulatoryUpdate).where(
+            or_(RegulatoryUpdate.tenant_id == tenant_id, RegulatoryUpdate.tenant_id.is_(None))
+        )
+        if source:
+            query = query.where(RegulatoryUpdate.source == source)
+        if since:
+            query = query.where(RegulatoryUpdate.published_date >= since)
+        if impact:
+            query = query.where(RegulatoryUpdate.impact == impact)
+        if reviewed is not None:
+            query = query.where(RegulatoryUpdate.is_reviewed == reviewed)
 
-    def mark_update_reviewed(
+        result = await self.db.execute(query.order_by(RegulatoryUpdate.published_date.desc()))
+        return [
+            {
+                "id": row.id,
+                "source": row.source,
+                "source_reference": row.source_reference,
+                "source_url": row.source_url,
+                "title": row.title,
+                "summary": row.summary,
+                "category": row.category,
+                "subcategory": row.subcategory,
+                "impact": row.impact,
+                "affected_standards": row.affected_standards or [],
+                "affected_clauses": row.affected_clauses or [],
+                "published_date": _to_iso(row.published_date),
+                "effective_date": _to_iso(row.effective_date),
+                "detected_at": _to_iso(row.detected_at),
+                "is_reviewed": row.is_reviewed,
+                "reviewed_by": row.reviewed_by,
+                "reviewed_at": _to_iso(row.reviewed_at),
+                "requires_action": row.requires_action,
+                "action_notes": row.action_notes,
+            }
+            for row in result.scalars().all()
+        ]
+
+    async def mark_update_reviewed(
         self,
+        *,
+        tenant_id: int,
         update_id: int,
         reviewed_by: int,
         requires_action: bool,
         action_notes: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Mark a regulatory update as reviewed."""
+    ) -> dict[str, Any]:
+        result = await self.db.execute(
+            select(RegulatoryUpdate).where(
+                RegulatoryUpdate.id == update_id,
+                or_(RegulatoryUpdate.tenant_id == tenant_id, RegulatoryUpdate.tenant_id.is_(None)),
+            )
+        )
+        update = result.scalar_one_or_none()
+        if update is None:
+            raise NotFoundError(f"RegulatoryUpdate {update_id} not found")
+
+        update.is_reviewed = True
+        update.reviewed_by = reviewed_by
+        update.reviewed_at = datetime.now(timezone.utc)
+        update.requires_action = requires_action
+        update.action_notes = action_notes
+        await self.db.flush()
         return {
-            "id": update_id,
-            "is_reviewed": True,
-            "reviewed_by": reviewed_by,
-            "reviewed_at": datetime.now(timezone.utc).isoformat(),
-            "requires_action": requires_action,
-            "action_notes": action_notes,
+            "id": update.id,
+            "is_reviewed": update.is_reviewed,
+            "reviewed_by": update.reviewed_by,
+            "reviewed_at": _to_iso(update.reviewed_at),
+            "requires_action": update.requires_action,
+            "action_notes": update.action_notes,
         }
 
-    # ==================== Gap Analysis ====================
-
-    def run_gap_analysis(
+    async def run_gap_analysis(
         self,
+        *,
+        tenant_id: int,
         regulatory_update_id: Optional[int] = None,
         standard_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Run automated gap analysis."""
-        return {"gaps": [], "total": 0, "overall_compliance": 0.0}
+        actor_user_id: Optional[int] = None,
+    ) -> dict[str, Any]:
+        standard = None
+        if standard_id is not None:
+            standard_result = await self.db.execute(
+                select(Standard).where(
+                    Standard.id == standard_id,
+                    or_(Standard.tenant_id == tenant_id, Standard.tenant_id.is_(None)),
+                )
+            )
+            standard = standard_result.scalar_one_or_none()
 
-    def get_gap_analyses(
+        update = None
+        if regulatory_update_id is not None:
+            update_result = await self.db.execute(
+                select(RegulatoryUpdate).where(
+                    RegulatoryUpdate.id == regulatory_update_id,
+                    or_(RegulatoryUpdate.tenant_id == tenant_id, RegulatoryUpdate.tenant_id.is_(None)),
+                )
+            )
+            update = update_result.scalar_one_or_none()
+
+        if standard is None and update and update.affected_standards:
+            standard = await self._resolve_standard(
+                tenant_id=tenant_id,
+                raw_value=update.affected_standards[0],
+            )
+
+        total_clauses = 0
+        covered_clauses = 0
+        title_scope = "organization"
+        if standard is not None:
+            title_scope = standard.name
+            total_clause_result = await self.db.execute(
+                select(func.count(Clause.id)).where(
+                    Clause.standard_id == standard.id,
+                    Clause.is_active == True,  # noqa: E712
+                    or_(Clause.tenant_id == tenant_id, Clause.tenant_id.is_(None)),
+                )
+            )
+            total_clauses = int(total_clause_result.scalar() or 0)
+
+            covered_clauses = await self._count_standard_coverage(
+                tenant_id=tenant_id,
+                standard=standard,
+            )
+
+        uncovered = max(total_clauses - covered_clauses, 0)
+        overall_compliance = round((covered_clauses / total_clauses) * 100, 1) if total_clauses else 0.0
+        gaps = {
+            "covered_clauses": covered_clauses,
+            "uncovered_clauses": uncovered,
+            "regulatory_update_id": regulatory_update_id,
+        }
+
+        analysis = GapAnalysis(
+            tenant_id=tenant_id,
+            regulatory_update_id=regulatory_update_id,
+            standard_id=standard.id if standard is not None else None,
+            title=f"Gap analysis for {title_scope}",
+            description="Generated from standards coverage and persisted evidence links.",
+            gaps=gaps,
+            total_gaps=uncovered,
+            critical_gaps=uncovered if overall_compliance < 50 else 0,
+            high_gaps=uncovered if 50 <= overall_compliance < 80 else 0,
+            recommendations={
+                "recommended_actions": [
+                    "Upload missing evidence",
+                    "Link audit findings to uncovered clauses",
+                    "Review certificates against affected standards",
+                ]
+            },
+            estimated_effort_hours=max(uncovered * 2, 4) if uncovered else 2,
+            status="completed",
+            assigned_to=actor_user_id,
+            completed_at=datetime.now(timezone.utc),
+        )
+        self.db.add(analysis)
+        await self.db.flush()
+        return {
+            "id": analysis.id,
+            "title": analysis.title,
+            "gaps": analysis.gaps,
+            "total": analysis.total_gaps,
+            "overall_compliance": overall_compliance,
+            "critical_gaps": analysis.critical_gaps,
+            "high_gaps": analysis.high_gaps,
+            "status": analysis.status,
+        }
+
+    async def get_gap_analyses(
         self,
+        *,
+        tenant_id: int,
         status: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """Get list of gap analyses."""
-        return []
+    ) -> list[dict[str, Any]]:
+        query = select(GapAnalysis).where(or_(GapAnalysis.tenant_id == tenant_id, GapAnalysis.tenant_id.is_(None)))
+        if status:
+            query = query.where(GapAnalysis.status == status)
+        result = await self.db.execute(query.order_by(GapAnalysis.created_at.desc()))
+        return [
+            {
+                "id": analysis.id,
+                "regulatory_update_id": analysis.regulatory_update_id,
+                "standard_id": analysis.standard_id,
+                "title": analysis.title,
+                "description": analysis.description,
+                "gaps": analysis.gaps,
+                "total_gaps": analysis.total_gaps,
+                "critical_gaps": analysis.critical_gaps,
+                "high_gaps": analysis.high_gaps,
+                "recommendations": analysis.recommendations,
+                "estimated_effort_hours": analysis.estimated_effort_hours,
+                "status": analysis.status,
+                "assigned_to": analysis.assigned_to,
+                "created_at": _to_iso(analysis.created_at),
+                "completed_at": _to_iso(analysis.completed_at),
+            }
+            for analysis in result.scalars().all()
+        ]
 
-    # ==================== Certificate Tracking ====================
-
-    def get_certificates(
+    async def get_certificates(
         self,
+        *,
+        tenant_id: int,
         certificate_type: Optional[str] = None,
         entity_type: Optional[str] = None,
         status: Optional[str] = None,
         expiring_within_days: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Get certificates with filters."""
-        return {"certificates": [], "total": 0}
+    ) -> list[dict[str, Any]]:
+        query = select(Certificate).where(or_(Certificate.tenant_id == tenant_id, Certificate.tenant_id.is_(None)))
+        if certificate_type:
+            query = query.where(Certificate.certificate_type == certificate_type)
+        if entity_type:
+            query = query.where(Certificate.entity_type == entity_type)
+        if status:
+            query = query.where(Certificate.status == status)
+        if expiring_within_days is not None:
+            query = query.where(Certificate.expiry_date <= datetime.now(timezone.utc) + timedelta(days=expiring_within_days))
 
-    def get_expiring_certificates_summary(self) -> Dict[str, Any]:
-        """Get summary of expiring certificates."""
-        return {"expiring_soon": 0, "expired": 0, "categories": []}
+        result = await self.db.execute(query.order_by(Certificate.expiry_date.asc()))
+        return [
+            {
+                "id": certificate.id,
+                "name": certificate.name,
+                "certificate_type": certificate.certificate_type,
+                "reference_number": certificate.reference_number,
+                "entity_type": certificate.entity_type,
+                "entity_id": certificate.entity_id,
+                "entity_name": certificate.entity_name,
+                "issuing_body": certificate.issuing_body,
+                "issue_date": _to_iso(certificate.issue_date),
+                "expiry_date": _to_iso(certificate.expiry_date),
+                "reminder_days": certificate.reminder_days,
+                "reminder_sent": certificate.reminder_sent,
+                "status": certificate.status,
+                "is_critical": certificate.is_critical,
+                "primary_evidence_asset_id": certificate.primary_evidence_asset_id,
+                "document_url": certificate.document_url,
+                "notes": certificate.notes,
+            }
+            for certificate in result.scalars().all()
+        ]
 
-    # ==================== Scheduled Audits ====================
+    async def get_expiring_certificates_summary(self, *, tenant_id: int) -> dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        soon = now + timedelta(days=30)
+        result = await self.db.execute(
+            select(Certificate).where(or_(Certificate.tenant_id == tenant_id, Certificate.tenant_id.is_(None)))
+        )
+        rows = result.scalars().all()
+        expiring_soon = [row for row in rows if now <= row.expiry_date <= soon]
+        expired = [row for row in rows if row.expiry_date < now]
+        categories: dict[str, int] = {}
+        for row in rows:
+            categories[row.certificate_type] = categories.get(row.certificate_type, 0) + 1
+        return {
+            "expiring_soon": len(expiring_soon),
+            "expired": len(expired),
+            "categories": [{"certificate_type": key, "count": value} for key, value in sorted(categories.items())],
+        }
 
-    def get_scheduled_audits(
+    async def get_scheduled_audits(
         self,
+        *,
+        tenant_id: int,
         upcoming_days: Optional[int] = None,
         overdue: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        """Get scheduled audits."""
-        return {"audits": [], "total": 0}
+    ) -> list[dict[str, Any]]:
+        query = select(ScheduledAudit).where(
+            and_(
+                or_(ScheduledAudit.tenant_id == tenant_id, ScheduledAudit.tenant_id.is_(None)),
+                ScheduledAudit.is_active == True,  # noqa: E712
+            )
+        )
+        now = datetime.now(timezone.utc)
+        if upcoming_days is not None:
+            query = query.where(ScheduledAudit.next_due_date <= now + timedelta(days=upcoming_days))
+        if overdue is True:
+            query = query.where(ScheduledAudit.next_due_date < now)
+        elif overdue is False:
+            query = query.where(ScheduledAudit.next_due_date >= now)
 
-    # ==================== Compliance Scoring ====================
+        result = await self.db.execute(query.order_by(ScheduledAudit.next_due_date.asc()))
+        return [
+            {
+                "id": audit.id,
+                "name": audit.name,
+                "description": audit.description,
+                "audit_type": audit.audit_type,
+                "template_id": audit.template_id,
+                "frequency": audit.frequency,
+                "schedule_config": audit.schedule_config,
+                "next_due_date": _to_iso(audit.next_due_date),
+                "last_completed_date": _to_iso(audit.last_completed_date),
+                "assigned_to": audit.assigned_to,
+                "department": audit.department,
+                "standard_ids": audit.standard_ids or [],
+                "reminder_days_before": audit.reminder_days_before,
+                "reminder_sent": audit.reminder_sent,
+                "created_at": _to_iso(audit.created_at),
+            }
+            for audit in result.scalars().all()
+        ]
 
-    def calculate_compliance_score(
+    async def calculate_compliance_score(
         self,
+        *,
+        tenant_id: int,
         scope_type: str = "organization",
         scope_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Calculate compliance score."""
-        return {"overall_score": 0.0, "categories": {}, "trend": "no_data"}
+    ) -> dict[str, Any]:
+        standards_result = await self.db.execute(
+            select(Standard).where(
+                Standard.is_active == True,  # noqa: E712
+                or_(Standard.tenant_id == tenant_id, Standard.tenant_id.is_(None)),
+            )
+        )
+        standards = standards_result.scalars().all()
+        categories: dict[str, float] = {}
+        total_clauses = 0
+        total_covered = 0
 
-    def get_compliance_trend(
+        for standard in standards:
+            clause_count_result = await self.db.execute(
+                select(func.count(Clause.id)).where(
+                    Clause.standard_id == standard.id,
+                    Clause.is_active == True,  # noqa: E712
+                    or_(Clause.tenant_id == tenant_id, Clause.tenant_id.is_(None)),
+                )
+            )
+            clause_count = int(clause_count_result.scalar() or 0)
+            covered = await self._count_standard_coverage(
+                tenant_id=tenant_id,
+                standard=standard,
+            )
+            total_clauses += clause_count
+            total_covered += min(covered, clause_count)
+            categories[standard.code] = round((covered / clause_count) * 100, 1) if clause_count else 0.0
+
+        overall_score = round((total_covered / total_clauses) * 100, 1) if total_clauses else 0.0
+        return {
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "overall_score": overall_score,
+            "categories": categories,
+            "trend": "improving" if overall_score >= 75 else "attention_required",
+        }
+
+    async def get_compliance_trend(
         self,
+        *,
+        tenant_id: int,
         scope_type: str = "organization",
         months: int = 12,
-    ) -> List[Dict[str, Any]]:
-        """Get compliance score trend over time."""
-        return []
+    ) -> list[dict[str, Any]]:
+        result = await self.db.execute(
+            select(GapAnalysis).where(or_(GapAnalysis.tenant_id == tenant_id, GapAnalysis.tenant_id.is_(None)))
+        )
+        analyses = result.scalars().all()
+        trend = []
+        for month_offset in range(months - 1, -1, -1):
+            bucket_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            bucket_start = bucket_start - timedelta(days=month_offset * 30)
+            bucket_label = bucket_start.strftime("%Y-%m")
+            month_analyses = [
+                analysis for analysis in analyses if analysis.created_at.strftime("%Y-%m") == bucket_label
+            ]
+            if month_analyses:
+                score = round(
+                    sum(max(0, 100 - (analysis.total_gaps * 5)) for analysis in month_analyses) / len(month_analyses),
+                    1,
+                )
+            else:
+                score = 0.0
+            trend.append({"period": bucket_label, "score": score, "scope_type": scope_type})
+        return trend
 
     # ==================== RIDDOR Automation ====================
 
@@ -212,5 +606,3 @@ class ComplianceAutomationService:
         }
 
 
-# Singleton instance
-compliance_automation_service = ComplianceAutomationService()

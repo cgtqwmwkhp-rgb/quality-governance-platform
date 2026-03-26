@@ -175,6 +175,10 @@ class Certificate(Base):
     is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Attachments
+    primary_evidence_asset_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("evidence_assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     document_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Notes

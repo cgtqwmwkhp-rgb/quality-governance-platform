@@ -16,7 +16,14 @@ import {
   Play,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { auditsApi, AuditRun, AuditFinding, AuditTemplate, AuditRunCreate } from '../api/client'
+import {
+  auditsApi,
+  evidenceAssetsApi,
+  AuditRun,
+  AuditFinding,
+  AuditTemplate,
+  AuditRunCreate,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card, CardContent } from '../components/ui/Card'
@@ -42,6 +49,11 @@ interface CreateAuditForm {
   title: string
   location: string
   scheduled_date: string
+  source_origin: string
+  assurance_scheme: string
+  external_body_name: string
+  external_auditor_name: string
+  external_reference: string
 }
 
 const KANBAN_COLUMNS = [
@@ -76,6 +88,11 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
   title: '',
   location: '',
   scheduled_date: new Date().toISOString().split('T')[0]!,
+  source_origin: 'internal',
+  assurance_scheme: '',
+  external_body_name: '',
+  external_auditor_name: '',
+  external_reference: '',
 }
 
 export default function Audits() {
@@ -96,6 +113,7 @@ export default function Audits() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [showVersionSelector, setShowVersionSelector] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reportFile, setReportFile] = useState<File | null>(null)
   const { toasts, dismiss: dismissToast } = useToast()
 
   const loadData = async () => {
@@ -199,6 +217,7 @@ export default function Audits() {
     setFormData(buildDefaultForm())
     setFormError(null)
     setShowVersionSelector(false)
+    setReportFile(null)
   }
 
   const handleSubmitAudit = async (e: React.FormEvent) => {
@@ -217,12 +236,47 @@ export default function Audits() {
         title: formData.title || undefined,
         location: formData.location || undefined,
         scheduled_date: formData.scheduled_date || undefined,
+        source_origin: formData.source_origin || undefined,
+        assurance_scheme: formData.assurance_scheme || undefined,
+        external_body_name: formData.external_body_name || undefined,
+        external_auditor_name: formData.external_auditor_name || undefined,
+        external_reference: formData.external_reference || undefined,
       }
 
       const res = await auditsApi.createRun(payload)
       const result = res.data
 
-      setSuccessMessage(`Audit scheduled successfully! Reference: ${result.reference_number}`)
+      let successDetail = `Audit scheduled successfully! Reference: ${result.reference_number}`
+      if (reportFile) {
+        try {
+          const uploadRes = await evidenceAssetsApi.upload(reportFile, {
+            source_module: 'audit',
+            source_id: result.id,
+            title: formData.external_reference || reportFile.name,
+            description:
+              formData.assurance_scheme || formData.external_body_name
+                ? `Uploaded customer audit report for ${formData.assurance_scheme || 'external audit'}`
+                : 'Uploaded customer audit report',
+            visibility: 'internal_customer',
+          })
+
+          await auditsApi.updateRun(result.id, {
+            source_document_asset_id: uploadRes.data.id,
+            source_document_label: uploadRes.data.original_filename,
+          })
+          successDetail += ` Report linked: ${uploadRes.data.original_filename}`
+        } catch (uploadErr: unknown) {
+          const axiosErr = uploadErr as { response?: { data?: { detail?: string } } }
+          successDetail +=
+            ' Audit created, but the source report upload failed. You can add the report from Evidence Assets.'
+          if (import.meta.env.DEV) console.error('Failed to upload audit source document:', uploadErr)
+          if (axiosErr.response?.data?.detail) {
+            setFormError(String(axiosErr.response.data.detail))
+          }
+        }
+      }
+
+      setSuccessMessage(successDetail)
 
       await loadData()
 
@@ -249,7 +303,9 @@ export default function Audits() {
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
-        (a.location || '').toLowerCase().includes(term),
+        (a.location || '').toLowerCase().includes(term) ||
+        (a.assurance_scheme || '').toLowerCase().includes(term) ||
+        (a.external_body_name || '').toLowerCase().includes(term),
     )
   }, [audits, searchTerm])
 
@@ -503,6 +559,20 @@ export default function Audits() {
                         <h4 className="font-medium text-foreground text-sm mb-2 line-clamp-2">
                           {audit.title || 'Untitled Audit'}
                         </h4>
+                        {(audit.source_origin || audit.assurance_scheme) && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {audit.source_origin && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                {audit.source_origin.replace(/_/g, ' ')}
+                              </Badge>
+                            )}
+                            {audit.assurance_scheme && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {audit.assurance_scheme}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                         {audit.location && (
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                             <MapPin size={12} />
@@ -613,6 +683,25 @@ export default function Audits() {
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">
                             {audit.title || 'Untitled'}
                           </p>
+                          {(audit.source_origin || audit.assurance_scheme || audit.external_body_name) && (
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              {audit.source_origin && (
+                                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                  {audit.source_origin.replace(/_/g, ' ')}
+                                </Badge>
+                              )}
+                              {audit.assurance_scheme && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {audit.assurance_scheme}
+                                </Badge>
+                              )}
+                              {audit.external_body_name && (
+                                <span className="text-xs text-muted-foreground">
+                                  {audit.external_body_name}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm text-foreground">
                           {audit.location || '-'}
@@ -915,6 +1004,111 @@ export default function Audits() {
                   }
                   maxLength={200}
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="audit-source-origin" className="text-sm font-medium text-foreground">
+                    Audit Source
+                  </label>
+                  <select
+                    id="audit-source-origin"
+                    value={formData.source_origin}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, source_origin: e.target.value }))
+                    }
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="internal">Internal</option>
+                    <option value="customer">Customer</option>
+                    <option value="third_party">Third Party</option>
+                    <option value="certification">Certification Body</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="audit-scheme" className="text-sm font-medium text-foreground">
+                    Assurance Scheme
+                  </label>
+                  <Input
+                    id="audit-scheme"
+                    type="text"
+                    placeholder="e.g., Customer Audit, Achilles, Planet Mark"
+                    value={formData.assurance_scheme}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, assurance_scheme: e.target.value }))
+                    }
+                    maxLength={100}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="audit-external-body" className="text-sm font-medium text-foreground">
+                    External Body
+                  </label>
+                  <Input
+                    id="audit-external-body"
+                    type="text"
+                    placeholder="e.g., Customer, Achilles, Planet Mark"
+                    value={formData.external_body_name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, external_body_name: e.target.value }))
+                    }
+                    maxLength={255}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="audit-external-auditor" className="text-sm font-medium text-foreground">
+                    External Auditor
+                  </label>
+                  <Input
+                    id="audit-external-auditor"
+                    type="text"
+                    placeholder="Auditor or assessor name"
+                    value={formData.external_auditor_name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, external_auditor_name: e.target.value }))
+                    }
+                    maxLength={255}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="audit-external-reference" className="text-sm font-medium text-foreground">
+                  External Reference
+                </label>
+                <Input
+                  id="audit-external-reference"
+                  type="text"
+                  placeholder="Certificate number, report reference, or customer audit ID"
+                  value={formData.external_reference}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, external_reference: e.target.value }))
+                  }
+                  maxLength={100}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
+                  Source Audit Report
+                </label>
+                <Input
+                  id="audit-report-file"
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                  onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Upload the customer or certification audit report so it is linked into the shared evidence layer.
+                </p>
+                {reportFile && (
+                  <p className="text-xs text-primary">
+                    Selected file: {reportFile.name}
+                  </p>
+                )}
               </div>
 
               {/* Scheduled Date */}

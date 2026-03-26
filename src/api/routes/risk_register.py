@@ -170,8 +170,12 @@ async def list_risks(
                 "treatment_strategy": r.treatment_strategy,
                 "status": r.status,
                 "is_within_appetite": r.is_within_appetite,
+                "is_escalated": r.is_escalated,
+                "escalation_reason": r.escalation_reason,
                 "risk_owner_name": r.risk_owner_name,
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
+                "linked_audits": r.linked_audits or [],
+                "linked_actions": r.linked_actions or [],
             }
             for r in risks
         ],
@@ -269,6 +273,9 @@ async def get_risk(
         "review_notes": risk.review_notes,
         "is_escalated": risk.is_escalated,
         "escalation_reason": risk.escalation_reason,
+        "linked_audits": risk.linked_audits or [],
+        "linked_incidents": risk.linked_incidents or [],
+        "linked_actions": risk.linked_actions or [],
         "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
         "controls": [
             {

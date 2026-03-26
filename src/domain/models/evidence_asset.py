@@ -48,6 +48,7 @@ class EvidenceSourceModule(str, enum.Enum):
     ACTION = "action"
     ASSESSMENT = "assessment"
     INDUCTION = "induction"
+    CERTIFICATE = "certificate"
 
 
 class EvidenceVisibility(str, enum.Enum):
