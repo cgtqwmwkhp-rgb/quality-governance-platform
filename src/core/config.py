@@ -59,6 +59,23 @@ class Settings(BaseSettings):
                     "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
                 )
 
+            if self.external_audit_import_enabled and not self.external_audit_import_feature_flag:
+                logger.info(
+                    "External audit import is enabled in production without a feature-flag key. "
+                    "Set EXTERNAL_AUDIT_IMPORT_FEATURE_FLAG for staged rollout if needed."
+                )
+
+            mistral_placeholders = {
+                *placeholder_keys,
+                "mistral-api-key",
+                "replace-me",
+            }
+            if self.mistral_api_key and self.mistral_api_key in mistral_placeholders:
+                raise ValueError(
+                    "SECURITY ERROR: MISTRAL_API_KEY contains a placeholder value in production! "
+                    "Set a real provider credential or disable OCR."
+                )
+
             if self.uat_mode.upper() != "READ_ONLY":
                 logger.info(
                     "UAT_MODE is %s in production — write operations are enabled. "
@@ -96,6 +113,7 @@ class Settings(BaseSettings):
         pams_configured = "yes" if (self.pams_database_url or "").strip() else "no"
         appinsights_configured = "yes" if (self.applicationinsights_connection_string or "").strip() else "no"
         azure_storage_configured = "yes" if (self.azure_storage_connection_string or "").strip() else "no"
+        mistral_configured = "yes" if (self.mistral_api_key or "").strip() else "no"
 
         logger.info("Configuration summary: app_env=%s", self.app_env)
         logger.info(
@@ -106,6 +124,8 @@ class Settings(BaseSettings):
         logger.info("Configuration summary: azure_storage_configured=%s", azure_storage_configured)
         logger.info("Configuration summary: azure_storage_container=%s", self.azure_storage_container_name or "(unset)")
         logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)
+        logger.info("Configuration summary: mistral_configured=%s", mistral_configured)
+        logger.info("Configuration summary: external_audit_import_enabled=%s", self.external_audit_import_enabled)
         logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 
     # Application
@@ -188,6 +208,14 @@ class Settings(BaseSettings):
     # Celery (optional — background task processing)
     celery_broker_url: str = ""
     celery_result_backend: str = ""
+
+    # External audit OCR / import
+    external_audit_import_enabled: bool = True
+    external_audit_import_feature_flag: str = "external_audit_import"
+    mistral_api_key: str = ""
+    mistral_ocr_model: str = "mistral-ocr-latest"
+    mistral_api_base_url: str = "https://api.mistral.ai/v1"
+    mistral_ocr_timeout_seconds: int = 60
 
     # OpenTelemetry / Azure Monitor
     otel_trace_sample_rate: Optional[float] = None

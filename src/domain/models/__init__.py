@@ -86,6 +86,12 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.domain.models.external_audit_import import (
+    ExternalAuditDraft,
+    ExternalAuditDraftStatus,
+    ExternalAuditImportJob,
+    ExternalAuditImportStatus,
+)
 
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.feature_flag import FeatureFlag
@@ -327,6 +333,10 @@ __all__ = [
     "EvidenceSourceModule",
     "EvidenceVisibility",
     "EvidenceRetentionPolicy",
+    "ExternalAuditImportJob",
+    "ExternalAuditImportStatus",
+    "ExternalAuditDraft",
+    "ExternalAuditDraftStatus",
     # Investigations (Stage 2)
     "InvestigationTemplate",
     "InvestigationRun",

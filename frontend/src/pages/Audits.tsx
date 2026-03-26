@@ -20,6 +20,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   auditsApi,
   evidenceAssetsApi,
+  externalAuditImportsApi,
   AuditRun,
   AuditFinding,
   AuditTemplate,
@@ -348,8 +349,9 @@ export default function Audits() {
       const isImportFlow = modalMode === 'import'
       let reportUploadFailed = false
       let successDetail = isImportFlow
-        ? `External audit imported successfully. Reference: ${result.reference_number}`
+        ? `External audit intake created successfully. Reference: ${result.reference_number}`
         : `Audit scheduled successfully! Reference: ${result.reference_number}`
+      let importJobId: number | null = null
       if (reportFile) {
         try {
           const uploadRes = await evidenceAssetsApi.upload(reportFile, {
@@ -368,6 +370,15 @@ export default function Audits() {
             source_document_label: uploadRes.data.original_filename,
           })
           successDetail += ` Report linked: ${uploadRes.data.original_filename}`
+          if (isImportFlow) {
+            const jobRes = await externalAuditImportsApi.createJob({
+              audit_run_id: result.id,
+              source_document_asset_id: uploadRes.data.id,
+            })
+            importJobId = jobRes.data.id
+            await externalAuditImportsApi.queueJob(importJobId)
+            successDetail += ' OCR and draft review have been queued.'
+          }
         } catch (uploadErr: unknown) {
           reportUploadFailed = true
           const axiosErr = uploadErr as { response?: { data?: { detail?: string } } }
@@ -387,7 +398,11 @@ export default function Audits() {
       await loadData()
 
       if (isImportFlow && !reportUploadFailed) {
-        navigate(`/audits/${result.id}/execute`)
+        navigate(
+          importJobId
+            ? `/audits/${result.id}/import-review?jobId=${importJobId}`
+            : `/audits/${result.id}/execute`,
+        )
         return
       }
 
@@ -962,7 +977,7 @@ export default function Audits() {
             </DialogTitle>
             <DialogDescription>
               {modalMode === 'import'
-                ? 'Choose the external audit type, upload the report, and create a linked audit record.'
+                ? 'Choose the external audit type, upload the report, and create a linked audit record ready for OCR review and approval.'
                 : 'Select a published template and schedule an audit run.'}
             </DialogDescription>
           </DialogHeader>

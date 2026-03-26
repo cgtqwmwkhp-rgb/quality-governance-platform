@@ -4110,4 +4110,76 @@ export const vehicleChecklistsApi = {
     api.get('/api/v1/vehicle-checklists/analytics/export/defects', { responseType: 'blob' }),
 }
 
+export interface ExternalAuditImportJob {
+  id: number
+  reference_number: string
+  audit_run_id: number
+  source_document_asset_id: number
+  status: string
+  provider_name?: string | null
+  provider_model?: string | null
+  source_filename?: string | null
+  extraction_method?: string | null
+  extraction_text_preview?: string | null
+  page_count?: number | null
+  analysis_summary?: string | null
+  error_code?: string | null
+  error_detail?: string | null
+  created_at: string
+  processed_at?: string | null
+  promoted_at?: string | null
+}
+
+export interface ExternalAuditImportDraft {
+  id: number
+  import_job_id: number
+  audit_run_id: number
+  status: string
+  title: string
+  description: string
+  severity: string
+  finding_type: string
+  confidence_score?: number | null
+  competence_verdict?: string | null
+  source_pages_json?: number[] | null
+  evidence_snippets_json?: string[] | null
+  mapped_frameworks_json?: Array<Record<string, unknown>> | null
+  mapped_standards_json?: Array<Record<string, unknown>> | null
+  suggested_action_title?: string | null
+  suggested_action_description?: string | null
+  suggested_risk_title?: string | null
+  review_notes?: string | null
+  promoted_finding_id?: number | null
+  created_at: string
+  updated_at: string
+}
+
+export const externalAuditImportsApi = {
+  createJob: (data: { audit_run_id: number; source_document_asset_id?: number }) =>
+    api.post<ExternalAuditImportJob>('/api/v1/external-audit-imports/jobs', data),
+
+  queueJob: (jobId: number) =>
+    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/queue`),
+
+  getJob: (jobId: number) =>
+    api.get<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}`),
+
+  listDrafts: (jobId: number) =>
+    api.get<ExternalAuditImportDraft[]>(`/api/v1/external-audit-imports/jobs/${jobId}/drafts`),
+
+  reviewDraft: (
+    draftId: number,
+    data: {
+      status: 'accepted' | 'rejected' | 'draft'
+      review_notes?: string
+      title?: string
+      description?: string
+      severity?: string
+    },
+  ) => api.patch<ExternalAuditImportDraft>(`/api/v1/external-audit-imports/drafts/${draftId}`, data),
+
+  promoteJob: (jobId: number) =>
+    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
+}
+
 export default api
