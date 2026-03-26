@@ -352,7 +352,9 @@ class ComplianceAutomationService:
         if status:
             query = query.where(Certificate.status == status)
         if expiring_within_days is not None:
-            query = query.where(Certificate.expiry_date <= datetime.now(timezone.utc) + timedelta(days=expiring_within_days))
+            query = query.where(
+                Certificate.expiry_date <= datetime.now(timezone.utc) + timedelta(days=expiring_within_days)
+            )
 
         result = await self.db.execute(query.order_by(Certificate.expiry_date.asc()))
         return [
@@ -604,5 +606,3 @@ class ComplianceAutomationService:
             "submitted_by": submitted_by,
             "confirmation": None,
         }
-
-

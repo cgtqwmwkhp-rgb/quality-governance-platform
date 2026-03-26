@@ -1341,7 +1341,9 @@ class AuditService:
             )
         )
         question_map = {question.id: question for question in question_result.scalars().all()}
-        existing_by_question = {finding.question_id: finding for finding in run.findings if finding.question_id is not None}
+        existing_by_question = {
+            finding.question_id: finding for finding in run.findings if finding.question_id is not None
+        }
 
         for response in run.responses:
             question = question_map.get(response.question_id)

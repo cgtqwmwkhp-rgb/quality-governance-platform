@@ -179,21 +179,23 @@ async def _build_capa_provenance(
     clause_reference: Optional[str] = capa.clause_reference
 
     if source_type == "audit_finding" and capa.source_id:
-        result = await db.execute(
-            select(AuditFinding).where(AuditFinding.id == capa.source_id)
-        )
+        result = await db.execute(select(AuditFinding).where(AuditFinding.id == capa.source_id))
         finding = cast(Optional[AuditFinding], result.scalar_one_or_none())
         if finding is not None:
-            source_reference = finding.reference_number
-            source_title = finding.title
-            if clause_reference is None and finding.clause_ids_json_legacy:
-                clause_reference = ", ".join(str(value) for value in finding.clause_ids_json_legacy[:3])
-            run_result = await db.execute(select(AuditRun).where(AuditRun.id == finding.run_id))
-            run = cast(Optional[AuditRun], run_result.scalar_one_or_none())
+            source_reference = getattr(finding, "reference_number", None) or source_reference
+            source_title = getattr(finding, "title", None)
+            clause_ids = getattr(finding, "clause_ids_json_legacy", None) or []
+            if clause_reference is None and clause_ids:
+                clause_reference = ", ".join(str(value) for value in clause_ids[:3])
+            run_id = getattr(finding, "run_id", None)
+            run = None
+            if run_id is not None:
+                run_result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
+                run = cast(Optional[AuditRun], run_result.scalar_one_or_none())
             if run is not None:
-                source_scheme = run.assurance_scheme
+                source_scheme = getattr(run, "assurance_scheme", None)
                 if clause_reference is None:
-                    clause_reference = run.external_reference
+                    clause_reference = getattr(run, "external_reference", None)
 
     return {
         "source_reference": source_reference,
@@ -1220,7 +1222,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     await db.refresh(action)
 
     if isinstance(action, CAPAAction):
-        return _capa_to_response(action, src_type)
+        return await _capa_to_response(db, action, src_type)
     owner_id = getattr(action, "owner_id", None) or getattr(action, "assigned_to_id", None)
     email = await _resolve_owner_email(db, owner_id)
     return _action_to_response(action, src_type, source_id, owner_email=email)

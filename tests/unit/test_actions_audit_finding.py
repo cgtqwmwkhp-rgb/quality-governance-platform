@@ -10,9 +10,16 @@ from src.domain.models.capa import CAPAAction, CAPASource
 
 @pytest.mark.asyncio
 async def test_create_action_supports_audit_finding_source() -> None:
-    finding = SimpleNamespace(id=55)
+    finding = SimpleNamespace(
+        id=55,
+        run_id=12,
+        reference_number="AF-2026-0055",
+        title="Missing evidence",
+        clause_ids_json_legacy=["7.5"],
+    )
+    run = SimpleNamespace(id=12, assurance_scheme="ISO 9001:2015", external_reference="7.5")
     execute_result = MagicMock()
-    execute_result.scalar_one_or_none.return_value = finding
+    execute_result.scalar_one_or_none.side_effect = [finding, run]
 
     db = SimpleNamespace(
         execute=AsyncMock(return_value=execute_result),
