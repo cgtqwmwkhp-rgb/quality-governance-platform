@@ -9,6 +9,8 @@ const mockListTemplates = vi.fn()
 const mockCreateRun = vi.fn()
 const mockUpdateRun = vi.fn()
 const mockUpload = vi.fn()
+const mockCreateImportJob = vi.fn()
+const mockQueueImportJob = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
@@ -33,6 +35,10 @@ vi.mock('../../api/client', () => ({
   },
   evidenceAssetsApi: {
     upload: (...args: unknown[]) => mockUpload(...args),
+  },
+  externalAuditImportsApi: {
+    createJob: (...args: unknown[]) => mockCreateImportJob(...args),
+    queueJob: (...args: unknown[]) => mockQueueImportJob(...args),
   },
 }))
 
@@ -97,6 +103,17 @@ describe('Audits external import flow', () => {
         id: 41,
       },
     })
+    mockCreateImportJob.mockResolvedValue({
+      data: {
+        id: 72,
+      },
+    })
+    mockQueueImportJob.mockResolvedValue({
+      data: {
+        id: 72,
+        status: 'queued',
+      },
+    })
   })
 
   it('imports an external audit and links the uploaded report', async () => {
@@ -145,8 +162,13 @@ describe('Audits external import flow', () => {
         source_document_label: 'achilles-audit.pdf',
       }),
     )
+    expect(mockCreateImportJob).toHaveBeenCalledWith({
+      audit_run_id: 41,
+      source_document_asset_id: 55,
+    })
+    expect(mockQueueImportJob).toHaveBeenCalledWith(72)
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/audits/41/execute')
+      expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72')
     })
   })
 

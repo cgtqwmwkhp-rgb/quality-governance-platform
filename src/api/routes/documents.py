@@ -8,16 +8,12 @@ Enterprise document management with:
 - Access control
 """
 
-import csv
-import io
 import logging
 import uuid
-import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from defusedxml import ElementTree as ET
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
@@ -34,6 +30,8 @@ from src.domain.models.document import (
     SensitivityLevel,
 )
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
+from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
@@ -167,6 +165,8 @@ class ExtractedDocumentContent:
     sheet_count: Optional[int] = None
     has_tables: bool = False
     note: Optional[str] = None
+    page_texts: list[str] | None = None
+    extraction_method: str = "native"
 
 
 def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
@@ -196,156 +196,36 @@ def _safe_filename(filename: Optional[str]) -> str:
     return (filename or "unnamed").replace("/", "_").replace("\\", "_")
 
 
+def _coerce_extraction(result: ServiceExtractedDocumentContent) -> ExtractedDocumentContent:
+    return ExtractedDocumentContent(
+        text=result.text,
+        page_count=result.page_count,
+        sheet_count=result.sheet_count,
+        has_tables=result.has_tables,
+        note=result.note,
+        page_texts=result.page_texts,
+        extraction_method=result.extraction_method,
+    )
+
+
 def _extract_pdf_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
     """Extract searchable text from PDF evidence."""
-    try:
-        from pypdf import PdfReader
-    except ImportError:
-        logger.warning("PDF extraction dependency missing for %s", file_name)
-        return ExtractedDocumentContent(
-            text="",
-            note="Stored successfully but PDF extraction is unavailable in this environment.",
-        )
-
-    try:
-        reader = PdfReader(io.BytesIO(content))
-        page_text = [(page.extract_text() or "").strip() for page in reader.pages]
-        text = "\n\n".join(part for part in page_text if part)
-        return ExtractedDocumentContent(text=text, page_count=len(reader.pages))
-    except Exception as exc:
-        logger.warning("PDF extraction failed for %s: %s", file_name, type(exc).__name__)
-        return ExtractedDocumentContent(
-            text="",
-            note=f"Stored successfully but PDF extraction failed for {file_name}.",
-        )
+    return _coerce_extraction(shared_extract_document_content(FileType.PDF, file_name, content))
 
 
 def _extract_docx_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
     """Extract text from DOCX packages without optional dependencies."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            document_xml = archive.read("word/document.xml")
-    except Exception as exc:
-        logger.warning("DOCX extraction failed for %s: %s", file_name, type(exc).__name__)
-        return ExtractedDocumentContent(
-            text="",
-            note=f"Stored successfully but DOCX extraction failed for {file_name}.",
-        )
-
-    root = ET.fromstring(document_xml)
-    paragraphs: list[str] = []
-    for paragraph in root.iter():
-        if paragraph.tag.endswith("}p"):
-            runs = [node.text or "" for node in paragraph.iter() if node.tag.endswith("}t") and node.text]
-            joined = "".join(runs).strip()
-            if joined:
-                paragraphs.append(joined)
-    return ExtractedDocumentContent(text="\n".join(paragraphs))
-
-
-def _read_xlsx_shared_strings(archive: zipfile.ZipFile) -> list[str]:
-    """Load workbook shared strings for cell lookup."""
-    try:
-        raw = archive.read("xl/sharedStrings.xml")
-    except KeyError:
-        return []
-
-    root = ET.fromstring(raw)
-    values: list[str] = []
-    for string_item in root.iter():
-        if string_item.tag.endswith("}si"):
-            parts = [node.text or "" for node in string_item.iter() if node.tag.endswith("}t") and node.text]
-            values.append("".join(parts))
-    return values
+    return _coerce_extraction(shared_extract_document_content(FileType.DOCX, file_name, content))
 
 
 def _extract_xlsx_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
     """Extract text rows from XLSX packages for indexing."""
-    try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            shared_strings = _read_xlsx_shared_strings(archive)
-            sheet_paths = sorted(name for name in archive.namelist() if name.startswith("xl/worksheets/sheet"))
-            sheet_lines: list[str] = []
-
-            for idx, sheet_path in enumerate(sheet_paths, start=1):
-                root = ET.fromstring(archive.read(sheet_path))
-                rows: list[str] = []
-                for row in root.iter():
-                    if not row.tag.endswith("}row"):
-                        continue
-                    values: list[str] = []
-                    for cell in row:
-                        if not cell.tag.endswith("}c"):
-                            continue
-                        cell_type = cell.attrib.get("t")
-                        value = ""
-                        inline_value = next(
-                            (node.text for node in cell.iter() if node.tag.endswith("}t") and node.text), None
-                        )
-                        if inline_value:
-                            value = inline_value
-                        else:
-                            raw_value = next(
-                                (node.text for node in cell.iter() if node.tag.endswith("}v") and node.text), ""
-                            )
-                            if cell_type == "s" and raw_value.isdigit():
-                                shared_index = int(raw_value)
-                                value = (
-                                    shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
-                                )
-                            else:
-                                value = raw_value
-                        value = value.strip()
-                        if value:
-                            values.append(value)
-                    if values:
-                        rows.append(", ".join(values))
-
-                if rows:
-                    sheet_lines.append(f"Sheet {idx}")
-                    sheet_lines.extend(rows)
-
-        return ExtractedDocumentContent(
-            text="\n".join(sheet_lines),
-            sheet_count=len(sheet_paths),
-            has_tables=bool(sheet_lines),
-        )
-    except Exception as exc:
-        logger.warning("XLSX extraction failed for %s: %s", file_name, type(exc).__name__)
-        return ExtractedDocumentContent(
-            text="",
-            note=f"Stored successfully but XLSX extraction failed for {file_name}.",
-        )
+    return _coerce_extraction(shared_extract_document_content(FileType.XLSX, file_name, content))
 
 
 def _extract_document_content(file_type: FileType, file_name: str, content: bytes) -> ExtractedDocumentContent:
     """Return searchable text for supported document formats."""
-    if file_type in {FileType.TXT, FileType.MD}:
-        return ExtractedDocumentContent(text=content.decode("utf-8", errors="ignore"))
-
-    if file_type == FileType.CSV:
-        decoded = content.decode("utf-8", errors="ignore")
-        rows = [", ".join(cell.strip() for cell in row if cell.strip()) for row in csv.reader(io.StringIO(decoded))]
-        filtered_rows = [row for row in rows if row]
-        return ExtractedDocumentContent(text="\n".join(filtered_rows), has_tables=bool(filtered_rows))
-
-    if file_type == FileType.PDF:
-        return _extract_pdf_text(content, file_name)
-
-    if file_type == FileType.DOCX:
-        return _extract_docx_text(content, file_name)
-
-    if file_type == FileType.XLSX:
-        return _extract_xlsx_text(content, file_name)
-
-    unsupported_notes = {
-        FileType.DOC: "Stored successfully but legacy .doc extraction is not supported yet.",
-        FileType.XLS: "Stored successfully but legacy .xls extraction is not supported yet.",
-        FileType.PNG: "Stored successfully but image OCR is not supported yet.",
-        FileType.JPG: "Stored successfully but image OCR is not supported yet.",
-        FileType.JPEG: "Stored successfully but image OCR is not supported yet.",
-    }
-    return ExtractedDocumentContent(text="", note=unsupported_notes.get(file_type))
+    return _coerce_extraction(shared_extract_document_content(file_type, file_name, content))
 
 
 async def _process_uploaded_document(

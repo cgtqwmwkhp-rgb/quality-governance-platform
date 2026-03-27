@@ -17,6 +17,7 @@ class ReferenceNumberService:
         "audit_template": "TPL",
         "audit_run": "AUD",
         "audit_finding": "FND",
+        "audit_import": "AIM",
         "risk": "RSK",
         "incident": "INC",
         "rta": "RTA",

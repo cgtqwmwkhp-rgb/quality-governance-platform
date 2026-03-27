@@ -18,8 +18,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
@@ -81,7 +80,7 @@ class CarbonReportingYear(Base):
     # Organization context
     organization_name: Mapped[str] = mapped_column(String(255), default="Plantexpand Limited")
     reporting_boundary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    sites_included: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    sites_included: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Headcount for per-employee calculations
     average_fte: Mapped[float] = mapped_column(Float, nullable=False, default=0)
@@ -187,7 +186,7 @@ class EmissionSource(Base):
     verified_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Breakdown (for detailed sources like fleet)
-    sub_sources: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    sub_sources: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     # e.g., [{"vehicle": "LD24VLP", "litres": 5000, "co2e": 12.5}, ...]
 
     created_at: Mapped[datetime] = mapped_column(
@@ -236,12 +235,12 @@ class Scope3CategoryData(Base):
     # spend-based, activity-based, supplier-specific, hybrid
 
     # Data sources
-    data_sources: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    data_sources: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     supplier_data_coverage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # % of spend
 
     # Improvement recommendations
     improvement_priority: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    improvement_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
@@ -294,8 +293,8 @@ class ImprovementAction(Base):
     actual_completion_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Evidence
-    evidence_required: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    evidence_provided: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    evidence_required: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    evidence_provided: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Results
     actual_reduction_achieved: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -348,13 +347,13 @@ class DataQualityAssessment(Base):
     transparency_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Data sources analyzed
-    sources_assessed: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    sources_assessed: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     actual_data_percent: Mapped[float] = mapped_column(Float, default=0)  # % from actual reads
     estimated_data_percent: Mapped[float] = mapped_column(Float, default=0)  # % estimated
 
     # Recommendations
-    improvement_recommendations: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    priority_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    improvement_recommendations: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    priority_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     target_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     assessed_date: Mapped[datetime] = mapped_column(
@@ -600,7 +599,7 @@ class ISO14001CrossMapping(Base):
     alignment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Evidence sharing
-    shared_evidence_types: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    shared_evidence_types: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)

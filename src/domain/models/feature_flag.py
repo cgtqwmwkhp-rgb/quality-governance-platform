@@ -2,11 +2,8 @@
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSON, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, Uuid
 
 from src.infrastructure.database import Base
 
@@ -14,7 +11,7 @@ from src.infrastructure.database import Base
 class FeatureFlag(Base):
     __tablename__ = "feature_flags"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     key = Column(String(100), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)

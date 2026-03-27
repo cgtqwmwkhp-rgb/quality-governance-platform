@@ -1195,59 +1195,13 @@ async def create_finding(
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     started = time.perf_counter()
-    # Verify run exists and belongs to user's tenant
-    result = await db.execute(
-        select(AuditRun).where(
-            AuditRun.id == run_id,
-            or_(
-                AuditRun.tenant_id == current_user.tenant_id,
-                AuditRun.tenant_id.is_(None),
-            ),
-        )
-    )
-    run = result.scalar_one_or_none()
-
-    if not run:
-        _record_audit_endpoint_event(
-            "POST /api/v1/audits/runs/{id}/findings",
-            404,
-            (time.perf_counter() - started) * 1000,
-            "run_not_found",
-        )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
-        )
-
-    finding_dict = finding_data.model_dump()
-
-    # Handle list fields
-    clause_ids = finding_dict.pop("clause_ids", None)
-    control_ids = finding_dict.pop("control_ids", None)
-    risk_ids = finding_dict.pop("risk_ids", None)
-
-    finding = AuditFinding(
-        run_id=run_id,
-        status=FindingStatus.OPEN,
-        created_by_id=current_user.id,
+    service = AuditService(db)
+    finding = await service.create_finding(
+        run_id,
+        finding_data.model_dump(),
+        user_id=current_user.id,
         tenant_id=current_user.tenant_id,
-        **finding_dict,
     )
-
-    # Store list fields as JSON
-    if clause_ids:
-        finding.clause_ids_json_legacy = clause_ids
-    if control_ids:
-        finding.control_ids_json = control_ids
-    if risk_ids:
-        finding.risk_ids_json = risk_ids
-
-    # Generate reference number
-    finding.reference_number = await ReferenceNumberService.generate(db, "audit_finding", AuditFinding)
-
-    db.add(finding)
-    await db.commit()
-    await db.refresh(finding)
 
     response = AuditFindingResponse.model_validate(finding)
     _record_audit_endpoint_event(

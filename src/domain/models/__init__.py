@@ -39,6 +39,7 @@ from src.domain.models.audit import (
     TemplateVersion,
 )
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
+from src.domain.models.capa import CAPAAction
 from src.domain.models.complaint import Complaint, ComplaintAction
 
 # Digital Signatures (Tier 2)
@@ -85,6 +86,12 @@ from src.domain.models.evidence_asset import (
     EvidenceRetentionPolicy,
     EvidenceSourceModule,
     EvidenceVisibility,
+)
+from src.domain.models.external_audit_import import (
+    ExternalAuditDraft,
+    ExternalAuditDraftStatus,
+    ExternalAuditImportJob,
+    ExternalAuditImportStatus,
 )
 
 # Evidence Assets (Shared Attachments Module)
@@ -169,6 +176,7 @@ from src.domain.models.risk_register import (
 )
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -192,6 +200,9 @@ __all__ = [
     "User",
     "Role",
     "UserRole",
+    "Tenant",
+    "TenantUser",
+    "TenantInvitation",
     # Standard models
     "Standard",
     "Clause",
@@ -227,6 +238,8 @@ __all__ = [
     # Complaint models
     "Complaint",
     "ComplaintAction",
+    # CAPA models
+    "CAPAAction",
     # Policy models
     "Policy",
     "PolicyVersion",
@@ -327,6 +340,10 @@ __all__ = [
     "EvidenceSourceModule",
     "EvidenceVisibility",
     "EvidenceRetentionPolicy",
+    "ExternalAuditImportJob",
+    "ExternalAuditImportStatus",
+    "ExternalAuditDraft",
+    "ExternalAuditDraftStatus",
     # Investigations (Stage 2)
     "InvestigationTemplate",
     "InvestigationRun",

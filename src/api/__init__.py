@@ -27,6 +27,7 @@ from src.api.routes import (
     engineers,
     evidence_assets,
     executive_dashboard,
+    external_audit_imports,
     feature_flags,
     form_config,
     global_search,
@@ -133,6 +134,11 @@ router.include_router(form_config.router, prefix="/admin/config", tags=["Admin C
 router.include_router(near_miss.router, prefix="/near-misses", tags=["Near Misses"])
 # Evidence Assets (Shared Attachments Module)
 router.include_router(evidence_assets.router, prefix="/evidence-assets", tags=["Evidence Assets"])
+router.include_router(
+    external_audit_imports.router,
+    prefix="/external-audit-imports",
+    tags=["External Audit Imports"],
+)
 # Workflow Engine (SLA, Escalation, Automation)
 router.include_router(workflow.router, tags=["Workflow Engine"])
 # Key Risk Indicators & SIF Classification
