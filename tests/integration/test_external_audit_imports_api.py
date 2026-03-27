@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routes import external_audit_imports
 from src.domain.exceptions import ValidationError
-from src.domain.models.audit import AuditFinding, AuditRun, AuditTemplate, AuditStatus, FindingStatus
+from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus, AuditTemplate, FindingStatus
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -17,7 +17,11 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
-from src.domain.models.external_audit_import import ExternalAuditDraft, ExternalAuditDraftStatus, ExternalAuditImportStatus
+from src.domain.models.external_audit_import import (
+    ExternalAuditDraft,
+    ExternalAuditDraftStatus,
+    ExternalAuditImportStatus,
+)
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from tests.conftest import generate_test_reference
 
@@ -406,7 +410,9 @@ async def test_process_job_failure_preserves_existing_drafts(
         "storage_service",
         lambda: SimpleNamespace(download=AsyncMock(return_value=b"Achilles import content")),
     )
-    monkeypatch.setattr(service.analysis_service, "analyze", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    monkeypatch.setattr(
+        service.analysis_service, "analyze", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
 
     processed_job = await service.process_job(
         job_id=job.id,

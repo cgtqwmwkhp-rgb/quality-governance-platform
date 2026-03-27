@@ -74,9 +74,7 @@ class ExternalAuditIntakeTemplateResolver:
                     external_audit_type=external_audit_type,
                 )
 
-        raise NotFoundError(
-            f"No published external audit intake template is configured for '{external_audit_type}'"
-        )
+        raise NotFoundError(f"No published external audit intake template is configured for '{external_audit_type}'")
 
     def _pick_unique_match(
         self,
@@ -86,9 +84,7 @@ class ExternalAuditIntakeTemplateResolver:
         rule: str,
         external_audit_type: str,
     ) -> IntakeTemplateResolution:
-        tenant_matches = [
-            template for template in matches if tenant_id is not None and template.tenant_id == tenant_id
-        ]
+        tenant_matches = [template for template in matches if tenant_id is not None and template.tenant_id == tenant_id]
         if tenant_matches:
             preferred_matches = tenant_matches
             scope = "tenant"

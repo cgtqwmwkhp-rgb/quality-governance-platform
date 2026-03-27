@@ -451,15 +451,12 @@ class AuditRunBase(BaseModel):
 class AuditRunCreate(AuditRunBase):
     """Schema for creating an Audit Run."""
 
-    template_id: Optional[int] = None
+    template_id: int
     assigned_to_id: Optional[int] = None
     external_audit_type: Optional[Literal["customer", "iso", "planet_mark", "achilles_uvdb", "other"]] = None
 
     @model_validator(mode="after")
     def validate_external_import_fields(self) -> "AuditRunCreate":
-        if self.external_audit_type is None and self.template_id is None:
-            raise ValueError("template_id is required unless external_audit_type is provided")
-
         if self.external_audit_type is None:
             return self
 

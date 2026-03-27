@@ -173,6 +173,7 @@ class TestAuditsAPI:
         response = await client.post(
             "/api/v1/audits/runs",
             json={
+                "template_id": template.id,
                 "title": "Achilles follow-up audit",
                 "external_audit_type": "achilles_uvdb",
             },
@@ -210,6 +211,7 @@ class TestAuditsAPI:
         response = await client.post(
             "/api/v1/audits/runs",
             json={
+                "template_id": 999999,
                 "title": "Planet Mark import",
                 "external_audit_type": "planet_mark",
             },

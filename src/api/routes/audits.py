@@ -849,7 +849,7 @@ async def create_run(
     """Create a new audit run from a template."""
     started = time.perf_counter()
     intake_resolution: IntakeTemplateResolution | None = None
-    if run_data.template_id is None and run_data.external_audit_type is not None:
+    if run_data.external_audit_type is not None:
         resolver = ExternalAuditIntakeTemplateResolver(db)
         try:
             intake_resolution = await resolver.resolve(

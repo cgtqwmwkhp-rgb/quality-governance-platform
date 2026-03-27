@@ -254,7 +254,7 @@ export default function Audits() {
     const preferred = latestPublishedTemplates[0]!
     return {
       ...INITIAL_FORM_STATE,
-      template_id: mode === 'schedule' ? preferred.id : null,
+      template_id: preferred.id,
       title: mode === 'schedule' ? decodeHtmlEntities(preferred.name) : '',
       source_origin: mode === 'import' ? '' : 'internal',
     }
@@ -321,6 +321,10 @@ export default function Audits() {
         setFormError('Please upload the external audit report')
         return
       }
+      if (!formData.template_id) {
+        setFormError('No published intake template is configured for external audit imports')
+        return
+      }
     } else if (!formData.template_id) {
       setFormError('Please select an audit template')
       return
@@ -329,7 +333,7 @@ export default function Audits() {
     setIsSubmitting(true)
     try {
       const payload: AuditRunCreate = {
-        ...(formData.template_id ? { template_id: formData.template_id } : {}),
+        template_id: formData.template_id as number,
         title:
           formData.title ||
           (modalMode === 'import'
@@ -1355,7 +1359,7 @@ export default function Audits() {
                     isSubmitting ||
                     (modalMode === 'schedule'
                       ? templates.length === 0 || !formData.template_id
-                      : false)
+                      : !formData.template_id)
                   }
                 >
                   {isSubmitting ? (
