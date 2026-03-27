@@ -20,8 +20,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Drop the root_cause_analyses table as RTA functionality is now part of Investigation system."""
-    # Drop the table (CASCADE will drop dependent constraints)
-    op.execute('DROP TABLE IF EXISTS root_cause_analyses CASCADE')
+    inspector = sa.inspect(op.get_bind())
+    if "root_cause_analyses" in inspector.get_table_names():
+        op.drop_table("root_cause_analyses")
 
 
 def downgrade() -> None:

@@ -20,6 +20,8 @@ depends_on = None
 
 def upgrade() -> None:
     """Convert enum columns to VARCHAR strings."""
+    if op.get_bind().dialect.name != "postgresql":
+        return
     
     # List of all enum columns to convert: (table, column, max_length)
     enum_columns = [
