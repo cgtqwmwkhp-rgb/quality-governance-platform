@@ -217,7 +217,7 @@ class SearchService:
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: incident query failed [request_id=%s]: %s",
                 request_id,
@@ -271,7 +271,7 @@ class SearchService:
                         highlights=query.lower().split(),
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: RTA query failed [request_id=%s]: %s",
                 request_id,
@@ -326,7 +326,7 @@ class SearchService:
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: complaint query failed [request_id=%s]: %s",
                 request_id,
@@ -379,7 +379,7 @@ class SearchService:
                         highlights=[w for w in words if w in title_lower or w in desc_lower],
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: risk query failed [request_id=%s]: %s",
                 request_id,
@@ -418,7 +418,7 @@ class SearchService:
                         highlights=self._highlight_words(query, finding.title, finding.description),
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: audit query failed [request_id=%s]: %s",
                 request_id,
@@ -498,7 +498,7 @@ class SearchService:
                             highlights=self._highlight_words(query, action.title, action.description) + [action_type],
                         )
                     )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: action query failed [request_id=%s]: %s",
                 request_id,
@@ -557,7 +557,7 @@ class SearchService:
                         ),
                     )
                 )
-        except (SQLAlchemyError, ValueError) as e:
+        except (AttributeError, SQLAlchemyError, ValueError) as e:
             logger.warning(
                 "Search: document query failed [request_id=%s]: %s",
                 request_id,

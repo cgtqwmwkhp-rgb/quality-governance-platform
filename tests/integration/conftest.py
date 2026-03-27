@@ -8,8 +8,10 @@ the JWT but skips the database lookup.
 """
 
 import os
+import tempfile
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from typing import AsyncGenerator, Generator
 
@@ -21,8 +23,12 @@ from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
+_DEFAULT_SQLITE_DB_PATH = Path(tempfile.gettempdir()) / f"qgp-test-integration-{os.getpid()}.db"
+_DEFAULT_INTEGRATION_DATABASE_URL = f"sqlite+aiosqlite:///{_DEFAULT_SQLITE_DB_PATH}"
+
 # Force test-mode DB engine settings (e.g., NullPool) during imports.
 os.environ.setdefault("TESTING", "1")
+os.environ.setdefault("DATABASE_URL", _DEFAULT_INTEGRATION_DATABASE_URL)
 
 from src.api.dependencies import get_current_user, get_db, security  # noqa: E402
 from src.core.config import settings  # noqa: E402
@@ -282,6 +288,56 @@ def _override_auth():
 
 
 @pytest.fixture(autouse=True)
+async def _bootstrap_test_schema(request):
+    """Create an isolated test schema before integration fixtures use the DB.
+
+    Default integration runs should be self-contained and must not require a
+    developer to manually start PostgreSQL. If a dedicated DATABASE_URL is
+    supplied externally, we still bootstrap the schema into that database.
+    """
+    import src.domain.models  # noqa: F401
+    from src.domain.models.audit import AuditFinding, AuditQuestion, AuditRun, AuditSection, AuditTemplate
+    from src.domain.models.evidence_asset import EvidenceAsset
+    from src.domain.models.external_audit_import import ExternalAuditDraft, ExternalAuditImportJob
+    from src.domain.models.tenant import Tenant
+    from src.domain.models.user import Role, User, user_roles
+    from src.infrastructure.database import Base, close_db, engine
+
+    database_url = os.environ.get("DATABASE_URL", "")
+    use_sqlite = database_url.startswith("sqlite+aiosqlite:///")
+
+    use_minimal_sqlite_schema = bool(request.node.get_closest_marker("sqlite_minimal_schema"))
+    if use_sqlite:
+        await close_db()
+
+    if use_sqlite and use_minimal_sqlite_schema:
+        tables = [
+            Tenant.__table__,
+            Role.__table__,
+            User.__table__,
+            user_roles,
+            AuditTemplate.__table__,
+            AuditSection.__table__,
+            AuditQuestion.__table__,
+            AuditRun.__table__,
+            AuditFinding.__table__,
+            EvidenceAsset.__table__,
+            ExternalAuditImportJob.__table__,
+            ExternalAuditDraft.__table__,
+        ]
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn, tables=tables))
+    else:
+        async with engine.begin() as conn:
+            if use_sqlite:
+                await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
+    yield
+    await close_db()
+
+
+@pytest.fixture(autouse=True)
 async def _seed_default_data():
     """Seed a default tenant and user for FK integrity.
 
@@ -449,30 +505,15 @@ def superuser_auth_headers() -> dict[str, str]:
 async def test_session():
     """Async database session for direct ORM operations in tests."""
     try:
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-        from sqlalchemy.pool import NullPool
+        from src.infrastructure.database import async_session_maker
 
-        database_url = os.environ.get(
-            "DATABASE_URL",
-            "sqlite+aiosqlite:///./test_integration.db",
-        )
-        engine = create_async_engine(database_url, poolclass=NullPool, future=True)
-        session_maker = async_sessionmaker(
-            engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autocommit=False,
-            autoflush=False,
-        )
-
-        async with session_maker() as session:
+        async with async_session_maker() as session:
             try:
                 yield session
             finally:
                 # Ensure failed tests do not leak open transactions into later tests.
                 if session.in_transaction():
                     await session.rollback()
-        await engine.dispose()
     except Exception as exc:
         pytest.skip(f"DB session setup failed: {exc}")
 
@@ -564,7 +605,7 @@ def database_url() -> str:
     """Get database URL from environment."""
     return os.environ.get(
         "DATABASE_URL",
-        "sqlite+aiosqlite:///./test_integration.db",
+        _DEFAULT_INTEGRATION_DATABASE_URL,
     )
 
 
@@ -638,6 +679,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "requires_db: marks tests that require database access",
+    )
+    config.addinivalue_line(
+        "markers",
+        "sqlite_minimal_schema: marks tests that only need a minimal SQLite bootstrap",
     )
 
 

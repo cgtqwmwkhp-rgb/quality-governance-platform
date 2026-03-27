@@ -33,8 +33,7 @@ Cross-Mapping to ISO Standards:
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.infrastructure.database import Base
@@ -87,27 +86,27 @@ class UVDBQuestion(Base):
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Sub-questions for detailed compliance checking
-    sub_questions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    sub_questions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Scoring
     max_score: Mapped[int] = mapped_column(Integer, default=3)  # Typically 0-3 scale
-    scoring_criteria: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    scoring_criteria: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Evidence requirements
-    evidence_requirements: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    document_types: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    evidence_requirements: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    document_types: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Applicability
     mse_applicable: Mapped[bool] = mapped_column(Boolean, default=True)  # Main Site Evaluation
     site_applicable: Mapped[bool] = mapped_column(Boolean, default=True)  # Site Audit
 
     # Cross-reference to ISO clauses
-    iso_clause_mapping: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    iso_clause_mapping: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Guidance
     auditor_guidance: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    positive_indicators: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    negative_indicators: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    positive_indicators: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    negative_indicators: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
@@ -154,7 +153,7 @@ class UVDBAudit(Base):
     total_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     max_possible_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     percentage_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    section_scores: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    section_scores: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Status
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="scheduled")
@@ -180,7 +179,7 @@ class UVDBAudit(Base):
 
     # Notes
     audit_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    improvement_actions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    improvement_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
@@ -210,11 +209,11 @@ class UVDBAuditResponse(Base):
     site_response: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # 0-3 score
 
     # Sub-question responses (Yes/No/N/A for each)
-    sub_question_responses: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    sub_question_responses: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Evidence
     evidence_provided: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    documents_presented: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    documents_presented: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
     # Findings
     finding_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)

@@ -96,11 +96,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.exception("Storage dependency validation failed during startup")
         raise
 
-    # Initialise PAMS external database connection (non-blocking)
-    try:
-        await init_pams()
-    except Exception as e:
-        logger.warning("PAMS database init failed (non-fatal): %s", e)
+    # Skip external PAMS reflection in tests to keep local/CI runs deterministic.
+    if _os.environ.get("TESTING") == "1":
+        logger.info("Skipping PAMS initialization during tests")
+    else:
+        # Initialise PAMS external database connection (non-blocking)
+        try:
+            await init_pams()
+        except Exception as e:
+            logger.warning("PAMS database init failed (non-fatal): %s", e)
 
     # Pre-warm OpenAPI schema generation for fast first request
     # This avoids cold-start latency when /openapi.json is first accessed

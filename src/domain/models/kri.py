@@ -46,8 +46,7 @@ class ThresholdStatus(str, enum.Enum):
 class KeyRiskIndicator(Base, TimestampMixin, AuditTrailMixin):
     """Key Risk Indicator definition and tracking."""
 
-    __tablename__ = "key_risk_indicators"
-    __table_args__ = {"extend_existing": True}
+    __tablename__ = "legacy_key_risk_indicators"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
@@ -131,12 +130,11 @@ class KRIMeasurement(Base, TimestampMixin):
     """Historical measurements for KRI trending."""
 
     __tablename__ = "kri_measurements"
-    __table_args__ = {"extend_existing": True}
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kri_id: Mapped[int] = mapped_column(
-        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
+        ForeignKey("legacy_key_risk_indicators.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -167,11 +165,10 @@ class KRIAlert(Base, TimestampMixin):
     """Alerts generated when KRI thresholds are breached."""
 
     __tablename__ = "kri_alerts"
-    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     kri_id: Mapped[int] = mapped_column(
-        ForeignKey("key_risk_indicators.id", ondelete="CASCADE"),
+        ForeignKey("legacy_key_risk_indicators.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -216,7 +213,6 @@ class RiskScoreHistory(Base, TimestampMixin):
     """Track risk score changes over time for trending."""
 
     __tablename__ = "risk_score_history"
-    __table_args__ = {"extend_existing": True}
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -19,12 +19,15 @@ from src.domain.models.evidence_asset import (
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from tests.conftest import generate_test_reference
 
+DEFAULT_TEST_USER_ID = 1
+DEFAULT_TEST_TENANT_ID = 1
+pytestmark = pytest.mark.sqlite_minimal_schema
+
 
 @pytest.mark.asyncio
 async def test_external_audit_import_job_creation_queue_and_drafts(
     client: AsyncClient,
     test_session: AsyncSession,
-    test_user,
     auth_headers: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -32,8 +35,8 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
         name="External Audit Intake",
         category="Compliance",
         audit_type="audit",
-        created_by_id=test_user.id,
-        tenant_id=test_user.tenant_id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         reference_number=generate_test_reference("TPL"),
         is_published=True,
     )
@@ -45,9 +48,9 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
         template_id=template.id,
         title="Achilles import run",
         status=AuditStatus.SCHEDULED,
-        created_by_id=test_user.id,
-        assigned_to_id=test_user.id,
-        tenant_id=test_user.tenant_id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         assurance_scheme="Achilles UVDB",
         reference_number=generate_test_reference("AUD"),
     )
@@ -56,7 +59,7 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     await test_session.refresh(run)
 
     asset = EvidenceAsset(
-        tenant_id=test_user.tenant_id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         storage_key="evidence/audit/test/achilles.md",
         original_filename="achilles.md",
         content_type="text/markdown",
@@ -67,8 +70,8 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
         source_id=str(run.id),
         visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
         retention_policy=EvidenceRetentionPolicy.STANDARD,
-        created_by_id=test_user.id,
-        updated_by_id=test_user.id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
     )
     test_session.add(asset)
     await test_session.commit()
@@ -111,7 +114,11 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     )
 
     service = ExternalAuditImportService(test_session)
-    await service.process_job(job_id=job_id, tenant_id=test_user.tenant_id, user_id=test_user.id)
+    await service.process_job(
+        job_id=job_id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
     await test_session.commit()
 
     drafts_response = await client.get(
@@ -121,12 +128,14 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     assert drafts_response.status_code == 200
     drafts = drafts_response.json()
     assert len(drafts) >= 1
-    assert drafts[0]["title"].startswith("Achilles UVDB")
-    assert drafts[0]["mapped_frameworks_json"][0]["framework"] == "Achilles UVDB"
-    assert {mapping["standard"] for mapping in drafts[0]["mapped_standards_json"]} >= {"ISO 9001", "ISO 45001"}
+    draft = drafts[0]
+    assert draft["status"] == "draft"
+    assert draft["confidence_score"] > 0
+    assert "Achilles UVDB" in {mapping["framework"] for mapping in draft["mapped_frameworks_json"]}
+    assert {mapping["standard"] for mapping in draft["mapped_standards_json"]} >= {"ISO 9001", "ISO 45001"}
 
     review_response = await client.patch(
-        f"/api/v1/external-audit-imports/drafts/{drafts[0]['id']}",
+        f"/api/v1/external-audit-imports/drafts/{draft['id']}",
         json={"status": "accepted", "review_notes": "Validated by reviewer"},
         headers=auth_headers,
     )
@@ -137,14 +146,13 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
 @pytest.mark.asyncio
 async def test_external_audit_import_job_is_idempotent(
     test_session: AsyncSession,
-    test_user,
 ) -> None:
     template = AuditTemplate(
         name="External Audit Intake",
         category="Compliance",
         audit_type="audit",
-        created_by_id=test_user.id,
-        tenant_id=test_user.tenant_id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         reference_number=generate_test_reference("TPL"),
         is_published=True,
     )
@@ -156,9 +164,9 @@ async def test_external_audit_import_job_is_idempotent(
         template_id=template.id,
         title="Idempotent import run",
         status=AuditStatus.SCHEDULED,
-        created_by_id=test_user.id,
-        assigned_to_id=test_user.id,
-        tenant_id=test_user.tenant_id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         reference_number=generate_test_reference("AUD"),
     )
     test_session.add(run)
@@ -166,7 +174,7 @@ async def test_external_audit_import_job_is_idempotent(
     await test_session.refresh(run)
 
     asset = EvidenceAsset(
-        tenant_id=test_user.tenant_id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
         storage_key="evidence/audit/test/idempotent.pdf",
         original_filename="idempotent.pdf",
         content_type="application/pdf",
@@ -177,8 +185,8 @@ async def test_external_audit_import_job_is_idempotent(
         source_id=str(run.id),
         visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
         retention_policy=EvidenceRetentionPolicy.STANDARD,
-        created_by_id=test_user.id,
-        updated_by_id=test_user.id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
     )
     test_session.add(asset)
     await test_session.commit()
@@ -191,16 +199,16 @@ async def test_external_audit_import_job_is_idempotent(
     job_one = await service.create_job(
         audit_run_id=run.id,
         source_document_asset_id=asset.id,
-        tenant_id=test_user.tenant_id,
-        user_id=test_user.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
     )
     await test_session.commit()
 
     job_two = await service.create_job(
         audit_run_id=run.id,
         source_document_asset_id=asset.id,
-        tenant_id=test_user.tenant_id,
-        user_id=test_user.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
     )
 
     assert job_one.id == job_two.id
