@@ -44,6 +44,11 @@ class CAPASource(str, PyEnum):
     VEHICLE_DEFECT = "vehicle_defect"
 
 
+def _enum_values(enum_cls: type[PyEnum]) -> list[str]:
+    """Persist enum values so SQLAlchemy matches PostgreSQL lowercase labels."""
+    return [member.value for member in enum_cls]
+
+
 class CAPAAction(Base):
     __tablename__ = "capa_actions"
 
@@ -52,10 +57,14 @@ class CAPAAction(Base):
     reference_number = Column(String(50), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    capa_type: Any = Column(Enum(CAPAType), nullable=False)
-    status: Any = Column(Enum(CAPAStatus), default=CAPAStatus.OPEN, nullable=False, index=True)
-    priority: Any = Column(Enum(CAPAPriority), default=CAPAPriority.MEDIUM, nullable=False)
-    source_type: Any = Column(Enum(CAPASource), nullable=True)
+    capa_type: Any = Column(Enum(CAPAType, values_callable=_enum_values), nullable=False)
+    status: Any = Column(
+        Enum(CAPAStatus, values_callable=_enum_values), default=CAPAStatus.OPEN, nullable=False, index=True
+    )
+    priority: Any = Column(
+        Enum(CAPAPriority, values_callable=_enum_values), default=CAPAPriority.MEDIUM, nullable=False
+    )
+    source_type: Any = Column(Enum(CAPASource, values_callable=_enum_values), nullable=True)
     source_id = Column(Integer, nullable=True)
     source_reference = Column(String(100), nullable=True, index=True)  # For UUID refs (assessment/induction runs)
 

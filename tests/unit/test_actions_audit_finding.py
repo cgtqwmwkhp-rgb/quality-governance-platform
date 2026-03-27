@@ -3,9 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from src.api.routes.actions import ActionCreate, create_action
-from src.domain.models.capa import CAPAAction, CAPASource
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPAStatus, CAPASource, CAPAType
 
 
 @pytest.mark.asyncio
@@ -59,3 +60,22 @@ async def test_create_action_supports_audit_finding_source() -> None:
     assert response.source_type == "audit_finding"
     assert response.source_id == 55
     assert response.priority == "high"
+
+
+def test_capa_enums_bind_lowercase_values_for_postgres() -> None:
+    dialect = postgresql.dialect()
+
+    source_processor = CAPAAction.__table__.c.source_type.type.bind_processor(dialect)
+    status_processor = CAPAAction.__table__.c.status.type.bind_processor(dialect)
+    priority_processor = CAPAAction.__table__.c.priority.type.bind_processor(dialect)
+    type_processor = CAPAAction.__table__.c.capa_type.type.bind_processor(dialect)
+
+    assert source_processor is not None
+    assert status_processor is not None
+    assert priority_processor is not None
+    assert type_processor is not None
+
+    assert source_processor(CAPASource.AUDIT_FINDING) == "audit_finding"
+    assert status_processor(CAPAStatus.OPEN) == "open"
+    assert priority_processor(CAPAPriority.HIGH) == "high"
+    assert type_processor(CAPAType.CORRECTIVE) == "corrective"
