@@ -5,11 +5,17 @@ from datetime import timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.audit import AuditRun, AuditStatus, AuditTemplate
 from src.domain.models.user import User
 from tests.conftest import generate_test_reference
+
+
+def _matches_intake_resolver(template: AuditTemplate) -> bool:
+    tags = [str(tag).strip().lower() for tag in (template.tags_json or []) if isinstance(tag, str)]
+    return "external_audit_intake" in tags or (template.name or "").strip().lower() == "external audit intake"
 
 
 class TestAuditsAPI:
@@ -207,6 +213,11 @@ class TestAuditsAPI:
                 is_published=True,
             )
         )
+        existing_templates = (await test_session.execute(select(AuditTemplate))).scalars().all()
+        for template in existing_templates:
+            if _matches_intake_resolver(template):
+                template.is_published = False
+                template.is_active = False
         await test_session.commit()
 
         response = await client.post(
