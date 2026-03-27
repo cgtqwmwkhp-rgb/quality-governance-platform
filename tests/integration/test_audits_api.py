@@ -1,5 +1,6 @@
 """Integration tests for Audits API endpoints."""
 
+import json
 from datetime import timedelta
 
 import pytest
@@ -159,12 +160,13 @@ class TestAuditsAPI:
     ):
         """Test external import types map into the canonical audit metadata fields."""
         template = AuditTemplate(
-            name="External Audit Intake",
-            category="Compliance",
-            audit_type="audit",
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
             created_by_id=test_user.id,
             reference_number=generate_test_reference("TPL"),
             is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
         )
         test_session.add(template)
         await test_session.commit()
@@ -187,6 +189,44 @@ class TestAuditsAPI:
         assert data["assurance_scheme"] == "Achilles UVDB"
 
     @pytest.mark.asyncio
+    async def test_create_external_audit_run_returns_not_found_when_no_intake_template_exists(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test external imports surface a structured 404 when intake config is missing."""
+        test_session.add(
+            AuditTemplate(
+                name="General Safety Audit",
+                category="Safety",
+                audit_type="audit",
+                created_by_id=test_user.id,
+                reference_number=generate_test_reference("TPL"),
+                is_published=True,
+            )
+        )
+        await test_session.commit()
+
+        response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": 999999,
+                "title": "Achilles follow-up audit",
+                "external_audit_type": "achilles_uvdb",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 404
+        payload = json.dumps(response.json())
+        assert (
+            "No published external audit intake template is configured for 'achilles_uvdb'" in payload
+            or "No published audit templates are available for this tenant" in payload
+        )
+
+    @pytest.mark.asyncio
     async def test_create_external_audit_run_fails_closed_when_multiple_intake_templates_match(
         self,
         client: AsyncClient,
@@ -198,12 +238,13 @@ class TestAuditsAPI:
         for reference_suffix in ("A", "B"):
             test_session.add(
                 AuditTemplate(
-                    name="External Audit Intake",
-                    category="Compliance",
-                    audit_type="audit",
+                    name=f"ZZZ External Audit Intake ({reference_suffix})",
+                    category="System",
+                    audit_type="external_import",
                     created_by_id=test_user.id,
                     reference_number=generate_test_reference(f"TPL{reference_suffix}"),
                     is_published=True,
+                    tags_json=["external_audit_intake", "external_audit_intake:planet_mark"],
                 )
             )
         await test_session.commit()

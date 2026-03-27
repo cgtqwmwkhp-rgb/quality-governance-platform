@@ -132,6 +132,30 @@ const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
   },
 ]
 
+const INTAKE_TEMPLATE_TAG = 'external_audit_intake'
+
+function hasTemplateTag(template: AuditTemplate, tag: string): boolean {
+  return (template.tags || []).some((candidate) => candidate?.trim().toLowerCase() === tag)
+}
+
+function isSystemIntakeTemplate(template: AuditTemplate): boolean {
+  return hasTemplateTag(template, INTAKE_TEMPLATE_TAG)
+}
+
+function getStructuredErrorMessage(error: unknown): string | null {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+  if (detail && typeof detail === 'object') {
+    const message = (detail as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+  return null
+}
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
@@ -198,9 +222,14 @@ export default function Audits() {
     loadData()
   }, [])
 
+  const scheduleTemplates = useMemo(
+    () => templates.filter((template) => !isSystemIntakeTemplate(template)),
+    [templates],
+  )
+
   const templateFamilies = useMemo(() => {
     const families = new Map<string, { key: string; label: string; versions: AuditTemplate[] }>()
-    templates.forEach((template) => {
+    scheduleTemplates.forEach((template) => {
       const label = decodeHtmlEntities(template.name || 'Untitled Template').trim()
       const familyKey = `${label.toLowerCase()}::${(template.audit_type || '').toLowerCase()}`
       const existing = families.get(familyKey)
@@ -221,7 +250,7 @@ export default function Audits() {
         versions: [...family.versions].sort((a, b) => b.version - a.version),
       }))
       .sort((a, b) => a.label.localeCompare(b.label))
-  }, [templates])
+  }, [scheduleTemplates])
 
   const latestPublishedTemplates = useMemo(
     () =>
@@ -231,7 +260,12 @@ export default function Audits() {
     [templateFamilies],
   )
 
-  const selectedTemplate = templates.find((template) => template.id === formData.template_id)
+  const importPlaceholderTemplate = useMemo(
+    () => latestPublishedTemplates[0] ?? templates[0] ?? null,
+    [latestPublishedTemplates, templates],
+  )
+
+  const selectedTemplate = latestPublishedTemplates.find((template) => template.id === formData.template_id)
   const selectedTemplateFamily = useMemo(() => {
     if (!selectedTemplate) return null
     return (
@@ -245,13 +279,13 @@ export default function Audits() {
     selectedTemplateFamily?.versions[0] ?? latestPublishedTemplates[0] ?? null
 
   const buildDefaultForm = (mode: AuditModalMode): CreateAuditForm => {
-    if (!latestPublishedTemplates.length) {
+    const preferred = mode === 'import' ? importPlaceholderTemplate : latestPublishedTemplates[0] ?? null
+    if (!preferred) {
       return {
         ...INITIAL_FORM_STATE,
         source_origin: mode === 'import' ? '' : 'internal',
       }
     }
-    const preferred = latestPublishedTemplates[0]!
     return {
       ...INITIAL_FORM_STATE,
       template_id: preferred.id,
@@ -351,15 +385,10 @@ export default function Audits() {
 
       const res = await auditsApi.createRun(payload)
       const result = res.data
-      const resolvedTemplate = templates.find((template) => template.id === result.template_id)
-      const resolvedTemplateLabel = resolvedTemplate
-        ? decodeHtmlEntities(resolvedTemplate.name)
-        : `Template ${result.template_id}`
-
       const isImportFlow = modalMode === 'import'
       let reportUploadFailed = false
       let successDetail = isImportFlow
-        ? `External audit intake created successfully. Reference: ${result.reference_number}. Processing template: ${resolvedTemplateLabel} v${result.template_version}.`
+        ? `External audit intake created successfully. Reference: ${result.reference_number}. The internal intake template was resolved automatically.`
         : `Audit scheduled successfully! Reference: ${result.reference_number}`
       let importJobId: number | null = null
       if (reportFile) {
@@ -391,12 +420,11 @@ export default function Audits() {
           }
         } catch (uploadErr: unknown) {
           reportUploadFailed = true
-          const axiosErr = uploadErr as { response?: { data?: { detail?: string } } }
-          const uploadErrorDetail = axiosErr.response?.data?.detail
+          const uploadErrorDetail = getStructuredErrorMessage(uploadErr)
           successDetail +=
-            ' Audit created, but the source report upload failed. You can add the report from Evidence Assets.'
+            ' Intake created, but the source report upload failed. You can add the report from Evidence Assets.'
           if (uploadErrorDetail) {
-            successDetail += ` Upload error: ${String(uploadErrorDetail)}`
+            successDetail += ` Upload error: ${uploadErrorDetail}`
           }
           if (import.meta.env.DEV) console.error('Failed to upload audit source document:', uploadErr)
         }
@@ -423,9 +451,11 @@ export default function Audits() {
       }, 2000)
     } catch (err: unknown) {
       if (import.meta.env.DEV) console.error('Failed to create audit:', err)
-      const axiosErr = err as { response?: { data?: { detail?: string } } }
       const errorMessage =
-        axiosErr.response?.data?.detail || 'Failed to schedule audit. Please try again.'
+        getStructuredErrorMessage(err) ||
+        (modalMode === 'import'
+          ? 'Failed to create external audit intake. Please try again.'
+          : 'Failed to schedule audit. Please try again.')
       setFormError(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -983,11 +1013,11 @@ export default function Audits() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-primary" />
-              {modalMode === 'import' ? 'Import External Audit' : 'Schedule New Audit'}
+              {modalMode === 'import' ? 'Create External Audit Intake' : 'Schedule New Audit'}
             </DialogTitle>
             <DialogDescription>
               {modalMode === 'import'
-                ? 'Choose the external audit type, upload the report, and create a linked audit record ready for OCR review and approval.'
+                ? 'Choose the external audit program, attach the report, and create the intake record that queues OCR review and downstream promotion.'
                 : 'Select a published template and schedule an audit run.'}
             </DialogDescription>
           </DialogHeader>
@@ -1013,8 +1043,12 @@ export default function Audits() {
                 )}
               >
                 {successTone === 'warning'
-                  ? 'Audit created with follow-up required'
-                  : t('audits.scheduled_success')}
+                  ? modalMode === 'import'
+                    ? 'Intake created with follow-up required'
+                    : 'Audit created with follow-up required'
+                  : modalMode === 'import'
+                    ? 'External audit intake created'
+                    : t('audits.scheduled_success')}
               </p>
               <p className="text-muted-foreground">{successMessage}</p>
             </div>
@@ -1025,7 +1059,7 @@ export default function Audits() {
                   <span className="text-sm font-medium text-foreground">
                     Audit Template <span className="text-destructive">*</span>
                   </span>
-                  {templates.length === 0 ? (
+                  {latestPublishedTemplates.length === 0 ? (
                     <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
                       <p className="text-sm text-warning">
                         No published templates available. Please create and publish a template first
@@ -1319,7 +1353,7 @@ export default function Audits() {
               {/* Scheduled Date */}
               <div className="space-y-2">
                 <label htmlFor="audit-date" className="text-sm font-medium text-foreground">
-                  Scheduled Date
+                  {modalMode === 'import' ? 'Audit Date' : 'Scheduled Date'}
                 </label>
                 <Input
                   id="audit-date"
@@ -1358,14 +1392,14 @@ export default function Audits() {
                   disabled={
                     isSubmitting ||
                     (modalMode === 'schedule'
-                      ? templates.length === 0 || !formData.template_id
+                      ? latestPublishedTemplates.length === 0 || !formData.template_id
                       : !formData.template_id)
                   }
                 >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      {modalMode === 'import' ? 'Importing audit...' : t('audits.scheduling')}
+                      {modalMode === 'import' ? 'Creating intake...' : t('audits.scheduling')}
                     </>
                   ) : (
                     <>
@@ -1374,7 +1408,7 @@ export default function Audits() {
                       ) : (
                         <Calendar className="w-4 h-4" />
                       )}
-                      {modalMode === 'import' ? 'Import External Audit' : 'Schedule Audit'}
+                      {modalMode === 'import' ? 'Create Intake' : 'Schedule Audit'}
                     </>
                   )}
                 </Button>

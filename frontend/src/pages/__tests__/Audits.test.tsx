@@ -60,12 +60,27 @@ describe('Audits external import flow', () => {
       data: {
         items: [
           {
+            id: 21,
+            reference_number: 'TPL-0021',
+            name: 'Annual Safety Audit',
+            description: 'Published schedule template',
+            category: 'Safety',
+            audit_type: 'audit',
+            tags: [],
+            version: 3,
+            is_active: true,
+            is_published: true,
+            created_at: '2026-03-24T10:00:00Z',
+            updated_at: '2026-03-24T10:00:00Z',
+          },
+          {
             id: 11,
             reference_number: 'TPL-0001',
-            name: 'External Audit Intake',
+            name: 'ZZZ External Audit Intake (System)',
             description: 'Reusable external audit template',
-            category: 'Compliance',
-            audit_type: 'audit',
+            category: 'System',
+            audit_type: 'external_import',
+            tags: ['external_audit_intake', 'external_audit_intake:achilles_uvdb'],
             version: 1,
             is_active: true,
             is_published: true,
@@ -73,7 +88,7 @@ describe('Audits external import flow', () => {
             updated_at: '2026-03-24T10:00:00Z',
           },
         ],
-        total: 1,
+        total: 2,
         page: 1,
         page_size: 100,
         pages: 1,
@@ -135,7 +150,7 @@ describe('Audits external import flow', () => {
       target: { files: [file] },
     })
 
-    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Import External Audit' }).at(-1)!)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
 
     await waitFor(() => {
       expect(mockCreateRun).toHaveBeenCalledTimes(1)
@@ -143,7 +158,7 @@ describe('Audits external import flow', () => {
 
     expect(mockCreateRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        template_id: 11,
+        template_id: 21,
         external_audit_type: 'achilles_uvdb',
         source_origin: 'third_party',
         assurance_scheme: 'Achilles UVDB',
@@ -183,7 +198,7 @@ describe('Audits external import flow', () => {
       target: { value: 'customer' },
     })
 
-    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Import External Audit' }).at(-1)!)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
 
     expect(await screen.findByText('Please upload the external audit report')).toBeInTheDocument()
     expect(mockCreateRun).not.toHaveBeenCalled()
@@ -195,7 +210,7 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const importDialog = await screen.findByRole('dialog')
-    const importDateInput = within(importDialog).getByLabelText(/Scheduled Date/i)
+    const importDateInput = within(importDialog).getByLabelText(/Audit Date/i)
     expect(importDateInput).not.toHaveAttribute('min')
     expect(importDialog.className).toContain('sm:max-w-3xl')
     expect(importDialog.className).toContain('max-h-[85vh]')
@@ -232,13 +247,63 @@ describe('Audits external import flow', () => {
       target: { files: [file] },
     })
 
-    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Import External Audit' }).at(-1)!)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
 
-    expect(await screen.findByText('Audit created with follow-up required')).toBeInTheDocument()
+    expect(await screen.findByText('Intake created with follow-up required')).toBeInTheDocument()
     expect(
       screen.getByText(/Blob storage is temporarily unavailable/),
     ).toBeInTheDocument()
     expect(mockUpdateRun).not.toHaveBeenCalled()
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('surfaces structured backend import errors instead of schedule fallback text', async () => {
+    mockCreateRun.mockRejectedValueOnce({
+      response: {
+        status: 404,
+        data: {
+          detail: {
+            message:
+              "No published external audit intake template is configured for 'achilles_uvdb'",
+          },
+        },
+      },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
+      target: { value: 'achilles_uvdb' },
+    })
+
+    const file = new File(['audit pdf'], 'achilles-audit.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
+
+    expect(
+      await screen.findByText(
+        "No published external audit intake template is configured for 'achilles_uvdb'",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Failed to schedule audit. Please try again.')).not.toBeInTheDocument()
+  })
+
+  it('hides system intake templates from the schedule picker', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Schedule Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    const templateSelect = within(dialog).getAllByRole('combobox')[0]!
+    const options = within(templateSelect).getAllByRole('option').map((option) => option.textContent)
+
+    expect(options.join(' ')).toContain('Annual Safety Audit')
+    expect(options.join(' ')).not.toContain('ZZZ External Audit Intake (System)')
   })
 })

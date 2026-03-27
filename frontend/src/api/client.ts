@@ -942,6 +942,7 @@ export interface AuditTemplate {
   description?: string
   category?: string
   audit_type: string
+  tags?: string[]
   version: number
   is_active: boolean
   is_published: boolean

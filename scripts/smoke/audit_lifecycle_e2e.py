@@ -32,6 +32,7 @@ import requests
 TIMEOUT_SECONDS = 45
 MAX_ATTEMPTS = 3
 RETRYABLE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
+INTAKE_TEMPLATE_TAG = "external_audit_intake"
 
 
 @dataclass
@@ -40,6 +41,12 @@ class StepResult:
     passed: bool
     detail: str
     payload: Optional[dict[str, Any]] = None
+
+
+def _is_intake_template(template: dict[str, Any]) -> bool:
+    return INTAKE_TEMPLATE_TAG in {
+        str(tag).strip().lower() for tag in (template.get("tags") or []) if isinstance(tag, str)
+    }
 
 
 def _now_iso() -> str:
@@ -183,24 +190,51 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         )
         return results
     templates = templates_resp.json().get("items", [])
-    if not templates:
+    intake_templates = [template for template in templates if _is_intake_template(template)]
+    if len(intake_templates) != 1:
+        results.append(
+            StepResult(
+                "verify_external_audit_intake_template",
+                False,
+                "Expected exactly one published intake template in the API response",
+                {
+                    "count": len(intake_templates),
+                    "template_ids": [template.get("id") for template in intake_templates],
+                },
+            )
+        )
+        return results
+    results.append(
+        StepResult(
+            "verify_external_audit_intake_template",
+            True,
+            f"Resolved intake template_id={intake_templates[0].get('id')}",
+            {
+                "template_name": intake_templates[0].get("name"),
+                "tags": intake_templates[0].get("tags"),
+            },
+        )
+    )
+
+    schedule_templates = [template for template in templates if not _is_intake_template(template)]
+    if not schedule_templates:
         results.append(
             StepResult(
                 "list_published_templates",
                 True,
-                "No published templates available (endpoint healthy, skipping lifecycle)",
+                "No user-selectable published templates available (endpoint healthy, skipping lifecycle)",
             )
         )
         return results
-    template_id = templates[0]["id"]
+    template_id = schedule_templates[0]["id"]
     results.append(
         StepResult(
             "list_published_templates",
             True,
             f"Selected template_id={template_id}",
             {
-                "template_name": templates[0].get("name"),
-                "template_version": templates[0].get("version"),
+                "template_name": schedule_templates[0].get("name"),
+                "template_version": schedule_templates[0].get("version"),
             },
         )
     )
