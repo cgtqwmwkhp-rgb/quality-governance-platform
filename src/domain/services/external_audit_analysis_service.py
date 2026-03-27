@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import cast
 
 from src.domain.services.achilles_mapping_service import AchillesMappingService
 from src.domain.services.iso_compliance_service import iso_compliance_service
@@ -115,49 +116,57 @@ class ExternalAuditAnalysisService:
     ) -> ExternalAuditAnalysisResult:
         normalized_text = extracted_text.strip()
         scheme_match = self._detect_scheme(normalized_text, assurance_scheme)
-        frameworks = self._detect_frameworks(normalized_text, assurance_scheme, scheme_match["scheme"])
+        scheme = self._as_str(scheme_match["scheme"])
+        scheme_label = self._as_str(scheme_match["label"])
+        scheme_confidence = self._as_float(scheme_match["confidence"])
+        scheme_signals = cast(list[str], scheme_match["signals"])
+        frameworks = self._detect_frameworks(normalized_text, assurance_scheme, scheme)
         standards = self._build_standard_mappings(normalized_text)
-        scorecard = self._extract_scorecard(normalized_text, page_texts, scheme_match["scheme"])
+        scorecard = self._extract_scorecard(normalized_text, page_texts, scheme)
+        overall_score = self._as_optional_float(scorecard["overall_score"])
+        max_score = self._as_optional_float(scorecard["max_score"])
+        score_percentage = self._as_optional_float(scorecard["score_percentage"])
+        score_breakdown = cast(list[dict[str, object]], scorecard["score_breakdown"])
+        evidence_preview = cast(list[dict[str, object]], scorecard["evidence_preview"])
+        warnings = cast(list[str], scorecard["warnings"])
         report_date = self._extract_report_date(normalized_text)
         findings = self._extract_findings(
             page_texts=page_texts or ([normalized_text] if normalized_text else []),
             assurance_scheme=assurance_scheme,
-            scheme_label=scheme_match["label"],
+            scheme_label=scheme_label,
             frameworks=frameworks,
             standards=standards,
         )
         positive_summary = self._build_category_summary(findings, {"positive_practice"})
         nonconformity_summary = self._build_category_summary(findings, {"nonconformity", "competence_gap", "finding"})
         improvement_summary = self._build_category_summary(findings, {"opportunity_for_improvement", "observation"})
-        summary = self._build_summary(
-            normalized_text, findings, frameworks, standards, scorecard, scheme_match["label"]
-        )
+        summary = self._build_summary(normalized_text, findings, frameworks, standards, scorecard, scheme_label)
         return ExternalAuditAnalysisResult(
             summary=summary,
             findings=findings,
             mapped_frameworks=frameworks,
             mapped_standards=standards,
-            detected_scheme=str(scheme_match["scheme"]),
-            detected_scheme_confidence=float(scheme_match["confidence"]),
-            scheme_version=self._detect_scheme_version(normalized_text, str(scheme_match["scheme"])),
-            issuer_name=self._detect_issuer_name(normalized_text, str(scheme_match["scheme"]), assurance_scheme),
+            detected_scheme=scheme,
+            detected_scheme_confidence=scheme_confidence,
+            scheme_version=self._detect_scheme_version(normalized_text, scheme),
+            issuer_name=self._detect_issuer_name(normalized_text, scheme, assurance_scheme),
             report_date=report_date,
-            overall_score=scorecard["overall_score"],
-            max_score=scorecard["max_score"],
-            score_percentage=scorecard["score_percentage"],
-            outcome_status=self._determine_outcome_status(normalized_text, findings, scorecard["score_percentage"]),
+            overall_score=overall_score,
+            max_score=max_score,
+            score_percentage=score_percentage,
+            outcome_status=self._determine_outcome_status(normalized_text, findings, score_percentage),
             classification_basis={
                 "assurance_scheme": assurance_scheme,
-                "signals": scheme_match["signals"],
+                "signals": scheme_signals,
                 "mapped_frameworks": frameworks,
                 "mapped_standards": standards,
             },
-            score_breakdown=scorecard["score_breakdown"],
-            evidence_preview=scorecard["evidence_preview"] or self._build_evidence_preview_from_standards(standards),
+            score_breakdown=score_breakdown,
+            evidence_preview=evidence_preview or self._build_evidence_preview_from_standards(standards),
             positive_summary=positive_summary,
             nonconformity_summary=nonconformity_summary,
             improvement_summary=improvement_summary,
-            processing_warnings=scorecard["warnings"],
+            processing_warnings=warnings,
         )
 
     def _extract_findings(
@@ -290,7 +299,7 @@ class ExternalAuditAnalysisService:
             )
         score_percentage = scorecard.get("score_percentage")
         if score_percentage is not None:
-            parts.append(f"Normalized score: {float(score_percentage):.1f}%.")
+            parts.append(f"Normalized score: {self._as_float(score_percentage):.1f}%.")
         if text:
             parts.append(f"Source text length: {len(text.split())} words.")
         return " ".join(parts)
@@ -440,8 +449,12 @@ class ExternalAuditAnalysisService:
                 score_percentage = float(generic_pct.group(2))
 
         if score_percentage is None and score_breakdown:
-            total_score = sum(float(item["score"]) for item in score_breakdown if item.get("score") is not None)
-            total_max = sum(float(item["max_score"]) for item in score_breakdown if item.get("max_score") is not None)
+            total_score = sum(
+                self._as_float(item["score"]) for item in score_breakdown if item.get("score") is not None
+            )
+            total_max = sum(
+                self._as_float(item["max_score"]) for item in score_breakdown if item.get("max_score") is not None
+            )
             if total_max > 0:
                 overall_score = total_score
                 max_score = total_max
@@ -630,3 +643,18 @@ class ExternalAuditAnalysisService:
             seen.add(key)
             deduped.append(item)
         return deduped
+
+    def _as_str(self, value: object) -> str:
+        return value if isinstance(value, str) else str(value)
+
+    def _as_float(self, value: object) -> float:
+        if isinstance(value, bool):
+            return float(value)
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(str(value))
+
+    def _as_optional_float(self, value: object) -> float | None:
+        if value is None:
+            return None
+        return self._as_float(value)
