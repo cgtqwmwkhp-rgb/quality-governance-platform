@@ -528,6 +528,7 @@ class AuditRunResponse(BaseModel):
     external_reference: Optional[str] = None
     source_document_asset_id: Optional[int] = None
     source_document_label: Optional[str] = None
+    is_external_import_intake: bool = False
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     status: str

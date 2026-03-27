@@ -15,7 +15,7 @@
     "size-check": "npx size-limit",
     "lighthouse": "lhci autorun",
     "test:coverage": "vitest run --coverage",
-    "test:a11y": "vitest run --reporter=verbose src/**/*.a11y.test.{ts,tsx}",
+    "test:a11y": "vitest run --reporter=verbose a11y",
     "i18n:check": "node ../scripts/i18n-check.mjs"
   },
   "dependencies": {

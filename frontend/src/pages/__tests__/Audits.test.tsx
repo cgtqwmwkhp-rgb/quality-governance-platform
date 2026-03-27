@@ -306,4 +306,50 @@ describe('Audits external import flow', () => {
     expect(options.join(' ')).toContain('Annual Safety Audit')
     expect(options.join(' ')).not.toContain('ZZZ External Audit Intake (System)')
   })
+
+  it('keeps imported external intake runs out of the audit workspace views', async () => {
+    mockListRuns.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 41,
+            reference_number: 'AUD-00041',
+            template_id: 11,
+            template_version: 1,
+            title: 'Imported Achilles Intake',
+            status: 'pending_review',
+            source_origin: 'third_party',
+            assurance_scheme: 'Achilles UVDB',
+            is_external_import_intake: true,
+            created_at: '2026-03-24T10:05:00Z',
+          },
+          {
+            id: 42,
+            reference_number: 'AUD-00042',
+            template_id: 21,
+            template_version: 3,
+            title: 'Visible Internal Audit',
+            status: 'scheduled',
+            source_origin: 'internal',
+            is_external_import_intake: false,
+            created_at: '2026-03-24T10:10:00Z',
+          },
+        ],
+        total: 2,
+        page: 1,
+        page_size: 100,
+        pages: 1,
+      },
+    })
+
+    render(<Audits />)
+
+    expect(await screen.findByText('Visible Internal Audit')).toBeInTheDocument()
+    expect(screen.queryByText('Imported Achilles Intake')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'List' }))
+
+    expect(screen.getByText('Visible Internal Audit')).toBeInTheDocument()
+    expect(screen.queryByText('Imported Achilles Intake')).not.toBeInTheDocument()
+  })
 })

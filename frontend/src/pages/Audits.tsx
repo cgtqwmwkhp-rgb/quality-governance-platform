@@ -156,6 +156,10 @@ function getStructuredErrorMessage(error: unknown): string | null {
   return null
 }
 
+function isExternalImportIntakeRun(audit: AuditRun): boolean {
+  return audit.is_external_import_intake === true
+}
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
@@ -463,9 +467,10 @@ export default function Audits() {
   }
 
   const filteredAudits = useMemo(() => {
-    if (!searchTerm.trim()) return audits
+    const visibleAudits = audits.filter((audit) => !isExternalImportIntakeRun(audit))
+    if (!searchTerm.trim()) return visibleAudits
     const term = searchTerm.toLowerCase()
-    return audits.filter(
+    return visibleAudits.filter(
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
