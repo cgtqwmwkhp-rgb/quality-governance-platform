@@ -32,8 +32,23 @@ def _index_exists(table_name: str, index_name: str) -> bool:
     return any(index["name"] == index_name for index in _inspector().get_indexes(table_name))
 
 
-def _rename_index(old_name: str, new_name: str) -> None:
+def _rename_index(table_name: str, old_name: str, new_name: str) -> None:
     if not old_name or old_name == new_name:
+        return
+    if op.get_bind().dialect.name == "sqlite":
+        index = next(
+            (candidate for candidate in _inspector().get_indexes(table_name) if candidate["name"] == old_name),
+            None,
+        )
+        if not index:
+            return
+        op.create_index(
+            new_name,
+            table_name,
+            index["column_names"],
+            unique=index.get("unique", False),
+        )
+        op.drop_index(old_name, table_name=table_name)
         return
     op.execute(sa.text(f'ALTER INDEX "{old_name}" RENAME TO "{new_name}"'))
 
@@ -47,6 +62,7 @@ def _rename_legacy_kri_table() -> None:
     op.rename_table("key_risk_indicators", "legacy_key_risk_indicators")
     if _index_exists("legacy_key_risk_indicators", "ix_key_risk_indicators_tenant_id"):
         _rename_index(
+            "legacy_key_risk_indicators",
             "ix_key_risk_indicators_tenant_id",
             "ix_legacy_key_risk_indicators_tenant_id",
         )
@@ -90,6 +106,7 @@ def downgrade() -> None:
     if _table_exists("legacy_key_risk_indicators") and not _table_exists("key_risk_indicators"):
         if _index_exists("legacy_key_risk_indicators", "ix_legacy_key_risk_indicators_tenant_id"):
             _rename_index(
+                "legacy_key_risk_indicators",
                 "ix_legacy_key_risk_indicators_tenant_id",
                 "ix_key_risk_indicators_tenant_id",
             )

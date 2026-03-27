@@ -26,19 +26,15 @@ _TABLES = [
 
 _COLUMNS = ["tenant_id", "status", "created_at"]
 
-_COL_EXISTS = sa.text(
-    "SELECT EXISTS ("
-    "  SELECT 1 FROM information_schema.columns"
-    "  WHERE table_name = :t AND column_name = :c"
-    ")"
-)
-
-
 def upgrade() -> None:
     conn = op.get_bind()
+    inspector = sa.inspect(conn)
     for table in _TABLES:
+        if not inspector.has_table(table):
+            continue
+        table_columns = {column["name"] for column in inspector.get_columns(table)}
         for column in _COLUMNS:
-            if conn.execute(_COL_EXISTS, {"t": table, "c": column}).scalar():
+            if column in table_columns:
                 op.execute(
                     f"CREATE INDEX IF NOT EXISTS ix_{table}_{column} "
                     f"ON {table} ({column})"
@@ -47,17 +43,12 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
+    inspector = sa.inspect(conn)
     for table in reversed(_TABLES):
+        if not inspector.has_table(table):
+            continue
+        existing_indexes = {index["name"] for index in inspector.get_indexes(table)}
         for column in reversed(_COLUMNS):
             idx = f"ix_{table}_{column}"
-            result = conn.execute(
-                sa.text(
-                    "SELECT EXISTS ("
-                    "  SELECT 1 FROM pg_indexes"
-                    "  WHERE indexname = :idx"
-                    ")"
-                ),
-                {"idx": idx},
-            )
-            if result.scalar():
+            if idx in existing_indexes:
                 op.drop_index(idx, table_name=table)

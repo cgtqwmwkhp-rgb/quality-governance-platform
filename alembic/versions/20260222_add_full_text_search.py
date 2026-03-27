@@ -28,6 +28,9 @@ TABLES = {
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     op.execute(
         "DO $$ BEGIN "
         "  EXECUTE 'CREATE EXTENSION IF NOT EXISTS pg_trgm'; "
@@ -75,6 +78,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     for table in reversed(list(TABLES)):
         op.execute(
             f"DROP TRIGGER IF EXISTS {table}_search_vector_trigger ON {table}"

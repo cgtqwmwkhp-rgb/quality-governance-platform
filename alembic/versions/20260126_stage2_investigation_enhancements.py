@@ -28,6 +28,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Add Stage 2 investigation enhancements."""
+    conn = op.get_bind()
+    is_sqlite = conn.dialect.name == "sqlite"
 
     # === Add new columns to investigation_runs ===
 
@@ -72,13 +74,14 @@ def upgrade() -> None:
     )
 
     # Add foreign key for approved_by
-    op.create_foreign_key(
-        "fk_investigation_runs_approved_by",
-        "investigation_runs",
-        "users",
-        ["approved_by_id"],
-        ["id"],
-    )
+    if not is_sqlite:
+        op.create_foreign_key(
+            "fk_investigation_runs_approved_by",
+            "investigation_runs",
+            "users",
+            ["approved_by_id"],
+            ["id"],
+        )
 
     # === Create investigation_comments table ===
     op.create_table(
@@ -221,6 +224,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove Stage 2 investigation enhancements."""
+    conn = op.get_bind()
+    is_sqlite = conn.dialect.name == "sqlite"
 
     # Drop tables
     op.drop_index("ix_investigation_customer_packs_audience", table_name="investigation_customer_packs")
@@ -237,7 +242,8 @@ def downgrade() -> None:
     op.drop_table("investigation_comments")
 
     # Drop foreign key and columns from investigation_runs
-    op.drop_constraint("fk_investigation_runs_approved_by", "investigation_runs", type_="foreignkey")
+    if not is_sqlite:
+        op.drop_constraint("fk_investigation_runs_approved_by", "investigation_runs", type_="foreignkey")
 
     op.drop_column("investigation_runs", "rejection_reason")
     op.drop_column("investigation_runs", "approved_by_id")

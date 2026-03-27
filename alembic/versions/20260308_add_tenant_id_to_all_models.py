@@ -11,6 +11,7 @@ are safely skipped. Sets DEFAULT 1 for existing rows.
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "20260308_tenant"
 down_revision: Union[str, None] = "20260303_pos_ans"
@@ -191,28 +192,93 @@ TABLES = [
     "workflow_templates",
 ]
 
+RLS_TABLES = [
+    "incidents",
+    "complaints",
+    "risks",
+    "capa_actions",
+    "audit_runs",
+    "investigation_runs",
+    "documents",
+    "near_misses",
+    "road_traffic_collisions",
+    "workflow_rules",
+    "users",
+    "audit_log_entries",
+]
+
+
+def _inspector() -> sa.Inspector:
+    return sa.inspect(op.get_bind())
+
+
+def _table_exists(table_name: str) -> bool:
+    return _inspector().has_table(table_name)
+
+
+def _has_column(table_name: str, column_name: str) -> bool:
+    if not _table_exists(table_name):
+        return False
+    return column_name in {col["name"] for col in _inspector().get_columns(table_name)}
+
+
+def _has_index(table_name: str, index_name: str) -> bool:
+    if not _table_exists(table_name):
+        return False
+    return index_name in {index["name"] for index in _inspector().get_indexes(table_name)}
+
+
+def _indexes_using_column(table_name: str, column_name: str) -> list[str]:
+    if not _table_exists(table_name):
+        return []
+    return [
+        index["name"]
+        for index in _inspector().get_indexes(table_name)
+        if column_name in (index.get("column_names") or [])
+    ]
+
+
+def _drop_postgres_tenant_policies(table_name: str) -> None:
+    if op.get_bind().dialect.name != "postgresql" or table_name not in RLS_TABLES:
+        return
+    op.execute(
+        f"DO $$ BEGIN "
+        f"  IF EXISTS (SELECT 1 FROM pg_class WHERE relname = '{table_name}') THEN "
+        f"    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON {table_name}'; "
+        f"    EXECUTE 'ALTER TABLE {table_name} DISABLE ROW LEVEL SECURITY'; "
+        f"  END IF; "
+        f"EXCEPTION WHEN OTHERS THEN "
+        f"  RAISE NOTICE 'Tenant policy teardown skip for {table_name}: %', SQLERRM; "
+        f"END $$"
+    )
+
 
 def upgrade() -> None:
     for table in TABLES:
-        op.execute(
-            f"DO $$ BEGIN "
-            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
-            f"WHERE table_schema='public' AND table_name='{table}') THEN "
-            f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
-            f"tenant_id INTEGER; "
-            f"CREATE INDEX IF NOT EXISTS ix_{table}_tenant_id "
-            f"ON {table} (tenant_id); "
-            f"END IF; END $$;"
-        )
+        if not _table_exists(table):
+            continue
+        if not _has_column(table, "tenant_id"):
+            op.add_column(table, sa.Column("tenant_id", sa.Integer(), nullable=True))
+        index_name = f"ix_{table}_tenant_id"
+        if not _has_index(table, index_name):
+            op.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} (tenant_id)")
 
 
 def downgrade() -> None:
+    dialect = op.get_bind().dialect.name
     for table in reversed(TABLES):
-        op.execute(
-            f"DO $$ BEGIN "
-            f"IF EXISTS (SELECT 1 FROM information_schema.tables "
-            f"WHERE table_schema='public' AND table_name='{table}') THEN "
-            f"DROP INDEX IF EXISTS ix_{table}_tenant_id; "
-            f"ALTER TABLE {table} DROP COLUMN IF EXISTS tenant_id; "
-            f"END IF; END $$;"
-        )
+        if not _table_exists(table):
+            continue
+        if not _has_column(table, "tenant_id"):
+            continue
+        for index_name in _indexes_using_column(table, "tenant_id"):
+            if dialect == "postgresql":
+                op.drop_index(index_name, table_name=table)
+            else:
+                op.execute(f"DROP INDEX IF EXISTS {index_name}")
+        _drop_postgres_tenant_policies(table)
+        if dialect == "sqlite":
+            with op.batch_alter_table(table) as batch_op:
+                batch_op.drop_column("tenant_id")
+        else:
+            op.drop_column(table, "tenant_id")

@@ -4122,7 +4122,26 @@ export interface ExternalAuditImportJob {
   extraction_method?: string | null
   extraction_text_preview?: string | null
   page_count?: number | null
+  source_sheet_count?: number | null
+  has_tabular_data: boolean
   analysis_summary?: string | null
+  detected_scheme?: string | null
+  detected_scheme_confidence?: number | null
+  scheme_version?: string | null
+  issuer_name?: string | null
+  report_date?: string | null
+  overall_score?: number | null
+  max_score?: number | null
+  score_percentage?: number | null
+  outcome_status?: string | null
+  classification_basis_json?: Record<string, unknown> | null
+  score_breakdown_json?: Array<Record<string, unknown>> | null
+  evidence_preview_json?: Array<Record<string, unknown>> | null
+  positive_summary_json?: Array<Record<string, unknown>> | null
+  nonconformity_summary_json?: Array<Record<string, unknown>> | null
+  improvement_summary_json?: Array<Record<string, unknown>> | null
+  promotion_summary_json?: Record<string, unknown> | null
+  processing_warnings_json?: string[] | null
   error_code?: string | null
   error_detail?: string | null
   created_at: string

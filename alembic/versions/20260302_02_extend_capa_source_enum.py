@@ -17,12 +17,15 @@ depends_on = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.dialect.name != "postgresql":
+        return
+
     # CAPASource uses native PostgreSQL enum via Enum() (not native_enum=False)
     # so we need ALTER TYPE. If the column uses String storage (native_enum=False),
     # no ALTER TYPE is needed -- the Python enum is sufficient.
     # The capa.py model uses Enum(CAPAType) without native_enum=False, so we
     # check and add if needed.
-    conn = op.get_bind()
     # Check if enum type exists (it may use string storage)
     result = conn.execute(
         __import__("sqlalchemy").text(

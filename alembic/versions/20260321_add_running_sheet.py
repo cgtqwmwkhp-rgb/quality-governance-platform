@@ -16,22 +16,32 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
 def upgrade() -> None:
-    op.execute(
-        "CREATE TABLE IF NOT EXISTS rta_running_sheet_entries ("
-        "id SERIAL PRIMARY KEY, "
-        "rta_id INTEGER NOT NULL REFERENCES road_traffic_collisions(id) ON DELETE CASCADE, "
-        "content TEXT NOT NULL, "
-        "entry_type VARCHAR(50) NOT NULL DEFAULT 'note', "
-        "author_id INTEGER REFERENCES users(id), "
-        "author_email VARCHAR(255), "
-        "created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), "
-        "updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()"
-        ")"
-    )
+    if not _has_table("rta_running_sheet_entries"):
+        op.create_table(
+            "rta_running_sheet_entries",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("rta_id", sa.Integer(), sa.ForeignKey("road_traffic_collisions.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("content", sa.Text(), nullable=False),
+            sa.Column("entry_type", sa.String(50), nullable=False, server_default="note"),
+            sa.Column("author_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
+            sa.Column("author_email", sa.String(255), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
+            sa.PrimaryKeyConstraint("id"),
+        )
     op.execute("CREATE INDEX IF NOT EXISTS ix_rta_running_sheet_rta_id ON rta_running_sheet_entries(rta_id)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_rta_running_sheet_created ON rta_running_sheet_entries(created_at)")
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS rta_running_sheet_entries;")
+    if _has_table("rta_running_sheet_entries"):
+        op.drop_table("rta_running_sheet_entries")

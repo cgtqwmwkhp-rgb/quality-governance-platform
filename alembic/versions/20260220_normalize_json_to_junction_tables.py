@@ -57,6 +57,39 @@ def _create_junction_table(
     op.create_index(f"ix_{table_name}_{fk2_col}", table_name, [fk2_col])
 
 
+def _migrate_json_array_column(
+    source_table: str,
+    source_id_col: str,
+    source_json_col: str,
+    target_table: str,
+    target_left_col: str,
+    target_right_col: str,
+) -> None:
+    dialect = op.get_bind().dialect.name
+
+    if dialect == "postgresql":
+        sql = f"""
+            INSERT INTO {target_table} ({target_left_col}, {target_right_col})
+            SELECT src.{source_id_col}, CAST(je.value AS INTEGER)
+            FROM {source_table} AS src,
+                 json_array_elements_text(src.{source_json_col}) AS je(value)
+            WHERE src.{source_json_col} IS NOT NULL
+              AND CAST(src.{source_json_col} AS TEXT) NOT IN ('[]', 'null')
+            ON CONFLICT DO NOTHING
+        """
+    else:
+        sql = f"""
+            INSERT OR IGNORE INTO {target_table} ({target_left_col}, {target_right_col})
+            SELECT src.{source_id_col}, CAST(je.value AS INTEGER)
+            FROM {source_table} AS src
+            JOIN json_each(src.{source_json_col}) AS je
+            WHERE src.{source_json_col} IS NOT NULL
+              AND CAST(src.{source_json_col} AS TEXT) NOT IN ('[]', 'null')
+        """
+
+    op.execute(sa.text(sql))
+
+
 def upgrade() -> None:
     # ------------------------------------------------------------------ #
     # 1. Create junction tables                                          #
@@ -103,59 +136,54 @@ def upgrade() -> None:
     # ------------------------------------------------------------------ #
 
     # risks.clause_ids_json → risk_clause_mapping
-    op.execute(sa.text("""
-        INSERT INTO risk_clause_mapping (risk_id, clause_id)
-        SELECT r.id, je.value::INTEGER
-        FROM risks r,
-             json_array_elements_text(r.clause_ids_json) AS je(value)
-        WHERE r.clause_ids_json IS NOT NULL
-          AND r.clause_ids_json::text NOT IN ('[]', 'null')
-        ON CONFLICT DO NOTHING
-    """))
+    _migrate_json_array_column(
+        "risks",
+        "id",
+        "clause_ids_json",
+        "risk_clause_mapping",
+        "risk_id",
+        "clause_id",
+    )
 
     # risks.control_ids_json → risk_control_mapping
-    op.execute(sa.text("""
-        INSERT INTO risk_control_mapping (risk_id, control_id)
-        SELECT r.id, je.value::INTEGER
-        FROM risks r,
-             json_array_elements_text(r.control_ids_json) AS je(value)
-        WHERE r.control_ids_json IS NOT NULL
-          AND r.control_ids_json::text NOT IN ('[]', 'null')
-        ON CONFLICT DO NOTHING
-    """))
+    _migrate_json_array_column(
+        "risks",
+        "id",
+        "control_ids_json",
+        "risk_control_mapping",
+        "risk_id",
+        "control_id",
+    )
 
     # risks.linked_audit_ids_json → risk_audit_mapping
-    op.execute(sa.text("""
-        INSERT INTO risk_audit_mapping (risk_id, audit_id)
-        SELECT r.id, je.value::INTEGER
-        FROM risks r,
-             json_array_elements_text(r.linked_audit_ids_json) AS je(value)
-        WHERE r.linked_audit_ids_json IS NOT NULL
-          AND r.linked_audit_ids_json::text NOT IN ('[]', 'null')
-        ON CONFLICT DO NOTHING
-    """))
+    _migrate_json_array_column(
+        "risks",
+        "id",
+        "linked_audit_ids_json",
+        "risk_audit_mapping",
+        "risk_id",
+        "audit_id",
+    )
 
     # risks.linked_incident_ids_json → risk_incident_mapping
-    op.execute(sa.text("""
-        INSERT INTO risk_incident_mapping (risk_id, incident_id)
-        SELECT r.id, je.value::INTEGER
-        FROM risks r,
-             json_array_elements_text(r.linked_incident_ids_json) AS je(value)
-        WHERE r.linked_incident_ids_json IS NOT NULL
-          AND r.linked_incident_ids_json::text NOT IN ('[]', 'null')
-        ON CONFLICT DO NOTHING
-    """))
+    _migrate_json_array_column(
+        "risks",
+        "id",
+        "linked_incident_ids_json",
+        "risk_incident_mapping",
+        "risk_id",
+        "incident_id",
+    )
 
     # audit_findings.clause_ids_json → audit_finding_clause_mapping
-    op.execute(sa.text("""
-        INSERT INTO audit_finding_clause_mapping (finding_id, clause_id)
-        SELECT f.id, je.value::INTEGER
-        FROM audit_findings f,
-             json_array_elements_text(f.clause_ids_json) AS je(value)
-        WHERE f.clause_ids_json IS NOT NULL
-          AND f.clause_ids_json::text NOT IN ('[]', 'null')
-        ON CONFLICT DO NOTHING
-    """))
+    _migrate_json_array_column(
+        "audit_findings",
+        "id",
+        "clause_ids_json",
+        "audit_finding_clause_mapping",
+        "finding_id",
+        "clause_id",
+    )
 
     # audit_section_clause_mapping — no source JSON column on audit_sections,
     # so no data migration needed.  The table is ready for application use.

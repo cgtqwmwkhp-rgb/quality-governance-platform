@@ -20,6 +20,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    if conn.dialect.name != "postgresql":
+        inspector = sa.inspect(conn)
+        if inspector.has_table("users"):
+            existing_columns = {col["name"] for col in inspector.get_columns("users")}
+            if "totp_secret" not in existing_columns:
+                op.add_column("users", sa.Column("totp_secret", sa.String(length=64), nullable=True))
+            if "mfa_enabled" not in existing_columns:
+                op.add_column("users", sa.Column("mfa_enabled", sa.Boolean(), nullable=True, server_default=sa.text("false")))
+            if "password_history" not in existing_columns:
+                op.add_column("users", sa.Column("password_history", sa.Text(), nullable=True))
+        return
+
     op.execute(
         "DO $$ BEGIN "
         "  IF NOT EXISTS ("
@@ -53,6 +66,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    conn = op.get_bind()
+    if conn.dialect.name != "postgresql":
+        inspector = sa.inspect(conn)
+        if inspector.has_table("users"):
+            existing_columns = {col["name"] for col in inspector.get_columns("users")}
+            for column in ("password_history", "mfa_enabled", "totp_secret"):
+                if column in existing_columns:
+                    op.drop_column("users", column)
+        return
+
     op.execute(
         "ALTER TABLE users "
         "DROP COLUMN IF EXISTS totp_secret, "

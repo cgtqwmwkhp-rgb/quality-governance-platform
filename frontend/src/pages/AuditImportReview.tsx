@@ -11,11 +11,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Badge } from '../components/ui/Badge'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 
+function getSeverityVariant(severity: string) {
+  if (severity === 'critical') return 'critical'
+  if (severity === 'high') return 'high'
+  if (severity === 'low') return 'low'
+  return 'medium'
+}
+
 export default function AuditImportReview() {
   const { auditId } = useParams()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const jobId = Number(searchParams.get('jobId') || '')
+  const routeAuditId = Number(auditId || '')
 
   const [job, setJob] = useState<ExternalAuditImportJob | null>(null)
   const [drafts, setDrafts] = useState<ExternalAuditImportDraft[]>([])
@@ -26,6 +34,8 @@ export default function AuditImportReview() {
 
   const load = useCallback(async () => {
     if (!jobId) {
+      setJob(null)
+      setDrafts([])
       setError('Missing import job reference.')
       setLoading(false)
       return
@@ -38,6 +48,12 @@ export default function AuditImportReview() {
         externalAuditImportsApi.getJob(jobId),
         externalAuditImportsApi.listDrafts(jobId),
       ])
+      if (Number.isFinite(routeAuditId) && routeAuditId > 0 && jobRes.data.audit_run_id !== routeAuditId) {
+        setJob(null)
+        setDrafts([])
+        setError('This import job belongs to a different audit run. Re-open it from the audits workspace.')
+        return
+      }
       setJob(jobRes.data)
       setDrafts(draftsRes.data)
     } catch (err) {
@@ -46,22 +62,75 @@ export default function AuditImportReview() {
     } finally {
       setLoading(false)
     }
-  }, [jobId])
+  }, [jobId, routeAuditId])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  const acceptedCount = useMemo(
+  useEffect(() => {
+    if (!job || !['queued', 'processing', 'promoting'].includes(job.status)) return
+    const timeoutId = window.setTimeout(() => {
+      void load()
+    }, 5000)
+    return () => window.clearTimeout(timeoutId)
+  }, [job, load])
+
+  const approvedCount = useMemo(
     () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted').length,
     [drafts],
   )
+  const promoteableCount = useMemo(
+    () => drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
+    [drafts],
+  )
+  const promotedCount = useMemo(
+    () => drafts.filter((draft) => draft.status === 'promoted' || draft.promoted_finding_id).length,
+    [drafts],
+  )
+  const acceptedDrafts = useMemo(
+    () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted'),
+    [drafts],
+  )
+  const acceptedClauseCount = useMemo(() => {
+    const clauseKeys = new Set<string>()
+    acceptedDrafts.forEach((draft) => {
+      draft.mapped_standards_json?.forEach((mapping) => {
+        const clauseKey =
+          typeof mapping?.clause_id === 'string'
+            ? mapping.clause_id
+            : [mapping?.standard, mapping?.clause_number].filter(Boolean).join(':')
+        if (clauseKey) clauseKeys.add(clauseKey)
+      })
+    })
+    return clauseKeys.size
+  }, [acceptedDrafts])
+  const acceptedActionCandidates = useMemo(
+    () =>
+      acceptedDrafts.filter((draft) =>
+        ['nonconformity', 'competence_gap', 'finding'].includes(draft.finding_type),
+      ).length,
+    [acceptedDrafts],
+  )
+  const acceptedRiskCandidates = useMemo(
+    () =>
+      acceptedDrafts.filter(
+        (draft) =>
+          ['nonconformity', 'competence_gap', 'finding'].includes(draft.finding_type) &&
+          ['high', 'critical'].includes(draft.severity),
+      ).length,
+    [acceptedDrafts],
+  )
+  const promotionSummary = job?.promotion_summary_json ?? null
+  const schemeAlignment = promotionSummary?.scheme_alignment as Record<string, unknown> | undefined
 
   const handleDraftDecision = async (draftId: number, status: 'accepted' | 'rejected') => {
     setBusyDraftId(draftId)
+    setError(null)
     try {
       const res = await externalAuditImportsApi.reviewDraft(draftId, { status })
       setDrafts((prev) => prev.map((draft) => (draft.id === draftId ? res.data : draft)))
+      setError(null)
     } catch (err) {
       console.error('Failed to update draft review decision', err)
       setError('Failed to update the draft. Please retry.')
@@ -71,7 +140,7 @@ export default function AuditImportReview() {
   }
 
   const handlePromote = async () => {
-    if (!job) return
+    if (!job || promoteableCount === 0 || ['completed', 'promoting'].includes(job.status)) return
     setIsPromoting(true)
     setError(null)
     try {
@@ -103,11 +172,20 @@ export default function AuditImportReview() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => navigate(`/audits/${auditId}/execute`)}>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/audits/${job?.audit_run_id ?? auditId}/execute`)}
+            disabled={!job?.audit_run_id}
+          >
             <FileText size={16} />
             Open Audit Run
           </Button>
-          <Button onClick={handlePromote} disabled={acceptedCount === 0 || isPromoting}>
+          <Button
+            onClick={handlePromote}
+            disabled={
+              promoteableCount === 0 || isPromoting || job?.status === 'completed' || job?.status === 'promoting'
+            }
+          >
             {isPromoting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
             Promote Accepted Drafts
           </Button>
@@ -116,46 +194,242 @@ export default function AuditImportReview() {
 
       {error ? (
         <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="flex items-center gap-3 p-5">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            <p className="text-sm text-destructive">{error}</p>
+          <CardContent className="flex items-center justify-between gap-3 p-5">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              <p className="text-sm text-destructive">{error}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       ) : null}
 
       {job ? (
-        <Card>
+        <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-primary" />
+                {job.reference_number}
+              </CardTitle>
+              <CardDescription>
+                Status: {job.status.replace(/_/g, ' ')}. {job.analysis_summary || 'Analysis summary pending.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Source file</p>
+                <p className="mt-1 font-medium text-foreground">{job.source_filename || 'Source document'}</p>
+              </div>
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Extraction</p>
+                <p className="mt-1 font-medium text-foreground">{job.extraction_method || 'pending'}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {job.page_count ? `${job.page_count} page(s)` : 'Pages pending'}
+                  {job.source_sheet_count ? `, ${job.source_sheet_count} sheet(s)` : ''}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Classification</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {job.detected_scheme?.replace(/_/g, ' ') || 'Pending classification'}
+                </p>
+                {job.detected_scheme_confidence != null ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {Math.round(job.detected_scheme_confidence * 100)}% confidence
+                  </p>
+                ) : null}
+              </div>
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted drafts</p>
+                <p className="mt-1 font-medium text-foreground">{approvedCount}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {promoteableCount} awaiting promotion, {promotedCount} promoted
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Scorecard</CardTitle>
+              <CardDescription>
+                Normalized audit interpretation before any live promotion happens.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Outcome</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{job.outcome_status?.replace(/_/g, ' ') || 'review required'}</Badge>
+                  {job.scheme_version ? <Badge variant="secondary">{job.scheme_version}</Badge> : null}
+                  {job.has_tabular_data ? <Badge variant="info">Tabular evidence detected</Badge> : null}
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Overall score</p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {job.score_percentage != null
+                      ? `${job.score_percentage.toFixed(1)}%`
+                      : 'No explicit score extracted'}
+                  </p>
+                  {job.overall_score != null && job.max_score != null ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {job.overall_score} / {job.max_score}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Issuer</p>
+                  <p className="mt-1 font-medium text-foreground">{job.issuer_name || 'Reviewer confirmation required'}</p>
+                  {job.report_date ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Report date: {new Date(job.report_date).toLocaleDateString()}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              {job.score_breakdown_json?.length ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Score breakdown</p>
+                  <div className="mt-3 grid gap-2">
+                    {job.score_breakdown_json.slice(0, 6).map((item, index) => (
+                      <div key={`score-breakdown-${index}`} className="flex items-center justify-between text-sm">
+                        <span className="text-foreground">{String(item.label || `Section ${index + 1}`)}</span>
+                        <span className="text-muted-foreground">
+                          {String(item.score ?? '-')} / {String(item.max_score ?? '-')} ({String(item.percentage ?? '-')}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {job?.processing_warnings_json?.length ? (
+        <Card className="border-warning/30 bg-warning/5">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
-              {job.reference_number}
-            </CardTitle>
-            <CardDescription>
-              Status: {job.status.replace(/_/g, ' ')}. {job.analysis_summary || 'Analysis summary pending.'}
-            </CardDescription>
+            <CardTitle className="text-base">Reviewer warnings</CardTitle>
+            <CardDescription>These items should be checked before promotion.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Source file</p>
-              <p className="mt-1 font-medium text-foreground">{job.source_filename || 'Source document'}</p>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Extraction</p>
-              <p className="mt-1 font-medium text-foreground">{job.extraction_method || 'pending'}</p>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted drafts</p>
-              <p className="mt-1 font-medium text-foreground">{acceptedCount}</p>
-            </div>
+          <CardContent className="space-y-2">
+            {job.processing_warnings_json.map((warning, index) => (
+              <p key={`warning-${index}`} className="text-sm text-foreground">
+                {warning}
+              </p>
+            ))}
           </CardContent>
         </Card>
+      ) : null}
+
+      {job?.status === 'failed' ? (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardHeader>
+            <CardTitle className="text-base">Import failed</CardTitle>
+            <CardDescription>The import did not reach reviewer-ready status.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-destructive">
+            <p>{job.error_code || 'IMPORT_FAILED'}</p>
+            <p>{job.error_detail || 'Review logs and retry the import job.'}</p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {job ? (
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Evidence and mappings</CardTitle>
+              <CardDescription>
+                ISO evidence candidates and scheme mappings extracted from the source document.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {job.evidence_preview_json?.length ? (
+                  job.evidence_preview_json.slice(0, 8).map((mapping, index) => (
+                    <Badge key={`evidence-${index}`} variant="secondary">
+                      {String(mapping.clause_number || mapping.clause_id || 'Clause')} {String(mapping.standard || '')}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No clause-level evidence preview available yet.</p>
+                )}
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Positive evidence</p>
+                  <p className="mt-1 font-medium text-foreground">{job.positive_summary_json?.length || 0}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Non-compliances</p>
+                  <p className="mt-1 font-medium text-foreground">{job.nonconformity_summary_json?.length || 0}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Improvements</p>
+                  <p className="mt-1 font-medium text-foreground">{job.improvement_summary_json?.length || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Promotion impact</CardTitle>
+              <CardDescription>
+                What the accepted drafts will write into the live governance system.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted findings</p>
+                  <p className="mt-1 font-medium text-foreground">{approvedCount}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ISO evidence links</p>
+                  <p className="mt-1 font-medium text-foreground">{acceptedClauseCount}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Action candidates</p>
+                  <p className="mt-1 font-medium text-foreground">{acceptedActionCandidates}</p>
+                </div>
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Risk candidates</p>
+                  <p className="mt-1 font-medium text-foreground">{acceptedRiskCandidates}</p>
+                </div>
+              </div>
+              {schemeAlignment ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Scheme alignment</p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {String(schemeAlignment.status || 'pending').replace(/_/g, ' ')}
+                  </p>
+                  {schemeAlignment.reason ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{String(schemeAlignment.reason)}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       <div className="grid gap-4">
         {drafts.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              No draft findings were produced yet. If processing has just started, refresh shortly.
+              {job?.status === 'queued' || job?.status === 'processing' || job?.status === 'promoting'
+                ? 'Processing is still running. This workspace refreshes automatically while analysis is in progress.'
+                : error
+                  ? 'The latest import state could not be refreshed. Retry to continue reviewing this workspace.'
+                : 'No draft findings were produced for this import. Review the source document and processing warnings before promoting.'}
             </CardContent>
           </Card>
         ) : (
@@ -164,7 +438,7 @@ export default function AuditImportReview() {
               <CardHeader>
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-xl">{draft.title}</CardTitle>
-                  <Badge variant={draft.severity === 'high' ? 'high' : draft.severity === 'low' ? 'low' : 'medium'}>
+                  <Badge variant={getSeverityVariant(draft.severity)}>
                     {draft.severity}
                   </Badge>
                   <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
@@ -191,10 +465,27 @@ export default function AuditImportReview() {
                   ))}
                   {draft.mapped_standards_json?.map((mapping, index) => (
                     <Badge key={`standard-${draft.id}-${index}`} variant="secondary">
-                      {String(mapping.standard || 'ISO')}
+                      {String(mapping.clause_number || mapping.standard || 'ISO')}
                     </Badge>
                   ))}
                 </div>
+
+                {(draft.suggested_action_title || draft.suggested_risk_title) && (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {draft.suggested_action_title ? (
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Proposed action</p>
+                        <p className="mt-1 text-sm text-foreground">{draft.suggested_action_title}</p>
+                      </div>
+                    ) : null}
+                    {draft.suggested_risk_title ? (
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Proposed risk</p>
+                        <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-3">
                   <Button

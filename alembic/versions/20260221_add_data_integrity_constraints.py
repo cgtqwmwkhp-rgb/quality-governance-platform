@@ -20,8 +20,43 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_has_column(conn, table: str, column: str) -> bool:
+    inspector = sa.inspect(conn)
+    if not inspector.has_table(table):
+        return False
+    return column in {col["name"] for col in inspector.get_columns(table)}
+
+
+def _table_exists(conn, table: str) -> bool:
+    return sa.inspect(conn).has_table(table)
+
+
+def _has_named_constraint(conn, table: str, constraint_name: str, constraint_type: str) -> bool:
+    inspector = sa.inspect(conn)
+    if not inspector.has_table(table):
+        return False
+    if constraint_type == "check":
+        return any(
+            constraint.get("name") == constraint_name
+            for constraint in inspector.get_check_constraints(table)
+        )
+    if constraint_type == "unique":
+        return any(
+            constraint.get("name") == constraint_name
+            for constraint in inspector.get_unique_constraints(table)
+        )
+    return False
+
+
 def upgrade() -> None:
     conn = op.get_bind()
+    dialect = conn.dialect.name
+
+    if dialect != "postgresql":
+        for table in ("incidents", "risks", "audits", "complaints"):
+            if _table_exists(conn, table) and not _table_has_column(conn, table, "version"):
+                op.add_column(table, sa.Column("version", sa.Integer(), nullable=False, server_default="1"))
+        return
 
     # --- UNIQUE constraints (wrapped in PL/pgSQL for subtransaction safety) ---
     for table, col, cname in [
@@ -99,31 +134,30 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
+    dialect = conn.dialect.name
 
     for table in ("complaints", "audits", "risks", "incidents"):
         if _table_has_column(conn, table, "version"):
             op.drop_column(table, "version")
 
-    for name in (
-        "ck_complaints_status",
-        "ck_audits_status",
-        "ck_risks_status",
-        "ck_incidents_status",
-    ):
-        try:
-            op.drop_constraint(name, name.split("_")[1] + "s")
-        except Exception:
-            pass
+    if dialect != "postgresql":
+        return
 
-    for name in (
-        "uq_complaints_reference",
-        "uq_audits_reference",
-        "uq_risks_reference",
-        "uq_incidents_reference",
-        "uq_users_email",
+    for table, name in (
+        ("complaints", "ck_complaints_status"),
+        ("audits", "ck_audits_status"),
+        ("risks", "ck_risks_status"),
+        ("incidents", "ck_incidents_status"),
     ):
-        try:
-            table = name.replace("uq_", "").rsplit("_", 1)[0]
-            op.drop_constraint(name, table)
-        except Exception:
-            pass
+        if _has_named_constraint(conn, table, name, "check"):
+            op.drop_constraint(name, table, type_="check")
+
+    for table, name in (
+        ("complaints", "uq_complaints_reference"),
+        ("audits", "uq_audits_reference"),
+        ("risks", "uq_risks_reference"),
+        ("incidents", "uq_incidents_reference"),
+        ("users", "uq_users_email"),
+    ):
+        if _has_named_constraint(conn, table, name, "unique"):
+            op.drop_constraint(name, table, type_="unique")

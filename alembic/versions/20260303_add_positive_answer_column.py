@@ -20,13 +20,24 @@ def upgrade() -> None:
         "audit_questions",
         sa.Column("positive_answer", sa.String(10), nullable=False, server_default="yes"),
     )
-    op.create_check_constraint(
-        "ck_audit_questions_positive_answer",
-        "audit_questions",
-        "positive_answer IN ('yes', 'no')",
-    )
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("audit_questions") as batch_op:
+            batch_op.create_check_constraint(
+                "ck_audit_questions_positive_answer",
+                "positive_answer IN ('yes', 'no')",
+            )
+    else:
+        op.create_check_constraint(
+            "ck_audit_questions_positive_answer",
+            "audit_questions",
+            "positive_answer IN ('yes', 'no')",
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint("ck_audit_questions_positive_answer", "audit_questions", type_="check")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("audit_questions") as batch_op:
+            batch_op.drop_constraint("ck_audit_questions_positive_answer", type_="check")
+    else:
+        op.drop_constraint("ck_audit_questions_positive_answer", "audit_questions", type_="check")
     op.drop_column("audit_questions", "positive_answer")

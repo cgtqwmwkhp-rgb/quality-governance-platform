@@ -25,6 +25,17 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
+def _has_index(table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
+    return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
+
+
 def upgrade() -> None:
     """Create investigation_actions table."""
     op.create_table(
@@ -52,8 +63,8 @@ def upgrade() -> None:
         sa.Column("effectiveness_notes", sa.Text(), nullable=True),
         sa.Column("is_effective", sa.Boolean(), nullable=True),
         # Timestamps (from TimestampMixin)
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=True),
         # Reference number (from ReferenceNumberMixin)
         sa.Column("reference_number", sa.String(length=50), nullable=True),
         # Audit trail (from AuditTrailMixin)
@@ -86,11 +97,17 @@ def downgrade() -> None:
     
     WARNING: This drops all investigation action data permanently.
     """
-    op.drop_index("ix_investigation_actions_due_date", table_name="investigation_actions")
-    op.drop_index("ix_investigation_actions_owner_id", table_name="investigation_actions")
-    op.drop_index("ix_investigation_actions_status", table_name="investigation_actions")
-    op.drop_index("ix_investigation_actions_investigation_id", table_name="investigation_actions")
-    op.drop_table("investigation_actions")
+    if _has_index("investigation_actions", "ix_investigation_actions_due_date"):
+        op.drop_index("ix_investigation_actions_due_date", table_name="investigation_actions")
+    if _has_index("investigation_actions", "ix_investigation_actions_owner_id"):
+        op.drop_index("ix_investigation_actions_owner_id", table_name="investigation_actions")
+    if _has_index("investigation_actions", "ix_investigation_actions_status"):
+        op.drop_index("ix_investigation_actions_status", table_name="investigation_actions")
+    if _has_index("investigation_actions", "ix_investigation_actions_investigation_id"):
+        op.drop_index("ix_investigation_actions_investigation_id", table_name="investigation_actions")
+    if sa.inspect(op.get_bind()).has_table("investigation_actions"):
+        op.drop_table("investigation_actions")
     
     # Drop the enum type
-    op.execute("DROP TYPE IF EXISTS investigationactionstatus")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS investigationactionstatus")

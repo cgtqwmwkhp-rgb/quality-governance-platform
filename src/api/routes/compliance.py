@@ -213,7 +213,7 @@ async def _load_evidence_links(
     query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
 
     if tenant_id is None:
-        query = query.where(ComplianceEvidenceLink.tenant_id.is_(None))
+        query = query.where(False)
     else:
         query = query.where(ComplianceEvidenceLink.tenant_id == tenant_id)
 

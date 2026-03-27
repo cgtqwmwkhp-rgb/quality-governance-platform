@@ -15,6 +15,10 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     op.create_table(
         "risks_v2",
@@ -72,12 +76,12 @@ def upgrade() -> None:
         sa.Column("linked_incidents", sa.JSON(), nullable=True),
         sa.Column("linked_audits", sa.JSON(), nullable=True),
         sa.Column("linked_actions", sa.JSON(), nullable=True),
-        sa.Column("identified_date", sa.DateTime(), server_default=sa.text("now()")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("identified_date", sa.DateTime(), server_default=_current_timestamp_default()),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.Column(
             "updated_at",
             sa.DateTime(),
-            server_default=sa.text("now()"),
+            server_default=_current_timestamp_default(),
         ),
         sa.Column(
             "created_by",
@@ -117,8 +121,8 @@ def upgrade() -> None:
         sa.Column("evidence_location", sa.Text(), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
         sa.Column("implementation_status", sa.String(50), server_default="implemented"),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("reference"),
     )
@@ -142,7 +146,7 @@ def upgrade() -> None:
         sa.Column("reduces_likelihood", sa.Boolean(), server_default=sa.text("true")),
         sa.Column("reduces_impact", sa.Boolean(), server_default=sa.text("false")),
         sa.Column("reduction_value", sa.Integer(), server_default="1"),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_risk_control_mappings_risk_id", "risk_control_mappings", ["risk_id"])
@@ -171,7 +175,7 @@ def upgrade() -> None:
         sa.Column("effectiveness", sa.String(50), nullable=True),
         sa.Column("order_index", sa.Integer(), server_default="0"),
         sa.Column("is_escalation_factor", sa.Boolean(), server_default=sa.text("false")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_bow_tie_elements_risk_id", "bow_tie_elements", ["risk_id"])
@@ -204,7 +208,7 @@ def upgrade() -> None:
         sa.Column("last_alert_sent", sa.DateTime(), nullable=True),
         sa.Column("owner_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_enterprise_kri_risk_id", "enterprise_key_risk_indicators", ["risk_id"])
@@ -218,7 +222,7 @@ def upgrade() -> None:
             sa.ForeignKey("risks_v2.id", ondelete="CASCADE"),
             nullable=False,
         ),
-        sa.Column("assessment_date", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("assessment_date", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.Column(
             "assessed_by",
             sa.Integer(),
@@ -254,8 +258,8 @@ def upgrade() -> None:
         sa.Column("approved_date", sa.DateTime(), nullable=True),
         sa.Column("next_review_date", sa.DateTime(), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()")),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default()),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default()),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("category"),
     )

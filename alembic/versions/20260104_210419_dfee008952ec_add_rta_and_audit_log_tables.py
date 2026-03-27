@@ -18,6 +18,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_index(table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
+    return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
+
+
 def upgrade() -> None:
     """Upgrade database schema."""
     # Create rcastatus enum type for Postgres
@@ -48,7 +55,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade database schema."""
-    op.drop_index(op.f('ix_root_cause_analyses_title'), table_name='root_cause_analyses')
-    op.drop_index(op.f('ix_root_cause_analyses_reference_number'), table_name='root_cause_analyses')
-    op.drop_table('root_cause_analyses')
-    sa.Enum(name='rca_status_enum').drop(op.get_bind())
+    if _has_index('root_cause_analyses', op.f('ix_root_cause_analyses_title')):
+        op.drop_index(op.f('ix_root_cause_analyses_title'), table_name='root_cause_analyses')
+    if _has_index('root_cause_analyses', op.f('ix_root_cause_analyses_reference_number')):
+        op.drop_index(op.f('ix_root_cause_analyses_reference_number'), table_name='root_cause_analyses')
+    if sa.inspect(op.get_bind()).has_table('root_cause_analyses'):
+        op.drop_table('root_cause_analyses')
+    if op.get_bind().dialect.name == 'postgresql':
+        sa.Enum(name='rca_status_enum').drop(op.get_bind(), checkfirst=True)

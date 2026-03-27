@@ -44,6 +44,9 @@ _POLICY_SQL = (
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     # Create a BYPASS role for migrations and admin tasks
     op.execute(
         "DO $$ BEGIN "
@@ -80,6 +83,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     for table in reversed(RLS_TABLES):
         op.execute(
             f"DO $$ BEGIN "

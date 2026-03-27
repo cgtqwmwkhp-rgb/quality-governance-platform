@@ -34,27 +34,19 @@ _COMPOSITE_INDEXES: list[tuple[str, list[str]]] = [
     ("tenant_id_status", ["tenant_id", "status"]),
 ]
 
-_COL_EXISTS = sa.text(
-    "SELECT EXISTS ("
-    "  SELECT 1 FROM information_schema.columns"
-    "  WHERE table_name = :t AND column_name = :c"
-    ")"
-)
-
-
-def _all_columns_exist(conn, table: str, columns: list[str]) -> bool:
+def _all_columns_exist(inspector: sa.Inspector, table: str, columns: list[str]) -> bool:
     """Return True only if every column in the list exists on the table."""
-    return all(
-        conn.execute(_COL_EXISTS, {"t": table, "c": col}).scalar()
-        for col in columns
-    )
+    if not inspector.has_table(table):
+        return False
+    existing_columns = {column["name"] for column in inspector.get_columns(table)}
+    return all(column in existing_columns for column in columns)
 
 
 def upgrade() -> None:
-    conn = op.get_bind()
+    inspector = sa.inspect(op.get_bind())
     for table in _TABLES:
         for suffix, columns in _COMPOSITE_INDEXES:
-            if _all_columns_exist(conn, table, columns):
+            if _all_columns_exist(inspector, table, columns):
                 idx_name = f"ix_{table}_{suffix}"
                 col_list = ", ".join(columns)
                 op.execute(
@@ -64,18 +56,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    conn = op.get_bind()
+    inspector = sa.inspect(op.get_bind())
     for table in reversed(_TABLES):
+        if not inspector.has_table(table):
+            continue
+        existing_indexes = {index["name"] for index in inspector.get_indexes(table)}
         for suffix, _columns in reversed(_COMPOSITE_INDEXES):
             idx_name = f"ix_{table}_{suffix}"
-            result = conn.execute(
-                sa.text(
-                    "SELECT EXISTS ("
-                    "  SELECT 1 FROM pg_indexes"
-                    "  WHERE indexname = :idx"
-                    ")"
-                ),
-                {"idx": idx_name},
-            )
-            if result.scalar():
+            if idx_name in existing_indexes:
                 op.drop_index(idx_name, table_name=table)

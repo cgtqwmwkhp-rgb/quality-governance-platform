@@ -15,6 +15,10 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     # Policy Acknowledgment Requirements table
     op.create_table(
@@ -33,8 +37,8 @@ def upgrade() -> None:
         sa.Column('quiz_questions', sa.JSON(), nullable=True),
         sa.Column('quiz_passing_score', sa.Integer(), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_policy_ack_req_policy_id', 'policy_acknowledgment_requirements', ['policy_id'])
@@ -63,8 +67,8 @@ def upgrade() -> None:
         sa.Column('reminders_sent', sa.Integer(), default=0),
         sa.Column('last_reminder_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_policy_ack_requirement_id', 'policy_acknowledgments', ['requirement_id'])
@@ -86,8 +90,8 @@ def upgrade() -> None:
         sa.Column('scroll_percentage', sa.Integer(), nullable=True),
         sa.Column('ip_address', sa.String(50), nullable=True),
         sa.Column('device_type', sa.String(50), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_doc_read_log_doc_type', 'document_read_logs', ['document_type'])

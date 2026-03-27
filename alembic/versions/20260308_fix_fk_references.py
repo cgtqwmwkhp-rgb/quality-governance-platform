@@ -58,6 +58,9 @@ FK_FIXES = [
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     for fix in FK_FIXES:
         op.execute(
             f"DO $$ BEGIN "
@@ -73,6 +76,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name != "postgresql":
+        return
+
     for fix in reversed(FK_FIXES):
         op.execute(
             f"DO $$ BEGIN "

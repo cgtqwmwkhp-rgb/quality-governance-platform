@@ -19,6 +19,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_index(table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
+    return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
+
+
 def upgrade() -> None:
     op.create_table(
         "capa_actions",
@@ -76,11 +83,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_capa_actions_tenant_id", table_name="capa_actions")
-    op.drop_index("ix_capa_actions_status", table_name="capa_actions")
-    op.drop_index("ix_capa_actions_reference_number", table_name="capa_actions")
-    op.drop_table("capa_actions")
-    op.execute("DROP TYPE IF EXISTS capasource")
-    op.execute("DROP TYPE IF EXISTS capapriority")
-    op.execute("DROP TYPE IF EXISTS capastatus")
-    op.execute("DROP TYPE IF EXISTS capatype")
+    if _has_index("capa_actions", "ix_capa_actions_tenant_id"):
+        op.drop_index("ix_capa_actions_tenant_id", table_name="capa_actions")
+    if _has_index("capa_actions", "ix_capa_actions_status"):
+        op.drop_index("ix_capa_actions_status", table_name="capa_actions")
+    if _has_index("capa_actions", "ix_capa_actions_reference_number"):
+        op.drop_index("ix_capa_actions_reference_number", table_name="capa_actions")
+    if sa.inspect(op.get_bind()).has_table("capa_actions"):
+        op.drop_table("capa_actions")
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("DROP TYPE IF EXISTS capasource")
+        op.execute("DROP TYPE IF EXISTS capapriority")
+        op.execute("DROP TYPE IF EXISTS capastatus")
+        op.execute("DROP TYPE IF EXISTS capatype")

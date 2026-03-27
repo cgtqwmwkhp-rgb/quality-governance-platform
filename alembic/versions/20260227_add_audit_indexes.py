@@ -10,7 +10,7 @@ audit_findings, and audit_templates tables.
 """
 
 from alembic import op
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 revision = "20260227_audit_idx"
 down_revision = "20260222_soft_delete"
@@ -19,33 +19,21 @@ depends_on = None
 
 
 def _index_exists(conn, index_name: str) -> bool:
-    result = conn.execute(
-        text("SELECT 1 FROM pg_indexes WHERE indexname = :name"),
-        {"name": index_name},
-    )
-    return result.scalar() is not None
+    inspector = inspect(conn)
+    for table_name in inspector.get_table_names():
+        if any(index["name"] == index_name for index in inspector.get_indexes(table_name)):
+            return True
+    return False
 
 
 def _table_exists(conn, table_name: str) -> bool:
-    result = conn.execute(
-        text(
-            "SELECT 1 FROM information_schema.tables "
-            "WHERE table_schema = 'public' AND table_name = :name"
-        ),
-        {"name": table_name},
-    )
-    return result.scalar() is not None
+    return inspect(conn).has_table(table_name)
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    result = conn.execute(
-        text(
-            "SELECT 1 FROM information_schema.columns "
-            "WHERE table_schema = 'public' AND table_name = :table AND column_name = :col"
-        ),
-        {"table": table_name, "col": column_name},
-    )
-    return result.scalar() is not None
+    if not _table_exists(conn, table_name):
+        return False
+    return column_name in {column["name"] for column in inspect(conn).get_columns(table_name)}
 
 
 def _has_duplicates(conn, table: str, columns: list[str]) -> bool:

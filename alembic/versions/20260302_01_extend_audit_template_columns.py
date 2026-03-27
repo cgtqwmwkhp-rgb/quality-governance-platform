@@ -24,7 +24,19 @@ branch_labels = None
 depends_on = None
 
 
+def _inspector() -> sa.Inspector:
+    return sa.inspect(op.get_bind())
+
+
+def _has_index(table_name: str, index_name: str) -> bool:
+    return _inspector().has_table(table_name) and any(
+        index["name"] == index_name for index in _inspector().get_indexes(table_name)
+    )
+
+
 def upgrade() -> None:
+    dialect = op.get_bind().dialect.name
+
     # -- audit_templates: new columns --
     op.add_column(
         "audit_templates",
@@ -67,7 +79,8 @@ def upgrade() -> None:
             {"uid": str(uuid.uuid4()), "tid": row[0]},
         )
 
-    op.alter_column("audit_templates", "external_id", nullable=False)
+    if dialect != "sqlite":
+        op.alter_column("audit_templates", "external_id", nullable=False)
 
     # -- audit_questions: new columns --
     op.add_column(
@@ -157,4 +170,10 @@ def downgrade() -> None:
     op.drop_column("audit_templates", "tags_json")
     op.drop_column("audit_templates", "subcategory")
     op.drop_column("audit_templates", "template_status")
-    op.drop_column("audit_templates", "external_id")
+    if _has_index("audit_templates", "ix_audit_templates_external_id"):
+        op.drop_index("ix_audit_templates_external_id", table_name="audit_templates")
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("audit_templates") as batch_op:
+            batch_op.drop_column("external_id")
+    else:
+        op.drop_column("audit_templates", "external_id")

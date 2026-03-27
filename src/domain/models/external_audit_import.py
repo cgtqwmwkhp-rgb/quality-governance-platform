@@ -6,7 +6,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -75,6 +75,25 @@ class ExternalAuditImportJob(Base, TimestampMixin, ReferenceNumberMixin, AuditTr
     error_detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     promoted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    detected_scheme: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, index=True)
+    detected_scheme_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scheme_version: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    issuer_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    report_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    max_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    score_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    outcome_status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    source_sheet_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    has_tabular_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    classification_basis_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    score_breakdown_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    evidence_preview_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    positive_summary_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    nonconformity_summary_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    improvement_summary_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    promotion_summary_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    processing_warnings_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
 
 class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):

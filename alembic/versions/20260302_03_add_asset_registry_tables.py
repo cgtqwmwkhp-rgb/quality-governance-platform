@@ -10,7 +10,6 @@ equipment tracking and audit template tagging.
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSON
 
 revision = "20260302_asset_reg"
 down_revision = "20260302_capa_enum"
@@ -67,7 +66,7 @@ def upgrade() -> None:
         sa.Column("site", sa.String(200), nullable=True),
         sa.Column("department", sa.String(100), nullable=True),
         sa.Column("qr_code_data", sa.String(500), nullable=True),
-        sa.Column("metadata_json", JSON, nullable=True),
+        sa.Column("metadata_json", sa.JSON(), nullable=True),
         sa.Column("tenant_id", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
