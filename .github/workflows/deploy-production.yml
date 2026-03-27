@@ -423,9 +423,18 @@ jobs:
       - name: Create database backup
         run: |
           echo "Creating pre-deployment database backup..."
+          DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv 2>/dev/null || true)
+          SERVER_NAME="${{ secrets.AZURE_DB_SERVER_NAME }}"
+          if [ -z "$SERVER_NAME" ] && [ -n "$DB_URL" ]; then
+            SERVER_NAME=$(DB_URL="$DB_URL" python3 -c "from urllib.parse import urlparse; import os; host = urlparse(os.environ.get('DB_URL', '')).hostname or ''; print(host.split('.')[0] if host else '')")
+          fi
+          if [ -z "$SERVER_NAME" ]; then
+            echo "::warning::Database backup command failed — unable to resolve production PostgreSQL server name"
+            exit 0
+          fi
           az postgres flexible-server backup create \
             --resource-group ${{ env.AZURE_DB_RESOURCE_GROUP }} \
-            --name ${{ secrets.AZURE_DB_SERVER_NAME }} \
+            --name "$SERVER_NAME" \
             --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
