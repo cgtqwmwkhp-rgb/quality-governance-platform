@@ -35,7 +35,26 @@ class ExternalAuditImportJobResponse(BaseModel):
     extraction_method: Optional[str] = None
     extraction_text_preview: Optional[str] = None
     page_count: Optional[int] = None
+    source_sheet_count: Optional[int] = None
+    has_tabular_data: bool = False
     analysis_summary: Optional[str] = None
+    detected_scheme: Optional[str] = None
+    detected_scheme_confidence: Optional[float] = None
+    scheme_version: Optional[str] = None
+    issuer_name: Optional[str] = None
+    report_date: Optional[datetime] = None
+    overall_score: Optional[float] = None
+    max_score: Optional[float] = None
+    score_percentage: Optional[float] = None
+    outcome_status: Optional[str] = None
+    classification_basis_json: Optional[dict] = None
+    score_breakdown_json: Optional[list] = None
+    evidence_preview_json: Optional[list] = None
+    positive_summary_json: Optional[list] = None
+    nonconformity_summary_json: Optional[list] = None
+    improvement_summary_json: Optional[list] = None
+    promotion_summary_json: Optional[dict] = None
+    processing_warnings_json: Optional[list] = None
     error_code: Optional[str] = None
     error_detail: Optional[str] = None
     created_at: datetime
@@ -81,7 +100,7 @@ class ExternalAuditDraftReviewRequest(BaseModel):
 async def create_import_job(
     payload: ExternalAuditImportJobCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
     """Create an idempotent external audit import job for a run/source document."""
     service = ExternalAuditImportService(db)
@@ -98,12 +117,17 @@ async def create_import_job(
 async def queue_import_job(
     job_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
     """Queue an external audit import job for asynchronous OCR/analysis."""
     service = ExternalAuditImportService(db)
-    job = await service.queue_job(job_id=job_id, tenant_id=current_user.tenant_id, user_id=current_user.id)
-    process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+    job, should_enqueue = await service.queue_job(
+        job_id=job_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+    )
+    if should_enqueue:
+        process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
     return ExternalAuditImportJobResponse.model_validate(job)
 
 

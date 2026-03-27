@@ -27,7 +27,12 @@ def process_external_audit_import_job(self, job_id: int, tenant_id: int | None, 
             service = ExternalAuditImportService(session)
             job = await service.process_job(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
             await session.commit()
-            return {"job_id": job.id, "status": str(job.status)}
+            return {
+                "job_id": job.id,
+                "status": str(job.status),
+                "detected_scheme": job.detected_scheme,
+                "outcome_status": job.outcome_status,
+            }
 
     try:
         return asyncio.run(_run())

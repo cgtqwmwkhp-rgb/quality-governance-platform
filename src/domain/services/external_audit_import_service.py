@@ -7,12 +7,13 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
-from src.domain.models.audit import AuditRun
+from src.domain.models.audit import AuditRun, AuditStatus
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.document import FileType
 from src.domain.models.evidence_asset import EvidenceAsset
 from src.domain.models.external_audit_import import (
@@ -21,6 +22,7 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportJob,
     ExternalAuditImportStatus,
 )
+from src.domain.models.uvdb_achilles import UVDBAudit
 from src.domain.services.audit_service import AuditService
 from src.domain.services.document_extraction_service import extract_document_content
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
@@ -110,19 +112,21 @@ class ExternalAuditImportService:
         await self.db.refresh(job)
         return job
 
-    async def queue_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+    async def queue_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> tuple[ExternalAuditImportJob, bool]:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         if job.status in {
+            ExternalAuditImportStatus.QUEUED,
             ExternalAuditImportStatus.PROCESSING,
             ExternalAuditImportStatus.REVIEW_REQUIRED,
             ExternalAuditImportStatus.COMPLETED,
+            ExternalAuditImportStatus.PROMOTING,
         }:
-            return job
+            return job, False
         job.status = ExternalAuditImportStatus.QUEUED
         job.updated_by_id = user_id
         await self.db.flush()
         await self.db.refresh(job)
-        return job
+        return job, True
 
     async def get_job(self, *, job_id: int, tenant_id: int | None) -> ExternalAuditImportJob:
         result = await self.db.execute(
@@ -148,9 +152,7 @@ class ExternalAuditImportService:
         )
         return list(result.scalars().all())
 
-    async def process_job(
-        self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
-    ) -> ExternalAuditImportJob:
+    async def process_job(self, *, job_id: int, tenant_id: int | None, user_id: int | None = None) -> ExternalAuditImportJob:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
@@ -169,37 +171,37 @@ class ExternalAuditImportService:
             await self.db.flush()
             return job
 
-        file_type = self._infer_file_type(asset.original_filename, asset.content_type)
-        extraction = extract_document_content(file_type, asset.original_filename or "source", raw)
-        text = extraction.text.strip()
-        extraction_method = extraction.extraction_method
-        page_texts = extraction.page_texts or []
-        note = extraction.note
+        try:
+            file_type = self._infer_file_type(asset.original_filename, asset.content_type)
+            extraction = extract_document_content(file_type, asset.original_filename or "source", raw)
+            text = extraction.text.strip()
+            extraction_method = extraction.extraction_method
+            page_texts = extraction.page_texts or []
+            note = extraction.note
 
-        should_try_ocr = (not text) or file_type in {FileType.PNG, FileType.JPG, FileType.JPEG}
-        if should_try_ocr:
-            ocr_result = await self.ocr_service.ocr_bytes(
-                raw,
-                asset.original_filename or "source",
-                asset.content_type or "application/octet-stream",
+            should_try_ocr = (not text) or file_type in {FileType.PNG, FileType.JPG, FileType.JPEG}
+            if should_try_ocr:
+                ocr_result = await self.ocr_service.ocr_bytes(
+                    raw,
+                    asset.original_filename or "source",
+                    asset.content_type or "application/octet-stream",
+                )
+                if ocr_result.text.strip():
+                    text = ocr_result.text.strip()
+                    page_texts = ocr_result.pages or [text]
+                    extraction_method = ocr_result.method
+                    note = ocr_result.note
+                elif note is None:
+                    note = ocr_result.note
+
+            analysis = self.analysis_service.analyze(
+                extracted_text=text,
+                page_texts=page_texts or ([text] if text else []),
+                assurance_scheme=run.assurance_scheme,
             )
-            if ocr_result.text.strip():
-                text = ocr_result.text.strip()
-                page_texts = ocr_result.pages or [text]
-                extraction_method = ocr_result.method
-                note = ocr_result.note
-            elif note is None:
-                note = ocr_result.note
 
-        await self._clear_existing_drafts(job_id=job.id, tenant_id=tenant_id)
-        analysis = self.analysis_service.analyze(
-            extracted_text=text,
-            page_texts=page_texts or ([text] if text else []),
-            assurance_scheme=run.assurance_scheme,
-        )
-
-        for candidate in analysis.findings:
-            self.db.add(
+            preview = text[:500] if text else None
+            replacement_drafts = [
                 ExternalAuditDraft(
                     import_job_id=job.id,
                     audit_run_id=run.id,
@@ -222,27 +224,59 @@ class ExternalAuditImportService:
                     created_by_id=user_id or job.created_by_id,
                     updated_by_id=user_id or job.updated_by_id,
                 )
-            )
+                for candidate in analysis.findings
+            ]
+            async with self.db.begin_nested():
+                await self._clear_existing_drafts(job_id=job.id, tenant_id=tenant_id)
+                for draft in replacement_drafts:
+                    self.db.add(draft)
 
-        preview = text[:500] if text else None
-        job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
-        job.extraction_method = extraction_method
-        job.extraction_text_preview = preview
-        job.page_count = extraction.page_count or len(page_texts) or None
-        job.page_texts_json = page_texts or None
-        job.provenance_json = {
-            **(job.provenance_json or {}),
-            "extraction_note": note,
-            "mapped_frameworks": analysis.mapped_frameworks,
-            "mapped_standards": analysis.mapped_standards,
-        }
-        job.analysis_summary = analysis.summary
-        job.error_code = None
-        job.error_detail = None
-        job.processed_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        await self.db.refresh(job)
-        return job
+                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+                job.extraction_method = extraction_method
+                job.extraction_text_preview = preview
+                job.page_count = extraction.page_count or len(page_texts) or None
+                job.source_sheet_count = extraction.sheet_count
+                job.has_tabular_data = bool(extraction.has_tables)
+                job.page_texts_json = page_texts or None
+                job.provenance_json = {
+                    **(job.provenance_json or {}),
+                    "extraction_note": note,
+                    "mapped_frameworks": analysis.mapped_frameworks,
+                    "mapped_standards": analysis.mapped_standards,
+                    "classification_basis": analysis.classification_basis,
+                }
+                job.analysis_summary = analysis.summary
+                job.detected_scheme = analysis.detected_scheme
+                job.detected_scheme_confidence = analysis.detected_scheme_confidence
+                job.scheme_version = analysis.scheme_version
+                job.issuer_name = analysis.issuer_name
+                job.report_date = analysis.report_date
+                job.overall_score = analysis.overall_score
+                job.max_score = analysis.max_score
+                job.score_percentage = analysis.score_percentage
+                job.outcome_status = analysis.outcome_status
+                job.classification_basis_json = analysis.classification_basis
+                job.score_breakdown_json = analysis.score_breakdown or None
+                job.evidence_preview_json = analysis.evidence_preview or None
+                job.positive_summary_json = analysis.positive_summary or None
+                job.nonconformity_summary_json = analysis.nonconformity_summary or None
+                job.improvement_summary_json = analysis.improvement_summary or None
+                job.processing_warnings_json = analysis.processing_warnings or None
+                job.promotion_summary_json = self._build_promotion_summary(findings=analysis.findings)
+                job.error_code = None
+                job.error_detail = None
+                job.processed_at = datetime.now(timezone.utc)
+            await self.db.flush()
+            await self.db.refresh(job)
+            return job
+        except Exception as exc:
+            job.status = ExternalAuditImportStatus.FAILED
+            job.error_code = "IMPORT_PROCESSING_FAILED"
+            job.error_detail = "Import analysis failed before review could begin. Review logs and retry the job."
+            logger.exception("External audit import processing failed for job %s", job.id, exc_info=exc)
+            await self.db.flush()
+            await self.db.refresh(job)
+            return job
 
     async def review_draft(
         self,
@@ -257,6 +291,11 @@ class ExternalAuditImportService:
         severity: str | None = None,
     ) -> ExternalAuditDraft:
         draft = await self._get_draft(draft_id=draft_id, tenant_id=tenant_id)
+        if draft.promoted_finding_id or draft.status == ExternalAuditDraftStatus.PROMOTED:
+            raise ConflictError("Promoted drafts can no longer be modified")
+        job = await self.get_job(job_id=draft.import_job_id, tenant_id=tenant_id)
+        if job.status in {ExternalAuditImportStatus.PROMOTING, ExternalAuditImportStatus.COMPLETED}:
+            raise ConflictError("Draft review is locked while the import job is promoting or completed")
         draft.status = ExternalAuditDraftStatus(status_value)
         if review_notes is not None:
             draft.review_notes = review_notes
@@ -268,26 +307,52 @@ class ExternalAuditImportService:
             draft.severity = severity
         draft.updated_by_id = user_id
         await self.db.flush()
+        await self._refresh_job_promotion_summary(job_id=draft.import_job_id, tenant_id=tenant_id)
         await self.db.refresh(draft)
         return draft
 
     async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        transitioned = await self.db.execute(
+            update(ExternalAuditImportJob)
+            .where(
+                ExternalAuditImportJob.id == job_id,
+                ExternalAuditImportJob.tenant_id == tenant_id,
+                ExternalAuditImportJob.status == ExternalAuditImportStatus.REVIEW_REQUIRED,
+            )
+            .values(
+                status=ExternalAuditImportStatus.PROMOTING,
+                updated_by_id=user_id,
+            )
+        )
+        if transitioned.rowcount != 1:
+            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+            if job.status == ExternalAuditImportStatus.COMPLETED:
+                return job
+            if job.status == ExternalAuditImportStatus.PROMOTING:
+                raise ConflictError("Import job promotion is already in progress")
+            raise ValidationError("Import job must be in review_required state before promotion")
+
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
-        if job.status == ExternalAuditImportStatus.COMPLETED:
-            return job
         drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
         accepted = [draft for draft in drafts if draft.status == ExternalAuditDraftStatus.ACCEPTED]
         if not accepted:
+            job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+            job.updated_by_id = user_id
+            await self.db.flush()
             raise ValidationError("At least one draft must be accepted before promotion")
 
-        job.status = ExternalAuditImportStatus.PROMOTING
-        await self.db.flush()
-
         audit_service = AuditService(self.db)
+        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
+        resolved_tenant_id = run.tenant_id if run.tenant_id is not None else tenant_id
+        if resolved_tenant_id is None:
+            raise ValidationError("Cannot promote external audit findings without a tenant context")
+        promoted_findings: list[int] = []
+        document_clause_ids: set[str] = set()
         for draft in accepted:
             if draft.promoted_finding_id:
                 draft.status = ExternalAuditDraftStatus.PROMOTED
                 continue
+            clause_ids = self._extract_clause_ids(draft)
             finding = await audit_service.create_finding(
                 draft.audit_run_id,
                 {
@@ -295,18 +360,56 @@ class ExternalAuditImportService:
                     "description": draft.description,
                     "severity": draft.severity,
                     "finding_type": draft.finding_type,
+                    "clause_ids": clause_ids,
                     "risk_ids": [],
+                    "corrective_action_required": draft.finding_type in {"nonconformity", "competence_gap", "finding"},
                 },
                 user_id=user_id,
-                tenant_id=draft.tenant_id or tenant_id or 0,
+                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
+            )
+            await self._link_evidence_for_finding(
+                finding_id=finding.id,
+                clause_ids=clause_ids,
+                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
+                user_id=user_id,
+                note=draft.description,
+                confidence=draft.confidence_score,
             )
             draft.promoted_finding_id = finding.id
             draft.status = ExternalAuditDraftStatus.PROMOTED
             draft.updated_by_id = user_id
+            promoted_findings.append(finding.id)
+            document_clause_ids.update(clause_ids)
 
+        if document_clause_ids:
+            await self._link_source_document_evidence(
+                asset_id=job.source_document_asset_id,
+                clause_ids=sorted(document_clause_ids),
+                tenant_id=resolved_tenant_id,
+                user_id=user_id,
+                title=job.source_filename,
+            )
+
+        if run.status in {AuditStatus.DRAFT, AuditStatus.SCHEDULED}:
+            run.status = AuditStatus.PENDING_REVIEW
+        run.completed_at = None
+        run.passed = None
+
+        scheme_alignment = await self._sync_scheme_records(
+            job=job,
+            run=run,
+            tenant_id=resolved_tenant_id,
+            drafts=accepted,
+        )
         job.status = ExternalAuditImportStatus.COMPLETED
         job.promoted_at = datetime.now(timezone.utc)
         job.updated_by_id = user_id
+        job.promotion_summary_json = {
+            **(job.promotion_summary_json or {}),
+            "promoted_findings": promoted_findings,
+            "evidence_link_candidates": len(document_clause_ids),
+            "scheme_alignment": scheme_alignment,
+        }
         await self.db.flush()
         await self.db.refresh(job)
         return job
@@ -387,3 +490,188 @@ class ExternalAuditImportService:
         if inferred:
             return inferred
         raise ValidationError("Unsupported source document type for external audit import")
+
+    def _build_promotion_summary(self, *, findings: list) -> dict[str, object]:
+        action_candidates = sum(
+            1
+            for finding in findings
+            if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+        )
+        risk_candidates = sum(
+            1
+            for finding in findings
+            if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+            and getattr(finding, "severity", "") in {"high", "critical"}
+        )
+        evidence_link_candidates = len(
+            {
+                str(mapping.get("clause_id"))
+                for finding in findings
+                for mapping in ((getattr(finding, "mapped_standards", None) or getattr(finding, "mapped_standards_json", []) or []))
+                if mapping.get("clause_id")
+            }
+        )
+        return {
+            "total_candidates": len(findings),
+            "action_candidates": action_candidates,
+            "risk_candidates": risk_candidates,
+            "evidence_link_candidates": evidence_link_candidates,
+            "positive_findings": sum(1 for finding in findings if getattr(finding, "finding_type", "") == "positive_practice"),
+            "improvement_findings": sum(
+                1
+                for finding in findings
+                if getattr(finding, "finding_type", "") in {"opportunity_for_improvement", "observation"}
+            ),
+            "nonconformities": sum(
+                1
+                for finding in findings
+                if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+            ),
+        }
+
+    async def _refresh_job_promotion_summary(self, *, job_id: int, tenant_id: int | None) -> None:
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
+        summary = self._build_promotion_summary(findings=drafts)
+        summary["accepted_candidates"] = sum(1 for draft in drafts if draft.status in {ExternalAuditDraftStatus.ACCEPTED, ExternalAuditDraftStatus.PROMOTED})
+        summary["rejected_candidates"] = sum(1 for draft in drafts if draft.status == ExternalAuditDraftStatus.REJECTED)
+        job.promotion_summary_json = summary
+        await self.db.flush()
+
+    def _extract_clause_ids(self, draft: ExternalAuditDraft) -> list[str]:
+        clause_ids: list[str] = []
+        for mapping in draft.mapped_standards_json or []:
+            clause_id = mapping.get("clause_id") if isinstance(mapping, dict) else None
+            if clause_id:
+                clause_ids.append(str(clause_id))
+        return sorted(set(clause_ids))
+
+    async def _link_evidence_for_finding(
+        self,
+        *,
+        finding_id: int,
+        clause_ids: list[str],
+        tenant_id: int | None,
+        user_id: int,
+        note: str | None,
+        confidence: float | None,
+    ) -> None:
+        for clause_id in clause_ids:
+            existing = await self.db.execute(
+                select(ComplianceEvidenceLink).where(
+                    ComplianceEvidenceLink.tenant_id == tenant_id,
+                    ComplianceEvidenceLink.entity_type == "audit_finding",
+                    ComplianceEvidenceLink.entity_id == str(finding_id),
+                    ComplianceEvidenceLink.clause_id == clause_id,
+                )
+            )
+            link = existing.scalar_one_or_none()
+            if link is None:
+                link = ComplianceEvidenceLink(
+                    tenant_id=tenant_id,
+                    entity_type="audit_finding",
+                    entity_id=str(finding_id),
+                    clause_id=clause_id,
+                    created_by_id=user_id,
+                )
+                self.db.add(link)
+            else:
+                link.deleted_at = None
+            link.linked_by = EvidenceLinkMethod.AUTO
+            link.confidence = confidence
+            link.title = f"Imported audit evidence for finding {finding_id}"
+            link.notes = note
+        await self.db.flush()
+
+    async def _link_source_document_evidence(
+        self,
+        *,
+        asset_id: int,
+        clause_ids: list[str],
+        tenant_id: int | None,
+        user_id: int,
+        title: str | None,
+    ) -> None:
+        for clause_id in clause_ids:
+            existing = await self.db.execute(
+                select(ComplianceEvidenceLink).where(
+                    ComplianceEvidenceLink.tenant_id == tenant_id,
+                    ComplianceEvidenceLink.entity_type == "document",
+                    ComplianceEvidenceLink.entity_id == str(asset_id),
+                    ComplianceEvidenceLink.clause_id == clause_id,
+                )
+            )
+            link = existing.scalar_one_or_none()
+            if link is None:
+                link = ComplianceEvidenceLink(
+                    tenant_id=tenant_id,
+                    entity_type="document",
+                    entity_id=str(asset_id),
+                    clause_id=clause_id,
+                    created_by_id=user_id,
+                )
+                self.db.add(link)
+            else:
+                link.deleted_at = None
+            link.linked_by = EvidenceLinkMethod.AUTO
+            link.title = title or f"Imported audit source document {asset_id}"
+        await self.db.flush()
+
+    async def _sync_scheme_records(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        tenant_id: int | None,
+        drafts: list[ExternalAuditDraft],
+    ) -> dict[str, object]:
+        if job.detected_scheme != "achilles_uvdb":
+            return {
+                "status": "not_synced",
+                "scheme": job.detected_scheme,
+                "reason": "Automatic domain synchronization is currently enabled for Achilles / UVDB imports only.",
+            }
+
+        result = await self.db.execute(
+            select(UVDBAudit).where(
+                UVDBAudit.tenant_id == tenant_id,
+                UVDBAudit.audit_reference == run.reference_number,
+            )
+        )
+        uvdb_audit = result.scalar_one_or_none()
+        if uvdb_audit is None:
+            uvdb_audit = UVDBAudit(
+                tenant_id=tenant_id,
+                audit_reference=run.reference_number,
+                company_name=run.title or run.location or "Imported UVDB Audit",
+                company_id=run.external_reference,
+                audit_type=(job.scheme_version or "B2").split(",")[0][:50],
+            )
+            self.db.add(uvdb_audit)
+
+        uvdb_audit.audit_date = job.report_date.replace(tzinfo=None) if job.report_date else None
+        uvdb_audit.auditor_organization = run.external_body_name
+        uvdb_audit.lead_auditor = run.external_auditor_name
+        uvdb_audit.total_score = job.overall_score
+        uvdb_audit.max_possible_score = job.max_score
+        uvdb_audit.percentage_score = job.score_percentage
+        uvdb_audit.section_scores = {"sections": job.score_breakdown_json or []}
+        uvdb_audit.status = "completed"
+        uvdb_audit.findings_count = sum(
+            1 for draft in drafts if draft.finding_type in {"nonconformity", "competence_gap", "finding"}
+        )
+        uvdb_audit.major_findings = sum(
+            1
+            for draft in drafts
+            if draft.finding_type in {"nonconformity", "competence_gap", "finding"}
+            and draft.severity in {"high", "critical"}
+        )
+        uvdb_audit.minor_findings = sum(
+            1
+            for draft in drafts
+            if draft.finding_type in {"nonconformity", "competence_gap", "finding"} and draft.severity == "medium"
+        )
+        uvdb_audit.observations = sum(1 for draft in drafts if draft.finding_type == "observation")
+        uvdb_audit.audit_notes = job.analysis_summary
+        await self.db.flush()
+        return {"status": "synced", "scheme": "achilles_uvdb", "uvdb_audit_id": uvdb_audit.id}

@@ -1,11 +1,13 @@
-"""Turn extracted external audit text into reviewable draft findings."""
+"""Turn extracted external audit text into normalized reviewable audit results."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 
 from src.domain.services.achilles_mapping_service import AchillesMappingService
+from src.domain.services.iso_compliance_service import iso_compliance_service
 from src.domain.services.iso_cross_mapping_service import ISOCrossMappingService
 
 
@@ -37,12 +39,28 @@ class ExternalAuditAnalysisResult:
     findings: list[DraftFindingCandidate]
     mapped_frameworks: list[dict[str, object]]
     mapped_standards: list[dict[str, object]]
+    detected_scheme: str
+    detected_scheme_confidence: float
+    scheme_version: str | None
+    issuer_name: str | None
+    report_date: datetime | None
+    overall_score: float | None
+    max_score: float | None
+    score_percentage: float | None
+    outcome_status: str
+    classification_basis: dict[str, object]
+    score_breakdown: list[dict[str, object]]
+    evidence_preview: list[dict[str, object]]
+    positive_summary: list[dict[str, object]]
+    nonconformity_summary: list[dict[str, object]]
+    improvement_summary: list[dict[str, object]]
+    processing_warnings: list[str]
 
 
 class ExternalAuditAnalysisService:
-    """Rule-based first-pass analysis with provenance and confidence."""
+    """Scheme-aware first-pass analysis with normalized score and evidence previews."""
 
-    _TRIGGER_KEYWORDS: tuple[tuple[str, str, str, float], ...] = (
+    _NONCONFORMITY_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("major non-conformance", "high", "nonconformity", 0.9),
         ("major nonconformance", "high", "nonconformity", 0.9),
         ("minor non-conformance", "medium", "nonconformity", 0.8),
@@ -52,6 +70,36 @@ class ExternalAuditAnalysisService:
         ("non-compliant", "high", "nonconformity", 0.8),
         ("non compliant", "high", "nonconformity", 0.8),
         ("finding", "medium", "finding", 0.55),
+    )
+    _POSITIVE_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
+        ("good practice", "low", "positive_practice", 0.8),
+        ("strength", "low", "positive_practice", 0.78),
+        ("compliant", "low", "positive_practice", 0.72),
+        ("conforms", "low", "positive_practice", 0.7),
+        ("competent", "low", "positive_practice", 0.74),
+        ("effective", "low", "positive_practice", 0.65),
+    )
+    _IMPROVEMENT_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
+        ("opportunity for improvement", "medium", "opportunity_for_improvement", 0.88),
+        ("improvement opportunity", "medium", "opportunity_for_improvement", 0.84),
+        ("recommendation", "medium", "opportunity_for_improvement", 0.72),
+        ("recommended improvement", "medium", "opportunity_for_improvement", 0.76),
+    )
+    _ISO_STANDARD_PATTERNS: tuple[tuple[str, str], ...] = (
+        ("ISO 9001", r"\biso\s*9001(?::?2015)?\b"),
+        ("ISO 14001", r"\biso\s*14001(?::?2015)?\b"),
+        ("ISO 27001", r"\biso(?:\/iec)?\s*27001(?::?2022)?\b"),
+        ("ISO 45001", r"\biso\s*45001(?::?2018)?\b"),
+    )
+    _OUTCOME_PATTERNS: tuple[tuple[str, str], ...] = (
+        ("fail", r"\b(failed|not competent|major non[- ]conformance|non[- ]compliant)\b"),
+        ("pass", r"\b(certif(?:ied|ication)\s+recommended|recommended\s+for\s+certification|passed|pass)\b"),
+        ("review_required", r"\b(observation|opportunity for improvement|improvement opportunity)\b"),
+    )
+    _DATE_PATTERNS: tuple[str, ...] = (
+        r"\b(\d{4}-\d{2}-\d{2})\b",
+        r"\b(\d{2}/\d{2}/\d{4})\b",
+        r"\b(\d{2}-\d{2}-\d{4})\b",
     )
 
     def __init__(self) -> None:
@@ -66,20 +114,48 @@ class ExternalAuditAnalysisService:
         assurance_scheme: str | None,
     ) -> ExternalAuditAnalysisResult:
         normalized_text = extracted_text.strip()
-        frameworks = self.achilles_mapping_service.map_text(normalized_text, assurance_scheme)
-        standards = self.iso_mapping_service.map_text(normalized_text)
+        scheme_match = self._detect_scheme(normalized_text, assurance_scheme)
+        frameworks = self._detect_frameworks(normalized_text, assurance_scheme, scheme_match["scheme"])
+        standards = self._build_standard_mappings(normalized_text)
+        scorecard = self._extract_scorecard(normalized_text, page_texts, scheme_match["scheme"])
+        report_date = self._extract_report_date(normalized_text)
         findings = self._extract_findings(
             page_texts=page_texts or ([normalized_text] if normalized_text else []),
             assurance_scheme=assurance_scheme,
+            scheme_label=scheme_match["label"],
             frameworks=frameworks,
             standards=standards,
         )
-        summary = self._build_summary(normalized_text, findings, frameworks, standards)
+        positive_summary = self._build_category_summary(findings, {"positive_practice"})
+        nonconformity_summary = self._build_category_summary(findings, {"nonconformity", "competence_gap", "finding"})
+        improvement_summary = self._build_category_summary(findings, {"opportunity_for_improvement", "observation"})
+        summary = self._build_summary(normalized_text, findings, frameworks, standards, scorecard, scheme_match["label"])
         return ExternalAuditAnalysisResult(
             summary=summary,
             findings=findings,
             mapped_frameworks=frameworks,
             mapped_standards=standards,
+            detected_scheme=str(scheme_match["scheme"]),
+            detected_scheme_confidence=float(scheme_match["confidence"]),
+            scheme_version=self._detect_scheme_version(normalized_text, str(scheme_match["scheme"])),
+            issuer_name=self._detect_issuer_name(normalized_text, str(scheme_match["scheme"]), assurance_scheme),
+            report_date=report_date,
+            overall_score=scorecard["overall_score"],
+            max_score=scorecard["max_score"],
+            score_percentage=scorecard["score_percentage"],
+            outcome_status=self._determine_outcome_status(normalized_text, findings, scorecard["score_percentage"]),
+            classification_basis={
+                "assurance_scheme": assurance_scheme,
+                "signals": scheme_match["signals"],
+                "mapped_frameworks": frameworks,
+                "mapped_standards": standards,
+            },
+            score_breakdown=scorecard["score_breakdown"],
+            evidence_preview=scorecard["evidence_preview"] or self._build_evidence_preview_from_standards(standards),
+            positive_summary=positive_summary,
+            nonconformity_summary=nonconformity_summary,
+            improvement_summary=improvement_summary,
+            processing_warnings=scorecard["warnings"],
         )
 
     def _extract_findings(
@@ -87,6 +163,7 @@ class ExternalAuditAnalysisService:
         *,
         page_texts: list[str],
         assurance_scheme: str | None,
+        scheme_label: str,
         frameworks: list[dict[str, object]],
         standards: list[dict[str, object]],
     ) -> list[DraftFindingCandidate]:
@@ -96,11 +173,13 @@ class ExternalAuditAnalysisService:
             lowered = compact.lower()
             if not compact:
                 continue
-            for trigger, severity, finding_type, confidence in self._TRIGGER_KEYWORDS:
+            negative_detected = False
+            for trigger, severity, finding_type, confidence in self._NONCONFORMITY_TRIGGERS:
                 if trigger not in lowered:
                     continue
                 snippet = self._snippet_around(compact, trigger)
-                title = self._build_title(trigger, assurance_scheme)
+                title = self._build_title(trigger, scheme_label)
+                negative_detected = True
                 findings.append(
                     DraftFindingCandidate(
                         title=title,
@@ -108,7 +187,7 @@ class ExternalAuditAnalysisService:
                         severity=severity,
                         finding_type=finding_type,
                         confidence_score=confidence,
-                        competence_verdict="not_competent" if severity in {"high", "medium"} else None,
+                        competence_verdict="not_competent" if finding_type == "competence_gap" else None,
                         source_pages=[page_number],
                         evidence_snippets=[snippet],
                         mapped_frameworks=frameworks,
@@ -124,6 +203,66 @@ class ExternalAuditAnalysisService:
                     )
                 )
                 break
+            for trigger, severity, finding_type, confidence in self._IMPROVEMENT_TRIGGERS:
+                if trigger not in lowered:
+                    continue
+                snippet = self._snippet_around(compact, trigger)
+                title = self._build_title(trigger, scheme_label)
+                findings.append(
+                    DraftFindingCandidate(
+                        title=title,
+                        description=snippet,
+                        severity=severity,
+                        finding_type=finding_type,
+                        confidence_score=confidence,
+                        competence_verdict=None,
+                        source_pages=[page_number],
+                        evidence_snippets=[snippet],
+                        mapped_frameworks=frameworks,
+                        mapped_standards=standards,
+                        suggested_action_title=f"Follow up imported audit improvement: {title}",
+                        suggested_action_description=snippet,
+                        suggested_risk_title=None,
+                        provenance={
+                            "page_number": page_number,
+                            "trigger": trigger,
+                            "analysis_method": "normalized_import_review",
+                        },
+                    )
+                )
+                break
+            if negative_detected:
+                continue
+            for trigger, severity, finding_type, confidence in self._POSITIVE_TRIGGERS:
+                if trigger not in lowered:
+                    continue
+                if trigger == "competent" and "not competent" in lowered:
+                    continue
+                snippet = self._snippet_around(compact, trigger)
+                title = self._build_title(trigger, scheme_label)
+                findings.append(
+                    DraftFindingCandidate(
+                        title=title,
+                        description=snippet,
+                        severity=severity,
+                        finding_type=finding_type,
+                        confidence_score=confidence,
+                        competence_verdict="competent",
+                        source_pages=[page_number],
+                        evidence_snippets=[snippet],
+                        mapped_frameworks=frameworks,
+                        mapped_standards=standards,
+                        suggested_action_title=None,
+                        suggested_action_description=None,
+                        suggested_risk_title=None,
+                        provenance={
+                            "page_number": page_number,
+                            "trigger": trigger,
+                            "analysis_method": "normalized_import_review",
+                        },
+                    )
+                )
+                break
         return self._dedupe_findings(findings)
 
     def _build_summary(
@@ -132,8 +271,11 @@ class ExternalAuditAnalysisService:
         findings: list[DraftFindingCandidate],
         frameworks: list[dict[str, object]],
         standards: list[dict[str, object]],
+        scorecard: dict[str, object],
+        scheme_label: str,
     ) -> str:
         parts = []
+        parts.append(f"Detected scheme: {scheme_label}.")
         if findings:
             parts.append(f"{len(findings)} draft finding(s) extracted for reviewer confirmation.")
         else:
@@ -141,7 +283,10 @@ class ExternalAuditAnalysisService:
         if frameworks:
             parts.append(f"Framework matches: {', '.join(str(item['framework']) for item in frameworks)}.")
         if standards:
-            parts.append(f"ISO references detected: {', '.join(str(item['standard']) for item in standards)}.")
+            parts.append(f"ISO references detected: {', '.join(sorted({str(item['standard']) for item in standards}))}.")
+        score_percentage = scorecard.get("score_percentage")
+        if score_percentage is not None:
+            parts.append(f"Normalized score: {float(score_percentage):.1f}%.")
         if text:
             parts.append(f"Source text length: {len(text.split())} words.")
         return " ".join(parts)
@@ -155,8 +300,7 @@ class ExternalAuditAnalysisService:
         end = min(len(text), idx + 260)
         return text[start:end].strip()
 
-    def _build_title(self, trigger: str, assurance_scheme: str | None) -> str:
-        scheme_label = (assurance_scheme or "External Audit").strip() or "External Audit"
+    def _build_title(self, trigger: str, scheme_label: str) -> str:
         human_trigger = trigger.replace("-", " ").title()
         return f"{scheme_label}: {human_trigger}"
 
@@ -169,4 +313,315 @@ class ExternalAuditAnalysisService:
                 continue
             seen.add(key)
             deduped.append(finding)
+        return deduped
+
+    def _detect_scheme(self, text: str, assurance_scheme: str | None) -> dict[str, object]:
+        lowered = text.lower()
+        scheme = (assurance_scheme or "").lower()
+        signals: list[str] = []
+
+        if "planet mark" in lowered or "planet mark" in scheme:
+            signals.append("planet_mark_keyword")
+            return {
+                "scheme": "planet_mark",
+                "label": "Planet Mark",
+                "confidence": 0.97 if "planet mark" in scheme else 0.92,
+                "signals": signals,
+            }
+
+        if any(token in lowered for token in ("achilles", "uvdb", "verify b2", "verify b1")) or any(
+            token in scheme for token in ("achilles", "uvdb")
+        ):
+            signals.append("achilles_uvdb_keyword")
+            return {
+                "scheme": "achilles_uvdb",
+                "label": "Achilles / UVDB",
+                "confidence": 0.97 if any(token in scheme for token in ("achilles", "uvdb")) else 0.9,
+                "signals": signals,
+            }
+
+        iso_hits = [label for label, pattern in self._ISO_STANDARD_PATTERNS if re.search(pattern, lowered, re.IGNORECASE)]
+        if iso_hits or "iso" in scheme:
+            signals.extend(iso_hits or ["assurance_scheme_iso"])
+            return {
+                "scheme": "iso",
+                "label": "ISO Audit",
+                "confidence": 0.88 if iso_hits else 0.75,
+                "signals": signals,
+            }
+
+        if any(token in lowered for token in ("customer audit", "client audit", "supplier audit", "third-party audit")):
+            signals.append("customer_or_third_party_keyword")
+            return {
+                "scheme": "customer_other",
+                "label": "Customer / Third-Party Audit",
+                "confidence": 0.72,
+                "signals": signals,
+            }
+
+        return {
+            "scheme": "customer_other",
+            "label": (assurance_scheme or "External Audit").strip() or "External Audit",
+            "confidence": 0.45,
+            "signals": ["fallback_external_audit"],
+        }
+
+    def _detect_frameworks(
+        self,
+        text: str,
+        assurance_scheme: str | None,
+        scheme: str,
+    ) -> list[dict[str, object]]:
+        mappings = self.achilles_mapping_service.map_text(text, assurance_scheme)
+        if scheme == "planet_mark":
+            mappings.append({"framework": "Planet Mark", "confidence": 0.95, "basis": "scheme_or_content_match"})
+        elif scheme == "customer_other":
+            mappings.append(
+                {
+                    "framework": "Customer / Third-Party Audit",
+                    "confidence": 0.6,
+                    "basis": "generic_external_audit",
+                }
+            )
+        return self._dedupe_dicts(mappings, key_fields=("framework", "basis"))
+
+    def _build_standard_mappings(self, text: str) -> list[dict[str, object]]:
+        standards = self.iso_mapping_service.map_text(text)
+        clause_matches = iso_compliance_service.auto_tag_content(text, min_confidence=0.35)
+        for match in clause_matches:
+            standards.append(
+                {
+                    "standard": self._humanize_standard(str(match["standard"])),
+                    "confidence": float(match["confidence"]) / 100.0,
+                    "basis": "clause_auto_tag",
+                    "clause_id": match["clause_id"],
+                    "clause_number": match["clause_number"],
+                    "title": match["title"],
+                }
+            )
+        return self._dedupe_dicts(standards, key_fields=("standard", "clause_id", "basis"))
+
+    def _extract_scorecard(self, text: str, page_texts: list[str], scheme: str) -> dict[str, object]:
+        score_breakdown = self._extract_score_breakdown(text)
+        overall_score: float | None = None
+        max_score: float | None = None
+        score_percentage: float | None = None
+        warnings: list[str] = []
+
+        ratio_match = re.search(
+            r"(?i)(overall|total|final|audit)\s+(score|rating|result)[^0-9]{0,20}(\d{1,3}(?:\.\d+)?)\s*(?:/|out of)\s*(\d{1,3}(?:\.\d+)?)",
+            text,
+        )
+        if ratio_match:
+            overall_score = float(ratio_match.group(3))
+            max_score = float(ratio_match.group(4))
+            if max_score:
+                score_percentage = round((overall_score / max_score) * 100, 1)
+
+        if score_percentage is None:
+            pct_match = re.search(
+                r"(?i)(overall|total|final|audit)\s+(score|rating|result|compliance)[^0-9]{0,20}(\d{1,3}(?:\.\d+)?)\s*%",
+                text,
+            )
+            if pct_match:
+                score_percentage = float(pct_match.group(3))
+
+        if score_percentage is None:
+            generic_pct = re.search(r"(?i)\b(score|rating|result|compliance)\b[^0-9]{0,10}(\d{1,3}(?:\.\d+)?)\s*%", text)
+            if generic_pct:
+                score_percentage = float(generic_pct.group(2))
+
+        if score_percentage is None and score_breakdown:
+            total_score = sum(float(item["score"]) for item in score_breakdown if item.get("score") is not None)
+            total_max = sum(float(item["max_score"]) for item in score_breakdown if item.get("max_score") is not None)
+            if total_max > 0:
+                overall_score = total_score
+                max_score = total_max
+                score_percentage = round((total_score / total_max) * 100, 1)
+
+        evidence_preview = iso_compliance_service.auto_tag_content(text, min_confidence=0.45)[:8]
+        if not evidence_preview:
+            warnings.append("No clause-level ISO evidence could be auto-tagged from the imported text.")
+        if score_percentage is None:
+            warnings.append("No explicit overall score was extracted from the imported report.")
+        if scheme == "planet_mark":
+            warnings.append("Planet Mark imports may require reviewer confirmation of reduction and data-quality scores.")
+
+        return {
+            "overall_score": overall_score,
+            "max_score": max_score,
+            "score_percentage": score_percentage,
+            "score_breakdown": score_breakdown,
+            "evidence_preview": evidence_preview,
+            "warnings": warnings,
+        }
+
+    def _build_evidence_preview_from_standards(self, standards: list[dict[str, object]]) -> list[dict[str, object]]:
+        preview: list[dict[str, object]] = []
+        for mapping in standards:
+            clause_id = mapping.get("clause_id")
+            clause_number = mapping.get("clause_number")
+            standard = mapping.get("standard")
+            if not clause_id and not clause_number and not standard:
+                continue
+            preview.append(
+                {
+                    "standard": standard,
+                    "clause_id": clause_id,
+                    "clause_number": clause_number,
+                    "title": mapping.get("title"),
+                    "confidence": mapping.get("confidence"),
+                }
+            )
+        return self._dedupe_dicts(preview[:8], key_fields=("standard", "clause_id", "clause_number", "title"))
+
+    def _extract_score_breakdown(self, text: str) -> list[dict[str, object]]:
+        breakdown: list[dict[str, object]] = []
+        for raw_line in text.splitlines():
+            line = re.sub(r"\s+", " ", raw_line).strip()
+            if len(line) < 8 or len(line) > 160:
+                continue
+            if line.lower().startswith(("page ", "sheet ")):
+                continue
+            match = re.search(
+                r"(?P<label>[A-Za-z][A-Za-z0-9/&().,\- ]{3,80})[:\s-]+(?P<score>\d{1,3}(?:\.\d+)?)\s*/\s*(?P<max>\d{1,3}(?:\.\d+)?)",
+                line,
+            )
+            if not match:
+                continue
+            label = match.group("label").strip(" :-")
+            if label.lower() in {"overall", "total", "final score", "audit score"}:
+                continue
+            score = float(match.group("score"))
+            max_score = float(match.group("max"))
+            if max_score <= 0:
+                continue
+            breakdown.append(
+                {
+                    "label": label,
+                    "score": score,
+                    "max_score": max_score,
+                    "percentage": round((score / max_score) * 100, 1),
+                }
+            )
+        return self._dedupe_dicts(breakdown[:12], key_fields=("label",))
+
+    def _extract_report_date(self, text: str) -> datetime | None:
+        for pattern in self._DATE_PATTERNS:
+            match = re.search(pattern, text)
+            if not match:
+                continue
+            raw = match.group(1)
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                try:
+                    return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+        return None
+
+    def _detect_scheme_version(self, text: str, scheme: str) -> str | None:
+        if scheme == "achilles_uvdb":
+            match = re.search(r"(?i)\b(B1|B2|C2|V\d+(?:\.\d+)?)\b", text)
+            if match:
+                return match.group(1).upper()
+        if scheme == "iso":
+            standards = re.findall(r"(?i)\bISO(?:\/IEC)?\s*(9001|14001|27001|45001)\s*:?\s*(2015|2018|2022)?\b", text)
+            if standards:
+                return ", ".join(
+                    sorted(
+                        {
+                            f"ISO {standard}{f':{year}' if year else ''}"
+                            for standard, year in standards
+                        }
+                    )
+                )
+        if scheme == "planet_mark":
+            match = re.search(r"(?i)planet mark[^0-9]*(\d{4})", text)
+            if match:
+                return match.group(1)
+        return None
+
+    def _detect_issuer_name(self, text: str, scheme: str, assurance_scheme: str | None) -> str | None:
+        if scheme == "planet_mark":
+            return "Planet Mark"
+        if scheme == "achilles_uvdb":
+            return "Achilles"
+        if scheme == "iso":
+            issuer_match = re.search(r"(?i)\b(BSI|SGS|LRQA|Bureau Veritas|DNV|NQA|UKAS)\b", text)
+            if issuer_match:
+                return issuer_match.group(1)
+        if assurance_scheme:
+            return assurance_scheme.strip()
+        return None
+
+    def _determine_outcome_status(
+        self,
+        text: str,
+        findings: list[DraftFindingCandidate],
+        score_percentage: float | None,
+    ) -> str:
+        lowered = text.lower()
+        if any(
+            f.finding_type in {"nonconformity", "competence_gap", "finding"} and f.severity in {"high", "critical"}
+            for f in findings
+        ):
+            return "fail"
+        if any(f.finding_type in {"opportunity_for_improvement", "observation"} for f in findings):
+            if score_percentage is None or score_percentage < 85:
+                return "review_required"
+        for outcome, pattern in self._OUTCOME_PATTERNS:
+            if re.search(pattern, lowered, re.IGNORECASE):
+                return outcome
+        if score_percentage is not None:
+            if score_percentage >= 85:
+                return "pass"
+            if score_percentage >= 70:
+                return "review_required"
+            return "fail"
+        return "review_required"
+
+    def _build_category_summary(
+        self,
+        findings: list[DraftFindingCandidate],
+        finding_types: set[str],
+    ) -> list[dict[str, object]]:
+        summary: list[dict[str, object]] = []
+        for finding in findings:
+            if finding.finding_type not in finding_types:
+                continue
+            summary.append(
+                {
+                    "title": finding.title,
+                    "severity": finding.severity,
+                    "finding_type": finding.finding_type,
+                    "confidence_score": finding.confidence_score,
+                    "source_pages": finding.source_pages,
+                }
+            )
+        return summary[:10]
+
+    def _humanize_standard(self, standard: str) -> str:
+        normalized = standard.lower()
+        mapping = {
+            "iso9001": "ISO 9001",
+            "iso14001": "ISO 14001",
+            "iso45001": "ISO 45001",
+            "iso27001": "ISO 27001",
+        }
+        return mapping.get(normalized, standard.upper())
+
+    def _dedupe_dicts(
+        self,
+        values: list[dict[str, object]],
+        *,
+        key_fields: tuple[str, ...],
+    ) -> list[dict[str, object]]:
+        seen: set[tuple[object, ...]] = set()
+        deduped: list[dict[str, object]] = []
+        for item in values:
+            key = tuple(item.get(field) for field in key_fields)
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
         return deduped
