@@ -40,8 +40,8 @@ from src.domain.models.audit import (
 )
 from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
-from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.complaint import Complaint, ComplaintAction
+from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 
 # Digital Signatures (Tier 2)
 from src.domain.models.digital_signature import (

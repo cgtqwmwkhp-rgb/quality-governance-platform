@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routes import external_audit_imports
 from src.domain.exceptions import ValidationError
-from src.domain.models.audit import AuditFinding, AuditRun, AuditTemplate, AuditStatus, FindingStatus
+from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus, AuditTemplate, FindingStatus
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
