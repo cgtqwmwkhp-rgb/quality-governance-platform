@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routes import external_audit_imports
-from src.domain.models.audit import AuditRun, AuditTemplate, AuditStatus
+from src.domain.models.audit import AuditRun, AuditStatus, AuditTemplate
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,

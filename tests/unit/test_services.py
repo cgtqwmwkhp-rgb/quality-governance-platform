@@ -57,6 +57,7 @@ class TestReferenceNumberParsing:
             "audit_template",
             "audit_run",
             "audit_finding",
+            "audit_import",
             "risk",
             "incident",
             "rta",

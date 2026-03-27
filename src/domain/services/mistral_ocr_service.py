@@ -75,10 +75,7 @@ class MistralOCRService:
                 )
                 response.raise_for_status()
             data = response.json()
-            pages = [
-                (page.get("markdown") or page.get("text") or "").strip()
-                for page in data.get("pages", [])
-            ]
+            pages = [(page.get("markdown") or page.get("text") or "").strip() for page in data.get("pages", [])]
             text = "\n\n".join(part for part in pages if part).strip()
             return OCRResult(
                 text=text,

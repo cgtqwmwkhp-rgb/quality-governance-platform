@@ -31,6 +31,11 @@ from src.domain.services.risk_service import BowTieService, KRIService, RiskScor
 router = APIRouter()
 
 
+def _naive_utc_now() -> datetime:
+    """Match the risk_register model's naive-UTC DateTime columns."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 # ============ Pydantic Schemas ============
 
 
@@ -636,7 +641,7 @@ async def get_risk_summary(
 
     overdue_result = await db.execute(
         select(func.count(EnterpriseRisk.id)).where(
-            EnterpriseRisk.next_review_date < datetime.now(timezone.utc),
+            EnterpriseRisk.next_review_date < _naive_utc_now(),
             EnterpriseRisk.status != "closed",
             tenant_filter,
         )
@@ -804,7 +809,7 @@ async def update_risk(
     for key, value in update_data.items():
         setattr(risk, key, value)
 
-    risk.updated_at = datetime.now(timezone.utc)
+    risk.updated_at = _naive_utc_now()
     await db.commit()
     await db.refresh(risk)
 
@@ -860,5 +865,5 @@ async def delete_risk(
         raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
 
     risk.status = "closed"
-    risk.updated_at = datetime.now(timezone.utc)
+    risk.updated_at = _naive_utc_now()
     await db.commit()

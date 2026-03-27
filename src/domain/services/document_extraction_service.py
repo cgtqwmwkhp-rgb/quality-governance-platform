@@ -159,7 +159,9 @@ def _extract_xlsx_text(content: bytes, file_name: str) -> ExtractedDocumentConte
                             )
                             if cell_type == "s" and raw_value.isdigit():
                                 shared_index = int(raw_value)
-                                value = shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
+                                value = (
+                                    shared_strings[shared_index] if shared_index < len(shared_strings) else raw_value
+                                )
                             else:
                                 value = raw_value
                         value = value.strip()

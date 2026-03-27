@@ -148,7 +148,9 @@ class ExternalAuditImportService:
         )
         return list(result.scalars().all())
 
-    async def process_job(self, *, job_id: int, tenant_id: int | None, user_id: int | None = None) -> ExternalAuditImportJob:
+    async def process_job(
+        self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
+    ) -> ExternalAuditImportJob:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)

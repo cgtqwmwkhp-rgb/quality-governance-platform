@@ -29,11 +29,9 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
-from src.domain.services.document_extraction_service import (
-    ExtractedDocumentContent as ServiceExtractedDocumentContent,
-    extract_document_content as shared_extract_document_content,
-)
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
+from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
+from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
 from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
