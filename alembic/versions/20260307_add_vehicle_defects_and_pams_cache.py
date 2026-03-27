@@ -22,69 +22,86 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
 def upgrade() -> None:
-    op.execute("""
-    CREATE TABLE IF NOT EXISTS vehicle_defects (
-        id SERIAL PRIMARY KEY,
-        tenant_id INTEGER REFERENCES tenants(id),
-        pams_table VARCHAR(30) NOT NULL,
-        pams_record_id INTEGER NOT NULL,
-        check_field VARCHAR(255) NOT NULL,
-        check_value VARCHAR(500),
-        priority VARCHAR(5) NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'open',
-        notes TEXT,
-        vehicle_reg VARCHAR(20),
-        created_by_id INTEGER REFERENCES users(id),
-        assigned_to_email VARCHAR(255),
-        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
-    );
-    """)
+    if not _has_table("vehicle_defects"):
+        op.create_table(
+            "vehicle_defects",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id"), nullable=True),
+            sa.Column("pams_table", sa.String(30), nullable=False),
+            sa.Column("pams_record_id", sa.Integer(), nullable=False),
+            sa.Column("check_field", sa.String(255), nullable=False),
+            sa.Column("check_value", sa.String(500), nullable=True),
+            sa.Column("priority", sa.String(5), nullable=False),
+            sa.Column("status", sa.String(20), nullable=False, server_default="open"),
+            sa.Column("notes", sa.Text(), nullable=True),
+            sa.Column("vehicle_reg", sa.String(20), nullable=True),
+            sa.Column("created_by_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
+            sa.Column("assigned_to_email", sa.String(255), nullable=True),
+            sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=True),
+            sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+        )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_tenant_id ON vehicle_defects(tenant_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_pams_table ON vehicle_defects(pams_table)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_pams_record_id ON vehicle_defects(pams_record_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_priority ON vehicle_defects(priority)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_status ON vehicle_defects(status)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_vehicle_reg ON vehicle_defects(vehicle_reg)")
 
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_tenant_id ON vehicle_defects(tenant_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_pams_table ON vehicle_defects(pams_table);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_pams_record_id ON vehicle_defects(pams_record_id);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_priority ON vehicle_defects(priority);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_status ON vehicle_defects(status);")
-    op.execute("CREATE INDEX IF NOT EXISTS ix_vehicle_defects_vehicle_reg ON vehicle_defects(vehicle_reg);")
+    if not _has_table("pams_van_checklist_cache"):
+        op.create_table(
+            "pams_van_checklist_cache",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("pams_id", sa.Integer(), nullable=False),
+            sa.Column("raw_data", sa.JSON(), nullable=True),
+            sa.Column("synced_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("pams_id"),
+        )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_pams_vc_cache_pams_id ON pams_van_checklist_cache(pams_id)")
 
-    op.execute("""
-    CREATE TABLE IF NOT EXISTS pams_van_checklist_cache (
-        id SERIAL PRIMARY KEY,
-        pams_id INTEGER NOT NULL UNIQUE,
-        raw_data JSONB,
-        synced_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
-    );
-    """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_pams_vc_cache_pams_id ON pams_van_checklist_cache(pams_id);")
+    if not _has_table("pams_van_checklist_monthly_cache"):
+        op.create_table(
+            "pams_van_checklist_monthly_cache",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("pams_id", sa.Integer(), nullable=False),
+            sa.Column("raw_data", sa.JSON(), nullable=True),
+            sa.Column("synced_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint("pams_id"),
+        )
+    op.execute("CREATE INDEX IF NOT EXISTS ix_pams_vcm_cache_pams_id ON pams_van_checklist_monthly_cache(pams_id)")
 
-    op.execute("""
-    CREATE TABLE IF NOT EXISTS pams_van_checklist_monthly_cache (
-        id SERIAL PRIMARY KEY,
-        pams_id INTEGER NOT NULL UNIQUE,
-        raw_data JSONB,
-        synced_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
-    );
-    """)
-    op.execute("CREATE INDEX IF NOT EXISTS ix_pams_vcm_cache_pams_id ON pams_van_checklist_monthly_cache(pams_id);")
-
-    op.execute("""
-    CREATE TABLE IF NOT EXISTS pams_sync_log (
-        id SERIAL PRIMARY KEY,
-        table_name VARCHAR(50) NOT NULL,
-        rows_synced INTEGER DEFAULT 0,
-        defects_detected INTEGER DEFAULT 0,
-        status VARCHAR(20) DEFAULT 'success',
-        error_message TEXT,
-        started_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
-        completed_at TIMESTAMP WITHOUT TIME ZONE
-    );
-    """)
+    if not _has_table("pams_sync_log"):
+        op.create_table(
+            "pams_sync_log",
+            sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column("table_name", sa.String(50), nullable=False),
+            sa.Column("rows_synced", sa.Integer(), server_default="0", nullable=True),
+            sa.Column("defects_detected", sa.Integer(), server_default="0", nullable=True),
+            sa.Column("status", sa.String(20), server_default="success", nullable=True),
+            sa.Column("error_message", sa.Text(), nullable=True),
+            sa.Column("started_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=True),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            sa.PrimaryKeyConstraint("id"),
+        )
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS pams_sync_log;")
-    op.execute("DROP TABLE IF EXISTS pams_van_checklist_monthly_cache;")
-    op.execute("DROP TABLE IF EXISTS pams_van_checklist_cache;")
-    op.execute("DROP TABLE IF EXISTS vehicle_defects;")
+    if _has_table("pams_sync_log"):
+        op.drop_table("pams_sync_log")
+    if _has_table("pams_van_checklist_monthly_cache"):
+        op.drop_table("pams_van_checklist_monthly_cache")
+    if _has_table("pams_van_checklist_cache"):
+        op.drop_table("pams_van_checklist_cache")
+    if _has_table("vehicle_defects"):
+        op.drop_table("vehicle_defects")

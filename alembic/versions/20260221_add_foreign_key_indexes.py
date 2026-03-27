@@ -66,18 +66,10 @@ _FK_INDEXES: list[tuple[str, str]] = [
     ("complaint_actions", "verified_by_id"),
 ]
 
-_COL_EXISTS = sa.text(
-    "SELECT EXISTS ("
-    "  SELECT 1 FROM information_schema.columns"
-    "  WHERE table_name = :t AND column_name = :c"
-    ")"
-)
-
-
 def upgrade() -> None:
-    conn = op.get_bind()
+    inspector = sa.inspect(op.get_bind())
     for table, column in _FK_INDEXES:
-        if conn.execute(_COL_EXISTS, {"t": table, "c": column}).scalar():
+        if inspector.has_table(table) and column in {col["name"] for col in inspector.get_columns(table)}:
             idx_name = f"ix_{table}_{column}"
             op.execute(
                 f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table} ({column})"
@@ -85,17 +77,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    conn = op.get_bind()
+    inspector = sa.inspect(op.get_bind())
     for table, column in reversed(_FK_INDEXES):
+        if not inspector.has_table(table):
+            continue
+        existing_indexes = {index["name"] for index in inspector.get_indexes(table)}
         idx_name = f"ix_{table}_{column}"
-        result = conn.execute(
-            sa.text(
-                "SELECT EXISTS ("
-                "  SELECT 1 FROM pg_indexes"
-                "  WHERE indexname = :idx"
-                ")"
-            ),
-            {"idx": idx_name},
-        )
-        if result.scalar():
+        if idx_name in existing_indexes:
             op.drop_index(idx_name, table_name=table)

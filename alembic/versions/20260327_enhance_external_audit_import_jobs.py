@@ -1,6 +1,6 @@
 """Enhance external audit import jobs with normalized review state.
 
-Revision ID: 20260327_external_audit_import_enhancements
+Revision ID: 20260327_ext_audit_import_jobs
 Revises: 20260327_documents_updated_by
 Create Date: 2026-03-27
 """
@@ -10,23 +10,34 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260327_external_audit_import_enhancements"
+revision: str = "20260327_ext_audit_import_jobs"
 down_revision: Union[str, None] = "20260327_documents_updated_by"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_table(table_name: str) -> bool:
+    return sa.inspect(op.get_bind()).has_table(table_name)
+
+
 def _has_column(table_name: str, column_name: str) -> bool:
     inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
     return any(column["name"] == column_name for column in inspector.get_columns(table_name))
 
 
 def _has_index(table_name: str, index_name: str) -> bool:
     inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
     return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
 
 
 def upgrade() -> None:
+    if not _has_table("external_audit_import_jobs"):
+        return
+
     columns = [
         ("detected_scheme", sa.String(length=50), True),
         ("detected_scheme_confidence", sa.Float(), True),
@@ -71,6 +82,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if not _has_table("external_audit_import_jobs"):
+        return
+
     if _has_index("external_audit_import_jobs", "ix_external_audit_import_jobs_detected_scheme"):
         op.drop_index("ix_external_audit_import_jobs_detected_scheme", table_name="external_audit_import_jobs")
 

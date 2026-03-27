@@ -10,7 +10,6 @@ onboarding_checklists tables for field engineer competency tracking.
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSON
 
 revision = "20260302_engineer"
 down_revision = "20260302_asset_reg"
@@ -30,8 +29,8 @@ def upgrade() -> None:
         sa.Column("department", sa.String(100), nullable=True),
         sa.Column("site", sa.String(200), nullable=True),
         sa.Column("start_date", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("specialisations_json", JSON, nullable=True),
-        sa.Column("certifications_json", JSON, nullable=True),
+        sa.Column("specialisations_json", sa.JSON(), nullable=True),
+        sa.Column("certifications_json", sa.JSON(), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default="true"),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id"), nullable=True),
@@ -39,12 +38,12 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("created_by_id", sa.Integer(), nullable=True),
         sa.Column("updated_by_id", sa.Integer(), nullable=True),
+        sa.UniqueConstraint("external_id", name="uq_engineers_external_id"),
     )
     op.create_index("ix_engineers_employee_number", "engineers", ["employee_number"])
     op.create_index("ix_engineers_external_id", "engineers", ["external_id"])
     op.create_index("ix_engineers_tenant_id", "engineers", ["tenant_id"])
     op.create_index("ix_engineers_user_id", "engineers", ["user_id"])
-    op.create_unique_constraint("uq_engineers_external_id", "engineers", ["external_id"])
 
     # competency_records
     op.create_table(

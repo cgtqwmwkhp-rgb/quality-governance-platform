@@ -15,6 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    is_sqlite = op.get_bind().dialect.name == "sqlite"
+
     op.add_column(
         "audit_templates",
         sa.Column("archived_at", sa.DateTime(timezone=True), nullable=True),
@@ -24,10 +26,17 @@ def upgrade() -> None:
         sa.Column(
             "archived_by_id",
             sa.Integer(),
-            sa.ForeignKey("users.id"),
             nullable=True,
         ),
     )
+    if not is_sqlite:
+        op.create_foreign_key(
+            "fk_audit_templates_archived_by_id_users",
+            "audit_templates",
+            "users",
+            ["archived_by_id"],
+            ["id"],
+        )
     op.create_index(
         "ix_audit_templates_archived_at",
         "audit_templates",
@@ -36,6 +45,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    is_sqlite = op.get_bind().dialect.name == "sqlite"
+
     op.drop_index("ix_audit_templates_archived_at", table_name="audit_templates")
+    if not is_sqlite:
+        op.drop_constraint("fk_audit_templates_archived_by_id_users", "audit_templates", type_="foreignkey")
     op.drop_column("audit_templates", "archived_by_id")
     op.drop_column("audit_templates", "archived_at")

@@ -15,6 +15,10 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     # ==========================================================================
     # RCA TOOLS TABLES
@@ -40,8 +44,8 @@ def upgrade() -> None:
         sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('reviewed_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('review_comments', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -68,8 +72,8 @@ def upgrade() -> None:
         sa.Column('reviewed', sa.Boolean(), default=False),
         sa.Column('reviewed_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('reviewed_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -94,8 +98,8 @@ def upgrade() -> None:
         sa.Column('recommended_improvements', sa.JSON(), nullable=True),
         sa.Column('completed', sa.Boolean(), default=False),
         sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -128,8 +132,8 @@ def upgrade() -> None:
         sa.Column('is_effective', sa.Boolean(), nullable=True),
         sa.Column('effectiveness_notes', sa.Text(), nullable=True),
         sa.Column('evidence_attachments', sa.JSON(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -163,8 +167,8 @@ def upgrade() -> None:
         sa.Column('next_assessment_due', sa.DateTime(timezone=True), nullable=True),
         sa.Column('competence_score', sa.Float(), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -190,8 +194,8 @@ def upgrade() -> None:
         sa.Column('certificate_url', sa.String(500), nullable=True),
         sa.Column('verification_url', sa.String(500), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_auditor_certs_profile_id', 'auditor_certifications', ['profile_id'])
@@ -217,8 +221,8 @@ def upgrade() -> None:
         sa.Column('certificate_issued', sa.Boolean(), default=False),
         sa.Column('certificate_url', sa.String(500), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_auditor_training_profile_id', 'auditor_training', ['profile_id'])
@@ -237,8 +241,8 @@ def upgrade() -> None:
         sa.Column('weight', sa.Float(), default=1.0),
         sa.Column('assessment_criteria', sa.JSON(), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('code'),
     )
@@ -261,8 +265,8 @@ def upgrade() -> None:
         sa.Column('development_actions', sa.JSON(), nullable=True),
         sa.Column('has_gap', sa.Boolean(), default=False),
         sa.Column('gap_notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_auditor_comp_profile_id', 'auditor_competencies', ['profile_id'])
@@ -281,8 +285,8 @@ def upgrade() -> None:
         sa.Column('required_industry_experience', sa.JSON(), nullable=True),
         sa.Column('additional_requirements', sa.Text(), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_audit_criteria_type', 'audit_assignment_criteria', ['audit_type'])

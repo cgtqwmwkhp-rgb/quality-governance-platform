@@ -43,11 +43,11 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("created_by_id", sa.Integer(), nullable=True),
         sa.Column("updated_by_id", sa.Integer(), nullable=True),
+        sa.UniqueConstraint("external_id", name="uq_loler_examinations_external_id"),
     )
     op.create_index("ix_loler_examinations_asset_id", "loler_examinations", ["asset_id"])
     op.create_index("ix_loler_examinations_external_id", "loler_examinations", ["external_id"])
     op.create_index("ix_loler_examinations_tenant_id", "loler_examinations", ["tenant_id"])
-    op.create_unique_constraint("uq_loler_examinations_external_id", "loler_examinations", ["external_id"])
 
     op.create_table(
         "loler_defects",

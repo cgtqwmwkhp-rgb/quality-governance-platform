@@ -25,6 +25,10 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     op.create_table(
         "workflow_templates",
@@ -45,8 +49,8 @@ def upgrade() -> None:
         sa.Column("notifications", sa.JSON(), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
         sa.Column("version", sa.Integer(), server_default=sa.text("1")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),
@@ -67,9 +71,9 @@ def upgrade() -> None:
         sa.Column("sla_warning_at", sa.DateTime(), nullable=True),
         sa.Column("sla_breached", sa.Boolean(), server_default=sa.text("false")),
         sa.Column("context", sa.JSON(), nullable=True),
-        sa.Column("started_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("started_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_workflow_instances_template_id", "workflow_instances", ["template_id"])
@@ -98,7 +102,7 @@ def upgrade() -> None:
         sa.Column("outcome_reason", sa.Text(), nullable=True),
         sa.Column("outcome_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
         sa.Column("outcome_at", sa.DateTime(), nullable=True),
-        sa.Column("started_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("started_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -123,7 +127,7 @@ def upgrade() -> None:
         sa.Column("due_at", sa.DateTime(), nullable=True),
         sa.Column("reminder_sent_at", sa.DateTime(), nullable=True),
         sa.Column("reminder_count", sa.Integer(), server_default=sa.text("0")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_approval_requests_step_id", "approval_requests", ["step_id"])
@@ -145,7 +149,7 @@ def upgrade() -> None:
         sa.Column("send_notification", sa.Boolean(), server_default=sa.text("true")),
         sa.Column("notification_template", sa.String(100), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_escalation_rules_config_template_id", "escalation_rules_config", ["template_id"])
@@ -162,7 +166,7 @@ def upgrade() -> None:
         sa.Column("previous_priority", sa.String(20), nullable=True),
         sa.Column("new_priority", sa.String(20), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
-        sa.Column("escalated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("escalated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_escalation_logs_instance_id", "escalation_logs", ["instance_id"])
@@ -178,7 +182,7 @@ def upgrade() -> None:
         sa.Column("workflow_types", sa.JSON(), nullable=True),
         sa.Column("reason", sa.String(255), nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_user_delegations_user_id", "user_delegations", ["user_id"])

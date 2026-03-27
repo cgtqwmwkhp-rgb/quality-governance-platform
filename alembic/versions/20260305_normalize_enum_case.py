@@ -19,6 +19,7 @@ ORM can deserialise them correctly.
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
 
 revision: str = "20260305_enum_case"
 down_revision: Union[str, None] = "20260303_feature_flags"
@@ -49,19 +50,20 @@ ENUM_COLUMNS = [
 
 
 def upgrade() -> None:
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
     for table, column in ENUM_COLUMNS:
+        if not inspector.has_table(table):
+            continue
+        if column not in {col["name"] for col in inspector.get_columns(table)}:
+            continue
+
         op.execute(
-            f"DO $$ BEGIN "
-            f"  IF EXISTS ("
-            f"    SELECT 1 FROM information_schema.columns "
-            f"    WHERE table_name = '{table}' AND column_name = '{column}'"
-            f"  ) THEN "
-            f"    EXECUTE 'UPDATE {table} SET {column} = LOWER({column}) "
-            f"      WHERE {column} IS NOT NULL AND {column} <> LOWER({column})'; "
-            f"  END IF; "
-            f"EXCEPTION WHEN OTHERS THEN "
-            f"  RAISE NOTICE 'enum_case skip {table}.{column}: %', SQLERRM; "
-            f"END $$"
+            sa.text(
+                f"UPDATE {table} SET {column} = LOWER({column}) "
+                f"WHERE {column} IS NOT NULL AND {column} <> LOWER({column})"
+            )
         )
 
 

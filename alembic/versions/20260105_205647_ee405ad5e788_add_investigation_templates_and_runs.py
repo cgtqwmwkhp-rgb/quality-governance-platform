@@ -18,6 +18,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_index(table_name: str, index_name: str) -> bool:
+    inspector = sa.inspect(op.get_bind())
+    if not inspector.has_table(table_name):
+        return False
+    return any(index["name"] == index_name for index in inspector.get_indexes(table_name))
+
+
 def upgrade() -> None:
     """Upgrade database schema."""
     # Create investigation_templates table
@@ -77,18 +84,29 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Downgrade database schema."""
     # Drop investigation_runs table
-    op.drop_index(op.f('ix_investigation_runs_reference_number'), table_name='investigation_runs')
-    op.drop_index(op.f('ix_investigation_runs_assigned_entity_id'), table_name='investigation_runs')
-    op.drop_index(op.f('ix_investigation_runs_assigned_entity_type'), table_name='investigation_runs')
-    op.drop_index(op.f('ix_investigation_runs_template_id'), table_name='investigation_runs')
-    op.drop_index(op.f('ix_investigation_runs_id'), table_name='investigation_runs')
-    op.drop_table('investigation_runs')
+    for index_name in (
+        op.f('ix_investigation_runs_reference_number'),
+        op.f('ix_investigation_runs_assigned_entity_id'),
+        op.f('ix_investigation_runs_assigned_entity_type'),
+        op.f('ix_investigation_runs_template_id'),
+        op.f('ix_investigation_runs_id'),
+    ):
+        if _has_index('investigation_runs', index_name):
+            op.drop_index(index_name, table_name='investigation_runs')
+    if sa.inspect(op.get_bind()).has_table('investigation_runs'):
+        op.drop_table('investigation_runs')
 
     # Drop investigation_templates table
-    op.drop_index(op.f('ix_investigation_templates_name'), table_name='investigation_templates')
-    op.drop_index(op.f('ix_investigation_templates_id'), table_name='investigation_templates')
-    op.drop_table('investigation_templates')
+    for index_name in (
+        op.f('ix_investigation_templates_name'),
+        op.f('ix_investigation_templates_id'),
+    ):
+        if _has_index('investigation_templates', index_name):
+            op.drop_index(index_name, table_name='investigation_templates')
+    if sa.inspect(op.get_bind()).has_table('investigation_templates'):
+        op.drop_table('investigation_templates')
 
     # Drop enums
-    op.execute('DROP TYPE IF EXISTS investigationstatus')
-    op.execute('DROP TYPE IF EXISTS assignedentitytype')
+    if op.get_bind().dialect.name == 'postgresql':
+        op.execute('DROP TYPE IF EXISTS investigationstatus')
+        op.execute('DROP TYPE IF EXISTS assignedentitytype')

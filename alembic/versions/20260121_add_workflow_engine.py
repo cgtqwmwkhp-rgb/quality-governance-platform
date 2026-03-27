@@ -16,6 +16,10 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     # Workflow Rules table
     op.create_table(
@@ -37,8 +41,8 @@ def upgrade() -> None:
         sa.Column('department', sa.String(100), nullable=True),
         sa.Column('contract', sa.String(100), nullable=True),
         sa.Column('created_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -60,8 +64,8 @@ def upgrade() -> None:
         sa.Column('error_message', sa.Text(), nullable=True),
         sa.Column('action_taken', sa.Text(), nullable=True),
         sa.Column('action_result', sa.JSON(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_rule_executions_rule_id', 'rule_executions', ['rule_id'])
@@ -88,8 +92,8 @@ def upgrade() -> None:
         sa.Column('exclude_weekends', sa.Boolean(), default=True),
         sa.Column('is_active', sa.Boolean(), default=True),
         sa.Column('match_priority', sa.Integer(), default=0),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -119,8 +123,8 @@ def upgrade() -> None:
         sa.Column('is_paused', sa.Boolean(), default=False),
         sa.Column('paused_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('total_paused_hours', sa.Float(), default=0),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_sla_tracking_entity_type', 'sla_tracking', ['entity_type'])
@@ -142,8 +146,8 @@ def upgrade() -> None:
         sa.Column('notify_reporter', sa.Boolean(), default=False),
         sa.Column('hours_after_previous', sa.Float(), nullable=False),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_escalation_levels_entity_type', 'escalation_levels', ['entity_type'])

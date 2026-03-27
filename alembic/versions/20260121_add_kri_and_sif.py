@@ -16,6 +16,10 @@ branch_labels = None
 depends_on = None
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     # Key Risk Indicators table
     op.create_table(
@@ -42,8 +46,8 @@ def upgrade() -> None:
         sa.Column('owner_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('department', sa.String(100), nullable=True),
         sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.Column('created_by', sa.String(100), nullable=True),
         sa.Column('updated_by', sa.String(100), nullable=True),
         sa.PrimaryKeyConstraint('id'),
@@ -65,8 +69,8 @@ def upgrade() -> None:
         sa.Column('period_end', sa.DateTime(timezone=True), nullable=True),
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('source_data', sa.JSON(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_kri_measurements_kri_id', 'kri_measurements', ['kri_id'])
@@ -93,8 +97,8 @@ def upgrade() -> None:
         sa.Column('resolved_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('resolved_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
         sa.Column('resolution_notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_kri_alerts_kri_id', 'kri_alerts', ['kri_id'])
@@ -115,8 +119,8 @@ def upgrade() -> None:
         sa.Column('previous_score', sa.Integer(), nullable=True),
         sa.Column('score_change', sa.Integer(), nullable=True),
         sa.Column('change_reason', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=_current_timestamp_default(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_risk_score_history_risk_id', 'risk_score_history', ['risk_id'])
@@ -126,6 +130,7 @@ def upgrade() -> None:
     from sqlalchemy import inspect
     
     conn = op.get_bind()
+    is_sqlite = conn.dialect.name == "sqlite"
     inspector = inspect(conn)
     existing_tables = inspector.get_table_names()
     
@@ -134,7 +139,15 @@ def upgrade() -> None:
         op.add_column('incidents', sa.Column('is_psif', sa.Boolean(), default=False, nullable=True))
         op.add_column('incidents', sa.Column('sif_classification', sa.String(50), nullable=True))
         op.add_column('incidents', sa.Column('sif_assessment_date', sa.DateTime(timezone=True), nullable=True))
-        op.add_column('incidents', sa.Column('sif_assessed_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True))
+        op.add_column('incidents', sa.Column('sif_assessed_by_id', sa.Integer(), nullable=True))
+        if not is_sqlite:
+            op.create_foreign_key(
+                'fk_incidents_sif_assessed_by_id_users',
+                'incidents',
+                'users',
+                ['sif_assessed_by_id'],
+                ['id'],
+            )
         op.add_column('incidents', sa.Column('sif_rationale', sa.Text(), nullable=True))
         op.add_column('incidents', sa.Column('life_altering_potential', sa.Boolean(), default=False, nullable=True))
         op.add_column('incidents', sa.Column('precursor_events', sa.JSON(), nullable=True))
@@ -150,10 +163,16 @@ def downgrade() -> None:
     from sqlalchemy import inspect
     
     conn = op.get_bind()
+    is_sqlite = conn.dialect.name == "sqlite"
     inspector = inspect(conn)
     existing_tables = inspector.get_table_names()
     
     if 'incidents' in existing_tables:
+        if not is_sqlite:
+            try:
+                op.drop_constraint('fk_incidents_sif_assessed_by_id_users', 'incidents', type_='foreignkey')
+            except Exception:
+                pass
         for col in ['is_sif', 'is_psif', 'sif_classification', 'sif_assessment_date', 
                     'sif_assessed_by_id', 'sif_rationale', 'life_altering_potential',
                     'precursor_events', 'control_failures']:

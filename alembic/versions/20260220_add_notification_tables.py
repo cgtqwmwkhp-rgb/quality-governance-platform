@@ -49,6 +49,10 @@ NOTIFICATION_TYPE_VALUES = (
 NOTIFICATION_PRIORITY_VALUES = ("critical", "high", "medium", "low")
 
 
+def _current_timestamp_default() -> sa.TextClause:
+    return sa.text("CURRENT_TIMESTAMP")
+
+
 def upgrade() -> None:
     notification_type_enum = sa.Enum(*NOTIFICATION_TYPE_VALUES, name="notificationtype")
     notification_priority_enum = sa.Enum(*NOTIFICATION_PRIORITY_VALUES, name="notificationpriority")
@@ -69,7 +73,7 @@ def upgrade() -> None:
         sa.Column("is_read", sa.Boolean(), server_default=sa.text("false"), index=True),
         sa.Column("read_at", sa.DateTime(), nullable=True),
         sa.Column("delivered_channels", sa.JSON(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False, index=True),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False, index=True),
         sa.Column("expires_at", sa.DateTime(), nullable=True),
     )
 
@@ -87,7 +91,7 @@ def upgrade() -> None:
         sa.Column("category_preferences", sa.JSON(), nullable=True),
         sa.Column("email_digest_enabled", sa.Boolean(), server_default=sa.text("true")),
         sa.Column("email_digest_frequency", sa.String(20), server_default="daily"),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
     )
 
     op.create_table(
@@ -103,7 +107,7 @@ def upgrade() -> None:
         sa.Column("end_position", sa.Integer(), nullable=True),
         sa.Column("is_read", sa.Boolean(), server_default=sa.text("false")),
         sa.Column("read_at", sa.DateTime(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
     )
 
     op.create_table(
@@ -119,8 +123,8 @@ def upgrade() -> None:
         sa.Column("acknowledged_at", sa.DateTime(), nullable=True),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), server_default=_current_timestamp_default(), nullable=False),
     )
 
 

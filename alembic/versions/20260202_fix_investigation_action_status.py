@@ -31,6 +31,8 @@ depends_on = None
 
 def upgrade() -> None:
     """Convert status column from native ENUM to VARCHAR."""
+    dialect = op.get_bind().dialect.name
+
     # Step 1: Add new VARCHAR column
     op.add_column(
         "investigation_actions",
@@ -38,18 +40,25 @@ def upgrade() -> None:
     )
 
     # Step 2: Copy data - cast ENUM to text
-    op.execute("UPDATE investigation_actions SET status_new = status::text WHERE status IS NOT NULL")
+    if dialect == "postgresql":
+        op.execute("UPDATE investigation_actions SET status_new = status::text WHERE status IS NOT NULL")
+    else:
+        op.execute("UPDATE investigation_actions SET status_new = status WHERE status IS NOT NULL")
 
-    # Step 3: Drop the old ENUM column
+    # Step 3: Drop the old status index before replacing the column
+    op.drop_index("ix_investigation_actions_status", table_name="investigation_actions")
+
+    # Step 4: Drop the old ENUM column
     op.drop_column("investigation_actions", "status")
 
-    # Step 4: Rename new column to status
+    # Step 5: Rename new column to status
     op.alter_column("investigation_actions", "status_new", new_column_name="status")
 
-    # Step 5: Drop the ENUM type (cleanup)
-    op.execute("DROP TYPE IF EXISTS investigationactionstatus")
+    # Step 6: Drop the ENUM type (cleanup)
+    if dialect == "postgresql":
+        op.execute("DROP TYPE IF EXISTS investigationactionstatus")
 
-    # Step 6: Re-create index on status if it existed
+    # Step 7: Re-create index on status if it existed
     op.create_index(
         "ix_investigation_actions_status",
         "investigation_actions",
@@ -59,11 +68,14 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert to native ENUM type."""
+    dialect = op.get_bind().dialect.name
+
     # Step 1: Re-create the ENUM type
-    op.execute(
-        "CREATE TYPE investigationactionstatus AS ENUM "
-        "('open', 'in_progress', 'pending_verification', 'completed', 'cancelled')"
-    )
+    if dialect == "postgresql":
+        op.execute(
+            "CREATE TYPE investigationactionstatus AS ENUM "
+            "('open', 'in_progress', 'pending_verification', 'completed', 'cancelled')"
+        )
 
     # Step 2: Add new ENUM column
     op.add_column(
@@ -84,9 +96,12 @@ def downgrade() -> None:
     )
 
     # Step 3: Copy data
-    op.execute(
-        "UPDATE investigation_actions SET status_new = status::investigationactionstatus " "WHERE status IS NOT NULL"
-    )
+    if dialect == "postgresql":
+        op.execute(
+            "UPDATE investigation_actions SET status_new = status::investigationactionstatus WHERE status IS NOT NULL"
+        )
+    else:
+        op.execute("UPDATE investigation_actions SET status_new = status WHERE status IS NOT NULL")
 
     # Step 4: Drop VARCHAR column
     op.drop_index("ix_investigation_actions_status", table_name="investigation_actions")

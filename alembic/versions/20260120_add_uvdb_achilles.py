@@ -19,6 +19,10 @@ branch_labels = None
 depends_on = None
 
 
+def _json_type() -> sa.JSON:
+    return postgresql.JSONB() if op.get_bind().dialect.name == "postgresql" else sa.JSON()
+
+
 def upgrade() -> None:
     # UVDB Sections
     op.create_table(
@@ -46,17 +50,17 @@ def upgrade() -> None:
         sa.Column('section_id', sa.Integer(), nullable=False),
         sa.Column('question_number', sa.String(20), nullable=False),
         sa.Column('question_text', sa.Text(), nullable=False),
-        sa.Column('sub_questions', postgresql.JSONB(), nullable=True),
+        sa.Column('sub_questions', _json_type(), nullable=True),
         sa.Column('max_score', sa.Integer(), nullable=False, default=3),
-        sa.Column('scoring_criteria', postgresql.JSONB(), nullable=True),
-        sa.Column('evidence_requirements', postgresql.JSONB(), nullable=True),
-        sa.Column('document_types', postgresql.JSONB(), nullable=True),
+        sa.Column('scoring_criteria', _json_type(), nullable=True),
+        sa.Column('evidence_requirements', _json_type(), nullable=True),
+        sa.Column('document_types', _json_type(), nullable=True),
         sa.Column('mse_applicable', sa.Boolean(), nullable=False, default=True),
         sa.Column('site_applicable', sa.Boolean(), nullable=False, default=True),
-        sa.Column('iso_clause_mapping', postgresql.JSONB(), nullable=True),
+        sa.Column('iso_clause_mapping', _json_type(), nullable=True),
         sa.Column('auditor_guidance', sa.Text(), nullable=True),
-        sa.Column('positive_indicators', postgresql.JSONB(), nullable=True),
-        sa.Column('negative_indicators', postgresql.JSONB(), nullable=True),
+        sa.Column('positive_indicators', _json_type(), nullable=True),
+        sa.Column('negative_indicators', _json_type(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint('id'),
@@ -82,7 +86,7 @@ def upgrade() -> None:
         sa.Column('total_score', sa.Float(), nullable=True),
         sa.Column('max_possible_score', sa.Float(), nullable=True),
         sa.Column('percentage_score', sa.Float(), nullable=True),
-        sa.Column('section_scores', postgresql.JSONB(), nullable=True),
+        sa.Column('section_scores', _json_type(), nullable=True),
         sa.Column('status', sa.String(30), nullable=False, default='scheduled'),
         sa.Column('findings_count', sa.Integer(), nullable=False, default=0),
         sa.Column('major_findings', sa.Integer(), nullable=False, default=0),
@@ -97,7 +101,7 @@ def upgrade() -> None:
         sa.Column('fors_accredited', sa.Boolean(), nullable=False, default=False),
         sa.Column('fors_level', sa.String(20), nullable=True),
         sa.Column('audit_notes', sa.Text(), nullable=True),
-        sa.Column('improvement_actions', postgresql.JSONB(), nullable=True),
+        sa.Column('improvement_actions', _json_type(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.PrimaryKeyConstraint('id'),
@@ -113,9 +117,9 @@ def upgrade() -> None:
         sa.Column('question_id', sa.Integer(), nullable=False),
         sa.Column('mse_response', sa.Integer(), nullable=True),
         sa.Column('site_response', sa.Integer(), nullable=True),
-        sa.Column('sub_question_responses', postgresql.JSONB(), nullable=True),
+        sa.Column('sub_question_responses', _json_type(), nullable=True),
         sa.Column('evidence_provided', sa.Text(), nullable=True),
-        sa.Column('documents_presented', postgresql.JSONB(), nullable=True),
+        sa.Column('documents_presented', _json_type(), nullable=True),
         sa.Column('finding_type', sa.String(30), nullable=True),
         sa.Column('finding_description', sa.Text(), nullable=True),
         sa.Column('auditor_notes', sa.Text(), nullable=True),

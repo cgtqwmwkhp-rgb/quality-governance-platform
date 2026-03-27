@@ -18,6 +18,16 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("evidence_assets") as batch_op:
+            batch_op.alter_column(
+                "source_id",
+                existing_type=sa.Integer(),
+                type_=sa.String(36),
+                existing_nullable=False,
+            )
+        return
+
     op.alter_column(
         "evidence_assets",
         "source_id",
@@ -29,6 +39,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "sqlite":
+        with op.batch_alter_table("evidence_assets") as batch_op:
+            batch_op.alter_column(
+                "source_id",
+                existing_type=sa.String(36),
+                type_=sa.Integer(),
+                existing_nullable=False,
+            )
+        return
+
     op.alter_column(
         "evidence_assets",
         "source_id",

@@ -50,6 +50,9 @@ CONSTRAINTS = [
 
 def upgrade() -> None:
     conn = op.get_bind()
+    if conn.dialect.name != "postgresql":
+        return
+
     for table, cname, _ in CONSTRAINTS:
         conn.execute(
             sa.text(
@@ -81,6 +84,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     conn = op.get_bind()
+    if conn.dialect.name != "postgresql":
+        return
+
     for table, cname, _ in CONSTRAINTS:
         conn.execute(
             sa.text(

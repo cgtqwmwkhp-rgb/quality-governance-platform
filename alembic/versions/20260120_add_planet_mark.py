@@ -18,6 +18,10 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _json_type() -> sa.JSON:
+    return postgresql.JSONB(astext_type=sa.Text()) if op.get_bind().dialect.name == "postgresql" else sa.JSON()
+
+
 def upgrade() -> None:
     # Carbon Reporting Year
     op.create_table(
@@ -29,7 +33,7 @@ def upgrade() -> None:
         sa.Column('period_end', sa.DateTime(), nullable=False),
         sa.Column('organization_name', sa.String(255), nullable=True, default='Plantexpand Limited'),
         sa.Column('reporting_boundary', sa.Text(), nullable=True),
-        sa.Column('sites_included', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('sites_included', _json_type(), nullable=True),
         sa.Column('average_fte', sa.Float(), nullable=False, default=0),
         sa.Column('is_baseline_year', sa.Boolean(), default=False),
         sa.Column('baseline_year_id', sa.Integer(), sa.ForeignKey('carbon_reporting_year.id'), nullable=True),
@@ -82,7 +86,7 @@ def upgrade() -> None:
         sa.Column('is_verified', sa.Boolean(), default=False),
         sa.Column('verified_by', sa.String(255), nullable=True),
         sa.Column('verified_date', sa.DateTime(), nullable=True),
-        sa.Column('sub_sources', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('sub_sources', _json_type(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
@@ -103,10 +107,10 @@ def upgrade() -> None:
         sa.Column('percentage_of_scope3', sa.Float(), default=0),
         sa.Column('data_quality_score', sa.Integer(), default=0),
         sa.Column('calculation_method', sa.String(100), nullable=True),
-        sa.Column('data_sources', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('data_sources', _json_type(), nullable=True),
         sa.Column('supplier_data_coverage', sa.Float(), nullable=True),
         sa.Column('improvement_priority', sa.String(20), nullable=True),
-        sa.Column('improvement_actions', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('improvement_actions', _json_type(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
@@ -133,8 +137,8 @@ def upgrade() -> None:
         sa.Column('status', sa.String(30), default='planned'),
         sa.Column('progress_percent', sa.Integer(), default=0),
         sa.Column('actual_completion_date', sa.DateTime(), nullable=True),
-        sa.Column('evidence_required', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('evidence_provided', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('evidence_required', _json_type(), nullable=True),
+        sa.Column('evidence_provided', _json_type(), nullable=True),
         sa.Column('actual_reduction_achieved', sa.Float(), nullable=True),
         sa.Column('lessons_learned', sa.Text(), nullable=True),
         sa.Column('reminder_sent', sa.Boolean(), default=False),
@@ -159,11 +163,11 @@ def upgrade() -> None:
         sa.Column('accuracy_notes', sa.Text(), nullable=True),
         sa.Column('consistency_notes', sa.Text(), nullable=True),
         sa.Column('transparency_notes', sa.Text(), nullable=True),
-        sa.Column('sources_assessed', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('sources_assessed', _json_type(), nullable=True),
         sa.Column('actual_data_percent', sa.Float(), default=0),
         sa.Column('estimated_data_percent', sa.Float(), default=0),
-        sa.Column('improvement_recommendations', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('priority_actions', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('improvement_recommendations', _json_type(), nullable=True),
+        sa.Column('priority_actions', _json_type(), nullable=True),
         sa.Column('target_score', sa.Integer(), nullable=True),
         sa.Column('assessed_date', sa.DateTime(), nullable=True),
         sa.Column('assessed_by', sa.String(255), nullable=True),
@@ -279,7 +283,7 @@ def upgrade() -> None:
         sa.Column('iso14001_title', sa.String(255), nullable=False),
         sa.Column('mapping_type', sa.String(20), nullable=False),
         sa.Column('alignment_notes', sa.Text(), nullable=True),
-        sa.Column('shared_evidence_types', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column('shared_evidence_types', _json_type(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )

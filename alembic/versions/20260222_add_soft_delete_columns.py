@@ -9,6 +9,7 @@ Revises: 20260222_full_text_search
 
 from typing import Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260222_soft_delete"
@@ -20,6 +21,13 @@ TABLES = ["users", "incidents", "risks", "complaints"]
 
 
 def upgrade() -> None:
+    inspector = op.get_bind().dialect.name != "postgresql" and sa.inspect(op.get_bind())
+    if inspector:
+        for table in TABLES:
+            if inspector.has_table(table) and "deleted_at" not in {col["name"] for col in inspector.get_columns(table)}:
+                op.add_column(table, sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True))
+        return
+
     for table in TABLES:
         op.execute(
             f"DO $$ BEGIN "
@@ -40,6 +48,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    inspector = op.get_bind().dialect.name != "postgresql" and sa.inspect(op.get_bind())
+    if inspector:
+        for table in TABLES:
+            if inspector.has_table(table) and "deleted_at" in {col["name"] for col in inspector.get_columns(table)}:
+                op.drop_column(table, "deleted_at")
+        return
+
     for table in TABLES:
         op.execute(
             f"DO $$ BEGIN "

@@ -27,23 +27,15 @@ INDEXES = [
 
 def upgrade() -> None:
     conn = op.get_bind()
+    inspector = sa.inspect(conn)
     for idx_name, table, column in INDEXES:
-        conn.execute(
-            sa.text(
-                f"DO $$ BEGIN "
-                f"  IF EXISTS (SELECT 1 FROM information_schema.tables "
-                f"    WHERE table_name = '{table}') "
-                f"  AND EXISTS (SELECT 1 FROM information_schema.columns "
-                f"    WHERE table_name = '{table}' AND column_name = '{column}') "
-                f"  AND NOT EXISTS (SELECT 1 FROM pg_indexes "
-                f"    WHERE indexname = '{idx_name}') THEN "
-                f"    EXECUTE 'CREATE INDEX {idx_name} ON {table} ({column})'; "
-                f"  END IF; "
-                f"EXCEPTION WHEN OTHERS THEN "
-                f"  RAISE NOTICE 'skip {idx_name}: %', SQLERRM; "
-                f"END $$"
-            )
-        )
+        if not inspector.has_table(table):
+            continue
+        if column not in {col["name"] for col in inspector.get_columns(table)}:
+            continue
+        if idx_name in {index["name"] for index in inspector.get_indexes(table)}:
+            continue
+        conn.execute(sa.text(f"CREATE INDEX {idx_name} ON {table} ({column})"))
 
 
 def downgrade() -> None:
