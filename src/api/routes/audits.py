@@ -47,7 +47,7 @@ from src.api.schemas.audit import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
-from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -60,6 +60,10 @@ from src.domain.models.audit import (
 )
 from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
+from src.domain.services.external_audit_intake_template_resolver import (
+    ExternalAuditIntakeTemplateResolver,
+    IntakeTemplateResolution,
+)
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.monitoring.azure_monitor import StructuredLogger
 
@@ -844,21 +848,53 @@ async def create_run(
 ) -> AuditRunResponse:
     """Create a new audit run from a template."""
     started = time.perf_counter()
-    # Verify template exists and is published
-    result = await db.execute(
-        select(AuditTemplate).where(
-            and_(
-                AuditTemplate.id == run_data.template_id,
-                AuditTemplate.is_published == True,
-                AuditTemplate.is_active == True,
-                or_(
-                    AuditTemplate.tenant_id == current_user.tenant_id,
-                    AuditTemplate.tenant_id.is_(None),
-                ),
+    intake_resolution: IntakeTemplateResolution | None = None
+    if run_data.external_audit_type is not None:
+        resolver = ExternalAuditIntakeTemplateResolver(db)
+        try:
+            intake_resolution = await resolver.resolve(
+                tenant_id=current_user.tenant_id,
+                external_audit_type=run_data.external_audit_type,
+            )
+            template = intake_resolution.template
+        except NotFoundError as exc:
+            _record_audit_endpoint_event(
+                "POST /api/v1/audits/runs",
+                404,
+                (time.perf_counter() - started) * 1000,
+                "intake_template_not_found",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, str(exc)),
+            ) from exc
+        except ConflictError as exc:
+            _record_audit_endpoint_event(
+                "POST /api/v1/audits/runs",
+                409,
+                (time.perf_counter() - started) * 1000,
+                "intake_template_ambiguous",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
+            ) from exc
+    else:
+        # Verify template exists and is published
+        result = await db.execute(
+            select(AuditTemplate).where(
+                and_(
+                    AuditTemplate.id == run_data.template_id,
+                    AuditTemplate.is_published == True,
+                    AuditTemplate.is_active == True,
+                    or_(
+                        AuditTemplate.tenant_id == current_user.tenant_id,
+                        AuditTemplate.tenant_id.is_(None),
+                    ),
+                )
             )
         )
-    )
-    template = result.scalar_one_or_none()
+        template = result.scalar_one_or_none()
 
     if not template:
         _record_audit_endpoint_event(
@@ -872,8 +908,11 @@ async def create_run(
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Published template not found"),
         )
 
+    payload = _normalize_run_create_payload(run_data)
+    payload["template_id"] = template.id
+
     run = AuditRun(
-        **_normalize_run_create_payload(run_data),
+        **payload,
         template_version=template.version,
         status=AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
@@ -888,6 +927,18 @@ async def create_run(
     await db.refresh(run)
 
     response = AuditRunResponse.model_validate(run)
+    if intake_resolution is not None:
+        logger.info(
+            "Resolved external audit intake template",
+            extra={
+                "template_id": template.id,
+                "template_version": template.version,
+                "resolution_scope": intake_resolution.scope,
+                "resolution_rule": intake_resolution.rule,
+                "external_audit_type": run_data.external_audit_type,
+                "tenant_id": current_user.tenant_id,
+            },
+        )
     _record_audit_endpoint_event("POST /api/v1/audits/runs", 201, (time.perf_counter() - started) * 1000)
     return response
 

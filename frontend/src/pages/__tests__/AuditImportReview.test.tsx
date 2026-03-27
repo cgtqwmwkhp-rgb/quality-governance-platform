@@ -4,11 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AuditImportReview from '../AuditImportReview'
 
 const mockGetJob = vi.fn()
+const mockGetRunDetail = vi.fn()
 const mockListDrafts = vi.fn()
 const mockReviewDraft = vi.fn()
 const mockPromoteJob = vi.fn()
 
 vi.mock('../../api/client', () => ({
+  auditsApi: {
+    getRunDetail: (...args: unknown[]) => mockGetRunDetail(...args),
+  },
   externalAuditImportsApi: {
     getJob: (...args: unknown[]) => mockGetJob(...args),
     listDrafts: (...args: unknown[]) => mockListDrafts(...args),
@@ -30,6 +34,25 @@ function renderPage(initialEntry = '/audits/41/import-review?jobId=72') {
 describe('AuditImportReview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetRunDetail.mockResolvedValue({
+      data: {
+        id: 41,
+        reference_number: 'AUD-00041',
+        template_id: 11,
+        template_version: 3,
+        template_name: 'External Audit Intake',
+        title: 'Achilles follow-up audit',
+        source_origin: 'third_party',
+        assurance_scheme: 'Achilles UVDB',
+        external_body_name: 'Achilles',
+        external_reference: 'UVDB-2026-001',
+        status: 'pending_review',
+        responses: [],
+        findings: [],
+        completion_percentage: 0,
+        created_at: '2026-03-24T10:00:00Z',
+      },
+    })
   })
 
   it('blocks mismatched audit routes from showing the wrong import job', async () => {
@@ -39,6 +62,12 @@ describe('AuditImportReview', () => {
         audit_run_id: 41,
         reference_number: 'IMP-00072',
         status: 'review_required',
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
       },
     })
     mockListDrafts.mockResolvedValue({ data: [] })
@@ -49,6 +78,7 @@ describe('AuditImportReview', () => {
       await screen.findByText('This import job belongs to a different audit run. Re-open it from the audits workspace.'),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open Audit Run' })).toBeDisabled()
+    expect(mockGetRunDetail).not.toHaveBeenCalled()
   })
 
   it('shows failed-job diagnostics and counts clause mappings without clause ids', async () => {
@@ -65,6 +95,12 @@ describe('AuditImportReview', () => {
         improvement_summary_json: [],
         evidence_preview_json: [],
         processing_warnings_json: [],
+        provider_name: 'mistral',
+        provider_model: 'mistral-ocr-latest',
+        source_filename: 'achilles-audit.pdf',
+        extraction_method: 'ocr',
+        detected_scheme: 'achilles_uvdb',
+        detected_scheme_confidence: 0.91,
         error_code: 'IMPORT_PROCESSING_FAILED',
         error_detail: 'Import analysis failed before review could begin. Review logs and retry the job.',
       },
@@ -94,6 +130,13 @@ describe('AuditImportReview', () => {
     renderPage()
 
     expect(await screen.findByText('Import failed')).toBeInTheDocument()
+    expect(screen.getByText('Declared intake').parentElement).toHaveTextContent('Achilles / UVDB')
+    expect(screen.getByText('Processing template').parentElement).toHaveTextContent('External Audit Intake')
+    expect(screen.getByText('Processing template').parentElement).toHaveTextContent('Version 3')
+    expect(screen.getByText('Source file').parentElement).toHaveTextContent('achilles-audit.pdf')
+    expect(screen.getByText('OCR provider').parentElement).toHaveTextContent('mistral')
+    expect(screen.getByText('Classification').parentElement).toHaveTextContent('achilles uvdb')
+    expect(screen.getByText('Classification').parentElement).toHaveTextContent('91% confidence')
     expect(screen.getByText('IMPORT_PROCESSING_FAILED')).toBeInTheDocument()
     expect(
       screen.getByText('Import analysis failed before review could begin. Review logs and retry the job.'),
@@ -120,6 +163,12 @@ describe('AuditImportReview', () => {
         improvement_summary_json: [],
         evidence_preview_json: [],
         processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
       },
     })
     mockListDrafts.mockResolvedValue({

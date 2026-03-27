@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import {
+  auditsApi,
   externalAuditImportsApi,
+  type AuditRunDetail,
   type ExternalAuditImportDraft,
   type ExternalAuditImportJob,
 } from '../api/client'
@@ -18,6 +20,49 @@ function getSeverityVariant(severity: string) {
   return 'medium'
 }
 
+function humanizeLabel(value: string | null | undefined) {
+  if (!value) return ''
+  return value.replace(/_/g, ' ')
+}
+
+function readProvenanceString(job: ExternalAuditImportJob | null, key: string) {
+  const value = job?.provenance_json?.[key]
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function readProvenanceNumber(job: ExternalAuditImportJob | null, key: string) {
+  const value = job?.provenance_json?.[key]
+  return typeof value === 'number' ? value : null
+}
+
+function deriveDeclaredProgramLabel(auditRun: AuditRunDetail | null, job: ExternalAuditImportJob | null) {
+  const declaredScheme =
+    auditRun?.assurance_scheme || readProvenanceString(job, 'declared_assurance_scheme') || ''
+  const normalizedScheme = declaredScheme.toLowerCase()
+  const declaredSource =
+    auditRun?.source_origin || readProvenanceString(job, 'declared_source_origin') || ''
+
+  if (normalizedScheme.includes('achilles') || normalizedScheme.includes('uvdb')) {
+    return 'Achilles / UVDB'
+  }
+  if (normalizedScheme.includes('planet mark')) {
+    return 'Planet Mark'
+  }
+  if (declaredSource === 'customer') {
+    return 'Customer Audit'
+  }
+  if (declaredSource === 'certification' && normalizedScheme.startsWith('iso')) {
+    return 'ISO Audit'
+  }
+  if (declaredScheme) {
+    return declaredScheme
+  }
+  if (declaredSource) {
+    return humanizeLabel(declaredSource)
+  }
+  return 'External Audit'
+}
+
 export default function AuditImportReview() {
   const { auditId } = useParams()
   const [searchParams] = useSearchParams()
@@ -26,6 +71,7 @@ export default function AuditImportReview() {
   const routeAuditId = Number(auditId || '')
 
   const [job, setJob] = useState<ExternalAuditImportJob | null>(null)
+  const [auditRun, setAuditRun] = useState<AuditRunDetail | null>(null)
   const [drafts, setDrafts] = useState<ExternalAuditImportDraft[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -35,6 +81,7 @@ export default function AuditImportReview() {
   const load = useCallback(async () => {
     if (!jobId) {
       setJob(null)
+      setAuditRun(null)
       setDrafts([])
       setError('Missing import job reference.')
       setLoading(false)
@@ -50,14 +97,24 @@ export default function AuditImportReview() {
       ])
       if (Number.isFinite(routeAuditId) && routeAuditId > 0 && jobRes.data.audit_run_id !== routeAuditId) {
         setJob(null)
+        setAuditRun(null)
         setDrafts([])
         setError('This import job belongs to a different audit run. Re-open it from the audits workspace.')
         return
       }
+      let auditRunDetail: AuditRunDetail | null = null
+      try {
+        const auditRunRes = await auditsApi.getRunDetail(jobRes.data.audit_run_id)
+        auditRunDetail = auditRunRes.data
+      } catch (auditRunErr) {
+        console.error('Failed to load resolved audit run details for import review', auditRunErr)
+      }
       setJob(jobRes.data)
+      setAuditRun(auditRunDetail)
       setDrafts(draftsRes.data)
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
+      setAuditRun(null)
       setError('Failed to load the import review workspace. Please retry.')
     } finally {
       setLoading(false)
@@ -123,6 +180,19 @@ export default function AuditImportReview() {
   )
   const promotionSummary = job?.promotion_summary_json ?? null
   const schemeAlignment = promotionSummary?.scheme_alignment as Record<string, unknown> | undefined
+  const declaredProgramLabel = deriveDeclaredProgramLabel(auditRun, job)
+  const declaredSourceOrigin =
+    auditRun?.source_origin || readProvenanceString(job, 'declared_source_origin')
+  const declaredScheme =
+    auditRun?.assurance_scheme || readProvenanceString(job, 'declared_assurance_scheme')
+  const resolvedTemplateVersion =
+    auditRun?.template_version ?? readProvenanceNumber(job, 'processing_template_version')
+  const resolvedTemplateId = auditRun?.template_id ?? readProvenanceNumber(job, 'processing_template_id')
+  const resolvedTemplateName = auditRun?.template_name
+  const declaredExternalBody =
+    auditRun?.external_body_name || readProvenanceString(job, 'declared_external_body_name')
+  const declaredExternalReference =
+    auditRun?.external_reference || readProvenanceString(job, 'declared_external_reference')
 
   const handleDraftDecision = async (draftId: number, status: 'accepted' | 'rejected') => {
     setBusyDraftId(draftId)
@@ -220,8 +290,32 @@ export default function AuditImportReview() {
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Declared intake</p>
+                <p className="mt-1 font-medium text-foreground">{declaredProgramLabel}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {declaredSourceOrigin ? `Source: ${humanizeLabel(declaredSourceOrigin)}` : 'Source pending'}
+                  {declaredScheme ? ` · Scheme: ${declaredScheme}` : ''}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Processing template</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {resolvedTemplateName || (resolvedTemplateId ? `Template ${resolvedTemplateId}` : 'Pending resolution')}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {resolvedTemplateVersion != null
+                    ? `Version ${resolvedTemplateVersion}`
+                    : 'Version pending'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Source file</p>
                 <p className="mt-1 font-medium text-foreground">{job.source_filename || 'Source document'}</p>
+                {(declaredExternalBody || declaredExternalReference) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {[declaredExternalBody, declaredExternalReference].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </div>
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Extraction</p>
@@ -234,13 +328,20 @@ export default function AuditImportReview() {
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Classification</p>
                 <p className="mt-1 font-medium text-foreground">
-                  {job.detected_scheme?.replace(/_/g, ' ') || 'Pending classification'}
+                  {humanizeLabel(job.detected_scheme) || 'Pending classification'}
                 </p>
                 {job.detected_scheme_confidence != null ? (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {Math.round(job.detected_scheme_confidence * 100)}% confidence
                   </p>
                 ) : null}
+              </div>
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">OCR provider</p>
+                <p className="mt-1 font-medium text-foreground">{job.provider_name || 'Pending provider'}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {job.provider_model || 'Model pending'}
+                </p>
               </div>
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted drafts</p>

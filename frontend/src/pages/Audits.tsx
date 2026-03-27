@@ -255,7 +255,7 @@ export default function Audits() {
     return {
       ...INITIAL_FORM_STATE,
       template_id: preferred.id,
-      title: decodeHtmlEntities(preferred.name),
+      title: mode === 'schedule' ? decodeHtmlEntities(preferred.name) : '',
       source_origin: mode === 'import' ? '' : 'internal',
     }
   }
@@ -308,11 +308,6 @@ export default function Audits() {
     e.preventDefault()
     setFormError(null)
 
-    if (!formData.template_id) {
-      setFormError('Please select an audit template')
-      return
-    }
-
     if (modalMode === 'import') {
       if (!formData.external_audit_type) {
         setFormError('Please choose the external audit type')
@@ -326,13 +321,24 @@ export default function Audits() {
         setFormError('Please upload the external audit report')
         return
       }
+      if (!formData.template_id) {
+        setFormError('No published intake template is configured for external audit imports')
+        return
+      }
+    } else if (!formData.template_id) {
+      setFormError('Please select an audit template')
+      return
     }
 
     setIsSubmitting(true)
     try {
       const payload: AuditRunCreate = {
-        template_id: formData.template_id,
-        title: formData.title || undefined,
+        template_id: formData.template_id as number,
+        title:
+          formData.title ||
+          (modalMode === 'import'
+            ? selectedExternalAuditType?.label || formData.assurance_scheme || undefined
+            : undefined),
         location: formData.location || undefined,
         scheduled_date: formData.scheduled_date || undefined,
         external_audit_type: formData.external_audit_type || undefined,
@@ -345,11 +351,15 @@ export default function Audits() {
 
       const res = await auditsApi.createRun(payload)
       const result = res.data
+      const resolvedTemplate = templates.find((template) => template.id === result.template_id)
+      const resolvedTemplateLabel = resolvedTemplate
+        ? decodeHtmlEntities(resolvedTemplate.name)
+        : `Template ${result.template_id}`
 
       const isImportFlow = modalMode === 'import'
       let reportUploadFailed = false
       let successDetail = isImportFlow
-        ? `External audit intake created successfully. Reference: ${result.reference_number}`
+        ? `External audit intake created successfully. Reference: ${result.reference_number}. Processing template: ${resolvedTemplateLabel} v${result.template_version}.`
         : `Audit scheduled successfully! Reference: ${result.reference_number}`
       let importJobId: number | null = null
       if (reportFile) {
@@ -377,7 +387,7 @@ export default function Audits() {
             })
             importJobId = jobRes.data.id
             await externalAuditImportsApi.queueJob(importJobId)
-            successDetail += ' OCR and draft review have been queued.'
+            successDetail += ` OCR and draft review have been queued for ${result.assurance_scheme || formData.assurance_scheme || 'this external audit'}.`
           }
         } catch (uploadErr: unknown) {
           reportUploadFailed = true
@@ -1010,111 +1020,112 @@ export default function Audits() {
             </div>
           ) : (
             <form onSubmit={handleSubmitAudit} className="space-y-5">
-              {/* Template Selection */}
-              <div className="space-y-2">
-                <span className="text-sm font-medium text-foreground">
-                  Audit Template <span className="text-destructive">*</span>
-                </span>
-                {templates.length === 0 ? (
-                  <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
-                    <p className="text-sm text-warning">
-                      No published templates available. Please create and publish a template first
-                      using the Audit Template Builder.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <select
-                      value={formData.template_id ?? ''}
-                      onChange={(e) => {
-                        const templateId = Number(e.target.value)
-                        const template = latestPublishedTemplates.find(
-                          (item) => item.id === templateId,
-                        )
-                        setFormData((prev) => ({
-                          ...prev,
-                          template_id: Number.isNaN(templateId) ? null : templateId,
-                          title:
-                            prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
-                        }))
-                        setShowVersionSelector(false)
-                      }}
-                      className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    >
-                      <option value="">Select a published template...</option>
-                      {latestPublishedTemplates.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {decodeHtmlEntities(template.name)} (v{template.version}) -{' '}
-                          {template.reference_number}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground">
-                      Showing {latestPublishedTemplates.length} published{' '}
-                      {latestPublishedTemplates.length === 1 ? 'template' : 'templates'}. Only
-                      published templates appear here &mdash; publish via the Template Builder.
-                    </p>
-                    {selectedTemplateFamily && selectedTemplateFamily.versions.length > 1 && (
-                      <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowVersionSelector((prev) => !prev)}
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          {showVersionSelector
-                            ? 'Hide older versions'
-                            : 'Need an older version? Choose here'}
-                        </button>
-                        {showVersionSelector && (
-                          <select
-                            value={formData.template_id ?? ''}
-                            onChange={(e) => {
-                              const templateId = Number(e.target.value)
-                              const template = selectedTemplateFamily.versions.find(
-                                (item) => item.id === templateId,
-                              )
-                              setFormData((prev) => ({
-                                ...prev,
-                                template_id: Number.isNaN(templateId) ? null : templateId,
-                                title:
-                                  prev.title ||
-                                  (template?.name ? decodeHtmlEntities(template.name) : ''),
-                              }))
-                            }}
-                            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              {modalMode === 'schedule' ? (
+                <div className="space-y-2">
+                  <span className="text-sm font-medium text-foreground">
+                    Audit Template <span className="text-destructive">*</span>
+                  </span>
+                  {templates.length === 0 ? (
+                    <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
+                      <p className="text-sm text-warning">
+                        No published templates available. Please create and publish a template first
+                        using the Audit Template Builder.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <select
+                        value={formData.template_id ?? ''}
+                        onChange={(e) => {
+                          const templateId = Number(e.target.value)
+                          const template = latestPublishedTemplates.find(
+                            (item) => item.id === templateId,
+                          )
+                          setFormData((prev) => ({
+                            ...prev,
+                            template_id: Number.isNaN(templateId) ? null : templateId,
+                            title:
+                              prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                          }))
+                          setShowVersionSelector(false)
+                        }}
+                        className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      >
+                        <option value="">Select a published template...</option>
+                        {latestPublishedTemplates.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {decodeHtmlEntities(template.name)} (v{template.version}) -{' '}
+                            {template.reference_number}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground">
+                        Showing {latestPublishedTemplates.length} published{' '}
+                        {latestPublishedTemplates.length === 1 ? 'template' : 'templates'}. Only
+                        published templates appear here &mdash; publish via the Template Builder.
+                      </p>
+                      {selectedTemplateFamily && selectedTemplateFamily.versions.length > 1 && (
+                        <div className="rounded-xl border border-border bg-surface p-3 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowVersionSelector((prev) => !prev)}
+                            className="text-xs font-medium text-primary hover:underline"
                           >
-                            {selectedTemplateFamily.versions.map((template) => (
-                              <option key={template.id} value={template.id}>
-                                v{template.version} - {template.reference_number}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </div>
-                    )}
-                    {latestSelectedTemplate &&
-                      selectedTemplate?.id === latestSelectedTemplate.id && (
-                        <p className="text-xs text-muted-foreground">
-                          Using latest published version: v{latestSelectedTemplate.version}
-                        </p>
+                            {showVersionSelector
+                              ? 'Hide older versions'
+                              : 'Need an older version? Choose here'}
+                          </button>
+                          {showVersionSelector && (
+                            <select
+                              value={formData.template_id ?? ''}
+                              onChange={(e) => {
+                                const templateId = Number(e.target.value)
+                                const template = selectedTemplateFamily.versions.find(
+                                  (item) => item.id === templateId,
+                                )
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  template_id: Number.isNaN(templateId) ? null : templateId,
+                                  title:
+                                    prev.title ||
+                                    (template?.name ? decodeHtmlEntities(template.name) : ''),
+                                }))
+                              }}
+                              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            >
+                              {selectedTemplateFamily.versions.map((template) => (
+                                <option key={template.id} value={template.id}>
+                                  v{template.version} - {template.reference_number}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       )}
-                    {selectedTemplate && (
-                      <div className="rounded-xl border border-border bg-surface p-3">
-                        <div className="flex items-center gap-2 mb-1">
-                          <FileText className="w-4 h-4 text-primary" />
-                          <p className="text-sm font-medium text-foreground">
-                            {decodeHtmlEntities(selectedTemplate.name)}
+                      {latestSelectedTemplate &&
+                        selectedTemplate?.id === latestSelectedTemplate.id && (
+                          <p className="text-xs text-muted-foreground">
+                            Using latest published version: v{latestSelectedTemplate.version}
+                          </p>
+                        )}
+                      {selectedTemplate && (
+                        <div className="rounded-xl border border-border bg-surface p-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText className="w-4 h-4 text-primary" />
+                            <p className="text-sm font-medium text-foreground">
+                              {decodeHtmlEntities(selectedTemplate.name)}
+                            </p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedTemplate.category || selectedTemplate.audit_type} • v
+                            {selectedTemplate.version} • {selectedTemplate.reference_number}
                           </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {selectedTemplate.category || selectedTemplate.audit_type} • v
-                          {selectedTemplate.version} • {selectedTemplate.reference_number}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               {/* Title */}
               <div className="space-y-2">
@@ -1130,7 +1141,7 @@ export default function Audits() {
                   maxLength={300}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional. Defaults to template name.
+                  Optional. Schedule mode defaults to the template name; import mode defaults to the selected source program.
                 </p>
               </div>
 
@@ -1157,9 +1168,16 @@ export default function Audits() {
               {modalMode === 'import' ? (
                 <>
                   <div className="rounded-xl border border-border bg-surface p-4 space-y-4">
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="text-sm font-medium text-foreground">Import essentials</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Choose the external program, attach the source report, and the platform will
+                        resolve the internal intake checklist automatically.
+                      </p>
+                    </div>
                     <div className="space-y-2">
                       <label htmlFor="audit-import-type" className="text-sm font-medium text-foreground">
-                        Import Type <span className="text-destructive">*</span>
+                        External Audit Program <span className="text-destructive">*</span>
                       </label>
                       <select
                         id="audit-import-type"
@@ -1176,8 +1194,26 @@ export default function Audits() {
                       </select>
                       <p className="text-xs text-muted-foreground">
                         {selectedExternalAuditType?.description ||
-                          'This controls the source metadata and keeps imported audits searchable.'}
+                          'This drives the source metadata, searchability, and internal processing path for the import.'}
                       </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
+                        Source Audit Report <span className="text-destructive">*</span>
+                      </label>
+                      <Input
+                        id="audit-report-file"
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx"
+                        onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Upload the source report so the imported audit is linked into the shared evidence layer from day one.
+                      </p>
+                      {reportFile && (
+                        <p className="text-xs text-primary">Selected file: {reportFile.name}</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1208,7 +1244,15 @@ export default function Audits() {
                         />
                       </div>
                     </div>
+                  </div>
 
+                  <div className="rounded-xl border border-border bg-surface p-4 space-y-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Supporting metadata</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        These details stay with the audit run and help reviewers validate the import context.
+                      </p>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <label htmlFor="audit-external-body" className="text-sm font-medium text-foreground">
@@ -1257,23 +1301,16 @@ export default function Audits() {
                         maxLength={100}
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
-                        Source Audit Report <span className="text-destructive">*</span>
-                      </label>
-                      <Input
-                        id="audit-report-file"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.xls,.xlsx"
-                        onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Upload the source report so the imported audit is linked into the shared evidence layer from day one.
+                    <div className="rounded-lg border border-dashed border-border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Internal processing template
                       </p>
-                      {reportFile && (
-                        <p className="text-xs text-primary">Selected file: {reportFile.name}</p>
-                      )}
+                      <p className="mt-1 text-sm text-foreground">
+                        Assigned automatically by the server from the selected import program.
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        The resolved template and version are shown after creation in the review workspace.
+                      </p>
                     </div>
                   </div>
                 </>
@@ -1318,7 +1355,12 @@ export default function Audits() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting || templates.length === 0 || !formData.template_id}
+                  disabled={
+                    isSubmitting ||
+                    (modalMode === 'schedule'
+                      ? templates.length === 0 || !formData.template_id
+                      : !formData.template_id)
+                  }
                 >
                   {isSubmitting ? (
                     <>

@@ -136,6 +136,10 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     assert job_payload["detected_scheme"] == "achilles_uvdb"
     assert job_payload["detected_scheme_confidence"] > 0.5
     assert job_payload["issuer_name"] == "Achilles"
+    assert job_payload["provenance_json"]["processing_template_id"] == template.id
+    assert job_payload["provenance_json"]["processing_template_version"] == run.template_version
+    assert job_payload["provenance_json"]["declared_assurance_scheme"] == "Achilles UVDB"
+    assert job_payload["provenance_json"]["declared_vs_detected"]["detected_scheme"] == "achilles_uvdb"
     assert job_payload["nonconformity_summary_json"]
     assert job_payload["promotion_summary_json"]["action_candidates"] >= 1
     assert job_payload["evidence_preview_json"]

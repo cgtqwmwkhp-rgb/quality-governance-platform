@@ -182,8 +182,44 @@ class TestAuditsAPI:
 
         assert response.status_code == 201
         data = response.json()
+        assert data["template_id"] == template.id
         assert data["source_origin"] == "third_party"
         assert data["assurance_scheme"] == "Achilles UVDB"
+
+    @pytest.mark.asyncio
+    async def test_create_external_audit_run_fails_closed_when_multiple_intake_templates_match(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test external imports fail closed when intake template resolution is ambiguous."""
+        for reference_suffix in ("A", "B"):
+            test_session.add(
+                AuditTemplate(
+                    name="External Audit Intake",
+                    category="Compliance",
+                    audit_type="audit",
+                    created_by_id=test_user.id,
+                    reference_number=generate_test_reference(f"TPL{reference_suffix}"),
+                    is_published=True,
+                )
+            )
+        await test_session.commit()
+
+        response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": 999999,
+                "title": "Planet Mark import",
+                "external_audit_type": "planet_mark",
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 409
+        assert "Multiple published external audit intake templates match" in str(response.json())
 
     @pytest.mark.asyncio
     async def test_start_audit_run(

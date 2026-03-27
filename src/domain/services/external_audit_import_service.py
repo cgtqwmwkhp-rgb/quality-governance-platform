@@ -103,6 +103,12 @@ class ExternalAuditImportService:
                 "audit_run_id": run.id,
                 "source_asset_id": asset.id,
                 "storage_key": asset.storage_key,
+                "processing_template_id": run.template_id,
+                "processing_template_version": run.template_version,
+                "declared_source_origin": run.source_origin,
+                "declared_assurance_scheme": run.assurance_scheme,
+                "declared_external_body_name": run.external_body_name,
+                "declared_external_reference": run.external_reference,
             },
             created_by_id=user_id,
             updated_by_id=user_id,
@@ -248,6 +254,12 @@ class ExternalAuditImportService:
                     "mapped_frameworks": analysis.mapped_frameworks,
                     "mapped_standards": analysis.mapped_standards,
                     "classification_basis": analysis.classification_basis,
+                    "declared_vs_detected": {
+                        "declared_source_origin": run.source_origin,
+                        "declared_assurance_scheme": run.assurance_scheme,
+                        "detected_scheme": analysis.detected_scheme,
+                        "detected_scheme_confidence": analysis.detected_scheme_confidence,
+                    },
                 }
                 job.analysis_summary = analysis.summary
                 job.detected_scheme = analysis.detected_scheme

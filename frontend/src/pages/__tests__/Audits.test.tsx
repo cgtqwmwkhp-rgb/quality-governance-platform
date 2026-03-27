@@ -122,7 +122,8 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    expect(within(dialog).queryByText(/Audit Template/i)).not.toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'achilles_uvdb' },
     })
 
@@ -178,7 +179,7 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'customer' },
     })
 
@@ -222,7 +223,7 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'achilles_uvdb' },
     })
 
