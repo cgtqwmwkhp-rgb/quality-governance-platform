@@ -18,6 +18,22 @@ def _matches_intake_resolver(template: AuditTemplate) -> bool:
     return "external_audit_intake" in tags or (template.name or "").strip().lower() == "external audit intake"
 
 
+async def _deactivate_existing_intake_templates(
+    test_session: AsyncSession,
+    *,
+    external_audit_type: str,
+) -> None:
+    """Keep resolver-backed tests deterministic in the shared integration database."""
+    existing_templates = (await test_session.execute(select(AuditTemplate))).scalars().all()
+    specific_tag = f"external_audit_intake:{external_audit_type}".lower()
+    for template in existing_templates:
+        tags = [str(tag).strip().lower() for tag in (template.tags_json or []) if isinstance(tag, str)]
+        if _matches_intake_resolver(template) or specific_tag in tags:
+            template.is_published = False
+            template.is_active = False
+    await test_session.commit()
+
+
 class TestAuditsAPI:
     """Test suite for Audits API endpoints."""
 
@@ -165,6 +181,7 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """Test external import types map into the canonical audit metadata fields."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
         template = AuditTemplate(
             name="ZZZ External Audit Intake (System)",
             category="System",
@@ -204,6 +221,7 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """Test run detail surfaces the external import intake marker for safe routing."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
         template = AuditTemplate(
             name="ZZZ External Audit Intake (System)",
             category="System",
@@ -256,12 +274,7 @@ class TestAuditsAPI:
                 is_published=True,
             )
         )
-        existing_templates = (await test_session.execute(select(AuditTemplate))).scalars().all()
-        for template in existing_templates:
-            if _matches_intake_resolver(template):
-                template.is_published = False
-                template.is_active = False
-        await test_session.commit()
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
 
         response = await client.post(
             "/api/v1/audits/runs",
