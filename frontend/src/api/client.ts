@@ -908,6 +908,7 @@ export interface AuditRun {
   external_reference?: string
   source_document_asset_id?: number
   source_document_label?: string
+  is_external_import_intake?: boolean
   status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
   scheduled_date?: string
   due_date?: string

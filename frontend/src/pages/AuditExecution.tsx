@@ -400,6 +400,7 @@ export default function AuditExecution() {
   const { auditId: runId } = useParams<{ auditId: string }>()
 
   const [audit, setAudit] = useState<AuditData | null>(null)
+  const [nonExecutableMessage, setNonExecutableMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(!!runId)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -436,6 +437,7 @@ export default function AuditExecution() {
       try {
         setLoading(true)
         setError(null)
+        setNonExecutableMessage(null)
 
         const runRes = await auditsApi.getRunDetail(runIdNum)
         const runData = runRes.data
@@ -444,6 +446,17 @@ export default function AuditExecution() {
         const templateData = templateRes.data
 
         if (cancelled) return
+
+        if (runData.is_external_import_intake || templateData.audit_type === 'external_import') {
+          setAudit(null)
+          setResponses({})
+          setResponseIdMap({})
+          setRunCompleted(false)
+          setNonExecutableMessage(
+            'This imported external audit is reviewed through the import workspace and cannot be executed here.',
+          )
+          return
+        }
 
         const sections: AuditSection[] = templateData.sections
           .filter((s) => s.is_active)
@@ -478,6 +491,18 @@ export default function AuditExecution() {
               })),
             isComplete: false,
           }))
+
+        const hasExecutableQuestions = sections.some((section) => section.questions.length > 0)
+        if (!hasExecutableQuestions) {
+          setAudit(null)
+          setResponses({})
+          setResponseIdMap({})
+          setRunCompleted(false)
+          setNonExecutableMessage(
+            'This audit does not contain any executable sections or questions, so there is nothing to complete here.',
+          )
+          return
+        }
 
         const questionTypeMap: Record<string, string> = {}
         for (const section of sections) {
@@ -626,10 +651,10 @@ export default function AuditExecution() {
         <div className="max-w-md w-full bg-card border border-border rounded-2xl p-8 text-center">
           <ClipboardCheck className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
           <h2 className="text-2xl font-bold text-foreground mb-2">
-            {error ? 'Error Loading Audit' : 'No Audit Loaded'}
+            {nonExecutableMessage ? 'Audit Not Executable Here' : error ? 'Error Loading Audit' : 'No Audit Loaded'}
           </h2>
           <p className="text-muted-foreground mb-6">
-            {error || 'Select an audit from the audit list to begin execution.'}
+            {nonExecutableMessage || error || 'Select an audit from the audit list to begin execution.'}
           </p>
           <button
             onClick={() => navigate('/audits')}

@@ -30,7 +30,7 @@ _DEFAULT_INTEGRATION_DATABASE_URL = f"sqlite+aiosqlite:///{_DEFAULT_SQLITE_DB_PA
 os.environ.setdefault("TESTING", "1")
 os.environ.setdefault("DATABASE_URL", _DEFAULT_INTEGRATION_DATABASE_URL)
 
-from src.api.dependencies import get_current_user, get_db, security  # noqa: E402
+from src.api.dependencies import get_current_user, security  # noqa: E402
 from src.core.config import settings  # noqa: E402
 from src.core.security import decode_token  # noqa: E402
 from src.domain.models.user import User  # noqa: E402
@@ -239,7 +239,6 @@ def _mock_user_from_jwt(payload: dict, db_user: object | None = None) -> _MockUs
 
 async def _test_get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db=Depends(get_db),
 ) -> _MockUser:
     """Test-only override for ``get_current_user``.
 
@@ -264,12 +263,17 @@ async def _test_get_current_user(
 
     from sqlalchemy.orm import selectinload
 
-    result = await db.execute(select(User).where(User.id == int(user_id_raw)).options(selectinload(User.roles)))
-    user = result.scalar_one_or_none()
-    if user is not None:
-        if not user.is_active:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
-        return _mock_user_from_jwt(payload, db_user=user)
+    from src.infrastructure.database import async_session_maker
+
+    async with async_session_maker() as session:
+        result = await session.execute(
+            select(User).where(User.id == int(user_id_raw)).options(selectinload(User.roles))
+        )
+        user = result.scalar_one_or_none()
+        if user is not None:
+            if not user.is_active:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is disabled")
+            return _mock_user_from_jwt(payload, db_user=user)
 
     return _mock_user_from_jwt(payload)
 
@@ -527,7 +531,8 @@ async def test_session():
 async def test_tenant(test_session):
     """Create a test tenant in the database and return the tenant_id.
 
-    The tenant is automatically cleaned up after the test via transaction rollback.
+    The integration harness recreates schema per test, so commit setup records to
+    avoid holding open SQLite write locks across API requests.
     """
     from tests.factories import TenantFactory
 
@@ -538,7 +543,7 @@ async def test_tenant(test_session):
         is_active=True,
     )
     test_session.add(tenant)
-    await test_session.flush()
+    await test_session.commit()
     await test_session.refresh(tenant)
 
     yield tenant
@@ -548,7 +553,8 @@ async def test_tenant(test_session):
 async def test_user(test_session, test_tenant):
     """Create a test user in the database with the correct tenant_id.
 
-    The user is automatically cleaned up after the test via transaction rollback.
+    The integration harness recreates schema per test, so commit setup records to
+    avoid holding open SQLite write locks across API requests.
     """
     from src.core.security import get_password_hash
     from tests.factories import UserFactory
@@ -561,7 +567,7 @@ async def test_user(test_session, test_tenant):
         tenant_id=test_tenant.id,
     )
     test_session.add(user)
-    await test_session.flush()
+    await test_session.commit()
     await test_session.refresh(user)
 
     yield user

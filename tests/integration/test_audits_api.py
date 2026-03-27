@@ -18,6 +18,22 @@ def _matches_intake_resolver(template: AuditTemplate) -> bool:
     return "external_audit_intake" in tags or (template.name or "").strip().lower() == "external audit intake"
 
 
+async def _deactivate_existing_intake_templates(
+    test_session: AsyncSession,
+    *,
+    external_audit_type: str,
+) -> None:
+    """Keep resolver-backed tests deterministic in the shared integration database."""
+    existing_templates = (await test_session.execute(select(AuditTemplate))).scalars().all()
+    specific_tag = f"external_audit_intake:{external_audit_type}".lower()
+    for template in existing_templates:
+        tags = [str(tag).strip().lower() for tag in (template.tags_json or []) if isinstance(tag, str)]
+        if _matches_intake_resolver(template) or specific_tag in tags:
+            template.is_published = False
+            template.is_active = False
+    await test_session.commit()
+
+
 class TestAuditsAPI:
     """Test suite for Audits API endpoints."""
 
@@ -165,6 +181,7 @@ class TestAuditsAPI:
         auth_headers: dict,
     ):
         """Test external import types map into the canonical audit metadata fields."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
         template = AuditTemplate(
             name="ZZZ External Audit Intake (System)",
             category="System",
@@ -193,6 +210,50 @@ class TestAuditsAPI:
         assert data["template_id"] == template.id
         assert data["source_origin"] == "third_party"
         assert data["assurance_scheme"] == "Achilles UVDB"
+        assert data["is_external_import_intake"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_audit_run_detail_marks_external_import_intake(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        """Test run detail surfaces the external import intake marker for safe routing."""
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
+        template = AuditTemplate(
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        create_response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Achilles follow-up audit",
+                "external_audit_type": "achilles_uvdb",
+            },
+            headers=auth_headers,
+        )
+        assert create_response.status_code == 201
+
+        run_id = create_response.json()["id"]
+        detail_response = await client.get(
+            f"/api/v1/audits/runs/{run_id}",
+            headers=auth_headers,
+        )
+
+        assert detail_response.status_code == 200
+        assert detail_response.json()["is_external_import_intake"] is True
 
     @pytest.mark.asyncio
     async def test_create_external_audit_run_returns_not_found_when_no_intake_template_exists(
@@ -213,12 +274,7 @@ class TestAuditsAPI:
                 is_published=True,
             )
         )
-        existing_templates = (await test_session.execute(select(AuditTemplate))).scalars().all()
-        for template in existing_templates:
-            if _matches_intake_resolver(template):
-                template.is_published = False
-                template.is_active = False
-        await test_session.commit()
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
 
         response = await client.post(
             "/api/v1/audits/runs",

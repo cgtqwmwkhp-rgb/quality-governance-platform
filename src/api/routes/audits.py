@@ -143,6 +143,29 @@ def _record_audit_endpoint_event(
     )
 
 
+def _template_has_tag(template: AuditTemplate | None, tag: str) -> bool:
+    if template is None:
+        return False
+    return any(
+        str(candidate).strip().lower() == tag for candidate in (template.tags_json or []) if isinstance(candidate, str)
+    )
+
+
+def _is_external_import_intake_template(template: AuditTemplate | None) -> bool:
+    if template is None:
+        return False
+    return template.audit_type == "external_import" or _template_has_tag(template, "external_audit_intake")
+
+
+def _annotate_run_response_import_mode(
+    response: AuditRunResponse | AuditRunDetailResponse,
+    *,
+    template: AuditTemplate | None,
+) -> AuditRunResponse | AuditRunDetailResponse:
+    response.is_external_import_intake = _is_external_import_intake_template(template)
+    return response
+
+
 EXTERNAL_AUDIT_TYPE_DEFAULT_SCHEME = {
     "customer": "Customer Audit",
     "planet_mark": "Planet Mark",
@@ -794,7 +817,12 @@ async def list_runs(
         validated_items = []
         for idx, run in enumerate(result.items):
             try:
-                validated_items.append(AuditRunResponse.model_validate(run))
+                validated_items.append(
+                    _annotate_run_response_import_mode(
+                        AuditRunResponse.model_validate(run),
+                        template=getattr(run, "template", None),
+                    )
+                )
             except Exception as item_exc:
                 logger.error(
                     "Failed to serialize run id=%s (index %d): %s\n%s",
@@ -926,7 +954,7 @@ async def create_run(
     await db.commit()
     await db.refresh(run)
 
-    response = AuditRunResponse.model_validate(run)
+    response = _annotate_run_response_import_mode(AuditRunResponse.model_validate(run), template=template)
     if intake_resolution is not None:
         logger.info(
             "Resolved external audit intake template",
@@ -953,7 +981,10 @@ async def get_run(
     service = AuditService(db)
     detail = await service.get_run_detail(run_id, current_user.tenant_id)
 
-    response = AuditRunDetailResponse.model_validate(detail.run)
+    response = _annotate_run_response_import_mode(
+        AuditRunDetailResponse.model_validate(detail.run),
+        template=detail.run.template,
+    )
     response.template_name = detail.template_name
     response.completion_percentage = detail.completion_percentage
     return response
