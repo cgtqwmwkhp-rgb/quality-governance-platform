@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.dialects import postgresql
 
 from src.api.routes.actions import ActionCreate, create_action
-from src.domain.models.capa import CAPAAction, CAPAPriority, CAPAStatus, CAPASource, CAPAType
+from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 
 
 @pytest.mark.asyncio
