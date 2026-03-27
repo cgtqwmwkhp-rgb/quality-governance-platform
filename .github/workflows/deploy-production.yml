@@ -42,6 +42,7 @@ env:
   ACR_NAME: ${{ secrets.PROD_ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.PROD_AZURE_WEBAPP_NAME }}
   AZURE_RESOURCE_GROUP: rg-qgp-staging  # Shared resource group for both environments — webapp/ACR names differ via PROD_ secrets
+  AZURE_DB_RESOURCE_GROUP: rg-qgp-prod
   ENVIRONMENT_NAME: production
   IMAGE_NAME: quality-governance-platform
 
@@ -423,7 +424,7 @@ jobs:
         run: |
           echo "Creating pre-deployment database backup..."
           az postgres flexible-server backup create \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --resource-group ${{ env.AZURE_DB_RESOURCE_GROUP }} \
             --name ${{ secrets.AZURE_DB_SERVER_NAME }} \
             --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
