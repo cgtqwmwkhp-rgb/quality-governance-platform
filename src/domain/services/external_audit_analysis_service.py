@@ -129,7 +129,9 @@ class ExternalAuditAnalysisService:
         positive_summary = self._build_category_summary(findings, {"positive_practice"})
         nonconformity_summary = self._build_category_summary(findings, {"nonconformity", "competence_gap", "finding"})
         improvement_summary = self._build_category_summary(findings, {"opportunity_for_improvement", "observation"})
-        summary = self._build_summary(normalized_text, findings, frameworks, standards, scorecard, scheme_match["label"])
+        summary = self._build_summary(
+            normalized_text, findings, frameworks, standards, scorecard, scheme_match["label"]
+        )
         return ExternalAuditAnalysisResult(
             summary=summary,
             findings=findings,
@@ -283,7 +285,9 @@ class ExternalAuditAnalysisService:
         if frameworks:
             parts.append(f"Framework matches: {', '.join(str(item['framework']) for item in frameworks)}.")
         if standards:
-            parts.append(f"ISO references detected: {', '.join(sorted({str(item['standard']) for item in standards}))}.")
+            parts.append(
+                f"ISO references detected: {', '.join(sorted({str(item['standard']) for item in standards}))}."
+            )
         score_percentage = scorecard.get("score_percentage")
         if score_percentage is not None:
             parts.append(f"Normalized score: {float(score_percentage):.1f}%.")
@@ -340,7 +344,9 @@ class ExternalAuditAnalysisService:
                 "signals": signals,
             }
 
-        iso_hits = [label for label, pattern in self._ISO_STANDARD_PATTERNS if re.search(pattern, lowered, re.IGNORECASE)]
+        iso_hits = [
+            label for label, pattern in self._ISO_STANDARD_PATTERNS if re.search(pattern, lowered, re.IGNORECASE)
+        ]
         if iso_hits or "iso" in scheme:
             signals.extend(iso_hits or ["assurance_scheme_iso"])
             return {
@@ -427,7 +433,9 @@ class ExternalAuditAnalysisService:
                 score_percentage = float(pct_match.group(3))
 
         if score_percentage is None:
-            generic_pct = re.search(r"(?i)\b(score|rating|result|compliance)\b[^0-9]{0,10}(\d{1,3}(?:\.\d+)?)\s*%", text)
+            generic_pct = re.search(
+                r"(?i)\b(score|rating|result|compliance)\b[^0-9]{0,10}(\d{1,3}(?:\.\d+)?)\s*%", text
+            )
             if generic_pct:
                 score_percentage = float(generic_pct.group(2))
 
@@ -445,7 +453,9 @@ class ExternalAuditAnalysisService:
         if score_percentage is None:
             warnings.append("No explicit overall score was extracted from the imported report.")
         if scheme == "planet_mark":
-            warnings.append("Planet Mark imports may require reviewer confirmation of reduction and data-quality scores.")
+            warnings.append(
+                "Planet Mark imports may require reviewer confirmation of reduction and data-quality scores."
+            )
 
         return {
             "overall_score": overall_score,
@@ -528,12 +538,7 @@ class ExternalAuditAnalysisService:
             standards = re.findall(r"(?i)\bISO(?:\/IEC)?\s*(9001|14001|27001|45001)\s*:?\s*(2015|2018|2022)?\b", text)
             if standards:
                 return ", ".join(
-                    sorted(
-                        {
-                            f"ISO {standard}{f':{year}' if year else ''}"
-                            for standard, year in standards
-                        }
-                    )
+                    sorted({f"ISO {standard}{f':{year}' if year else ''}" for standard, year in standards})
                 )
         if scheme == "planet_mark":
             match = re.search(r"(?i)planet mark[^0-9]*(\d{4})", text)

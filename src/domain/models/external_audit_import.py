@@ -45,7 +45,9 @@ class ExternalAuditImportJob(Base, TimestampMixin, ReferenceNumberMixin, AuditTr
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    audit_run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    audit_run_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     source_document_asset_id: Mapped[int] = mapped_column(
         ForeignKey("evidence_assets.id", ondelete="CASCADE"),
         nullable=False,
@@ -98,9 +100,7 @@ class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
     """Reviewable imported finding draft prior to live promotion."""
 
     __tablename__ = "external_audit_import_drafts"
-    __table_args__ = (
-        Index("ix_external_audit_import_drafts_job_status", "import_job_id", "status"),
-    )
+    __table_args__ = (Index("ix_external_audit_import_drafts_job_status", "import_job_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     import_job_id: Mapped[int] = mapped_column(
@@ -108,7 +108,9 @@ class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
         nullable=False,
         index=True,
     )
-    audit_run_id: Mapped[int] = mapped_column(ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    audit_run_id: Mapped[int] = mapped_column(
+        ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     status: Mapped[ExternalAuditDraftStatus] = mapped_column(
         CaseInsensitiveEnum(ExternalAuditDraftStatus),
@@ -130,4 +132,6 @@ class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
     suggested_action_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     suggested_risk_title: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     review_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    promoted_finding_id: Mapped[Optional[int]] = mapped_column(ForeignKey("audit_findings.id"), nullable=True, index=True)
+    promoted_finding_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("audit_findings.id"), nullable=True, index=True
+    )

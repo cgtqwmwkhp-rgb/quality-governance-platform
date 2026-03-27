@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
-from src.domain.models.audit import AuditRun, AuditStatus
+from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.document import FileType
 from src.domain.models.evidence_asset import EvidenceAsset
@@ -112,7 +112,9 @@ class ExternalAuditImportService:
         await self.db.refresh(job)
         return job
 
-    async def queue_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> tuple[ExternalAuditImportJob, bool]:
+    async def queue_job(
+        self, *, job_id: int, tenant_id: int | None, user_id: int
+    ) -> tuple[ExternalAuditImportJob, bool]:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         if job.status in {
             ExternalAuditImportStatus.QUEUED,
@@ -152,7 +154,9 @@ class ExternalAuditImportService:
         )
         return list(result.scalars().all())
 
-    async def process_job(self, *, job_id: int, tenant_id: int | None, user_id: int | None = None) -> ExternalAuditImportJob:
+    async def process_job(
+        self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
+    ) -> ExternalAuditImportJob:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
@@ -367,18 +371,22 @@ class ExternalAuditImportService:
                 user_id=user_id,
                 tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
             )
+            finding_id = await self._resolve_persisted_finding_id(
+                finding_id=getattr(finding, "id", None),
+                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
+            )
             await self._link_evidence_for_finding(
-                finding_id=finding.id,
+                finding_id=finding_id,
                 clause_ids=clause_ids,
                 tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
                 user_id=user_id,
                 note=draft.description,
                 confidence=draft.confidence_score,
             )
-            draft.promoted_finding_id = finding.id
+            draft.promoted_finding_id = finding_id
             draft.status = ExternalAuditDraftStatus.PROMOTED
             draft.updated_by_id = user_id
-            promoted_findings.append(finding.id)
+            promoted_findings.append(finding_id)
             document_clause_ids.update(clause_ids)
 
         if document_clause_ids:
@@ -464,6 +472,21 @@ class ExternalAuditImportService:
             raise NotFoundError(f"External audit draft {draft_id} not found")
         return draft
 
+    async def _resolve_persisted_finding_id(self, *, finding_id: int | None, tenant_id: int | None) -> int:
+        if finding_id is None:
+            raise ConflictError("Promoted finding did not return a persistent identifier")
+
+        result = await self.db.execute(
+            select(AuditFinding.id).where(
+                AuditFinding.id == finding_id,
+                AuditFinding.tenant_id == tenant_id,
+            )
+        )
+        persisted_id = result.scalar_one_or_none()
+        if persisted_id is None:
+            raise ConflictError("Promoted finding was not persisted before draft linkage")
+        return persisted_id
+
     async def _clear_existing_drafts(self, *, job_id: int, tenant_id: int | None) -> None:
         drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
         for draft in drafts:
@@ -507,7 +530,9 @@ class ExternalAuditImportService:
             {
                 str(mapping.get("clause_id"))
                 for finding in findings
-                for mapping in ((getattr(finding, "mapped_standards", None) or getattr(finding, "mapped_standards_json", []) or []))
+                for mapping in (
+                    (getattr(finding, "mapped_standards", None) or getattr(finding, "mapped_standards_json", []) or [])
+                )
                 if mapping.get("clause_id")
             }
         )
@@ -516,7 +541,9 @@ class ExternalAuditImportService:
             "action_candidates": action_candidates,
             "risk_candidates": risk_candidates,
             "evidence_link_candidates": evidence_link_candidates,
-            "positive_findings": sum(1 for finding in findings if getattr(finding, "finding_type", "") == "positive_practice"),
+            "positive_findings": sum(
+                1 for finding in findings if getattr(finding, "finding_type", "") == "positive_practice"
+            ),
             "improvement_findings": sum(
                 1
                 for finding in findings
@@ -533,7 +560,11 @@ class ExternalAuditImportService:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
         summary = self._build_promotion_summary(findings=drafts)
-        summary["accepted_candidates"] = sum(1 for draft in drafts if draft.status in {ExternalAuditDraftStatus.ACCEPTED, ExternalAuditDraftStatus.PROMOTED})
+        summary["accepted_candidates"] = sum(
+            1
+            for draft in drafts
+            if draft.status in {ExternalAuditDraftStatus.ACCEPTED, ExternalAuditDraftStatus.PROMOTED}
+        )
         summary["rejected_candidates"] = sum(1 for draft in drafts if draft.status == ExternalAuditDraftStatus.REJECTED)
         job.promotion_summary_json = summary
         await self.db.flush()

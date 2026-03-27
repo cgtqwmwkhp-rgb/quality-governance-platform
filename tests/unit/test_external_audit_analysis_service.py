@@ -6,8 +6,7 @@ def test_outcome_status_prioritizes_failures_over_observations() -> None:
 
     result = service.analyze(
         extracted_text=(
-            "Audit summary: observation recorded. "
-            "Major non-conformance identified against the management system."
+            "Audit summary: observation recorded. " "Major non-conformance identified against the management system."
         ),
         page_texts=[
             "Audit summary: observation recorded.",
