@@ -992,7 +992,7 @@ export interface AuditRunDetail extends AuditRun {
 }
 
 export interface AuditRunCreate {
-  template_id: number
+  template_id?: number
   title?: string
   location?: string
   location_details?: string
@@ -4134,6 +4134,7 @@ export interface ExternalAuditImportJob {
   max_score?: number | null
   score_percentage?: number | null
   outcome_status?: string | null
+  provenance_json?: Record<string, unknown> | null
   classification_basis_json?: Record<string, unknown> | null
   score_breakdown_json?: Array<Record<string, unknown>> | null
   evidence_preview_json?: Array<Record<string, unknown>> | null

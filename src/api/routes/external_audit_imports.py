@@ -47,6 +47,7 @@ class ExternalAuditImportJobResponse(BaseModel):
     max_score: Optional[float] = None
     score_percentage: Optional[float] = None
     outcome_status: Optional[str] = None
+    provenance_json: Optional[dict] = None
     classification_basis_json: Optional[dict] = None
     score_breakdown_json: Optional[list] = None
     evidence_preview_json: Optional[list] = None

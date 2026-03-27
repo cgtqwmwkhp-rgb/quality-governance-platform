@@ -122,7 +122,8 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    expect(within(dialog).queryByText(/Audit Template/i)).not.toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'achilles_uvdb' },
     })
 
@@ -142,12 +143,12 @@ describe('Audits external import flow', () => {
 
     expect(mockCreateRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        template_id: 11,
         external_audit_type: 'achilles_uvdb',
         source_origin: 'third_party',
         assurance_scheme: 'Achilles UVDB',
       }),
     )
+    expect(mockCreateRun.mock.calls[0]?.[0]).not.toHaveProperty('template_id')
     expect(mockUpload).toHaveBeenCalledWith(
       file,
       expect.objectContaining({
@@ -178,7 +179,7 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'customer' },
     })
 
@@ -222,7 +223,7 @@ describe('Audits external import flow', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
 
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText(/Import Type/i), {
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
       target: { value: 'achilles_uvdb' },
     })
 
@@ -239,5 +240,38 @@ describe('Audits external import flow', () => {
     ).toBeInTheDocument()
     expect(mockUpdateRun).not.toHaveBeenCalled()
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the import flow available even when no published templates are listed', async () => {
+    mockListTemplates.mockResolvedValueOnce({
+      data: { items: [], total: 0, page: 1, page_size: 100, pages: 0 },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
+      target: { value: 'planet_mark' },
+    })
+
+    const file = new File(['audit pdf'], 'planet-mark.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Import External Audit' }).at(-1)!)
+
+    await waitFor(() => {
+      expect(mockCreateRun).toHaveBeenCalledTimes(1)
+    })
+    expect(mockCreateRun.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        external_audit_type: 'planet_mark',
+        source_origin: 'certification',
+        assurance_scheme: 'Planet Mark',
+      }),
+    )
   })
 })

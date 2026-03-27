@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.routes import external_audit_imports
 from src.domain.exceptions import ValidationError
-from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus, AuditTemplate, FindingStatus
+from src.domain.models.audit import AuditFinding, AuditRun, AuditTemplate, AuditStatus, FindingStatus
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -17,11 +17,7 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
-from src.domain.models.external_audit_import import (
-    ExternalAuditDraft,
-    ExternalAuditDraftStatus,
-    ExternalAuditImportStatus,
-)
+from src.domain.models.external_audit_import import ExternalAuditDraft, ExternalAuditDraftStatus, ExternalAuditImportStatus
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from tests.conftest import generate_test_reference
 
@@ -136,6 +132,10 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     assert job_payload["detected_scheme"] == "achilles_uvdb"
     assert job_payload["detected_scheme_confidence"] > 0.5
     assert job_payload["issuer_name"] == "Achilles"
+    assert job_payload["provenance_json"]["processing_template_id"] == template.id
+    assert job_payload["provenance_json"]["processing_template_version"] == run.template_version
+    assert job_payload["provenance_json"]["declared_assurance_scheme"] == "Achilles UVDB"
+    assert job_payload["provenance_json"]["declared_vs_detected"]["detected_scheme"] == "achilles_uvdb"
     assert job_payload["nonconformity_summary_json"]
     assert job_payload["promotion_summary_json"]["action_candidates"] >= 1
     assert job_payload["evidence_preview_json"]
@@ -406,9 +406,7 @@ async def test_process_job_failure_preserves_existing_drafts(
         "storage_service",
         lambda: SimpleNamespace(download=AsyncMock(return_value=b"Achilles import content")),
     )
-    monkeypatch.setattr(
-        service.analysis_service, "analyze", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom"))
-    )
+    monkeypatch.setattr(service.analysis_service, "analyze", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
 
     processed_job = await service.process_job(
         job_id=job.id,

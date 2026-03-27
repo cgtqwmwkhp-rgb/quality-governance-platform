@@ -307,13 +307,17 @@ class TestAuditRunCreate:
     def test_external_import_accepts_supported_type(self):
         """Test importing an external audit with a supported type."""
         run = AuditRunCreate(
-            template_id=1,
             external_audit_type="planet_mark",
             source_origin="certification",
             assurance_scheme="Planet Mark",
         )
         assert run.external_audit_type == "planet_mark"
         assert run.source_origin == "certification"
+
+    def test_internal_run_requires_template_id(self):
+        """Test internal runs still require an explicit template."""
+        with pytest.raises(ValidationError):
+            AuditRunCreate()
 
     def test_external_import_rejects_invalid_source_origin(self):
         """Test source_origin rejects values outside the bounded contract."""
