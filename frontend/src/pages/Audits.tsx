@@ -156,10 +156,6 @@ function getStructuredErrorMessage(error: unknown): string | null {
   return null
 }
 
-function isExternalImportIntakeRun(audit: AuditRun): boolean {
-  return audit.is_external_import_intake === true
-}
-
 function isExternalAuditImportRun(audit: AuditRun): boolean {
   return audit.is_external_audit_import === true || audit.is_external_import_intake === true
 }

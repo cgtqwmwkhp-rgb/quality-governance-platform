@@ -959,9 +959,7 @@ class AuditService:
 
     async def _ensure_run_is_executable(self, run: AuditRun) -> None:
         if await self._is_external_audit_import_run(run):
-            raise ValidationError(
-                "Imported external audit outcomes cannot be executed from the audit run workflow"
-            )
+            raise ValidationError("Imported external audit outcomes cannot be executed from the audit run workflow")
 
     async def list_runs(
         self,
