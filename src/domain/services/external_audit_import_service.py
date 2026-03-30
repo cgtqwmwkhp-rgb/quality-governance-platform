@@ -59,6 +59,17 @@ class ExternalAuditImportService:
         if not settings.external_audit_import_enabled:
             raise ValidationError("External audit import is disabled by configuration")
 
+    @staticmethod
+    def _scheme_home(scheme: str | None) -> tuple[str, str]:
+        normalized = (scheme or "").strip().lower()
+        if normalized == "achilles_uvdb":
+            return "/uvdb", "Achilles / UVDB"
+        if normalized == "planet_mark":
+            return "/planet-mark", "Planet Mark"
+        if normalized == "iso":
+            return "/compliance", "ISO Compliance"
+        return "/compliance", "Compliance Summary"
+
     async def create_job(
         self,
         *,
@@ -410,10 +421,24 @@ class ExternalAuditImportService:
                 title=job.source_filename,
             )
 
-        if run.status in {AuditStatus.DRAFT, AuditStatus.SCHEDULED}:
-            run.status = AuditStatus.PENDING_REVIEW
-        run.completed_at = None
-        run.passed = None
+        completion_timestamp = job.report_date or datetime.now(timezone.utc)
+        if run.started_at is None:
+            run.started_at = completion_timestamp
+        run.status = AuditStatus.COMPLETED
+        run.completed_at = completion_timestamp
+        if job.overall_score is not None:
+            run.score = job.overall_score
+        if job.max_score is not None:
+            run.max_score = job.max_score
+        if job.score_percentage is not None:
+            run.score_percentage = job.score_percentage
+        normalized_outcome = (job.outcome_status or "").strip().lower()
+        if normalized_outcome in {"pass", "passed", "compliant"}:
+            run.passed = True
+        elif normalized_outcome in {"fail", "failed", "non_compliant", "non-compliant"}:
+            run.passed = False
+        else:
+            run.passed = None
 
         scheme_alignment = await self._sync_scheme_records(
             job=job,
@@ -668,11 +693,14 @@ class ExternalAuditImportService:
         tenant_id: int | None,
         drafts: list[ExternalAuditDraft],
     ) -> dict[str, object]:
+        home_route, home_label = self._scheme_home(job.detected_scheme)
         if job.detected_scheme != "achilles_uvdb":
             return {
-                "status": "not_synced",
+                "status": "completed_outcome_routed",
                 "scheme": job.detected_scheme,
-                "reason": "Automatic domain synchronization is currently enabled for Achilles / UVDB imports only.",
+                "home_route": home_route,
+                "home_label": home_label,
+                "reason": "This imported external audit is routed into the relevant completed compliance area without executable audit-run semantics.",
             }
 
         result = await self.db.execute(
@@ -717,4 +745,10 @@ class ExternalAuditImportService:
         uvdb_audit.observations = sum(1 for draft in drafts if draft.finding_type == "observation")
         uvdb_audit.audit_notes = job.analysis_summary
         await self.db.flush()
-        return {"status": "synced", "scheme": "achilles_uvdb", "uvdb_audit_id": uvdb_audit.id}
+        return {
+            "status": "synced",
+            "scheme": "achilles_uvdb",
+            "uvdb_audit_id": uvdb_audit.id,
+            "home_route": home_route,
+            "home_label": home_label,
+        }

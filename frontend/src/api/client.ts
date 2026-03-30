@@ -908,6 +908,7 @@ export interface AuditRun {
   external_reference?: string
   source_document_asset_id?: number
   source_document_label?: string
+  is_external_audit_import?: boolean
   is_external_import_intake?: boolean
   status: 'draft' | 'scheduled' | 'in_progress' | 'pending_review' | 'completed' | 'cancelled'
   scheduled_date?: string
@@ -4147,6 +4148,8 @@ export interface ExternalAuditImportJob {
   processing_warnings_json?: string[] | null
   error_code?: string | null
   error_detail?: string | null
+  specialist_home_path?: string | null
+  specialist_home_label?: string | null
   created_at: string
   processed_at?: string | null
   promoted_at?: string | null

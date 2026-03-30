@@ -63,6 +63,41 @@ function deriveDeclaredProgramLabel(auditRun: AuditRunDetail | null, job: Extern
   return 'External Audit'
 }
 
+function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path: string; label: string } {
+  const path = job?.specialist_home_path?.trim()
+  const label = job?.specialist_home_label?.trim()
+  if (path && label) {
+    return { path, label }
+  }
+
+  let scheme = (job?.detected_scheme || '').trim().toLowerCase()
+  if (!scheme) {
+    const provenance = job?.provenance_json || {}
+    const declaredScheme = String(provenance.declared_assurance_scheme || '').toLowerCase()
+    const declaredSource = String(provenance.declared_source_origin || '').toLowerCase()
+    if (declaredScheme.includes('achilles') || declaredScheme.includes('uvdb')) {
+      scheme = 'achilles_uvdb'
+    } else if (declaredScheme.includes('planet mark')) {
+      scheme = 'planet_mark'
+    } else if (declaredScheme.startsWith('iso')) {
+      scheme = 'iso'
+    } else if (declaredSource === 'customer') {
+      scheme = 'customer_other'
+    }
+  }
+
+  if (scheme === 'achilles_uvdb') {
+    return { path: '/uvdb', label: 'Open Achilles / UVDB' }
+  }
+  if (scheme === 'planet_mark') {
+    return { path: '/planet-mark', label: 'Open Planet Mark' }
+  }
+  if (scheme === 'iso') {
+    return { path: '/compliance', label: 'Open ISO Compliance' }
+  }
+  return { path: '/compliance', label: 'Open Compliance Summary' }
+}
+
 export default function AuditImportReview() {
   const { auditId } = useParams()
   const [searchParams] = useSearchParams()
@@ -193,6 +228,7 @@ export default function AuditImportReview() {
     auditRun?.external_body_name || readProvenanceString(job, 'declared_external_body_name')
   const declaredExternalReference =
     auditRun?.external_reference || readProvenanceString(job, 'declared_external_reference')
+  const specialistHome = useMemo(() => deriveSpecialistHome(job), [job])
 
   const handleDraftDecision = async (draftId: number, status: 'accepted' | 'rejected') => {
     setBusyDraftId(draftId)
@@ -238,17 +274,17 @@ export default function AuditImportReview() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">External Audit Review</h1>
           <p className="mt-1 text-muted-foreground">
-            OCR and analysis stay in draft until you explicitly approve promotion into live findings.
+            OCR and analysis stay in draft until you approve promotion into completed governance outcomes.
           </p>
         </div>
         <div className="flex gap-3">
           <Button
             variant="outline"
-            onClick={() => navigate(`/audits/${job?.audit_run_id ?? auditId}/execute`)}
-            disabled={!job?.audit_run_id}
+            onClick={() => navigate(specialistHome.path)}
+            disabled={!job}
           >
             <FileText size={16} />
-            Open Audit Run
+            {specialistHome.label}
           </Button>
           <Button
             onClick={handlePromote}
@@ -606,10 +642,10 @@ export default function AuditImportReview() {
                   </Button>
                   {draft.promoted_finding_id ? (
                     <Link
-                      to={`/audits/${draft.audit_run_id}/execute`}
+                      to={specialistHome.path}
                       className="inline-flex items-center text-sm font-medium text-primary hover:underline"
                     >
-                      View live finding
+                      {specialistHome.label}
                     </Link>
                   ) : null}
                 </div>

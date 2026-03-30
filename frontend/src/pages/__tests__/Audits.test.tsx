@@ -101,9 +101,10 @@ describe('Audits external import flow', () => {
         template_id: 11,
         template_version: 1,
         title: 'External Audit Intake',
-        status: 'scheduled',
+        status: 'pending_review',
         source_origin: 'third_party',
         assurance_scheme: 'Achilles UVDB',
+        is_external_audit_import: true,
         created_at: '2026-03-24T10:05:00Z',
       },
     })
@@ -307,7 +308,7 @@ describe('Audits external import flow', () => {
     expect(options.join(' ')).not.toContain('ZZZ External Audit Intake (System)')
   })
 
-  it('keeps imported external intake runs out of the audit workspace views', async () => {
+  it('keeps imported external outcomes out of the audit workspace views', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -320,7 +321,8 @@ describe('Audits external import flow', () => {
             status: 'pending_review',
             source_origin: 'third_party',
             assurance_scheme: 'Achilles UVDB',
-            is_external_import_intake: true,
+            is_external_audit_import: true,
+            is_external_import_intake: false,
             created_at: '2026-03-24T10:05:00Z',
           },
           {
@@ -331,6 +333,7 @@ describe('Audits external import flow', () => {
             title: 'Visible Internal Audit',
             status: 'scheduled',
             source_origin: 'internal',
+            is_external_audit_import: false,
             is_external_import_intake: false,
             created_at: '2026-03-24T10:10:00Z',
           },

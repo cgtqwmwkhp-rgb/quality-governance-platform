@@ -428,7 +428,7 @@ async def test_process_job_failure_preserves_existing_drafts(
 
 
 @pytest.mark.asyncio
-async def test_promote_requires_review_required_and_leaves_audit_run_pending_review(
+async def test_promote_requires_review_required_and_completes_external_audit_outcome(
     test_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -550,6 +550,9 @@ async def test_promote_requires_review_required_and_leaves_audit_run_pending_rev
     await test_session.refresh(run)
 
     assert promoted_job.status == ExternalAuditImportStatus.COMPLETED
-    assert run.status == AuditStatus.PENDING_REVIEW
-    assert run.completed_at is None
-    assert run.passed is None
+    assert run.status == AuditStatus.COMPLETED
+    assert run.completed_at is not None
+    assert run.score == 91.5
+    assert run.max_score == 100
+    assert run.score_percentage == 91.5
+    assert run.passed is True
