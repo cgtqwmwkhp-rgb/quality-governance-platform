@@ -447,7 +447,11 @@ export default function AuditExecution() {
 
         if (cancelled) return
 
-        if (runData.is_external_import_intake || templateData.audit_type === 'external_import') {
+        if (
+          runData.is_external_audit_import ||
+          runData.is_external_import_intake ||
+          templateData.audit_type === 'external_import'
+        ) {
           setAudit(null)
           setResponses({})
           setResponseIdMap({})

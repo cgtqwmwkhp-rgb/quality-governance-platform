@@ -58,6 +58,8 @@ class ExternalAuditImportJobResponse(BaseModel):
     processing_warnings_json: Optional[list] = None
     error_code: Optional[str] = None
     error_detail: Optional[str] = None
+    specialist_home_path: Optional[str] = None
+    specialist_home_label: Optional[str] = None
     created_at: datetime
     processed_at: Optional[datetime] = None
     promoted_at: Optional[datetime] = None
@@ -97,6 +99,37 @@ class ExternalAuditDraftReviewRequest(BaseModel):
     severity: Optional[str] = Field(default=None, max_length=50)
 
 
+def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str, str]:
+    scheme = (job.detected_scheme or "").strip().lower()
+    if not scheme:
+        provenance = job.provenance_json or {}
+        declared_scheme = str(provenance.get("declared_assurance_scheme") or "").lower()
+        declared_source = str(provenance.get("declared_source_origin") or "").lower()
+        if "achilles" in declared_scheme or "uvdb" in declared_scheme:
+            scheme = "achilles_uvdb"
+        elif "planet mark" in declared_scheme:
+            scheme = "planet_mark"
+        elif declared_scheme.startswith("iso"):
+            scheme = "iso"
+        elif declared_source == "customer":
+            scheme = "customer_other"
+
+    if scheme == "achilles_uvdb":
+        return "/uvdb", "Open Achilles / UVDB"
+    if scheme == "planet_mark":
+        return "/planet-mark", "Open Planet Mark"
+    if scheme == "iso":
+        return "/compliance", "Open ISO Compliance"
+    return "/compliance", "Open Compliance Summary"
+
+
+def _annotate_job_response(job: ExternalAuditImportJobResponse) -> ExternalAuditImportJobResponse:
+    path, label = _determine_specialist_home(job)
+    job.specialist_home_path = path
+    job.specialist_home_label = label
+    return job
+
+
 @router.post("/jobs", response_model=ExternalAuditImportJobResponse, status_code=status.HTTP_201_CREATED)
 async def create_import_job(
     payload: ExternalAuditImportJobCreate,
@@ -111,7 +144,7 @@ async def create_import_job(
         user_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
-    return ExternalAuditImportJobResponse.model_validate(job)
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
 @router.post("/jobs/{job_id}/queue", response_model=ExternalAuditImportJobResponse)
@@ -129,7 +162,7 @@ async def queue_import_job(
     )
     if should_enqueue:
         process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
-    return ExternalAuditImportJobResponse.model_validate(job)
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
 @router.get("/jobs/{job_id}", response_model=ExternalAuditImportJobResponse)
@@ -141,7 +174,7 @@ async def get_import_job(
     """Get import-job status and summary."""
     service = ExternalAuditImportService(db)
     job = await service.get_job(job_id=job_id, tenant_id=current_user.tenant_id)
-    return ExternalAuditImportJobResponse.model_validate(job)
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
 @router.get("/jobs/{job_id}/drafts", response_model=list[ExternalAuditDraftResponse])
@@ -187,4 +220,4 @@ async def promote_import_job(
     """Promote approved drafts into live audit findings and downstream remediation."""
     service = ExternalAuditImportService(db)
     job = await service.promote_job(job_id=job_id, tenant_id=current_user.tenant_id, user_id=current_user.id)
-    return ExternalAuditImportJobResponse.model_validate(job)
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))

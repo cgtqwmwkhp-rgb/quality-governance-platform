@@ -8,7 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.domain.models.audit import AuditRun, AuditStatus, AuditTemplate
+from src.domain.models.audit import AuditQuestion, AuditRun, AuditSection, AuditStatus, AuditTemplate
 from src.domain.models.user import User
 from tests.conftest import generate_test_reference
 
@@ -210,6 +210,8 @@ class TestAuditsAPI:
         assert data["template_id"] == template.id
         assert data["source_origin"] == "third_party"
         assert data["assurance_scheme"] == "Achilles UVDB"
+        assert data["status"] == "pending_review"
+        assert data["is_external_audit_import"] is True
         assert data["is_external_import_intake"] is True
 
     @pytest.mark.asyncio
@@ -253,6 +255,7 @@ class TestAuditsAPI:
         )
 
         assert detail_response.status_code == 200
+        assert detail_response.json()["is_external_audit_import"] is True
         assert detail_response.json()["is_external_import_intake"] is True
 
     @pytest.mark.asyncio
@@ -292,6 +295,110 @@ class TestAuditsAPI:
             "No published external audit intake template is configured for 'achilles_uvdb'" in payload
             or "No published audit templates are available for this tenant" in payload
         )
+
+    @pytest.mark.asyncio
+    async def test_start_external_audit_import_run_is_rejected(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
+        template = AuditTemplate(
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
+        )
+        test_session.add(template)
+        await test_session.commit()
+        await test_session.refresh(template)
+
+        create_response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Imported Achilles outcome",
+                "external_audit_type": "achilles_uvdb",
+            },
+            headers=auth_headers,
+        )
+        assert create_response.status_code == 201
+        run_id = create_response.json()["id"]
+
+        start_response = await client.post(
+            f"/api/v1/audits/runs/{run_id}/start",
+            headers=auth_headers,
+        )
+
+        assert start_response.status_code == 400
+        assert "Imported external audit outcomes cannot be executed" in str(start_response.json())
+
+    @pytest.mark.asyncio
+    async def test_create_response_for_external_audit_import_run_is_rejected(
+        self,
+        client: AsyncClient,
+        test_session: AsyncSession,
+        test_user: User,
+        auth_headers: dict,
+    ):
+        await _deactivate_existing_intake_templates(test_session, external_audit_type="achilles_uvdb")
+        template = AuditTemplate(
+            name="ZZZ External Audit Intake (System)",
+            category="System",
+            audit_type="external_import",
+            created_by_id=test_user.id,
+            reference_number=generate_test_reference("TPL"),
+            is_published=True,
+            tags_json=["external_audit_intake", "external_audit_intake:achilles_uvdb"],
+        )
+        section = AuditSection(
+            template_id=0,
+            title="Imported evidence section",
+            sort_order=1,
+        )
+        question = AuditQuestion(
+            template_id=0,
+            question_text="Imported finding placeholder",
+            question_type="yes_no",
+            sort_order=1,
+        )
+        test_session.add(template)
+        await test_session.flush()
+        section.template_id = template.id
+        test_session.add(section)
+        await test_session.flush()
+        question.template_id = template.id
+        question.section_id = section.id
+        test_session.add(question)
+        await test_session.commit()
+        await test_session.refresh(template)
+        await test_session.refresh(question)
+
+        create_response = await client.post(
+            "/api/v1/audits/runs",
+            json={
+                "template_id": template.id,
+                "title": "Imported Achilles outcome",
+                "external_audit_type": "achilles_uvdb",
+            },
+            headers=auth_headers,
+        )
+        assert create_response.status_code == 201
+        run_id = create_response.json()["id"]
+
+        response_payload = await client.post(
+            f"/api/v1/audits/runs/{run_id}/responses",
+            json={"question_id": question.id, "response_value": "yes"},
+            headers=auth_headers,
+        )
+
+        assert response_payload.status_code == 400
+        assert "Imported external audit outcomes cannot be executed" in str(response_payload.json())
 
     @pytest.mark.asyncio
     async def test_create_external_audit_run_fails_closed_when_multiple_intake_templates_match(

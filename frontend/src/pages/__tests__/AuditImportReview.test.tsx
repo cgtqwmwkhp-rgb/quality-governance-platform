@@ -46,7 +46,8 @@ describe('AuditImportReview', () => {
         assurance_scheme: 'Achilles UVDB',
         external_body_name: 'Achilles',
         external_reference: 'UVDB-2026-001',
-        status: 'pending_review',
+        status: 'completed',
+        is_external_audit_import: true,
         responses: [],
         findings: [],
         completion_percentage: 0,
@@ -62,6 +63,8 @@ describe('AuditImportReview', () => {
         audit_run_id: 41,
         reference_number: 'IMP-00072',
         status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
         provenance_json: {
           processing_template_id: 11,
           processing_template_version: 3,
@@ -77,7 +80,7 @@ describe('AuditImportReview', () => {
     expect(
       await screen.findByText('This import job belongs to a different audit run. Re-open it from the audits workspace.'),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open Audit Run' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open Compliance Summary' })).toBeDisabled()
     expect(mockGetRunDetail).not.toHaveBeenCalled()
   })
 
@@ -88,6 +91,8 @@ describe('AuditImportReview', () => {
         audit_run_id: 41,
         reference_number: 'IMP-00072',
         status: 'failed',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
         analysis_summary: 'Review required',
         promotion_summary_json: null,
         positive_summary_json: [],
@@ -157,6 +162,8 @@ describe('AuditImportReview', () => {
         audit_run_id: 41,
         reference_number: 'IMP-00072',
         status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
         promotion_summary_json: null,
         positive_summary_json: [],
         nonconformity_summary_json: [],

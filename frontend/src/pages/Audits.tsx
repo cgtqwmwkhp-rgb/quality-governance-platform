@@ -160,6 +160,10 @@ function isExternalImportIntakeRun(audit: AuditRun): boolean {
   return audit.is_external_import_intake === true
 }
 
+function isExternalAuditImportRun(audit: AuditRun): boolean {
+  return audit.is_external_audit_import === true || audit.is_external_import_intake === true
+}
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
@@ -467,7 +471,7 @@ export default function Audits() {
   }
 
   const filteredAudits = useMemo(() => {
-    const visibleAudits = audits.filter((audit) => !isExternalImportIntakeRun(audit))
+    const visibleAudits = audits.filter((audit) => !isExternalAuditImportRun(audit))
     if (!searchTerm.trim()) return visibleAudits
     const term = searchTerm.toLowerCase()
     return visibleAudits.filter(

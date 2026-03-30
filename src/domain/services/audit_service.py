@@ -943,6 +943,26 @@ class AuditService:
     # Run methods
     # ==================================================================
 
+    async def _is_external_audit_import_run(self, run: AuditRun) -> bool:
+        template = run.__dict__.get("template")
+        if template is None:
+            template_result = await self.db.execute(select(AuditTemplate).where(AuditTemplate.id == run.template_id))
+            template = template_result.scalar_one_or_none()
+        if template is None:
+            return False
+        if template.audit_type == "external_import":
+            return True
+        return any(
+            isinstance(candidate, str) and candidate.strip().lower() == "external_audit_intake"
+            for candidate in (template.tags_json or [])
+        )
+
+    async def _ensure_run_is_executable(self, run: AuditRun) -> None:
+        if await self._is_external_audit_import_run(run):
+            raise ValidationError(
+                "Imported external audit outcomes cannot be executed from the audit run workflow"
+            )
+
     async def list_runs(
         self,
         tenant_id: int,
@@ -1072,6 +1092,7 @@ class AuditService:
         )
 
         if "status" in update_data:
+            await self._ensure_run_is_executable(run)
             new_status = update_data["status"]
             if new_status == AuditStatus.COMPLETED.value:
                 raise ValidationError("Cannot set status to completed directly; " "use the complete endpoint")
@@ -1101,6 +1122,7 @@ class AuditService:
             run_id,
             tenant_id=tenant_id,
         )
+        await self._ensure_run_is_executable(run)
         if run.status != AuditStatus.SCHEDULED:
             raise ValidationError("Only scheduled runs can be started")
 
@@ -1411,6 +1433,7 @@ class AuditService:
         run = result.scalar_one_or_none()
         if not run:
             raise NotFoundError(f"AuditRun {run_id} not found")
+        await self._ensure_run_is_executable(run)
 
         if run.status != AuditStatus.IN_PROGRESS:
             raise ValidationError("Only in-progress runs can be completed")
@@ -1458,6 +1481,7 @@ class AuditService:
             run_id,
             tenant_id=tenant_id,
         )
+        await self._ensure_run_is_executable(run)
 
         if run.status not in (AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS):
             raise ValidationError("Cannot add responses to a completed or cancelled run")
@@ -1505,6 +1529,7 @@ class AuditService:
         if not response:
             raise NotFoundError(f"AuditResponse {response_id} not found")
 
+        await self._ensure_run_is_executable(response.run)
         if response.run.status == AuditStatus.COMPLETED:
             raise ValidationError("Cannot update responses on a completed run")
 

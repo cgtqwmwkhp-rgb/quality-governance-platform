@@ -162,7 +162,9 @@ def _annotate_run_response_import_mode(
     *,
     template: AuditTemplate | None,
 ) -> AuditRunResponse | AuditRunDetailResponse:
-    response.is_external_import_intake = _is_external_import_intake_template(template)
+    is_external_import = _is_external_import_intake_template(template)
+    response.is_external_audit_import = is_external_import
+    response.is_external_import_intake = is_external_import
     return response
 
 
@@ -942,7 +944,7 @@ async def create_run(
     run = AuditRun(
         **payload,
         template_version=template.version,
-        status=AuditStatus.SCHEDULED,
+        status=AuditStatus.PENDING_REVIEW if intake_resolution is not None else AuditStatus.SCHEDULED,
         created_by_id=current_user.id,
         tenant_id=current_user.tenant_id,
     )
@@ -998,13 +1000,46 @@ async def update_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Update an audit run."""
+    started = time.perf_counter()
     service = AuditService(db)
-    run = await service.update_run(
-        run_id,
-        run_data.model_dump(exclude_unset=True),
-        tenant_id=current_user.tenant_id,
+    try:
+        run = await service.update_run(
+            run_id,
+            run_data.model_dump(exclude_unset=True),
+            tenant_id=current_user.tenant_id,
+        )
+    except NotFoundError:
+        _record_audit_endpoint_event(
+            "PATCH /api/v1/audits/runs/{id}",
+            404,
+            (time.perf_counter() - started) * 1000,
+            "run_not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
+        )
+    except ValidationError as exc:
+        _record_audit_endpoint_event(
+            "PATCH /api/v1/audits/runs/{id}",
+            400,
+            (time.perf_counter() - started) * 1000,
+            "invalid_status_transition",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, str(exc)),
+        )
+    response = _annotate_run_response_import_mode(
+        AuditRunResponse.model_validate(run),
+        template=run.__dict__.get("template"),
     )
-    return AuditRunResponse.model_validate(run)
+    _record_audit_endpoint_event(
+        "PATCH /api/v1/audits/runs/{id}",
+        200,
+        (time.perf_counter() - started) * 1000,
+    )
+    return response
 
 
 @router.post("/runs/{run_id}/start", response_model=AuditRunResponse)
@@ -1014,9 +1049,42 @@ async def start_run(
     current_user: CurrentUser,
 ) -> AuditRunResponse:
     """Start an audit run."""
+    started = time.perf_counter()
     service = AuditService(db)
-    run = await service.start_run(run_id, tenant_id=current_user.tenant_id)
-    return AuditRunResponse.model_validate(run)
+    try:
+        run = await service.start_run(run_id, tenant_id=current_user.tenant_id)
+    except NotFoundError:
+        _record_audit_endpoint_event(
+            "POST /api/v1/audits/runs/{id}/start",
+            404,
+            (time.perf_counter() - started) * 1000,
+            "run_not_found",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
+        )
+    except ValidationError as exc:
+        _record_audit_endpoint_event(
+            "POST /api/v1/audits/runs/{id}/start",
+            400,
+            (time.perf_counter() - started) * 1000,
+            "invalid_status_transition",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, str(exc)),
+        )
+    response = _annotate_run_response_import_mode(
+        AuditRunResponse.model_validate(run),
+        template=run.__dict__.get("template"),
+    )
+    _record_audit_endpoint_event(
+        "POST /api/v1/audits/runs/{id}/start",
+        200,
+        (time.perf_counter() - started) * 1000,
+    )
+    return response
 
 
 @router.post("/runs/{run_id}/complete", response_model=AuditRunResponse)
@@ -1063,7 +1131,10 @@ async def complete_run(
     await db.commit()
     await db.refresh(run)
 
-    response = AuditRunResponse.model_validate(run)
+    response = _annotate_run_response_import_mode(
+        AuditRunResponse.model_validate(run),
+        template=run.__dict__.get("template"),
+    )
     _record_audit_endpoint_event(
         "POST /api/v1/audits/runs/{id}/complete",
         200,
@@ -1090,7 +1161,9 @@ async def create_response(
     started = time.perf_counter()
     # Verify run exists and is in progress
     result = await db.execute(
-        select(AuditRun).where(
+        select(AuditRun)
+        .options(selectinload(AuditRun.template))
+        .where(
             AuditRun.id == run_id,
             or_(
                 AuditRun.tenant_id == current_user.tenant_id,
@@ -1110,6 +1183,21 @@ async def create_response(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
+        )
+
+    if _is_external_import_intake_template(run.template):
+        _record_audit_endpoint_event(
+            "POST /api/v1/audits/runs/{id}/responses",
+            400,
+            (time.perf_counter() - started) * 1000,
+            "external_import_non_executable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Imported external audit outcomes cannot be executed from the audit run workflow",
+            ),
         )
 
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
