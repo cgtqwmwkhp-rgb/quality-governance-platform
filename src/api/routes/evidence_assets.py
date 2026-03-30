@@ -16,6 +16,7 @@ from typing import Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -294,8 +295,29 @@ async def upload_evidence_asset(
     )
 
     db.add(evidence_asset)
-    await db.commit()
-    await db.refresh(evidence_asset)
+    try:
+        await db.commit()
+        await db.refresh(evidence_asset)
+    except SQLAlchemyError:
+        await db.rollback()
+        try:
+            await storage_service().delete(storage_key)
+        except StorageError:
+            logger.exception(
+                "Evidence upload cleanup failed after metadata persistence error",
+                extra={"source_module": source_module, "source_id": source_id, "storage_key": storage_key},
+            )
+        logger.exception(
+            "Evidence metadata persistence failed after blob upload",
+            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "EVIDENCE_METADATA_PERSIST_FAILED",
+                "message": "The file upload completed but its evidence record could not be saved. Please retry, and contact support if the issue continues.",
+            },
+        )
 
     return EvidenceAssetUploadResponse(
         id=evidence_asset.id,
