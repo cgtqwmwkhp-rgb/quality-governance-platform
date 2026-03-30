@@ -458,7 +458,7 @@ class InvestigationService:
 
         query = select(EvidenceAsset).where(
             EvidenceAsset.source_module == source_module,
-            EvidenceAsset.source_id == source_id,
+            EvidenceAsset.source_id == str(source_id),
             EvidenceAsset.deleted_at.is_(None),
         )
         result = await db.execute(query)

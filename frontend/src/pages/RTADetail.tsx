@@ -318,7 +318,7 @@ export default function RTADetail() {
           source_module: 'road_traffic_collision',
           source_id: rta.id,
           title: file.name,
-          visibility: 'internal',
+          visibility: 'internal_customer',
         })
       }
       loadPhotos(rta.id)

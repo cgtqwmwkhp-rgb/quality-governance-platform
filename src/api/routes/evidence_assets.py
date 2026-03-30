@@ -162,6 +162,8 @@ async def upload_evidence_asset(
     # Validate source exists
     await validate_source_exists(source_module, source_id, db)
 
+    normalized_source_id = str(source_id)
+
     # Validate content type
     content_type = file.content_type or "application/octet-stream"
     if content_type not in ALLOWED_CONTENT_TYPES:
@@ -225,7 +227,7 @@ async def upload_evidence_asset(
             content_type=content_type,
             metadata={
                 "source_module": source_module,
-                "source_id": str(source_id),
+                "source_id": normalized_source_id,
                 "uploaded_by": str(current_user.id),
             },
         )
@@ -277,7 +279,7 @@ async def upload_evidence_asset(
         checksum_sha256=checksum,
         asset_type=asset_type_enum,
         source_module=source_module_enum,
-        source_id=source_id,
+        source_id=normalized_source_id,
         title=title,
         description=description,
         captured_at=parsed_captured_at,
@@ -369,7 +371,7 @@ async def list_evidence_assets(
             )
 
     if source_id is not None:
-        query = query.where(EvidenceAsset.source_id == source_id)
+        query = query.where(EvidenceAsset.source_id == str(source_id))
 
     if asset_type:
         try:

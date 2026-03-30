@@ -132,6 +132,7 @@ class EvidenceService:
             )
 
         await self.validate_source_exists(source_module, source_id)
+        normalized_source_id = str(source_id)
 
         if content_type not in ALLOWED_CONTENT_TYPES:
             raise ValueError(f"Content type {content_type} is not allowed")
@@ -163,7 +164,7 @@ class EvidenceService:
                 content_type=content_type,
                 metadata={
                     "source_module": source_module,
-                    "source_id": str(source_id),
+                    "source_id": normalized_source_id,
                     "uploaded_by": str(user_id),
                 },
             )
@@ -190,7 +191,7 @@ class EvidenceService:
             checksum_sha256=checksum,
             asset_type=asset_type_enum,
             source_module=source_module_enum,
-            source_id=source_id,
+            source_id=normalized_source_id,
             title=title,
             description=description,
             captured_at=parsed_captured_at,
@@ -249,7 +250,7 @@ class EvidenceService:
                 raise ValueError(f"Invalid source module: {source_module}")
 
         if source_id is not None:
-            query = query.where(EvidenceAsset.source_id == source_id)
+            query = query.where(EvidenceAsset.source_id == str(source_id))
 
         if asset_type:
             try:
