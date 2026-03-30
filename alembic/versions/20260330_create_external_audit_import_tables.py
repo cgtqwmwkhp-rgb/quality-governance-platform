@@ -37,9 +37,7 @@ def _has_unique_constraint(table_name: str, constraint_name: str) -> bool:
     inspector = sa.inspect(op.get_bind())
     if not inspector.has_table(table_name):
         return False
-    return any(
-        constraint["name"] == constraint_name for constraint in inspector.get_unique_constraints(table_name)
-    )
+    return any(constraint["name"] == constraint_name for constraint in inspector.get_unique_constraints(table_name))
 
 
 def _ensure_jobs_table() -> None:
@@ -96,8 +94,12 @@ def _ensure_jobs_table() -> None:
             sa.Column("improvement_summary_json", sa.JSON(), nullable=True),
             sa.Column("promotion_summary_json", sa.JSON(), nullable=True),
             sa.Column("processing_warnings_json", sa.JSON(), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
-            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()
+            ),
             sa.Column("reference_number", sa.String(length=20), nullable=False),
             sa.Column("created_by_id", sa.Integer(), nullable=True),
             sa.Column("updated_by_id", sa.Integer(), nullable=True),
@@ -163,8 +165,12 @@ def _ensure_drafts_table() -> None:
             sa.Column("suggested_risk_title", sa.String(length=300), nullable=True),
             sa.Column("review_notes", sa.Text(), nullable=True),
             sa.Column("promoted_finding_id", sa.Integer(), sa.ForeignKey("audit_findings.id"), nullable=True),
-            sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
-            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), nullable=False, server_default=_current_timestamp_default()
+            ),
             sa.Column("created_by_id", sa.Integer(), nullable=True),
             sa.Column("updated_by_id", sa.Integer(), nullable=True),
             sa.PrimaryKeyConstraint("id"),
