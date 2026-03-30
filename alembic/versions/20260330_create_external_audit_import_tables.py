@@ -1,6 +1,6 @@
 """Create external audit import tables when missing.
 
-Revision ID: 20260330_create_ext_audit_import_tables
+Revision ID: 20260330_ext_audit_fix
 Revises: 20260327_ext_audit_import_jobs
 Create Date: 2026-03-30
 """
@@ -12,7 +12,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260330_create_ext_audit_import_tables"
+revision: str = "20260330_ext_audit_fix"
 down_revision: Union[str, None] = "20260327_ext_audit_import_jobs"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
