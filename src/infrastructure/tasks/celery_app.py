@@ -34,7 +34,9 @@ def _redis_ssl_options(url: str) -> dict[str, Any] | None:
     return {"ssl_cert_reqs": ssl.CERT_REQUIRED}
 
 
-broker_url = _normalize_redis_ssl_url(settings.celery_broker_url) if settings.celery_broker_url else "redis://localhost:6379/0"
+broker_url = (
+    _normalize_redis_ssl_url(settings.celery_broker_url) if settings.celery_broker_url else "redis://localhost:6379/0"
+)
 result_backend = (
     _normalize_redis_ssl_url(settings.celery_result_backend)
     if settings.celery_result_backend
