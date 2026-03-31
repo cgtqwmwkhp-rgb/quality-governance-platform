@@ -253,6 +253,7 @@ async function networkFirstHtml(request) {
     }
     return response;
   } catch (error) {
+    console.warn('[SW] Navigation fetch failed, falling back to cache:', request.url, error?.message);
     const cached = await caches.match(request);
     if (cached) {
       return cached;
@@ -261,6 +262,7 @@ async function networkFirstHtml(request) {
     // can handle the deep-link once the bundle loads.
     const appShell = await caches.match('/index.html');
     if (appShell) {
+      console.log('[SW] Serving cached app shell for SPA route:', request.url);
       return appShell;
     }
     const offline = await caches.match('/offline.html');
