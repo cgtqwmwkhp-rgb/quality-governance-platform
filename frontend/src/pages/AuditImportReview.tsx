@@ -35,7 +35,10 @@ function readProvenanceNumber(job: ExternalAuditImportJob | null, key: string) {
   return typeof value === 'number' ? value : null
 }
 
-function deriveDeclaredProgramLabel(auditRun: AuditRunDetail | null, job: ExternalAuditImportJob | null) {
+function deriveDeclaredProgramLabel(
+  auditRun: AuditRunDetail | null,
+  job: ExternalAuditImportJob | null,
+) {
   const declaredScheme =
     auditRun?.assurance_scheme || readProvenanceString(job, 'declared_assurance_scheme') || ''
   const normalizedScheme = declaredScheme.toLowerCase()
@@ -110,11 +113,17 @@ export default function AuditImportReview() {
   const [drafts, setDrafts] = useState<ExternalAuditImportDraft[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [queueNotice, setQueueNotice] = useState<string | null>(
+    searchParams.get('queueError') === '1'
+      ? 'The import workspace is ready, but automatic processing did not start. Retry queueing below.'
+      : null,
+  )
   const [busyDraftId, setBusyDraftId] = useState<number | null>(null)
   const [isPromoting, setIsPromoting] = useState(false)
+  const [isQueueing, setIsQueueing] = useState(false)
 
   const load = useCallback(async () => {
-    if (!jobId) {
+    if (!jobId && (!Number.isFinite(routeAuditId) || routeAuditId <= 0)) {
       setJob(null)
       setAuditRun(null)
       setDrafts([])
@@ -126,15 +135,32 @@ export default function AuditImportReview() {
     setLoading(true)
     setError(null)
     try {
+      let resolvedJobRes = null
+      if (jobId) {
+        resolvedJobRes = await externalAuditImportsApi.getJob(jobId)
+      } else if (Number.isFinite(routeAuditId) && routeAuditId > 0) {
+        resolvedJobRes = await externalAuditImportsApi.getLatestJobForRun(routeAuditId)
+      }
+
+      if (!resolvedJobRes) {
+        throw new Error('Import job could not be resolved')
+      }
+
       const [jobRes, draftsRes] = await Promise.all([
-        externalAuditImportsApi.getJob(jobId),
-        externalAuditImportsApi.listDrafts(jobId),
+        Promise.resolve(resolvedJobRes),
+        externalAuditImportsApi.listDrafts(resolvedJobRes.data.id),
       ])
-      if (Number.isFinite(routeAuditId) && routeAuditId > 0 && jobRes.data.audit_run_id !== routeAuditId) {
+      if (
+        Number.isFinite(routeAuditId) &&
+        routeAuditId > 0 &&
+        jobRes.data.audit_run_id !== routeAuditId
+      ) {
         setJob(null)
         setAuditRun(null)
         setDrafts([])
-        setError('This import job belongs to a different audit run. Re-open it from the audits workspace.')
+        setError(
+          'This import job belongs to a different audit run. Re-open it from the audits workspace.',
+        )
         return
       }
       let auditRunDetail: AuditRunDetail | null = null
@@ -169,11 +195,13 @@ export default function AuditImportReview() {
   }, [job, load])
 
   const approvedCount = useMemo(
-    () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted').length,
+    () =>
+      drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted').length,
     [drafts],
   )
   const promoteableCount = useMemo(
-    () => drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
+    () =>
+      drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
     [drafts],
   )
   const promotedCount = useMemo(
@@ -222,7 +250,8 @@ export default function AuditImportReview() {
     auditRun?.assurance_scheme || readProvenanceString(job, 'declared_assurance_scheme')
   const resolvedTemplateVersion =
     auditRun?.template_version ?? readProvenanceNumber(job, 'processing_template_version')
-  const resolvedTemplateId = auditRun?.template_id ?? readProvenanceNumber(job, 'processing_template_id')
+  const resolvedTemplateId =
+    auditRun?.template_id ?? readProvenanceNumber(job, 'processing_template_id')
   const resolvedTemplateName = auditRun?.template_name
   const declaredExternalBody =
     auditRun?.external_body_name || readProvenanceString(job, 'declared_external_body_name')
@@ -260,6 +289,22 @@ export default function AuditImportReview() {
     }
   }
 
+  const handleRetryQueue = async () => {
+    if (!job) return
+    setIsQueueing(true)
+    setError(null)
+    try {
+      await externalAuditImportsApi.queueJob(job.id)
+      setQueueNotice(null)
+      await load()
+    } catch (err) {
+      console.error('Failed to queue external audit import job', err)
+      setError('Failed to start processing. Please retry queueing the import.')
+    } finally {
+      setIsQueueing(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-6">
@@ -274,25 +319,29 @@ export default function AuditImportReview() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">External Audit Review</h1>
           <p className="mt-1 text-muted-foreground">
-            OCR and analysis stay in draft until you approve promotion into completed governance outcomes.
+            OCR and analysis stay in draft until you approve promotion into completed governance
+            outcomes.
           </p>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => navigate(specialistHome.path)}
-            disabled={!job}
-          >
+          <Button variant="outline" onClick={() => navigate(specialistHome.path)} disabled={!job}>
             <FileText size={16} />
             {specialistHome.label}
           </Button>
           <Button
             onClick={handlePromote}
             disabled={
-              promoteableCount === 0 || isPromoting || job?.status === 'completed' || job?.status === 'promoting'
+              promoteableCount === 0 ||
+              isPromoting ||
+              job?.status === 'completed' ||
+              job?.status === 'promoting'
             }
           >
-            {isPromoting ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+            {isPromoting ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <ShieldCheck size={16} />
+            )}
             Promote Accepted Drafts
           </Button>
         </div>
@@ -312,6 +361,28 @@ export default function AuditImportReview() {
         </Card>
       ) : null}
 
+      {queueNotice ? (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="flex items-center justify-between gap-3 p-5">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-warning" />
+              <p className="text-sm text-foreground">{queueNotice}</p>
+            </div>
+            {job?.status === 'pending' || job?.status === 'failed' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleRetryQueue()}
+                disabled={isQueueing}
+              >
+                {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}
+                Retry Queue
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {job ? (
         <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
           <Card>
@@ -321,22 +392,30 @@ export default function AuditImportReview() {
                 {job.reference_number}
               </CardTitle>
               <CardDescription>
-                Status: {job.status.replace(/_/g, ' ')}. {job.analysis_summary || 'Analysis summary pending.'}
+                Status: {job.status.replace(/_/g, ' ')}.{' '}
+                {job.analysis_summary || 'Analysis summary pending.'}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Declared intake</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Declared intake
+                </p>
                 <p className="mt-1 font-medium text-foreground">{declaredProgramLabel}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {declaredSourceOrigin ? `Source: ${humanizeLabel(declaredSourceOrigin)}` : 'Source pending'}
+                  {declaredSourceOrigin
+                    ? `Source: ${humanizeLabel(declaredSourceOrigin)}`
+                    : 'Source pending'}
                   {declaredScheme ? ` · Scheme: ${declaredScheme}` : ''}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Processing template</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Processing template
+                </p>
                 <p className="mt-1 font-medium text-foreground">
-                  {resolvedTemplateName || (resolvedTemplateId ? `Template ${resolvedTemplateId}` : 'Pending resolution')}
+                  {resolvedTemplateName ||
+                    (resolvedTemplateId ? `Template ${resolvedTemplateId}` : 'Pending resolution')}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {resolvedTemplateVersion != null
@@ -346,7 +425,9 @@ export default function AuditImportReview() {
               </div>
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Source file</p>
-                <p className="mt-1 font-medium text-foreground">{job.source_filename || 'Source document'}</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {job.source_filename || 'Source document'}
+                </p>
                 {(declaredExternalBody || declaredExternalReference) && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {[declaredExternalBody, declaredExternalReference].filter(Boolean).join(' · ')}
@@ -355,14 +436,18 @@ export default function AuditImportReview() {
               </div>
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Extraction</p>
-                <p className="mt-1 font-medium text-foreground">{job.extraction_method || 'pending'}</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {job.extraction_method || 'pending'}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {job.page_count ? `${job.page_count} page(s)` : 'Pages pending'}
                   {job.source_sheet_count ? `, ${job.source_sheet_count} sheet(s)` : ''}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Classification</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Classification
+                </p>
                 <p className="mt-1 font-medium text-foreground">
                   {humanizeLabel(job.detected_scheme) || 'Pending classification'}
                 </p>
@@ -373,14 +458,20 @@ export default function AuditImportReview() {
                 ) : null}
               </div>
               <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">OCR provider</p>
-                <p className="mt-1 font-medium text-foreground">{job.provider_name || 'Pending provider'}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  OCR provider
+                </p>
+                <p className="mt-1 font-medium text-foreground">
+                  {job.provider_name || 'Pending provider'}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {job.provider_model || 'Model pending'}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted drafts</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Accepted drafts
+                </p>
                 <p className="mt-1 font-medium text-foreground">{approvedCount}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {promoteableCount} awaiting promotion, {promotedCount} promoted
@@ -400,14 +491,22 @@ export default function AuditImportReview() {
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Outcome</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{job.outcome_status?.replace(/_/g, ' ') || 'review required'}</Badge>
-                  {job.scheme_version ? <Badge variant="secondary">{job.scheme_version}</Badge> : null}
-                  {job.has_tabular_data ? <Badge variant="info">Tabular evidence detected</Badge> : null}
+                  <Badge variant="outline">
+                    {job.outcome_status?.replace(/_/g, ' ') || 'review required'}
+                  </Badge>
+                  {job.scheme_version ? (
+                    <Badge variant="secondary">{job.scheme_version}</Badge>
+                  ) : null}
+                  {job.has_tabular_data ? (
+                    <Badge variant="info">Tabular evidence detected</Badge>
+                  ) : null}
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Overall score</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Overall score
+                  </p>
                   <p className="mt-1 font-medium text-foreground">
                     {job.score_percentage != null
                       ? `${job.score_percentage.toFixed(1)}%`
@@ -421,7 +520,9 @@ export default function AuditImportReview() {
                 </div>
                 <div className="rounded-lg border border-border p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Issuer</p>
-                  <p className="mt-1 font-medium text-foreground">{job.issuer_name || 'Reviewer confirmation required'}</p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {job.issuer_name || 'Reviewer confirmation required'}
+                  </p>
                   {job.report_date ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Report date: {new Date(job.report_date).toLocaleDateString()}
@@ -431,13 +532,21 @@ export default function AuditImportReview() {
               </div>
               {job.score_breakdown_json?.length ? (
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Score breakdown</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Score breakdown
+                  </p>
                   <div className="mt-3 grid gap-2">
                     {job.score_breakdown_json.slice(0, 6).map((item, index) => (
-                      <div key={`score-breakdown-${index}`} className="flex items-center justify-between text-sm">
-                        <span className="text-foreground">{String(item.label || `Section ${index + 1}`)}</span>
+                      <div
+                        key={`score-breakdown-${index}`}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-foreground">
+                          {String(item.label || `Section ${index + 1}`)}
+                        </span>
                         <span className="text-muted-foreground">
-                          {String(item.score ?? '-')} / {String(item.max_score ?? '-')} ({String(item.percentage ?? '-')}%)
+                          {String(item.score ?? '-')} / {String(item.max_score ?? '-')} (
+                          {String(item.percentage ?? '-')}%)
                         </span>
                       </div>
                     ))}
@@ -447,6 +556,27 @@ export default function AuditImportReview() {
             </CardContent>
           </Card>
         </div>
+      ) : null}
+
+      {job && (job.status === 'pending' || job.status === 'failed') ? (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardHeader>
+            <CardTitle className="text-base">Processing queue</CardTitle>
+            <CardDescription>
+              This intake exists, but OCR and analysis are not currently running.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-foreground">
+              {job.error_detail ||
+                'Retry queueing this import to continue OCR, schema mapping, and reviewer draft generation.'}
+            </p>
+            <Button onClick={() => void handleRetryQueue()} disabled={isQueueing}>
+              {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}
+              Retry Queue
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       {job?.processing_warnings_json?.length ? (
@@ -492,25 +622,40 @@ export default function AuditImportReview() {
                 {job.evidence_preview_json?.length ? (
                   job.evidence_preview_json.slice(0, 8).map((mapping, index) => (
                     <Badge key={`evidence-${index}`} variant="secondary">
-                      {String(mapping.clause_number || mapping.clause_id || 'Clause')} {String(mapping.standard || '')}
+                      {String(mapping.clause_number || mapping.clause_id || 'Clause')}{' '}
+                      {String(mapping.standard || '')}
                     </Badge>
                   ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">No clause-level evidence preview available yet.</p>
+                  <p className="text-sm text-muted-foreground">
+                    No clause-level evidence preview available yet.
+                  </p>
                 )}
               </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Positive evidence</p>
-                  <p className="mt-1 font-medium text-foreground">{job.positive_summary_json?.length || 0}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Positive evidence
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {job.positive_summary_json?.length || 0}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Non-compliances</p>
-                  <p className="mt-1 font-medium text-foreground">{job.nonconformity_summary_json?.length || 0}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Non-compliances
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {job.nonconformity_summary_json?.length || 0}
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Improvements</p>
-                  <p className="mt-1 font-medium text-foreground">{job.improvement_summary_json?.length || 0}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Improvements
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">
+                    {job.improvement_summary_json?.length || 0}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -526,30 +671,42 @@ export default function AuditImportReview() {
             <CardContent className="space-y-3">
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Accepted findings</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Accepted findings
+                  </p>
                   <p className="mt-1 font-medium text-foreground">{approvedCount}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">ISO evidence links</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    ISO evidence links
+                  </p>
                   <p className="mt-1 font-medium text-foreground">{acceptedClauseCount}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Action candidates</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Action candidates
+                  </p>
                   <p className="mt-1 font-medium text-foreground">{acceptedActionCandidates}</p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Risk candidates</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Risk candidates
+                  </p>
                   <p className="mt-1 font-medium text-foreground">{acceptedRiskCandidates}</p>
                 </div>
               </div>
               {schemeAlignment ? (
                 <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Scheme alignment</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Scheme alignment
+                  </p>
                   <p className="mt-1 font-medium text-foreground">
                     {String(schemeAlignment.status || 'pending').replace(/_/g, ' ')}
                   </p>
                   {schemeAlignment.reason ? (
-                    <p className="mt-1 text-xs text-muted-foreground">{String(schemeAlignment.reason)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {String(schemeAlignment.reason)}
+                    </p>
                   ) : null}
                 </div>
               ) : null}
@@ -562,11 +719,13 @@ export default function AuditImportReview() {
         {drafts.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              {job?.status === 'queued' || job?.status === 'processing' || job?.status === 'promoting'
+              {job?.status === 'queued' ||
+              job?.status === 'processing' ||
+              job?.status === 'promoting'
                 ? 'Processing is still running. This workspace refreshes automatically while analysis is in progress.'
                 : error
                   ? 'The latest import state could not be refreshed. Retry to continue reviewing this workspace.'
-                : 'No draft findings were produced for this import. Review the source document and processing warnings before promoting.'}
+                  : 'No draft findings were produced for this import. Review the source document and processing warnings before promoting.'}
             </CardContent>
           </Card>
         ) : (
@@ -575,12 +734,12 @@ export default function AuditImportReview() {
               <CardHeader>
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-xl">{draft.title}</CardTitle>
-                  <Badge variant={getSeverityVariant(draft.severity)}>
-                    {draft.severity}
-                  </Badge>
+                  <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
                   <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
                   {draft.confidence_score != null ? (
-                    <Badge variant="secondary">{Math.round(draft.confidence_score * 100)}% confidence</Badge>
+                    <Badge variant="secondary">
+                      {Math.round(draft.confidence_score * 100)}% confidence
+                    </Badge>
                   ) : null}
                 </div>
                 <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
@@ -611,13 +770,19 @@ export default function AuditImportReview() {
                   <div className="grid gap-3 md:grid-cols-2">
                     {draft.suggested_action_title ? (
                       <div className="rounded-lg border border-border p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Proposed action</p>
-                        <p className="mt-1 text-sm text-foreground">{draft.suggested_action_title}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Proposed action
+                        </p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {draft.suggested_action_title}
+                        </p>
                       </div>
                     ) : null}
                     {draft.suggested_risk_title ? (
                       <div className="rounded-lg border border-border p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Proposed risk</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                          Proposed risk
+                        </p>
                         <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
                       </div>
                     ) : null}
@@ -630,7 +795,9 @@ export default function AuditImportReview() {
                     onClick={() => void handleDraftDecision(draft.id, 'accepted')}
                     disabled={busyDraftId === draft.id || draft.status === 'promoted'}
                   >
-                    {busyDraftId === draft.id ? <Loader2 size={16} className="animate-spin" /> : null}
+                    {busyDraftId === draft.id ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : null}
                     Accept
                   </Button>
                   <Button

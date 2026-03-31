@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 import logging
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from celery import Celery  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
 from celery.schedules import crontab  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
@@ -9,8 +10,29 @@ from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-broker_url = settings.celery_broker_url or "redis://localhost:6379/0"
-result_backend = settings.celery_result_backend or "redis://localhost:6379/1"
+
+def _normalize_redis_ssl_url(url: str) -> str:
+    """Ensure Azure Redis `rediss://` URLs include the SSL requirement Kombu expects."""
+    if not url.startswith("rediss://"):
+        return url
+
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    if "ssl_cert_reqs" in query:
+        return url
+
+    query["ssl_cert_reqs"] = "CERT_REQUIRED"
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+broker_url = (
+    _normalize_redis_ssl_url(settings.celery_broker_url) if settings.celery_broker_url else "redis://localhost:6379/0"
+)
+result_backend = (
+    _normalize_redis_ssl_url(settings.celery_result_backend)
+    if settings.celery_result_backend
+    else "redis://localhost:6379/1"
+)
 
 if not settings.celery_broker_url:
     logger.warning("CELERY_BROKER_URL not configured — using default redis://localhost:6379/0")

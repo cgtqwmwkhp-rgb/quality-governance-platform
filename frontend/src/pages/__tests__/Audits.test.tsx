@@ -251,11 +251,42 @@ describe('Audits external import flow', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
 
     expect(await screen.findByText('Intake created with follow-up required')).toBeInTheDocument()
-    expect(
-      screen.getByText(/Blob storage is temporarily unavailable/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Blob storage is temporarily unavailable/)).toBeInTheDocument()
     expect(mockUpdateRun).not.toHaveBeenCalled()
     expect(mockNavigate).not.toHaveBeenCalled()
+  })
+
+  it('routes to import review even when automatic queueing fails', async () => {
+    mockQueueImportJob.mockRejectedValueOnce({
+      response: {
+        data: {
+          detail: {
+            message: 'Background processing could not be started. Retry queueing the import.',
+          },
+        },
+      },
+    })
+
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
+      target: { value: 'achilles_uvdb' },
+    })
+
+    const file = new File(['audit pdf'], 'achilles-audit.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
+
+    await waitFor(() => {
+      expect(mockQueueImportJob).toHaveBeenCalledWith(72)
+    })
+    expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72&queueError=1')
   })
 
   it('surfaces structured backend import errors instead of schedule fallback text', async () => {
@@ -292,7 +323,9 @@ describe('Audits external import flow', () => {
         "No published external audit intake template is configured for 'achilles_uvdb'",
       ),
     ).toBeInTheDocument()
-    expect(screen.queryByText('Failed to schedule audit. Please try again.')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Failed to schedule audit. Please try again.'),
+    ).not.toBeInTheDocument()
   })
 
   it('hides system intake templates from the schedule picker', async () => {
@@ -302,13 +335,15 @@ describe('Audits external import flow', () => {
 
     const dialog = await screen.findByRole('dialog')
     const templateSelect = within(dialog).getAllByRole('combobox')[0]!
-    const options = within(templateSelect).getAllByRole('option').map((option) => option.textContent)
+    const options = within(templateSelect)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
 
     expect(options.join(' ')).toContain('Annual Safety Audit')
     expect(options.join(' ')).not.toContain('ZZZ External Audit Intake (System)')
   })
 
-  it('keeps imported external outcomes out of the audit workspace views', async () => {
+  it('shows imported external outcomes in the audit workspace and opens review mode', async () => {
     mockListRuns.mockResolvedValueOnce({
       data: {
         items: [
@@ -347,12 +382,16 @@ describe('Audits external import flow', () => {
 
     render(<Audits />)
 
-    expect(await screen.findByText('Visible Internal Audit')).toBeInTheDocument()
-    expect(screen.queryByText('Imported Achilles Intake')).not.toBeInTheDocument()
+    expect(await screen.findByText('Imported Achilles Intake')).toBeInTheDocument()
+    expect(screen.getByText('Visible Internal Audit')).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByText('Open Review')[0]!)
+
+    expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review')
 
     fireEvent.click(screen.getByRole('button', { name: 'List' }))
 
-    expect(screen.getByText('Visible Internal Audit')).toBeInTheDocument()
-    expect(screen.queryByText('Imported Achilles Intake')).not.toBeInTheDocument()
+    expect(await screen.findByText('Visible Internal Audit')).toBeInTheDocument()
+    expect(screen.getByText('Imported Achilles Intake')).toBeInTheDocument()
   })
 })

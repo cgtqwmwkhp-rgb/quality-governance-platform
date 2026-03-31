@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.exceptions import ExternalServiceError
+from src.domain.models.external_audit_import import ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ExternalAuditImportJobCreate(BaseModel):
@@ -161,7 +165,33 @@ async def queue_import_job(
         user_id=current_user.id,
     )
     if should_enqueue:
-        process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+        await db.commit()
+        await db.refresh(job)
+        try:
+            process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+        except Exception as exc:
+            logger.exception("Failed to dispatch external audit import job %s", job.id)
+            job.status = ExternalAuditImportStatus.PENDING
+            job.error_code = "QUEUE_DISPATCH_FAILED"
+            job.error_detail = "Background processing could not be started. Retry queueing the import."
+            job.updated_by_id = current_user.id
+            await db.commit()
+            await db.refresh(job)
+            raise ExternalServiceError(
+                "Background processing could not be started. Retry queueing the import."
+            ) from exc
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
+
+
+@router.get("/runs/{audit_run_id}/latest-job", response_model=ExternalAuditImportJobResponse)
+async def get_latest_import_job_for_run(
+    audit_run_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+) -> ExternalAuditImportJobResponse:
+    """Resolve the most recent import job for an audit run."""
+    service = ExternalAuditImportService(db)
+    job = await service.get_latest_job_for_run(audit_run_id=audit_run_id, tenant_id=current_user.tenant_id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 

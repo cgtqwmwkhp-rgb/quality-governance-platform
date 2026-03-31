@@ -160,6 +160,14 @@ function isExternalAuditImportRun(audit: AuditRun): boolean {
   return audit.is_external_audit_import === true || audit.is_external_import_intake === true
 }
 
+function getAuditWorkspacePath(audit: AuditRun, importJobId?: number | null): string {
+  if (!isExternalAuditImportRun(audit)) {
+    return `/audits/${audit.id}/execute`
+  }
+  const params = importJobId ? `?jobId=${importJobId}` : ''
+  return `/audits/${audit.id}/import-review${params}`
+}
+
 const INITIAL_FORM_STATE: CreateAuditForm = {
   template_id: null,
   title: '',
@@ -269,7 +277,9 @@ export default function Audits() {
     [latestPublishedTemplates, templates],
   )
 
-  const selectedTemplate = latestPublishedTemplates.find((template) => template.id === formData.template_id)
+  const selectedTemplate = latestPublishedTemplates.find(
+    (template) => template.id === formData.template_id,
+  )
   const selectedTemplateFamily = useMemo(() => {
     if (!selectedTemplate) return null
     return (
@@ -283,7 +293,8 @@ export default function Audits() {
     selectedTemplateFamily?.versions[0] ?? latestPublishedTemplates[0] ?? null
 
   const buildDefaultForm = (mode: AuditModalMode): CreateAuditForm => {
-    const preferred = mode === 'import' ? importPlaceholderTemplate : latestPublishedTemplates[0] ?? null
+    const preferred =
+      mode === 'import' ? importPlaceholderTemplate : (latestPublishedTemplates[0] ?? null)
     if (!preferred) {
       return {
         ...INITIAL_FORM_STATE,
@@ -322,7 +333,8 @@ export default function Audits() {
 
   const selectedExternalAuditType = useMemo(
     () =>
-      EXTERNAL_AUDIT_TYPE_OPTIONS.find((option) => option.value === formData.external_audit_type) ?? null,
+      EXTERNAL_AUDIT_TYPE_OPTIONS.find((option) => option.value === formData.external_audit_type) ??
+      null,
     [formData.external_audit_type],
   )
 
@@ -391,6 +403,7 @@ export default function Audits() {
       const result = res.data
       const isImportFlow = modalMode === 'import'
       let reportUploadFailed = false
+      let importQueueFailed = false
       let successDetail = isImportFlow
         ? `External audit intake created successfully. Reference: ${result.reference_number}. The internal intake template was resolved automatically.`
         : `Audit scheduled successfully! Reference: ${result.reference_number}`
@@ -419,8 +432,20 @@ export default function Audits() {
               source_document_asset_id: uploadRes.data.id,
             })
             importJobId = jobRes.data.id
-            await externalAuditImportsApi.queueJob(importJobId)
-            successDetail += ` OCR and draft review have been queued for ${result.assurance_scheme || formData.assurance_scheme || 'this external audit'}.`
+            try {
+              await externalAuditImportsApi.queueJob(importJobId)
+              successDetail += ` OCR and draft review have been queued for ${result.assurance_scheme || formData.assurance_scheme || 'this external audit'}.`
+            } catch (queueErr: unknown) {
+              importQueueFailed = true
+              const queueErrorDetail = getStructuredErrorMessage(queueErr)
+              successDetail +=
+                ' Import workspace created, but automatic processing could not be started. Open the review workspace to retry queueing.'
+              if (queueErrorDetail) {
+                successDetail += ` Queue error: ${queueErrorDetail}`
+              }
+              if (import.meta.env.DEV)
+                console.error('Failed to queue external audit import job:', queueErr)
+            }
           }
         } catch (uploadErr: unknown) {
           reportUploadFailed = true
@@ -430,20 +455,19 @@ export default function Audits() {
           if (uploadErrorDetail) {
             successDetail += ` Upload error: ${uploadErrorDetail}`
           }
-          if (import.meta.env.DEV) console.error('Failed to upload audit source document:', uploadErr)
+          if (import.meta.env.DEV)
+            console.error('Failed to upload audit source document:', uploadErr)
         }
       }
 
-      setSuccessTone(reportUploadFailed ? 'warning' : 'success')
+      setSuccessTone(reportUploadFailed || importQueueFailed ? 'warning' : 'success')
       setSuccessMessage(successDetail)
 
       await loadData()
 
-      if (isImportFlow && !reportUploadFailed) {
+      if (isImportFlow && importJobId) {
         navigate(
-          importJobId
-            ? `/audits/${result.id}/import-review?jobId=${importJobId}`
-            : `/audits/${result.id}/execute`,
+          `${getAuditWorkspacePath(result, importJobId)}${importQueueFailed ? '&queueError=1' : ''}`,
         )
         return
       }
@@ -467,10 +491,9 @@ export default function Audits() {
   }
 
   const filteredAudits = useMemo(() => {
-    const visibleAudits = audits.filter((audit) => !isExternalAuditImportRun(audit))
-    if (!searchTerm.trim()) return visibleAudits
+    if (!searchTerm.trim()) return audits
     const term = searchTerm.toLowerCase()
-    return visibleAudits.filter(
+    return audits.filter(
       (a) =>
         (a.title || '').toLowerCase().includes(term) ||
         (a.reference_number || '').toLowerCase().includes(term) ||
@@ -700,11 +723,11 @@ export default function Audits() {
                         className="p-4 cursor-pointer"
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigate(`/audits/${audit.id}/execute`)}
+                        onClick={() => navigate(getAuditWorkspacePath(audit))}
                         onKeyDown={(e: React.KeyboardEvent) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            navigate(`/audits/${audit.id}/execute`)
+                            navigate(getAuditWorkspacePath(audit))
                           }
                         }}
                       >
@@ -737,7 +760,10 @@ export default function Audits() {
                         {(audit.source_origin || audit.assurance_scheme) && (
                           <div className="flex flex-wrap gap-2 mb-2">
                             {audit.source_origin && (
-                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] uppercase tracking-wide"
+                              >
                                 {audit.source_origin.replace(/_/g, ' ')}
                               </Badge>
                             )}
@@ -767,12 +793,16 @@ export default function Audits() {
                               variant={audit.status === 'in_progress' ? 'default' : 'outline'}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                navigate(`/audits/${audit.id}/execute`)
+                                navigate(getAuditWorkspacePath(audit))
                               }}
                               className="text-xs h-7 px-2.5"
                             >
                               <Play size={12} />
-                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
+                              {isExternalAuditImportRun(audit)
+                                ? 'Open Review'
+                                : audit.status === 'in_progress'
+                                  ? 'Continue'
+                                  : 'Start'}
                             </Button>
                           )}
                         </div>
@@ -841,11 +871,11 @@ export default function Audits() {
                         className="hover:bg-surface transition-colors cursor-pointer"
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigate(`/audits/${audit.id}/execute`)}
+                        onClick={() => navigate(getAuditWorkspacePath(audit))}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            navigate(`/audits/${audit.id}/execute`)
+                            navigate(getAuditWorkspacePath(audit))
                           }
                         }}
                       >
@@ -858,10 +888,15 @@ export default function Audits() {
                           <p className="text-sm font-medium text-foreground truncate max-w-xs">
                             {audit.title || 'Untitled'}
                           </p>
-                          {(audit.source_origin || audit.assurance_scheme || audit.external_body_name) && (
+                          {(audit.source_origin ||
+                            audit.assurance_scheme ||
+                            audit.external_body_name) && (
                             <div className="mt-1 flex flex-wrap gap-2">
                               {audit.source_origin && (
-                                <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] uppercase tracking-wide"
+                                >
                                   {audit.source_origin.replace(/_/g, ' ')}
                                 </Badge>
                               )}
@@ -924,12 +959,16 @@ export default function Audits() {
                               variant={audit.status === 'in_progress' ? 'default' : 'outline'}
                               onClick={(e) => {
                                 e.stopPropagation()
-                                navigate(`/audits/${audit.id}/execute`)
+                                navigate(getAuditWorkspacePath(audit))
                               }}
                               className="text-xs h-7"
                             >
                               <Play size={12} />
-                              {audit.status === 'in_progress' ? 'Continue' : 'Start'}
+                              {isExternalAuditImportRun(audit)
+                                ? 'Open Review'
+                                : audit.status === 'in_progress'
+                                  ? 'Continue'
+                                  : 'Start'}
                             </Button>
                           ) : audit.status === 'completed' ? (
                             <Button
@@ -937,7 +976,7 @@ export default function Audits() {
                               variant="ghost"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                navigate(`/audits/${audit.id}/execute`)
+                                navigate(getAuditWorkspacePath(audit))
                               }}
                               className="text-xs h-7"
                             >
@@ -1084,7 +1123,8 @@ export default function Audits() {
                             ...prev,
                             template_id: Number.isNaN(templateId) ? null : templateId,
                             title:
-                              prev.title || (template?.name ? decodeHtmlEntities(template.name) : ''),
+                              prev.title ||
+                              (template?.name ? decodeHtmlEntities(template.name) : ''),
                           }))
                           setShowVersionSelector(false)
                         }}
@@ -1180,7 +1220,8 @@ export default function Audits() {
                   maxLength={300}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional. Schedule mode defaults to the template name; import mode defaults to the selected source program.
+                  Optional. Schedule mode defaults to the template name; import mode defaults to the
+                  selected source program.
                 </p>
               </div>
 
@@ -1215,7 +1256,10 @@ export default function Audits() {
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="audit-import-type" className="text-sm font-medium text-foreground">
+                      <label
+                        htmlFor="audit-import-type"
+                        className="text-sm font-medium text-foreground"
+                      >
                         External Audit Program <span className="text-destructive">*</span>
                       </label>
                       <select
@@ -1238,7 +1282,10 @@ export default function Audits() {
                     </div>
 
                     <div className="space-y-2">
-                      <label htmlFor="audit-report-file" className="text-sm font-medium text-foreground">
+                      <label
+                        htmlFor="audit-report-file"
+                        className="text-sm font-medium text-foreground"
+                      >
                         Source Audit Report <span className="text-destructive">*</span>
                       </label>
                       <Input
@@ -1248,7 +1295,8 @@ export default function Audits() {
                         onChange={(e) => setReportFile(e.target.files?.[0] ?? null)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Upload the source report so the imported audit is linked into the shared evidence layer from day one.
+                        Upload the source report so the imported audit is linked into the shared
+                        evidence layer from day one.
                       </p>
                       {reportFile && (
                         <p className="text-xs text-primary">Selected file: {reportFile.name}</p>
@@ -1257,7 +1305,10 @@ export default function Audits() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label htmlFor="audit-source-origin" className="text-sm font-medium text-foreground">
+                        <label
+                          htmlFor="audit-source-origin"
+                          className="text-sm font-medium text-foreground"
+                        >
                           Source Origin
                         </label>
                         <Input
@@ -1268,7 +1319,10 @@ export default function Audits() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label htmlFor="audit-scheme" className="text-sm font-medium text-foreground">
+                        <label
+                          htmlFor="audit-scheme"
+                          className="text-sm font-medium text-foreground"
+                        >
                           Audit Scheme / Standard <span className="text-destructive">*</span>
                         </label>
                         <Input
@@ -1289,12 +1343,16 @@ export default function Audits() {
                     <div>
                       <p className="text-sm font-medium text-foreground">Supporting metadata</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        These details stay with the audit run and help reviewers validate the import context.
+                        These details stay with the audit run and help reviewers validate the import
+                        context.
                       </p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <label htmlFor="audit-external-body" className="text-sm font-medium text-foreground">
+                        <label
+                          htmlFor="audit-external-body"
+                          className="text-sm font-medium text-foreground"
+                        >
                           External Body / Customer
                         </label>
                         <Input
@@ -1309,7 +1367,10 @@ export default function Audits() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <label htmlFor="audit-external-auditor" className="text-sm font-medium text-foreground">
+                        <label
+                          htmlFor="audit-external-auditor"
+                          className="text-sm font-medium text-foreground"
+                        >
                           External Auditor / Assessor
                         </label>
                         <Input
@@ -1318,7 +1379,10 @@ export default function Audits() {
                           placeholder="Auditor or assessor name"
                           value={formData.external_auditor_name}
                           onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, external_auditor_name: e.target.value }))
+                            setFormData((prev) => ({
+                              ...prev,
+                              external_auditor_name: e.target.value,
+                            }))
                           }
                           maxLength={255}
                         />
@@ -1326,7 +1390,10 @@ export default function Audits() {
                     </div>
 
                     <div className="space-y-2">
-                      <label htmlFor="audit-external-reference" className="text-sm font-medium text-foreground">
+                      <label
+                        htmlFor="audit-external-reference"
+                        className="text-sm font-medium text-foreground"
+                      >
                         External Reference
                       </label>
                       <Input
@@ -1348,7 +1415,8 @@ export default function Audits() {
                         Assigned automatically by the server from the selected import program.
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        The resolved template and version are shown after creation in the review workspace.
+                        The resolved template and version are shown after creation in the review
+                        workspace.
                       </p>
                     </div>
                   </div>
@@ -1370,7 +1438,9 @@ export default function Audits() {
                       scheduled_date: e.target.value,
                     }))
                   }
-                  min={modalMode === 'schedule' ? new Date().toISOString().split('T')[0] : undefined}
+                  min={
+                    modalMode === 'schedule' ? new Date().toISOString().split('T')[0] : undefined
+                  }
                 />
               </div>
 

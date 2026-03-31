@@ -325,6 +325,195 @@ async def test_external_audit_import_job_queue_is_idempotent(
 
 
 @pytest.mark.asyncio
+async def test_external_audit_import_queue_failure_keeps_job_retryable(
+    client: AsyncClient,
+    test_session: AsyncSession,
+    auth_headers: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Retryable import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/retryable.pdf",
+        original_filename="retryable.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="retryable-queue-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    run.source_document_asset_id = asset.id
+    await test_session.commit()
+
+    create_response = await client.post(
+        "/api/v1/external-audit-imports/jobs",
+        json={"audit_run_id": run.id, "source_document_asset_id": asset.id},
+        headers=auth_headers,
+    )
+    assert create_response.status_code == 201
+    job_id = create_response.json()["id"]
+
+    monkeypatch.setattr(
+        external_audit_imports.process_external_audit_import_job,
+        "delay",
+        lambda *_args: (_ for _ in ()).throw(ValueError("broker misconfigured")),
+    )
+
+    failed_queue = await client.post(
+        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
+        headers=auth_headers,
+    )
+    assert failed_queue.status_code == 502
+
+    job_after_failure = await client.get(
+        f"/api/v1/external-audit-imports/jobs/{job_id}",
+        headers=auth_headers,
+    )
+    assert job_after_failure.status_code == 200
+    assert job_after_failure.json()["status"] == "pending"
+    assert job_after_failure.json()["error_code"] == "QUEUE_DISPATCH_FAILED"
+
+    delay_calls: list[tuple[int, int, int]] = []
+
+    def _delay(job_id_value: int, tenant_id_value: int, user_id_value: int) -> None:
+        delay_calls.append((job_id_value, tenant_id_value, user_id_value))
+
+    monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", _delay)
+
+    retried_queue = await client.post(
+        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
+        headers=auth_headers,
+    )
+    assert retried_queue.status_code == 200
+    assert retried_queue.json()["status"] == "queued"
+    assert delay_calls == [(job_id, DEFAULT_TEST_TENANT_ID, DEFAULT_TEST_USER_ID)]
+
+
+@pytest.mark.asyncio
+async def test_external_audit_import_latest_job_for_run_returns_most_recent_job(
+    client: AsyncClient,
+    test_session: AsyncSession,
+    auth_headers: dict,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Latest-job import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset_one = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/latest-one.pdf",
+        original_filename="latest-one.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="latest-one-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    asset_two = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/latest-two.pdf",
+        original_filename="latest-two.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="latest-two-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add_all([asset_one, asset_two])
+    await test_session.commit()
+    await test_session.refresh(asset_one)
+    await test_session.refresh(asset_two)
+
+    create_response_one = await client.post(
+        "/api/v1/external-audit-imports/jobs",
+        json={"audit_run_id": run.id, "source_document_asset_id": asset_one.id},
+        headers=auth_headers,
+    )
+    create_response_two = await client.post(
+        "/api/v1/external-audit-imports/jobs",
+        json={"audit_run_id": run.id, "source_document_asset_id": asset_two.id},
+        headers=auth_headers,
+    )
+
+    assert create_response_one.status_code == 201
+    assert create_response_two.status_code == 201
+
+    latest_job_response = await client.get(
+        f"/api/v1/external-audit-imports/runs/{run.id}/latest-job",
+        headers=auth_headers,
+    )
+    assert latest_job_response.status_code == 200
+    assert latest_job_response.json()["id"] == create_response_two.json()["id"]
+    assert latest_job_response.json()["source_document_asset_id"] == asset_two.id
+
+
+@pytest.mark.asyncio
 async def test_process_job_failure_preserves_existing_drafts(
     test_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

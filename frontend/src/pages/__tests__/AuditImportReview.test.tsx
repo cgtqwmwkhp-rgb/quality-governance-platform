@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AuditImportReview from '../AuditImportReview'
 
 const mockGetJob = vi.fn()
+const mockGetLatestJobForRun = vi.fn()
 const mockGetRunDetail = vi.fn()
 const mockListDrafts = vi.fn()
+const mockQueueJob = vi.fn()
 const mockReviewDraft = vi.fn()
 const mockPromoteJob = vi.fn()
 
@@ -15,7 +17,9 @@ vi.mock('../../api/client', () => ({
   },
   externalAuditImportsApi: {
     getJob: (...args: unknown[]) => mockGetJob(...args),
+    getLatestJobForRun: (...args: unknown[]) => mockGetLatestJobForRun(...args),
     listDrafts: (...args: unknown[]) => mockListDrafts(...args),
+    queueJob: (...args: unknown[]) => mockQueueJob(...args),
     reviewDraft: (...args: unknown[]) => mockReviewDraft(...args),
     promoteJob: (...args: unknown[]) => mockPromoteJob(...args),
   },
@@ -34,6 +38,22 @@ function renderPage(initialEntry = '/audits/41/import-review?jobId=72') {
 describe('AuditImportReview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetLatestJobForRun.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
     mockGetRunDetail.mockResolvedValue({
       data: {
         id: 41,
@@ -78,10 +98,22 @@ describe('AuditImportReview', () => {
     renderPage('/audits/99/import-review?jobId=72')
 
     expect(
-      await screen.findByText('This import job belongs to a different audit run. Re-open it from the audits workspace.'),
+      await screen.findByText(
+        'This import job belongs to a different audit run. Re-open it from the audits workspace.',
+      ),
     ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open Compliance Summary' })).toBeDisabled()
     expect(mockGetRunDetail).not.toHaveBeenCalled()
+  })
+
+  it('resolves the latest job for a run when no job query string is present', async () => {
+    mockListDrafts.mockResolvedValue({ data: [] })
+
+    renderPage('/audits/41/import-review')
+
+    expect(await screen.findByText('IMP-00072')).toBeInTheDocument()
+    expect(mockGetLatestJobForRun).toHaveBeenCalledWith(41)
+    expect(mockGetJob).not.toHaveBeenCalled()
   })
 
   it('shows failed-job diagnostics and counts clause mappings without clause ids', async () => {
@@ -107,7 +139,8 @@ describe('AuditImportReview', () => {
         detected_scheme: 'achilles_uvdb',
         detected_scheme_confidence: 0.91,
         error_code: 'IMPORT_PROCESSING_FAILED',
-        error_detail: 'Import analysis failed before review could begin. Review logs and retry the job.',
+        error_detail:
+          'Import analysis failed before review could begin. Review logs and retry the job.',
       },
     })
     mockListDrafts.mockResolvedValue({
@@ -136,7 +169,9 @@ describe('AuditImportReview', () => {
 
     expect(await screen.findByText('Import failed')).toBeInTheDocument()
     expect(screen.getByText('Declared intake').parentElement).toHaveTextContent('Achilles / UVDB')
-    expect(screen.getByText('Processing template').parentElement).toHaveTextContent('External Audit Intake')
+    expect(screen.getByText('Processing template').parentElement).toHaveTextContent(
+      'External Audit Intake',
+    )
     expect(screen.getByText('Processing template').parentElement).toHaveTextContent('Version 3')
     expect(screen.getByText('Source file').parentElement).toHaveTextContent('achilles-audit.pdf')
     expect(screen.getByText('OCR provider').parentElement).toHaveTextContent('mistral')
@@ -144,7 +179,9 @@ describe('AuditImportReview', () => {
     expect(screen.getByText('Classification').parentElement).toHaveTextContent('91% confidence')
     expect(screen.getByText('IMPORT_PROCESSING_FAILED')).toBeInTheDocument()
     expect(
-      screen.getByText('Import analysis failed before review could begin. Review logs and retry the job.'),
+      screen.getByText(
+        'Import analysis failed before review could begin. Review logs and retry the job.',
+      ),
     ).toBeInTheDocument()
     expect(screen.getByText('critical').className).toContain('bg-red-100')
 
@@ -199,27 +236,25 @@ describe('AuditImportReview', () => {
         },
       ],
     })
-    mockReviewDraft
-      .mockRejectedValueOnce(new Error('temporary failure'))
-      .mockResolvedValueOnce({
-        data: {
-          id: 11,
-          import_job_id: 72,
-          audit_run_id: 41,
-          status: 'accepted',
-          title: 'Needs follow-up',
-          description: 'Evidence snippet',
-          severity: 'high',
-          finding_type: 'nonconformity',
-          confidence_score: 0.88,
-          competence_verdict: null,
-          evidence_snippets_json: ['Evidence snippet'],
-          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
-          mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
-          suggested_action_title: 'Address issue',
-          suggested_risk_title: 'Create risk',
-        },
-      })
+    mockReviewDraft.mockRejectedValueOnce(new Error('temporary failure')).mockResolvedValueOnce({
+      data: {
+        id: 11,
+        import_job_id: 72,
+        audit_run_id: 41,
+        status: 'accepted',
+        title: 'Needs follow-up',
+        description: 'Evidence snippet',
+        severity: 'high',
+        finding_type: 'nonconformity',
+        confidence_score: 0.88,
+        competence_verdict: null,
+        evidence_snippets_json: ['Evidence snippet'],
+        mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+        mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+        suggested_action_title: 'Address issue',
+        suggested_risk_title: 'Create risk',
+      },
+    })
 
     renderPage()
 
@@ -232,8 +267,54 @@ describe('AuditImportReview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
 
     await waitFor(() => {
-      expect(screen.queryByText('Failed to update the draft. Please retry.')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('Failed to update the draft. Please retry.'),
+      ).not.toBeInTheDocument()
     })
     expect(screen.getByText('accepted')).toBeInTheDocument()
+  })
+
+  it('shows queue recovery guidance and retries queueing pending imports', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'pending',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        analysis_summary: null,
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        error_code: 'QUEUE_DISPATCH_FAILED',
+        error_detail: 'Background processing could not be started. Retry queueing the import.',
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({ data: [] })
+    mockQueueJob.mockResolvedValue({ data: { id: 72, status: 'queued' } })
+
+    renderPage('/audits/41/import-review?jobId=72&queueError=1')
+
+    expect(
+      await screen.findByText(
+        'The import workspace is ready, but automatic processing did not start. Retry queueing below.',
+      ),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Retry Queue' })[0]!)
+
+    await waitFor(() => {
+      expect(mockQueueJob).toHaveBeenCalledWith(72)
+    })
   })
 })

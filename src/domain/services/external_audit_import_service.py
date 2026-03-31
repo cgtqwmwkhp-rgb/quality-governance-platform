@@ -159,6 +159,22 @@ class ExternalAuditImportService:
             raise NotFoundError(f"External audit import job {job_id} not found")
         return job
 
+    async def get_latest_job_for_run(self, *, audit_run_id: int, tenant_id: int | None) -> ExternalAuditImportJob:
+        await self._get_run(audit_run_id=audit_run_id, tenant_id=tenant_id)
+        result = await self.db.execute(
+            select(ExternalAuditImportJob)
+            .where(
+                ExternalAuditImportJob.audit_run_id == audit_run_id,
+                ExternalAuditImportJob.tenant_id == tenant_id,
+            )
+            .order_by(ExternalAuditImportJob.id.desc())
+            .limit(1)
+        )
+        job = result.scalar_one_or_none()
+        if not job:
+            raise NotFoundError(f"External audit import job not found for audit run {audit_run_id}")
+        return job
+
     async def list_job_drafts(self, *, job_id: int, tenant_id: int | None) -> list[ExternalAuditDraft]:
         await self.get_job(job_id=job_id, tenant_id=tenant_id)
         result = await self.db.execute(

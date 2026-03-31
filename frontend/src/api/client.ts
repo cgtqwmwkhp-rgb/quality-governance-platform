@@ -1433,7 +1433,15 @@ export interface Action {
   description: string
   action_type: string
   priority: string
-  status: 'open' | 'in_progress' | 'pending_verification' | 'completed' | 'cancelled' | 'closed' | 'verified' | 'overdue'
+  status:
+    | 'open'
+    | 'in_progress'
+    | 'pending_verification'
+    | 'completed'
+    | 'cancelled'
+    | 'closed'
+    | 'verified'
+    | 'overdue'
   due_date?: string
   completed_at?: string
   completion_notes?: string
@@ -1531,7 +1539,8 @@ export const nearMissesApi = {
     api.get<PaginatedResponse<NearMiss>>(`/api/v1/near-misses/?page=${page}&page_size=${pageSize}`),
   create: (data: NearMissCreate) => api.post<NearMiss>('/api/v1/near-misses/', data),
   get: (id: number) => api.get<NearMiss>(`/api/v1/near-misses/${id}`),
-  update: (id: number, data: NearMissUpdate) => api.patch<NearMiss>(`/api/v1/near-misses/${id}`, data),
+  update: (id: number, data: NearMissUpdate) =>
+    api.patch<NearMiss>(`/api/v1/near-misses/${id}`, data),
   listInvestigations: (id: number, page = 1, pageSize = 10) =>
     api.get<PaginatedResponse<Investigation>>(
       `/api/v1/near-misses/${id}/investigations?page=${page}&page_size=${pageSize}`,
@@ -2206,7 +2215,10 @@ export interface PlanetMarkDataQualityResponse {
   year_id: number
   overall_score: number
   max_score: number
-  scopes: Record<string, { score: number; actual_pct: number; source_count?: number; recommendations: string[] }>
+  scopes: Record<
+    string,
+    { score: number; actual_pct: number; source_count?: number; recommendations: string[] }
+  >
   priority_improvements: Array<{ action: string; impact: string }>
   target_scores: Record<string, string>
 }
@@ -2219,7 +2231,8 @@ export const planetMarkApi = {
   /**
    * Get carbon management dashboard summary.
    */
-  getDashboard: () => api.get<PlanetMarkDashboardResponse | SetupRequiredResponse>('/api/v1/planet-mark/dashboard'),
+  getDashboard: () =>
+    api.get<PlanetMarkDashboardResponse | SetupRequiredResponse>('/api/v1/planet-mark/dashboard'),
 
   /**
    * List all carbon reporting years.
@@ -2240,7 +2253,11 @@ export const planetMarkApi = {
     sites_included?: string[]
     is_baseline_year?: boolean
     reduction_target_percent?: number
-  }) => api.post<{ id: number; year_label: string; message: string }>('/api/v1/planet-mark/years', data),
+  }) =>
+    api.post<{ id: number; year_label: string; message: string }>(
+      '/api/v1/planet-mark/years',
+      data,
+    ),
 
   /**
    * Get detailed data for a specific reporting year.
@@ -2262,7 +2279,8 @@ export const planetMarkApi = {
   /**
    * Get Scope 3 category breakdown for a year.
    */
-  getScope3: (yearId: number) => api.get<PlanetMarkScope3Response>(`/api/v1/planet-mark/years/${yearId}/scope3`),
+  getScope3: (yearId: number) =>
+    api.get<PlanetMarkScope3Response>(`/api/v1/planet-mark/years/${yearId}/scope3`),
 
   /**
    * List improvement actions for a year.
@@ -2434,7 +2452,12 @@ export const uvdbApi = {
   /**
    * List UVDB audits.
    */
-  listAudits: (params?: { skip?: number; limit?: number; status?: string; company_name?: string }) => {
+  listAudits: (params?: {
+    skip?: number
+    limit?: number
+    status?: string
+    company_name?: string
+  }) => {
     const sp = new URLSearchParams()
     if (params?.skip !== undefined) sp.set('skip', String(params.skip))
     if (params?.limit !== undefined) sp.set('limit', String(params.limit))
@@ -3132,7 +3155,9 @@ export const complianceApi = {
       `/api/v1/compliance/gaps${standard ? `?standard=${standard}` : ''}`,
     ),
   getReport: (standard?: string) =>
-    api.get<ComplianceReportResponse>(`/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`),
+    api.get<ComplianceReportResponse>(
+      `/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`,
+    ),
   listStandards: () => api.get<ComplianceStandardRecord[]>('/api/v1/compliance/standards'),
 }
 
@@ -3388,9 +3413,7 @@ export const searchApi = {
     },
   ) => {
     const params =
-      typeof queryOrParams === 'string'
-        ? { q: queryOrParams, ...filters }
-        : queryOrParams
+      typeof queryOrParams === 'string' ? { q: queryOrParams, ...filters } : queryOrParams
 
     const sp = new URLSearchParams({ q: params.q })
     if (params.module) sp.set('module', params.module)
@@ -3637,7 +3660,9 @@ export interface GlobalSearchResponse {
 
 export const workflowsApi = {
   getPendingApprovals: () =>
-    api.get<{ approvals: WorkflowApprovalRecord[]; total: number }>('/api/v1/workflows/approvals/pending'),
+    api.get<{ approvals: WorkflowApprovalRecord[]; total: number }>(
+      '/api/v1/workflows/approvals/pending',
+    ),
   approveRequest: (approvalId: string, data?: { notes?: string }) =>
     api.post(`/api/v1/workflows/approvals/${approvalId}/approve`, data),
   rejectRequest: (approvalId: string, data?: { notes?: string; reason?: string }) =>
@@ -3655,9 +3680,11 @@ export const workflowsApi = {
       `/api/v1/workflows/instances?${sp}`,
     )
   },
-  listTemplates: () => api.get<{ templates: WorkflowTemplateRecord[] }>('/api/v1/workflows/templates'),
+  listTemplates: () =>
+    api.get<{ templates: WorkflowTemplateRecord[] }>('/api/v1/workflows/templates'),
   getStats: () => api.get<WorkflowStatsResponse>('/api/v1/workflows/stats'),
-  getDelegations: () => api.get<{ delegations: WorkflowDelegationRecord[] }>('/api/v1/workflows/delegations'),
+  getDelegations: () =>
+    api.get<{ delegations: WorkflowDelegationRecord[] }>('/api/v1/workflows/delegations'),
   setDelegation: (data: {
     delegate_id: number
     start_date: string
@@ -4075,16 +4102,13 @@ export const vehicleChecklistsApi = {
     })
     if (priority) params.set('priority', priority)
     if (status) params.set('status', status)
-    return api.get<PaginatedResponse<VehicleDefect>>(
-      `/api/v1/vehicle-checklists/defects?${params}`,
-    )
+    return api.get<PaginatedResponse<VehicleDefect>>(`/api/v1/vehicle-checklists/defects?${params}`)
   },
 
   createDefect: (data: VehicleDefectCreate) =>
     api.post<VehicleDefect>('/api/v1/vehicle-checklists/defects', data),
 
-  getDefect: (id: number) =>
-    api.get<VehicleDefect>(`/api/v1/vehicle-checklists/defects/${id}`),
+  getDefect: (id: number) => api.get<VehicleDefect>(`/api/v1/vehicle-checklists/defects/${id}`),
 
   updateDefect: (id: number, data: VehicleDefectUpdate) =>
     api.patch<VehicleDefect>(`/api/v1/vehicle-checklists/defects/${id}`, data),
@@ -4094,8 +4118,7 @@ export const vehicleChecklistsApi = {
 
   triggerSync: () => api.post('/api/v1/vehicle-checklists/sync'),
 
-  analyticsSummary: () =>
-    api.get<AnalyticsSummary>('/api/v1/vehicle-checklists/analytics/summary'),
+  analyticsSummary: () => api.get<AnalyticsSummary>('/api/v1/vehicle-checklists/analytics/summary'),
 
   analyticsTrends: (days = 30) =>
     api.get<TrendDataPoint[]>(`/api/v1/vehicle-checklists/analytics/trends?days=${days}`),
@@ -4186,6 +4209,9 @@ export const externalAuditImportsApi = {
   queueJob: (jobId: number) =>
     api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/queue`),
 
+  getLatestJobForRun: (auditRunId: number) =>
+    api.get<ExternalAuditImportJob>(`/api/v1/external-audit-imports/runs/${auditRunId}/latest-job`),
+
   getJob: (jobId: number) =>
     api.get<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}`),
 
@@ -4201,7 +4227,8 @@ export const externalAuditImportsApi = {
       description?: string
       severity?: string
     },
-  ) => api.patch<ExternalAuditImportDraft>(`/api/v1/external-audit-imports/drafts/${draftId}`, data),
+  ) =>
+    api.patch<ExternalAuditImportDraft>(`/api/v1/external-audit-imports/drafts/${draftId}`, data),
 
   promoteJob: (jobId: number) =>
     api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
