@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { AlertCircle, CheckCircle2, FileText, Loader2, ShieldCheck } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Info,
+  Loader2,
+  ShieldCheck,
+} from 'lucide-react'
 import {
   auditsApi,
   externalAuditImportsApi,
@@ -18,6 +27,66 @@ function getSeverityVariant(severity: string) {
   if (severity === 'high') return 'high'
   if (severity === 'low') return 'low'
   return 'medium'
+}
+
+function getConfidenceTier(confidence: number | null | undefined): {
+  label: string
+  color: string
+  bgColor: string
+  borderColor: string
+} {
+  if (confidence == null)
+    return {
+      label: 'Unknown',
+      color: 'text-slate-500',
+      bgColor: 'bg-slate-50',
+      borderColor: 'border-slate-200',
+    }
+  const pct = Math.round(confidence * 100)
+  if (pct >= 85)
+    return {
+      label: `${pct}%`,
+      color: 'text-emerald-700',
+      bgColor: 'bg-emerald-50',
+      borderColor: 'border-emerald-200',
+    }
+  if (pct >= 60)
+    return {
+      label: `${pct}%`,
+      color: 'text-amber-700',
+      bgColor: 'bg-amber-50',
+      borderColor: 'border-amber-200',
+    }
+  return {
+    label: `${pct}%`,
+    color: 'text-red-700',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
+  }
+}
+
+function getAnalysisMethodLabel(provenance: Record<string, unknown> | null | undefined): string {
+  if (!provenance) return 'rule-based'
+  const method = String(provenance.analysis_method || '')
+  if (method.includes('consensus') || method.includes('ai_structured')) return 'AI consensus'
+  if (method.includes('mistral')) return 'Mistral AI'
+  if (method.includes('gemini')) return 'Gemini AI'
+  if (method.includes('rule_based')) return 'Rule-based'
+  if (method.includes('normalized')) return 'Rule-based'
+  return method || 'rule-based'
+}
+
+const SEVERITY_WEIGHT: Record<string, number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+}
+
+function reviewUrgency(draft: ExternalAuditImportDraft): number {
+  const confidenceInverse = 1 - (draft.confidence_score ?? 0.5)
+  const severityScore = SEVERITY_WEIGHT[draft.severity] ?? 2
+  return confidenceInverse * 10 + severityScore
 }
 
 function humanizeLabel(value: string | null | undefined) {
@@ -777,112 +846,217 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
+      <DraftFindingsList
+        drafts={drafts}
+        job={job}
+        error={error}
+        busyDraftId={busyDraftId}
+        specialistHome={specialistHome}
+        onDecision={handleDraftDecision}
+        onLoad={load}
+      />
+    </div>
+  )
+}
+
+function DraftFindingsList({
+  drafts,
+  job,
+  error,
+  busyDraftId,
+  specialistHome,
+  onDecision,
+  onLoad,
+}: {
+  drafts: ExternalAuditImportDraft[]
+  job: ExternalAuditImportJob | null
+  error: string | null
+  busyDraftId: number | null
+  specialistHome: { path: string; label: string }
+  onDecision: (id: number, status: 'accepted' | 'rejected') => void
+  onLoad: () => void
+}) {
+  const [expandedProvenance, setExpandedProvenance] = useState<Set<number>>(new Set())
+
+  const sortedDrafts = useMemo(() => {
+    return [...drafts].sort((a, b) => reviewUrgency(b) - reviewUrgency(a))
+  }, [drafts])
+
+  const toggleProvenance = (id: number) => {
+    setExpandedProvenance((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  if (drafts.length === 0) {
+    return (
       <div className="grid gap-4">
-        {drafts.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              {job?.status === 'processing' || job?.status === 'promoting'
-                ? 'Processing is still running. This workspace refreshes automatically while analysis is in progress.'
-                : job?.status === 'queued'
-                  ? 'Waiting for processing to start. Click Retry Queue above if this persists.'
-                  : error
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            {job?.status === 'processing' || job?.status === 'promoting'
+              ? 'Processing is still running. This workspace refreshes automatically while analysis is in progress.'
+              : job?.status === 'queued'
+                ? 'Waiting for processing to start. Click Retry Queue above if this persists.'
+                : error
                   ? 'The latest import state could not be refreshed. Retry to continue reviewing this workspace.'
                   : 'No draft findings were produced for this import. Review the source document and processing warnings before promoting.'}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {drafts.length} finding(s) sorted by review urgency (low confidence + high severity first)
+        </p>
+        <Button variant="outline" size="sm" onClick={onLoad}>
+          Refresh
+        </Button>
+      </div>
+      {sortedDrafts.map((draft) => {
+        const tier = getConfidenceTier(draft.confidence_score)
+        const methodLabel = getAnalysisMethodLabel(draft.provenance_json ?? null)
+        const isExpanded = expandedProvenance.has(draft.id)
+
+        return (
+          <Card key={draft.id}>
+            <CardHeader>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="text-xl">{draft.title}</CardTitle>
+                <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
+                <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tier.color} ${tier.bgColor} ${tier.borderColor}`}
+                >
+                  {tier.label} confidence
+                </span>
+                <Badge variant="secondary">{methodLabel}</Badge>
+              </div>
+              <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-foreground">{draft.description}</p>
+
+              {draft.evidence_snippets_json?.length ? (
+                <div className="rounded-lg bg-surface p-4 text-sm text-muted-foreground">
+                  {draft.evidence_snippets_json[0]}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                {draft.mapped_frameworks_json?.map((mapping, index) => (
+                  <Badge key={`framework-${draft.id}-${index}`} variant="info">
+                    {String(mapping.framework || 'Framework')}
+                  </Badge>
+                ))}
+                {draft.mapped_standards_json?.map((mapping, index) => (
+                  <Badge key={`standard-${draft.id}-${index}`} variant="secondary">
+                    {String(mapping.clause_number || mapping.standard || 'ISO')}
+                  </Badge>
+                ))}
+              </div>
+
+              {(draft.suggested_action_title || draft.suggested_risk_title) && (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {draft.suggested_action_title ? (
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Proposed action
+                      </p>
+                      <p className="mt-1 text-sm text-foreground">
+                        {draft.suggested_action_title}
+                      </p>
+                    </div>
+                  ) : null}
+                  {draft.suggested_risk_title ? (
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                        Proposed risk
+                      </p>
+                      <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {draft.provenance_json ? (
+                <div className="rounded-lg border border-border">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between p-3 text-left text-xs text-muted-foreground hover:bg-surface"
+                    onClick={() => toggleProvenance(draft.id)}
+                  >
+                    <span className="flex items-center gap-1">
+                      <Info size={12} />
+                      Provenance &amp; confidence detail
+                    </span>
+                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  {isExpanded ? (
+                    <ProvenanceDetail provenance={draft.provenance_json} />
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="success"
+                  onClick={() => void onDecision(draft.id, 'accepted')}
+                  disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                >
+                  {busyDraftId === draft.id ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : null}
+                  Accept
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void onDecision(draft.id, 'rejected')}
+                  disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                >
+                  Reject
+                </Button>
+                {draft.promoted_finding_id ? (
+                  <Link
+                    to={specialistHome.path}
+                    className="inline-flex items-center text-sm font-medium text-primary hover:underline"
+                  >
+                    {specialistHome.label}
+                  </Link>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
-        ) : (
-          drafts.map((draft) => (
-            <Card key={draft.id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-xl">{draft.title}</CardTitle>
-                  <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
-                  <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
-                  {draft.confidence_score != null ? (
-                    <Badge variant="secondary">
-                      {Math.round(draft.confidence_score * 100)}% confidence
-                    </Badge>
-                  ) : null}
-                </div>
-                <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-foreground">{draft.description}</p>
+        )
+      })}
+    </div>
+  )
+}
 
-                {draft.evidence_snippets_json?.length ? (
-                  <div className="rounded-lg bg-surface p-4 text-sm text-muted-foreground">
-                    {draft.evidence_snippets_json[0]}
-                  </div>
-                ) : null}
+function ProvenanceDetail({ provenance }: { provenance: Record<string, unknown> }) {
+  const pageNumber = provenance.page_number != null ? String(provenance.page_number) : null
+  const analysisMethod = String(provenance.analysis_method || 'unknown')
+  const trigger = provenance.trigger ? String(provenance.trigger) : null
+  const aiConfidence = provenance.ai_confidence != null ? String(provenance.ai_confidence) : null
+  const aiProvider = provenance.ai_provider ? String(provenance.ai_provider) : null
 
-                <div className="flex flex-wrap gap-2">
-                  {draft.mapped_frameworks_json?.map((mapping, index) => (
-                    <Badge key={`framework-${draft.id}-${index}`} variant="info">
-                      {String(mapping.framework || 'Framework')}
-                    </Badge>
-                  ))}
-                  {draft.mapped_standards_json?.map((mapping, index) => (
-                    <Badge key={`standard-${draft.id}-${index}`} variant="secondary">
-                      {String(mapping.clause_number || mapping.standard || 'ISO')}
-                    </Badge>
-                  ))}
-                </div>
-
-                {(draft.suggested_action_title || draft.suggested_risk_title) && (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {draft.suggested_action_title ? (
-                      <div className="rounded-lg border border-border p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Proposed action
-                        </p>
-                        <p className="mt-1 text-sm text-foreground">
-                          {draft.suggested_action_title}
-                        </p>
-                      </div>
-                    ) : null}
-                    {draft.suggested_risk_title ? (
-                      <div className="rounded-lg border border-border p-3">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                          Proposed risk
-                        </p>
-                        <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    variant="success"
-                    onClick={() => void handleDraftDecision(draft.id, 'accepted')}
-                    disabled={busyDraftId === draft.id || draft.status === 'promoted'}
-                  >
-                    {busyDraftId === draft.id ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : null}
-                    Accept
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => void handleDraftDecision(draft.id, 'rejected')}
-                    disabled={busyDraftId === draft.id || draft.status === 'promoted'}
-                  >
-                    Reject
-                  </Button>
-                  {draft.promoted_finding_id ? (
-                    <Link
-                      to={specialistHome.path}
-                      className="inline-flex items-center text-sm font-medium text-primary hover:underline"
-                    >
-                      {specialistHome.label}
-                    </Link>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+  return (
+    <div className="border-t border-border p-3 text-xs text-muted-foreground space-y-1">
+      {pageNumber && <p>Source page: {pageNumber}</p>}
+      <p>Analysis method: {analysisMethod}</p>
+      {trigger && (
+        <p>
+          Trigger phrase: &quot;{trigger}&quot;
+        </p>
+      )}
+      {aiConfidence && <p>AI raw confidence: {aiConfidence}</p>}
+      {aiProvider && <p>AI provider: {aiProvider}</p>}
     </div>
   )
 }

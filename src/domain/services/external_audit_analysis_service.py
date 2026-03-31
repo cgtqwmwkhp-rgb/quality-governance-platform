@@ -65,8 +65,17 @@ class ExternalAuditAnalysisService:
     _NONCONFORMITY_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("major non-conformance", "high", "nonconformity", 0.9),
         ("major nonconformance", "high", "nonconformity", 0.9),
+        ("major non-conformity", "high", "nonconformity", 0.9),
         ("minor non-conformance", "medium", "nonconformity", 0.8),
         ("minor nonconformance", "medium", "nonconformity", 0.8),
+        ("minor non-conformity", "medium", "nonconformity", 0.8),
+        ("corrective action required", "high", "nonconformity", 0.85),
+        ("critical finding", "critical", "nonconformity", 0.92),
+        ("significant deficiency", "high", "nonconformity", 0.82),
+        ("does not meet", "high", "nonconformity", 0.78),
+        ("failed to demonstrate", "high", "nonconformity", 0.78),
+        ("inadequate", "medium", "nonconformity", 0.65),
+        ("area of concern", "medium", "nonconformity", 0.70),
         ("observation", "low", "observation", 0.65),
         ("not competent", "high", "competence_gap", 0.85),
         ("non-compliant", "high", "nonconformity", 0.8),
@@ -75,11 +84,17 @@ class ExternalAuditAnalysisService:
     )
     _POSITIVE_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("good practice", "low", "positive_practice", 0.92),
+        ("best practice", "low", "positive_practice", 0.92),
+        ("exemplary", "low", "positive_practice", 0.90),
+        ("exceeds requirements", "low", "positive_practice", 0.90),
+        ("fully compliant", "low", "positive_practice", 0.92),
         ("strength", "low", "positive_practice", 0.88),
         ("compliant", "low", "positive_practice", 0.88),
         ("conforms", "low", "positive_practice", 0.85),
         ("competent", "low", "positive_practice", 0.87),
         ("effective", "low", "positive_practice", 0.80),
+        ("satisfactory", "low", "positive_practice", 0.78),
+        ("well managed", "low", "positive_practice", 0.82),
     )
     _CONFIDENCE_BOOSTERS: tuple[str, ...] = (
         "compliant",
@@ -109,10 +124,26 @@ class ExternalAuditAnalysisService:
         ("pass", r"\b(certif(?:ied|ication)\s+recommended|recommended\s+for\s+certification|passed|pass)\b"),
         ("review_required", r"\b(observation|opportunity for improvement|improvement opportunity)\b"),
     )
+    _CONTEXTUAL_DATE_LABELS = re.compile(
+        r"(?:audit\s+date|date\s+of\s+(?:audit|assessment|inspection|visit)|report\s+date|assessment\s+date)"
+        r"[:\s\-–]+",
+        re.IGNORECASE,
+    )
     _DATE_PATTERNS: tuple[str, ...] = (
         r"\b(\d{4}-\d{2}-\d{2})\b",
         r"\b(\d{2}/\d{2}/\d{4})\b",
         r"\b(\d{2}-\d{2}-\d{4})\b",
+    )
+    _LONG_DATE_RE = re.compile(
+        r"\b(\d{1,2})\s*(?:st|nd|rd|th)?\s+"
+        r"(January|February|March|April|May|June|July|August|September|October|November|December)"
+        r"\s+(\d{4})\b",
+        re.IGNORECASE,
+    )
+    _LONG_DATE_ALT_RE = re.compile(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)"
+        r"\s+(\d{1,2}),?\s+(\d{4})\b",
+        re.IGNORECASE,
     )
 
     def __init__(self) -> None:
@@ -242,6 +273,19 @@ class ExternalAuditAnalysisService:
 
         return breakdown, overall, max_s, pct
 
+    _NEGATION_WINDOW = re.compile(
+        r"\b(?:no|not|without|absence of|zero|free from|did not find)\s+",
+        re.IGNORECASE,
+    )
+
+    def _is_negated(self, text_lower: str, trigger: str) -> bool:
+        """Check if a trigger phrase is preceded by a negation within ~40 chars."""
+        idx = text_lower.find(trigger)
+        if idx < 0:
+            return False
+        window = text_lower[max(0, idx - 40) : idx]
+        return bool(self._NEGATION_WINDOW.search(window))
+
     def _extract_findings(
         self,
         *,
@@ -259,12 +303,18 @@ class ExternalAuditAnalysisService:
             if not compact:
                 continue
             negative_detected = False
+            matched_triggers: set[str] = set()
             for trigger, severity, finding_type, confidence in self._NONCONFORMITY_TRIGGERS:
                 if trigger not in lowered:
+                    continue
+                if trigger in matched_triggers:
+                    continue
+                if self._is_negated(lowered, trigger):
                     continue
                 snippet = self._snippet_around(compact, trigger)
                 title = self._build_title(trigger, scheme_label)
                 negative_detected = True
+                matched_triggers.add(trigger)
                 findings.append(
                     DraftFindingCandidate(
                         title=title,
@@ -287,12 +337,14 @@ class ExternalAuditAnalysisService:
                         },
                     )
                 )
-                break
             for trigger, severity, finding_type, confidence in self._IMPROVEMENT_TRIGGERS:
                 if trigger not in lowered:
                     continue
+                if trigger in matched_triggers:
+                    continue
                 snippet = self._snippet_around(compact, trigger)
                 title = self._build_title(trigger, scheme_label)
+                matched_triggers.add(trigger)
                 findings.append(
                     DraftFindingCandidate(
                         title=title,
@@ -315,40 +367,44 @@ class ExternalAuditAnalysisService:
                         },
                     )
                 )
-                break
-            if negative_detected:
-                continue
-            for trigger, severity, finding_type, confidence in self._POSITIVE_TRIGGERS:
-                if trigger not in lowered:
-                    continue
-                if trigger == "competent" and "not competent" in lowered:
-                    continue
-                snippet = self._snippet_around(compact, trigger)
-                title = self._build_title(trigger, scheme_label)
-                boosted = self._boost_confidence(confidence, lowered)
-                findings.append(
-                    DraftFindingCandidate(
-                        title=title,
-                        description=snippet,
-                        severity=severity,
-                        finding_type=finding_type,
-                        confidence_score=boosted,
-                        competence_verdict="competent",
-                        source_pages=[page_number],
-                        evidence_snippets=[snippet],
-                        mapped_frameworks=frameworks,
-                        mapped_standards=standards,
-                        suggested_action_title=None,
-                        suggested_action_description=None,
-                        suggested_risk_title=None,
-                        provenance={
-                            "page_number": page_number,
-                            "trigger": trigger,
-                            "analysis_method": "normalized_import_review",
-                        },
+            if not negative_detected:
+                for trigger, severity, finding_type, confidence in self._POSITIVE_TRIGGERS:
+                    if trigger not in lowered:
+                        continue
+                    if trigger in matched_triggers:
+                        continue
+                    if trigger == "competent" and "not competent" in lowered:
+                        continue
+                    if trigger == "compliant" and "non-compliant" in lowered:
+                        continue
+                    if trigger == "compliant" and "non compliant" in lowered:
+                        continue
+                    snippet = self._snippet_around(compact, trigger)
+                    title = self._build_title(trigger, scheme_label)
+                    boosted = self._boost_confidence(confidence, lowered)
+                    matched_triggers.add(trigger)
+                    findings.append(
+                        DraftFindingCandidate(
+                            title=title,
+                            description=snippet,
+                            severity=severity,
+                            finding_type=finding_type,
+                            confidence_score=boosted,
+                            competence_verdict="competent",
+                            source_pages=[page_number],
+                            evidence_snippets=[snippet],
+                            mapped_frameworks=frameworks,
+                            mapped_standards=standards,
+                            suggested_action_title=None,
+                            suggested_action_description=None,
+                            suggested_risk_title=None,
+                            provenance={
+                                "page_number": page_number,
+                                "trigger": trigger,
+                                "analysis_method": "normalized_import_review",
+                            },
+                        )
                     )
-                )
-                break
 
         if ai_result and ai_result.provider_status == "completed" and ai_result.findings:
             existing_titles = {f.title.lower() for f in findings}
@@ -362,15 +418,16 @@ class ExternalAuditAnalysisService:
                         description=str(ai_f.get("description", "")),
                         severity=str(ai_f.get("severity", "medium")),
                         finding_type=str(ai_f.get("finding_type", "finding")),
-                        confidence_score=float(str(ai_f.get("confidence", 0.85))),
+                        confidence_score=float(str(ai_f.get("confidence", 0.50))),
                         competence_verdict=("not_competent" if ai_f.get("finding_type") == "competence_gap" else None),
                         source_pages=[],
                         evidence_snippets=[str(ai_f.get("description", ""))[:400]],
                         mapped_frameworks=frameworks,
                         mapped_standards=standards,
                         provenance={
-                            "analysis_method": "mistral_ai_structured",
-                            "ai_confidence": float(str(ai_f.get("confidence", 0.85))),
+                            "analysis_method": "ai_structured",
+                            "ai_provider": ai_f.get("_provider", "unknown"),
+                            "ai_confidence": float(str(ai_f.get("confidence", 0.50))),
                         },
                     )
                 )
@@ -664,9 +721,16 @@ class ExternalAuditAnalysisService:
                     "percentage": pct,
                 }
             )
-        return self._dedupe_dicts(breakdown[:12], key_fields=("label",))
+        return self._dedupe_dicts(breakdown[:20], key_fields=("label",))
 
     def _extract_report_date(self, text: str) -> datetime | None:
+        label_match = self._CONTEXTUAL_DATE_LABELS.search(text)
+        if label_match:
+            region = text[label_match.end() : label_match.end() + 80]
+            parsed = self._parse_date_from_region(region)
+            if parsed:
+                return parsed
+
         for pattern in self._DATE_PATTERNS:
             match = re.search(pattern, text)
             if not match:
@@ -677,6 +741,37 @@ class ExternalAuditAnalysisService:
                     return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
                 except ValueError:
                     continue
+        return None
+
+    def _parse_date_from_region(self, region: str) -> datetime | None:
+        """Parse a date from a small text region near a label."""
+        for pattern in self._DATE_PATTERNS:
+            match = re.search(pattern, region)
+            if match:
+                raw = match.group(1)
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+                    try:
+                        return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        continue
+        long_match = self._LONG_DATE_RE.search(region)
+        if long_match:
+            try:
+                return datetime.strptime(
+                    f"{long_match.group(1)} {long_match.group(2)} {long_match.group(3)}",
+                    "%d %B %Y",
+                ).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        alt_match = self._LONG_DATE_ALT_RE.search(region)
+        if alt_match:
+            try:
+                return datetime.strptime(
+                    f"{alt_match.group(2)} {alt_match.group(1)} {alt_match.group(3)}",
+                    "%d %B %Y",
+                ).replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
         return None
 
     def _detect_scheme_version(self, text: str, scheme: str) -> str | None:
@@ -709,6 +804,17 @@ class ExternalAuditAnalysisService:
             return assurance_scheme.strip()
         return None
 
+    _NEGATION_BEFORE_OUTCOME = re.compile(
+        r"\b(?:no|not|without|absence of|zero|free from|did not find|no evidence of)\b",
+        re.IGNORECASE,
+    )
+
+    def _outcome_is_negated(self, text_lower: str, match: re.Match) -> bool:  # type: ignore[type-arg]
+        """Check whether an outcome-pattern match is preceded by a negation."""
+        start = match.start()
+        window = text_lower[max(0, start - 50) : start]
+        return bool(self._NEGATION_BEFORE_OUTCOME.search(window))
+
     def _determine_outcome_status(
         self,
         text: str,
@@ -716,17 +822,28 @@ class ExternalAuditAnalysisService:
         score_percentage: float | None,
     ) -> str:
         lowered = text.lower()
-        if any(
-            f.finding_type in {"nonconformity", "competence_gap", "finding"} and f.severity in {"high", "critical"}
+
+        non_negated_severe = any(
+            f.finding_type in {"nonconformity", "competence_gap"}
+            and f.severity in {"high", "critical"}
+            and f.provenance.get("analysis_method") != "normalized_import_review"
             for f in findings
-        ):
+        )
+        if non_negated_severe:
             return "fail"
+
         if any(f.finding_type in {"opportunity_for_improvement", "observation"} for f in findings):
             if score_percentage is None or score_percentage < 85:
                 return "review_required"
+
         for outcome, pattern in self._OUTCOME_PATTERNS:
-            if re.search(pattern, lowered, re.IGNORECASE):
-                return outcome
+            match = re.search(pattern, lowered, re.IGNORECASE)
+            if not match:
+                continue
+            if outcome == "fail" and self._outcome_is_negated(lowered, match):
+                continue
+            return outcome
+
         if score_percentage is not None:
             if score_percentage >= 85:
                 return "pass"
