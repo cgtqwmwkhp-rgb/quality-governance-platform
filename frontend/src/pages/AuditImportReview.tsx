@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
+  Building2,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -9,6 +10,7 @@ import {
   Info,
   Loader2,
   ShieldCheck,
+  User,
 } from 'lucide-react'
 import {
   auditsApi,
@@ -92,6 +94,19 @@ function reviewUrgency(draft: ExternalAuditImportDraft): number {
 function humanizeLabel(value: string | null | undefined) {
   if (!value) return ''
   return value.replace(/_/g, ' ')
+}
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return ''
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(value))
+  } catch {
+    return String(value)
+  }
 }
 
 function readProvenanceString(job: ExternalAuditImportJob | null, key: string) {
@@ -192,6 +207,8 @@ export default function AuditImportReview() {
   const [isPromoting, setIsPromoting] = useState(false)
   const [isQueueing, setIsQueueing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [showPromoteConfirm, setShowPromoteConfirm] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const processingTriggered = useRef(false)
 
   const load = useCallback(async () => {
@@ -359,6 +376,7 @@ export default function AuditImportReview() {
   const handleDraftDecision = async (draftId: number, status: 'accepted' | 'rejected') => {
     setBusyDraftId(draftId)
     setError(null)
+    setSuccessMessage(null)
     try {
       const res = await externalAuditImportsApi.reviewDraft(draftId, { status })
       setDrafts((prev) => prev.map((draft) => (draft.id === draftId ? res.data : draft)))
@@ -371,13 +389,21 @@ export default function AuditImportReview() {
     }
   }
 
-  const handlePromote = async () => {
+  const handlePromoteClick = () => {
     if (!job || promoteableCount === 0 || ['completed', 'promoting'].includes(job.status)) return
+    setShowPromoteConfirm(true)
+  }
+
+  const handlePromoteConfirm = async () => {
+    if (!job) return
+    setShowPromoteConfirm(false)
     setIsPromoting(true)
     setError(null)
+    setSuccessMessage(null)
     try {
       await externalAuditImportsApi.promoteJob(job.id)
       await load()
+      setSuccessMessage(`Successfully promoted ${promoteableCount} finding(s) into the live governance system.`)
     } catch (err) {
       console.error('Failed to promote imported audit findings', err)
       setError('Promotion failed. Review the accepted drafts and try again.')
@@ -438,7 +464,7 @@ export default function AuditImportReview() {
             {specialistHome.label}
           </Button>
           <Button
-            onClick={handlePromote}
+            onClick={handlePromoteClick}
             disabled={
               promoteableCount === 0 ||
               isPromoting ||
@@ -456,8 +482,48 @@ export default function AuditImportReview() {
         </div>
       </div>
 
+      {showPromoteConfirm ? (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between gap-3 p-5">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  Confirm promotion of {promoteableCount} accepted finding(s)?
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  This will write findings into the live governance system. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowPromoteConfirm(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void handlePromoteConfirm()}>
+                Confirm Promote
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {successMessage ? (
+        <Card className="border-emerald-300 bg-emerald-50" role="alert">
+          <CardContent className="flex items-center justify-between gap-3 p-5">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <p className="text-sm text-emerald-800">{successMessage}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSuccessMessage(null)}>
+              Dismiss
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {error ? (
-        <Card className="border-destructive/30 bg-destructive/5">
+        <Card className="border-destructive/30 bg-destructive/5" role="alert">
           <CardContent className="flex items-center justify-between gap-3 p-5">
             <div className="flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-destructive" />
@@ -634,7 +700,7 @@ export default function AuditImportReview() {
                   </p>
                   {job.report_date ? (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Report date: {new Date(job.report_date).toLocaleDateString()}
+                      Report date: {formatDate(job.report_date as unknown as string)}
                     </p>
                   ) : null}
                 </div>
@@ -667,8 +733,78 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
+      {job &&
+      (job.organization_name ||
+        job.auditor_name ||
+        job.audit_type ||
+        job.certificate_number ||
+        job.audit_scope ||
+        job.next_audit_date) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Audit Report Summary
+            </CardTitle>
+            <CardDescription>
+              Key metadata extracted from the audit document by AI analysis.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {job.organization_name ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Organisation audited
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.organization_name}</p>
+              </div>
+            ) : null}
+            {job.auditor_name ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                  <User size={12} /> Lead auditor
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.auditor_name}</p>
+              </div>
+            ) : null}
+            {job.audit_type ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit type</p>
+                <p className="mt-1 font-medium text-foreground capitalize">
+                  {job.audit_type.replace(/_/g, ' ')}
+                </p>
+              </div>
+            ) : null}
+            {job.certificate_number ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Certificate / Registration No.
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.certificate_number}</p>
+              </div>
+            ) : null}
+            {job.audit_scope ? (
+              <div className="col-span-full rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit scope</p>
+                <p className="mt-1 text-sm text-foreground line-clamp-4">{job.audit_scope}</p>
+              </div>
+            ) : null}
+            {job.next_audit_date ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Next audit date
+                </p>
+                <p className="mt-1 font-medium text-foreground">
+                  {formatDate(job.next_audit_date as unknown as string)}
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {isProcessing ? (
-        <Card className="border-primary/30 bg-primary/5">
+        <Card className="border-primary/30 bg-primary/5" aria-busy="true" role="status">
           <CardContent className="flex items-center gap-4 p-6">
             <Loader2 size={24} className="animate-spin text-primary" />
             <div>
@@ -991,6 +1127,7 @@ function DraftFindingsList({
                     type="button"
                     className="flex w-full items-center justify-between p-3 text-left text-xs text-muted-foreground hover:bg-surface"
                     onClick={() => toggleProvenance(draft.id)}
+                    aria-expanded={isExpanded}
                   >
                     <span className="flex items-center gap-1">
                       <Info size={12} />

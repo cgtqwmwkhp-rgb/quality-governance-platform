@@ -96,10 +96,10 @@ class ExternalAuditDraftResponse(BaseModel):
 
 class ExternalAuditDraftReviewRequest(BaseModel):
     status: str = Field(pattern="^(accepted|rejected|draft)$")
-    review_notes: Optional[str] = None
+    review_notes: Optional[str] = Field(default=None, max_length=5000)
     title: Optional[str] = Field(default=None, max_length=300)
-    description: Optional[str] = None
-    severity: Optional[str] = Field(default=None, max_length=50)
+    description: Optional[str] = Field(default=None, max_length=10000)
+    severity: Optional[str] = Field(default=None, pattern="^(low|medium|high|critical)$")
 
 
 def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str, str]:
@@ -126,10 +126,15 @@ def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str
     return "/compliance", "Open Compliance Summary"
 
 
+_REDACTED_PROVENANCE_KEYS = frozenset({"storage_key"})
+
+
 def _annotate_job_response(job: ExternalAuditImportJobResponse) -> ExternalAuditImportJobResponse:
     path, label = _determine_specialist_home(job)
     job.specialist_home_path = path
     job.specialist_home_label = label
+    if job.provenance_json:
+        job.provenance_json = {k: v for k, v in job.provenance_json.items() if k not in _REDACTED_PROVENANCE_KEYS}
     return job
 
 

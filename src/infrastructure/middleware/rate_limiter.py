@@ -205,6 +205,8 @@ ENDPOINT_LIMITS: dict[str, RateLimitConfig] = {
     "/api/v1/rtas": RateLimitConfig(requests_per_minute=30, burst_limit=10),
     # Portal endpoints - moderate limits
     "/api/v1/portal/": RateLimitConfig(requests_per_minute=30, burst_limit=10),
+    # External audit import - expensive AI processing
+    "/api/v1/external-audit-imports/jobs": RateLimitConfig(requests_per_minute=10, burst_limit=3),
     # Standard API - default limits
     "default": RateLimitConfig(requests_per_minute=60, burst_limit=20),
     # High-frequency endpoints - higher limits

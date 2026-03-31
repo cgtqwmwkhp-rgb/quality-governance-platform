@@ -8,7 +8,9 @@ confidence, while disagreements are surfaced as warnings.
 
 from __future__ import annotations
 
+import copy
 import logging
+import math
 from difflib import SequenceMatcher
 
 from src.domain.services.mistral_analysis_service import AIAnalysisResult
@@ -27,6 +29,9 @@ class AIConsensusService:
         result_a: AIAnalysisResult,
         result_b: AIAnalysisResult,
     ) -> AIAnalysisResult:
+        result_a = copy.deepcopy(result_a)
+        result_b = copy.deepcopy(result_b)
+
         a_ok = result_a.provider_status == "completed"
         b_ok = result_b.provider_status == "completed"
 
@@ -101,6 +106,9 @@ class AIConsensusService:
         overall = self._pick_agreed_float(a.overall_score, b.overall_score, "overall_score", warnings)
         max_s = self._pick_agreed_float(a.max_score, b.max_score, "max_score", warnings)
         pct = self._pick_agreed_float(a.score_percentage, b.score_percentage, "score_percentage", warnings)
+
+        if pct is not None:
+            pct = max(0.0, min(pct, 100.0))
 
         return {"breakdown": breakdown, "overall": overall, "max_score": max_s, "score_percentage": pct}
 
@@ -237,6 +245,10 @@ class AIConsensusService:
         field_name: str,
         warnings: list[str],
     ) -> float | None:
+        if val_a is not None and not math.isfinite(val_a):
+            val_a = None
+        if val_b is not None and not math.isfinite(val_b):
+            val_b = None
         if val_a is not None and val_b is not None:
             if abs(val_a - val_b) <= SCORE_TOLERANCE_PCT:
                 return round((val_a + val_b) / 2, 2)

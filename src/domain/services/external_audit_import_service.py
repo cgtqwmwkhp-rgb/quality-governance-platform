@@ -36,6 +36,9 @@ from src.infrastructure.storage import StorageError, storage_service
 
 logger = logging.getLogger(__name__)
 
+MAX_SOURCE_FILE_BYTES = 50 * 1024 * 1024  # 50 MB hard limit
+PROCESSING_TTL_SECONDS = 600  # 10 minutes before a PROCESSING job is considered stale
+
 _EXTENSION_TO_FILETYPE = {
     ".pdf": FileType.PDF,
     ".docx": FileType.DOCX,
@@ -164,7 +167,33 @@ class ExternalAuditImportService:
         job = result.scalar_one_or_none()
         if not job:
             raise NotFoundError(f"External audit import job {job_id} not found")
+        await self._recover_stale_processing(job)
         return job
+
+    async def _recover_stale_processing(self, job: ExternalAuditImportJob) -> None:
+        """Auto-recover jobs stuck in PROCESSING beyond the TTL."""
+        if job.status != ExternalAuditImportStatus.PROCESSING:
+            return
+        updated_at = job.updated_at if hasattr(job, "updated_at") and job.updated_at else job.created_at
+        if updated_at is None:
+            return
+        now = datetime.now(timezone.utc)
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        elapsed = (now - updated_at).total_seconds()
+        if elapsed > PROCESSING_TTL_SECONDS:
+            logger.warning(
+                "Recovering stale PROCESSING job %s (stuck for %.0fs)",
+                job.id,
+                elapsed,
+            )
+            job.status = ExternalAuditImportStatus.FAILED
+            job.error_code = "PROCESSING_TIMEOUT"
+            job.error_detail = (
+                f"Processing did not complete within {PROCESSING_TTL_SECONDS // 60} minutes. "
+                "The job has been automatically reset. Please retry."
+            )
+            await self.db.flush()
 
     async def get_latest_job_for_run(self, *, audit_run_id: int, tenant_id: int | None) -> ExternalAuditImportJob:
         await self._get_run(audit_run_id=audit_run_id, tenant_id=tenant_id)
@@ -240,6 +269,17 @@ class ExternalAuditImportService:
             job.error_code = "SOURCE_DOWNLOAD_FAILED"
             job.error_detail = "Unable to download the source audit file for OCR/import processing."
             logger.warning("External audit import download failed for job %s: %s", job.id, type(exc).__name__)
+            await self.db.flush()
+            return job
+
+        if len(raw) > MAX_SOURCE_FILE_BYTES:
+            job.status = ExternalAuditImportStatus.FAILED
+            job.error_code = "SOURCE_FILE_TOO_LARGE"
+            job.error_detail = (
+                f"Source file is {len(raw) // (1024 * 1024)}MB, which exceeds the "
+                f"{MAX_SOURCE_FILE_BYTES // (1024 * 1024)}MB limit."
+            )
+            logger.warning("Source file too large for job %s: %d bytes", job.id, len(raw))
             await self.db.flush()
             return job
 
@@ -361,7 +401,9 @@ class ExternalAuditImportService:
                 job.report_date = analysis.report_date
                 job.overall_score = analysis.overall_score
                 job.max_score = analysis.max_score
-                job.score_percentage = analysis.score_percentage
+                job.score_percentage = (
+                    max(0.0, min(analysis.score_percentage, 100.0)) if analysis.score_percentage is not None else None
+                )
                 job.outcome_status = analysis.outcome_status
                 job.classification_basis_json = analysis.classification_basis
                 job.score_breakdown_json = analysis.score_breakdown or None
