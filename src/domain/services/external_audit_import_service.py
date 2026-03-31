@@ -26,6 +26,7 @@ from src.domain.models.uvdb_achilles import UVDBAudit
 from src.domain.services.audit_service import AuditService
 from src.domain.services.document_extraction_service import extract_document_content
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
+from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.mistral_ocr_service import MistralOCRService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.infrastructure.storage import StorageError, storage_service
@@ -54,6 +55,7 @@ class ExternalAuditImportService:
         self.db = db
         self.analysis_service = ExternalAuditAnalysisService()
         self.ocr_service = MistralOCRService()
+        self.ai_analysis_service = MistralAnalysisService()
 
     def ensure_feature_enabled(self) -> None:
         if not settings.external_audit_import_enabled:
@@ -239,30 +241,39 @@ class ExternalAuditImportService:
         try:
             file_type = self._infer_file_type(asset.original_filename, asset.content_type)
             extraction = extract_document_content(file_type, asset.original_filename or "source", raw)
-            text = extraction.text.strip()
+            native_text = extraction.text.strip()
             extraction_method = extraction.extraction_method
             page_texts = extraction.page_texts or []
             note = extraction.note
 
-            should_try_ocr = (not text) or file_type in {FileType.PNG, FileType.JPG, FileType.JPEG}
-            if should_try_ocr:
+            ocr_text = ""
+            ocr_pages: list[str] = []
+            if self.ocr_service.is_configured:
                 ocr_result = await self.ocr_service.ocr_bytes(
                     raw,
                     asset.original_filename or "source",
                     asset.content_type or "application/octet-stream",
                 )
-                if ocr_result.text.strip():
-                    text = ocr_result.text.strip()
-                    page_texts = ocr_result.pages or [text]
-                    extraction_method = ocr_result.method
+                ocr_text = ocr_result.text.strip()
+                ocr_pages = ocr_result.pages or []
+                if ocr_result.note and note is None:
                     note = ocr_result.note
-                elif note is None:
-                    note = ocr_result.note
+
+            text, page_texts, extraction_method = self._merge_extractions(
+                native_text=native_text,
+                native_pages=page_texts,
+                ocr_text=ocr_text,
+                ocr_pages=ocr_pages,
+                native_method=extraction_method,
+            )
+
+            ai_result = await self.ai_analysis_service.analyze_text(text, assurance_scheme=run.assurance_scheme)
 
             analysis = self.analysis_service.analyze(
                 extracted_text=text,
                 page_texts=page_texts or ([text] if text else []),
                 assurance_scheme=run.assurance_scheme,
+                ai_result=ai_result,
             )
 
             preview = text[:500] if text else None
@@ -575,6 +586,37 @@ class ExternalAuditImportService:
                 raise ConflictError("Cannot reprocess an import job after findings have been promoted")
             await self.db.delete(draft)
         await self.db.flush()
+
+    @staticmethod
+    def _merge_extractions(
+        *,
+        native_text: str,
+        native_pages: list[str],
+        ocr_text: str,
+        ocr_pages: list[str],
+        native_method: str,
+    ) -> tuple[str, list[str], str]:
+        """Pick the richer extraction source, preferring OCR when it yields more content."""
+        if not ocr_text:
+            return native_text, native_pages, native_method
+        if not native_text:
+            return ocr_text, ocr_pages, "mistral_ocr"
+
+        native_words = len(native_text.split())
+        ocr_words = len(ocr_text.split())
+
+        if ocr_words >= native_words * 1.15:
+            logger.info(
+                "OCR text chosen over native (%d vs %d words)",
+                ocr_words,
+                native_words,
+            )
+            return ocr_text, ocr_pages, "mistral_ocr"
+
+        if native_words >= ocr_words * 1.15:
+            return native_text, native_pages, native_method
+
+        return ocr_text, ocr_pages, "mistral_ocr_preferred"
 
     def _infer_file_type(self, filename: str | None, content_type: str | None) -> FileType:
         suffix = Path(filename or "").suffix.lower()

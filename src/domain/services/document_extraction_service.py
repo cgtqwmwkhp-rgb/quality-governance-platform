@@ -59,7 +59,11 @@ def extract_document_content(file_type: FileType, file_name: str, content: bytes
 
 
 def _extract_pdf_text(content: bytes, file_name: str) -> ExtractedDocumentContent:
-    """Extract searchable text from PDF evidence."""
+    """Extract searchable text from PDF using pdfplumber (table-aware) with pypdf fallback."""
+    plumber_result = _extract_pdf_via_pdfplumber(content, file_name)
+    if plumber_result is not None:
+        return plumber_result
+
     try:
         from pypdf import PdfReader
     except ImportError:
@@ -85,6 +89,50 @@ def _extract_pdf_text(content: bytes, file_name: str) -> ExtractedDocumentConten
             text="",
             note=f"Stored successfully but PDF extraction failed for {file_name}.",
         )
+
+
+def _extract_pdf_via_pdfplumber(content: bytes, file_name: str) -> ExtractedDocumentContent | None:
+    """Use pdfplumber for table-aware PDF extraction. Returns None if unavailable."""
+    try:
+        import pdfplumber  # noqa: F811
+    except ImportError:
+        return None
+
+    try:
+        page_texts: list[str] = []
+        has_tables = False
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            page_count = len(pdf.pages)
+            for page in pdf.pages:
+                parts: list[str] = []
+                tables = page.extract_tables()
+                if tables:
+                    has_tables = True
+                    for table in tables:
+                        for row in table:
+                            cells = [str(c).strip() for c in row if c]
+                            if cells:
+                                parts.append(" | ".join(cells))
+                plain = page.extract_text()
+                if plain:
+                    parts.append(plain.strip())
+                page_texts.append("\n".join(parts))
+
+        filtered = [p for p in page_texts if p.strip()]
+        text = "\n\n".join(filtered)
+        if not text.strip():
+            return None
+
+        return ExtractedDocumentContent(
+            text=text,
+            page_count=page_count,
+            page_texts=page_texts,
+            has_tables=has_tables,
+            extraction_method="pdfplumber",
+        )
+    except Exception as exc:
+        logger.warning("pdfplumber extraction failed for %s: %s — falling back to pypdf", file_name, type(exc).__name__)
+        return None
 
 
 def _extract_docx_text(content: bytes, file_name: str) -> ExtractedDocumentContent:

@@ -215,7 +215,7 @@ class Settings(BaseSettings):
     mistral_api_key: str = ""
     mistral_ocr_model: str = "mistral-ocr-latest"
     mistral_api_base_url: str = "https://api.mistral.ai/v1"
-    mistral_ocr_timeout_seconds: int = 60
+    mistral_ocr_timeout_seconds: int = 120
 
     # OpenTelemetry / Azure Monitor
     otel_trace_sample_rate: Optional[float] = None

@@ -10,6 +10,7 @@ from typing import cast
 from src.domain.services.achilles_mapping_service import AchillesMappingService
 from src.domain.services.iso_compliance_service import iso_compliance_service
 from src.domain.services.iso_cross_mapping_service import ISOCrossMappingService
+from src.domain.services.mistral_analysis_service import AIAnalysisResult
 
 
 @dataclass
@@ -73,12 +74,23 @@ class ExternalAuditAnalysisService:
         ("finding", "medium", "finding", 0.55),
     )
     _POSITIVE_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
-        ("good practice", "low", "positive_practice", 0.8),
-        ("strength", "low", "positive_practice", 0.78),
-        ("compliant", "low", "positive_practice", 0.72),
-        ("conforms", "low", "positive_practice", 0.7),
-        ("competent", "low", "positive_practice", 0.74),
-        ("effective", "low", "positive_practice", 0.65),
+        ("good practice", "low", "positive_practice", 0.92),
+        ("strength", "low", "positive_practice", 0.88),
+        ("compliant", "low", "positive_practice", 0.88),
+        ("conforms", "low", "positive_practice", 0.85),
+        ("competent", "low", "positive_practice", 0.87),
+        ("effective", "low", "positive_practice", 0.80),
+    )
+    _CONFIDENCE_BOOSTERS: tuple[str, ...] = (
+        "compliant",
+        "conforms",
+        "competent",
+        "effective",
+        "satisfactory",
+        "meets requirements",
+        "acceptable",
+        "adequate",
+        "verified",
     )
     _IMPROVEMENT_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("opportunity for improvement", "medium", "opportunity_for_improvement", 0.88),
@@ -113,6 +125,7 @@ class ExternalAuditAnalysisService:
         extracted_text: str,
         page_texts: list[str],
         assurance_scheme: str | None,
+        ai_result: AIAnalysisResult | None = None,
     ) -> ExternalAuditAnalysisResult:
         normalized_text = extracted_text.strip()
         scheme_match = self._detect_scheme(normalized_text, assurance_scheme)
@@ -130,17 +143,47 @@ class ExternalAuditAnalysisService:
         evidence_preview = cast(list[dict[str, object]], scorecard["evidence_preview"])
         warnings = cast(list[str], scorecard["warnings"])
         report_date = self._extract_report_date(normalized_text)
+
+        if ai_result and ai_result.provider_status == "completed":
+            score_breakdown, overall_score, max_score, score_percentage = self._merge_ai_scores(
+                rule_breakdown=score_breakdown,
+                rule_overall=overall_score,
+                rule_max=max_score,
+                rule_pct=score_percentage,
+                ai=ai_result,
+            )
+            if ai_result.report_date and report_date is None:
+                try:
+                    report_date = datetime.strptime(ai_result.report_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    pass
+            if ai_result.issuer_name:
+                pass  # rule-based issuer takes precedence if present
+            if ai_result.outcome:
+                pass  # merged below via _determine_outcome_status
+            warnings.extend(ai_result.warnings)
+
         findings = self._extract_findings(
             page_texts=page_texts or ([normalized_text] if normalized_text else []),
             assurance_scheme=assurance_scheme,
             scheme_label=scheme_label,
             frameworks=frameworks,
             standards=standards,
+            ai_result=ai_result,
         )
         positive_summary = self._build_category_summary(findings, {"positive_practice"})
         nonconformity_summary = self._build_category_summary(findings, {"nonconformity", "competence_gap", "finding"})
         improvement_summary = self._build_category_summary(findings, {"opportunity_for_improvement", "observation"})
         summary = self._build_summary(normalized_text, findings, frameworks, standards, scorecard, scheme_label)
+
+        issuer = self._detect_issuer_name(normalized_text, scheme, assurance_scheme)
+        if not issuer and ai_result and ai_result.issuer_name:
+            issuer = ai_result.issuer_name
+
+        outcome = self._determine_outcome_status(normalized_text, findings, score_percentage)
+        if ai_result and ai_result.outcome and outcome == "review_required":
+            outcome = ai_result.outcome
+
         return ExternalAuditAnalysisResult(
             summary=summary,
             findings=findings,
@@ -149,12 +192,12 @@ class ExternalAuditAnalysisService:
             detected_scheme=scheme,
             detected_scheme_confidence=scheme_confidence,
             scheme_version=self._detect_scheme_version(normalized_text, scheme),
-            issuer_name=self._detect_issuer_name(normalized_text, scheme, assurance_scheme),
+            issuer_name=issuer,
             report_date=report_date,
             overall_score=overall_score,
             max_score=max_score,
             score_percentage=score_percentage,
-            outcome_status=self._determine_outcome_status(normalized_text, findings, score_percentage),
+            outcome_status=outcome,
             classification_basis={
                 "assurance_scheme": assurance_scheme,
                 "signals": scheme_signals,
@@ -169,6 +212,36 @@ class ExternalAuditAnalysisService:
             processing_warnings=warnings,
         )
 
+    def _merge_ai_scores(
+        self,
+        *,
+        rule_breakdown: list[dict[str, object]],
+        rule_overall: float | None,
+        rule_max: float | None,
+        rule_pct: float | None,
+        ai: AIAnalysisResult,
+    ) -> tuple[list[dict[str, object]], float | None, float | None, float | None]:
+        """Prefer AI-extracted scores when rule-based extraction is empty or suspect."""
+        breakdown = rule_breakdown
+        overall = rule_overall
+        max_s = rule_max
+        pct = rule_pct
+
+        if ai.score_breakdown and (not rule_breakdown or len(ai.score_breakdown) > len(rule_breakdown)):
+            breakdown = ai.score_breakdown
+
+        if ai.overall_score is not None and ai.max_score is not None:
+            if overall is None or (overall is not None and max_s is not None and overall > max_s):
+                overall = ai.overall_score
+                max_s = ai.max_score
+            if pct is None or (pct is not None and pct > 100):
+                pct = ai.score_percentage
+
+        if pct is None and ai.score_percentage is not None:
+            pct = ai.score_percentage
+
+        return breakdown, overall, max_s, pct
+
     def _extract_findings(
         self,
         *,
@@ -177,6 +250,7 @@ class ExternalAuditAnalysisService:
         scheme_label: str,
         frameworks: list[dict[str, object]],
         standards: list[dict[str, object]],
+        ai_result: AIAnalysisResult | None = None,
     ) -> list[DraftFindingCandidate]:
         findings: list[DraftFindingCandidate] = []
         for page_number, page_text in enumerate(page_texts, start=1):
@@ -251,13 +325,14 @@ class ExternalAuditAnalysisService:
                     continue
                 snippet = self._snippet_around(compact, trigger)
                 title = self._build_title(trigger, scheme_label)
+                boosted = self._boost_confidence(confidence, lowered)
                 findings.append(
                     DraftFindingCandidate(
                         title=title,
                         description=snippet,
                         severity=severity,
                         finding_type=finding_type,
-                        confidence_score=confidence,
+                        confidence_score=boosted,
                         competence_verdict="competent",
                         source_pages=[page_number],
                         evidence_snippets=[snippet],
@@ -274,6 +349,32 @@ class ExternalAuditAnalysisService:
                     )
                 )
                 break
+
+        if ai_result and ai_result.provider_status == "completed" and ai_result.findings:
+            existing_titles = {f.title.lower() for f in findings}
+            for ai_f in ai_result.findings:
+                title = str(ai_f.get("title", ""))
+                if title.lower() in existing_titles:
+                    continue
+                findings.append(
+                    DraftFindingCandidate(
+                        title=f"{scheme_label}: {title}" if scheme_label and scheme_label not in title else title,
+                        description=str(ai_f.get("description", "")),
+                        severity=str(ai_f.get("severity", "medium")),
+                        finding_type=str(ai_f.get("finding_type", "finding")),
+                        confidence_score=float(str(ai_f.get("confidence", 0.85))),
+                        competence_verdict=("not_competent" if ai_f.get("finding_type") == "competence_gap" else None),
+                        source_pages=[],
+                        evidence_snippets=[str(ai_f.get("description", ""))[:400]],
+                        mapped_frameworks=frameworks,
+                        mapped_standards=standards,
+                        provenance={
+                            "analysis_method": "mistral_ai_structured",
+                            "ai_confidence": float(str(ai_f.get("confidence", 0.85))),
+                        },
+                    )
+                )
+
         return self._dedupe_findings(findings)
 
     def _build_summary(
@@ -303,6 +404,12 @@ class ExternalAuditAnalysisService:
         if text:
             parts.append(f"Source text length: {len(text.split())} words.")
         return " ".join(parts)
+
+    def _boost_confidence(self, base: float, page_text_lower: str) -> float:
+        """Boost confidence when corroborating keywords appear on the same page."""
+        hits = sum(1 for kw in self._CONFIDENCE_BOOSTERS if kw in page_text_lower)
+        boost = min(hits * 0.02, 0.10)
+        return min(round(base + boost, 2), 0.99)
 
     def _snippet_around(self, text: str, trigger: str) -> str:
         lowered = text.lower()
@@ -428,9 +535,11 @@ class ExternalAuditAnalysisService:
             text,
         )
         if ratio_match:
-            overall_score = float(ratio_match.group(3))
-            max_score = float(ratio_match.group(4))
-            if max_score:
+            candidate_score = float(ratio_match.group(3))
+            candidate_max = float(ratio_match.group(4))
+            if candidate_max and candidate_score <= candidate_max:
+                overall_score = candidate_score
+                max_score = candidate_max
                 score_percentage = round((overall_score / max_score) * 100, 1)
 
         if score_percentage is None:
@@ -498,6 +607,22 @@ class ExternalAuditAnalysisService:
             )
         return self._dedupe_dicts(preview[:8], key_fields=("standard", "clause_id", "clause_number", "title"))
 
+    @staticmethod
+    def _looks_like_date(a: float, b: float, trailing: str) -> bool:
+        """Return True when a/b looks like DD/MM, MM/DD, or is followed by a year."""
+        if trailing and re.match(r"\s*/\s*\d{4}\b", trailing):
+            return True
+        if trailing and re.match(r"\s*/\s*\d{2}\b", trailing):
+            return True
+        ia, ib = int(a), int(b)
+        if a != ia or b != ib:
+            return False
+        if 1 <= ia <= 31 and 1 <= ib <= 12:
+            return True
+        if 1 <= ib <= 31 and 1 <= ia <= 12:
+            return True
+        return False
+
     def _extract_score_breakdown(self, text: str) -> list[dict[str, object]]:
         breakdown: list[dict[str, object]] = []
         for raw_line in text.splitlines():
@@ -519,12 +644,24 @@ class ExternalAuditAnalysisService:
             max_score = float(match.group("max"))
             if max_score <= 0:
                 continue
+
+            trailing = line[match.end() :]
+            if self._looks_like_date(score, max_score, trailing):
+                continue
+
+            if score > max_score:
+                continue
+
+            pct = round((score / max_score) * 100, 1)
+            if pct > 100.0:
+                continue
+
             breakdown.append(
                 {
                     "label": label,
                     "score": score,
                     "max_score": max_score,
-                    "percentage": round((score / max_score) * 100, 1),
+                    "percentage": pct,
                 }
             )
         return self._dedupe_dicts(breakdown[:12], key_fields=("label",))
