@@ -82,13 +82,12 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate event - AGGRESSIVELY clear old caches
+// Activate event - clear old caches, then claim clients
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activating...');
   event.waitUntil(
     caches.keys()
       .then((keys) => {
-        // Delete ALL caches that don't match current version
         const deletions = keys
           .filter((key) => !key.startsWith(CACHE_VERSION))
           .map((key) => {
@@ -96,6 +95,18 @@ self.addEventListener('activate', (event) => {
             return caches.delete(key);
           });
         return Promise.all(deletions);
+      })
+      .then(() => {
+        // Ensure the app shell is cached before claiming clients so that
+        // intercepted navigation requests can fall back to index.html.
+        return caches.open(STATIC_CACHE).then((cache) =>
+          cache.match('/index.html').then((existing) => {
+            if (existing) return;
+            return cache.add('/index.html').catch(() => {
+              console.warn('[SW] Could not pre-cache index.html during activate');
+            });
+          })
+        );
       })
       .then(() => {
         console.log('[SW] Taking control of all clients');
@@ -242,11 +253,23 @@ async function networkFirstHtml(request) {
     }
     return response;
   } catch (error) {
+    console.warn('[SW] Navigation fetch failed, falling back to cache:', request.url, error?.message);
     const cached = await caches.match(request);
     if (cached) {
       return cached;
     }
-    return caches.match('/offline.html');
+    // SPA fallback: serve the cached app shell so the client-side router
+    // can handle the deep-link once the bundle loads.
+    const appShell = await caches.match('/index.html');
+    if (appShell) {
+      console.log('[SW] Serving cached app shell for SPA route:', request.url);
+      return appShell;
+    }
+    const offline = await caches.match('/offline.html');
+    return offline || new Response('Offline', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain' },
+    });
   }
 }
 
