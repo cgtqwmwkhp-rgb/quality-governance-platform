@@ -96,6 +96,7 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     job_id = create_response.json()["id"]
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", lambda *_args: None)
+    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
 
     queue_response = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
@@ -307,6 +308,7 @@ async def test_external_audit_import_job_queue_is_idempotent(
         delay_calls.append((job_id_value, tenant_id_value, user_id_value))
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", _delay)
+    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
 
     first_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
@@ -392,35 +394,14 @@ async def test_external_audit_import_queue_failure_keeps_job_retryable(
         "delay",
         lambda *_args: (_ for _ in ()).throw(ValueError("broker misconfigured")),
     )
+    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
 
-    failed_queue = await client.post(
+    fallback_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
         headers=auth_headers,
     )
-    assert failed_queue.status_code == 502
-
-    job_after_failure = await client.get(
-        f"/api/v1/external-audit-imports/jobs/{job_id}",
-        headers=auth_headers,
-    )
-    assert job_after_failure.status_code == 200
-    assert job_after_failure.json()["status"] == "pending"
-    assert job_after_failure.json()["error_code"] == "QUEUE_DISPATCH_FAILED"
-
-    delay_calls: list[tuple[int, int, int]] = []
-
-    def _delay(job_id_value: int, tenant_id_value: int, user_id_value: int) -> None:
-        delay_calls.append((job_id_value, tenant_id_value, user_id_value))
-
-    monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", _delay)
-
-    retried_queue = await client.post(
-        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
-        headers=auth_headers,
-    )
-    assert retried_queue.status_code == 200
-    assert retried_queue.json()["status"] == "queued"
-    assert delay_calls == [(job_id, DEFAULT_TEST_TENANT_ID, DEFAULT_TEST_USER_ID)]
+    assert fallback_queue.status_code == 200
+    assert fallback_queue.json()["status"] == "queued"
 
 
 @pytest.mark.asyncio
