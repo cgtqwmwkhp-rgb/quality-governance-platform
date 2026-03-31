@@ -122,6 +122,8 @@ export default function AuditImportReview() {
   const [busyDraftId, setBusyDraftId] = useState<number | null>(null)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isQueueing, setIsQueueing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const processingTriggered = useRef(false)
 
   const load = useCallback(async () => {
     if (!jobId && (!Number.isFinite(routeAuditId) || routeAuditId <= 0)) {
@@ -199,7 +201,21 @@ export default function AuditImportReview() {
   }, [load])
 
   useEffect(() => {
-    if (!job || !['queued', 'processing', 'promoting'].includes(job.status)) return
+    if (!job || job.status !== 'queued' || isProcessing || processingTriggered.current) return
+    processingTriggered.current = true
+    setIsProcessing(true)
+    externalAuditImportsApi
+      .processJob(job.id)
+      .then(() => load())
+      .catch((err) => {
+        console.error('Import processing failed', err)
+        void load()
+      })
+      .finally(() => setIsProcessing(false))
+  }, [job, isProcessing, load])
+
+  useEffect(() => {
+    if (!job || !['processing', 'promoting'].includes(job.status)) return
     const timeoutId = window.setTimeout(() => {
       void load()
     }, 5000)
@@ -306,8 +322,20 @@ export default function AuditImportReview() {
     setIsQueueing(true)
     setError(null)
     try {
-      await externalAuditImportsApi.queueJob(job.id)
+      const queueRes = await externalAuditImportsApi.queueJob(job.id)
       setQueueNotice(null)
+      setJob(queueRes.data)
+
+      if (queueRes.data.status === 'queued') {
+        setIsProcessing(true)
+        try {
+          await externalAuditImportsApi.processJob(job.id)
+        } catch (processErr) {
+          console.error('Import processing failed after retry', processErr)
+        } finally {
+          setIsProcessing(false)
+        }
+      }
       await load()
     } catch (err) {
       console.error('Failed to queue external audit import job', err)
@@ -570,7 +598,28 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
-      {job && (job.status === 'pending' || job.error_code === 'QUEUE_DISPATCH_FAILED') ? (
+      {isProcessing ? (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center gap-4 p-6">
+            <Loader2 size={24} className="animate-spin text-primary" />
+            <div>
+              <p className="font-medium text-foreground">
+                Processing import&hellip;
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Extracting text, running analysis, and generating draft findings. This may take up to
+                two minutes.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {job &&
+      !isProcessing &&
+      (job.status === 'pending' ||
+        job.status === 'queued' ||
+        job.error_code === 'QUEUE_DISPATCH_FAILED') ? (
         <Card className="border-warning/30 bg-warning/5">
           <CardHeader>
             <CardTitle className="text-base">Processing queue</CardTitle>
@@ -584,7 +633,7 @@ export default function AuditImportReview() {
                 ? job.error_detail || 'Background processing could not be started automatically.'
                 : 'Retry queueing this import to continue OCR, schema mapping, and reviewer draft generation.'}
             </p>
-            <Button onClick={() => void handleRetryQueue()} disabled={isQueueing}>
+            <Button onClick={() => void handleRetryQueue()} disabled={isQueueing || isProcessing}>
               {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}
               Retry Queue
             </Button>
@@ -732,11 +781,11 @@ export default function AuditImportReview() {
         {drafts.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
-              {job?.status === 'queued' ||
-              job?.status === 'processing' ||
-              job?.status === 'promoting'
+              {job?.status === 'processing' || job?.status === 'promoting'
                 ? 'Processing is still running. This workspace refreshes automatically while analysis is in progress.'
-                : error
+                : job?.status === 'queued'
+                  ? 'Waiting for processing to start. Click Retry Queue above if this persists.'
+                  : error
                   ? 'The latest import state could not be refreshed. Retry to continue reviewing this workspace.'
                   : 'No draft findings were produced for this import. Review the source document and processing warnings before promoting.'}
             </CardContent>

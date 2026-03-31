@@ -97,6 +97,13 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", lambda *_args: None)
 
+    queue_response = await client.post(
+        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
+        headers=auth_headers,
+    )
+    assert queue_response.status_code == 200
+    assert queue_response.json()["status"] == "queued"
+
     import src.domain.services.external_audit_import_service as import_service_module
 
     monkeypatch.setattr(
@@ -112,12 +119,12 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
         ),
     )
 
-    queue_response = await client.post(
-        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
+    process_response = await client.post(
+        f"/api/v1/external-audit-imports/jobs/{job_id}/process",
         headers=auth_headers,
     )
-    assert queue_response.status_code == 200
-    assert queue_response.json()["status"] == "review_required"
+    assert process_response.status_code == 200
+    assert process_response.json()["status"] == "review_required"
 
     job_response = await client.get(
         f"/api/v1/external-audit-imports/jobs/{job_id}",
@@ -300,14 +307,6 @@ async def test_external_audit_import_job_queue_is_idempotent(
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", _delay)
 
-    import src.domain.services.external_audit_import_service as import_service_module
-
-    monkeypatch.setattr(
-        import_service_module,
-        "storage_service",
-        lambda: SimpleNamespace(download=AsyncMock(return_value=b"Queue-safe content")),
-    )
-
     first_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
         headers=auth_headers,
@@ -319,8 +318,8 @@ async def test_external_audit_import_job_queue_is_idempotent(
 
     assert first_queue.status_code == 200
     assert second_queue.status_code == 200
-    assert first_queue.json()["status"] == "review_required"
-    assert second_queue.json()["status"] == "review_required"
+    assert first_queue.json()["status"] == "queued"
+    assert second_queue.json()["status"] == "queued"
     assert delay_calls == [(job_id, DEFAULT_TEST_TENANT_ID, DEFAULT_TEST_USER_ID)]
 
 
@@ -393,20 +392,12 @@ async def test_external_audit_import_queue_failure_keeps_job_retryable(
         lambda *_args: (_ for _ in ()).throw(ValueError("broker misconfigured")),
     )
 
-    import src.domain.services.external_audit_import_service as import_service_module
-
-    monkeypatch.setattr(
-        import_service_module,
-        "storage_service",
-        lambda: SimpleNamespace(download=AsyncMock(return_value=b"Retryable content")),
-    )
-
     fallback_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
         headers=auth_headers,
     )
     assert fallback_queue.status_code == 200
-    assert fallback_queue.json()["status"] == "review_required"
+    assert fallback_queue.json()["status"] == "queued"
 
 
 @pytest.mark.asyncio

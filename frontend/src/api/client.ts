@@ -22,6 +22,10 @@ const REQUEST_TIMEOUT_MS = 15000
 // File uploads to Azure Blob Storage can take longer, especially for large files
 const UPLOAD_TIMEOUT_MS = 120000
 
+// Extended timeout for import processing (2 minutes)
+// PDF extraction + OCR + analysis runs synchronously in the process endpoint
+const PROCESSING_TIMEOUT_MS = 120000
+
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
 export type LoginErrorCode =
@@ -4208,6 +4212,11 @@ export const externalAuditImportsApi = {
 
   queueJob: (jobId: number) =>
     api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/queue`),
+
+  processJob: (jobId: number) =>
+    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/process`, null, {
+      timeout: PROCESSING_TIMEOUT_MS,
+    }),
 
   getLatestJobForRun: (auditRunId: number) =>
     api.get<ExternalAuditImportJob>(`/api/v1/external-audit-imports/runs/${auditRunId}/latest-job`),

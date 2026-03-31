@@ -156,12 +156,11 @@ async def queue_import_job(
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
-    """Queue and immediately process an external audit import job.
+    """Set an import job to QUEUED status (fast — no inline processing).
 
-    Processing runs synchronously within this request so errors surface
-    directly instead of being lost in background tasks.  The Celery
-    dispatch is kept as a best-effort optimistic path for environments
-    that have a worker, but the response always waits for completion.
+    The frontend should follow up with a ``POST /jobs/{job_id}/process``
+    call from the import-review page where a longer client timeout and
+    proper progress UX are available.
     """
     service = ExternalAuditImportService(db)
     job, should_enqueue = await service.queue_job(
@@ -170,25 +169,33 @@ async def queue_import_job(
         user_id=current_user.id,
     )
 
-    needs_processing = should_enqueue or job.status == ExternalAuditImportStatus.QUEUED
-
     if should_enqueue:
-        await db.commit()
-        await db.refresh(job)
         try:
             process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
         except Exception:
             logger.warning("Celery dispatch unavailable for job %s", job.id)
 
-    if needs_processing:
-        job = await service.process_job(
-            job_id=job.id,
-            tenant_id=current_user.tenant_id,
-            user_id=current_user.id,
-        )
-        await db.commit()
-        await db.refresh(job)
+    return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
+
+@router.post("/jobs/{job_id}/process", response_model=ExternalAuditImportJobResponse)
+async def process_import_job(
+    job_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+) -> ExternalAuditImportJobResponse:
+    """Process a QUEUED import job synchronously (long-running).
+
+    Called from the import-review page with an extended client timeout.
+    On any failure the job is marked FAILED so the user sees an
+    actionable error instead of an infinite "queued" state.
+    """
+    service = ExternalAuditImportService(db)
+    job = await service.process_job(
+        job_id=job_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+    )
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
