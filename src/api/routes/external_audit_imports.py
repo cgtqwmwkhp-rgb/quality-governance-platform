@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.exceptions import ExternalServiceError
 from src.domain.models.external_audit_import import ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
@@ -151,29 +151,47 @@ async def create_import_job(
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
-def _run_import_inline(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
-    """In-process fallback so jobs are processed even without a Celery worker."""
-    import asyncio
+_processing_jobs: set[int] = set()
 
+
+async def _process_import_async(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
+    """Fire-and-forget coroutine that processes an import job on the running event loop.
+
+    Runs in the server's event loop via ``asyncio.create_task`` so it survives
+    after the HTTP response is sent, unlike ``BackgroundTasks`` sync callbacks
+    that may be killed when the ASGI request scope closes.
+    """
     from src.infrastructure.database import async_session_maker
 
-    async def _process() -> None:
+    try:
         async with async_session_maker() as session:
             service = ExternalAuditImportService(session)
             await service.process_job(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
             await session.commit()
-
-    try:
-        asyncio.run(_process())
+        logger.info("Inline import processing completed for job %s", job_id)
     except Exception:
         logger.exception("Inline import processing failed for job %s", job_id)
+    finally:
+        _processing_jobs.discard(job_id)
+
+
+def _schedule_inline_processing(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
+    """Schedule import processing on the running event loop (at most once per job)."""
+    if job_id in _processing_jobs:
+        return
+    _processing_jobs.add(job_id)
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_process_import_async(job_id, tenant_id, user_id))
+    except RuntimeError:
+        _processing_jobs.discard(job_id)
+        logger.warning("No running event loop for inline processing of job %s", job_id)
 
 
 @router.post("/jobs/{job_id}/queue", response_model=ExternalAuditImportJobResponse)
 async def queue_import_job(
     job_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
     """Queue an external audit import job for asynchronous OCR/analysis."""
@@ -190,10 +208,12 @@ async def queue_import_job(
             process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
         except Exception:
             logger.warning("Celery dispatch unavailable for job %s", job.id)
-        # Always schedule an in-process fallback. If a Celery worker already
-        # processed the job, the fallback will see status != QUEUED and no-op
-        # thanks to the idempotent transition guard in process_job().
-        background_tasks.add_task(_run_import_inline, job.id, current_user.tenant_id, current_user.id)
+        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
+    elif job.status == ExternalAuditImportStatus.QUEUED:
+        # Job was previously queued but never processed (e.g. no Celery worker
+        # picked it up and the earlier inline attempt failed/was killed).
+        # Re-trigger processing so the job doesn't stay stuck forever.
+        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
@@ -218,6 +238,8 @@ async def get_import_job(
     """Get import-job status and summary."""
     service = ExternalAuditImportService(db)
     job = await service.get_job(job_id=job_id, tenant_id=current_user.tenant_id)
+    if job.status == ExternalAuditImportStatus.QUEUED:
+        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 

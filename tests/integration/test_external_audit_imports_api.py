@@ -96,7 +96,7 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
     job_id = create_response.json()["id"]
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", lambda *_args: None)
-    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
+    monkeypatch.setattr(external_audit_imports, "_schedule_inline_processing", lambda *_args: None)
 
     queue_response = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
@@ -308,7 +308,7 @@ async def test_external_audit_import_job_queue_is_idempotent(
         delay_calls.append((job_id_value, tenant_id_value, user_id_value))
 
     monkeypatch.setattr(external_audit_imports.process_external_audit_import_job, "delay", _delay)
-    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
+    monkeypatch.setattr(external_audit_imports, "_schedule_inline_processing", lambda *_args: None)
 
     first_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
@@ -394,7 +394,7 @@ async def test_external_audit_import_queue_failure_keeps_job_retryable(
         "delay",
         lambda *_args: (_ for _ in ()).throw(ValueError("broker misconfigured")),
     )
-    monkeypatch.setattr(external_audit_imports, "_run_import_inline", lambda *_args: None)
+    monkeypatch.setattr(external_audit_imports, "_schedule_inline_processing", lambda *_args: None)
 
     fallback_queue = await client.post(
         f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
