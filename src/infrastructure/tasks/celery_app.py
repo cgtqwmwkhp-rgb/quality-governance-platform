@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 import logging
+from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from celery import Celery  # type: ignore[import-untyped]  # TYPE-IGNORE: MYPY-OVERRIDE
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def _normalize_redis_ssl_url(url: str) -> str:
     """Ensure Azure Redis `rediss://` URLs include the SSL requirement Kombu expects."""
-    if not url.startswith("rediss://"):
+    if urlsplit(url).scheme.lower() != "rediss":
         return url
 
     parts = urlsplit(url)
@@ -23,6 +24,13 @@ def _normalize_redis_ssl_url(url: str) -> str:
 
     query["ssl_cert_reqs"] = "CERT_REQUIRED"
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _redis_ssl_options(url: str) -> dict[str, Any] | None:
+    """Provide explicit SSL settings because Celery strips URL query params from backend config."""
+    if urlsplit(url).scheme.lower() != "rediss":
+        return None
+    return {"ssl_cert_reqs": "CERT_REQUIRED"}
 
 
 broker_url = (
@@ -67,6 +75,8 @@ celery_app.conf.update(
     task_retry_backoff_max=600,
     task_max_retries=3,
     task_retry_jitter=True,
+    broker_use_ssl=_redis_ssl_options(broker_url),
+    redis_backend_use_ssl=_redis_ssl_options(result_backend),
 )
 
 celery_app.conf.beat_schedule = {
