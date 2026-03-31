@@ -126,7 +126,7 @@ def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str
     return "/compliance", "Open Compliance Summary"
 
 
-_REDACTED_PROVENANCE_KEYS = frozenset({"storage_key", "source_asset_id", "processing_template_id"})
+_REDACTED_PROVENANCE_KEYS = frozenset({"storage_key"})
 
 
 def _annotate_job_response(job: ExternalAuditImportJobResponse) -> ExternalAuditImportJobResponse:
