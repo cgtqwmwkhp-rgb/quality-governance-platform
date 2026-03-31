@@ -212,7 +212,12 @@ class ExternalAuditImportService:
             )
             return job
 
-        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        try:
+            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        except Exception:
+            logger.exception("Could not reload job %s after QUEUED→PROCESSING transition", job_id)
+            raise
+
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
 

@@ -250,6 +250,17 @@ async function networkFirstHtml(request) {
     if (response.ok) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, response.clone());
+      return response;
+    }
+    // Server returned an error (e.g. 503 during deployment).  For SPA
+    // navigation requests the cached app shell is a better fallback than
+    // surfacing a transient server error to the user.
+    if (response.status >= 500) {
+      console.warn('[SW] Server error for navigation, trying app shell fallback:', response.status, request.url);
+      const appShell = await caches.match('/index.html');
+      if (appShell) {
+        return appShell;
+      }
     }
     return response;
   } catch (error) {
@@ -258,8 +269,6 @@ async function networkFirstHtml(request) {
     if (cached) {
       return cached;
     }
-    // SPA fallback: serve the cached app shell so the client-side router
-    // can handle the deep-link once the bundle loads.
     const appShell = await caches.match('/index.html');
     if (appShell) {
       console.log('[SW] Serving cached app shell for SPA route:', request.url);
