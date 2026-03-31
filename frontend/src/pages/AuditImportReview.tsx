@@ -176,7 +176,14 @@ export default function AuditImportReview() {
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
-      setError('Failed to load the import review workspace. Please retry.')
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 404 && !jobId) {
+        setError(
+          'No import job has been created for this audit yet. Attach a source report and queue the import first.',
+        )
+      } else {
+        setError('Failed to load the import review workspace. Please retry.')
+      }
     } finally {
       setLoading(false)
     }
@@ -558,7 +565,7 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
-      {job && (job.status === 'pending' || job.status === 'failed') ? (
+      {job && (job.status === 'pending' || job.error_code === 'QUEUE_DISPATCH_FAILED') ? (
         <Card className="border-warning/30 bg-warning/5">
           <CardHeader>
             <CardTitle className="text-base">Processing queue</CardTitle>
@@ -568,8 +575,9 @@ export default function AuditImportReview() {
           </CardHeader>
           <CardContent className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-foreground">
-              {job.error_detail ||
-                'Retry queueing this import to continue OCR, schema mapping, and reviewer draft generation.'}
+              {job.error_code === 'QUEUE_DISPATCH_FAILED'
+                ? job.error_detail || 'Background processing could not be started automatically.'
+                : 'Retry queueing this import to continue OCR, schema mapping, and reviewer draft generation.'}
             </p>
             <Button onClick={() => void handleRetryQueue()} disabled={isQueueing}>
               {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}

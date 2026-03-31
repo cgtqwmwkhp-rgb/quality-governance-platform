@@ -190,12 +190,35 @@ class ExternalAuditImportService:
     async def process_job(
         self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
     ) -> ExternalAuditImportJob:
+        transition_values: dict[str, object] = {"status": ExternalAuditImportStatus.PROCESSING}
+        if user_id is not None:
+            transition_values["updated_by_id"] = user_id
+
+        transitioned = await self.db.execute(
+            update(ExternalAuditImportJob)
+            .where(
+                ExternalAuditImportJob.id == job_id,
+                ExternalAuditImportJob.tenant_id == tenant_id,
+                ExternalAuditImportJob.status == ExternalAuditImportStatus.QUEUED,
+            )
+            .values(**transition_values)
+        )
+        if transitioned.rowcount != 1:
+            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+            logger.info(
+                "Skipping external audit import job %s re-entry because status is %s",
+                job.id,
+                job.status,
+            )
+            return job
+
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
 
-        job.status = ExternalAuditImportStatus.PROCESSING
         job.updated_by_id = user_id or job.updated_by_id
+        job.error_code = None
+        job.error_detail = None
         await self.db.flush()
 
         try:

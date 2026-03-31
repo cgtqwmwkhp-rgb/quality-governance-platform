@@ -574,6 +574,7 @@ async def test_process_job_failure_preserves_existing_drafts(
         tenant_id=DEFAULT_TEST_TENANT_ID,
         user_id=DEFAULT_TEST_USER_ID,
     )
+    job.status = ExternalAuditImportStatus.QUEUED
     await test_session.flush()
 
     test_session.add(
@@ -614,6 +615,105 @@ async def test_process_job_failure_preserves_existing_drafts(
     assert processed_job.status == ExternalAuditImportStatus.FAILED
     assert len(drafts) == 1
     assert drafts[0].title == "Preserve me"
+
+
+@pytest.mark.asyncio
+async def test_process_job_is_noop_once_review_is_ready(
+    test_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Ready-for-review import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/review-ready.pdf",
+        original_filename="review-ready.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="review-ready-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+    await test_session.flush()
+
+    test_session.add(
+        ExternalAuditDraft(
+            import_job_id=job.id,
+            audit_run_id=run.id,
+            tenant_id=DEFAULT_TEST_TENANT_ID,
+            status=ExternalAuditDraftStatus.DRAFT,
+            title="Keep reviewer work",
+            description="Existing draft should survive duplicate delivery",
+            severity="medium",
+            finding_type="nonconformity",
+            created_by_id=DEFAULT_TEST_USER_ID,
+            updated_by_id=DEFAULT_TEST_USER_ID,
+        )
+    )
+    await test_session.commit()
+
+    download_mock = AsyncMock(return_value=b"should-not-run")
+    import src.domain.services.external_audit_import_service as import_service_module
+
+    monkeypatch.setattr(
+        import_service_module,
+        "storage_service",
+        lambda: SimpleNamespace(download=download_mock),
+    )
+
+    processed_job = await service.process_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    await test_session.commit()
+
+    drafts = await service.list_job_drafts(job_id=job.id, tenant_id=DEFAULT_TEST_TENANT_ID)
+    assert processed_job.status == ExternalAuditImportStatus.REVIEW_REQUIRED
+    assert len(drafts) == 1
+    assert drafts[0].title == "Keep reviewer work"
+    download_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio

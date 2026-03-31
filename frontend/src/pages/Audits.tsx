@@ -787,7 +787,9 @@ export default function Audits() {
                               <span>{new Date(audit.scheduled_date).toLocaleDateString()}</span>
                             </div>
                           )}
-                          {(audit.status === 'scheduled' || audit.status === 'in_progress') && (
+                          {(isExternalAuditImportRun(audit) ||
+                            audit.status === 'scheduled' ||
+                            audit.status === 'in_progress') && (
                             <Button
                               size="sm"
                               variant={audit.status === 'in_progress' ? 'default' : 'outline'}
@@ -953,7 +955,9 @@ export default function Audits() {
                             : '-'}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          {audit.status === 'scheduled' || audit.status === 'in_progress' ? (
+                          {isExternalAuditImportRun(audit) ||
+                          audit.status === 'scheduled' ||
+                          audit.status === 'in_progress' ? (
                             <Button
                               size="sm"
                               variant={audit.status === 'in_progress' ? 'default' : 'outline'}
