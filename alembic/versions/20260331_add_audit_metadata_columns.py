@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 revision = "a3b1c2d3e4f5"
-down_revision = None
+down_revision = "20260330_ext_audit_fix"
 branch_labels = None
 depends_on = None
 
