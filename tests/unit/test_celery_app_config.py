@@ -1,5 +1,7 @@
 """Regression coverage for Celery Redis URL normalization."""
 
+import ssl
+
 from src.infrastructure.tasks.celery_app import _normalize_redis_ssl_url, _redis_ssl_options
 
 
@@ -30,7 +32,7 @@ def test_normalize_redis_ssl_url_leaves_plain_redis_unchanged() -> None:
 def test_redis_ssl_options_enable_cert_requirement_for_rediss() -> None:
     url = "rediss://:secret@redis-qgp-prod.redis.cache.windows.net:6380/1"
 
-    assert _redis_ssl_options(url) == {"ssl_cert_reqs": "CERT_REQUIRED"}
+    assert _redis_ssl_options(url) == {"ssl_cert_reqs": ssl.CERT_REQUIRED}
 
 
 def test_redis_ssl_options_ignore_plain_redis() -> None:
