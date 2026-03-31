@@ -9,9 +9,10 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import update
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.external_audit_import import ExternalAuditImportStatus
+from src.domain.models.external_audit_import import ExternalAuditImportJob, ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
@@ -158,8 +159,8 @@ async def _process_import_async(job_id: int, tenant_id: int | None, user_id: int
     """Fire-and-forget coroutine that processes an import job on the running event loop.
 
     Runs in the server's event loop via ``asyncio.create_task`` so it survives
-    after the HTTP response is sent, unlike ``BackgroundTasks`` sync callbacks
-    that may be killed when the ASGI request scope closes.
+    after the HTTP response is sent.  On failure the job is marked FAILED so
+    the user sees an actionable error instead of an infinite "queued" state.
     """
     from src.infrastructure.database import async_session_maker
 
@@ -171,6 +172,28 @@ async def _process_import_async(job_id: int, tenant_id: int | None, user_id: int
         logger.info("Inline import processing completed for job %s", job_id)
     except Exception:
         logger.exception("Inline import processing failed for job %s", job_id)
+        try:
+            async with async_session_maker() as err_session:
+                await err_session.execute(
+                    update(ExternalAuditImportJob)
+                    .where(
+                        ExternalAuditImportJob.id == job_id,
+                        ExternalAuditImportJob.status.in_(
+                            [
+                                ExternalAuditImportStatus.QUEUED,
+                                ExternalAuditImportStatus.PROCESSING,
+                            ]
+                        ),
+                    )
+                    .values(
+                        status=ExternalAuditImportStatus.FAILED,
+                        error_code="INLINE_PROCESSING_FAILED",
+                        error_detail="Import processing failed. Check server logs and retry.",
+                    )
+                )
+                await err_session.commit()
+        except Exception:
+            logger.exception("Could not mark job %s as FAILED after processing error", job_id)
     finally:
         _processing_jobs.discard(job_id)
 
