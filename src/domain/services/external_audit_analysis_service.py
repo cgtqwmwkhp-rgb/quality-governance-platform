@@ -175,6 +175,9 @@ class ExternalAuditAnalysisService:
         warnings = cast(list[str], scorecard["warnings"])
         report_date = self._extract_report_date(normalized_text)
 
+        if score_percentage is not None:
+            score_percentage = max(0.0, min(score_percentage, 100.0))
+
         if ai_result and ai_result.provider_status == "completed":
             score_breakdown, overall_score, max_score, score_percentage = self._merge_ai_scores(
                 rule_breakdown=score_breakdown,
@@ -183,6 +186,8 @@ class ExternalAuditAnalysisService:
                 rule_pct=score_percentage,
                 ai=ai_result,
             )
+            if score_percentage is not None:
+                score_percentage = max(0.0, min(score_percentage, 100.0))
             if ai_result.report_date and report_date is None:
                 try:
                     report_date = datetime.strptime(ai_result.report_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
@@ -270,6 +275,9 @@ class ExternalAuditAnalysisService:
 
         if pct is None and ai.score_percentage is not None:
             pct = ai.score_percentage
+
+        if pct is not None:
+            pct = max(0.0, min(pct, 100.0))
 
         return breakdown, overall, max_s, pct
 

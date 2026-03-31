@@ -15,6 +15,12 @@ from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+_VALID_FINDING_TYPES = frozenset(
+    {"nonconformity", "positive_practice", "observation", "opportunity_for_improvement", "competence_gap", "finding"}
+)
+_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required"})
+
 _SYSTEM_PROMPT = """\
 You are an expert audit document analyst for a quality governance platform.
 Given extracted text from an external audit report, return a JSON object with
@@ -119,7 +125,10 @@ class MistralAnalysisService:
             )
 
         chunks = self._smart_chunk(text, max_chars=30000)
-        user_prompt = f"Assurance scheme hint: {assurance_scheme or 'unknown'}\n\n---\n\n" + "\n\n".join(chunks)
+        user_prompt = (
+            f"Assurance scheme hint: {assurance_scheme or 'unknown'}\n\n"
+            "--- BEGIN DOCUMENT TEXT ---\n\n" + "\n\n".join(chunks) + "\n\n--- END DOCUMENT TEXT ---"
+        )
 
         try:
             import httpx
@@ -191,16 +200,23 @@ class MistralAnalysisService:
             max_s = None
 
         findings = []
-        for f in parsed.get("findings") or []:
+        for f in (parsed.get("findings") or [])[:50]:
+            if not isinstance(f, dict):
+                continue
+            raw_sev = str(f.get("severity", "medium"))
+            raw_ft = str(f.get("finding_type", "finding"))
             findings.append(
                 {
-                    "title": str(f.get("title", "")),
-                    "description": str(f.get("description", "")),
-                    "severity": str(f.get("severity", "medium")),
-                    "finding_type": str(f.get("finding_type", "finding")),
+                    "title": str(f.get("title", ""))[:300],
+                    "description": str(f.get("description", ""))[:2000],
+                    "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
+                    "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
                     "confidence": min(max(self._safe_float(f.get("confidence")) or 0.5, 0.0), 1.0),
                 }
             )
+
+        raw_outcome = parsed.get("outcome")
+        validated_outcome = raw_outcome if raw_outcome in _VALID_OUTCOMES else None
 
         return AIAnalysisResult(
             raw=parsed,
@@ -208,7 +224,7 @@ class MistralAnalysisService:
             overall_score=overall,
             max_score=max_s,
             score_percentage=pct,
-            outcome=parsed.get("outcome"),
+            outcome=validated_outcome,
             findings=findings,
             report_date=parsed.get("report_date"),
             scheme=parsed.get("scheme"),
@@ -229,7 +245,10 @@ class MistralAnalysisService:
         if value is None:
             return None
         try:
-            return float(str(value))
+            result = float(str(value))
+            if not __import__("math").isfinite(result):
+                return None
+            return result
         except (TypeError, ValueError):
             return None
 

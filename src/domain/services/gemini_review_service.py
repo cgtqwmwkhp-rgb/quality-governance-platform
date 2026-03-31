@@ -26,6 +26,13 @@ _gemini_review_cb = CircuitBreaker("gemini_review", failure_threshold=5, recover
 
 GEMINI_MODEL = "gemini-2.5-pro-preview-05-06"
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
+MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB hard limit
+GEMINI_TIMEOUT_SECONDS = 120
+_VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+_VALID_FINDING_TYPES = frozenset(
+    {"nonconformity", "positive_practice", "observation", "opportunity_for_improvement", "competence_gap", "finding"}
+)
+_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required"})
 
 _REVIEW_PROMPT = """\
 You are an expert audit document analyst. Analyse the attached audit report
@@ -132,6 +139,17 @@ class GeminiReviewService:
             logger.info("Gemini review skipped: not configured")
             return AIAnalysisResult(raw={}, provider_status="not_configured", provider_name="gemini")
 
+        if len(raw_pdf) > MAX_PDF_SIZE_BYTES:
+            logger.warning("Gemini review skipped: PDF size %d exceeds limit %d", len(raw_pdf), MAX_PDF_SIZE_BYTES)
+            return AIAnalysisResult(
+                raw={},
+                provider_status="skipped",
+                provider_name="gemini",
+                warnings=[
+                    f"PDF too large for Gemini review ({len(raw_pdf) // (1024*1024)}MB > {MAX_PDF_SIZE_BYTES // (1024*1024)}MB limit)"
+                ],
+            )
+
         client = self._get_client()
         if not client:
             return AIAnalysisResult(
@@ -145,7 +163,7 @@ class GeminiReviewService:
         text_excerpt = text[:8000] if text else ""
         user_message = (
             f"{_REVIEW_PROMPT}{scheme_hint}\n\n"
-            f"--- Supplementary extracted text (first 8000 chars) ---\n{text_excerpt}"
+            f"--- BEGIN SUPPLEMENTARY TEXT (first 8000 chars) ---\n{text_excerpt}\n--- END SUPPLEMENTARY TEXT ---"
         )
 
         def _run():
@@ -164,7 +182,10 @@ class GeminiReviewService:
                 os.unlink(tmp_path)
 
         try:
-            raw_text = await _gemini_review_cb.call(asyncio.to_thread, _run)
+            raw_text = await asyncio.wait_for(
+                _gemini_review_cb.call(asyncio.to_thread, _run),
+                timeout=GEMINI_TIMEOUT_SECONDS,
+            )
             raw_text = (raw_text or "").strip()
             if raw_text.startswith("```"):
                 raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
@@ -182,7 +203,14 @@ class GeminiReviewService:
                 warnings=[f"Gemini review failed: {type(exc).__name__}"],
             )
 
-    def _build_result(self, parsed: dict) -> AIAnalysisResult:
+    def _build_result(self, parsed: object) -> AIAnalysisResult:
+        if not isinstance(parsed, dict):
+            return AIAnalysisResult(
+                raw={},
+                provider_status="failed",
+                provider_name="gemini",
+                warnings=["Gemini returned non-object JSON"],
+            )
         breakdown = []
         for item in parsed.get("score_breakdown") or []:
             score = item.get("score")
@@ -214,16 +242,20 @@ class GeminiReviewService:
             max_s = None
 
         findings = []
-        for f in parsed.get("findings") or []:
+        for f in (parsed.get("findings") or [])[:50]:
+            if not isinstance(f, dict):
+                continue
+            raw_sev = str(f.get("severity", "medium"))
+            raw_ft = str(f.get("finding_type", "finding"))
             findings.append(
                 {
-                    "title": str(f.get("title", "")),
-                    "description": str(f.get("description", "")),
-                    "severity": str(f.get("severity", "medium")),
-                    "finding_type": str(f.get("finding_type", "finding")),
+                    "title": str(f.get("title", ""))[:300],
+                    "description": str(f.get("description", ""))[:2000],
+                    "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
+                    "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
                     "confidence": min(max(self._safe_float(f.get("confidence")) or 0.5, 0.0), 1.0),
-                    "clause_reference": f.get("clause_reference"),
-                    "corrective_action_deadline": f.get("corrective_action_deadline"),
+                    "clause_reference": str(f.get("clause_reference", ""))[:255] or None,
+                    "corrective_action_deadline": str(f.get("corrective_action_deadline", ""))[:20] or None,
                     "_provider": "gemini",
                 }
             )
@@ -235,13 +267,16 @@ class GeminiReviewService:
                 f"{vi.get('context', '')} → {vi.get('interpretation', '?')}"
             )
 
+        raw_outcome = parsed.get("outcome")
+        validated_outcome = raw_outcome if raw_outcome in _VALID_OUTCOMES else None
+
         return AIAnalysisResult(
             raw=parsed,
             score_breakdown=breakdown,
             overall_score=overall,
             max_score=max_s,
             score_percentage=pct,
-            outcome=parsed.get("outcome"),
+            outcome=validated_outcome,
             findings=findings,
             report_date=parsed.get("report_date"),
             scheme=parsed.get("scheme"),
@@ -263,6 +298,9 @@ class GeminiReviewService:
         if value is None:
             return None
         try:
-            return float(str(value))
+            result = float(str(value))
+            if not __import__("math").isfinite(result):
+                return None
+            return result
         except (TypeError, ValueError):
             return None
