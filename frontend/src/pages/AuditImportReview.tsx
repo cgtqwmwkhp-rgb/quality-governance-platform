@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
+  Building2,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -9,6 +10,7 @@ import {
   Info,
   Loader2,
   ShieldCheck,
+  User,
 } from 'lucide-react'
 import {
   auditsApi,
@@ -667,6 +669,76 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
+      {job &&
+      (job.organization_name ||
+        job.auditor_name ||
+        job.audit_type ||
+        job.certificate_number ||
+        job.audit_scope ||
+        job.next_audit_date) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              Audit Report Summary
+            </CardTitle>
+            <CardDescription>
+              Key metadata extracted from the audit document by AI analysis.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {job.organization_name ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Organisation audited
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.organization_name}</p>
+              </div>
+            ) : null}
+            {job.auditor_name ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                  <User size={12} /> Lead auditor
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.auditor_name}</p>
+              </div>
+            ) : null}
+            {job.audit_type ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit type</p>
+                <p className="mt-1 font-medium text-foreground capitalize">
+                  {job.audit_type.replace(/_/g, ' ')}
+                </p>
+              </div>
+            ) : null}
+            {job.certificate_number ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Certificate / Registration No.
+                </p>
+                <p className="mt-1 font-medium text-foreground">{job.certificate_number}</p>
+              </div>
+            ) : null}
+            {job.audit_scope ? (
+              <div className="col-span-full rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit scope</p>
+                <p className="mt-1 text-sm text-foreground">{job.audit_scope}</p>
+              </div>
+            ) : null}
+            {job.next_audit_date ? (
+              <div className="rounded-lg border border-border p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Next audit date
+                </p>
+                <p className="mt-1 font-medium text-foreground">
+                  {new Date(job.next_audit_date).toLocaleDateString()}
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {isProcessing ? (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex items-center gap-4 p-6">
@@ -1045,6 +1117,14 @@ function ProvenanceDetail({ provenance }: { provenance: Record<string, unknown> 
   const trigger = provenance.trigger ? String(provenance.trigger) : null
   const aiConfidence = provenance.ai_confidence != null ? String(provenance.ai_confidence) : null
   const aiProvider = provenance.ai_provider ? String(provenance.ai_provider) : null
+  const clauseRef = provenance.clause_reference ? String(provenance.clause_reference) : null
+  const cadDeadline = provenance.corrective_action_deadline
+    ? String(provenance.corrective_action_deadline)
+    : null
+  const consensus = provenance._consensus ? String(provenance._consensus) : null
+  const providers = Array.isArray(provenance._providers)
+    ? (provenance._providers as string[]).join(', ')
+    : null
 
   return (
     <div className="border-t border-border p-3 text-xs text-muted-foreground space-y-1">
@@ -1057,6 +1137,23 @@ function ProvenanceDetail({ provenance }: { provenance: Record<string, unknown> 
       )}
       {aiConfidence && <p>AI raw confidence: {aiConfidence}</p>}
       {aiProvider && <p>AI provider: {aiProvider}</p>}
+      {clauseRef && <p>Clause reference: {clauseRef}</p>}
+      {cadDeadline && <p>Corrective action deadline: {cadDeadline}</p>}
+      {consensus && (
+        <p>
+          Consensus:{' '}
+          <span
+            className={
+              consensus === 'agreed'
+                ? 'font-semibold text-emerald-600'
+                : 'font-semibold text-amber-600'
+            }
+          >
+            {consensus === 'agreed' ? 'Confirmed by multiple providers' : 'Single source'}
+          </span>
+        </p>
+      )}
+      {providers && <p>Providers: {providers}</p>}
     </div>
   )
 }

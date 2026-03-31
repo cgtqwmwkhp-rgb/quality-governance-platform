@@ -4164,6 +4164,12 @@ export interface ExternalAuditImportJob {
   max_score?: number | null
   score_percentage?: number | null
   outcome_status?: string | null
+  organization_name?: string | null
+  auditor_name?: string | null
+  audit_type?: string | null
+  certificate_number?: string | null
+  audit_scope?: string | null
+  next_audit_date?: string | null
   provenance_json?: Record<string, unknown> | null
   classification_basis_json?: Record<string, unknown> | null
   score_breakdown_json?: Array<Record<string, unknown>> | null

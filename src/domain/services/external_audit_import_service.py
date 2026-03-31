@@ -363,6 +363,24 @@ class ExternalAuditImportService:
                 job.max_score = analysis.max_score
                 job.score_percentage = analysis.score_percentage
                 job.outcome_status = analysis.outcome_status
+
+                if ai_result and ai_result.provider_status == "completed":
+                    job.organization_name = ai_result.organization_name or job.organization_name
+                    job.auditor_name = ai_result.auditor_name or job.auditor_name
+                    job.audit_type = ai_result.audit_type or job.audit_type
+                    job.certificate_number = ai_result.certificate_number or job.certificate_number
+                    job.audit_scope = ai_result.audit_scope or job.audit_scope
+                    if ai_result.next_audit_date:
+                        try:
+                            from datetime import datetime as _dt
+                            from datetime import timezone as _tz
+
+                            job.next_audit_date = _dt.strptime(ai_result.next_audit_date, "%Y-%m-%d").replace(
+                                tzinfo=_tz.utc
+                            )
+                        except (ValueError, TypeError):
+                            pass
+
                 job.classification_basis_json = analysis.classification_basis
                 job.score_breakdown_json = analysis.score_breakdown or None
                 job.evidence_preview_json = analysis.evidence_preview or None
