@@ -458,6 +458,8 @@ jobs:
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
           STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+          MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
+          GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
 
           if [ -z "$DB_URL" ]; then
             echo "❌ Failed to retrieve DATABASE_URL from Key Vault"
@@ -489,6 +491,8 @@ jobs:
               AZURE_CLIENT_ID="${{ secrets.AZURE_AD_CLIENT_ID }}" \
               AZURE_TENANT_ID="${{ secrets.AZURE_AD_TENANT_ID }}" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              MISTRAL_API_KEY="${MISTRAL_API_KEY_VAL}" \
+              GOOGLE_GEMINI_API_KEY="${GEMINI_API_KEY_VAL}" \
               UAT_MODE="READ_WRITE" \
               APPLICATIONINSIGHTS_CONNECTION_STRING="${{ secrets.APPINSIGHTS_CONNECTION_STRING }}" \
             --output none
