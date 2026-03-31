@@ -8,6 +8,7 @@ const mockGetLatestJobForRun = vi.fn()
 const mockGetRunDetail = vi.fn()
 const mockListDrafts = vi.fn()
 const mockQueueJob = vi.fn()
+const mockProcessJob = vi.fn()
 const mockReviewDraft = vi.fn()
 const mockPromoteJob = vi.fn()
 
@@ -20,6 +21,7 @@ vi.mock('../../api/client', () => ({
     getLatestJobForRun: (...args: unknown[]) => mockGetLatestJobForRun(...args),
     listDrafts: (...args: unknown[]) => mockListDrafts(...args),
     queueJob: (...args: unknown[]) => mockQueueJob(...args),
+    processJob: (...args: unknown[]) => mockProcessJob(...args),
     reviewDraft: (...args: unknown[]) => mockReviewDraft(...args),
     promoteJob: (...args: unknown[]) => mockPromoteJob(...args),
   },
@@ -302,6 +304,7 @@ describe('AuditImportReview', () => {
     })
     mockListDrafts.mockResolvedValue({ data: [] })
     mockQueueJob.mockResolvedValue({ data: { id: 72, status: 'queued' } })
+    mockProcessJob.mockResolvedValue({ data: { id: 72, status: 'review_required' } })
 
     renderPage('/audits/41/import-review?jobId=72&queueError=1')
 
