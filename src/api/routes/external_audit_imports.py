@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import update
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.external_audit_import import ExternalAuditImportJob, ExternalAuditImportStatus
+from src.domain.models.external_audit_import import ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
@@ -152,78 +150,28 @@ async def create_import_job(
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
-_processing_jobs: set[int] = set()
-
-
-async def _process_import_async(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
-    """Fire-and-forget coroutine that processes an import job on the running event loop.
-
-    Runs in the server's event loop via ``asyncio.create_task`` so it survives
-    after the HTTP response is sent.  On failure the job is marked FAILED so
-    the user sees an actionable error instead of an infinite "queued" state.
-    """
-    from src.infrastructure.database import async_session_maker
-
-    try:
-        async with async_session_maker() as session:
-            service = ExternalAuditImportService(session)
-            await service.process_job(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
-            await session.commit()
-        logger.info("Inline import processing completed for job %s", job_id)
-    except Exception:
-        logger.exception("Inline import processing failed for job %s", job_id)
-        try:
-            async with async_session_maker() as err_session:
-                await err_session.execute(
-                    update(ExternalAuditImportJob)
-                    .where(
-                        ExternalAuditImportJob.id == job_id,
-                        ExternalAuditImportJob.status.in_(
-                            [
-                                ExternalAuditImportStatus.QUEUED,
-                                ExternalAuditImportStatus.PROCESSING,
-                            ]
-                        ),
-                    )
-                    .values(
-                        status=ExternalAuditImportStatus.FAILED,
-                        error_code="INLINE_PROCESSING_FAILED",
-                        error_detail="Import processing failed. Check server logs and retry.",
-                    )
-                )
-                await err_session.commit()
-        except Exception:
-            logger.exception("Could not mark job %s as FAILED after processing error", job_id)
-    finally:
-        _processing_jobs.discard(job_id)
-
-
-def _schedule_inline_processing(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
-    """Schedule import processing on the running event loop (at most once per job)."""
-    if job_id in _processing_jobs:
-        return
-    _processing_jobs.add(job_id)
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_process_import_async(job_id, tenant_id, user_id))
-    except RuntimeError:
-        _processing_jobs.discard(job_id)
-        logger.warning("No running event loop for inline processing of job %s", job_id)
-
-
 @router.post("/jobs/{job_id}/queue", response_model=ExternalAuditImportJobResponse)
 async def queue_import_job(
     job_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
-    """Queue an external audit import job for asynchronous OCR/analysis."""
+    """Queue and immediately process an external audit import job.
+
+    Processing runs synchronously within this request so errors surface
+    directly instead of being lost in background tasks.  The Celery
+    dispatch is kept as a best-effort optimistic path for environments
+    that have a worker, but the response always waits for completion.
+    """
     service = ExternalAuditImportService(db)
     job, should_enqueue = await service.queue_job(
         job_id=job_id,
         tenant_id=current_user.tenant_id,
         user_id=current_user.id,
     )
+
+    needs_processing = should_enqueue or job.status == ExternalAuditImportStatus.QUEUED
+
     if should_enqueue:
         await db.commit()
         await db.refresh(job)
@@ -231,12 +179,16 @@ async def queue_import_job(
             process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
         except Exception:
             logger.warning("Celery dispatch unavailable for job %s", job.id)
-        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
-    elif job.status == ExternalAuditImportStatus.QUEUED:
-        # Job was previously queued but never processed (e.g. no Celery worker
-        # picked it up and the earlier inline attempt failed/was killed).
-        # Re-trigger processing so the job doesn't stay stuck forever.
-        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
+
+    if needs_processing:
+        job = await service.process_job(
+            job_id=job.id,
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.id,
+        )
+        await db.commit()
+        await db.refresh(job)
+
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
@@ -261,8 +213,6 @@ async def get_import_job(
     """Get import-job status and summary."""
     service = ExternalAuditImportService(db)
     job = await service.get_job(job_id=job_id, tenant_id=current_user.tenant_id)
-    if job.status == ExternalAuditImportStatus.QUEUED:
-        _schedule_inline_processing(job.id, current_user.tenant_id, current_user.id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
