@@ -107,11 +107,14 @@ export default function Login({ onLogin }: LoginProps) {
   const exchangeToken = async (
     idToken: string,
   ): Promise<{ accessToken: string; refreshToken?: string } | null> => {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 15000)
     try {
       const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_token: idToken }),
+        signal: controller.signal,
       })
 
       if (!response.ok) {
@@ -129,6 +132,8 @@ export default function Login({ onLogin }: LoginProps) {
     } catch (err) {
       if (import.meta.env.DEV) console.error('[AdminAuth] Token exchange error:', err)
       return null
+    } finally {
+      clearTimeout(timeout)
     }
   }
 
@@ -185,6 +190,16 @@ export default function Login({ onLogin }: LoginProps) {
   useEffect(() => {
     handleOAuthCallback()
   }, [handleOAuthCallback])
+
+  // Auto-recover from stuck SSO loading state (e.g. backend timeout)
+  useEffect(() => {
+    if (!ssoLoading) return
+    const recovery = setTimeout(() => {
+      setSsoLoading(false)
+      setSsoError('Microsoft sign-in timed out. Please try again.')
+    }, 20000)
+    return () => clearTimeout(recovery)
+  }, [ssoLoading])
 
   // Microsoft SSO login
   const handleMicrosoftLogin = () => {
@@ -428,7 +443,7 @@ export default function Login({ onLogin }: LoginProps) {
 
             <Button
               type="submit"
-              disabled={isLoading || ssoLoading || !email.trim() || !password}
+              disabled={isLoading || !email.trim() || !password}
               className="mt-6 w-full"
               size="lg"
               data-testid="login-submit-btn"
