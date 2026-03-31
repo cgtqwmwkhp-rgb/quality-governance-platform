@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AlertCircle, CheckCircle2, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import {
@@ -112,6 +112,7 @@ export default function AuditImportReview() {
   const [auditRun, setAuditRun] = useState<AuditRunDetail | null>(null)
   const [drafts, setDrafts] = useState<ExternalAuditImportDraft[]>([])
   const [loading, setLoading] = useState(true)
+  const initialLoadDone = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [queueNotice, setQueueNotice] = useState<string | null>(
     searchParams.get('queueError') === '1'
@@ -129,10 +130,13 @@ export default function AuditImportReview() {
       setDrafts([])
       setError('Missing import job reference.')
       setLoading(false)
+      initialLoadDone.current = true
       return
     }
 
-    setLoading(true)
+    if (!initialLoadDone.current) {
+      setLoading(true)
+    }
     setError(null)
     try {
       let resolvedJobRes = null
@@ -186,6 +190,7 @@ export default function AuditImportReview() {
       }
     } finally {
       setLoading(false)
+      initialLoadDone.current = true
     }
   }, [jobId, routeAuditId])
 
