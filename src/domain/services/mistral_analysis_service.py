@@ -22,11 +22,17 @@ the following structure.  Be precise — only include data that is clearly
 stated in the text.  Do NOT invent values.
 
 {
-  "scheme": "achilles_uvdb | iso | planet_mark | customer_other",
+  "scheme": "achilles_uvdb | iso | planet_mark | smeta | ecovadis | customer_other",
   "scheme_label": "Human-readable scheme name",
   "scheme_version": "e.g. B2, ISO 9001:2015, or null",
   "issuer_name": "e.g. Achilles, BSI, or null",
   "report_date": "YYYY-MM-DD or null",
+  "organization_name": "Name of the company/entity being audited, or null",
+  "auditor_name": "Lead auditor name, or null",
+  "audit_type": "initial | surveillance | recertification | transfer | null",
+  "certificate_number": "Certificate or registration number, or null",
+  "audit_scope": "Scope of certification / audit scope description, or null",
+  "next_audit_date": "YYYY-MM-DD of next scheduled audit, or null",
   "overall_score": <number or null>,
   "max_score": <number or null>,
   "score_percentage": <number 0-100 or null>,
@@ -40,7 +46,9 @@ stated in the text.  Do NOT invent values.
       "description": "Evidence text from the document",
       "severity": "low | medium | high | critical",
       "finding_type": "nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap",
-      "confidence": <0.0 to 1.0>
+      "confidence": <0.0 to 1.0>,
+      "clause_reference": "e.g. ISO 9001:2015 clause 9.1.3, or null",
+      "corrective_action_deadline": "YYYY-MM-DD or null"
     }
   ],
   "warnings": ["Any data quality concerns"]
@@ -51,13 +59,17 @@ Rules:
   values (e.g. 23/6 meaning June 23) — those are dates, not scores.
 - confidence should reflect how clearly the finding is stated in the text.
 - If a score or finding is ambiguous, add a warning instead of guessing.
+- For ISO audits: there are typically NO numeric scores, only conformity
+  status.  Do not invent scores for ISO audits.
+- Look for visual indicators described in text: "green", "red", "amber",
+  "tick", "cross", "pass", "fail" adjacent to section labels.
 - Return ONLY the JSON object, no markdown fences or commentary.
 """
 
 
 @dataclass
 class AIAnalysisResult:
-    """Structured result from Mistral AI analysis."""
+    """Structured result from AI analysis (Mistral or Gemini)."""
 
     raw: dict
     score_breakdown: list[dict[str, object]] = field(default_factory=list)
@@ -72,6 +84,13 @@ class AIAnalysisResult:
     issuer_name: str | None = None
     warnings: list[str] = field(default_factory=list)
     provider_status: str = "completed"
+    provider_name: str = "mistral"
+    organization_name: str | None = None
+    auditor_name: str | None = None
+    audit_type: str | None = None
+    certificate_number: str | None = None
+    audit_scope: str | None = None
+    next_audit_date: str | None = None
 
 
 class MistralAnalysisService:
@@ -99,8 +118,8 @@ class MistralAnalysisService:
                 warnings=["Text too short for AI analysis"],
             )
 
-        trimmed = text[:12000]
-        user_prompt = f"Assurance scheme hint: {assurance_scheme or 'unknown'}\n\n---\n\n{trimmed}"
+        chunks = self._smart_chunk(text, max_chars=30000)
+        user_prompt = f"Assurance scheme hint: {assurance_scheme or 'unknown'}\n\n---\n\n" + "\n\n".join(chunks)
 
         try:
             import httpx
@@ -128,6 +147,7 @@ class MistralAnalysisService:
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
+            content = self._strip_markdown_fences(content)
             parsed = json.loads(content)
             return self._build_result(parsed)
 
@@ -195,6 +215,13 @@ class MistralAnalysisService:
             scheme_label=parsed.get("scheme_label"),
             issuer_name=parsed.get("issuer_name"),
             warnings=parsed.get("warnings") or [],
+            provider_name="mistral",
+            organization_name=parsed.get("organization_name"),
+            auditor_name=parsed.get("auditor_name"),
+            audit_type=parsed.get("audit_type"),
+            certificate_number=parsed.get("certificate_number"),
+            audit_scope=parsed.get("audit_scope"),
+            next_audit_date=parsed.get("next_audit_date"),
         )
 
     @staticmethod
@@ -205,3 +232,75 @@ class MistralAnalysisService:
             return float(str(value))
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _strip_markdown_fences(content: str) -> str:
+        """Remove markdown code fences that LLMs sometimes wrap JSON in."""
+        stripped = content.strip()
+        if stripped.startswith("```"):
+            stripped = stripped.split("\n", 1)[1] if "\n" in stripped else stripped[3:]
+        if stripped.endswith("```"):
+            stripped = stripped.rsplit("```", 1)[0]
+        return stripped.strip()
+
+    @staticmethod
+    def _smart_chunk(text: str, max_chars: int = 30000) -> list[str]:
+        """Select the most informative portions of a document for AI analysis.
+
+        Instead of a blind truncation, prioritises:
+        1. First ~4K chars (cover page, executive summary, ToC)
+        2. Sections containing score/finding keywords
+        3. Final ~2K chars (conclusions, recommendations)
+        """
+        if len(text) <= max_chars:
+            return [text]
+
+        _SIGNAL_KEYWORDS = (
+            "score",
+            "finding",
+            "non-conformance",
+            "nonconformance",
+            "observation",
+            "recommendation",
+            "improvement",
+            "competent",
+            "compliant",
+            "overall",
+            "total",
+            "result",
+            "pass",
+            "fail",
+            "certificate",
+            "conclusion",
+            "summary",
+        )
+
+        head = text[:4000]
+        tail = text[-2000:]
+        budget = max_chars - len(head) - len(tail) - 200
+
+        paragraphs = text[4000:-2000].split("\n\n") if len(text) > 6000 else []
+        scored: list[tuple[int, str]] = []
+        for para in paragraphs:
+            if not para.strip():
+                continue
+            lower = para.lower()
+            hits = sum(1 for kw in _SIGNAL_KEYWORDS if kw in lower)
+            scored.append((hits, para))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        middle_parts: list[str] = []
+        used = 0
+        for _hits, para in scored:
+            if used + len(para) > budget:
+                if not middle_parts:
+                    middle_parts.append(para[:budget])
+                break
+            middle_parts.append(para)
+            used += len(para)
+
+        chunks = [head]
+        if middle_parts:
+            chunks.append("\n\n".join(middle_parts))
+        chunks.append(tail)
+        return chunks

@@ -4202,6 +4202,7 @@ export interface ExternalAuditImportDraft {
   suggested_risk_title?: string | null
   review_notes?: string | null
   promoted_finding_id?: number | null
+  provenance_json?: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }

@@ -23,12 +23,15 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportStatus,
 )
 from src.domain.models.uvdb_achilles import UVDBAudit
+from src.domain.services.ai_consensus_service import AIConsensusService
 from src.domain.services.audit_service import AuditService
 from src.domain.services.document_extraction_service import extract_document_content
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
+from src.domain.services.gemini_review_service import GeminiReviewService
 from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.mistral_ocr_service import MistralOCRService
 from src.domain.services.reference_number import ReferenceNumberService
+from src.domain.services.scheme_profiles import validate_against_scheme
 from src.infrastructure.storage import StorageError, storage_service
 
 logger = logging.getLogger(__name__)
@@ -56,6 +59,8 @@ class ExternalAuditImportService:
         self.analysis_service = ExternalAuditAnalysisService()
         self.ocr_service = MistralOCRService()
         self.ai_analysis_service = MistralAnalysisService()
+        self.gemini_review_service = GeminiReviewService()
+        self.consensus_service = AIConsensusService()
 
     def ensure_feature_enabled(self) -> None:
         if not settings.external_audit_import_enabled:
@@ -267,7 +272,28 @@ class ExternalAuditImportService:
                 native_method=extraction_method,
             )
 
-            ai_result = await self.ai_analysis_service.analyze_text(text, assurance_scheme=run.assurance_scheme)
+            import asyncio as _aio
+
+            mistral_result, gemini_result = await _aio.gather(
+                self.ai_analysis_service.analyze_text(text, assurance_scheme=run.assurance_scheme),
+                self.gemini_review_service.review(
+                    raw_pdf=raw,
+                    text=text,
+                    filename=asset.original_filename or "source.pdf",
+                    content_type=asset.content_type or "application/pdf",
+                    assurance_scheme=run.assurance_scheme,
+                ),
+            )
+            ai_result = self.consensus_service.reconcile(mistral_result, gemini_result)
+
+            scheme_warnings = validate_against_scheme(
+                scheme=run.assurance_scheme or "",
+                overall_score=ai_result.overall_score,
+                max_score=ai_result.max_score,
+                score_percentage=ai_result.score_percentage,
+                score_breakdown=ai_result.score_breakdown,
+            )
+            ai_result.warnings.extend(scheme_warnings)
 
             analysis = self.analysis_service.analyze(
                 extracted_text=text,
