@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -151,10 +151,29 @@ async def create_import_job(
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
+def _run_import_inline(job_id: int, tenant_id: int | None, user_id: int | None) -> None:
+    """In-process fallback so jobs are processed even without a Celery worker."""
+    import asyncio
+
+    from src.infrastructure.database import async_session_maker
+
+    async def _process() -> None:
+        async with async_session_maker() as session:
+            service = ExternalAuditImportService(session)
+            await service.process_job(job_id=job_id, tenant_id=tenant_id, user_id=user_id)
+            await session.commit()
+
+    try:
+        asyncio.run(_process())
+    except Exception:
+        logger.exception("Inline import processing failed for job %s", job_id)
+
+
 @router.post("/jobs/{job_id}/queue", response_model=ExternalAuditImportJobResponse)
 async def queue_import_job(
     job_id: int,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
     """Queue an external audit import job for asynchronous OCR/analysis."""
@@ -169,17 +188,12 @@ async def queue_import_job(
         await db.refresh(job)
         try:
             process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
-        except Exception as exc:
-            logger.exception("Failed to dispatch external audit import job %s", job.id)
-            job.status = ExternalAuditImportStatus.PENDING
-            job.error_code = "QUEUE_DISPATCH_FAILED"
-            job.error_detail = "Background processing could not be started. Retry queueing the import."
-            job.updated_by_id = current_user.id
-            await db.commit()
-            await db.refresh(job)
-            raise ExternalServiceError(
-                "Background processing could not be started. Retry queueing the import."
-            ) from exc
+        except Exception:
+            logger.warning("Celery dispatch unavailable for job %s", job.id)
+        # Always schedule an in-process fallback. If a Celery worker already
+        # processed the job, the fallback will see status != QUEUED and no-op
+        # thanks to the idempotent transition guard in process_job().
+        background_tasks.add_task(_run_import_inline, job.id, current_user.tenant_id, current_user.id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 
 
