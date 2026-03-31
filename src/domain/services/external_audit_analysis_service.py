@@ -428,6 +428,10 @@ class ExternalAuditAnalysisService:
                             "analysis_method": "ai_structured",
                             "ai_provider": ai_f.get("_provider", "unknown"),
                             "ai_confidence": float(str(ai_f.get("confidence", 0.50))),
+                            "clause_reference": ai_f.get("clause_reference"),
+                            "corrective_action_deadline": ai_f.get("corrective_action_deadline"),
+                            "_consensus": ai_f.get("_consensus"),
+                            "_providers": ai_f.get("_providers"),
                         },
                     )
                 )

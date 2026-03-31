@@ -50,6 +50,12 @@ class ExternalAuditImportJobResponse(BaseModel):
     max_score: Optional[float] = None
     score_percentage: Optional[float] = None
     outcome_status: Optional[str] = None
+    organization_name: Optional[str] = None
+    auditor_name: Optional[str] = None
+    audit_type: Optional[str] = None
+    certificate_number: Optional[str] = None
+    audit_scope: Optional[str] = None
+    next_audit_date: Optional[datetime] = None
     provenance_json: Optional[dict] = None
     classification_basis_json: Optional[dict] = None
     score_breakdown_json: Optional[list] = None
@@ -88,6 +94,7 @@ class ExternalAuditDraftResponse(BaseModel):
     suggested_action_title: Optional[str] = None
     suggested_action_description: Optional[str] = None
     suggested_risk_title: Optional[str] = None
+    provenance_json: Optional[dict] = None
     review_notes: Optional[str] = None
     promoted_finding_id: Optional[int] = None
     created_at: datetime
