@@ -880,6 +880,20 @@ async def create_run(
     started = time.perf_counter()
     intake_resolution: IntakeTemplateResolution | None = None
     if run_data.external_audit_type is not None:
+        if current_user.tenant_id is None:
+            _record_audit_endpoint_event(
+                "POST /api/v1/audits/runs",
+                422,
+                (time.perf_counter() - started) * 1000,
+                "tenant_context_missing",
+            )
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=api_error(
+                    ErrorCode.VALIDATION_ERROR,
+                    "External audit imports require an active tenant context. Assign the user to a tenant and retry.",
+                ),
+            )
         resolver = ExternalAuditIntakeTemplateResolver(db)
         try:
             intake_resolution = await resolver.resolve(

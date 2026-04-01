@@ -14,6 +14,36 @@ const mockReviewDraft = vi.fn()
 const mockPromoteJob = vi.fn()
 
 vi.mock('../../api/client', () => ({
+  ErrorClass: {
+    VALIDATION_ERROR: 'VALIDATION_ERROR',
+    AUTH_ERROR: 'AUTH_ERROR',
+    NOT_FOUND: 'NOT_FOUND',
+    WRITE_BLOCKED: 'WRITE_BLOCKED',
+    NETWORK_ERROR: 'NETWORK_ERROR',
+    SERVER_ERROR: 'SERVER_ERROR',
+    SETUP_REQUIRED: 'SETUP_REQUIRED',
+    UNKNOWN: 'UNKNOWN',
+  },
+  createApiError: (error: { response?: { status?: number; data?: { detail?: { message?: string } | string } } }) => {
+    const status = error?.response?.status
+    let errorClass = 'UNKNOWN'
+    if (status === 400 || status === 422) errorClass = 'VALIDATION_ERROR'
+    else if (status === 401 || status === 403) errorClass = 'AUTH_ERROR'
+    else if (status === 404) errorClass = 'NOT_FOUND'
+    else if ((status ?? 0) >= 500) errorClass = 'SERVER_ERROR'
+    const detail = error?.response?.data?.detail
+    return {
+      error_class: errorClass,
+      status_code: status,
+      detail: typeof detail === 'string' ? detail : detail?.message,
+    }
+  },
+  getApiErrorMessage: (error: { response?: { data?: { detail?: { message?: string } | string } }; message?: string }) => {
+    const detail = error?.response?.data?.detail
+    if (typeof detail === 'string') return detail
+    if (detail && typeof detail === 'object' && 'message' in detail) return detail.message
+    return error?.message || 'API Error'
+  },
   auditsApi: {
     getRunDetail: (...args: unknown[]) => mockGetRunDetail(...args),
   },
@@ -343,6 +373,109 @@ describe('AuditImportReview', () => {
     expect(screen.getByText('CAPA Actions')).toBeInTheDocument()
     expect(screen.getByText('Enterprise Risks')).toBeInTheDocument()
     expect(screen.getByText('View Audit Actions')).toBeInTheDocument()
+  })
+
+  it('surfaces a reconciliation compatibility warning when diagnostics are unavailable', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({ data: [] })
+    mockGetReconciliation.mockRejectedValue({ response: { status: 404, data: { detail: 'missing' } } })
+
+    renderPage()
+
+    expect(
+      await screen.findByText(
+        'Downstream workflow diagnostics are unavailable for this job on the current backend.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the backend validation message when promotion fails', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({
+      data: [
+        {
+          id: 11,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'accepted',
+          title: 'Needs follow-up',
+          description: 'Evidence snippet',
+          severity: 'high',
+          finding_type: 'nonconformity',
+          confidence_score: 0.88,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+          suggested_action_title: 'Address issue',
+          suggested_risk_title: 'Create risk',
+        },
+      ],
+    })
+    mockPromoteJob.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: {
+            message:
+              'External audit imports require an active tenant context. Assign the user to a tenant and retry.',
+          },
+        },
+      },
+    })
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Promote Accepted Drafts' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Promote' }))
+
+    expect(
+      await screen.findByText(
+        'External audit imports require an active tenant context. Assign the user to a tenant and retry.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('shows queue recovery guidance and retries queueing pending imports', async () => {

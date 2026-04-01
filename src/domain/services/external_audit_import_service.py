@@ -177,6 +177,22 @@ class ExternalAuditImportService:
             )
         )
         job = result.scalar_one_or_none()
+        if job is None and tenant_id is not None:
+            legacy_result = await self.db.execute(
+                select(ExternalAuditImportJob).where(
+                    ExternalAuditImportJob.id == job_id,
+                    ExternalAuditImportJob.tenant_id.is_(None),
+                )
+            )
+            job = legacy_result.scalar_one_or_none()
+            if job is not None:
+                job.tenant_id = tenant_id
+                await self.db.flush()
+                logger.warning(
+                    "Recovered legacy tenantless external audit import job %s into tenant %s",
+                    job_id,
+                    tenant_id,
+                )
         if not job:
             raise NotFoundError(f"External audit import job {job_id} not found")
         await self._recover_stale_processing(job)
@@ -219,6 +235,25 @@ class ExternalAuditImportService:
             .limit(1)
         )
         job = result.scalar_one_or_none()
+        if job is None and tenant_id is not None:
+            legacy_result = await self.db.execute(
+                select(ExternalAuditImportJob)
+                .where(
+                    ExternalAuditImportJob.audit_run_id == audit_run_id,
+                    ExternalAuditImportJob.tenant_id.is_(None),
+                )
+                .order_by(ExternalAuditImportJob.id.desc())
+                .limit(1)
+            )
+            job = legacy_result.scalar_one_or_none()
+            if job is not None:
+                job.tenant_id = tenant_id
+                await self.db.flush()
+                logger.warning(
+                    "Recovered latest legacy tenantless external audit import job %s into tenant %s",
+                    job.id,
+                    tenant_id,
+                )
         if not job:
             raise NotFoundError(f"External audit import job not found for audit run {audit_run_id}")
         return job
@@ -233,18 +268,42 @@ class ExternalAuditImportService:
             )
             .order_by(ExternalAuditDraft.id.asc())
         )
-        return list(result.scalars().all())
+        drafts = list(result.scalars().all())
+        if drafts or tenant_id is None:
+            return drafts
+
+        legacy_result = await self.db.execute(
+            select(ExternalAuditDraft)
+            .where(
+                ExternalAuditDraft.import_job_id == job_id,
+                ExternalAuditDraft.tenant_id.is_(None),
+            )
+            .order_by(ExternalAuditDraft.id.asc())
+        )
+        drafts = list(legacy_result.scalars().all())
+        if drafts:
+            for draft in drafts:
+                draft.tenant_id = tenant_id
+            await self.db.flush()
+            logger.warning(
+                "Recovered %s legacy tenantless external audit draft(s) for job %s into tenant %s",
+                len(drafts),
+                job_id,
+                tenant_id,
+            )
+        return drafts
 
     async def get_promotion_reconciliation(self, *, job_id: int, tenant_id: int | None) -> dict[str, object]:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
-        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
-        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
+        effective_tenant_id = job.tenant_id or tenant_id
+        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=effective_tenant_id)
+        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
         stored_summary = job.promotion_summary_json or {}
         return await self._build_promotion_reconciliation(
             job=job,
             run=run,
             drafts=drafts,
-            tenant_id=tenant_id,
+            tenant_id=effective_tenant_id,
             failed_drafts=cast(list[dict[str, object]], stored_summary.get("failed_drafts") or []),
             scheme_alignment=stored_summary.get("scheme_alignment") if isinstance(stored_summary, dict) else None,
         )
@@ -474,6 +533,8 @@ class ExternalAuditImportService:
     async def process_job(
         self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
     ) -> ExternalAuditImportJob:
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        effective_tenant_id = job.tenant_id
         transition_values: dict[str, object] = {"status": ExternalAuditImportStatus.PROCESSING}
         if user_id is not None:
             transition_values["updated_by_id"] = user_id
@@ -482,13 +543,13 @@ class ExternalAuditImportService:
             update(ExternalAuditImportJob)
             .where(
                 ExternalAuditImportJob.id == job_id,
-                ExternalAuditImportJob.tenant_id == tenant_id,
+                ExternalAuditImportJob.tenant_id == effective_tenant_id,
                 ExternalAuditImportJob.status == ExternalAuditImportStatus.QUEUED,
             )
             .values(**transition_values)
         )
         if transitioned.rowcount != 1:
-            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+            job = await self.get_job(job_id=job_id, tenant_id=effective_tenant_id)
             logger.info(
                 "Skipping external audit import job %s re-entry because status is %s",
                 job.id,
@@ -497,12 +558,12 @@ class ExternalAuditImportService:
             return job
 
         try:
-            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+            job = await self.get_job(job_id=job_id, tenant_id=effective_tenant_id)
         except Exception:
             logger.exception("Could not reload job %s after QUEUED→PROCESSING transition", job_id)
             raise
 
-        asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=tenant_id)
+        asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=effective_tenant_id)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
 
         job.updated_by_id = user_id or job.updated_by_id
@@ -595,7 +656,7 @@ class ExternalAuditImportService:
                 ExternalAuditDraft(
                     import_job_id=job.id,
                     audit_run_id=run.id,
-                    tenant_id=tenant_id,
+                    tenant_id=effective_tenant_id,
                     status=ExternalAuditDraftStatus.DRAFT,
                     title=candidate.title,
                     description=candidate.description,
@@ -617,7 +678,7 @@ class ExternalAuditImportService:
                 for candidate in analysis.findings
             ]
             async with self.db.begin_nested():
-                await self._clear_existing_drafts(job_id=job.id, tenant_id=tenant_id)
+                await self._clear_existing_drafts(job_id=job.id, tenant_id=effective_tenant_id)
                 for draft in replacement_drafts:
                     self.db.add(draft)
 
@@ -719,11 +780,13 @@ class ExternalAuditImportService:
         return draft
 
     async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        effective_tenant_id = job.tenant_id
         transitioned = await self.db.execute(
             update(ExternalAuditImportJob)
             .where(
                 ExternalAuditImportJob.id == job_id,
-                ExternalAuditImportJob.tenant_id == tenant_id,
+                ExternalAuditImportJob.tenant_id == effective_tenant_id,
                 ExternalAuditImportJob.status == ExternalAuditImportStatus.REVIEW_REQUIRED,
             )
             .values(
@@ -732,15 +795,15 @@ class ExternalAuditImportService:
             )
         )
         if transitioned.rowcount != 1:
-            job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+            job = await self.get_job(job_id=job_id, tenant_id=effective_tenant_id)
             if job.status == ExternalAuditImportStatus.COMPLETED:
                 return job
             if job.status == ExternalAuditImportStatus.PROMOTING:
                 raise ConflictError("Import job promotion is already in progress")
             raise ValidationError("Import job must be in review_required state before promotion")
 
-        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
-        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
+        job = await self.get_job(job_id=job_id, tenant_id=effective_tenant_id)
+        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
         accepted = [draft for draft in drafts if draft.status == ExternalAuditDraftStatus.ACCEPTED]
         if not accepted:
             job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
@@ -748,8 +811,8 @@ class ExternalAuditImportService:
             await self.db.flush()
             raise ValidationError("At least one draft must be accepted before promotion")
 
-        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
-        resolved_tenant_id = run.tenant_id if run.tenant_id is not None else tenant_id
+        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=effective_tenant_id)
+        resolved_tenant_id = run.tenant_id or job.tenant_id or tenant_id
         if resolved_tenant_id is None:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
 
@@ -961,6 +1024,22 @@ class ExternalAuditImportService:
             )
         )
         run = result.scalar_one_or_none()
+        if run is None and tenant_id is not None:
+            legacy_result = await self.db.execute(
+                select(AuditRun).where(
+                    AuditRun.id == audit_run_id,
+                    AuditRun.tenant_id.is_(None),
+                )
+            )
+            run = legacy_result.scalar_one_or_none()
+            if run is not None:
+                run.tenant_id = tenant_id
+                await self.db.flush()
+                logger.warning(
+                    "Recovered legacy tenantless audit run %s into tenant %s",
+                    audit_run_id,
+                    tenant_id,
+                )
         if not run:
             raise NotFoundError(f"Audit run {audit_run_id} not found")
         return run
@@ -973,6 +1052,22 @@ class ExternalAuditImportService:
             )
         )
         asset = result.scalar_one_or_none()
+        if asset is None and tenant_id is not None:
+            legacy_result = await self.db.execute(
+                select(EvidenceAsset).where(
+                    EvidenceAsset.id == asset_id,
+                    EvidenceAsset.tenant_id.is_(None),
+                )
+            )
+            asset = legacy_result.scalar_one_or_none()
+            if asset is not None:
+                asset.tenant_id = tenant_id
+                await self.db.flush()
+                logger.warning(
+                    "Recovered legacy tenantless evidence asset %s into tenant %s",
+                    asset_id,
+                    tenant_id,
+                )
         if not asset:
             raise NotFoundError(f"Evidence asset {asset_id} not found")
         return asset
@@ -989,7 +1084,26 @@ class ExternalAuditImportService:
                 ExternalAuditImportJob.tenant_id == tenant_id,
             )
         )
-        return result.scalar_one_or_none()
+        job = result.scalar_one_or_none()
+        if job is not None or tenant_id is None:
+            return job
+
+        legacy_result = await self.db.execute(
+            select(ExternalAuditImportJob).where(
+                ExternalAuditImportJob.idempotency_key == idempotency_key,
+                ExternalAuditImportJob.tenant_id.is_(None),
+            )
+        )
+        job = legacy_result.scalar_one_or_none()
+        if job is not None:
+            job.tenant_id = tenant_id
+            await self.db.flush()
+            logger.warning(
+                "Recovered legacy tenantless import job %s for idempotency key into tenant %s",
+                job.id,
+                tenant_id,
+            )
+        return job
 
     async def _get_draft(self, *, draft_id: int, tenant_id: int | None) -> ExternalAuditDraft:
         result = await self.db.execute(
@@ -999,6 +1113,22 @@ class ExternalAuditImportService:
             )
         )
         draft = result.scalar_one_or_none()
+        if draft is None and tenant_id is not None:
+            legacy_result = await self.db.execute(
+                select(ExternalAuditDraft).where(
+                    ExternalAuditDraft.id == draft_id,
+                    ExternalAuditDraft.tenant_id.is_(None),
+                )
+            )
+            draft = legacy_result.scalar_one_or_none()
+            if draft is not None:
+                draft.tenant_id = tenant_id
+                await self.db.flush()
+                logger.warning(
+                    "Recovered legacy tenantless external audit draft %s into tenant %s",
+                    draft_id,
+                    tenant_id,
+                )
         if not draft:
             raise NotFoundError(f"External audit draft {draft_id} not found")
         return draft
