@@ -4280,6 +4280,14 @@ export const externalAuditImportsApi = {
   ) =>
     api.patch<ExternalAuditImportDraft>(`/api/v1/external-audit-imports/drafts/${draftId}`, data),
 
+  bulkReviewJob: (
+    jobId: number,
+    data: {
+      status: 'accepted' | 'rejected' | 'draft'
+      review_notes?: string
+    },
+  ) => api.post<ExternalAuditImportDraft[]>(`/api/v1/external-audit-imports/jobs/${jobId}/bulk-review`, data),
+
   promoteJob: (jobId: number) =>
     api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
 }

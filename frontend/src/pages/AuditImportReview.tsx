@@ -329,6 +329,7 @@ export default function AuditImportReview() {
       : null,
   )
   const [busyDraftId, setBusyDraftId] = useState<number | null>(null)
+  const [isBulkReviewing, setIsBulkReviewing] = useState(false)
   const [isPromoting, setIsPromoting] = useState(false)
   const [isQueueing, setIsQueueing] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -458,6 +459,10 @@ export default function AuditImportReview() {
       drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
     [drafts],
   )
+  const pendingDraftCount = useMemo(
+    () => drafts.filter((draft) => draft.status === 'draft' && !draft.promoted_finding_id).length,
+    [drafts],
+  )
   const acceptedDrafts = useMemo(
     () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted'),
     [drafts],
@@ -543,6 +548,24 @@ export default function AuditImportReview() {
   const handlePromoteClick = () => {
     if (!job || promoteableCount === 0 || ['completed', 'promoting'].includes(job.status)) return
     setShowPromoteConfirm(true)
+  }
+
+  const handleBulkApprove = async () => {
+    if (!job || pendingDraftCount === 0) return
+    setIsBulkReviewing(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const res = await externalAuditImportsApi.bulkReviewJob(job.id, { status: 'accepted' })
+      setDrafts(res.data)
+      setSuccessMessage(`Approved ${pendingDraftCount} pending finding(s). Review and promote when ready.`)
+      await load()
+    } catch (err) {
+      console.error('Failed to bulk approve draft findings', err)
+      setError('Failed to approve all pending findings. Please retry.')
+    } finally {
+      setIsBulkReviewing(false)
+    }
   }
 
   const handlePromoteConfirm = async () => {
@@ -633,6 +656,14 @@ export default function AuditImportReview() {
           </p>
         </div>
         <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={() => void handleBulkApprove()}
+            disabled={!job || pendingDraftCount === 0 || isBulkReviewing || isPromoting}
+          >
+            {isBulkReviewing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+            Approve All Pending
+          </Button>
           <Button variant="outline" onClick={() => navigate(specialistHomePath)} disabled={!job}>
             <FileText size={16} />
             {specialistHome.label}
@@ -1368,6 +1399,7 @@ export default function AuditImportReview() {
         job={job}
         error={error}
         busyDraftId={busyDraftId}
+        isBulkReviewing={isBulkReviewing}
         specialistHome={specialistHome}
         onDecision={handleDraftDecision}
         onLoad={load}
@@ -1381,6 +1413,7 @@ function DraftFindingsList({
   job,
   error,
   busyDraftId,
+  isBulkReviewing,
   specialistHome,
   onDecision,
   onLoad,
@@ -1389,6 +1422,7 @@ function DraftFindingsList({
   job: ExternalAuditImportJob | null
   error: string | null
   busyDraftId: number | null
+  isBulkReviewing: boolean
   specialistHome: { path: string; label: string }
   onDecision: (id: number, status: 'accepted' | 'rejected', extras?: Record<string, string>) => void
   onLoad: () => void
@@ -1735,7 +1769,7 @@ function DraftFindingsList({
                         setEditingDraft(null)
                         setEditFields({})
                       }}
-                      disabled={busyDraftId === draft.id}
+                      disabled={busyDraftId === draft.id || isBulkReviewing}
                     >
                       Save &amp; Accept
                     </Button>
@@ -1747,7 +1781,7 @@ function DraftFindingsList({
                         setEditingDraft(null)
                         setEditFields({})
                       }}
-                      disabled={busyDraftId === draft.id}
+                      disabled={busyDraftId === draft.id || isBulkReviewing}
                     >
                       Save &amp; Reject
                     </Button>
@@ -1769,7 +1803,7 @@ function DraftFindingsList({
                 <Button
                   variant="success"
                   onClick={() => void onDecision(draft.id, 'accepted')}
-                  disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                  disabled={busyDraftId === draft.id || isBulkReviewing || draft.status === 'promoted'}
                   aria-label={`Accept finding: ${draft.title}`}
                 >
                   {busyDraftId === draft.id ? (
@@ -1780,7 +1814,7 @@ function DraftFindingsList({
                 <Button
                   variant="outline"
                   onClick={() => void onDecision(draft.id, 'rejected')}
-                  disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                  disabled={busyDraftId === draft.id || isBulkReviewing || draft.status === 'promoted'}
                   aria-label={`Reject finding: ${draft.title}`}
                 >
                   Reject
@@ -1790,7 +1824,7 @@ function DraftFindingsList({
                     variant="ghost"
                     size="sm"
                     onClick={() => void onDecision(draft.id, 'draft' as 'accepted')}
-                    disabled={busyDraftId === draft.id}
+                    disabled={busyDraftId === draft.id || isBulkReviewing}
                     aria-label={`Reset finding to draft: ${draft.title}`}
                   >
                     Reset
@@ -1804,6 +1838,7 @@ function DraftFindingsList({
                       setEditingDraft(draft.id)
                       setEditFields({})
                     }}
+                    disabled={isBulkReviewing}
                   >
                     Edit
                   </Button>

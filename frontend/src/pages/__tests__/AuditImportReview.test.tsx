@@ -11,6 +11,7 @@ const mockGetReconciliation = vi.fn()
 const mockQueueJob = vi.fn()
 const mockProcessJob = vi.fn()
 const mockReviewDraft = vi.fn()
+const mockBulkReviewJob = vi.fn()
 const mockPromoteJob = vi.fn()
 
 vi.mock('../../api/client', () => ({
@@ -55,6 +56,7 @@ vi.mock('../../api/client', () => ({
     queueJob: (...args: unknown[]) => mockQueueJob(...args),
     processJob: (...args: unknown[]) => mockProcessJob(...args),
     reviewDraft: (...args: unknown[]) => mockReviewDraft(...args),
+    bulkReviewJob: (...args: unknown[]) => mockBulkReviewJob(...args),
     promoteJob: (...args: unknown[]) => mockPromoteJob(...args),
   },
 }))
@@ -73,6 +75,7 @@ describe('AuditImportReview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetReconciliation.mockResolvedValue({ data: null })
+    mockBulkReviewJob.mockResolvedValue({ data: [] })
     mockGetLatestJobForRun.mockResolvedValue({
       data: {
         id: 72,
@@ -475,6 +478,118 @@ describe('AuditImportReview', () => {
       await screen.findByText(
         'External audit imports require an active tenant context. Assign the user to a tenant and retry.',
       ),
+    ).toBeInTheDocument()
+  })
+
+  it('bulk approves all pending draft findings', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({
+      data: [
+        {
+          id: 11,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'draft',
+          title: 'Needs follow-up',
+          description: 'Evidence snippet',
+          severity: 'high',
+          finding_type: 'nonconformity',
+          confidence_score: 0.88,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+          suggested_action_title: 'Address issue',
+          suggested_risk_title: 'Create risk',
+        },
+        {
+          id: 12,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'draft',
+          title: 'Second issue',
+          description: 'Evidence snippet',
+          severity: 'medium',
+          finding_type: 'question_answered_no',
+          confidence_score: 0.74,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 45001', clause_number: '6.1' }],
+          suggested_action_title: 'Address second issue',
+          suggested_risk_title: 'Create second risk',
+        },
+      ],
+    })
+    mockBulkReviewJob.mockResolvedValue({
+      data: [
+        {
+          id: 11,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'accepted',
+          title: 'Needs follow-up',
+          description: 'Evidence snippet',
+          severity: 'high',
+          finding_type: 'nonconformity',
+          confidence_score: 0.88,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+          suggested_action_title: 'Address issue',
+          suggested_risk_title: 'Create risk',
+        },
+        {
+          id: 12,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'accepted',
+          title: 'Second issue',
+          description: 'Evidence snippet',
+          severity: 'medium',
+          finding_type: 'question_answered_no',
+          confidence_score: 0.74,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 45001', clause_number: '6.1' }],
+          suggested_action_title: 'Address second issue',
+          suggested_risk_title: 'Create second risk',
+        },
+      ],
+    })
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve All Pending' }))
+
+    await waitFor(() => {
+      expect(mockBulkReviewJob).toHaveBeenCalledWith(72, { status: 'accepted' })
+    })
+    expect(
+      await screen.findByText('Approved 2 pending finding(s). Review and promote when ready.'),
     ).toBeInTheDocument()
   })
 
