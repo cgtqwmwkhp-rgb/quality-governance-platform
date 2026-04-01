@@ -168,7 +168,14 @@ class GeminiReviewService:
                 import google.generativeai as genai
 
                 genai.configure(api_key=self.api_key)
-                self._client = genai.GenerativeModel(GEMINI_MODEL)
+                self._client = genai.GenerativeModel(
+                    GEMINI_MODEL,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.1,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    ),
+                )
             except ImportError:
                 logger.warning("google-generativeai not installed; Gemini review disabled")
                 return None

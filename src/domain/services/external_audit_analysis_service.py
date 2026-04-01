@@ -638,6 +638,15 @@ class ExternalAuditAnalysisService:
             return text[:400]
         start = max(0, idx - 140)
         end = min(len(text), idx + 260)
+        # Extend to nearest sentence boundary to avoid mid-word cuts
+        while start > 0 and text[start - 1] not in ".\n|":
+            start -= 1
+            if idx - start > 200:
+                break
+        while end < len(text) and text[end - 1] not in ".\n|":
+            end += 1
+            if end - idx > 350:
+                break
         return text[start:end].strip()
 
     def _build_title(self, trigger: str, scheme_label: str) -> str:

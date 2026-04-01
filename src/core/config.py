@@ -76,6 +76,13 @@ class Settings(BaseSettings):
                     "Set a real provider credential or disable OCR."
                 )
 
+            gemini_placeholders = {*placeholder_keys, "gemini-api-key", "replace-me"}
+            if self.google_gemini_api_key and self.google_gemini_api_key in gemini_placeholders:
+                raise ValueError(
+                    "SECURITY ERROR: GOOGLE_GEMINI_API_KEY contains a placeholder value in production! "
+                    "Set a real Google AI Studio key or leave blank to skip Gemini review."
+                )
+
             if self.uat_mode.upper() != "READ_ONLY":
                 logger.info(
                     "UAT_MODE is %s in production — write operations are enabled. "

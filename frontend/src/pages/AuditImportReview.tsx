@@ -6,9 +6,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
+  ExternalLink,
   FileText,
   Info,
   Loader2,
+  Shield,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -29,6 +32,62 @@ function getSeverityVariant(severity: string) {
   if (severity === 'high') return 'high'
   if (severity === 'low') return 'low'
   return 'medium'
+}
+
+function getFindingTypeStyle(findingType: string): {
+  label: string
+  badgeClasses: string
+  cardBorderClass: string
+  iconColor: string
+} {
+  const ft = findingType.toLowerCase().replace(/\s+/g, '_')
+  if (ft === 'positive_practice') {
+    return {
+      label: 'Good Practice',
+      badgeClasses:
+        'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+      cardBorderClass: 'border-l-4 border-l-emerald-500',
+      iconColor: 'text-emerald-600',
+    }
+  }
+  if (
+    ft === 'nonconformity' ||
+    ft === 'major_nonconformity' ||
+    ft === 'minor_nonconformity' ||
+    ft === 'competence_gap'
+  ) {
+    return {
+      label: ft === 'major_nonconformity' ? 'Major NC' : ft === 'minor_nonconformity' ? 'Minor NC' : ft === 'competence_gap' ? 'Competence Gap' : 'Non-Conformity',
+      badgeClasses:
+        'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+      cardBorderClass: 'border-l-4 border-l-red-500',
+      iconColor: 'text-red-600',
+    }
+  }
+  if (ft === 'observation' || ft === 'opportunity_for_improvement') {
+    return {
+      label: ft === 'observation' ? 'Observation' : 'Opportunity for Improvement',
+      badgeClasses:
+        'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
+      cardBorderClass: 'border-l-4 border-l-amber-500',
+      iconColor: 'text-amber-600',
+    }
+  }
+  if (ft === 'flagged_item' || ft === 'question_answered_no') {
+    return {
+      label: ft === 'flagged_item' ? 'Flagged Item' : 'Answered No',
+      badgeClasses:
+        'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+      cardBorderClass: 'border-l-4 border-l-orange-500',
+      iconColor: 'text-orange-600',
+    }
+  }
+  return {
+    label: findingType.replace(/_/g, ' '),
+    badgeClasses: 'bg-slate-100 text-slate-700 border-slate-300',
+    cardBorderClass: '',
+    iconColor: 'text-slate-500',
+  }
 }
 
 function getConfidenceTier(confidence: number | null | undefined): {
@@ -1211,12 +1270,18 @@ function DraftFindingsList({
         const tier = getConfidenceTier(draft.confidence_score)
         const methodLabel = getAnalysisMethodLabel(draft.provenance_json ?? null)
         const isExpanded = expandedProvenance.has(draft.id)
+        const ftStyle = getFindingTypeStyle(draft.finding_type)
 
         return (
-          <Card key={draft.id}>
+          <Card key={draft.id} className={ftStyle.cardBorderClass}>
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-xl">{draft.title}</CardTitle>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ftStyle.badgeClasses}`}
+                >
+                  {ftStyle.label}
+                </span>
                 <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
                 <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
                 <span
@@ -1227,18 +1292,56 @@ function DraftFindingsList({
                 </span>
                 <Badge variant={getMethodBadgeVariant(methodLabel)}>{methodLabel}</Badge>
               </div>
-              <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-foreground whitespace-pre-wrap">{draft.description}</p>
 
               {draft.evidence_snippets_json?.length ? (
-                <div className="rounded-lg bg-surface p-4 text-sm text-muted-foreground space-y-2">
-                  {draft.evidence_snippets_json.map((snippet, si) => (
-                    <p key={`snippet-${draft.id}-${si}`} className="whitespace-pre-wrap font-mono text-xs">
-                      {String(snippet)}
-                    </p>
-                  ))}
+                <div className="rounded-lg border border-border bg-slate-50 dark:bg-slate-900/50 p-4 text-sm space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Source Evidence
+                  </p>
+                  {draft.evidence_snippets_json.map((snippet, si) => {
+                    const text = String(snippet)
+                    const hasPipes = text.includes(' | ')
+                    if (hasPipes) {
+                      const rows = text.split('\n').filter(Boolean)
+                      return (
+                        <div
+                          key={`snippet-${draft.id}-${si}`}
+                          className="overflow-x-auto rounded border border-border"
+                        >
+                          <table className="w-full text-xs">
+                            <tbody>
+                              {rows.map((row, ri) => (
+                                <tr
+                                  key={`row-${draft.id}-${si}-${ri}`}
+                                  className={ri % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-850'}
+                                >
+                                  {row.split(' | ').map((cell, ci) => (
+                                    <td
+                                      key={`cell-${draft.id}-${si}-${ri}-${ci}`}
+                                      className="px-3 py-1.5 border-b border-border text-foreground"
+                                    >
+                                      {cell.trim()}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )
+                    }
+                    return (
+                      <p
+                        key={`snippet-${draft.id}-${si}`}
+                        className="whitespace-pre-wrap text-xs text-foreground leading-relaxed"
+                      >
+                        {text}
+                      </p>
+                    )
+                  })}
                 </div>
               ) : null}
 
@@ -1258,21 +1361,54 @@ function DraftFindingsList({
               {(draft.suggested_action_title || draft.suggested_risk_title) && (
                 <div className="grid gap-3 md:grid-cols-2">
                   {draft.suggested_action_title ? (
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Proposed action
-                      </p>
-                      <p className="mt-1 text-sm text-foreground">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                          <ClipboardList size={12} />
+                          Corrective Action
+                        </p>
+                        {draft.status === 'promoted' ? (
+                          <Link
+                            to="/actions"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            View in Actions <ExternalLink size={10} />
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-blue-500">Created on promotion</span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium text-foreground">
                         {draft.suggested_action_title}
                       </p>
+                      {draft.suggested_action_description ? (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                          {draft.suggested_action_description}
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                   {draft.suggested_risk_title ? (
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Proposed risk
+                    <div className="rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-900/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                          <Shield size={12} />
+                          Risk Escalation
+                        </p>
+                        {draft.status === 'promoted' ? (
+                          <Link
+                            to="/risk-register"
+                            className="flex items-center gap-1 text-xs text-rose-600 hover:underline"
+                          >
+                            View in Risk Register <ExternalLink size={10} />
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-rose-500">Created on promotion</span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium text-foreground">
+                        {draft.suggested_risk_title}
                       </p>
-                      <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
                     </div>
                   ) : null}
                 </div>
