@@ -22,9 +22,9 @@ from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
-_gemini_review_cb = CircuitBreaker("gemini_review", failure_threshold=5, recovery_timeout=60)
+_gemini_review_cb = CircuitBreaker("gemini_review", failure_threshold=5, recovery_timeout=300)
 
-GEMINI_MODEL = "gemini-2.5-pro-preview-05-06"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
 MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB hard limit
 GEMINI_TIMEOUT_SECONDS = 120
@@ -88,7 +88,11 @@ Rules:
 - For ISO audits: typically NO numeric scores, only conformity status.
 - GREEN cells/highlights = pass/compliant. RED = fail/nonconformity. AMBER = observation/partial.
 - Checkmarks (✓/✔) = pass. Crosses (✗/✘) = fail.
-- confidence should reflect how clearly the finding is stated.
+- For each finding, assign a calibrated confidence score between 0.0 and 1.0:
+  * 0.90-1.0: Finding is explicitly stated with clear, unambiguous evidence
+  * 0.70-0.89: Finding is strongly implied with visual or textual evidence
+  * 0.50-0.69: Finding is inferred from context or ambiguous indicators
+  * Below 0.50: Uncertain — only include if other evidence supports it
 - If ambiguous, add a warning instead of guessing.
 - Return ONLY the JSON object.
 """
@@ -98,7 +102,9 @@ class GeminiReviewService:
     """Independent multimodal audit document reviewer using Gemini 2.5 Pro."""
 
     def __init__(self) -> None:
-        self.api_key = os.environ.get(GEMINI_API_KEY_ENV)
+        from src.core.config import settings
+
+        self.api_key = settings.google_gemini_api_key or os.environ.get(GEMINI_API_KEY_ENV)
         self._client = None
 
     @property
@@ -120,11 +126,6 @@ class GeminiReviewService:
                 return None
         return self._client
 
-    @retry(
-        stop=stop_after_attempt(2),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True,
-    )
     async def review(
         self,
         *,
@@ -182,10 +183,7 @@ class GeminiReviewService:
                 os.unlink(tmp_path)
 
         try:
-            raw_text = await asyncio.wait_for(
-                _gemini_review_cb.call(asyncio.to_thread, _run),
-                timeout=GEMINI_TIMEOUT_SECONDS,
-            )
+            raw_text = await self._call_with_retry(_run)
             raw_text = (raw_text or "").strip()
             if raw_text.startswith("```"):
                 raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
@@ -195,13 +193,25 @@ class GeminiReviewService:
             parsed = json.loads(raw_text.strip())
             return self._build_result(parsed)
         except Exception as exc:
-            logger.warning("Gemini review failed: %s", type(exc).__name__, exc_info=True)
+            logger.warning("Gemini review failed: %s: %s", type(exc).__name__, exc, exc_info=True)
             return AIAnalysisResult(
                 raw={},
                 provider_status="failed",
                 provider_name="gemini",
-                warnings=[f"Gemini review failed: {type(exc).__name__}"],
+                warnings=[f"Gemini review failed: {type(exc).__name__}: {exc}"],
             )
+
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    async def _call_with_retry(self, run_fn):
+        """Wrap the actual Gemini API call so tenacity can retry on transient errors."""
+        return await asyncio.wait_for(
+            _gemini_review_cb.call(asyncio.to_thread, run_fn),
+            timeout=GEMINI_TIMEOUT_SECONDS,
+        )
 
     def _build_result(self, parsed: object) -> AIAnalysisResult:
         if not isinstance(parsed, dict):
@@ -253,7 +263,17 @@ class GeminiReviewService:
                     "description": str(f.get("description", ""))[:2000],
                     "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
                     "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
-                    "confidence": min(max(self._safe_float(f.get("confidence")) or 0.5, 0.0), 1.0),
+                    "confidence": min(
+                        max(
+                            (
+                                self._safe_float(f.get("confidence"))
+                                if self._safe_float(f.get("confidence")) is not None
+                                else 0.6
+                            ),
+                            0.0,
+                        ),
+                        1.0,
+                    ),
                     "clause_reference": str(f.get("clause_reference", ""))[:255] or None,
                     "corrective_action_deadline": str(f.get("corrective_action_deadline", ""))[:20] or None,
                     "_provider": "gemini",

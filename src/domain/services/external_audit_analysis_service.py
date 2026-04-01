@@ -80,8 +80,8 @@ class ExternalAuditAnalysisService:
         ("not competent", "high", "competence_gap", 0.85),
         ("non-compliant", "high", "nonconformity", 0.8),
         ("non compliant", "high", "nonconformity", 0.8),
-        ("finding", "medium", "finding", 0.55),
     )
+    _GENERIC_FINDING_RE = re.compile(r"\bfindings?\s*[#:\d(]", re.IGNORECASE)
     _POSITIVE_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("good practice", "low", "positive_practice", 0.92),
         ("best practice", "low", "positive_practice", 0.92),
@@ -312,6 +312,7 @@ class ExternalAuditAnalysisService:
                 continue
             negative_detected = False
             matched_triggers: set[str] = set()
+            specific_trigger_matched = False
             for trigger, severity, finding_type, confidence in self._NONCONFORMITY_TRIGGERS:
                 if trigger not in lowered:
                     continue
@@ -322,6 +323,7 @@ class ExternalAuditAnalysisService:
                 snippet = self._snippet_around(compact, trigger)
                 title = self._build_title(trigger, scheme_label)
                 negative_detected = True
+                specific_trigger_matched = True
                 matched_triggers.add(trigger)
                 findings.append(
                     DraftFindingCandidate(
@@ -341,6 +343,33 @@ class ExternalAuditAnalysisService:
                         provenance={
                             "page_number": page_number,
                             "trigger": trigger,
+                            "analysis_method": "rule_based_import_review",
+                        },
+                    )
+                )
+            # Only use the generic "finding #N" regex on pages without specific triggers
+            if not specific_trigger_matched and self._GENERIC_FINDING_RE.search(compact):
+                snippet = self._snippet_around(compact, "finding")
+                title = self._build_title("finding", scheme_label)
+                negative_detected = True
+                findings.append(
+                    DraftFindingCandidate(
+                        title=title,
+                        description=snippet,
+                        severity="medium",
+                        finding_type="finding",
+                        confidence_score=0.65,
+                        competence_verdict=None,
+                        source_pages=[page_number],
+                        evidence_snippets=[snippet],
+                        mapped_frameworks=frameworks,
+                        mapped_standards=standards,
+                        suggested_action_title=f"Address imported audit issue: {title}",
+                        suggested_action_description=snippet,
+                        suggested_risk_title=f"Imported audit escalation: {title}",
+                        provenance={
+                            "page_number": page_number,
+                            "trigger": "finding (regex)",
                             "analysis_method": "rule_based_import_review",
                         },
                     )
@@ -415,32 +444,80 @@ class ExternalAuditAnalysisService:
                     )
 
         if ai_result and ai_result.provider_status == "completed" and ai_result.findings:
-            existing_titles = {f.title.lower() for f in findings}
-            for ai_f in ai_result.findings:
-                title = str(ai_f.get("title", ""))
-                if title.lower() in existing_titles:
-                    continue
-                findings.append(
-                    DraftFindingCandidate(
-                        title=f"{scheme_label}: {title}" if scheme_label and scheme_label not in title else title,
-                        description=str(ai_f.get("description", "")),
-                        severity=str(ai_f.get("severity", "medium")),
-                        finding_type=str(ai_f.get("finding_type", "finding")),
-                        confidence_score=float(str(ai_f.get("confidence", 0.50))),
-                        competence_verdict=("not_competent" if ai_f.get("finding_type") == "competence_gap" else None),
-                        source_pages=[],
-                        evidence_snippets=[str(ai_f.get("description", ""))[:400]],
-                        mapped_frameworks=frameworks,
-                        mapped_standards=standards,
-                        provenance={
-                            "analysis_method": "ai_structured",
-                            "ai_provider": ai_f.get("_provider", "unknown"),
-                            "ai_confidence": float(str(ai_f.get("confidence", 0.50))),
-                        },
-                    )
-                )
+            from difflib import SequenceMatcher
 
-        return self._dedupe_findings(findings)
+            for ai_f in ai_result.findings:
+                ai_title = str(ai_f.get("title", ""))
+                ai_conf = float(str(ai_f.get("confidence", 0.60)))
+
+                # Check for corroborating rule-based finding (fuzzy title match)
+                corroborated = False
+                for existing in findings:
+                    existing_lower = existing.title.lower()
+                    ai_lower = ai_title.lower()
+                    # Exact substring or high similarity = corroboration
+                    if ai_lower in existing_lower or existing_lower in ai_lower:
+                        ratio = 1.0
+                    else:
+                        ratio = SequenceMatcher(None, existing_lower, ai_lower).ratio()
+                    if ratio >= 0.5:
+                        # Upgrade: take the higher confidence and mark as AI-confirmed
+                        existing.confidence_score = max(existing.confidence_score, ai_conf)
+                        existing.provenance["analysis_method"] = "ai_confirmed"
+                        existing.provenance["ai_provider"] = ai_f.get("_provider", "unknown")
+                        existing.provenance["ai_confidence"] = ai_conf
+                        if ai_f.get("clause_reference"):
+                            existing.provenance["clause_reference"] = ai_f["clause_reference"]
+                        corroborated = True
+                        break
+
+                if not corroborated:
+                    findings.append(
+                        DraftFindingCandidate(
+                            title=(
+                                f"{scheme_label}: {ai_title}"
+                                if scheme_label and scheme_label not in ai_title
+                                else ai_title
+                            ),
+                            description=str(ai_f.get("description", "")),
+                            severity=str(ai_f.get("severity", "medium")),
+                            finding_type=str(ai_f.get("finding_type", "finding")),
+                            confidence_score=ai_conf,
+                            competence_verdict=(
+                                "not_competent" if ai_f.get("finding_type") == "competence_gap" else None
+                            ),
+                            source_pages=[],
+                            evidence_snippets=[str(ai_f.get("description", ""))[:400]],
+                            mapped_frameworks=frameworks,
+                            mapped_standards=standards,
+                            provenance={
+                                "analysis_method": "ai_structured",
+                                "ai_provider": ai_f.get("_provider", "unknown"),
+                                "ai_confidence": ai_conf,
+                            },
+                        )
+                    )
+
+        deduped = self._dedupe_findings(findings)
+        return self._calibrate_confidence(deduped)
+
+    def _calibrate_confidence(self, findings: list[DraftFindingCandidate]) -> list[DraftFindingCandidate]:
+        """Post-processing calibration pass to adjust confidence based on cross-signals."""
+        for f in findings:
+            boost = 0.0
+            method = f.provenance.get("analysis_method", "")
+            # AI-confirmed findings (both rule-based and AI found the same thing) get a boost
+            if method == "ai_confirmed":
+                boost += 0.05
+            # Findings with clause references are more traceable
+            if f.provenance.get("clause_reference"):
+                boost += 0.05
+            # Findings from consensus (both providers agreed) get a boost
+            if f.provenance.get("ai_provider") == "consensus":
+                boost += 0.10
+            if boost > 0:
+                f.confidence_score = min(round(f.confidence_score + boost, 2), 0.99)
+        return findings
 
     def _build_summary(
         self,

@@ -75,6 +75,15 @@ async def readiness_check():
         logger.warning("Readiness probe: PAMS check failed: %s", exc)
         pams_status = "error"
 
+    circuit_breakers = {}
+    try:
+        from src.infrastructure.resilience.circuit_breaker import get_all_circuits
+
+        for cb in get_all_circuits():
+            circuit_breakers[cb.name] = cb.get_health()
+    except Exception:
+        pass
+
     payload = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -86,6 +95,7 @@ async def readiness_check():
             "pams_tables_reflected": pams_tables_reflected,
             "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
             "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "circuit_breakers": circuit_breakers,
         },
     }
 
