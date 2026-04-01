@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select, update
@@ -171,8 +171,8 @@ class ExternalAuditImportService:
         return job
 
     async def _recover_stale_processing(self, job: ExternalAuditImportJob) -> None:
-        """Auto-recover jobs stuck in PROCESSING beyond the TTL."""
-        if job.status != ExternalAuditImportStatus.PROCESSING:
+        """Auto-recover jobs stuck in PROCESSING or PROMOTING beyond the TTL."""
+        if job.status not in (ExternalAuditImportStatus.PROCESSING, ExternalAuditImportStatus.PROMOTING):
             return
         updated_at = job.updated_at if hasattr(job, "updated_at") and job.updated_at else job.created_at
         if updated_at is None:
@@ -491,49 +491,16 @@ class ExternalAuditImportService:
             await self.db.flush()
             raise ValidationError("At least one draft must be accepted before promotion")
 
-        audit_service = AuditService(self.db)
         run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
         resolved_tenant_id = run.tenant_id if run.tenant_id is not None else tenant_id
         if resolved_tenant_id is None:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
-        promoted_findings: list[int] = []
-        document_clause_ids: set[str] = set()
-        for draft in accepted:
-            if draft.promoted_finding_id:
-                draft.status = ExternalAuditDraftStatus.PROMOTED
-                continue
-            clause_ids = self._extract_clause_ids(draft)
-            finding = await audit_service.create_finding(
-                draft.audit_run_id,
-                {
-                    "title": draft.title,
-                    "description": draft.description,
-                    "severity": draft.severity,
-                    "finding_type": draft.finding_type,
-                    "clause_ids": clause_ids,
-                    "risk_ids": [],
-                    "corrective_action_required": draft.finding_type in {"nonconformity", "competence_gap", "finding"},
-                },
-                user_id=user_id,
-                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
-            )
-            finding_id = await self._resolve_persisted_finding_id(
-                finding_id=getattr(finding, "id", None),
-                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
-            )
-            await self._link_evidence_for_finding(
-                finding_id=finding_id,
-                clause_ids=clause_ids,
-                tenant_id=draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id,
-                user_id=user_id,
-                note=draft.description,
-                confidence=draft.confidence_score,
-            )
-            draft.promoted_finding_id = finding_id
-            draft.status = ExternalAuditDraftStatus.PROMOTED
-            draft.updated_by_id = user_id
-            promoted_findings.append(finding_id)
-            document_clause_ids.update(clause_ids)
+
+        promoted_findings, document_clause_ids = await self._promote_accepted_drafts(
+            accepted=accepted,
+            user_id=user_id,
+            resolved_tenant_id=resolved_tenant_id,
+        )
 
         if document_clause_ids:
             await self._link_source_document_evidence(
@@ -544,24 +511,7 @@ class ExternalAuditImportService:
                 title=job.source_filename,
             )
 
-        completion_timestamp = job.report_date or datetime.now(timezone.utc)
-        if run.started_at is None:
-            run.started_at = completion_timestamp
-        run.status = AuditStatus.COMPLETED
-        run.completed_at = completion_timestamp
-        if job.overall_score is not None:
-            run.score = job.overall_score
-        if job.max_score is not None:
-            run.max_score = job.max_score
-        if job.score_percentage is not None:
-            run.score_percentage = job.score_percentage
-        normalized_outcome = (job.outcome_status or "").strip().lower()
-        if normalized_outcome in {"pass", "passed", "compliant"}:
-            run.passed = True
-        elif normalized_outcome in {"fail", "failed", "non_compliant", "non-compliant"}:
-            run.passed = False
-        else:
-            run.passed = None
+        self._apply_run_completion(run, job)
 
         scheme_alignment = await self._sync_scheme_records(
             job=job,
@@ -580,7 +530,105 @@ class ExternalAuditImportService:
         }
         await self.db.flush()
         await self.db.refresh(job)
+
+        try:
+            from src.domain.services.cache_service import invalidate_tenant_cache
+
+            await invalidate_tenant_cache(resolved_tenant_id, "audits")
+            await invalidate_tenant_cache(resolved_tenant_id, "governance")
+        except Exception:
+            logger.debug("Cache invalidation after promotion skipped (not available)")
+
         return job
+
+    async def _promote_accepted_drafts(
+        self,
+        *,
+        accepted: list[ExternalAuditDraft],
+        user_id: int,
+        resolved_tenant_id: int,
+    ) -> tuple[list[int], set[str]]:
+        """Promote each accepted draft into a live finding inside a savepoint."""
+        audit_service = AuditService(self.db)
+        promoted_findings: list[int] = []
+        document_clause_ids: set[str] = set()
+        default_due_date = datetime.now(timezone.utc) + timedelta(days=30)
+
+        async with self.db.begin_nested():
+            for draft in accepted:
+                if draft.promoted_finding_id:
+                    draft.status = ExternalAuditDraftStatus.PROMOTED
+                    continue
+                clause_ids = self._extract_clause_ids(draft)
+                requires_action = draft.finding_type in {
+                    "nonconformity",
+                    "major_nonconformity",
+                    "minor_nonconformity",
+                    "competence_gap",
+                    "finding",
+                }
+                finding_data: dict = {
+                    "title": draft.title,
+                    "description": draft.description,
+                    "severity": draft.severity,
+                    "finding_type": draft.finding_type,
+                    "clause_ids": clause_ids,
+                    "risk_ids": [],
+                    "corrective_action_required": requires_action,
+                }
+                if requires_action:
+                    finding_data["corrective_action_due_date"] = default_due_date
+                if draft.suggested_action_title:
+                    finding_data["_suggested_action_title"] = draft.suggested_action_title
+                if draft.suggested_action_description:
+                    finding_data["_suggested_action_description"] = draft.suggested_action_description
+                if draft.suggested_risk_title:
+                    finding_data["_suggested_risk_title"] = draft.suggested_risk_title
+
+                draft_tid = draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id
+                finding = await audit_service.create_finding(
+                    draft.audit_run_id, finding_data, user_id=user_id, tenant_id=draft_tid
+                )
+                finding_id = await self._resolve_persisted_finding_id(
+                    finding_id=getattr(finding, "id", None), tenant_id=draft_tid
+                )
+                await self._link_evidence_for_finding(
+                    finding_id=finding_id,
+                    clause_ids=clause_ids,
+                    tenant_id=draft_tid,
+                    user_id=user_id,
+                    note=draft.description,
+                    confidence=draft.confidence_score,
+                )
+                draft.promoted_finding_id = finding_id
+                draft.status = ExternalAuditDraftStatus.PROMOTED
+                draft.updated_by_id = user_id
+                promoted_findings.append(finding_id)
+                document_clause_ids.update(clause_ids)
+
+        return promoted_findings, document_clause_ids
+
+    @staticmethod
+    def _apply_run_completion(run: AuditRun, job: ExternalAuditImportJob) -> None:
+        """Update the audit run with final scores and status."""
+        completion_timestamp = job.report_date or datetime.now(timezone.utc)
+        if run.started_at is None:
+            run.started_at = completion_timestamp
+        run.status = AuditStatus.COMPLETED
+        run.completed_at = completion_timestamp
+        if job.overall_score is not None:
+            run.score = job.overall_score
+        if job.max_score is not None:
+            run.max_score = job.max_score
+        if job.score_percentage is not None:
+            run.score_percentage = job.score_percentage
+        normalized_outcome = (job.outcome_status or "").strip().lower()
+        if normalized_outcome in {"pass", "passed", "compliant"}:
+            run.passed = True
+        elif normalized_outcome in {"fail", "failed", "non_compliant", "non-compliant"}:
+            run.passed = False
+        else:
+            run.passed = None
 
     async def _get_run(self, *, audit_run_id: int, tenant_id: int | None) -> AuditRun:
         result = await self.db.execute(

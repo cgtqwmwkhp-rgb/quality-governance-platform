@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,14 @@ SCHEME_PROFILES: dict[str, SchemeProfile] = {
         ],
         typical_section_count=4,
     ),
+    "customer_other": SchemeProfile(
+        scheme_id="customer_other",
+        label="Customer / Third-Party Audit",
+        score_type="percentage",
+        overall_min=0,
+        overall_max=100,
+        notes="Generic profile for customer/supplier audits. Sections vary by customer.",
+    ),
 }
 
 
@@ -127,7 +136,11 @@ def validate_against_scheme(
             label = str(item.get("label", "")).lower()
             score_val = item.get("score")
             for section in profile.sections:
-                if section.name.lower() in label or label in section.name.lower():
+                sec_lower = section.name.lower()
+                is_match = (
+                    sec_lower in label or label in sec_lower or SequenceMatcher(None, label, sec_lower).ratio() > 0.7
+                )
+                if is_match:
                     if score_val is not None:
                         s = float(str(score_val))
                         if s < section.min_score or s > section.max_score:
