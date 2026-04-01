@@ -64,6 +64,7 @@ class ExternalAuditImportJobResponse(BaseModel):
     specialist_home_path: Optional[str] = None
     specialist_home_label: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
     processed_at: Optional[datetime] = None
     promoted_at: Optional[datetime] = None
 
@@ -93,6 +94,7 @@ class ExternalAuditDraftResponse(BaseModel):
     provenance_json: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
+    updated_by_id: Optional[int] = None
 
 
 class ExternalAuditDraftReviewRequest(BaseModel):

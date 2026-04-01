@@ -83,7 +83,7 @@ async def test_competency_gate_blocks_when_latest_record_due():
         id=4,
         state=CompetencyLifecycleState.DUE,
         assessed_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
-        expires_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        expires_at=datetime(2026, 12, 31, tzinfo=timezone.utc),
     )
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_ScalarResult([due_record])))
 

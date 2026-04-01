@@ -12,20 +12,34 @@ import logging
 from dataclasses import dataclass, field
 
 from src.core.config import settings
+from src.infrastructure.resilience.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
+_mistral_analysis_cb = CircuitBreaker("mistral_analysis", failure_threshold=5, recovery_timeout=300)
+
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 _VALID_FINDING_TYPES = frozenset(
-    {"nonconformity", "positive_practice", "observation", "opportunity_for_improvement", "competence_gap", "finding"}
+    {
+        "nonconformity",
+        "major_nonconformity",
+        "minor_nonconformity",
+        "positive_practice",
+        "observation",
+        "opportunity_for_improvement",
+        "competence_gap",
+        "finding",
+        "flagged_item",
+        "question_answered_no",
+    }
 )
-_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required"})
+_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required", "conditional_pass"})
 
 _SYSTEM_PROMPT = """\
-You are an expert audit document analyst for a quality governance platform.
-Given extracted text from an external audit report, return a JSON object with
-the following structure.  Be precise — only include data that is clearly
-stated in the text.  Do NOT invent values.
+You are an expert audit document analyst for a Fortune 500 quality governance
+platform. Given extracted text from an external audit report, return a JSON
+object with the following structure. Be precise — only include data that is
+clearly stated in the text. Do NOT invent values.
 
 {
   "scheme": "achilles_uvdb | iso | planet_mark | smeta | ecovadis | customer_other",
@@ -39,19 +53,24 @@ stated in the text.  Do NOT invent values.
   "certificate_number": "Certificate or registration number, or null",
   "audit_scope": "Scope of certification / audit scope description, or null",
   "next_audit_date": "YYYY-MM-DD of next scheduled audit, or null",
+  "site_name": "Name of the specific site/facility audited (may differ from organization_name), or null",
+  "site_address": "Full address of the audited site/facility, or null",
   "overall_score": <number or null>,
   "max_score": <number or null>,
   "score_percentage": <number 0-100 or null>,
-  "outcome": "pass | fail | review_required",
+  "outcome": "pass | fail | review_required | conditional_pass",
+  "items_total": <total number of scored items/questions or null>,
+  "items_applicable": <number of applicable items excluding N/A or null>,
+  "items_na": <number of N/A items excluded from scoring or null>,
   "score_breakdown": [
     {"label": "Section name", "score": <number>, "max_score": <number>}
   ],
   "findings": [
     {
       "title": "Short title",
-      "description": "Evidence text from the document",
+      "description": "Verbatim evidence text from the document, preserving original wording",
       "severity": "low | medium | high | critical",
-      "finding_type": "nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap",
+      "finding_type": "nonconformity | major_nonconformity | minor_nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap | flagged_item | question_answered_no",
       "confidence": <0.0 to 1.0>,
       "clause_reference": "e.g. ISO 9001:2015 clause 9.1.3, or null",
       "corrective_action_deadline": "YYYY-MM-DD or null"
@@ -61,16 +80,55 @@ stated in the text.  Do NOT invent values.
 }
 
 Rules:
-- score_breakdown entries MUST have score <= max_score.  Reject date-like
+- score_breakdown entries MUST have score <= max_score. Reject date-like
   values (e.g. 23/6 meaning June 23) — those are dates, not scores.
-- For each finding, assign a calibrated confidence score between 0.0 and 1.0:
-  * 0.90-1.0: Finding is explicitly stated with clear, unambiguous evidence
-  * 0.70-0.89: Finding is strongly implied with supporting evidence in the text
-  * 0.50-0.69: Finding is inferred from context or ambiguous language
-  * Below 0.50: Uncertain — only include if other evidence supports it
+- After computing score_breakdown, verify: the sum of section scores should
+  approximately equal overall_score, and the sum of section max_scores should
+  approximately equal max_score. If they diverge by more than 5%, add a
+  warning explaining the discrepancy.
+- Items marked "N/A", "Not Applicable", "Not Assessed", or "Excluded" must
+  NOT count toward max_score. Report them in items_na. Calculate
+  score_percentage against only applicable items.
+- When sections use different scoring scales (e.g. some 1/1 binary and some
+  out of 5), calculate score_percentage as (sum of scores / sum of max_scores)
+  * 100, NOT as the average of individual section percentages. Add a warning
+  if mixed scales detected.
+- The input text may come from OCR of tabular documents. Look for patterns
+  like "Question text ... Yes/No/N/A" or "Section ... Score/Max". When text
+  appears garbled or columns are misaligned, use adjacent numeric values and
+  section headers to reconstruct the intended score mapping. Add a warning if
+  table reconstruction is uncertain.
+- Tables that span multiple pages should be treated as a single continuous
+  table. Carry forward column headers from earlier pages.
+- Many audit documents contain BOTH a summary section (e.g. "Flagged Items
+  Summary") AND detailed per-question results. Do NOT duplicate findings.
+  Use the detailed per-question data as primary source and only add summary
+  items not covered in the detail. If overlap detected, add a warning.
+- Distinguish finding types carefully:
+  * "nonconformity" — formal NC raised by the auditor with required corrective action
+  * "major_nonconformity" / "minor_nonconformity" — if the document distinguishes severity
+  * "flagged_item" — item flagged in a summary but without formal NC status
+  * "question_answered_no" — a checklist question answered "No" without a formal finding
+  * "observation" — noted for awareness, no corrective action required
+  * "opportunity_for_improvement" — suggested improvement, not a deficiency
+  * "positive_practice" — good practice noted by the auditor
+- For each finding, preserve the original document text verbatim in the
+  description field. Prefix with page number if identifiable, e.g.
+  "[p.12] Original text here". Do not rephrase or summarise evidence.
+- Confidence calibration:
+  * 0.95-1.0: NC number assigned, clause reference given, corrective action with deadline
+  * 0.85-0.94: Finding text is explicit but missing one element (e.g. no clause ref)
+  * 0.70-0.84: Inferred from a "No" answer or red/fail indicator without narrative
+  * 0.50-0.69: Ambiguous — e.g. "partially compliant" with no further detail
+  * Below 0.50: Do not include; add a warning instead
+- Actively search for corrective action deadlines. Look for phrases like
+  "to be closed by", "due date", "response required by", "within X days".
+  If a general policy is stated (e.g. "all NCs must be closed within 90
+  days") but no specific date, calculate from report_date and note in the
+  description that the deadline was inferred.
 - If a score or finding is ambiguous, add a warning instead of guessing.
-- For ISO audits: there are typically NO numeric scores, only conformity
-  status.  Do not invent scores for ISO audits.
+- For ISO audits: typically NO numeric scores, only conformity status.
+  Do not invent scores for ISO audits.
 - Look for visual indicators described in text: "green", "red", "amber",
   "tick", "cross", "pass", "fail" adjacent to section labels.
 - Return ONLY the JSON object, no markdown fences or commentary.
@@ -101,6 +159,12 @@ class AIAnalysisResult:
     certificate_number: str | None = None
     audit_scope: str | None = None
     next_audit_date: str | None = None
+    site_name: str | None = None
+    site_address: str | None = None
+    items_total: int | None = None
+    items_applicable: int | None = None
+    items_na: int | None = None
+    visual_indicators: list[dict[str, object]] = field(default_factory=list)
 
 
 class MistralAnalysisService:
@@ -145,18 +209,23 @@ class MistralAnalysisService:
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": 0.1,
-                "max_tokens": 4096,
+                "max_tokens": 8192,
             }
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
-                response.raise_for_status()
+
+            async def _do_call():
+                async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+                    resp = await client.post(
+                        f"{self.base_url}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {self.api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                    )
+                    resp.raise_for_status()
+                    return resp
+
+            response = await _mistral_analysis_cb.call(_do_call)
 
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -165,11 +234,11 @@ class MistralAnalysisService:
             return self._build_result(parsed)
 
         except Exception as exc:
-            logger.warning("Mistral analysis failed: %s", type(exc).__name__, exc_info=True)
+            logger.warning("Mistral analysis failed: %s: %s", type(exc).__name__, exc, exc_info=True)
             return AIAnalysisResult(
                 raw={},
                 provider_status="failed",
-                warnings=[f"AI analysis failed: {type(exc).__name__}"],
+                warnings=[f"AI analysis failed: {type(exc).__name__}: {exc}"],
             )
 
     def _build_result(self, parsed: dict) -> AIAnalysisResult:
@@ -246,6 +315,11 @@ class MistralAnalysisService:
             certificate_number=parsed.get("certificate_number"),
             audit_scope=parsed.get("audit_scope"),
             next_audit_date=parsed.get("next_audit_date"),
+            site_name=parsed.get("site_name"),
+            site_address=parsed.get("site_address"),
+            items_total=self._safe_int(parsed.get("items_total")),
+            items_applicable=self._safe_int(parsed.get("items_applicable")),
+            items_na=self._safe_int(parsed.get("items_na")),
         )
 
     @staticmethod
@@ -257,6 +331,15 @@ class MistralAnalysisService:
             if not __import__("math").isfinite(result):
                 return None
             return result
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _safe_int(value: object) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(float(str(value)))
         except (TypeError, ValueError):
             return None
 
@@ -307,24 +390,28 @@ class MistralAnalysisService:
         budget = max_chars - len(head) - len(tail) - 200
 
         paragraphs = text[4000:-2000].split("\n\n") if len(text) > 6000 else []
-        scored: list[tuple[int, str]] = []
-        for para in paragraphs:
+        scored: list[tuple[int, int, str]] = []
+        for idx, para in enumerate(paragraphs):
             if not para.strip():
                 continue
             lower = para.lower()
             hits = sum(1 for kw in _SIGNAL_KEYWORDS if kw in lower)
-            scored.append((hits, para))
+            scored.append((hits, idx, para))
 
         scored.sort(key=lambda x: x[0], reverse=True)
-        middle_parts: list[str] = []
+        selected: list[tuple[int, int, str]] = []
         used = 0
-        for _hits, para in scored:
+        for _hits, idx, para in scored:
             if used + len(para) > budget:
-                if not middle_parts:
-                    middle_parts.append(para[:budget])
+                if not selected:
+                    selected.append((idx, _hits, para[:budget]))
                 break
-            middle_parts.append(para)
+            selected.append((idx, _hits, para))
             used += len(para)
+
+        # Re-sort by original document position to preserve structure
+        selected.sort(key=lambda x: x[0])
+        middle_parts: list[str] = [para for _idx, _hits, para in selected]
 
         chunks = [head]
         if middle_parts:

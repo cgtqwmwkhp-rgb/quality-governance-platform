@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
 
@@ -37,6 +38,23 @@ def _normalize_symbols(text: str) -> str:
     for symbol, tag in _SYMBOL_MAP.items():
         if symbol in text:
             text = text.replace(symbol, f" {tag} ")
+    return text
+
+
+_CAMEL_SPLIT_RE = re.compile(r"([a-z])([A-Z])")
+_LETTER_DIGIT_RE = re.compile(r"([a-zA-Z])(\d)")
+_DIGIT_LETTER_RE = re.compile(r"(\d)([a-zA-Z])")
+
+
+def _fix_concatenated_words(text: str) -> str:
+    """Insert spaces at camelCase and letter/digit boundaries.
+
+    Handles garbled OCR/table-extraction output like
+    ``"TypeofEquipment2postLift"`` → ``"Typeof Equipment 2 post Lift"``.
+    """
+    text = _CAMEL_SPLIT_RE.sub(r"\1 \2", text)
+    text = _LETTER_DIGIT_RE.sub(r"\1 \2", text)
+    text = _DIGIT_LETTER_RE.sub(r"\1 \2", text)
     return text
 
 
@@ -101,7 +119,14 @@ def _extract_pdf_text(content: bytes, file_name: str) -> ExtractedDocumentConten
 
     try:
         reader = PdfReader(io.BytesIO(content))
-        page_text = [_normalize_symbols((page.extract_text() or "").strip()) for page in reader.pages]
+        if getattr(reader, "is_encrypted", False):
+            return ExtractedDocumentContent(
+                text="",
+                note="PDF is password-protected. Decrypt it before uploading.",
+            )
+        page_text = [
+            _fix_concatenated_words(_normalize_symbols((page.extract_text() or "").strip())) for page in reader.pages
+        ]
         filtered_pages = [part for part in page_text if part]
         text = "\n\n".join(filtered_pages)
         return ExtractedDocumentContent(
@@ -154,11 +179,12 @@ def _extract_pdf_via_pdfplumber(content: bytes, file_name: str) -> ExtractedDocu
             page_count = len(pdf.pages)
             for page_num, page in enumerate(pdf.pages, start=1):
                 parts: list[str] = []
-                tables = page.extract_tables()
-                if tables:
+
+                table_objects = page.find_tables()
+                if table_objects:
                     has_tables = True
-                    for table in tables:
-                        for row in table:
+                    for tbl in table_objects:
+                        for row in tbl.extract():
                             cells = [str(c).strip() for c in row if c]
                             if cells:
                                 parts.append(" | ".join(cells))
@@ -180,10 +206,18 @@ def _extract_pdf_via_pdfplumber(content: bytes, file_name: str) -> ExtractedDocu
                 except Exception:
                     pass
 
-                plain = page.extract_text()
+                # Extract text outside table bounding boxes to avoid duplication
+                text_page = page
+                if table_objects:
+                    for tbl in table_objects:
+                        try:
+                            text_page = text_page.outside_bbox(tbl.bbox)
+                        except Exception:
+                            pass
+                plain = text_page.extract_text(x_tolerance=5, y_tolerance=3)
                 if plain:
                     parts.append(plain.strip())
-                page_text = _normalize_symbols("\n".join(parts))
+                page_text = _fix_concatenated_words(_normalize_symbols("\n".join(parts)))
                 page_texts.append(page_text)
 
         filtered = [p for p in page_texts if p.strip()]

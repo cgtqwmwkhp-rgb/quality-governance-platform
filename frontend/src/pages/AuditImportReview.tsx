@@ -6,9 +6,12 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
+  ExternalLink,
   FileText,
   Info,
   Loader2,
+  Shield,
   ShieldCheck,
   User,
 } from 'lucide-react'
@@ -29,6 +32,62 @@ function getSeverityVariant(severity: string) {
   if (severity === 'high') return 'high'
   if (severity === 'low') return 'low'
   return 'medium'
+}
+
+function getFindingTypeStyle(findingType: string): {
+  label: string
+  badgeClasses: string
+  cardBorderClass: string
+  iconColor: string
+} {
+  const ft = findingType.toLowerCase().replace(/\s+/g, '_')
+  if (ft === 'positive_practice') {
+    return {
+      label: 'Good Practice',
+      badgeClasses:
+        'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-700',
+      cardBorderClass: 'border-l-4 border-l-emerald-500',
+      iconColor: 'text-emerald-600',
+    }
+  }
+  if (
+    ft === 'nonconformity' ||
+    ft === 'major_nonconformity' ||
+    ft === 'minor_nonconformity' ||
+    ft === 'competence_gap'
+  ) {
+    return {
+      label: ft === 'major_nonconformity' ? 'Major NC' : ft === 'minor_nonconformity' ? 'Minor NC' : ft === 'competence_gap' ? 'Competence Gap' : 'Non-Conformity',
+      badgeClasses:
+        'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700',
+      cardBorderClass: 'border-l-4 border-l-red-500',
+      iconColor: 'text-red-600',
+    }
+  }
+  if (ft === 'observation' || ft === 'opportunity_for_improvement') {
+    return {
+      label: ft === 'observation' ? 'Observation' : 'Opportunity for Improvement',
+      badgeClasses:
+        'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700',
+      cardBorderClass: 'border-l-4 border-l-amber-500',
+      iconColor: 'text-amber-600',
+    }
+  }
+  if (ft === 'flagged_item' || ft === 'question_answered_no') {
+    return {
+      label: ft === 'flagged_item' ? 'Flagged Item' : 'Answered No',
+      badgeClasses:
+        'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-700',
+      cardBorderClass: 'border-l-4 border-l-orange-500',
+      iconColor: 'text-orange-600',
+    }
+  }
+  return {
+    label: findingType.replace(/_/g, ' '),
+    badgeClasses: 'bg-slate-100 text-slate-700 border-slate-300',
+    cardBorderClass: '',
+    iconColor: 'text-slate-500',
+  }
 }
 
 function getConfidenceTier(confidence: number | null | undefined): {
@@ -343,10 +402,6 @@ export default function AuditImportReview() {
       drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
     [drafts],
   )
-  const promotedCount = useMemo(
-    () => drafts.filter((draft) => draft.status === 'promoted' || draft.promoted_finding_id).length,
-    [drafts],
-  )
   const acceptedDrafts = useMemo(
     () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted'),
     [drafts],
@@ -398,12 +453,29 @@ export default function AuditImportReview() {
     auditRun?.external_reference || readProvenanceString(job, 'declared_external_reference')
   const specialistHome = useMemo(() => deriveSpecialistHome(job), [job])
 
-  const handleDraftDecision = async (draftId: number, status: 'accepted' | 'rejected') => {
+  const handleDraftDecision = async (
+    draftId: number,
+    status: 'accepted' | 'rejected',
+    extras?: Record<string, string>,
+  ) => {
     setBusyDraftId(draftId)
     setError(null)
     setSuccessMessage(null)
     try {
-      const res = await externalAuditImportsApi.reviewDraft(draftId, { status })
+      const payload: {
+        status: 'accepted' | 'rejected' | 'draft'
+        title?: string
+        description?: string
+        severity?: string
+        review_notes?: string
+      } = { status }
+      if (extras) {
+        if (extras.title) payload.title = extras.title
+        if (extras.description) payload.description = extras.description
+        if (extras.severity) payload.severity = extras.severity
+        if (extras.review_notes) payload.review_notes = extras.review_notes
+      }
+      const res = await externalAuditImportsApi.reviewDraft(draftId, payload)
       setDrafts((prev) => prev.map((draft) => (draft.id === draftId ? res.data : draft)))
       setError(null)
     } catch (err) {
@@ -517,7 +589,9 @@ export default function AuditImportReview() {
                   Confirm promotion of {promoteableCount} accepted finding(s)?
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  This will write findings into the live governance system. This action cannot be undone.
+                  This will create {promoteableCount} finding(s), {acceptedActionCandidates} corrective action(s),{' '}
+                  {acceptedRiskCandidates} risk escalation(s), and {acceptedClauseCount} evidence link(s) in the
+                  live governance system. This action cannot be undone.
                 </p>
               </div>
             </div>
@@ -670,11 +744,23 @@ export default function AuditImportReview() {
               </div>
               <div className="rounded-lg border border-border p-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Accepted drafts
+                  Review progress
                 </p>
-                <p className="mt-1 font-medium text-foreground">{approvedCount}</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {approvedCount + drafts.filter((d) => d.status === 'rejected').length} / {drafts.length} reviewed
+                </p>
+                {drafts.length > 0 ? (
+                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{
+                        width: `${Math.round(((approvedCount + drafts.filter((d) => d.status === 'rejected').length) / drafts.length) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                ) : null}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {promoteableCount} awaiting promotion, {promotedCount} promoted
+                  {approvedCount} accepted, {drafts.filter((d) => d.status === 'rejected').length} rejected, {promoteableCount} awaiting promotion
                 </p>
               </div>
             </CardContent>
@@ -707,11 +793,27 @@ export default function AuditImportReview() {
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">
                     Overall score
                   </p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {job.score_percentage != null
-                      ? `${job.score_percentage.toFixed(1)}%`
-                      : 'No explicit score extracted'}
-                  </p>
+                  {job.score_percentage != null ? (
+                    <>
+                      <p className="mt-1 text-2xl font-bold text-foreground">
+                        {job.score_percentage.toFixed(1)}%
+                      </p>
+                      <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            job.score_percentage >= 80
+                              ? 'bg-emerald-500'
+                              : job.score_percentage >= 50
+                                ? 'bg-amber-500'
+                                : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(job.score_percentage, 100)}%` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-1 font-medium text-foreground">No explicit score extracted</p>
+                  )}
                   {job.overall_score != null && job.max_score != null ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {job.overall_score} / {job.max_score}
@@ -736,20 +838,30 @@ export default function AuditImportReview() {
                     Score breakdown
                   </p>
                   <div className="mt-3 grid gap-2">
-                    {job.score_breakdown_json.slice(0, 6).map((item, index) => (
-                      <div
-                        key={`score-breakdown-${index}`}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-foreground">
-                          {String(item.label || `Section ${index + 1}`)}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {String(item.score ?? '-')} / {String(item.max_score ?? '-')} (
-                          {String(item.percentage ?? '-')}%)
-                        </span>
-                      </div>
-                    ))}
+                    {job.score_breakdown_json.map((item, index) => {
+                      const pct = Number(item.percentage ?? 0)
+                      return (
+                        <div key={`score-breakdown-${index}`} className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground">
+                              {String(item.label || `Section ${index + 1}`)}
+                            </span>
+                            <span className="text-muted-foreground">
+                              {String(item.score ?? '-')} / {String(item.max_score ?? '-')} (
+                              {String(item.percentage ?? '-')}%)
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`h-full rounded-full ${
+                                pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.min(pct, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -758,75 +870,87 @@ export default function AuditImportReview() {
         </div>
       ) : null}
 
-      {job &&
-      (job.organization_name ||
-        job.auditor_name ||
-        job.audit_type ||
-        job.certificate_number ||
-        job.audit_scope ||
-        job.next_audit_date) ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              Audit Report Summary
-            </CardTitle>
-            <CardDescription>
-              Key metadata extracted from the audit document by AI analysis.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {job.organization_name ? (
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Organisation audited
-                </p>
-                <p className="mt-1 font-medium text-foreground">{job.organization_name}</p>
-              </div>
-            ) : null}
-            {job.auditor_name ? (
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <User size={12} /> Lead auditor
-                </p>
-                <p className="mt-1 font-medium text-foreground">{job.auditor_name}</p>
-              </div>
-            ) : null}
-            {job.audit_type ? (
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit type</p>
-                <p className="mt-1 font-medium text-foreground capitalize">
-                  {job.audit_type.replace(/_/g, ' ')}
-                </p>
-              </div>
-            ) : null}
-            {job.certificate_number ? (
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Certificate / Registration No.
-                </p>
-                <p className="mt-1 font-medium text-foreground">{job.certificate_number}</p>
-              </div>
-            ) : null}
-            {job.audit_scope ? (
-              <div className="col-span-full rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit scope</p>
-                <p className="mt-1 text-sm text-foreground line-clamp-4">{job.audit_scope}</p>
-              </div>
-            ) : null}
-            {job.next_audit_date ? (
-              <div className="rounded-lg border border-border p-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Next audit date
-                </p>
-                <p className="mt-1 font-medium text-foreground">
-                  {formatDate(job.next_audit_date as unknown as string)}
-                </p>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      {(() => {
+        const prov = job?.provenance_json ?? {}
+        const orgName = String(prov.organization_name ?? prov.declared_organization_name ?? '')
+        const auditorName = String(prov.auditor_name ?? '')
+        const auditType = String(prov.audit_type ?? '')
+        const certNo = String(prov.certificate_number ?? '')
+        const scope = String(prov.audit_scope ?? '')
+        const nextDate = String(prov.next_audit_date ?? '')
+        const siteName = String(prov.site_name ?? '')
+        const siteAddr = String(prov.site_address ?? '')
+        const hasAny = orgName || auditorName || auditType || certNo || scope || nextDate
+        if (!job || !hasAny) return null
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                Audit Report Summary
+              </CardTitle>
+              <CardDescription>
+                Key metadata extracted from the audit document by AI analysis.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {orgName ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Organisation audited
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">{orgName}</p>
+                </div>
+              ) : null}
+              {siteName ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Site / Facility</p>
+                  <p className="mt-1 font-medium text-foreground">{siteName}</p>
+                  {siteAddr ? <p className="mt-1 text-xs text-muted-foreground">{siteAddr}</p> : null}
+                </div>
+              ) : null}
+              {auditorName ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <User size={12} /> Lead auditor
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">{auditorName}</p>
+                </div>
+              ) : null}
+              {auditType ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit type</p>
+                  <p className="mt-1 font-medium text-foreground capitalize">
+                    {auditType.replace(/_/g, ' ')}
+                  </p>
+                </div>
+              ) : null}
+              {certNo ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Certificate / Registration No.
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">{certNo}</p>
+                </div>
+              ) : null}
+              {scope ? (
+                <div className="col-span-full rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit scope</p>
+                  <p className="mt-1 text-sm text-foreground line-clamp-4">{scope}</p>
+                </div>
+              ) : null}
+              {nextDate ? (
+                <div className="rounded-lg border border-border p-4">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Next audit date
+                  </p>
+                  <p className="mt-1 font-medium text-foreground">{formatDate(nextDate)}</p>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {isProcessing ? (
         <Card className="border-primary/30 bg-primary/5" aria-busy="true" role="status">
@@ -875,14 +999,36 @@ export default function AuditImportReview() {
         <Card className="border-warning/30 bg-warning/5">
           <CardHeader>
             <CardTitle className="text-base">Reviewer warnings</CardTitle>
-            <CardDescription>These items should be checked before promotion.</CardDescription>
+            <CardDescription>
+              {job.processing_warnings_json.length} item(s) should be checked before promotion.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {job.processing_warnings_json.map((warning, index) => (
-              <p key={`warning-${index}`} className="text-sm text-foreground">
-                {warning}
-              </p>
-            ))}
+            {job.processing_warnings_json.map((warning, index) => {
+              const text = typeof warning === 'string' ? warning : String((warning as Record<string, unknown>)?.text ?? warning)
+              const isVisual = text.startsWith('Visual:')
+              const isScore = text.toLowerCase().includes('score')
+              const isOutcome = text.toLowerCase().includes('outcome') || text.toLowerCase().includes('disagreement')
+              return (
+                <div
+                  key={`warning-${index}`}
+                  className={`flex items-start gap-2 rounded px-3 py-2 text-sm ${
+                    isOutcome
+                      ? 'bg-red-50 border-l-2 border-red-400 text-red-800'
+                      : isScore
+                        ? 'bg-amber-50 border-l-2 border-amber-400 text-amber-800'
+                        : isVisual
+                          ? 'bg-blue-50 border-l-2 border-blue-400 text-blue-800'
+                          : 'text-foreground'
+                  }`}
+                >
+                  <span className="mt-0.5 text-xs">
+                    {isOutcome ? '!' : isScore ? '#' : isVisual ? '\u25CB' : '\u2022'}
+                  </span>
+                  <span>{text}</span>
+                </div>
+              )
+            })}
           </CardContent>
         </Card>
       ) : null}
@@ -1034,14 +1180,32 @@ function DraftFindingsList({
   error: string | null
   busyDraftId: number | null
   specialistHome: { path: string; label: string }
-  onDecision: (id: number, status: 'accepted' | 'rejected') => void
+  onDecision: (id: number, status: 'accepted' | 'rejected', extras?: Record<string, string>) => void
   onLoad: () => void
 }) {
   const [expandedProvenance, setExpandedProvenance] = useState<Set<number>>(new Set())
+  const [editingDraft, setEditingDraft] = useState<number | null>(null)
+  const [editFields, setEditFields] = useState<Record<string, string>>({})
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [sortBy, setSortBy] = useState<string>('urgency')
 
-  const sortedDrafts = useMemo(() => {
-    return [...drafts].sort((a, b) => reviewUrgency(b) - reviewUrgency(a))
-  }, [drafts])
+  const filteredAndSorted = useMemo(() => {
+    let filtered = drafts
+    if (filterStatus !== 'all') {
+      filtered = drafts.filter((d) => d.status === filterStatus)
+    }
+    const sorted = [...filtered]
+    if (sortBy === 'severity') {
+      const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+      sorted.sort((a, b) => (order[a.severity] ?? 2) - (order[b.severity] ?? 2))
+    } else if (sortBy === 'confidence') {
+      sorted.sort((a, b) => (a.confidence_score ?? 0) - (b.confidence_score ?? 0))
+    } else {
+      sorted.sort((a, b) => reviewUrgency(b) - reviewUrgency(a))
+    }
+    return sorted
+  }, [drafts, filterStatus, sortBy])
+  const sortedDrafts = filteredAndSorted
 
   const toggleProvenance = (id: number) => {
     setExpandedProvenance((prev) => {
@@ -1072,24 +1236,52 @@ function DraftFindingsList({
 
   return (
     <div className="grid gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          {drafts.length} finding(s) sorted by review urgency (low confidence + high severity first)
+          {filteredAndSorted.length} of {drafts.length} finding(s)
         </p>
-        <Button variant="outline" size="sm" onClick={onLoad}>
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className="rounded border border-border bg-background px-2 py-1 text-xs"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="draft">Pending</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+            <option value="promoted">Promoted</option>
+          </select>
+          <select
+            className="rounded border border-border bg-background px-2 py-1 text-xs"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="urgency">Sort: Urgency</option>
+            <option value="severity">Sort: Severity</option>
+            <option value="confidence">Sort: Confidence</option>
+          </select>
+          <Button variant="outline" size="sm" onClick={onLoad}>
+            Refresh
+          </Button>
+        </div>
       </div>
       {sortedDrafts.map((draft) => {
         const tier = getConfidenceTier(draft.confidence_score)
         const methodLabel = getAnalysisMethodLabel(draft.provenance_json ?? null)
         const isExpanded = expandedProvenance.has(draft.id)
+        const ftStyle = getFindingTypeStyle(draft.finding_type)
 
         return (
-          <Card key={draft.id}>
+          <Card key={draft.id} className={ftStyle.cardBorderClass}>
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-xl">{draft.title}</CardTitle>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${ftStyle.badgeClasses}`}
+                >
+                  {ftStyle.label}
+                </span>
                 <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
                 <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
                 <span
@@ -1100,14 +1292,56 @@ function DraftFindingsList({
                 </span>
                 <Badge variant={getMethodBadgeVariant(methodLabel)}>{methodLabel}</Badge>
               </div>
-              <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-foreground">{draft.description}</p>
+              <p className="text-sm text-foreground whitespace-pre-wrap">{draft.description}</p>
 
               {draft.evidence_snippets_json?.length ? (
-                <div className="rounded-lg bg-surface p-4 text-sm text-muted-foreground">
-                  {draft.evidence_snippets_json[0]}
+                <div className="rounded-lg border border-border bg-slate-50 dark:bg-slate-900/50 p-4 text-sm space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Source Evidence
+                  </p>
+                  {draft.evidence_snippets_json.map((snippet, si) => {
+                    const text = String(snippet)
+                    const hasPipes = text.includes(' | ')
+                    if (hasPipes) {
+                      const rows = text.split('\n').filter(Boolean)
+                      return (
+                        <div
+                          key={`snippet-${draft.id}-${si}`}
+                          className="overflow-x-auto rounded border border-border"
+                        >
+                          <table className="w-full text-xs">
+                            <tbody>
+                              {rows.map((row, ri) => (
+                                <tr
+                                  key={`row-${draft.id}-${si}-${ri}`}
+                                  className={ri % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-850'}
+                                >
+                                  {row.split(' | ').map((cell, ci) => (
+                                    <td
+                                      key={`cell-${draft.id}-${si}-${ri}-${ci}`}
+                                      className="px-3 py-1.5 border-b border-border text-foreground"
+                                    >
+                                      {cell.trim()}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )
+                    }
+                    return (
+                      <p
+                        key={`snippet-${draft.id}-${si}`}
+                        className="whitespace-pre-wrap text-xs text-foreground leading-relaxed"
+                      >
+                        {text}
+                      </p>
+                    )
+                  })}
                 </div>
               ) : null}
 
@@ -1127,21 +1361,54 @@ function DraftFindingsList({
               {(draft.suggested_action_title || draft.suggested_risk_title) && (
                 <div className="grid gap-3 md:grid-cols-2">
                   {draft.suggested_action_title ? (
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Proposed action
-                      </p>
-                      <p className="mt-1 text-sm text-foreground">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-900/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-400 flex items-center gap-1">
+                          <ClipboardList size={12} />
+                          Corrective Action
+                        </p>
+                        {draft.status === 'promoted' ? (
+                          <Link
+                            to="/actions"
+                            className="flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                          >
+                            View in Actions <ExternalLink size={10} />
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-blue-500">Created on promotion</span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium text-foreground">
                         {draft.suggested_action_title}
                       </p>
+                      {draft.suggested_action_description ? (
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                          {draft.suggested_action_description}
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                   {draft.suggested_risk_title ? (
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Proposed risk
+                    <div className="rounded-lg border border-rose-200 bg-rose-50/50 dark:border-rose-800 dark:bg-rose-900/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-wide text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                          <Shield size={12} />
+                          Risk Escalation
+                        </p>
+                        {draft.status === 'promoted' ? (
+                          <Link
+                            to="/risk-register"
+                            className="flex items-center gap-1 text-xs text-rose-600 hover:underline"
+                          >
+                            View in Risk Register <ExternalLink size={10} />
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-rose-500">Created on promotion</span>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-sm font-medium text-foreground">
+                        {draft.suggested_risk_title}
                       </p>
-                      <p className="mt-1 text-sm text-foreground">{draft.suggested_risk_title}</p>
                     </div>
                   ) : null}
                 </div>
@@ -1167,6 +1434,93 @@ function DraftFindingsList({
                 </div>
               ) : null}
 
+              {editingDraft === draft.id ? (
+                <div className="space-y-3 rounded-lg border border-border p-4 bg-surface/50">
+                  <div>
+                    <label htmlFor={`edit-title-${draft.id}`} className="text-xs font-medium text-muted-foreground">Title</label>
+                    <input
+                      id={`edit-title-${draft.id}`}
+                      className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
+                      value={editFields.title ?? draft.title}
+                      onChange={(e) => setEditFields((f) => ({ ...f, title: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={`edit-desc-${draft.id}`} className="text-xs font-medium text-muted-foreground">Description</label>
+                    <textarea
+                      id={`edit-desc-${draft.id}`}
+                      className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
+                      rows={3}
+                      value={editFields.description ?? draft.description}
+                      onChange={(e) => setEditFields((f) => ({ ...f, description: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label htmlFor={`edit-sev-${draft.id}`} className="text-xs font-medium text-muted-foreground">Severity</label>
+                      <select
+                        id={`edit-sev-${draft.id}`}
+                        className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
+                        value={editFields.severity ?? draft.severity}
+                        onChange={(e) => setEditFields((f) => ({ ...f, severity: e.target.value }))}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor={`edit-notes-${draft.id}`} className="text-xs font-medium text-muted-foreground">Review notes</label>
+                    <textarea
+                      id={`edit-notes-${draft.id}`}
+                      className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
+                      rows={2}
+                      placeholder="Add notes for the audit trail..."
+                      value={editFields.review_notes ?? (draft.review_notes || '')}
+                      onChange={(e) => setEditFields((f) => ({ ...f, review_notes: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="success"
+                      onClick={() => {
+                        void onDecision(draft.id, 'accepted', editFields)
+                        setEditingDraft(null)
+                        setEditFields({})
+                      }}
+                      disabled={busyDraftId === draft.id}
+                    >
+                      Save &amp; Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        void onDecision(draft.id, 'rejected', editFields)
+                        setEditingDraft(null)
+                        setEditFields({})
+                      }}
+                      disabled={busyDraftId === draft.id}
+                    >
+                      Save &amp; Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditingDraft(null)
+                        setEditFields({})
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-3">
                 <Button
                   variant="success"
@@ -1185,12 +1539,24 @@ function DraftFindingsList({
                 >
                   Reject
                 </Button>
+                {draft.status !== 'promoted' ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditingDraft(draft.id)
+                      setEditFields({})
+                    }}
+                  >
+                    Edit
+                  </Button>
+                ) : null}
                 {draft.promoted_finding_id ? (
                   <Link
-                    to={specialistHome.path}
+                    to={`${specialistHome.path}?findingId=${draft.promoted_finding_id}`}
                     className="inline-flex items-center text-sm font-medium text-primary hover:underline"
                   >
-                    {specialistHome.label}
+                    View promoted finding #{draft.promoted_finding_id}
                   </Link>
                 ) : null}
               </div>

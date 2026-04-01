@@ -4164,12 +4164,6 @@ export interface ExternalAuditImportJob {
   max_score?: number | null
   score_percentage?: number | null
   outcome_status?: string | null
-  organization_name?: string | null
-  auditor_name?: string | null
-  audit_type?: string | null
-  certificate_number?: string | null
-  audit_scope?: string | null
-  next_audit_date?: string | null
   provenance_json?: Record<string, unknown> | null
   classification_basis_json?: Record<string, unknown> | null
   score_breakdown_json?: Array<Record<string, unknown>> | null
@@ -4178,11 +4172,11 @@ export interface ExternalAuditImportJob {
   nonconformity_summary_json?: Array<Record<string, unknown>> | null
   improvement_summary_json?: Array<Record<string, unknown>> | null
   promotion_summary_json?: Record<string, unknown> | null
-  processing_warnings_json?: string[] | null
-  error_code?: string | null
-  error_detail?: string | null
+  processing_warnings_json?: Array<string | Record<string, unknown>> | null
   specialist_home_path?: string | null
   specialist_home_label?: string | null
+  error_code?: string | null
+  error_detail?: string | null
   created_at: string
   processed_at?: string | null
   promoted_at?: string | null

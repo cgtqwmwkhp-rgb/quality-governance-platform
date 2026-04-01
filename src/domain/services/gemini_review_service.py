@@ -30,15 +30,27 @@ MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB hard limit
 GEMINI_TIMEOUT_SECONDS = 120
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
 _VALID_FINDING_TYPES = frozenset(
-    {"nonconformity", "positive_practice", "observation", "opportunity_for_improvement", "competence_gap", "finding"}
+    {
+        "nonconformity",
+        "major_nonconformity",
+        "minor_nonconformity",
+        "positive_practice",
+        "observation",
+        "opportunity_for_improvement",
+        "competence_gap",
+        "finding",
+        "flagged_item",
+        "question_answered_no",
+    }
 )
-_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required"})
+_VALID_OUTCOMES = frozenset({"pass", "fail", "review_required", "conditional_pass"})
 
 _REVIEW_PROMPT = """\
-You are an expert audit document analyst. Analyse the attached audit report
-document and the supplementary extracted text below.  You can SEE the document
-visually — use visual cues (colours, checkmarks, crosses, traffic lights,
-stamps, table shading, logos) alongside the text content.
+You are an expert audit document analyst for a Fortune 500 quality governance
+platform. Analyse the attached audit report document and the supplementary
+extracted text below. You can SEE the document visually — use visual cues
+(colours, checkmarks, crosses, traffic lights, stamps, table shading, logos)
+alongside the text content.
 
 Return a JSON object with this exact structure (no markdown fences):
 
@@ -54,19 +66,24 @@ Return a JSON object with this exact structure (no markdown fences):
   "certificate_number": "Certificate/registration number, or null",
   "audit_scope": "Scope description, or null",
   "next_audit_date": "YYYY-MM-DD or null",
+  "site_name": "Name of the specific site/facility audited, or null",
+  "site_address": "Full address of the audited site/facility, or null",
   "overall_score": <number or null>,
   "max_score": <number or null>,
   "score_percentage": <number 0-100 or null>,
-  "outcome": "pass | fail | review_required",
+  "outcome": "pass | fail | review_required | conditional_pass",
+  "items_total": <total number of scored items/questions or null>,
+  "items_applicable": <number of applicable items excluding N/A or null>,
+  "items_na": <number of N/A items excluded from scoring or null>,
   "score_breakdown": [
     {"label": "Section name", "score": <number>, "max_score": <number>}
   ],
   "findings": [
     {
       "title": "Short title",
-      "description": "Evidence text from the document",
+      "description": "Verbatim evidence text from the document, preserving original wording",
       "severity": "low | medium | high | critical",
-      "finding_type": "nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap",
+      "finding_type": "nonconformity | major_nonconformity | minor_nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap | flagged_item | question_answered_no",
       "confidence": <0.0 to 1.0>,
       "clause_reference": "e.g. ISO 9001:2015 clause 9.1.3, or null",
       "corrective_action_deadline": "YYYY-MM-DD or null"
@@ -85,14 +102,48 @@ Return a JSON object with this exact structure (no markdown fences):
 
 Rules:
 - score_breakdown entries MUST have score <= max_score.
+- After computing score_breakdown, verify: the sum of section scores should
+  approximately equal overall_score, and the sum of section max_scores should
+  approximately equal max_score. If they diverge by more than 5%, add a
+  warning explaining the discrepancy.
+- Items marked "N/A", "Not Applicable", "Not Assessed", or "Excluded" must
+  NOT count toward max_score. Report them in items_na. Calculate
+  score_percentage against only applicable items.
+- When sections use different scoring scales (e.g. some 1/1 binary and some
+  out of 5), calculate score_percentage as (sum of scores / sum of max_scores)
+  * 100. Add a warning if mixed scales detected.
+- For tabular/grid documents: map each row's question text to its
+  corresponding score column. Treat column headers as the labels for
+  score_breakdown entries. Tables that span multiple pages should be treated
+  as a single continuous table — carry forward column headers.
+- Many audit documents contain BOTH a summary section (e.g. "Flagged Items
+  Summary") AND detailed per-question results. Do NOT duplicate findings.
+  Use the detailed per-question data as primary source and only add summary
+  items not covered in the detail. If overlap detected, add a warning.
 - For ISO audits: typically NO numeric scores, only conformity status.
 - GREEN cells/highlights = pass/compliant. RED = fail/nonconformity. AMBER = observation/partial.
-- Checkmarks (✓/✔) = pass. Crosses (✗/✘) = fail.
-- For each finding, assign a calibrated confidence score between 0.0 and 1.0:
-  * 0.90-1.0: Finding is explicitly stated with clear, unambiguous evidence
-  * 0.70-0.89: Finding is strongly implied with visual or textual evidence
-  * 0.50-0.69: Finding is inferred from context or ambiguous indicators
-  * Below 0.50: Uncertain — only include if other evidence supports it
+- Checkmarks (\u2713/\u2714) = pass. Crosses (\u2717/\u2718) = fail.
+- Distinguish finding types carefully:
+  * "nonconformity" — formal NC raised by the auditor with required corrective action
+  * "major_nonconformity" / "minor_nonconformity" — if the document distinguishes severity
+  * "flagged_item" — item flagged in a summary but without formal NC status
+  * "question_answered_no" — a checklist question answered "No" without a formal finding
+  * "observation" — noted for awareness, no corrective action required
+  * "opportunity_for_improvement" — suggested improvement, not a deficiency
+  * "positive_practice" — good practice noted by the auditor
+- For each finding, preserve the original document text verbatim in the
+  description field. Prefix with page number, e.g. "[p.12] Original text
+  here". Do not rephrase or summarise evidence.
+- Confidence calibration:
+  * 0.95-1.0: NC number assigned, clause reference given, corrective action with deadline
+  * 0.85-0.94: Finding text is explicit but missing one element (e.g. no clause ref)
+  * 0.70-0.84: Inferred from a "No" answer or red/fail indicator without narrative
+  * 0.50-0.69: Ambiguous — e.g. "partially compliant" with no further detail
+  * Below 0.50: Do not include; add a warning instead
+- Actively search for corrective action deadlines. Look for phrases like
+  "to be closed by", "due date", "response required by", "within X days".
+  If a general policy is stated but no specific date, calculate from
+  report_date and note that the deadline was inferred.
 - If ambiguous, add a warning instead of guessing.
 - Return ONLY the JSON object.
 """
@@ -117,7 +168,14 @@ class GeminiReviewService:
                 import google.generativeai as genai
 
                 genai.configure(api_key=self.api_key)
-                self._client = genai.GenerativeModel(GEMINI_MODEL)
+                self._client = genai.GenerativeModel(
+                    GEMINI_MODEL,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.1,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    ),
+                )
             except ImportError:
                 logger.warning("google-generativeai not installed; Gemini review disabled")
                 return None
@@ -161,10 +219,15 @@ class GeminiReviewService:
             )
 
         scheme_hint = f"\nAssurance scheme hint: {assurance_scheme}" if assurance_scheme else ""
-        text_excerpt = text[:8000] if text else ""
+        if text and len(text) > 8000:
+            text_excerpt = (
+                text[:8000] + "\n[... supplementary text truncated — rely on the visual PDF for remaining data]"
+            )
+        else:
+            text_excerpt = text or ""
         user_message = (
             f"{_REVIEW_PROMPT}{scheme_hint}\n\n"
-            f"--- BEGIN SUPPLEMENTARY TEXT (first 8000 chars) ---\n{text_excerpt}\n--- END SUPPLEMENTARY TEXT ---"
+            f"--- BEGIN SUPPLEMENTARY TEXT ---\n{text_excerpt}\n--- END SUPPLEMENTARY TEXT ---"
         )
 
         def _run():
@@ -275,7 +338,17 @@ class GeminiReviewService:
             )
 
         warnings = list(parsed.get("warnings") or [])
+
+        visual_indicators: list[dict[str, object]] = []
         for vi in parsed.get("visual_indicators") or []:
+            visual_indicators.append(
+                {
+                    "page": vi.get("page"),
+                    "element": vi.get("element"),
+                    "context": vi.get("context", ""),
+                    "interpretation": vi.get("interpretation"),
+                }
+            )
             warnings.append(
                 f"Visual: page {vi.get('page', '?')} — {vi.get('element', '?')}: "
                 f"{vi.get('context', '')} → {vi.get('interpretation', '?')}"
@@ -305,6 +378,12 @@ class GeminiReviewService:
             certificate_number=parsed.get("certificate_number"),
             audit_scope=parsed.get("audit_scope"),
             next_audit_date=parsed.get("next_audit_date"),
+            site_name=parsed.get("site_name"),
+            site_address=parsed.get("site_address"),
+            items_total=self._safe_int(parsed.get("items_total")),
+            items_applicable=self._safe_int(parsed.get("items_applicable")),
+            items_na=self._safe_int(parsed.get("items_na")),
+            visual_indicators=visual_indicators,
         )
 
     @staticmethod
@@ -316,5 +395,14 @@ class GeminiReviewService:
             if not __import__("math").isfinite(result):
                 return None
             return result
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _safe_int(value: object) -> int | None:
+        if value is None:
+            return None
+        try:
+            return int(float(str(value)))
         except (TypeError, ValueError):
             return None

@@ -1235,6 +1235,8 @@ class AuditService:
         run: AuditRun,
         finding: AuditFinding,
         actor_user_id: int,
+        suggested_title: str | None = None,
+        suggested_description: str | None = None,
     ) -> CAPAAction | None:
         if not finding.corrective_action_required:
             return None
@@ -1250,11 +1252,14 @@ class AuditService:
         if existing is not None:
             return existing
 
+        action_title = (suggested_title or f"Action plan: {finding.title}")[:255]
+        action_desc = suggested_description or finding.description
+
         action = CAPAAction(
             tenant_id=run.tenant_id,
             reference_number=await ReferenceNumberService.generate(self.db, "capa", CAPAAction),
-            title=f"Action plan: {finding.title}"[:255],
-            description=finding.description,
+            title=action_title,
+            description=action_desc,
             capa_type=CAPAType.CORRECTIVE,
             status=CAPAStatus.OPEN,
             priority=self._priority_from_severity(finding.severity),
@@ -1277,11 +1282,12 @@ class AuditService:
         finding: AuditFinding,
         action: CAPAAction | None,
         actor_user_id: int,
+        suggested_title: str | None = None,
     ) -> EnterpriseRisk | None:
         if finding.severity not in {"critical", "high"}:
             return None
 
-        title = f"Audit escalation: {run.reference_number} / {finding.reference_number}"[:255]
+        title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
         existing_result = await self.db.execute(
             select(EnterpriseRisk).where(
                 EnterpriseRisk.tenant_id == run.tenant_id,
@@ -1577,6 +1583,12 @@ class AuditService:
 
         finding_dict = self._remap_json_fields(data, _FINDING_JSON_REMAPS)
 
+        suggested_action_title = finding_dict.pop("_suggested_action_title", None)
+        suggested_action_description = finding_dict.pop("_suggested_action_description", None)
+        suggested_risk_title = finding_dict.pop("_suggested_risk_title", None)
+        # Strip any remaining internal keys that aren't AuditFinding columns
+        finding_dict = {k: v for k, v in finding_dict.items() if not k.startswith("_")}
+
         finding = AuditFinding(
             run_id=run_id,
             status=FindingStatus.OPEN,
@@ -1597,12 +1609,15 @@ class AuditService:
             run=run,
             finding=finding,
             actor_user_id=user_id,
+            suggested_title=suggested_action_title,
+            suggested_description=suggested_action_description,
         )
         await self._ensure_risk_for_finding(
             run=run,
             finding=finding,
             action=action,
             actor_user_id=user_id,
+            suggested_title=suggested_risk_title,
         )
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")

@@ -219,6 +219,29 @@ class ExternalAuditAnalysisService:
         outcome = self._determine_outcome_status(normalized_text, findings, score_percentage)
         if ai_result and ai_result.outcome and outcome == "review_required":
             outcome = ai_result.outcome
+        if ai_result and ai_result.outcome and outcome != ai_result.outcome:
+            warnings.append(f"Outcome divergence: rule-based='{outcome}' vs AI='{ai_result.outcome}'")
+
+        # Section-sum cross-check
+        if score_breakdown and overall_score is not None:
+            section_sum = sum(float(str(s.get("score", 0))) for s in score_breakdown)
+            if abs(section_sum - overall_score) > max(overall_score * 0.05, 1):
+                warnings.append(
+                    f"Section scores sum to {section_sum} but overall score is {overall_score} "
+                    f"(delta {abs(section_sum - overall_score):.1f})"
+                )
+
+        # Scheme-specific validation (was previously dead code — now wired in)
+        from src.domain.services.scheme_profiles import validate_against_scheme
+
+        scheme_warnings = validate_against_scheme(
+            scheme,
+            overall_score,
+            max_score,
+            score_percentage,
+            score_breakdown,
+        )
+        warnings.extend(scheme_warnings)
 
         return ExternalAuditAnalysisResult(
             summary=summary,
@@ -431,17 +454,16 @@ class ExternalAuditAnalysisService:
                     },
                 )
             )
-        if not negative_detected:
-            self._scan_positive_triggers(
-                lowered=lowered,
-                compact=compact,
-                page_number=page_number,
-                scheme_label=scheme_label,
-                frameworks=frameworks,
-                standards=standards,
-                matched_triggers=matched_triggers,
-                findings=findings,
-            )
+        self._scan_positive_triggers(
+            lowered=lowered,
+            compact=compact,
+            page_number=page_number,
+            scheme_label=scheme_label,
+            frameworks=frameworks,
+            standards=standards,
+            matched_triggers=matched_triggers,
+            findings=findings,
+        )
 
     def _scan_positive_triggers(
         self,
@@ -547,7 +569,7 @@ class ExternalAuditAnalysisService:
                 ratio = 1.0
             else:
                 ratio = SequenceMatcher(None, existing_lower, ai_lower).ratio()
-            if ratio >= 0.5:
+            if ratio >= 0.7:
                 existing.confidence_score = max(existing.confidence_score, ai_conf)
                 existing.provenance["analysis_method"] = "ai_confirmed"
                 existing.provenance["ai_provider"] = ai_f.get("_provider", "unknown")
@@ -558,21 +580,21 @@ class ExternalAuditAnalysisService:
         return False
 
     def _calibrate_confidence(self, findings: list[DraftFindingCandidate]) -> list[DraftFindingCandidate]:
-        """Post-processing calibration pass to adjust confidence based on cross-signals."""
+        """Post-processing calibration using multiplicative adjustments."""
         for f in findings:
-            boost = 0.0
+            multiplier = 1.0
             method = f.provenance.get("analysis_method", "")
-            # AI-confirmed findings (both rule-based and AI found the same thing) get a boost
+
             if method == "ai_confirmed":
-                boost += 0.05
-            # Findings with clause references are more traceable
+                multiplier *= 1.05
             if f.provenance.get("clause_reference"):
-                boost += 0.05
-            # Findings from consensus (both providers agreed) get a boost
-            if f.provenance.get("ai_provider") == "consensus":
-                boost += 0.10
-            if boost > 0:
-                f.confidence_score = min(round(f.confidence_score + boost, 2), 0.99)
+                multiplier *= 1.05
+
+            consensus_status = f.provenance.get("_consensus")
+            if consensus_status == "single_source" and method == "ai_structured":
+                multiplier *= 0.95
+
+            f.confidence_score = min(round(f.confidence_score * multiplier, 2), 0.99)
         return findings
 
     def _build_summary(
@@ -616,6 +638,15 @@ class ExternalAuditAnalysisService:
             return text[:400]
         start = max(0, idx - 140)
         end = min(len(text), idx + 260)
+        # Extend to nearest sentence boundary to avoid mid-word cuts
+        while start > 0 and text[start - 1] not in ".\n|":
+            start -= 1
+            if idx - start > 200:
+                break
+        while end < len(text) and text[end - 1] not in ".\n|":
+            end += 1
+            if end - idx > 350:
+                break
         return text[start:end].strip()
 
     def _build_title(self, trigger: str, scheme_label: str) -> str:
