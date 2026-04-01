@@ -837,8 +837,8 @@ export default function AuditImportReview() {
                 Processing import&hellip;
               </p>
               <p className="text-sm text-muted-foreground">
-                Extracting text, running analysis, and generating draft findings. This may take up to
-                two minutes.
+                Extracting text, running dual AI analysis (Mistral + Gemini), and generating draft
+                findings. This may take up to five minutes for large documents.
               </p>
             </div>
           </CardContent>

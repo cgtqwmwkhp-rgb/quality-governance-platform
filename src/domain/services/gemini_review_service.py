@@ -257,25 +257,19 @@ class GeminiReviewService:
                 continue
             raw_sev = str(f.get("severity", "medium"))
             raw_ft = str(f.get("finding_type", "finding"))
+            raw_conf = self._safe_float(f.get("confidence"))
+            conf: float = min(max(raw_conf if raw_conf is not None else 0.6, 0.0), 1.0)
+            clause_ref = str(f.get("clause_reference", ""))[:255] or None
+            deadline = str(f.get("corrective_action_deadline", ""))[:20] or None
             findings.append(
                 {
                     "title": str(f.get("title", ""))[:300],
                     "description": str(f.get("description", ""))[:2000],
                     "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
                     "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
-                    "confidence": min(
-                        max(
-                            (
-                                self._safe_float(f.get("confidence"))
-                                if self._safe_float(f.get("confidence")) is not None
-                                else 0.6
-                            ),
-                            0.0,
-                        ),
-                        1.0,
-                    ),
-                    "clause_reference": str(f.get("clause_reference", ""))[:255] or None,
-                    "corrective_action_deadline": str(f.get("corrective_action_deadline", ""))[:20] or None,
+                    "confidence": conf,
+                    "clause_reference": clause_ref,
+                    "corrective_action_deadline": deadline,
                     "_provider": "gemini",
                 }
             )
