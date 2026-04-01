@@ -1437,16 +1437,18 @@ function DraftFindingsList({
               {editingDraft === draft.id ? (
                 <div className="space-y-3 rounded-lg border border-border p-4 bg-surface/50">
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Title</label>
+                    <label htmlFor={`edit-title-${draft.id}`} className="text-xs font-medium text-muted-foreground">Title</label>
                     <input
+                      id={`edit-title-${draft.id}`}
                       className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
                       value={editFields.title ?? draft.title}
                       onChange={(e) => setEditFields((f) => ({ ...f, title: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Description</label>
+                    <label htmlFor={`edit-desc-${draft.id}`} className="text-xs font-medium text-muted-foreground">Description</label>
                     <textarea
+                      id={`edit-desc-${draft.id}`}
                       className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
                       rows={3}
                       value={editFields.description ?? draft.description}
@@ -1455,8 +1457,9 @@ function DraftFindingsList({
                   </div>
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className="text-xs font-medium text-muted-foreground">Severity</label>
+                      <label htmlFor={`edit-sev-${draft.id}`} className="text-xs font-medium text-muted-foreground">Severity</label>
                       <select
+                        id={`edit-sev-${draft.id}`}
                         className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
                         value={editFields.severity ?? draft.severity}
                         onChange={(e) => setEditFields((f) => ({ ...f, severity: e.target.value }))}
@@ -1469,8 +1472,9 @@ function DraftFindingsList({
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Review notes</label>
+                    <label htmlFor={`edit-notes-${draft.id}`} className="text-xs font-medium text-muted-foreground">Review notes</label>
                     <textarea
+                      id={`edit-notes-${draft.id}`}
                       className="mt-1 w-full rounded border border-border bg-background px-3 py-1.5 text-sm"
                       rows={2}
                       placeholder="Add notes for the audit trail..."
