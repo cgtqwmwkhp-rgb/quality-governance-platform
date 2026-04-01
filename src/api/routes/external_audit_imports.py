@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.external_audit_import import ExternalAuditImportStatus
+from src.domain.models.external_audit_import import ExternalAuditDraftStatus, ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
 from src.infrastructure.tasks.external_audit_import_tasks import process_external_audit_import_job
@@ -103,6 +103,11 @@ class ExternalAuditDraftReviewRequest(BaseModel):
     title: Optional[str] = Field(default=None, max_length=300)
     description: Optional[str] = Field(default=None, max_length=10000)
     severity: Optional[str] = Field(default=None, pattern="^(low|medium|high|critical)$")
+
+
+class ExternalAuditBulkReviewRequest(BaseModel):
+    status: str = Field(pattern="^(accepted|rejected|draft)$")
+    review_notes: Optional[str] = Field(default=None, max_length=5000)
 
 
 class PromotionReconciliationLink(BaseModel):
@@ -326,6 +331,26 @@ async def review_import_draft(
         severity=payload.severity,
     )
     return ExternalAuditDraftResponse.model_validate(draft)
+
+
+@router.post("/jobs/{job_id}/bulk-review", response_model=list[ExternalAuditDraftResponse])
+async def bulk_review_import_job_drafts(
+    job_id: int,
+    payload: ExternalAuditBulkReviewRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
+) -> list[ExternalAuditDraftResponse]:
+    """Apply one review decision across all mutable drafts in an import job."""
+    service = ExternalAuditImportService(db)
+    drafts = await service.bulk_review_job_drafts(
+        job_id=job_id,
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.id,
+        status_value=payload.status,
+        review_notes=payload.review_notes,
+        current_status_filter={ExternalAuditDraftStatus.DRAFT} if payload.status == "accepted" else None,
+    )
+    return [ExternalAuditDraftResponse.model_validate(draft) for draft in drafts]
 
 
 @router.post("/jobs/{job_id}/promote", response_model=ExternalAuditImportJobResponse)

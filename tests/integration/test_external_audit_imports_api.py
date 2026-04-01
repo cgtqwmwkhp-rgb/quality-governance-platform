@@ -166,6 +166,115 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
 
 
 @pytest.mark.asyncio
+async def test_external_audit_bulk_review_accepts_all_pending_drafts(
+    client: AsyncClient,
+    test_session: AsyncSession,
+    auth_headers: dict,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Bulk review import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        assurance_scheme="Achilles UVDB",
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/bulk-review.pdf",
+        original_filename="bulk-review.pdf",
+        content_type="application/pdf",
+        file_size_bytes=256,
+        checksum_sha256="bulk-review-asset",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    from src.domain.models.external_audit_import import ExternalAuditImportJob
+
+    import_job = ExternalAuditImportJob(
+        reference_number=generate_test_reference("IMP"),
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditImportStatus.REVIEW_REQUIRED,
+        source_checksum_sha256="bulk-review",
+        idempotency_key=f"{run.id}:bulk-review",
+        source_filename="bulk.pdf",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(import_job)
+    await test_session.commit()
+    await test_session.refresh(import_job)
+
+    draft_one = ExternalAuditDraft(
+        import_job_id=import_job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.DRAFT,
+        title="First draft",
+        description="First draft evidence",
+        severity="high",
+        finding_type="nonconformity",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    draft_two = ExternalAuditDraft(
+        import_job_id=import_job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.DRAFT,
+        title="Second draft",
+        description="Second draft evidence",
+        severity="medium",
+        finding_type="question_answered_no",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add_all([draft_one, draft_two])
+    await test_session.commit()
+
+    response = await client.post(
+        f"/api/v1/external-audit-imports/jobs/{import_job.id}/bulk-review",
+        json={"status": "accepted"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 2
+    assert {draft["status"] for draft in payload} == {"accepted"}
+
+
+@pytest.mark.asyncio
 async def test_external_audit_import_reconciliation_endpoint_returns_downstream_contract(
     client: AsyncClient,
     auth_headers: dict,
@@ -236,6 +345,100 @@ async def test_external_audit_import_reconciliation_endpoint_returns_downstream_
     assert payload["canonical_read_model"] == "specialist_sync_verification"
     assert payload["materialized"]["capa_actions"] == 1
     assert payload["view_links"]["actions"] == "/actions?sourceType=audit_finding"
+
+
+@pytest.mark.asyncio
+async def test_external_audit_service_recovers_tenanted_jobs_when_request_has_no_tenant(
+    test_session: AsyncSession,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Tenant fallback import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        assurance_scheme="Achilles UVDB",
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/tenant-fallback.pdf",
+        original_filename="tenant-fallback.pdf",
+        content_type="application/pdf",
+        file_size_bytes=256,
+        checksum_sha256="tenant-fallback-asset",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    from src.domain.models.external_audit_import import ExternalAuditImportJob
+
+    job = ExternalAuditImportJob(
+        reference_number=generate_test_reference("IMP"),
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditImportStatus.REVIEW_REQUIRED,
+        source_checksum_sha256="tenant-fallback",
+        idempotency_key=f"{run.id}:tenant-fallback",
+        source_filename="tenant-fallback.pdf",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    draft = ExternalAuditDraft(
+        import_job_id=0,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.DRAFT,
+        title="Fallback draft",
+        description="Fallback evidence",
+        severity="medium",
+        finding_type="nonconformity",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(job)
+    await test_session.commit()
+    await test_session.refresh(job)
+    draft.import_job_id = job.id
+    test_session.add(draft)
+    await test_session.commit()
+
+    service = ExternalAuditImportService(test_session)
+
+    recovered_job = await service.get_job(job_id=job.id, tenant_id=None)
+    recovered_drafts = await service.list_job_drafts(job_id=job.id, tenant_id=None)
+
+    assert recovered_job.id == job.id
+    assert recovered_job.tenant_id == DEFAULT_TEST_TENANT_ID
+    assert len(recovered_drafts) == 1
+    assert recovered_drafts[0].id == draft.id
 
 
 @pytest.mark.asyncio

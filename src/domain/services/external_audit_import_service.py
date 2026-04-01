@@ -177,6 +177,17 @@ class ExternalAuditImportService:
             )
         )
         job = result.scalar_one_or_none()
+        if job is None and tenant_id is None:
+            unscoped_result = await self.db.execute(
+                select(ExternalAuditImportJob).where(ExternalAuditImportJob.id == job_id)
+            )
+            job = unscoped_result.scalar_one_or_none()
+            if job is not None:
+                logger.warning(
+                    "Recovered external audit import job %s without request tenant scope using persisted tenant %s",
+                    job_id,
+                    job.tenant_id,
+                )
         if job is None and tenant_id is not None:
             legacy_result = await self.db.execute(
                 select(ExternalAuditImportJob).where(
@@ -235,6 +246,20 @@ class ExternalAuditImportService:
             .limit(1)
         )
         job = result.scalar_one_or_none()
+        if job is None and tenant_id is None:
+            unscoped_result = await self.db.execute(
+                select(ExternalAuditImportJob)
+                .where(ExternalAuditImportJob.audit_run_id == audit_run_id)
+                .order_by(ExternalAuditImportJob.id.desc())
+                .limit(1)
+            )
+            job = unscoped_result.scalar_one_or_none()
+            if job is not None:
+                logger.warning(
+                    "Recovered latest external audit import job %s for run %s without request tenant scope",
+                    job.id,
+                    audit_run_id,
+                )
         if job is None and tenant_id is not None:
             legacy_result = await self.db.execute(
                 select(ExternalAuditImportJob)
@@ -269,7 +294,22 @@ class ExternalAuditImportService:
             .order_by(ExternalAuditDraft.id.asc())
         )
         drafts = list(result.scalars().all())
-        if drafts or tenant_id is None:
+        if drafts:
+            return drafts
+
+        if tenant_id is None:
+            unscoped_result = await self.db.execute(
+                select(ExternalAuditDraft)
+                .where(ExternalAuditDraft.import_job_id == job_id)
+                .order_by(ExternalAuditDraft.id.asc())
+            )
+            drafts = list(unscoped_result.scalars().all())
+            if drafts:
+                logger.warning(
+                    "Recovered %s external audit draft(s) for job %s without request tenant scope",
+                    len(drafts),
+                    job_id,
+                )
             return drafts
 
         legacy_result = await self.db.execute(
@@ -779,6 +819,46 @@ class ExternalAuditImportService:
         await self.db.refresh(draft)
         return draft
 
+    async def bulk_review_job_drafts(
+        self,
+        *,
+        job_id: int,
+        tenant_id: int | None,
+        user_id: int,
+        status_value: str,
+        review_notes: str | None = None,
+        current_status_filter: set[ExternalAuditDraftStatus] | None = None,
+    ) -> list[ExternalAuditDraft]:
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        effective_tenant_id = job.tenant_id or tenant_id
+        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=effective_tenant_id)
+        if job.status in {ExternalAuditImportStatus.PROMOTING, ExternalAuditImportStatus.COMPLETED}:
+            raise ConflictError("Draft review is locked while the import job is promoting or completed")
+
+        mutable_drafts = [
+            draft
+            for draft in drafts
+            if not draft.promoted_finding_id and draft.status != ExternalAuditDraftStatus.PROMOTED
+        ]
+        if current_status_filter is not None:
+            mutable_drafts = [draft for draft in mutable_drafts if draft.status in current_status_filter]
+
+        if not mutable_drafts:
+            return drafts
+
+        next_status = ExternalAuditDraftStatus(status_value)
+        for draft in mutable_drafts:
+            draft.status = next_status
+            if review_notes is not None:
+                draft.review_notes = review_notes
+            draft.updated_by_id = user_id
+
+        await self.db.flush()
+        await self._refresh_job_promotion_summary(job_id=job_id, tenant_id=effective_tenant_id)
+        for draft in mutable_drafts:
+            await self.db.refresh(draft)
+        return drafts
+
     async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         effective_tenant_id = job.tenant_id
@@ -1024,6 +1104,15 @@ class ExternalAuditImportService:
             )
         )
         run = result.scalar_one_or_none()
+        if run is None and tenant_id is None:
+            unscoped_result = await self.db.execute(select(AuditRun).where(AuditRun.id == audit_run_id))
+            run = unscoped_result.scalar_one_or_none()
+            if run is not None:
+                logger.warning(
+                    "Recovered audit run %s without request tenant scope using persisted tenant %s",
+                    audit_run_id,
+                    run.tenant_id,
+                )
         if run is None and tenant_id is not None:
             legacy_result = await self.db.execute(
                 select(AuditRun).where(
@@ -1113,6 +1202,15 @@ class ExternalAuditImportService:
             )
         )
         draft = result.scalar_one_or_none()
+        if draft is None and tenant_id is None:
+            unscoped_result = await self.db.execute(select(ExternalAuditDraft).where(ExternalAuditDraft.id == draft_id))
+            draft = unscoped_result.scalar_one_or_none()
+            if draft is not None:
+                logger.warning(
+                    "Recovered external audit draft %s without request tenant scope using persisted tenant %s",
+                    draft_id,
+                    draft.tenant_id,
+                )
         if draft is None and tenant_id is not None:
             legacy_result = await self.db.execute(
                 select(ExternalAuditDraft).where(
