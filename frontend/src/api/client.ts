@@ -2461,12 +2461,24 @@ export const uvdbApi = {
     limit?: number
     status?: string
     company_name?: string
+    search?: string
+    audit_type?: string
+    date_from?: string
+    date_to?: string
+    min_score?: number
+    max_score?: number
   }) => {
     const sp = new URLSearchParams()
     if (params?.skip !== undefined) sp.set('skip', String(params.skip))
     if (params?.limit !== undefined) sp.set('limit', String(params.limit))
     if (params?.status) sp.set('status', params.status)
     if (params?.company_name) sp.set('company_name', params.company_name)
+    if (params?.search) sp.set('search', params.search)
+    if (params?.audit_type) sp.set('audit_type', params.audit_type)
+    if (params?.date_from) sp.set('date_from', params.date_from)
+    if (params?.date_to) sp.set('date_to', params.date_to)
+    if (params?.min_score !== undefined) sp.set('min_score', String(params.min_score))
+    if (params?.max_score !== undefined) sp.set('max_score', String(params.max_score))
     const query = sp.toString()
     return api.get<UVDBAuditsResponse>(`/api/v1/uvdb/audits${query ? `?${query}` : ''}`)
   },

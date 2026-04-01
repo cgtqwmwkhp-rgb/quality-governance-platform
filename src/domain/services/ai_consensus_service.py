@@ -18,7 +18,8 @@ from src.domain.services.mistral_analysis_service import AIAnalysisResult
 logger = logging.getLogger(__name__)
 
 SCORE_TOLERANCE_PCT = 5.0
-TITLE_SIMILARITY_THRESHOLD = 0.75
+SCORE_RELATIVE_TOLERANCE = 0.10
+TITLE_SIMILARITY_THRESHOLD = 0.85
 SECTION_LABEL_SIMILARITY_THRESHOLD = 0.7
 CORRELATION_DISCOUNT = 0.9
 
@@ -355,6 +356,11 @@ class AIConsensusService:
             cand_desc = str(candidate.get("description", "")).lower()[:500]
             cand_ft = str(candidate.get("finding_type", ""))
 
+            target_clause = str(target.get("clause_reference", "") or "").strip().lower()
+            cand_clause = str(candidate.get("clause_reference", "") or "").strip().lower()
+            if target_clause and cand_clause and target_clause != cand_clause:
+                continue
+
             title_sim = SequenceMatcher(None, target_title, cand_title).ratio()
             desc_sim = SequenceMatcher(None, target_desc, cand_desc).ratio() if target_desc and cand_desc else 0.0
             ft_match = 1.0 if target_ft == cand_ft else 0.0
@@ -393,7 +399,10 @@ class AIConsensusService:
         if val_b is not None and not math.isfinite(val_b):
             val_b = None
         if val_a is not None and val_b is not None:
-            if abs(val_a - val_b) <= SCORE_TOLERANCE_PCT:
+            abs_diff = abs(val_a - val_b)
+            denom = max(abs(val_a), abs(val_b), 1.0)
+            rel_diff = abs_diff / denom
+            if abs_diff <= SCORE_TOLERANCE_PCT and rel_diff <= SCORE_RELATIVE_TOLERANCE:
                 return round((val_a + val_b) / 2, 2)
             warnings.append(f"Score disagreement on {field_name}: {val_a} vs {val_b}")
             return val_a

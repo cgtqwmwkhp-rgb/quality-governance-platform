@@ -530,6 +530,12 @@ class ExternalAuditAnalysisService:
 
             corroborated = self._try_corroborate(findings, ai_f, ai_title, ai_conf)
             if not corroborated:
+                ai_evidence = ai_f.get("_evidence_snippets")
+                if ai_evidence and isinstance(ai_evidence, list) and any(ai_evidence):
+                    snippets = ai_evidence
+                else:
+                    desc_text = str(ai_f.get("description", ""))[:400]
+                    snippets = [desc_text] if desc_text else []
                 findings.append(
                     DraftFindingCandidate(
                         title=(
@@ -541,7 +547,7 @@ class ExternalAuditAnalysisService:
                         confidence_score=ai_conf,
                         competence_verdict=("not_competent" if ai_f.get("finding_type") == "competence_gap" else None),
                         source_pages=[],
-                        evidence_snippets=[str(ai_f.get("description", ""))[:400]],
+                        evidence_snippets=snippets,
                         mapped_frameworks=frameworks,
                         mapped_standards=standards,
                         provenance={
@@ -837,12 +843,21 @@ class ExternalAuditAnalysisService:
         return self._dedupe_dicts(preview[:8], key_fields=("standard", "clause_id", "clause_number", "title"))
 
     @staticmethod
-    def _looks_like_date(a: float, b: float, trailing: str) -> bool:
-        """Return True when a/b looks like DD/MM, MM/DD, or is followed by a year."""
+    def _looks_like_date(a: float, b: float, trailing: str, *, has_label_context: bool = False) -> bool:
+        """Return True when a/b looks like DD/MM, MM/DD, or is followed by a year.
+
+        When *has_label_context* is True the match came from a line with a
+        recognized section-label pattern, so we only reject it if there is an
+        explicit trailing year indicator — raw numeric-range heuristics are
+        skipped because they produce false positives on valid small-scale scores
+        like 3/5, 4/5, 1/1, 7/10.
+        """
         if trailing and re.match(r"\s*/\s*\d{4}\b", trailing):
             return True
         if trailing and re.match(r"\s*/\s*\d{2}\b", trailing):
             return True
+        if has_label_context:
+            return False
         ia, ib = int(a), int(b)
         if a != ia or b != ib:
             return False
@@ -861,7 +876,7 @@ class ExternalAuditAnalysisService:
             if line.lower().startswith(("page ", "sheet ")):
                 continue
             match = re.search(
-                r"(?P<label>[A-Za-z][A-Za-z0-9/&().,\- ]{3,80})[:\s-]+(?P<score>\d{1,3}(?:\.\d+)?)\s*/\s*(?P<max>\d{1,3}(?:\.\d+)?)",
+                r"(?P<label>[A-Za-z][A-Za-z0-9/&().,'\-:# ]{3,80})[:\s-]+(?P<score>\d{1,3}(?:\.\d+)?)\s*/\s*(?P<max>\d{1,3}(?:\.\d+)?)",
                 line,
             )
             if not match:
@@ -875,7 +890,7 @@ class ExternalAuditAnalysisService:
                 continue
 
             trailing = line[match.end() :]
-            if self._looks_like_date(score, max_score, trailing):
+            if self._looks_like_date(score, max_score, trailing, has_label_context=len(label) >= 4):
                 continue
 
             if score > max_score:
@@ -893,7 +908,9 @@ class ExternalAuditAnalysisService:
                     "percentage": pct,
                 }
             )
-        return self._dedupe_dicts(breakdown[:20], key_fields=("label",))
+        if len(breakdown) > 30:
+            breakdown = breakdown[:30]
+        return self._dedupe_dicts(breakdown, key_fields=("label",))
 
     def _extract_report_date(self, text: str) -> datetime | None:
         label_match = self._CONTEXTUAL_DATE_LABELS.search(text)

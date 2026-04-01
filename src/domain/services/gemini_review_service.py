@@ -86,7 +86,10 @@ Return a JSON object with this exact structure (no markdown fences):
       "finding_type": "nonconformity | major_nonconformity | minor_nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap | flagged_item | question_answered_no",
       "confidence": <0.0 to 1.0>,
       "clause_reference": "e.g. ISO 9001:2015 clause 9.1.3, or null",
-      "corrective_action_deadline": "YYYY-MM-DD or null"
+      "corrective_action_deadline": "YYYY-MM-DD or null",
+      "evidence_items": [
+        {"question": "Original inspection question text", "answer": "Yes | No | N/A", "score": "1/1 or 0/1 or null"}
+      ]
     }
   ],
   "visual_indicators": [
@@ -131,6 +134,15 @@ Rules:
   * "observation" — noted for awareness, no corrective action required
   * "opportunity_for_improvement" — suggested improvement, not a deficiency
   * "positive_practice" — good practice noted by the auditor
+- IMPORTANT: Only include "positive_practice" findings for genuinely exemplary
+  or noteworthy practices. Do NOT create findings for routine compliant answers.
+  For checklist-style documents, focus on non-conformities, flagged items, and
+  observations. Limit positive_practice findings to a maximum of 5.
+- Do NOT create "question_answered_no" findings for questions answered "Yes" or
+  answered compliantly.
+- For each finding, populate "evidence_items" with structured question/answer
+  pairs extracted from the document. Each item should have the original
+  inspection question, the answer given, and any score.
 - For each finding, preserve the original document text verbatim in the
   description field. Prefix with page number, e.g. "[p.12] Original text
   here". Do not rephrase or summarise evidence.
@@ -315,6 +327,7 @@ class GeminiReviewService:
             max_s = None
 
         findings = []
+        dropped_low_conf = 0
         for f in (parsed.get("findings") or [])[:50]:
             if not isinstance(f, dict):
                 continue
@@ -322,8 +335,21 @@ class GeminiReviewService:
             raw_ft = str(f.get("finding_type", "finding"))
             raw_conf = self._safe_float(f.get("confidence"))
             conf: float = min(max(raw_conf if raw_conf is not None else 0.6, 0.0), 1.0)
+            if conf < 0.50:
+                dropped_low_conf += 1
+                continue
             clause_ref = str(f.get("clause_reference", ""))[:255] or None
             deadline = str(f.get("corrective_action_deadline", ""))[:20] or None
+            evidence_items = f.get("evidence_items") or []
+            if not isinstance(evidence_items, list):
+                evidence_items = []
+            evidence_snippets: list[str] = []
+            for ei in evidence_items[:20]:
+                if isinstance(ei, dict) and ei.get("question"):
+                    parts = [str(ei["question"]), str(ei.get("answer", ""))]
+                    if ei.get("score"):
+                        parts.append(str(ei["score"]))
+                    evidence_snippets.append(" | ".join(parts))
             findings.append(
                 {
                     "title": str(f.get("title", ""))[:300],
@@ -334,12 +360,16 @@ class GeminiReviewService:
                     "clause_reference": clause_ref,
                     "corrective_action_deadline": deadline,
                     "_provider": "gemini",
+                    "_evidence_snippets": evidence_snippets or None,
                 }
             )
 
         warnings = list(parsed.get("warnings") or [])
+        if dropped_low_conf:
+            warnings.append(f"{dropped_low_conf} finding(s) dropped due to confidence below 0.50")
 
         visual_indicators: list[dict[str, object]] = []
+        _MAX_VISUAL_WARNINGS = 10
         for vi in parsed.get("visual_indicators") or []:
             visual_indicators.append(
                 {
@@ -349,10 +379,14 @@ class GeminiReviewService:
                     "interpretation": vi.get("interpretation"),
                 }
             )
-            warnings.append(
-                f"Visual: page {vi.get('page', '?')} — {vi.get('element', '?')}: "
-                f"{vi.get('context', '')} → {vi.get('interpretation', '?')}"
-            )
+            if len([w for w in warnings if w.startswith("Visual:")]) < _MAX_VISUAL_WARNINGS:
+                warnings.append(
+                    f"Visual: page {vi.get('page', '?')} — {vi.get('element', '?')}: "
+                    f"{vi.get('context', '')} → {vi.get('interpretation', '?')}"
+                )
+        extra_vis = len(visual_indicators) - _MAX_VISUAL_WARNINGS
+        if extra_vis > 0:
+            warnings.append(f"...and {extra_vis} more visual indicator(s) detected")
 
         raw_outcome = parsed.get("outcome")
         validated_outcome = raw_outcome if raw_outcome in _VALID_OUTCOMES else None

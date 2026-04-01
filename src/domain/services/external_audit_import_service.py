@@ -411,7 +411,16 @@ class ExternalAuditImportService:
                 job.positive_summary_json = analysis.positive_summary or None
                 job.nonconformity_summary_json = analysis.nonconformity_summary or None
                 job.improvement_summary_json = analysis.improvement_summary or None
-                job.processing_warnings_json = analysis.processing_warnings or None
+                warnings = list(analysis.processing_warnings or [])
+                declared = (run.assurance_scheme or "").strip().lower()
+                detected = (analysis.detected_scheme or "").strip().lower()
+                if declared and detected and declared != detected:
+                    warnings.append(
+                        f"Declared scheme '{run.assurance_scheme}' does not match "
+                        f"detected scheme '{analysis.detected_scheme}'. "
+                        f"Please verify the document matches the intended audit type."
+                    )
+                job.processing_warnings_json = warnings or None
                 job.promotion_summary_json = self._build_promotion_summary(findings=analysis.findings)
                 job.error_code = None
                 job.error_detail = None
@@ -496,46 +505,57 @@ class ExternalAuditImportService:
         if resolved_tenant_id is None:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
 
-        promoted_findings, document_clause_ids = await self._promote_accepted_drafts(
-            accepted=accepted,
-            user_id=user_id,
-            resolved_tenant_id=resolved_tenant_id,
-        )
-
-        if document_clause_ids:
-            await self._link_source_document_evidence(
-                asset_id=job.source_document_asset_id,
-                clause_ids=sorted(document_clause_ids),
-                tenant_id=resolved_tenant_id,
+        try:
+            promoted_findings, document_clause_ids = await self._promote_accepted_drafts(
+                accepted=accepted,
                 user_id=user_id,
-                title=job.source_filename,
+                resolved_tenant_id=resolved_tenant_id,
             )
 
-        self._apply_run_completion(run, job)
+            if document_clause_ids:
+                await self._link_source_document_evidence(
+                    asset_id=job.source_document_asset_id,
+                    clause_ids=sorted(document_clause_ids),
+                    tenant_id=resolved_tenant_id,
+                    user_id=user_id,
+                    title=job.source_filename,
+                )
 
-        scheme_alignment = await self._sync_scheme_records(
-            job=job,
-            run=run,
-            tenant_id=resolved_tenant_id,
-            drafts=accepted,
-        )
-        job.status = ExternalAuditImportStatus.COMPLETED
-        job.promoted_at = datetime.now(timezone.utc)
-        job.updated_by_id = user_id
-        job.promotion_summary_json = {
-            **(job.promotion_summary_json or {}),
-            "promoted_findings": promoted_findings,
-            "evidence_link_candidates": len(document_clause_ids),
-            "scheme_alignment": scheme_alignment,
-        }
-        await self.db.flush()
-        await self.db.refresh(job)
+            self._apply_run_completion(run, job)
+
+            scheme_alignment = await self._sync_scheme_records(
+                job=job,
+                run=run,
+                tenant_id=resolved_tenant_id,
+                drafts=accepted,
+            )
+            job.status = ExternalAuditImportStatus.COMPLETED
+            job.promoted_at = datetime.now(timezone.utc)
+            job.updated_by_id = user_id
+            job.promotion_summary_json = {
+                **(job.promotion_summary_json or {}),
+                "promoted_findings": promoted_findings,
+                "evidence_link_candidates": len(document_clause_ids),
+                "scheme_alignment": scheme_alignment,
+            }
+            await self.db.flush()
+            await self.db.refresh(job)
+        except Exception as exc:
+            logger.error("Promotion failed for job %s: %s", job_id, exc, exc_info=True)
+            job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+            job.updated_by_id = user_id
+            existing_warnings = job.processing_warnings_json or []
+            existing_warnings.append(f"Promotion failed: {str(exc)[:300]}")
+            job.processing_warnings_json = existing_warnings
+            await self.db.flush()
+            raise
 
         try:
             from src.domain.services.cache_service import invalidate_tenant_cache
 
             await invalidate_tenant_cache(resolved_tenant_id, "audits")
             await invalidate_tenant_cache(resolved_tenant_id, "governance")
+            await invalidate_tenant_cache(resolved_tenant_id, "uvdb")
         except Exception:
             logger.debug("Cache invalidation after promotion skipped (not available)")
 
@@ -548,63 +568,79 @@ class ExternalAuditImportService:
         user_id: int,
         resolved_tenant_id: int,
     ) -> tuple[list[int], set[str]]:
-        """Promote each accepted draft into a live finding inside a savepoint."""
+        """Promote each accepted draft into a live finding with per-draft savepoints."""
         audit_service = AuditService(self.db)
         promoted_findings: list[int] = []
         document_clause_ids: set[str] = set()
         default_due_date = datetime.now(timezone.utc) + timedelta(days=30)
+        failed_drafts: list[tuple[int, str]] = []
 
-        async with self.db.begin_nested():
-            for draft in accepted:
-                if draft.promoted_finding_id:
-                    draft.status = ExternalAuditDraftStatus.PROMOTED
-                    continue
-                clause_ids = self._extract_clause_ids(draft)
-                requires_action = draft.finding_type in {
-                    "nonconformity",
-                    "major_nonconformity",
-                    "minor_nonconformity",
-                    "competence_gap",
-                    "finding",
-                }
-                finding_data: dict = {
-                    "title": draft.title,
-                    "description": draft.description,
-                    "severity": draft.severity,
-                    "finding_type": draft.finding_type,
-                    "clause_ids": clause_ids,
-                    "risk_ids": [],
-                    "corrective_action_required": requires_action,
-                }
-                if requires_action:
-                    finding_data["corrective_action_due_date"] = default_due_date
-                if draft.suggested_action_title:
-                    finding_data["_suggested_action_title"] = draft.suggested_action_title
-                if draft.suggested_action_description:
-                    finding_data["_suggested_action_description"] = draft.suggested_action_description
-                if draft.suggested_risk_title:
-                    finding_data["_suggested_risk_title"] = draft.suggested_risk_title
-
-                draft_tid = draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id
-                finding = await audit_service.create_finding(
-                    draft.audit_run_id, finding_data, user_id=user_id, tenant_id=draft_tid
-                )
-                finding_id = await self._resolve_persisted_finding_id(
-                    finding_id=getattr(finding, "id", None), tenant_id=draft_tid
-                )
-                await self._link_evidence_for_finding(
-                    finding_id=finding_id,
-                    clause_ids=clause_ids,
-                    tenant_id=draft_tid,
-                    user_id=user_id,
-                    note=draft.description,
-                    confidence=draft.confidence_score,
-                )
-                draft.promoted_finding_id = finding_id
+        for draft in accepted:
+            if draft.promoted_finding_id:
                 draft.status = ExternalAuditDraftStatus.PROMOTED
-                draft.updated_by_id = user_id
-                promoted_findings.append(finding_id)
-                document_clause_ids.update(clause_ids)
+                continue
+            try:
+                async with self.db.begin_nested():
+                    clause_ids = self._extract_clause_ids(draft)
+                    requires_action = draft.finding_type in {
+                        "nonconformity",
+                        "major_nonconformity",
+                        "minor_nonconformity",
+                        "competence_gap",
+                        "finding",
+                    }
+                    finding_data: dict = {
+                        "title": draft.title,
+                        "description": draft.description,
+                        "severity": draft.severity,
+                        "finding_type": draft.finding_type,
+                        "clause_ids": clause_ids,
+                        "risk_ids": [],
+                        "corrective_action_required": requires_action,
+                    }
+                    if requires_action:
+                        finding_data["corrective_action_due_date"] = default_due_date
+                    if draft.suggested_action_title:
+                        finding_data["_suggested_action_title"] = draft.suggested_action_title
+                    if draft.suggested_action_description:
+                        finding_data["_suggested_action_description"] = draft.suggested_action_description
+                    if draft.suggested_risk_title:
+                        finding_data["_suggested_risk_title"] = draft.suggested_risk_title
+
+                    draft_tid = draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id
+                    finding = await audit_service.create_finding(
+                        draft.audit_run_id, finding_data, user_id=user_id, tenant_id=draft_tid
+                    )
+                    finding_id = await self._resolve_persisted_finding_id(
+                        finding_id=getattr(finding, "id", None), tenant_id=draft_tid
+                    )
+                    await self._link_evidence_for_finding(
+                        finding_id=finding_id,
+                        clause_ids=clause_ids,
+                        tenant_id=draft_tid,
+                        user_id=user_id,
+                        note=draft.description,
+                        confidence=draft.confidence_score,
+                    )
+                    draft.promoted_finding_id = finding_id
+                    draft.status = ExternalAuditDraftStatus.PROMOTED
+                    draft.updated_by_id = user_id
+                    promoted_findings.append(finding_id)
+                    document_clause_ids.update(clause_ids)
+            except Exception as exc:
+                logger.error("Failed to promote draft %s: %s", draft.id, exc, exc_info=True)
+                failed_drafts.append((draft.id, str(exc)[:200]))
+
+        if failed_drafts and not promoted_findings:
+            raise RuntimeError(
+                f"All {len(failed_drafts)} drafts failed to promote. " f"First error: {failed_drafts[0][1]}"
+            )
+        if failed_drafts:
+            logger.warning(
+                "Partial promotion: %d succeeded, %d failed",
+                len(promoted_findings),
+                len(failed_drafts),
+            )
 
         return promoted_findings, document_clause_ids
 
@@ -753,16 +789,22 @@ class ExternalAuditImportService:
             return inferred
         raise ValidationError("Unsupported source document type for external audit import")
 
+    _ACTION_FINDING_TYPES = {
+        "nonconformity",
+        "major_nonconformity",
+        "minor_nonconformity",
+        "competence_gap",
+        "finding",
+    }
+
     def _build_promotion_summary(self, *, findings: list) -> dict[str, object]:
         action_candidates = sum(
-            1
-            for finding in findings
-            if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+            1 for finding in findings if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
         )
         risk_candidates = sum(
             1
             for finding in findings
-            if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+            if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
             and getattr(finding, "severity", "") in {"high", "critical"}
         )
         evidence_link_candidates = len(
@@ -789,9 +831,7 @@ class ExternalAuditImportService:
                 if getattr(finding, "finding_type", "") in {"opportunity_for_improvement", "observation"}
             ),
             "nonconformities": sum(
-                1
-                for finding in findings
-                if getattr(finding, "finding_type", "") in {"nonconformity", "competence_gap", "finding"}
+                1 for finding in findings if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
             ),
         }
 
@@ -887,6 +927,14 @@ class ExternalAuditImportService:
             link.title = title or f"Imported audit source document {asset_id}"
         await self.db.flush()
 
+    def _count_findings(self, drafts: list[ExternalAuditDraft]) -> tuple[int, int, int, int]:
+        nc_types = self._ACTION_FINDING_TYPES
+        findings_count = sum(1 for d in drafts if d.finding_type in nc_types)
+        major = sum(1 for d in drafts if d.finding_type in nc_types and d.severity in {"high", "critical"})
+        minor = sum(1 for d in drafts if d.finding_type in nc_types and d.severity == "medium")
+        obs = sum(1 for d in drafts if d.finding_type == "observation")
+        return findings_count, major, minor, obs
+
     async def _sync_scheme_records(
         self,
         *,
@@ -895,16 +943,68 @@ class ExternalAuditImportService:
         tenant_id: int | None,
         drafts: list[ExternalAuditDraft],
     ) -> dict[str, object]:
-        home_route, home_label = self._scheme_home(job.detected_scheme)
-        if job.detected_scheme != "achilles_uvdb":
-            return {
-                "status": "completed_outcome_routed",
-                "scheme": job.detected_scheme,
-                "home_route": home_route,
-                "home_label": home_label,
-                "reason": "This imported external audit is routed into the relevant completed compliance area without executable audit-run semantics.",
-            }
+        from src.domain.models.external_audit_record import ExternalAuditRecord
 
+        home_route, home_label = self._scheme_home(job.detected_scheme)
+        findings_count, major, minor, obs = self._count_findings(drafts)
+
+        record = ExternalAuditRecord(
+            tenant_id=tenant_id,
+            scheme=job.detected_scheme or "unknown",
+            scheme_version=job.scheme_version,
+            scheme_label=job.detected_scheme,
+            audit_run_id=job.audit_run_id,
+            import_job_id=job.id,
+            issuer_name=job.issuer_name,
+            company_name=run.title or run.location,
+            report_date=job.report_date,
+            overall_score=job.overall_score,
+            max_score=job.max_score,
+            score_percentage=job.score_percentage,
+            section_scores=job.score_breakdown_json,
+            outcome_status=job.outcome_status,
+            findings_count=findings_count,
+            major_findings=major,
+            minor_findings=minor,
+            observations=obs,
+            analysis_summary=job.analysis_summary,
+            status="completed",
+        )
+        self.db.add(record)
+        await self.db.flush()
+
+        uvdb_audit_id = None
+        if job.detected_scheme == "achilles_uvdb":
+            uvdb_audit_id = await self._sync_uvdb_audit(
+                job=job,
+                run=run,
+                tenant_id=tenant_id,
+                findings_count=findings_count,
+                major=major,
+                minor=minor,
+                obs=obs,
+            )
+
+        return {
+            "status": "synced",
+            "scheme": job.detected_scheme,
+            "external_audit_record_id": record.id,
+            "uvdb_audit_id": uvdb_audit_id,
+            "home_route": home_route,
+            "home_label": home_label,
+        }
+
+    async def _sync_uvdb_audit(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        tenant_id: int | None,
+        findings_count: int,
+        major: int,
+        minor: int,
+        obs: int,
+    ) -> int | None:
         result = await self.db.execute(
             select(UVDBAudit).where(
                 UVDBAudit.tenant_id == tenant_id,
@@ -930,27 +1030,10 @@ class ExternalAuditImportService:
         uvdb_audit.percentage_score = job.score_percentage
         uvdb_audit.section_scores = {"sections": job.score_breakdown_json or []}
         uvdb_audit.status = "completed"
-        uvdb_audit.findings_count = sum(
-            1 for draft in drafts if draft.finding_type in {"nonconformity", "competence_gap", "finding"}
-        )
-        uvdb_audit.major_findings = sum(
-            1
-            for draft in drafts
-            if draft.finding_type in {"nonconformity", "competence_gap", "finding"}
-            and draft.severity in {"high", "critical"}
-        )
-        uvdb_audit.minor_findings = sum(
-            1
-            for draft in drafts
-            if draft.finding_type in {"nonconformity", "competence_gap", "finding"} and draft.severity == "medium"
-        )
-        uvdb_audit.observations = sum(1 for draft in drafts if draft.finding_type == "observation")
+        uvdb_audit.findings_count = findings_count
+        uvdb_audit.major_findings = major
+        uvdb_audit.minor_findings = minor
+        uvdb_audit.observations = obs
         uvdb_audit.audit_notes = job.analysis_summary
         await self.db.flush()
-        return {
-            "status": "synced",
-            "scheme": "achilles_uvdb",
-            "uvdb_audit_id": uvdb_audit.id,
-            "home_route": home_route,
-            "home_label": home_label,
-        }
+        return uvdb_audit.id
