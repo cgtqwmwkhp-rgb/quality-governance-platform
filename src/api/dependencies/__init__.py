@@ -6,8 +6,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.core.security import decode_token
+from src.domain.models.tenant import TenantUser
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
 
@@ -38,9 +40,6 @@ async def get_current_user(
         raise credentials_exception
     user_id: str = str(user_id_raw)
 
-    # Get user from database with roles eagerly loaded
-    from sqlalchemy.orm import selectinload
-
     result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
@@ -53,6 +52,7 @@ async def get_current_user(
             detail="User account is disabled",
         )
 
+    await _resolve_user_tenant_context(db, user)
     return user
 
 
@@ -122,16 +122,34 @@ async def get_optional_current_user(
         return None
     user_id: str = str(user_id_raw)
 
-    # Get user from database with roles eagerly loaded
-    from sqlalchemy.orm import selectinload
-
     result = await db.execute(select(User).where(User.id == int(user_id)).options(selectinload(User.roles)))
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
         return None
 
+    await _resolve_user_tenant_context(db, user)
     return user
+
+
+async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
+    """Backfill in-request tenant context from active tenant membership."""
+    if user.tenant_id is not None:
+        return
+
+    membership_result = await db.execute(
+        select(TenantUser)
+        .where(
+            TenantUser.user_id == user.id,
+            TenantUser.is_active == True,
+        )
+        .order_by(TenantUser.is_primary.desc(), TenantUser.id.asc())
+    )
+    membership = membership_result.scalars().first()
+    if membership is None:
+        return
+
+    user.tenant_id = membership.tenant_id
 
 
 # Type aliases for cleaner route signatures

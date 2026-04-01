@@ -18,7 +18,10 @@ import {
 } from 'lucide-react'
 import {
   auditsApi,
+  createApiError,
+  ErrorClass,
   externalAuditImportsApi,
+  getApiErrorMessage,
   type AuditRunDetail,
   type ExternalAuditImportDraft,
   type ExternalAuditImportJob,
@@ -205,6 +208,31 @@ function formatDate(value: string | null | undefined): string {
   }
 }
 
+function describeReconciliationFailure(error: unknown): string {
+  const apiError = createApiError(error)
+  if (apiError.error_class === ErrorClass.NOT_FOUND) {
+    return 'Downstream workflow diagnostics are unavailable for this job on the current backend.'
+  }
+  if (apiError.error_class === ErrorClass.VALIDATION_ERROR) {
+    return `Downstream workflow diagnostics unavailable: ${getApiErrorMessage(error)}`
+  }
+  if (apiError.error_class === ErrorClass.SERVER_ERROR) {
+    return 'Downstream workflow diagnostics are temporarily unavailable while the backend recovers.'
+  }
+  return 'Downstream workflow diagnostics could not be loaded right now.'
+}
+
+function describePromotionFailure(error: unknown): string {
+  const apiError = createApiError(error)
+  if (apiError.error_class === ErrorClass.VALIDATION_ERROR) {
+    return getApiErrorMessage(error)
+  }
+  if (apiError.error_class === ErrorClass.SERVER_ERROR) {
+    return 'Promotion is temporarily unavailable while the backend recovers. Please retry shortly.'
+  }
+  return 'Promotion failed. Review the accepted drafts and try again.'
+}
+
 function readProvenanceString(job: ExternalAuditImportJob | null, key: string) {
   const value = job?.provenance_json?.[key]
   return typeof value === 'string' && value.trim() ? value : null
@@ -306,6 +334,7 @@ export default function AuditImportReview() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
   const processingTriggered = useRef(false)
 
   const load = useCallback(async () => {
@@ -323,6 +352,7 @@ export default function AuditImportReview() {
       setLoading(true)
     }
     setError(null)
+    setReconciliationNotice(null)
     try {
       let resolvedJobRes = null
       if (jobId) {
@@ -335,10 +365,16 @@ export default function AuditImportReview() {
         throw new Error('Import job could not be resolved')
       }
 
-      const [jobRes, draftsRes, reconciliationRes] = await Promise.all([
+      const [jobRes, draftsRes, reconciliationResult] = await Promise.all([
         Promise.resolve(resolvedJobRes),
         externalAuditImportsApi.listDrafts(resolvedJobRes.data.id),
-        externalAuditImportsApi.getReconciliation(resolvedJobRes.data.id).catch(() => null),
+        externalAuditImportsApi
+          .getReconciliation(resolvedJobRes.data.id)
+          .then((res) => ({ data: res.data, notice: null }))
+          .catch((reconciliationErr) => ({
+            data: null,
+            notice: describeReconciliationFailure(reconciliationErr),
+          })),
       ])
       if (
         Number.isFinite(routeAuditId) &&
@@ -363,16 +399,20 @@ export default function AuditImportReview() {
       setJob(jobRes.data)
       setAuditRun(auditRunDetail)
       setDrafts(draftsRes.data)
-      setReconciliation(reconciliationRes?.data ?? null)
+      setReconciliation(reconciliationResult.data)
+      setReconciliationNotice(reconciliationResult.notice)
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
       setReconciliation(null)
+      setReconciliationNotice(null)
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404 && !jobId) {
         setError(
           'No import job has been created for this audit yet. Attach a source report and queue the import first.',
         )
+      } else if (status === 422) {
+        setError(getApiErrorMessage(err))
       } else {
         setError('Failed to load the import review workspace. Please retry.')
       }
@@ -514,8 +554,14 @@ export default function AuditImportReview() {
     try {
       const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
       await load()
-      const reconciliationRes = await externalAuditImportsApi.getReconciliation(job.id).catch(() => null)
-      const nextReconciliation = reconciliationRes?.data ?? null
+      let nextReconciliation: ExternalAuditPromotionReconciliation | null = null
+      try {
+        const reconciliationRes = await externalAuditImportsApi.getReconciliation(job.id)
+        nextReconciliation = reconciliationRes.data
+        setReconciliationNotice(null)
+      } catch (reconciliationErr) {
+        setReconciliationNotice(describeReconciliationFailure(reconciliationErr))
+      }
       setReconciliation(nextReconciliation)
       if (nextReconciliation?.failed_total) {
         setSuccessMessage(
@@ -534,7 +580,7 @@ export default function AuditImportReview() {
       }
     } catch (err) {
       console.error('Failed to promote imported audit findings', err)
-      setError('Promotion failed. Review the accepted drafts and try again.')
+      setError(describePromotionFailure(err))
     } finally {
       setIsPromoting(false)
     }
@@ -664,6 +710,15 @@ export default function AuditImportReview() {
             <Button variant="outline" size="sm" onClick={() => setSuccessMessage(null)}>
               Dismiss
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {reconciliationNotice ? (
+        <Card className="border-amber-300 bg-amber-50" role="status">
+          <CardContent className="flex items-center gap-3 p-5">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <p className="text-sm text-amber-900">{reconciliationNotice}</p>
           </CardContent>
         </Card>
       ) : null}
