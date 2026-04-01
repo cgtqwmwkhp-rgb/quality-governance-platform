@@ -1284,7 +1284,7 @@ class AuditService:
         actor_user_id: int,
         suggested_title: str | None = None,
     ) -> EnterpriseRisk | None:
-        if finding.severity not in {"critical", "high"}:
+        if finding.severity not in {"critical", "high", "medium"}:
             return None
 
         title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
@@ -1307,8 +1307,12 @@ class AuditService:
                 finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
             return existing
 
-        likelihood = 4 if finding.severity == "critical" else 3
-        impact = 5 if finding.severity == "critical" else 4
+        if finding.severity == "critical":
+            likelihood, impact = 4, 5
+        elif finding.severity == "high":
+            likelihood, impact = 3, 4
+        else:
+            likelihood, impact = 2, 3
         score = likelihood * impact
 
         risk = EnterpriseRisk(

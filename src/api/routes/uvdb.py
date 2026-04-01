@@ -579,7 +579,10 @@ async def list_audits(
     limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
     """List UVDB audits with filtering"""
+    tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
     filters = []
+    if tenant_id is not None:
+        filters.append(UVDBAudit.tenant_id == tenant_id)
     if status:
         filters.append(UVDBAudit.status == status)
     if company_name:
@@ -904,24 +907,29 @@ async def get_uvdb_dashboard(
     current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
-    total_result = await db.execute(select(func.count()).select_from(UVDBAudit))
+    tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
+    tenant_filter = [UVDBAudit.tenant_id == tenant_id] if tenant_id is not None else []
+
+    total_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*tenant_filter))
     total_audits = total_result.scalar()
 
     active_result = await db.execute(
-        select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status.in_(["scheduled", "in_progress"]))
+        select(func.count())
+        .select_from(UVDBAudit)
+        .where(UVDBAudit.status.in_(["scheduled", "in_progress"]), *tenant_filter)
     )
     active_audits = active_result.scalar()
 
     completed_result = await db.execute(
-        select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status == "completed")
+        select(func.count()).select_from(UVDBAudit).where(UVDBAudit.status == "completed", *tenant_filter)
     )
     completed_audits = completed_result.scalar()
 
-    # Average score
     avg_result = await db.execute(
         select(func.avg(UVDBAudit.percentage_score)).where(
             UVDBAudit.status == "completed",
             UVDBAudit.percentage_score.isnot(None),
+            *tenant_filter,
         )
     )
     avg_score = avg_result.scalar() or 0
