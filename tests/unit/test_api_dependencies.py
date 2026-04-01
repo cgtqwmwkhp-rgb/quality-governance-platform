@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.api.dependencies import _resolve_user_tenant_context
 from src.domain.models.tenant import TenantUser
