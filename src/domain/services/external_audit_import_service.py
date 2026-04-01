@@ -588,6 +588,8 @@ class ExternalAuditImportService:
                         "minor_nonconformity",
                         "competence_gap",
                         "finding",
+                        "flagged_item",
+                        "question_answered_no",
                     }
                     finding_data: dict = {
                         "title": draft.title,
@@ -795,6 +797,8 @@ class ExternalAuditImportService:
         "minor_nonconformity",
         "competence_gap",
         "finding",
+        "flagged_item",
+        "question_answered_no",
     }
 
     def _build_promotion_summary(self, *, findings: list) -> dict[str, object]:
@@ -974,7 +978,7 @@ class ExternalAuditImportService:
         await self.db.flush()
 
         uvdb_audit_id = None
-        if job.detected_scheme == "achilles_uvdb":
+        if self._is_uvdb_scheme(job, run):
             uvdb_audit_id = await self._sync_uvdb_audit(
                 job=job,
                 run=run,
@@ -993,6 +997,38 @@ class ExternalAuditImportService:
             "home_route": home_route,
             "home_label": home_label,
         }
+
+    @staticmethod
+    def _is_uvdb_scheme(job: ExternalAuditImportJob, run: AuditRun) -> bool:
+        """Determine if this import should sync to the UVDB audits table.
+
+        Checks detected_scheme first, then falls back to the declared
+        assurance_scheme on the audit run and provenance metadata.
+        """
+        _UVDB_KEYWORDS = {"achilles", "uvdb", "b2", "verify"}
+
+        detected = (job.detected_scheme or "").strip().lower()
+        if detected == "achilles_uvdb":
+            return True
+        if any(kw in detected for kw in _UVDB_KEYWORDS):
+            return True
+
+        declared = (getattr(run, "assurance_scheme", None) or "").strip().lower()
+        if any(kw in declared for kw in _UVDB_KEYWORDS):
+            return True
+
+        provenance = job.provenance_json or {}
+        declared_info = provenance.get("declared_vs_detected", {})
+        if isinstance(declared_info, dict):
+            declared_src = str(declared_info.get("declared_assurance_scheme", "")).lower()
+            if any(kw in declared_src for kw in _UVDB_KEYWORDS):
+                return True
+
+        source_fn = (job.source_filename or "").lower()
+        if any(kw in source_fn for kw in {"b2", "uvdb", "achilles", "verify"}):
+            return True
+
+        return False
 
     async def _sync_uvdb_audit(
         self,
