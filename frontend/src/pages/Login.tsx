@@ -103,38 +103,58 @@ export default function Login({ onLogin }: LoginProps) {
   const spinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const slowWarningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Exchange Azure AD id_token for platform JWT
+  // Exchange Azure AD id_token for platform JWT (with retry for cold-start resilience)
   const exchangeToken = async (
     idToken: string,
   ): Promise<{ accessToken: string; refreshToken?: string } | null> => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15000)
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_token: idToken }),
-        signal: controller.signal,
-      })
+    const MAX_ATTEMPTS = 3
+    const TIMEOUT_MS = 30_000
 
-      if (!response.ok) {
-        if (import.meta.env.DEV) {
-          console.error('[AdminAuth] Token exchange failed:', response.status)
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/auth/token-exchange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken }),
+          signal: controller.signal,
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          return {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+          }
         }
-        return null
+
+        // 4xx errors (except 408/429) are not retryable
+        if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+          if (import.meta.env.DEV) {
+            console.error(`[AdminAuth] Token exchange rejected (${response.status}), not retrying`)
+          }
+          return null
+        }
+
+        if (import.meta.env.DEV) {
+          console.warn(`[AdminAuth] Token exchange attempt ${attempt}/${MAX_ATTEMPTS} failed: ${response.status}`)
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn(`[AdminAuth] Token exchange attempt ${attempt}/${MAX_ATTEMPTS} error:`, err)
+        }
+      } finally {
+        clearTimeout(timeout)
       }
 
-      const data = await response.json()
-      return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
+      // Backoff before retry (1s, 2s)
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, attempt * 1000))
       }
-    } catch (err) {
-      if (import.meta.env.DEV) console.error('[AdminAuth] Token exchange error:', err)
-      return null
-    } finally {
-      clearTimeout(timeout)
     }
+
+    return null
   }
 
   // Handle OAuth callback (check URL for tokens)
@@ -186,18 +206,25 @@ export default function Login({ onLogin }: LoginProps) {
     return false
   }, [onLogin])
 
+  // Pre-warm the backend on mount so cold-start latency is absorbed before
+  // the user actually submits credentials or returns from SSO redirect.
+  useEffect(() => {
+    fetch(`${API_BASE}/api/health`, { method: 'GET', mode: 'no-cors' }).catch(() => {})
+  }, [])
+
   // Check for OAuth callback on mount
   useEffect(() => {
     handleOAuthCallback()
   }, [handleOAuthCallback])
 
-  // Auto-recover from stuck SSO loading state (e.g. backend timeout)
+  // Auto-recover from stuck SSO loading state (e.g. backend timeout).
+  // Budget: 3 attempts x 30s timeout + backoff ≈ 95s; allow 100s.
   useEffect(() => {
     if (!ssoLoading) return
     const recovery = setTimeout(() => {
       setSsoLoading(false)
       setSsoError('Microsoft sign-in timed out. Please try again.')
-    }, 20000)
+    }, 100_000)
     return () => clearTimeout(recovery)
   }, [ssoLoading])
 
