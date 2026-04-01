@@ -7,6 +7,7 @@ const mockGetJob = vi.fn()
 const mockGetLatestJobForRun = vi.fn()
 const mockGetRunDetail = vi.fn()
 const mockListDrafts = vi.fn()
+const mockGetReconciliation = vi.fn()
 const mockQueueJob = vi.fn()
 const mockProcessJob = vi.fn()
 const mockReviewDraft = vi.fn()
@@ -20,6 +21,7 @@ vi.mock('../../api/client', () => ({
     getJob: (...args: unknown[]) => mockGetJob(...args),
     getLatestJobForRun: (...args: unknown[]) => mockGetLatestJobForRun(...args),
     listDrafts: (...args: unknown[]) => mockListDrafts(...args),
+    getReconciliation: (...args: unknown[]) => mockGetReconciliation(...args),
     queueJob: (...args: unknown[]) => mockQueueJob(...args),
     processJob: (...args: unknown[]) => mockProcessJob(...args),
     reviewDraft: (...args: unknown[]) => mockReviewDraft(...args),
@@ -40,6 +42,7 @@ function renderPage(initialEntry = '/audits/41/import-review?jobId=72') {
 describe('AuditImportReview', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetReconciliation.mockResolvedValue({ data: null })
     mockGetLatestJobForRun.mockResolvedValue({
       data: {
         id: 72,
@@ -274,6 +277,72 @@ describe('AuditImportReview', () => {
       ).not.toBeInTheDocument()
     })
     expect(screen.getByText('accepted')).toBeInTheDocument()
+  })
+
+  it('shows downstream workflow proof from reconciliation data', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'completed',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({ data: [] })
+    mockGetReconciliation.mockResolvedValue({
+      data: {
+        job_id: 72,
+        audit_run_id: 41,
+        audit_reference: 'AUD-00041',
+        job_status: 'completed',
+        canonical_read_model: 'specialist_sync_verification',
+        specialist_home: { path: '/uvdb', label: 'Achilles / UVDB' },
+        accepted_total: 1,
+        promoted_total: 1,
+        accepted_pending_total: 0,
+        failed_total: 0,
+        failed_drafts: [],
+        materialized: {
+          audit_findings: 1,
+          capa_actions: 1,
+          enterprise_risks: 1,
+          uvdb_audit_id: 18,
+          external_audit_record_id: 22,
+        },
+        proof_matrix: [
+          { step: 'upload', status: 'ok', detail: 'report.pdf' },
+          { step: 'promotion', status: 'ok', detail: '1 finding(s) materialized' },
+        ],
+        draft_results: [],
+        view_links: {
+          actions: '/actions?sourceType=audit_finding',
+          risk_register: '/risk-register?auditOnly=1&auditRef=AUD-00041',
+          uvdb: '/uvdb?auditRef=AUD-00041',
+        },
+      },
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('Downstream Workflow Proof')).toBeInTheDocument()
+    expect(screen.getByText(/Canonical read model:\s*specialist sync verification\./i)).toBeInTheDocument()
+    expect(screen.getByText('CAPA Actions')).toBeInTheDocument()
+    expect(screen.getByText('Enterprise Risks')).toBeInTheDocument()
+    expect(screen.getByText('View Audit Actions')).toBeInTheDocument()
   })
 
   it('shows queue recovery guidance and retries queueing pending imports', async () => {

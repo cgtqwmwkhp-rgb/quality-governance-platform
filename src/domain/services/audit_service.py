@@ -1625,6 +1625,9 @@ class AuditService:
         )
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")
+        await invalidate_tenant_cache(tenant_id, "capa")
+        await invalidate_tenant_cache(tenant_id, "risk-register")
+        await invalidate_tenant_cache(tenant_id, "risks")
         track_metric("audits.findings")
         return finding
 

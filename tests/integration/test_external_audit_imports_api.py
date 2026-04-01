@@ -166,6 +166,79 @@ async def test_external_audit_import_job_creation_queue_and_drafts(
 
 
 @pytest.mark.asyncio
+async def test_external_audit_import_reconciliation_endpoint_returns_downstream_contract(
+    client: AsyncClient,
+    auth_headers: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = {
+        "job_id": 72,
+        "audit_run_id": 41,
+        "audit_reference": "AUD-00041",
+        "job_status": "completed",
+        "canonical_read_model": "specialist_sync_verification",
+        "specialist_home": {"path": "/uvdb", "label": "Achilles / UVDB"},
+        "scheme_alignment": {"uvdb_audit_id": 18},
+        "accepted_total": 1,
+        "promoted_total": 1,
+        "accepted_pending_total": 0,
+        "failed_total": 0,
+        "failed_drafts": [],
+        "materialized": {
+            "audit_findings": 1,
+            "capa_actions": 1,
+            "enterprise_risks": 1,
+            "uvdb_audit_id": 18,
+            "external_audit_record_id": 22,
+        },
+        "proof_matrix": [
+            {"step": "upload", "status": "ok", "detail": "report.pdf"},
+            {"step": "promotion", "status": "ok", "detail": "1 finding(s) materialized"},
+        ],
+        "draft_results": [
+            {
+                "draft_id": 9,
+                "draft_title": "NC",
+                "draft_status": "promoted",
+                "finding_type": "nonconformity",
+                "severity": "high",
+                "finding_id": 100,
+                "finding_reference": "FND-2026-0001",
+                "capa_actions": [{"id": 5, "reference_number": "CAPA-2026-0001", "title": "Action plan"}],
+                "enterprise_risks": [{"id": 7, "reference": "RSK-2026-0001", "title": "Audit escalation"}],
+                "view_links": {
+                    "actions": "/actions?sourceType=audit_finding&sourceId=100",
+                    "risk_register": "/risk-register?auditOnly=1&auditRef=AUD-00041",
+                    "uvdb": "/uvdb?auditRef=AUD-00041",
+                },
+            }
+        ],
+        "view_links": {
+            "actions": "/actions?sourceType=audit_finding",
+            "risk_register": "/risk-register?auditOnly=1&auditRef=AUD-00041",
+            "uvdb": "/uvdb?auditRef=AUD-00041",
+            "specialist_home": "/uvdb?auditRef=AUD-00041",
+        },
+    }
+    monkeypatch.setattr(
+        ExternalAuditImportService,
+        "get_promotion_reconciliation",
+        AsyncMock(return_value=expected),
+    )
+
+    response = await client.get(
+        "/api/v1/external-audit-imports/jobs/72/reconciliation",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["canonical_read_model"] == "specialist_sync_verification"
+    assert payload["materialized"]["capa_actions"] == 1
+    assert payload["view_links"]["actions"] == "/actions?sourceType=audit_finding"
+
+
+@pytest.mark.asyncio
 async def test_external_audit_import_job_is_idempotent(
     test_session: AsyncSession,
 ) -> None:
@@ -822,3 +895,148 @@ async def test_promote_requires_review_required_and_completes_external_audit_out
     assert run.max_score == 100
     assert run.score_percentage == 91.5
     assert run.passed is True
+
+
+@pytest.mark.asyncio
+async def test_external_audit_partial_promotion_stays_recoverable(
+    test_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Recoverable promotion run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        assurance_scheme="Achilles UVDB",
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/partial.pdf",
+        original_filename="partial.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="partial-promotion-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    run.source_document_asset_id = asset.id
+    await test_session.commit()
+
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+    job.score_percentage = 88
+    job.overall_score = 88
+    job.max_score = 100
+    job.outcome_status = "pass"
+    await test_session.flush()
+
+    good_draft = ExternalAuditDraft(
+        import_job_id=job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.ACCEPTED,
+        title="Promote me",
+        description="Imported nonconformity",
+        severity="high",
+        finding_type="nonconformity",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    bad_draft = ExternalAuditDraft(
+        import_job_id=job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.ACCEPTED,
+        title="Fail me",
+        description="Imported issue that should fail",
+        severity="medium",
+        finding_type="question_answered_no",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add_all([good_draft, bad_draft])
+    await test_session.commit()
+
+    async def _create_partially(_self, run_id: int, finding_data: dict, **_kwargs) -> AuditFinding:
+        if finding_data["title"] == "Fail me":
+            raise RuntimeError("simulated downstream failure")
+        finding = AuditFinding(
+            run_id=run_id,
+            title=finding_data["title"],
+            description=finding_data["description"],
+            severity=finding_data["severity"],
+            finding_type=finding_data["finding_type"],
+            status=FindingStatus.OPEN,
+            corrective_action_required=True,
+            reference_number=generate_test_reference("FND"),
+            created_by_id=DEFAULT_TEST_USER_ID,
+            tenant_id=DEFAULT_TEST_TENANT_ID,
+        )
+        test_session.add(finding)
+        await test_session.flush()
+        return finding
+
+    monkeypatch.setattr("src.domain.services.audit_service.AuditService.create_finding", _create_partially)
+    monkeypatch.setattr(service, "_link_evidence_for_finding", AsyncMock(return_value=None))
+    monkeypatch.setattr(service, "_link_source_document_evidence", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        service,
+        "_sync_scheme_records",
+        AsyncMock(
+            return_value={
+                "status": "synced",
+                "uvdb_audit_id": None,
+                "external_audit_record_id": None,
+                "home_route": "/uvdb",
+                "home_label": "Achilles / UVDB",
+            }
+        ),
+    )
+
+    promoted_job = await service.promote_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+
+    assert promoted_job.status == ExternalAuditImportStatus.REVIEW_REQUIRED
+    assert promoted_job.promotion_summary_json is not None
+    assert len(promoted_job.promotion_summary_json["failed_drafts"]) == 1
+    reconciliation = promoted_job.promotion_summary_json["reconciliation"]
+    assert reconciliation["failed_total"] == 1
+    assert reconciliation["promoted_total"] == 1

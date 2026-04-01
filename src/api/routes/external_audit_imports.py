@@ -105,6 +105,57 @@ class ExternalAuditDraftReviewRequest(BaseModel):
     severity: Optional[str] = Field(default=None, pattern="^(low|medium|high|critical)$")
 
 
+class PromotionReconciliationLink(BaseModel):
+    path: str
+    label: Optional[str] = None
+
+
+class PromotionReconciliationStep(BaseModel):
+    step: str
+    status: str
+    detail: str
+
+
+class PromotionReconciliationMaterialized(BaseModel):
+    audit_findings: int
+    capa_actions: int
+    enterprise_risks: int
+    uvdb_audit_id: Optional[int] = None
+    external_audit_record_id: Optional[int] = None
+
+
+class PromotionReconciliationDraftResult(BaseModel):
+    draft_id: int
+    draft_title: str
+    draft_status: str
+    finding_type: str
+    severity: str
+    finding_id: int
+    finding_reference: Optional[str] = None
+    capa_actions: list[dict] = Field(default_factory=list)
+    enterprise_risks: list[dict] = Field(default_factory=list)
+    view_links: dict[str, str] = Field(default_factory=dict)
+
+
+class PromotionReconciliationResponse(BaseModel):
+    job_id: int
+    audit_run_id: int
+    audit_reference: str
+    job_status: str
+    canonical_read_model: str
+    specialist_home: dict[str, str]
+    scheme_alignment: Optional[dict] = None
+    accepted_total: int
+    promoted_total: int
+    accepted_pending_total: int
+    failed_total: int
+    failed_drafts: list[dict] = Field(default_factory=list)
+    materialized: PromotionReconciliationMaterialized
+    proof_matrix: list[PromotionReconciliationStep]
+    draft_results: list[PromotionReconciliationDraftResult]
+    view_links: dict[str, str] = Field(default_factory=dict)
+
+
 def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str, str]:
     scheme = (job.detected_scheme or "").strip().lower()
     if not scheme:
@@ -229,6 +280,18 @@ async def get_import_job(
     service = ExternalAuditImportService(db)
     job = await service.get_job(job_id=job_id, tenant_id=current_user.tenant_id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
+
+
+@router.get("/jobs/{job_id}/reconciliation", response_model=PromotionReconciliationResponse)
+async def get_import_job_reconciliation(
+    job_id: int,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
+) -> PromotionReconciliationResponse:
+    """Return an authoritative downstream materialization ledger for a promoted import."""
+    service = ExternalAuditImportService(db)
+    reconciliation = await service.get_promotion_reconciliation(job_id=job_id, tenant_id=current_user.tenant_id)
+    return PromotionReconciliationResponse.model_validate(reconciliation)
 
 
 @router.get("/jobs/{job_id}/drafts", response_model=list[ExternalAuditDraftResponse])

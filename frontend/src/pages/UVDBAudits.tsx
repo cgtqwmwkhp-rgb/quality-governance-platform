@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Shield,
   Leaf,
@@ -77,8 +78,10 @@ type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
 
 export default function UVDBAudits() {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
+  const auditRefFromQuery = searchParams.get('auditRef') || ''
   const [activeTab, setActiveTab] = useState<'dashboard' | 'protocol' | 'audits' | 'mapping'>(
-    'dashboard',
+    auditRefFromQuery ? 'audits' : 'dashboard',
   )
   const [sections, setSections] = useState<UVDBSection[]>([])
   const [audits, setAudits] = useState<UVDBAudit[]>([])
@@ -97,7 +100,7 @@ export default function UVDBAudits() {
     audit_date: new Date().toISOString().split('T')[0] ?? '',
     lead_auditor: '',
   })
-  const [auditSearch, setAuditSearch] = useState('')
+  const [auditSearch, setAuditSearch] = useState(auditRefFromQuery)
   const [auditStatusFilter, setAuditStatusFilter] = useState<string>('')
   const [expandedAuditId, setExpandedAuditId] = useState<number | null>(null)
 
@@ -786,6 +789,14 @@ export default function UVDBAudits() {
                   {t('uvdb.new_audit')}
                 </button>
               </div>
+              {auditRefFromQuery && audits.length === 0 ? (
+                <div className="mx-4 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+                  No synced UVDB audit row is visible yet for <strong>{auditRefFromQuery}</strong>. If this
+                  import was promoted successfully, use the External Audit Review diagnostics panel to verify
+                  whether the UVDB sync step completed or whether the audit was routed to a different
+                  specialist surface.
+                </div>
+              ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-700/50">

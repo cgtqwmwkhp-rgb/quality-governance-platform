@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
   Shield,
@@ -86,12 +87,15 @@ const TREATMENT_STRATEGIES = [
 ]
 
 export default function RiskRegister() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
   const [selectedRisk, setSelectedRisk] = useState<Risk | null>(null)
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
+  const [auditOnly, setAuditOnly] = useState(searchParams.get('auditOnly') === '1')
+  const [auditRefFilter, setAuditRefFilter] = useState(searchParams.get('auditRef') || '')
   const [summary, setSummary] = useState({
     total_risks: 0,
     by_level: { critical: 0, high: 0, medium: 0, low: 0 },
@@ -103,6 +107,18 @@ export default function RiskRegister() {
   useEffect(() => {
     loadRisks()
   }, [])
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (auditOnly) next.set('auditOnly', '1')
+    else next.delete('auditOnly')
+    if (auditRefFilter) next.set('auditRef', auditRefFilter)
+    else next.delete('auditRef')
+    const nextQuery = next.toString()
+    if (nextQuery !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [auditOnly, auditRefFilter, searchParams, setSearchParams])
 
   const loadRisks = async () => {
     setLoading(true)
@@ -243,6 +259,21 @@ export default function RiskRegister() {
     }
   }
 
+  const visibleRisks = risks.filter((risk) => {
+    const auditLinked = (risk.linked_audits?.length ?? 0) > 0 || (risk.linked_actions?.length ?? 0) > 0 || risk.is_escalated
+    if (auditOnly && !auditLinked) {
+      return false
+    }
+    if (auditRefFilter) {
+      const needle = auditRefFilter.toLowerCase()
+      const linkedAudits = (risk.linked_audits ?? []).map((value) => String(value).toLowerCase())
+      if (!linkedAudits.some((value) => value.includes(needle))) {
+        return false
+      }
+    }
+    return true
+  })
+
   const getRiskLevelBadge = (level: string) => {
     const variants: Record<string, 'destructive' | 'warning' | 'info' | 'resolved'> = {
       critical: 'destructive',
@@ -297,6 +328,37 @@ export default function RiskRegister() {
           </Button>
         </div>
       </div>
+
+      {showFilters ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center">
+            <Button
+              variant={auditOnly ? 'default' : 'secondary'}
+              onClick={() => setAuditOnly((prev) => !prev)}
+            >
+              Audit-origin only
+            </Button>
+            <input
+              type="text"
+              value={auditRefFilter}
+              onChange={(e) => setAuditRefFilter(e.target.value)}
+              placeholder="Filter by audit reference"
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            />
+            {(auditOnly || auditRefFilter) ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setAuditOnly(false)
+                  setAuditRefFilter('')
+                }}
+              >
+                Clear audit filters
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -437,14 +499,14 @@ export default function RiskRegister() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {risks.length === 0 && (
+                {visibleRisks.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center py-12 text-muted-foreground">
                       No risks found in the register
                     </td>
                   </tr>
                 )}
-                {risks.map((risk) => (
+                {visibleRisks.map((risk) => (
                   <tr
                     key={risk.id}
                     className="hover:bg-muted/30 transition-colors cursor-pointer"

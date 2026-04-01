@@ -31,6 +31,12 @@ def test_external_audit_import_drafts_table_has_a_create_table_migration():
     assert matching_files, "Missing Alembic create_table migration for external_audit_import_drafts"
 
 
+def test_external_audit_records_table_has_a_create_table_migration():
+    """The unified external audit registry must be created by Alembic for production parity."""
+    matching_files = [name for name, text in _migration_texts() if _has_create_table(text, "external_audit_records")]
+    assert matching_files, "Missing Alembic create_table migration for external_audit_records"
+
+
 def test_external_audit_import_create_table_migration_postdates_enhancement_migration():
     """The repo must include a recovery migration after the enhancement-only revision."""
     create_migrations = [
