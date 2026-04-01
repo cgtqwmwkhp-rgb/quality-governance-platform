@@ -22,9 +22,9 @@ const REQUEST_TIMEOUT_MS = 15000
 // File uploads to Azure Blob Storage can take longer, especially for large files
 const UPLOAD_TIMEOUT_MS = 120000
 
-// Extended timeout for import processing (2 minutes)
-// PDF extraction + OCR + analysis runs synchronously in the process endpoint
-const PROCESSING_TIMEOUT_MS = 120000
+// Extended timeout for import processing (5 minutes)
+// PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
+const PROCESSING_TIMEOUT_MS = 300000
 
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
