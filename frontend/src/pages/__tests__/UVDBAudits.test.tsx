@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 const mockGetDashboard = vi.fn()
 const mockListSections = vi.fn()
@@ -39,6 +41,8 @@ vi.mock('../../components/ui/SetupRequiredPanel', () => ({
 }))
 
 describe('UVDBAudits', () => {
+  const renderPage = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>)
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetDashboard.mockResolvedValue({
@@ -104,7 +108,7 @@ describe('UVDBAudits', () => {
   it('renders live UVDB data and shows ISO mappings from the backend contract', async () => {
     const UVDBAudits = (await import('../UVDBAudits')).default
 
-    render(<UVDBAudits />)
+    renderPage(<UVDBAudits />)
 
     expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
 
@@ -123,7 +127,7 @@ describe('UVDBAudits', () => {
   it('creates a new audit from the header action and refreshes the page data', async () => {
     const UVDBAudits = (await import('../UVDBAudits')).default
 
-    render(<UVDBAudits />)
+    renderPage(<UVDBAudits />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'uvdb.new_audit' }))
 
@@ -163,7 +167,7 @@ describe('UVDBAudits', () => {
       })
 
     const UVDBAudits = (await import('../UVDBAudits')).default
-    render(<UVDBAudits />)
+    renderPage(<UVDBAudits />)
 
     expect(await screen.findByText('UVDB-2026-0001')).toBeInTheDocument()
     expect(mockGetDashboard).toHaveBeenCalledTimes(2)
@@ -192,7 +196,7 @@ describe('UVDBAudits', () => {
     })
 
     const UVDBAudits = (await import('../UVDBAudits')).default
-    render(<UVDBAudits />)
+    renderPage(<UVDBAudits />)
 
     expect(await screen.findAllByText('0%')).not.toHaveLength(0)
   })

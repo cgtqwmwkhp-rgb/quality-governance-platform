@@ -4219,6 +4219,31 @@ export interface ExternalAuditImportDraft {
   updated_at: string
 }
 
+export interface ExternalAuditPromotionReconciliation {
+  job_id: number
+  audit_run_id: number
+  audit_reference: string
+  job_status: string
+  canonical_read_model: string
+  specialist_home: { path: string; label: string }
+  scheme_alignment?: Record<string, unknown> | null
+  accepted_total: number
+  promoted_total: number
+  accepted_pending_total: number
+  failed_total: number
+  failed_drafts: Array<Record<string, unknown>>
+  materialized: {
+    audit_findings: number
+    capa_actions: number
+    enterprise_risks: number
+    uvdb_audit_id?: number | null
+    external_audit_record_id?: number | null
+  }
+  proof_matrix: Array<{ step: string; status: string; detail: string }>
+  draft_results: Array<Record<string, unknown>>
+  view_links: Record<string, string>
+}
+
 export const externalAuditImportsApi = {
   createJob: (data: { audit_run_id: number; source_document_asset_id?: number }) =>
     api.post<ExternalAuditImportJob>('/api/v1/external-audit-imports/jobs', data),
@@ -4236,6 +4261,9 @@ export const externalAuditImportsApi = {
 
   getJob: (jobId: number) =>
     api.get<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}`),
+
+  getReconciliation: (jobId: number) =>
+    api.get<ExternalAuditPromotionReconciliation>(`/api/v1/external-audit-imports/jobs/${jobId}/reconciliation`),
 
   listDrafts: (jobId: number) =>
     api.get<ExternalAuditImportDraft[]>(`/api/v1/external-audit-imports/jobs/${jobId}/drafts`),

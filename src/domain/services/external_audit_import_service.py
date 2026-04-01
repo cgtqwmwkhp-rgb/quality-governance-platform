@@ -6,13 +6,16 @@ import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import TypedDict, cast
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
 from src.domain.models.audit import AuditFinding, AuditRun, AuditStatus
+from src.domain.models.capa import CAPAAction, CAPASource
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.document import FileType
 from src.domain.models.evidence_asset import EvidenceAsset
@@ -22,6 +25,8 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportJob,
     ExternalAuditImportStatus,
 )
+from src.domain.models.external_audit_record import ExternalAuditRecord
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.uvdb_achilles import UVDBAudit
 from src.domain.services.ai_consensus_service import AIConsensusService
 from src.domain.services.audit_service import AuditService
@@ -32,6 +37,7 @@ from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.mistral_ocr_service import MistralOCRService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.scheme_profiles import validate_against_scheme
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 from src.infrastructure.storage import StorageError, storage_service
 
 logger = logging.getLogger(__name__)
@@ -52,6 +58,12 @@ _EXTENSION_TO_FILETYPE = {
     ".jpg": FileType.JPG,
     ".jpeg": FileType.JPEG,
 }
+
+
+class PromotionResult(TypedDict):
+    promoted_findings: list[int]
+    document_clause_ids: set[str]
+    failed_drafts: list[dict[str, object]]
 
 
 class ExternalAuditImportService:
@@ -222,6 +234,242 @@ class ExternalAuditImportService:
             .order_by(ExternalAuditDraft.id.asc())
         )
         return list(result.scalars().all())
+
+    async def get_promotion_reconciliation(self, *, job_id: int, tenant_id: int | None) -> dict[str, object]:
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
+        drafts = await self.list_job_drafts(job_id=job_id, tenant_id=tenant_id)
+        stored_summary = job.promotion_summary_json or {}
+        return await self._build_promotion_reconciliation(
+            job=job,
+            run=run,
+            drafts=drafts,
+            tenant_id=tenant_id,
+            failed_drafts=cast(list[dict[str, object]], stored_summary.get("failed_drafts") or []),
+            scheme_alignment=stored_summary.get("scheme_alignment") if isinstance(stored_summary, dict) else None,
+        )
+
+    async def _load_capa_actions_for_finding(self, *, finding_id: int, tenant_id: int | None) -> list[CAPAAction]:
+        try:
+            result = await self.db.execute(
+                select(CAPAAction).where(
+                    CAPAAction.tenant_id == tenant_id,
+                    CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                    CAPAAction.source_id == finding_id,
+                )
+            )
+            return list(result.scalars().all())
+        except (OperationalError, ProgrammingError):
+            logger.debug("CAPA table is unavailable while building reconciliation")
+            return []
+
+    async def _load_risks_for_finding(self, *, finding: AuditFinding, tenant_id: int | None) -> list[EnterpriseRisk]:
+        risk_ids = [int(risk_id) for risk_id in (finding.risk_ids_json or []) if str(risk_id).isdigit()]
+        if not risk_ids:
+            return []
+        try:
+            result = await self.db.execute(
+                select(EnterpriseRisk).where(
+                    EnterpriseRisk.tenant_id == tenant_id,
+                    EnterpriseRisk.id.in_(risk_ids),
+                )
+            )
+            return list(result.scalars().all())
+        except (OperationalError, ProgrammingError):
+            logger.debug("Risk register table is unavailable while building reconciliation")
+            return []
+
+    def _build_promotion_proof_matrix(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        drafts: list[ExternalAuditDraft],
+        actions_total: int,
+        risks_total: int,
+        uvdb_audit_id: int | None,
+        external_audit_record_id: int | None,
+        failed_drafts: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        promoted_total = sum(1 for draft in drafts if draft.promoted_finding_id)
+        accepted_total = sum(
+            1
+            for draft in drafts
+            if draft.status in {ExternalAuditDraftStatus.ACCEPTED, ExternalAuditDraftStatus.PROMOTED}
+        )
+        return [
+            {
+                "step": "upload",
+                "status": "ok" if job.source_document_asset_id else "missing",
+                "detail": job.source_filename or "Source document attached",
+            },
+            {
+                "step": "analysis",
+                "status": "ok" if job.processed_at else "pending",
+                "detail": job.reference_number,
+            },
+            {
+                "step": "review",
+                "status": "ok" if accepted_total else "pending",
+                "detail": f"{accepted_total} draft(s) approved for promotion",
+            },
+            {
+                "step": "promotion",
+                "status": "partial" if failed_drafts else ("ok" if promoted_total else "blocked"),
+                "detail": f"{promoted_total} finding(s) materialized for {run.reference_number}",
+            },
+            {
+                "step": "capa_actions",
+                "status": "ok" if actions_total else "none",
+                "detail": f"{actions_total} CAPA action(s)",
+            },
+            {
+                "step": "enterprise_risks",
+                "status": "ok" if risks_total else "none",
+                "detail": f"{risks_total} enterprise risk(s)",
+            },
+            {
+                "step": "uvdb_sync",
+                "status": "ok" if uvdb_audit_id else ("n/a" if not self._is_uvdb_scheme(job, run) else "missing"),
+                "detail": f"UVDB audit id {uvdb_audit_id}" if uvdb_audit_id else "No UVDB sync required or visible",
+            },
+            {
+                "step": "registry",
+                "status": "ok" if external_audit_record_id else "missing",
+                "detail": (
+                    f"External audit record id {external_audit_record_id}"
+                    if external_audit_record_id
+                    else "No unified registry row found"
+                ),
+            },
+        ]
+
+    async def _build_promotion_reconciliation(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        drafts: list[ExternalAuditDraft],
+        tenant_id: int | None,
+        failed_drafts: list[dict[str, object]],
+        scheme_alignment: object | None,
+    ) -> dict[str, object]:
+        home_route, home_label = self._scheme_home(job.detected_scheme)
+        promoted_drafts = [draft for draft in drafts if draft.promoted_finding_id]
+        accepted_pending = [
+            draft
+            for draft in drafts
+            if draft.status == ExternalAuditDraftStatus.ACCEPTED and not draft.promoted_finding_id
+        ]
+
+        registry_record = None
+        try:
+            record_result = await self.db.execute(
+                select(ExternalAuditRecord).where(
+                    ExternalAuditRecord.tenant_id == tenant_id,
+                    ExternalAuditRecord.import_job_id == job.id,
+                )
+            )
+            registry_record = record_result.scalar_one_or_none()
+        except (OperationalError, ProgrammingError):
+            logger.debug("External audit registry table is unavailable while building reconciliation")
+
+        uvdb_audit = None
+        if self._is_uvdb_scheme(job, run):
+            try:
+                uvdb_result = await self.db.execute(
+                    select(UVDBAudit).where(
+                        UVDBAudit.tenant_id == tenant_id,
+                        UVDBAudit.audit_reference == run.reference_number,
+                    )
+                )
+                uvdb_audit = uvdb_result.scalar_one_or_none()
+            except (OperationalError, ProgrammingError):
+                logger.debug("UVDB table is unavailable while building reconciliation")
+
+        draft_results: list[dict[str, object]] = []
+        capa_total = 0
+        risk_total = 0
+        for draft in promoted_drafts:
+            finding_result = await self.db.execute(
+                select(AuditFinding).where(
+                    AuditFinding.id == draft.promoted_finding_id,
+                    AuditFinding.tenant_id == tenant_id,
+                )
+            )
+            finding = finding_result.scalar_one_or_none()
+            if finding is None:
+                continue
+            capa_actions = await self._load_capa_actions_for_finding(finding_id=finding.id, tenant_id=tenant_id)
+            risks = await self._load_risks_for_finding(finding=finding, tenant_id=tenant_id)
+            capa_total += len(capa_actions)
+            risk_total += len(risks)
+            draft_results.append(
+                {
+                    "draft_id": draft.id,
+                    "draft_title": draft.title,
+                    "draft_status": draft.status.value if hasattr(draft.status, "value") else str(draft.status),
+                    "finding_type": draft.finding_type,
+                    "severity": draft.severity,
+                    "finding_id": finding.id,
+                    "finding_reference": finding.reference_number,
+                    "capa_actions": [
+                        {"id": action.id, "reference_number": action.reference_number, "title": action.title}
+                        for action in capa_actions
+                    ],
+                    "enterprise_risks": [
+                        {"id": risk.id, "reference": risk.reference, "title": risk.title} for risk in risks
+                    ],
+                    "view_links": {
+                        "actions": f"/actions?sourceType=audit_finding&sourceId={finding.id}",
+                        "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
+                        "uvdb": f"/uvdb?auditRef={run.reference_number}",
+                    },
+                }
+            )
+
+        return {
+            "job_id": job.id,
+            "audit_run_id": run.id,
+            "audit_reference": run.reference_number,
+            "job_status": job.status.value if hasattr(job.status, "value") else str(job.status),
+            "canonical_read_model": "specialist_sync_verification",
+            "specialist_home": {"path": home_route, "label": home_label},
+            "scheme_alignment": scheme_alignment,
+            "accepted_total": sum(
+                1
+                for draft in drafts
+                if draft.status in {ExternalAuditDraftStatus.ACCEPTED, ExternalAuditDraftStatus.PROMOTED}
+            ),
+            "promoted_total": len(draft_results),
+            "accepted_pending_total": len(accepted_pending),
+            "failed_total": len(failed_drafts),
+            "failed_drafts": failed_drafts,
+            "materialized": {
+                "audit_findings": len(draft_results),
+                "capa_actions": capa_total,
+                "enterprise_risks": risk_total,
+                "uvdb_audit_id": uvdb_audit.id if uvdb_audit else None,
+                "external_audit_record_id": registry_record.id if registry_record else None,
+            },
+            "proof_matrix": self._build_promotion_proof_matrix(
+                job=job,
+                run=run,
+                drafts=drafts,
+                actions_total=capa_total,
+                risks_total=risk_total,
+                uvdb_audit_id=uvdb_audit.id if uvdb_audit else None,
+                external_audit_record_id=registry_record.id if registry_record else None,
+                failed_drafts=failed_drafts,
+            ),
+            "draft_results": draft_results,
+            "view_links": {
+                "actions": "/actions?sourceType=audit_finding",
+                "risk_register": f"/risk-register?auditOnly=1&auditRef={run.reference_number}",
+                "uvdb": f"/uvdb?auditRef={run.reference_number}",
+                "specialist_home": f"{home_route}?auditRef={run.reference_number}",
+            },
+        }
 
     async def process_job(
         self, *, job_id: int, tenant_id: int | None, user_id: int | None = None
@@ -506,11 +754,15 @@ class ExternalAuditImportService:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
 
         try:
-            promoted_findings, document_clause_ids = await self._promote_accepted_drafts(
+            promotion_result: PromotionResult = await self._promote_accepted_drafts(
                 accepted=accepted,
                 user_id=user_id,
                 resolved_tenant_id=resolved_tenant_id,
             )
+            promoted_findings = promotion_result["promoted_findings"]
+            document_clause_ids = promotion_result["document_clause_ids"]
+            failed_drafts = promotion_result["failed_drafts"]
+            reconciled_drafts = [draft for draft in drafts if draft.promoted_finding_id]
 
             if document_clause_ids:
                 await self._link_source_document_evidence(
@@ -527,16 +779,36 @@ class ExternalAuditImportService:
                 job=job,
                 run=run,
                 tenant_id=resolved_tenant_id,
-                drafts=accepted,
+                drafts=reconciled_drafts,
             )
-            job.status = ExternalAuditImportStatus.COMPLETED
-            job.promoted_at = datetime.now(timezone.utc)
+            reconciliation = await self._build_promotion_reconciliation(
+                job=job,
+                run=run,
+                drafts=drafts,
+                tenant_id=resolved_tenant_id,
+                failed_drafts=failed_drafts,
+                scheme_alignment=scheme_alignment,
+            )
+            if failed_drafts:
+                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+                existing_warnings = list(job.processing_warnings_json or [])
+                existing_warnings.append(
+                    f"Promotion partially completed: {len(failed_drafts)} accepted draft(s) still need attention."
+                )
+                job.processing_warnings_json = existing_warnings
+            else:
+                job.status = ExternalAuditImportStatus.COMPLETED
+                job.promoted_at = datetime.now(timezone.utc)
             job.updated_by_id = user_id
             job.promotion_summary_json = {
                 **(job.promotion_summary_json or {}),
+                "materialization_contract_version": 1,
+                "canonical_read_model": "specialist_sync_verification",
                 "promoted_findings": promoted_findings,
                 "evidence_link_candidates": len(document_clause_ids),
+                "failed_drafts": failed_drafts,
                 "scheme_alignment": scheme_alignment,
+                "reconciliation": reconciliation,
             }
             await self.db.flush()
             await self.db.refresh(job)
@@ -551,9 +823,10 @@ class ExternalAuditImportService:
             raise
 
         try:
-            from src.domain.services.cache_service import invalidate_tenant_cache
-
             await invalidate_tenant_cache(resolved_tenant_id, "audits")
+            await invalidate_tenant_cache(resolved_tenant_id, "capa")
+            await invalidate_tenant_cache(resolved_tenant_id, "risk-register")
+            await invalidate_tenant_cache(resolved_tenant_id, "risks")
             await invalidate_tenant_cache(resolved_tenant_id, "governance")
             await invalidate_tenant_cache(resolved_tenant_id, "uvdb")
         except Exception:
@@ -567,13 +840,13 @@ class ExternalAuditImportService:
         accepted: list[ExternalAuditDraft],
         user_id: int,
         resolved_tenant_id: int,
-    ) -> tuple[list[int], set[str]]:
+    ) -> PromotionResult:
         """Promote each accepted draft into a live finding with per-draft savepoints."""
         audit_service = AuditService(self.db)
         promoted_findings: list[int] = []
         document_clause_ids: set[str] = set()
         default_due_date = datetime.now(timezone.utc) + timedelta(days=30)
-        failed_drafts: list[tuple[int, str]] = []
+        failed_drafts: list[dict[str, object]] = []
 
         for draft in accepted:
             if draft.promoted_finding_id:
@@ -631,11 +904,19 @@ class ExternalAuditImportService:
                     document_clause_ids.update(clause_ids)
             except Exception as exc:
                 logger.error("Failed to promote draft %s: %s", draft.id, exc, exc_info=True)
-                failed_drafts.append((draft.id, str(exc)[:200]))
+                failed_drafts.append(
+                    {
+                        "draft_id": draft.id,
+                        "title": draft.title,
+                        "finding_type": draft.finding_type,
+                        "severity": draft.severity,
+                        "error": str(exc)[:300],
+                    }
+                )
 
         if failed_drafts and not promoted_findings:
             raise RuntimeError(
-                f"All {len(failed_drafts)} drafts failed to promote. " f"First error: {failed_drafts[0][1]}"
+                f"All {len(failed_drafts)} drafts failed to promote. First error: {failed_drafts[0]['error']}"
             )
         if failed_drafts:
             logger.warning(
@@ -644,7 +925,11 @@ class ExternalAuditImportService:
                 len(failed_drafts),
             )
 
-        return promoted_findings, document_clause_ids
+        return {
+            "promoted_findings": promoted_findings,
+            "document_clause_ids": document_clause_ids,
+            "failed_drafts": failed_drafts,
+        }
 
     @staticmethod
     def _apply_run_completion(run: AuditRun, job: ExternalAuditImportJob) -> None:
@@ -809,7 +1094,7 @@ class ExternalAuditImportService:
             1
             for finding in findings
             if getattr(finding, "finding_type", "") in self._ACTION_FINDING_TYPES
-            and getattr(finding, "severity", "") in {"high", "critical"}
+            and getattr(finding, "severity", "") in {"medium", "high", "critical"}
         )
         evidence_link_candidates = len(
             {
@@ -947,8 +1232,6 @@ class ExternalAuditImportService:
         tenant_id: int | None,
         drafts: list[ExternalAuditDraft],
     ) -> dict[str, object]:
-        from src.domain.models.external_audit_record import ExternalAuditRecord
-
         home_route, home_label = self._scheme_home(job.detected_scheme)
         findings_count, major, minor, obs = self._count_findings(drafts)
 

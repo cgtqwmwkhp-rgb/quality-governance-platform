@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useDeferredValue } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -85,6 +86,7 @@ interface Action extends Omit<ApiAction, 'source_id' | 'owner_id' | 'owner_email
 
 type ViewMode = 'all' | 'my' | 'overdue'
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
+type SourceTypeFilter = 'all' | 'audit_finding' | 'incident' | 'complaint' | 'investigation' | 'rta'
 
 // Form state type for creating actions
 interface CreateActionForm {
@@ -109,11 +111,16 @@ const INITIAL_FORM: CreateActionForm = {
 
 export default function Actions() {
   const { t } = useTranslation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<ApiError | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceTypeFilter>(
+    (searchParams.get('sourceType') as SourceTypeFilter) || 'all',
+  )
+  const sourceIdFilter = Number(searchParams.get('sourceId') || '')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
 
@@ -139,7 +146,15 @@ export default function Actions() {
     setError(null)
     try {
       const statusFilter = filterStatus !== 'all' ? filterStatus : undefined
-      const response = await actionsApi.list(1, 100, statusFilter)
+      const response = await actionsApi.list(
+        1,
+        100,
+        statusFilter,
+        sourceTypeFilter !== 'all' ? sourceTypeFilter : undefined,
+        sourceTypeFilter !== 'all' && Number.isFinite(sourceIdFilter) && sourceIdFilter > 0
+          ? sourceIdFilter
+          : undefined,
+      )
       // Server returns sorted by created_at desc - maintain stable order
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
@@ -150,7 +165,18 @@ export default function Actions() {
     } finally {
       setLoading(false)
     }
-  }, [filterStatus])
+  }, [filterStatus, sourceIdFilter, sourceTypeFilter])
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (sourceTypeFilter === 'all') next.delete('sourceType')
+    else next.set('sourceType', sourceTypeFilter)
+    if (sourceTypeFilter === 'all' || !Number.isFinite(sourceIdFilter) || sourceIdFilter <= 0) next.delete('sourceId')
+    const nextQuery = next.toString()
+    if (nextQuery !== searchParams.toString()) {
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams, sourceIdFilter, sourceTypeFilter])
 
   useEffect(() => {
     loadActions()
@@ -419,6 +445,24 @@ export default function Actions() {
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="pending_verification">Pending Verification</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={sourceTypeFilter}
+          onValueChange={(value) => setSourceTypeFilter(value as SourceTypeFilter)}
+        >
+          <SelectTrigger className="w-[220px]">
+            <Filter className="w-4 h-4 mr-2" />
+            <SelectValue placeholder="All Sources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="audit_finding">Audit Findings</SelectItem>
+            <SelectItem value="incident">Incidents</SelectItem>
+            <SelectItem value="complaint">Complaints</SelectItem>
+            <SelectItem value="investigation">Investigations</SelectItem>
+            <SelectItem value="rta">RTAs</SelectItem>
           </SelectContent>
         </Select>
       </div>

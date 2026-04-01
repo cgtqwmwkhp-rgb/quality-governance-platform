@@ -22,6 +22,7 @@ import {
   type AuditRunDetail,
   type ExternalAuditImportDraft,
   type ExternalAuditImportJob,
+  type ExternalAuditPromotionReconciliation,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
@@ -34,6 +35,16 @@ function getSeverityVariant(severity: string) {
   if (severity === 'low') return 'low'
   return 'medium'
 }
+
+const ACTION_FINDING_TYPES = [
+  'nonconformity',
+  'major_nonconformity',
+  'minor_nonconformity',
+  'competence_gap',
+  'finding',
+  'flagged_item',
+  'question_answered_no',
+]
 
 function getFindingTypeStyle(findingType: string): {
   label: string
@@ -280,6 +291,7 @@ export default function AuditImportReview() {
   const [job, setJob] = useState<ExternalAuditImportJob | null>(null)
   const [auditRun, setAuditRun] = useState<AuditRunDetail | null>(null)
   const [drafts, setDrafts] = useState<ExternalAuditImportDraft[]>([])
+  const [reconciliation, setReconciliation] = useState<ExternalAuditPromotionReconciliation | null>(null)
   const [loading, setLoading] = useState(true)
   const initialLoadDone = useRef(false)
   const [error, setError] = useState<string | null>(null)
@@ -323,9 +335,10 @@ export default function AuditImportReview() {
         throw new Error('Import job could not be resolved')
       }
 
-      const [jobRes, draftsRes] = await Promise.all([
+      const [jobRes, draftsRes, reconciliationRes] = await Promise.all([
         Promise.resolve(resolvedJobRes),
         externalAuditImportsApi.listDrafts(resolvedJobRes.data.id),
+        externalAuditImportsApi.getReconciliation(resolvedJobRes.data.id).catch(() => null),
       ])
       if (
         Number.isFinite(routeAuditId) &&
@@ -350,9 +363,11 @@ export default function AuditImportReview() {
       setJob(jobRes.data)
       setAuditRun(auditRunDetail)
       setDrafts(draftsRes.data)
+      setReconciliation(reconciliationRes?.data ?? null)
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
+      setReconciliation(null)
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404 && !jobId) {
         setError(
@@ -422,17 +437,13 @@ export default function AuditImportReview() {
   }, [acceptedDrafts])
   const acceptedActionCandidates = useMemo(
     () =>
-      acceptedDrafts.filter((draft) =>
-        ['nonconformity', 'competence_gap', 'finding'].includes(draft.finding_type),
-      ).length,
+      acceptedDrafts.filter((draft) => ACTION_FINDING_TYPES.includes(draft.finding_type)).length,
     [acceptedDrafts],
   )
   const acceptedRiskCandidates = useMemo(
     () =>
       acceptedDrafts.filter(
-        (draft) =>
-          ['nonconformity', 'competence_gap', 'finding'].includes(draft.finding_type) &&
-          ['high', 'critical'].includes(draft.severity),
+        (draft) => ACTION_FINDING_TYPES.includes(draft.finding_type) && ['medium', 'high', 'critical'].includes(draft.severity),
       ).length,
     [acceptedDrafts],
   )
@@ -453,6 +464,8 @@ export default function AuditImportReview() {
   const declaredExternalReference =
     auditRun?.external_reference || readProvenanceString(job, 'declared_external_reference')
   const specialistHome = useMemo(() => deriveSpecialistHome(job), [job])
+  const specialistHomePath =
+    reconciliation?.view_links?.specialist_home || reconciliation?.view_links?.uvdb || specialistHome.path
 
   const handleDraftDecision = async (
     draftId: number,
@@ -499,9 +512,26 @@ export default function AuditImportReview() {
     setError(null)
     setSuccessMessage(null)
     try {
-      await externalAuditImportsApi.promoteJob(job.id)
+      const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
       await load()
-      setSuccessMessage(`Successfully promoted ${promoteableCount} finding(s) into the live governance system.`)
+      const reconciliationRes = await externalAuditImportsApi.getReconciliation(job.id).catch(() => null)
+      const nextReconciliation = reconciliationRes?.data ?? null
+      setReconciliation(nextReconciliation)
+      if (nextReconciliation?.failed_total) {
+        setSuccessMessage(
+          `Promotion partially completed: ${nextReconciliation.promoted_total} finding(s) materialized, ${nextReconciliation.failed_total} still require review.`,
+        )
+      } else {
+        const promotedFromSummary = promoteRes.data.promotion_summary_json?.[
+          'promoted_findings'
+        ] as unknown
+        const promotedCount =
+          nextReconciliation?.promoted_total ??
+          (Array.isArray(promotedFromSummary) ? promotedFromSummary.length : promoteableCount)
+        setSuccessMessage(
+          `Successfully promoted ${promotedCount} finding(s) into the live governance system.`,
+        )
+      }
     } catch (err) {
       console.error('Failed to promote imported audit findings', err)
       setError('Promotion failed. Review the accepted drafts and try again.')
@@ -557,7 +587,7 @@ export default function AuditImportReview() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={() => navigate(specialistHome.path)} disabled={!job}>
+          <Button variant="outline" onClick={() => navigate(specialistHomePath)} disabled={!job}>
             <FileText size={16} />
             {specialistHome.label}
           </Button>
@@ -634,6 +664,105 @@ export default function AuditImportReview() {
             <Button variant="outline" size="sm" onClick={() => setSuccessMessage(null)}>
               Dismiss
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {reconciliation ? (
+        <Card className="border-border/70">
+          <CardHeader>
+            <CardTitle className="text-base">Downstream Workflow Proof</CardTitle>
+            <CardDescription>
+              Canonical read model: {reconciliation.canonical_read_model.replace(/_/g, ' ')}.
+              {reconciliation.failed_total > 0
+                ? ` ${reconciliation.failed_total} accepted draft(s) still need recovery before the workflow is complete.`
+                : ' All downstream workflow steps are traceable from this import.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Findings</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {reconciliation.materialized.audit_findings}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">CAPA Actions</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {reconciliation.materialized.capa_actions}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Enterprise Risks</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {reconciliation.materialized.enterprise_risks}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">UVDB Sync</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {reconciliation.materialized.uvdb_audit_id ? `Row #${reconciliation.materialized.uvdb_audit_id}` : 'Not visible'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {reconciliation.proof_matrix.map((step) => (
+                <div key={step.step} className="rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-foreground">
+                      {step.step.replace(/_/g, ' ')}
+                    </p>
+                    <Badge
+                      variant={
+                        step.status === 'ok'
+                          ? 'success'
+                          : step.status === 'partial'
+                            ? 'warning'
+                            : step.status === 'none' || step.status === 'n/a'
+                              ? 'secondary'
+                              : 'destructive'
+                      }
+                    >
+                      {step.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">{step.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            {reconciliation.failed_total > 0 ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-800">Accepted drafts still pending recovery</p>
+                <div className="mt-2 space-y-1 text-xs text-amber-900">
+                  {reconciliation.failed_drafts.map((draft, index) => (
+                    <p key={`failed-draft-${index}`}>
+                      Draft #{String(draft.draft_id ?? '?')}: {String(draft.title || draft.error || 'Promotion failed')}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {reconciliation.view_links.actions ? (
+                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.actions)}>
+                  View Audit Actions
+                </Button>
+              ) : null}
+              {reconciliation.view_links.risk_register ? (
+                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.risk_register)}>
+                  View Audit Risks
+                </Button>
+              ) : null}
+              {reconciliation.view_links.uvdb ? (
+                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.uvdb)}>
+                  View UVDB Sync
+                </Button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : null}
