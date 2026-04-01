@@ -63,7 +63,11 @@ stated in the text.  Do NOT invent values.
 Rules:
 - score_breakdown entries MUST have score <= max_score.  Reject date-like
   values (e.g. 23/6 meaning June 23) — those are dates, not scores.
-- confidence should reflect how clearly the finding is stated in the text.
+- For each finding, assign a calibrated confidence score between 0.0 and 1.0:
+  * 0.90-1.0: Finding is explicitly stated with clear, unambiguous evidence
+  * 0.70-0.89: Finding is strongly implied with supporting evidence in the text
+  * 0.50-0.69: Finding is inferred from context or ambiguous language
+  * Below 0.50: Uncertain — only include if other evidence supports it
 - If a score or finding is ambiguous, add a warning instead of guessing.
 - For ISO audits: there are typically NO numeric scores, only conformity
   status.  Do not invent scores for ISO audits.
@@ -205,13 +209,17 @@ class MistralAnalysisService:
                 continue
             raw_sev = str(f.get("severity", "medium"))
             raw_ft = str(f.get("finding_type", "finding"))
+            raw_conf = self._safe_float(f.get("confidence"))
             findings.append(
                 {
                     "title": str(f.get("title", ""))[:300],
                     "description": str(f.get("description", ""))[:2000],
                     "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
                     "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
-                    "confidence": min(max(self._safe_float(f.get("confidence")) or 0.5, 0.0), 1.0),
+                    "confidence": min(max(raw_conf if raw_conf is not None else 0.6, 0.0), 1.0),
+                    "clause_reference": str(f.get("clause_reference", ""))[:255] or None,
+                    "corrective_action_deadline": str(f.get("corrective_action_deadline", ""))[:20] or None,
+                    "_provider": "mistral",
                 }
             )
 

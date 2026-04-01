@@ -90,6 +90,7 @@ class ExternalAuditDraftResponse(BaseModel):
     suggested_risk_title: Optional[str] = None
     review_notes: Optional[str] = None
     promoted_finding_id: Optional[int] = None
+    provenance_json: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

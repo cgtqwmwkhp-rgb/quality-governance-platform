@@ -36,16 +36,10 @@ class AIConsensusService:
         b_ok = result_b.provider_status == "completed"
 
         if a_ok and not b_ok:
-            result_a.warnings.append(
-                f"Single-provider result ({result_a.provider_name}); "
-                f"{result_b.provider_name} was {result_b.provider_status}"
-            )
+            result_a.warnings.append(self._degradation_message(result_a, result_b))
             return result_a
         if b_ok and not a_ok:
-            result_b.warnings.append(
-                f"Single-provider result ({result_b.provider_name}); "
-                f"{result_a.provider_name} was {result_a.provider_status}"
-            )
+            result_b.warnings.append(self._degradation_message(result_b, result_a))
             return result_b
         if not a_ok and not b_ok:
             return AIAnalysisResult(
@@ -132,6 +126,7 @@ class AIConsensusService:
                 finding = dict(af)
                 finding["confidence"] = round(combined, 3)
                 finding["_consensus"] = "agreed"
+                finding["_provider"] = "consensus"
                 finding["_providers"] = [a.provider_name, b.provider_name]
                 merged.append(finding)
             else:
@@ -207,6 +202,27 @@ class AIConsensusService:
             severity_order = {"fail": 0, "review_required": 1, "pass": 2}
             return a.outcome if severity_order.get(a.outcome, 1) <= severity_order.get(b.outcome, 1) else b.outcome
         return a.outcome or b.outcome
+
+    @staticmethod
+    def _degradation_message(ok_result: AIAnalysisResult, failed_result: AIAnalysisResult) -> str:
+        """Provide an actionable message based on the failure mode."""
+        status = failed_result.provider_status
+        name = failed_result.provider_name
+        detail = ""
+        if failed_result.warnings:
+            last_warn = failed_result.warnings[-1]
+            if "CircuitBreakerOpenError" in last_warn:
+                detail = f" — {name} circuit breaker is open (will auto-recover)"
+            elif "NotFound" in last_warn or "404" in last_warn:
+                detail = f" — {name} AI model may need updating"
+            elif "TimeoutError" in last_warn or "timed out" in last_warn.lower():
+                detail = f" — {name} timed out on this document"
+
+        if status == "not_configured":
+            return f"Single-provider result ({ok_result.provider_name}); {name} is not configured — add API key in settings"
+        if status == "skipped":
+            return f"Single-provider result ({ok_result.provider_name}); {name} was skipped (document too large or too short)"
+        return f"Single-provider result ({ok_result.provider_name}); {name} {status}{detail}"
 
     def _find_similar_finding(
         self,

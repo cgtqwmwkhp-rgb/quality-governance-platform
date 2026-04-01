@@ -70,12 +70,37 @@ function getConfidenceTier(confidence: number | null | undefined): {
 function getAnalysisMethodLabel(provenance: Record<string, unknown> | null | undefined): string {
   if (!provenance) return 'rule-based'
   const method = String(provenance.analysis_method || '')
-  if (method.includes('consensus') || method.includes('ai_structured')) return 'AI consensus'
+  if (method.includes('ai_confirmed')) return 'AI confirmed'
+  if (method.includes('consensus') || method.includes('ai_structured')) return 'AI analysis'
   if (method.includes('mistral')) return 'Mistral AI'
   if (method.includes('gemini')) return 'Gemini AI'
-  if (method.includes('rule_based')) return 'Rule-based'
-  if (method.includes('normalized')) return 'Rule-based'
+  if (method.includes('rule_based')) return 'rule-based'
+  if (method.includes('normalized')) return 'rule-based'
   return method || 'rule-based'
+}
+
+function getMethodBadgeVariant(
+  label: string,
+): 'default' | 'secondary' | 'info' | 'success' | 'destructive' | 'outline' {
+  if (label.includes('AI confirmed')) return 'success'
+  if (label.includes('AI')) return 'info'
+  return 'secondary'
+}
+
+function buildConfidenceTooltip(provenance: Record<string, unknown> | null | undefined): string {
+  if (!provenance) return ''
+  const parts: string[] = []
+  const method = String(provenance.analysis_method || '')
+  if (method) parts.push(`Method: ${method.replace(/_/g, ' ')}`)
+  const provider = provenance.ai_provider
+  if (provider) parts.push(`Provider: ${String(provider)}`)
+  const aiConf = provenance.ai_confidence
+  if (aiConf != null) parts.push(`AI confidence: ${Math.round(Number(aiConf) * 100)}%`)
+  const trigger = provenance.trigger
+  if (trigger) parts.push(`Rule trigger: ${String(trigger)}`)
+  const clause = provenance.clause_reference
+  if (clause) parts.push(`Clause: ${String(clause)}`)
+  return parts.join('\n')
 }
 
 const SEVERITY_WEIGHT: Record<string, number> = {
@@ -1068,11 +1093,12 @@ function DraftFindingsList({
                 <Badge variant={getSeverityVariant(draft.severity)}>{draft.severity}</Badge>
                 <Badge variant="outline">{draft.status.replace(/_/g, ' ')}</Badge>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tier.color} ${tier.bgColor} ${tier.borderColor}`}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tier.color} ${tier.bgColor} ${tier.borderColor} cursor-help`}
+                  title={buildConfidenceTooltip(draft.provenance_json ?? null)}
                 >
                   {tier.label} confidence
                 </span>
-                <Badge variant="secondary">{methodLabel}</Badge>
+                <Badge variant={getMethodBadgeVariant(methodLabel)}>{methodLabel}</Badge>
               </div>
               <CardDescription>{draft.finding_type.replace(/_/g, ' ')}</CardDescription>
             </CardHeader>

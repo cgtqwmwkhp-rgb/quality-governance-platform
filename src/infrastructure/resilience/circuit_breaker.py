@@ -150,6 +150,17 @@ class CircuitBreaker:
         except Exception:
             logger.debug("Failed to emit circuit breaker metric (monitor unavailable)")
 
+    async def reset(self) -> None:
+        """Manually reset the circuit breaker to closed state."""
+        async with self._lock:
+            old_state = self._state
+            self._state = CircuitState.CLOSED
+            self._failure_count = 0
+            self._half_open_calls = 0
+            if old_state != CircuitState.CLOSED:
+                self._record_transition(old_state, CircuitState.CLOSED)
+                logger.info(f"Circuit breaker '{self.name}' manually RESET to CLOSED")
+
     def get_health(self) -> dict:
         return {
             "name": self.name,

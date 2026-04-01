@@ -80,8 +80,8 @@ class ExternalAuditAnalysisService:
         ("not competent", "high", "competence_gap", 0.85),
         ("non-compliant", "high", "nonconformity", 0.8),
         ("non compliant", "high", "nonconformity", 0.8),
-        ("finding", "medium", "finding", 0.55),
     )
+    _GENERIC_FINDING_RE = re.compile(r"\bfindings?\s*[#:\d(]", re.IGNORECASE)
     _POSITIVE_TRIGGERS: tuple[tuple[str, str, str, float], ...] = (
         ("good practice", "low", "positive_practice", 0.92),
         ("best practice", "low", "positive_practice", 0.92),
@@ -306,127 +306,217 @@ class ExternalAuditAnalysisService:
     ) -> list[DraftFindingCandidate]:
         findings: list[DraftFindingCandidate] = []
         for page_number, page_text in enumerate(page_texts, start=1):
-            compact = re.sub(r"\s+", " ", page_text).strip()
-            lowered = compact.lower()
-            if not compact:
-                continue
-            negative_detected = False
-            matched_triggers: set[str] = set()
-            for trigger, severity, finding_type, confidence in self._NONCONFORMITY_TRIGGERS:
-                if trigger not in lowered:
-                    continue
-                if trigger in matched_triggers:
-                    continue
-                if self._is_negated(lowered, trigger):
-                    continue
-                snippet = self._snippet_around(compact, trigger)
-                title = self._build_title(trigger, scheme_label)
-                negative_detected = True
-                matched_triggers.add(trigger)
-                findings.append(
-                    DraftFindingCandidate(
-                        title=title,
-                        description=snippet,
-                        severity=severity,
-                        finding_type=finding_type,
-                        confidence_score=confidence,
-                        competence_verdict="not_competent" if finding_type == "competence_gap" else None,
-                        source_pages=[page_number],
-                        evidence_snippets=[snippet],
-                        mapped_frameworks=frameworks,
-                        mapped_standards=standards,
-                        suggested_action_title=f"Address imported audit issue: {title}",
-                        suggested_action_description=snippet,
-                        suggested_risk_title=f"Imported audit escalation: {title}",
-                        provenance={
-                            "page_number": page_number,
-                            "trigger": trigger,
-                            "analysis_method": "rule_based_import_review",
-                        },
-                    )
-                )
-            for trigger, severity, finding_type, confidence in self._IMPROVEMENT_TRIGGERS:
-                if trigger not in lowered:
-                    continue
-                if trigger in matched_triggers:
-                    continue
-                snippet = self._snippet_around(compact, trigger)
-                title = self._build_title(trigger, scheme_label)
-                matched_triggers.add(trigger)
-                findings.append(
-                    DraftFindingCandidate(
-                        title=title,
-                        description=snippet,
-                        severity=severity,
-                        finding_type=finding_type,
-                        confidence_score=confidence,
-                        competence_verdict=None,
-                        source_pages=[page_number],
-                        evidence_snippets=[snippet],
-                        mapped_frameworks=frameworks,
-                        mapped_standards=standards,
-                        suggested_action_title=f"Follow up imported audit improvement: {title}",
-                        suggested_action_description=snippet,
-                        suggested_risk_title=None,
-                        provenance={
-                            "page_number": page_number,
-                            "trigger": trigger,
-                            "analysis_method": "normalized_import_review",
-                        },
-                    )
-                )
-            if not negative_detected:
-                for trigger, severity, finding_type, confidence in self._POSITIVE_TRIGGERS:
-                    if trigger not in lowered:
-                        continue
-                    if trigger in matched_triggers:
-                        continue
-                    if trigger == "competent" and "not competent" in lowered:
-                        continue
-                    if trigger == "compliant" and "non-compliant" in lowered:
-                        continue
-                    if trigger == "compliant" and "non compliant" in lowered:
-                        continue
-                    snippet = self._snippet_around(compact, trigger)
-                    title = self._build_title(trigger, scheme_label)
-                    boosted = self._boost_confidence(confidence, lowered)
-                    matched_triggers.add(trigger)
-                    findings.append(
-                        DraftFindingCandidate(
-                            title=title,
-                            description=snippet,
-                            severity=severity,
-                            finding_type=finding_type,
-                            confidence_score=boosted,
-                            competence_verdict="competent",
-                            source_pages=[page_number],
-                            evidence_snippets=[snippet],
-                            mapped_frameworks=frameworks,
-                            mapped_standards=standards,
-                            suggested_action_title=None,
-                            suggested_action_description=None,
-                            suggested_risk_title=None,
-                            provenance={
-                                "page_number": page_number,
-                                "trigger": trigger,
-                                "analysis_method": "normalized_import_review",
-                            },
-                        )
-                    )
+            self._scan_page_for_findings(
+                page_number=page_number,
+                page_text=page_text,
+                scheme_label=scheme_label,
+                frameworks=frameworks,
+                standards=standards,
+                findings=findings,
+            )
 
         if ai_result and ai_result.provider_status == "completed" and ai_result.findings:
-            existing_titles = {f.title.lower() for f in findings}
-            for ai_f in ai_result.findings:
-                title = str(ai_f.get("title", ""))
-                if title.lower() in existing_titles:
-                    continue
+            self._merge_ai_findings(
+                findings=findings,
+                ai_result=ai_result,
+                scheme_label=scheme_label,
+                frameworks=frameworks,
+                standards=standards,
+            )
+
+        deduped = self._dedupe_findings(findings)
+        return self._calibrate_confidence(deduped)
+
+    def _scan_page_for_findings(
+        self,
+        *,
+        page_number: int,
+        page_text: str,
+        scheme_label: str,
+        frameworks: list[dict[str, object]],
+        standards: list[dict[str, object]],
+        findings: list[DraftFindingCandidate],
+    ) -> None:
+        """Extract rule-based findings from a single page."""
+        compact = re.sub(r"\s+", " ", page_text).strip()
+        lowered = compact.lower()
+        if not compact:
+            return
+        negative_detected = False
+        matched_triggers: set[str] = set()
+        specific_trigger_matched = False
+        for trigger, severity, finding_type, confidence in self._NONCONFORMITY_TRIGGERS:
+            if trigger not in lowered or trigger in matched_triggers:
+                continue
+            if self._is_negated(lowered, trigger):
+                continue
+            snippet = self._snippet_around(compact, trigger)
+            title = self._build_title(trigger, scheme_label)
+            negative_detected = True
+            specific_trigger_matched = True
+            matched_triggers.add(trigger)
+            findings.append(
+                DraftFindingCandidate(
+                    title=title,
+                    description=snippet,
+                    severity=severity,
+                    finding_type=finding_type,
+                    confidence_score=confidence,
+                    competence_verdict="not_competent" if finding_type == "competence_gap" else None,
+                    source_pages=[page_number],
+                    evidence_snippets=[snippet],
+                    mapped_frameworks=frameworks,
+                    mapped_standards=standards,
+                    suggested_action_title=f"Address imported audit issue: {title}",
+                    suggested_action_description=snippet,
+                    suggested_risk_title=f"Imported audit escalation: {title}",
+                    provenance={
+                        "page_number": page_number,
+                        "trigger": trigger,
+                        "analysis_method": "rule_based_import_review",
+                    },
+                )
+            )
+        if not specific_trigger_matched and self._GENERIC_FINDING_RE.search(compact):
+            snippet = self._snippet_around(compact, "finding")
+            title = self._build_title("finding", scheme_label)
+            negative_detected = True
+            findings.append(
+                DraftFindingCandidate(
+                    title=title,
+                    description=snippet,
+                    severity="medium",
+                    finding_type="finding",
+                    confidence_score=0.65,
+                    competence_verdict=None,
+                    source_pages=[page_number],
+                    evidence_snippets=[snippet],
+                    mapped_frameworks=frameworks,
+                    mapped_standards=standards,
+                    suggested_action_title=f"Address imported audit issue: {title}",
+                    suggested_action_description=snippet,
+                    suggested_risk_title=f"Imported audit escalation: {title}",
+                    provenance={
+                        "page_number": page_number,
+                        "trigger": "finding (regex)",
+                        "analysis_method": "rule_based_import_review",
+                    },
+                )
+            )
+        for trigger, severity, finding_type, confidence in self._IMPROVEMENT_TRIGGERS:
+            if trigger not in lowered or trigger in matched_triggers:
+                continue
+            snippet = self._snippet_around(compact, trigger)
+            title = self._build_title(trigger, scheme_label)
+            matched_triggers.add(trigger)
+            findings.append(
+                DraftFindingCandidate(
+                    title=title,
+                    description=snippet,
+                    severity=severity,
+                    finding_type=finding_type,
+                    confidence_score=confidence,
+                    competence_verdict=None,
+                    source_pages=[page_number],
+                    evidence_snippets=[snippet],
+                    mapped_frameworks=frameworks,
+                    mapped_standards=standards,
+                    suggested_action_title=f"Follow up imported audit improvement: {title}",
+                    suggested_action_description=snippet,
+                    suggested_risk_title=None,
+                    provenance={
+                        "page_number": page_number,
+                        "trigger": trigger,
+                        "analysis_method": "normalized_import_review",
+                    },
+                )
+            )
+        if not negative_detected:
+            self._scan_positive_triggers(
+                lowered=lowered,
+                compact=compact,
+                page_number=page_number,
+                scheme_label=scheme_label,
+                frameworks=frameworks,
+                standards=standards,
+                matched_triggers=matched_triggers,
+                findings=findings,
+            )
+
+    def _scan_positive_triggers(
+        self,
+        *,
+        lowered: str,
+        compact: str,
+        page_number: int,
+        scheme_label: str,
+        frameworks: list[dict[str, object]],
+        standards: list[dict[str, object]],
+        matched_triggers: set[str],
+        findings: list[DraftFindingCandidate],
+    ) -> None:
+        """Extract positive-practice findings from a page with no negative triggers."""
+        for trigger, severity, finding_type, confidence in self._POSITIVE_TRIGGERS:
+            if trigger not in lowered or trigger in matched_triggers:
+                continue
+            if trigger == "competent" and "not competent" in lowered:
+                continue
+            if trigger == "compliant" and ("non-compliant" in lowered or "non compliant" in lowered):
+                continue
+            snippet = self._snippet_around(compact, trigger)
+            title = self._build_title(trigger, scheme_label)
+            boosted = self._boost_confidence(confidence, lowered)
+            matched_triggers.add(trigger)
+            findings.append(
+                DraftFindingCandidate(
+                    title=title,
+                    description=snippet,
+                    severity=severity,
+                    finding_type=finding_type,
+                    confidence_score=boosted,
+                    competence_verdict="competent",
+                    source_pages=[page_number],
+                    evidence_snippets=[snippet],
+                    mapped_frameworks=frameworks,
+                    mapped_standards=standards,
+                    suggested_action_title=None,
+                    suggested_action_description=None,
+                    suggested_risk_title=None,
+                    provenance={
+                        "page_number": page_number,
+                        "trigger": trigger,
+                        "analysis_method": "normalized_import_review",
+                    },
+                )
+            )
+
+    def _merge_ai_findings(
+        self,
+        *,
+        findings: list[DraftFindingCandidate],
+        ai_result: AIAnalysisResult,
+        scheme_label: str,
+        frameworks: list[dict[str, object]],
+        standards: list[dict[str, object]],
+    ) -> None:
+        """Merge AI-detected findings with rule-based findings, upgrading corroborating matches."""
+        from difflib import SequenceMatcher
+
+        for ai_f in ai_result.findings:
+            ai_title = str(ai_f.get("title", ""))
+            ai_conf = float(str(ai_f.get("confidence", 0.60)))
+
+            corroborated = self._try_corroborate(findings, ai_f, ai_title, ai_conf)
+            if not corroborated:
                 findings.append(
                     DraftFindingCandidate(
-                        title=f"{scheme_label}: {title}" if scheme_label and scheme_label not in title else title,
+                        title=(
+                            f"{scheme_label}: {ai_title}" if scheme_label and scheme_label not in ai_title else ai_title
+                        ),
                         description=str(ai_f.get("description", "")),
                         severity=str(ai_f.get("severity", "medium")),
                         finding_type=str(ai_f.get("finding_type", "finding")),
-                        confidence_score=float(str(ai_f.get("confidence", 0.50))),
+                        confidence_score=ai_conf,
                         competence_verdict=("not_competent" if ai_f.get("finding_type") == "competence_gap" else None),
                         source_pages=[],
                         evidence_snippets=[str(ai_f.get("description", ""))[:400]],
@@ -435,12 +525,55 @@ class ExternalAuditAnalysisService:
                         provenance={
                             "analysis_method": "ai_structured",
                             "ai_provider": ai_f.get("_provider", "unknown"),
-                            "ai_confidence": float(str(ai_f.get("confidence", 0.50))),
+                            "ai_confidence": ai_conf,
                         },
                     )
                 )
 
-        return self._dedupe_findings(findings)
+    @staticmethod
+    def _try_corroborate(
+        findings: list[DraftFindingCandidate],
+        ai_f: dict[str, object],
+        ai_title: str,
+        ai_conf: float,
+    ) -> bool:
+        """Check if an AI finding corroborates an existing rule-based finding; upgrade if so."""
+        from difflib import SequenceMatcher
+
+        ai_lower = ai_title.lower()
+        for existing in findings:
+            existing_lower = existing.title.lower()
+            if ai_lower in existing_lower or existing_lower in ai_lower:
+                ratio = 1.0
+            else:
+                ratio = SequenceMatcher(None, existing_lower, ai_lower).ratio()
+            if ratio >= 0.5:
+                existing.confidence_score = max(existing.confidence_score, ai_conf)
+                existing.provenance["analysis_method"] = "ai_confirmed"
+                existing.provenance["ai_provider"] = ai_f.get("_provider", "unknown")
+                existing.provenance["ai_confidence"] = ai_conf
+                if ai_f.get("clause_reference"):
+                    existing.provenance["clause_reference"] = ai_f["clause_reference"]
+                return True
+        return False
+
+    def _calibrate_confidence(self, findings: list[DraftFindingCandidate]) -> list[DraftFindingCandidate]:
+        """Post-processing calibration pass to adjust confidence based on cross-signals."""
+        for f in findings:
+            boost = 0.0
+            method = f.provenance.get("analysis_method", "")
+            # AI-confirmed findings (both rule-based and AI found the same thing) get a boost
+            if method == "ai_confirmed":
+                boost += 0.05
+            # Findings with clause references are more traceable
+            if f.provenance.get("clause_reference"):
+                boost += 0.05
+            # Findings from consensus (both providers agreed) get a boost
+            if f.provenance.get("ai_provider") == "consensus":
+                boost += 0.10
+            if boost > 0:
+                f.confidence_score = min(round(f.confidence_score + boost, 2), 0.99)
+        return findings
 
     def _build_summary(
         self,
