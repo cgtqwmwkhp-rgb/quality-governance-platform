@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
+  AlertTriangle,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -579,6 +580,22 @@ export default function AuditImportReview() {
         </div>
       </div>
 
+      {promoteableCount > 0 && job?.status === 'review_required' && !showPromoteConfirm ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={16} className="text-amber-600" />
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              <strong>{promoteableCount}</strong> accepted finding(s) ready for promotion.
+              Click <strong>Promote</strong> to write them into the live governance system (actions, risk register, audit records).
+            </p>
+          </div>
+          <Button size="sm" onClick={handlePromoteClick} disabled={isPromoting}>
+            {isPromoting ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+            Promote Now
+          </Button>
+        </div>
+      ) : null}
+
       {showPromoteConfirm ? (
         <Card className="border-primary/30 bg-primary/5">
           <CardContent className="flex items-center justify-between gap-3 p-5">
@@ -688,8 +705,14 @@ export default function AuditImportReview() {
                   Processing template
                 </p>
                 <p className="mt-1 font-medium text-foreground">
-                  {resolvedTemplateName ||
-                    (resolvedTemplateId ? `Template ${resolvedTemplateId}` : 'Pending resolution')}
+                  {(() => {
+                    const raw = resolvedTemplateName || ''
+                    if (raw.startsWith('ZZZ') || raw.includes('(System)')) {
+                      const schemeLabel = job.detected_scheme || ''
+                      return schemeLabel ? `${schemeLabel} Intake` : 'External Audit Intake'
+                    }
+                    return raw || (resolvedTemplateId ? `Template ${resolvedTemplateId}` : 'Pending resolution')
+                  })()}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {resolvedTemplateVersion != null
@@ -819,6 +842,9 @@ export default function AuditImportReview() {
                       {job.overall_score} / {job.max_score}
                     </p>
                   ) : null}
+                  <p className="mt-1 text-xs text-muted-foreground italic">
+                    Weighted composite from audit body — see pillar breakdown below
+                  </p>
                 </div>
                 <div className="rounded-lg border border-border p-4">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground">Issuer</p>
@@ -1241,10 +1267,13 @@ function DraftFindingsList({
           {filteredAndSorted.length} of {drafts.length} finding(s)
         </p>
         <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="draft-filter-status" className="sr-only">Filter by status</label>
           <select
+            id="draft-filter-status"
             className="rounded border border-border bg-background px-2 py-1 text-xs"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
+            aria-label="Filter draft findings by status"
           >
             <option value="all">All statuses</option>
             <option value="draft">Pending</option>
@@ -1252,10 +1281,13 @@ function DraftFindingsList({
             <option value="rejected">Rejected</option>
             <option value="promoted">Promoted</option>
           </select>
+          <label htmlFor="draft-sort-by" className="sr-only">Sort findings</label>
           <select
+            id="draft-sort-by"
             className="rounded border border-border bg-background px-2 py-1 text-xs"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
+            aria-label="Sort draft findings"
           >
             <option value="urgency">Sort: Urgency</option>
             <option value="severity">Sort: Severity</option>
@@ -1296,54 +1328,78 @@ function DraftFindingsList({
             <CardContent className="space-y-4">
               <p className="text-sm text-foreground whitespace-pre-wrap">{draft.description}</p>
 
-              {draft.evidence_snippets_json?.length ? (
-                <div className="rounded-lg border border-border bg-slate-50 dark:bg-slate-900/50 p-4 text-sm space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Source Evidence
-                  </p>
-                  {draft.evidence_snippets_json.map((snippet, si) => {
-                    const text = String(snippet)
-                    const hasPipes = text.includes(' | ')
-                    if (hasPipes) {
-                      const rows = text.split('\n').filter(Boolean)
-                      return (
-                        <div
-                          key={`snippet-${draft.id}-${si}`}
-                          className="overflow-x-auto rounded border border-border"
-                        >
-                          <table className="w-full text-xs">
-                            <tbody>
-                              {rows.map((row, ri) => (
+              {(() => {
+                const snippets = draft.evidence_snippets_json?.filter(
+                  (s) => String(s).trim() && String(s).trim() !== draft.description?.trim()
+                ) || []
+                if (!snippets.length) return null
+                const allPipes = snippets.every((s) => String(s).includes(' | '))
+                if (allPipes) {
+                  const rows = snippets.map((s) => String(s))
+                  const getOutcomeStyle = (val: string) => {
+                    const v = val.trim().toLowerCase()
+                    if (['yes', 'pass', 'compliant', 'met', 'satisfactory'].includes(v))
+                      return 'text-emerald-700 dark:text-emerald-400 font-semibold'
+                    if (['no', 'fail', 'non-compliant', 'not met', 'unsatisfactory'].includes(v))
+                      return 'text-red-700 dark:text-red-400 font-semibold'
+                    if (['n/a', 'not applicable', 'excluded'].includes(v))
+                      return 'text-muted-foreground italic'
+                    return 'text-foreground'
+                  }
+                  return (
+                    <div className="rounded-lg border border-border bg-slate-50 dark:bg-slate-900/50 p-4 text-sm space-y-3">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Source Evidence
+                      </p>
+                      <div className="overflow-x-auto rounded border border-border">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-slate-100 dark:bg-slate-800">
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground border-b border-border">Inspection Requirement</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground border-b border-border">Outcome</th>
+                              {rows.some((r) => r.split(' | ').length > 2) && (
+                                <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground border-b border-border">Score</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row, ri) => {
+                              const cells = row.split(' | ')
+                              return (
                                 <tr
-                                  key={`row-${draft.id}-${si}-${ri}`}
-                                  className={ri % 2 === 0 ? 'bg-white dark:bg-slate-800' : 'bg-slate-50 dark:bg-slate-850'}
+                                  key={`erow-${draft.id}-${ri}`}
+                                  className={ri % 2 === 0 ? 'bg-white dark:bg-slate-800/50' : 'bg-slate-50 dark:bg-slate-900'}
                                 >
-                                  {row.split(' | ').map((cell, ci) => (
-                                    <td
-                                      key={`cell-${draft.id}-${si}-${ri}-${ci}`}
-                                      className="px-3 py-1.5 border-b border-border text-foreground"
-                                    >
-                                      {cell.trim()}
-                                    </td>
-                                  ))}
+                                  <td className="px-3 py-1.5 border-b border-border text-foreground">{cells[0]?.trim()}</td>
+                                  <td className={`px-3 py-1.5 border-b border-border ${getOutcomeStyle(cells[1] || '')}`}>{cells[1]?.trim()}</td>
+                                  {cells.length > 2 && (
+                                    <td className="px-3 py-1.5 border-b border-border text-foreground">{cells[2]?.trim()}</td>
+                                  )}
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    }
-                    return (
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div className="rounded-lg border border-border bg-slate-50 dark:bg-slate-900/50 p-4 text-sm space-y-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Source Evidence
+                    </p>
+                    {snippets.map((snippet, si) => (
                       <p
                         key={`snippet-${draft.id}-${si}`}
                         className="whitespace-pre-wrap text-xs text-foreground leading-relaxed"
                       >
-                        {text}
+                        {String(snippet)}
                       </p>
-                    )
-                  })}
-                </div>
-              ) : null}
+                    ))}
+                  </div>
+                )
+              })()}
 
               <div className="flex flex-wrap gap-2">
                 {draft.mapped_frameworks_json?.map((mapping, index) => (
@@ -1421,6 +1477,8 @@ function DraftFindingsList({
                     className="flex w-full items-center justify-between p-3 text-left text-xs text-muted-foreground hover:bg-surface"
                     onClick={() => toggleProvenance(draft.id)}
                     aria-expanded={isExpanded}
+                    aria-controls={`provenance-detail-${draft.id}`}
+                    aria-label={`Toggle provenance detail for: ${draft.title}`}
                   >
                     <span className="flex items-center gap-1">
                       <Info size={12} />
@@ -1429,7 +1487,9 @@ function DraftFindingsList({
                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                   </button>
                   {isExpanded ? (
-                    <ProvenanceDetail provenance={draft.provenance_json} />
+                    <div id={`provenance-detail-${draft.id}`}>
+                      <ProvenanceDetail provenance={draft.provenance_json} />
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -1526,6 +1586,7 @@ function DraftFindingsList({
                   variant="success"
                   onClick={() => void onDecision(draft.id, 'accepted')}
                   disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                  aria-label={`Accept finding: ${draft.title}`}
                 >
                   {busyDraftId === draft.id ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -1536,9 +1597,21 @@ function DraftFindingsList({
                   variant="outline"
                   onClick={() => void onDecision(draft.id, 'rejected')}
                   disabled={busyDraftId === draft.id || draft.status === 'promoted'}
+                  aria-label={`Reject finding: ${draft.title}`}
                 >
                   Reject
                 </Button>
+                {(draft.status === 'accepted' || draft.status === 'rejected') && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void onDecision(draft.id, 'draft' as 'accepted')}
+                    disabled={busyDraftId === draft.id}
+                    aria-label={`Reset finding to draft: ${draft.title}`}
+                  >
+                    Reset
+                  </Button>
+                )}
                 {draft.status !== 'promoted' ? (
                   <Button
                     variant="outline"
@@ -1564,6 +1637,7 @@ function DraftFindingsList({
           </Card>
         )
       })}
+
     </div>
   )
 }

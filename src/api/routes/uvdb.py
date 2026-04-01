@@ -569,15 +569,38 @@ async def list_audits(
     current_user: CurrentUser = None,
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
+    audit_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    min_score: Optional[float] = Query(None),
+    max_score: Optional[float] = Query(None),
+    search: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
-    """List UVDB audits"""
+    """List UVDB audits with filtering"""
     filters = []
     if status:
         filters.append(UVDBAudit.status == status)
     if company_name:
         filters.append(UVDBAudit.company_name.ilike(f"%{company_name}%"))
+    if audit_type:
+        filters.append(UVDBAudit.audit_type == audit_type)
+    if date_from:
+        filters.append(UVDBAudit.audit_date >= date_from)
+    if date_to:
+        filters.append(UVDBAudit.audit_date <= date_to)
+    if min_score is not None:
+        filters.append(UVDBAudit.percentage_score >= min_score)
+    if max_score is not None:
+        filters.append(UVDBAudit.percentage_score <= max_score)
+    if search:
+        search_filter = f"%{search}%"
+        filters.append(
+            UVDBAudit.company_name.ilike(search_filter)
+            | UVDBAudit.audit_reference.ilike(search_filter)
+            | UVDBAudit.lead_auditor.ilike(search_filter)
+        )
 
     try:
         count_result = await db.execute(select(func.count()).select_from(UVDBAudit).where(*filters))

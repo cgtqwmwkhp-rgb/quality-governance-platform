@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   Shield,
   Leaf,
   HardHat,
   Lock,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   FileText,
   Users,
   Building2,
@@ -19,7 +21,6 @@ import {
   Calendar,
   Award,
   ClipboardList,
-  ExternalLink,
   Link2,
   XCircle,
 } from 'lucide-react'
@@ -96,6 +97,9 @@ export default function UVDBAudits() {
     audit_date: new Date().toISOString().split('T')[0] ?? '',
     lead_auditor: '',
   })
+  const [auditSearch, setAuditSearch] = useState('')
+  const [auditStatusFilter, setAuditStatusFilter] = useState<string>('')
+  const [expandedAuditId, setExpandedAuditId] = useState<number | null>(null)
 
   // Transform API section to component type
   const transformSection = (apiSection: {
@@ -143,7 +147,12 @@ export default function UVDBAudits() {
         const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse] = await Promise.all([
           uvdbApi.getDashboard(),
           uvdbApi.listSections(),
-          uvdbApi.listAudits({ skip: 0, limit: 50 }),
+          uvdbApi.listAudits({
+            skip: 0,
+            limit: 50,
+            ...(auditSearch ? { search: auditSearch } : {}),
+            ...(auditStatusFilter ? { status: auditStatusFilter } : {}),
+          }),
           uvdbApi.getISOMapping(),
         ])
 
@@ -217,7 +226,7 @@ export default function UVDBAudits() {
 
         setLoadState('error')
       }
-    }, [])
+    }, [auditSearch, auditStatusFilter])
 
   const handleOpenCreateAuditForm = () => {
     setCreateAuditError(null)
@@ -747,10 +756,27 @@ export default function UVDBAudits() {
                     <input
                       type="text"
                       placeholder={t('uvdb.search_placeholder')}
+                      value={auditSearch}
+                      onChange={(e) => setAuditSearch(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') void loadData() }}
                       className="pl-10 pr-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
                     />
                   </div>
-                  <button className="flex items-center gap-2 px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors">
+                  <select
+                    value={auditStatusFilter}
+                    onChange={(e) => { setAuditStatusFilter(e.target.value); }}
+                    className="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:ring-2 focus:ring-yellow-500"
+                    aria-label="Filter by status"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="completed">Completed</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="scheduled">Scheduled</option>
+                  </select>
+                  <button
+                    className="flex items-center gap-2 px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors"
+                    onClick={() => void loadData()}
+                  >
                     <Filter className="w-4 h-4" />
                     {t('uvdb.filter')}
                   </button>
@@ -791,8 +817,8 @@ export default function UVDBAudits() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-700">
-                    {audits.map((audit) => (
-                      <tr key={audit.id} className="hover:bg-slate-700/50">
+                    {audits.map((audit) => (<React.Fragment key={`audit-group-${audit.id}`}>
+                      <tr className="hover:bg-slate-700/50">
                         <td className="px-4 py-3 font-medium text-white">
                           {audit.audit_reference}
                         </td>
@@ -822,14 +848,45 @@ export default function UVDBAudits() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           <button
-                            aria-label="Open external link"
+                            aria-label={`View details for ${audit.audit_reference}`}
                             className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
+                            onClick={() => setExpandedAuditId(expandedAuditId === audit.id ? null : audit.id)}
                           >
-                            <ExternalLink className="w-4 h-4 text-gray-400" />
+                            {expandedAuditId === audit.id ? (
+                              <ChevronUp className="w-4 h-4 text-gray-400" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-gray-400" />
+                            )}
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      {expandedAuditId === audit.id && (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-4 bg-slate-750 border-b border-slate-700">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <p className="text-gray-400 text-xs uppercase">Reference</p>
+                                <p className="text-white font-medium">{audit.audit_reference}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400 text-xs uppercase">Company</p>
+                                <p className="text-white font-medium">{audit.company_name}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400 text-xs uppercase">Lead Auditor</p>
+                                <p className="text-white font-medium">{audit.lead_auditor || '—'}</p>
+                              </div>
+                              <div>
+                                <p className="text-gray-400 text-xs uppercase">Score</p>
+                                <p className="text-emerald-400 font-bold text-lg">
+                                  {audit.percentage_score != null ? `${audit.percentage_score}%` : '—'}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>))}
                   </tbody>
                 </table>
               </div>

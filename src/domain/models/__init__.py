@@ -94,6 +94,7 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportJob,
     ExternalAuditImportStatus,
 )
+from src.domain.models.external_audit_record import ExternalAuditRecord
 
 # Evidence Assets (Shared Attachments Module)
 from src.domain.models.feature_flag import FeatureFlag

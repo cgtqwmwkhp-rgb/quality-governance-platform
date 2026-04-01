@@ -73,7 +73,10 @@ clearly stated in the text. Do NOT invent values.
       "finding_type": "nonconformity | major_nonconformity | minor_nonconformity | positive_practice | observation | opportunity_for_improvement | competence_gap | flagged_item | question_answered_no",
       "confidence": <0.0 to 1.0>,
       "clause_reference": "e.g. ISO 9001:2015 clause 9.1.3, or null",
-      "corrective_action_deadline": "YYYY-MM-DD or null"
+      "corrective_action_deadline": "YYYY-MM-DD or null",
+      "evidence_items": [
+        {"question": "Original inspection question text", "answer": "Yes | No | N/A", "score": "1/1 or 0/1 or null"}
+      ]
     }
   ],
   "warnings": ["Any data quality concerns"]
@@ -112,6 +115,16 @@ Rules:
   * "observation" — noted for awareness, no corrective action required
   * "opportunity_for_improvement" — suggested improvement, not a deficiency
   * "positive_practice" — good practice noted by the auditor
+- IMPORTANT: Only include "positive_practice" findings for genuinely exemplary
+  or noteworthy practices. Do NOT create findings for routine compliant answers.
+  For checklist-style documents, focus on non-conformities, flagged items, and
+  observations. Limit positive_practice findings to a maximum of 5.
+- Do NOT create "question_answered_no" findings for questions answered "Yes" or
+  answered compliantly.
+- For each finding, populate "evidence_items" with structured question/answer
+  pairs extracted from the document. Each item should have the original
+  inspection question, the answer given, and any score. This is critical for
+  evidence traceability.
 - For each finding, preserve the original document text verbatim in the
   description field. Prefix with page number if identifiable, e.g.
   "[p.12] Original text here". Do not rephrase or summarise evidence.
@@ -273,22 +286,38 @@ class MistralAnalysisService:
             max_s = None
 
         findings = []
+        dropped_low_conf = 0
         for f in (parsed.get("findings") or [])[:50]:
             if not isinstance(f, dict):
                 continue
             raw_sev = str(f.get("severity", "medium"))
             raw_ft = str(f.get("finding_type", "finding"))
             raw_conf = self._safe_float(f.get("confidence"))
+            conf = min(max(raw_conf if raw_conf is not None else 0.6, 0.0), 1.0)
+            if conf < 0.50:
+                dropped_low_conf += 1
+                continue
+            evidence_items = f.get("evidence_items") or []
+            if not isinstance(evidence_items, list):
+                evidence_items = []
+            evidence_snippets: list[str] = []
+            for ei in evidence_items[:20]:
+                if isinstance(ei, dict) and ei.get("question"):
+                    parts = [str(ei["question"]), str(ei.get("answer", ""))]
+                    if ei.get("score"):
+                        parts.append(str(ei["score"]))
+                    evidence_snippets.append(" | ".join(parts))
             findings.append(
                 {
                     "title": str(f.get("title", ""))[:300],
                     "description": str(f.get("description", ""))[:2000],
                     "severity": raw_sev if raw_sev in _VALID_SEVERITIES else "medium",
                     "finding_type": raw_ft if raw_ft in _VALID_FINDING_TYPES else "finding",
-                    "confidence": min(max(raw_conf if raw_conf is not None else 0.6, 0.0), 1.0),
+                    "confidence": conf,
                     "clause_reference": str(f.get("clause_reference", ""))[:255] or None,
                     "corrective_action_deadline": str(f.get("corrective_action_deadline", ""))[:20] or None,
                     "_provider": "mistral",
+                    "_evidence_snippets": evidence_snippets or None,
                 }
             )
 
@@ -307,7 +336,7 @@ class MistralAnalysisService:
             scheme=parsed.get("scheme"),
             scheme_label=parsed.get("scheme_label"),
             issuer_name=parsed.get("issuer_name"),
-            warnings=parsed.get("warnings") or [],
+            warnings=list(parsed.get("warnings") or []),
             provider_name="mistral",
             organization_name=parsed.get("organization_name"),
             auditor_name=parsed.get("auditor_name"),

@@ -261,12 +261,12 @@ describe('AuditImportReview', () => {
     renderPage()
 
     expect(await screen.findByText('Needs follow-up')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Accept finding/i }))
 
     expect(await screen.findByText('Failed to update the draft. Please retry.')).toBeInTheDocument()
     expect(screen.getByText('Needs follow-up')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Accept finding/i }))
 
     await waitFor(() => {
       expect(
