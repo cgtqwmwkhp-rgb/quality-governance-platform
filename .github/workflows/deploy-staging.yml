@@ -12,6 +12,10 @@ on:
         required: false
         default: 'Manual trigger'
 
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
 env:
   ACR_NAME: ${{ secrets.ACR_NAME }}
   AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}

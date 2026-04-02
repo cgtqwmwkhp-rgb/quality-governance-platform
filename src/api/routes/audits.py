@@ -13,6 +13,7 @@ from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
@@ -58,6 +59,7 @@ from src.domain.models.audit import (
     AuditTemplate,
     FindingStatus,
 )
+from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
 from src.domain.services.external_audit_intake_template_resolver import (
@@ -189,6 +191,52 @@ def _normalize_run_create_payload(run_data: AuditRunCreate) -> dict[str, Any]:
         payload["assurance_scheme"] = default_scheme
 
     return payload
+
+
+async def _recover_tenant_for_import(db: AsyncSession, user: User) -> Optional[int]:
+    """Last-resort tenant recovery when the auth-layer resolver left tenant_id unset.
+
+    Mirrors the logic in ``_resolve_user_tenant_context`` so the import endpoint
+    stays resilient even when the dependency-level fix hasn't reached the running
+    deployment yet.  Returns the resolved ``tenant_id`` or ``None``.
+    """
+    membership = (
+        (
+            await db.execute(
+                select(TenantUser)
+                .where(TenantUser.user_id == user.id, TenantUser.is_active == True)
+                .order_by(TenantUser.is_primary.desc(), TenantUser.id.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if membership is not None:
+        user.tenant_id = membership.tenant_id
+        await db.flush()
+        logger.info("create_run: recovered tenant_id=%s from membership for user %s", membership.tenant_id, user.id)
+        return membership.tenant_id
+
+    tenant = (
+        await db.execute(select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1))
+    ).scalar_one_or_none()
+    if tenant is None:
+        logger.error("create_run: no active tenant exists — cannot auto-assign for user %s", user.id)
+        return None
+
+    user.tenant_id = tenant.id
+    db.add(
+        TenantUser(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            is_active=True,
+            is_primary=True,
+            role="user",
+        )
+    )
+    await db.flush()
+    logger.info("create_run: auto-assigned tenant_id=%s to user %s (no prior membership)", tenant.id, user.id)
+    return tenant.id
 
 
 # ============== Template Endpoints ==============
@@ -880,6 +928,8 @@ async def create_run(
     started = time.perf_counter()
     intake_resolution: IntakeTemplateResolution | None = None
     if run_data.external_audit_type is not None:
+        if current_user.tenant_id is None:
+            current_user.tenant_id = await _recover_tenant_for_import(db, current_user)
         if current_user.tenant_id is None:
             _record_audit_endpoint_event(
                 "POST /api/v1/audits/runs",
