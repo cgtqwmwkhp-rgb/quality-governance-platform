@@ -221,8 +221,16 @@ async def _recover_tenant_for_import(db: AsyncSession, user: User) -> Optional[i
         await db.execute(select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1))
     ).scalar_one_or_none()
     if tenant is None:
-        logger.error("create_run: no active tenant exists — cannot auto-assign for user %s", user.id)
-        return None
+        tenant = Tenant(
+            name="Default Organisation",
+            slug="default",
+            admin_email="admin@qgp.local",
+            is_active=True,
+            subscription_tier="enterprise",
+        )
+        db.add(tenant)
+        await db.flush()
+        logger.warning("create_run: bootstrapped default tenant id=%s for user %s", tenant.id, user.id)
 
     user.tenant_id = tenant.id
     db.add(
