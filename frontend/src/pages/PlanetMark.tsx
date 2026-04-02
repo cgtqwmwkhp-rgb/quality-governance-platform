@@ -23,14 +23,18 @@ import {
   Home,
   Globe,
   XCircle,
+  ClipboardCheck,
+  ArrowUpRight,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   planetMarkApi,
+  externalAuditRecordsApi,
   ErrorClass,
   createApiError,
   isSetupRequired,
   SetupRequiredResponse,
+  type ExternalAuditRecordSummary,
 } from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
@@ -110,7 +114,7 @@ export default function PlanetMark() {
   const now = new Date()
   const defaultYear = now.getUTCFullYear()
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification'
+    'dashboard' | 'emissions' | 'actions' | 'quality' | 'scope3' | 'certification' | 'imported'
   >('dashboard')
   const [years, setYears] = useState<ReportingYear[]>([])
   const [currentYear, setCurrentYear] = useState<ReportingYear | null>(null)
@@ -122,6 +126,9 @@ export default function PlanetMark() {
   const [loadState, setLoadState] = useState<LoadState>('idle')
   const [errorClass, setErrorClass] = useState<ErrorClass | null>(null)
   const [setupRequired, setSetupRequired] = useState<SetupRequiredResponse | null>(null)
+  const [importedRecords, setImportedRecords] = useState<ExternalAuditRecordSummary[]>([])
+  const [importedTotal, setImportedTotal] = useState(0)
+  const [loadingImported, setLoadingImported] = useState(false)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
   const [setupActionError, setSetupActionError] = useState<string | null>(null)
   const [setupYearForm, setSetupYearForm] = useState({
@@ -357,6 +364,33 @@ export default function PlanetMark() {
     if (!currentYear) return
     void loadYearDetails(currentYear.id)
   }, [currentYear, loadYearDetails])
+
+  const [importedError, setImportedError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (activeTab !== 'imported') return
+    let cancelled = false
+    const loadImported = async () => {
+      setLoadingImported(true)
+      setImportedError(null)
+      try {
+        const res = await externalAuditRecordsApi.list({ scheme: 'planet_mark' })
+        if (!cancelled) {
+          setImportedRecords(res.data.records)
+          setImportedTotal(res.data.total)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setImportedRecords([])
+          setImportedError(createApiError(err).detail || 'Failed to load imported assessments.')
+        }
+      } finally {
+        if (!cancelled) setLoadingImported(false)
+      }
+    }
+    void loadImported()
+    return () => { cancelled = true }
+  }, [activeTab])
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -622,6 +656,7 @@ export default function PlanetMark() {
           { id: 'actions', label: t('planet_mark.improvement_plan'), icon: Target },
           { id: 'quality', label: t('planet_mark.data_quality'), icon: Gauge },
           { id: 'certification', label: t('planet_mark.certification'), icon: Award },
+          { id: 'imported', label: 'Imported Assessments', icon: ClipboardCheck },
         ].map((tab) => {
           const Icon = tab.icon
           return (
@@ -1235,6 +1270,104 @@ export default function PlanetMark() {
                   Live data quality metrics are not available for this reporting year yet.
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Imported Assessments Tab */}
+          {activeTab === 'imported' && (
+            <div className="space-y-6">
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border">
+                  <h3 className="font-bold text-foreground flex items-center gap-2">
+                    <ClipboardCheck className="w-5 h-5 text-primary" />
+                    Imported Planet Mark Assessments ({importedTotal})
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Assessment results imported via the external audit pipeline
+                  </p>
+                </div>
+                <div className="p-4">
+                  {importedError && (
+                    <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      {importedError}
+                    </div>
+                  )}
+                  {loadingImported && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                      <RefreshCw className="w-4 h-4 animate-spin" /> Loading imported assessments...
+                    </div>
+                  )}
+                  {!loadingImported && importedRecords.length === 0 && (
+                    <div className="text-center py-12">
+                      <ClipboardCheck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                      <h4 className="text-lg font-semibold text-muted-foreground mb-2">
+                        No imported assessments
+                      </h4>
+                      <p className="text-sm text-muted-foreground">
+                        Import Planet Mark assessment reports via the Audits page to see them here.
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    {importedRecords.map((record) => (
+                      <div
+                        key={record.id}
+                        className="p-4 bg-surface/50 rounded-lg border border-border hover:border-primary/40 transition-all"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h4 className="font-medium text-foreground">
+                              {record.scheme_label || 'Planet Mark Assessment'}
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              {record.issuer_name && `${record.issuer_name} · `}
+                              {record.report_date
+                                ? new Date(record.report_date).toLocaleDateString()
+                                : 'Date not available'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            {record.score_percentage != null && (
+                              <span className="text-lg font-bold text-primary">
+                                {Math.round(record.score_percentage)}%
+                              </span>
+                            )}
+                            <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
+                              record.outcome_status === 'pass' || record.outcome_status === 'approved'
+                                ? 'bg-success/20 text-success'
+                                : record.outcome_status === 'fail'
+                                  ? 'bg-destructive/20 text-destructive'
+                                  : 'bg-warning/20 text-warning'
+                            }`}>
+                              {record.outcome_status || record.status}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span>{record.findings_count ?? 0} findings</span>
+                          {(record.major_findings ?? 0) > 0 && (
+                            <span className="text-destructive">{record.major_findings} major</span>
+                          )}
+                          {(record.minor_findings ?? 0) > 0 && (
+                            <span className="text-warning">{record.minor_findings} minor</span>
+                          )}
+                          {(record.observations ?? 0) > 0 && (
+                            <span>{record.observations} observations</span>
+                          )}
+                          {record.import_job_id && (
+                            <a
+                              href={`/audits/0/import-review?jobId=${record.import_job_id}`}
+                              className="text-primary hover:underline flex items-center gap-1 ml-auto"
+                            >
+                              View Import <ArrowUpRight className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

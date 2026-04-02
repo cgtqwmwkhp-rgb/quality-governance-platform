@@ -140,7 +140,7 @@ describe('AuditImportReview', () => {
         'This import job belongs to a different audit run. Re-open it from the audits workspace.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open Compliance Summary' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open Customer Audits' })).toBeDisabled()
     expect(mockGetRunDetail).not.toHaveBeenCalled()
   })
 
@@ -384,7 +384,7 @@ describe('AuditImportReview', () => {
         id: 72,
         audit_run_id: 41,
         reference_number: 'IMP-00072',
-        status: 'review_required',
+        status: 'completed',
         specialist_home_path: '/uvdb',
         specialist_home_label: 'Open Achilles / UVDB',
         promotion_summary_json: null,

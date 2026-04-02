@@ -1,5 +1,6 @@
 """API dependencies for dependency injection."""
 
+import logging
 from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, status
@@ -12,6 +13,8 @@ from src.core.security import decode_token
 from src.domain.models.tenant import TenantUser
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
+
+logger = logging.getLogger(__name__)
 
 # Security scheme - auto_error=False allows optional auth
 security = HTTPBearer()
@@ -150,6 +153,12 @@ async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
         return
 
     user.tenant_id = membership.tenant_id
+    await db.flush()
+    logger.info(
+        "Persisted tenant_id=%s on user %s from TenantUser membership",
+        membership.tenant_id,
+        user.id,
+    )
 
 
 # Type aliases for cleaner route signatures

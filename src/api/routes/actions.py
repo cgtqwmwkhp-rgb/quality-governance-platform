@@ -267,6 +267,7 @@ async def _count_for_source(
     status_filter: Optional[str],
     source_id: Optional[int],
     source_reference: Optional[str],
+    tenant_id: Optional[int] = None,
 ) -> int:
     """Compute total count across all applicable source tables using SQL COUNT."""
     total = 0
@@ -303,7 +304,14 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "investigation")
 
     if not source_type or source_type == "assessment":
-        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+        q = (
+            select(func.count())
+            .select_from(CAPAAction)
+            .where(
+                CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
+                CAPAAction.tenant_id == tenant_id,
+            )
+        )
         if status_filter:
             q = _apply_capa_status_filter(q, status_filter)
         if source_type == "assessment" and source_reference:
@@ -311,7 +319,14 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "assessment")
 
     if not source_type or source_type == "induction":
-        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.INDUCTION)
+        q = (
+            select(func.count())
+            .select_from(CAPAAction)
+            .where(
+                CAPAAction.source_type == CAPASource.INDUCTION,
+                CAPAAction.tenant_id == tenant_id,
+            )
+        )
         if status_filter:
             q = _apply_capa_status_filter(q, status_filter)
         if source_type == "induction" and source_reference:
@@ -319,7 +334,14 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "induction")
 
     if not source_type or source_type == "audit_finding":
-        q = select(func.count()).select_from(CAPAAction).where(CAPAAction.source_type == CAPASource.AUDIT_FINDING)
+        q = (
+            select(func.count())
+            .select_from(CAPAAction)
+            .where(
+                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.tenant_id == tenant_id,
+            )
+        )
         if status_filter:
             q = _apply_capa_status_filter(q, status_filter)
         if source_type == "audit_finding" and source_id:
@@ -346,7 +368,9 @@ async def list_actions(
     When listing across all source types, individual queries are capped and
     merged client-side to honour the requested page window.
     """
-    total = await _count_for_source(db, source_type, status_filter, source_id, source_reference)
+    total = await _count_for_source(
+        db, source_type, status_filter, source_id, source_reference, tenant_id=current_user.tenant_id
+    )
 
     if total == 0:
         return ActionListResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
@@ -444,7 +468,10 @@ async def list_actions(
         try:
             q = (
                 select(CAPAAction)
-                .where(CAPAAction.source_type == CAPASource.JOB_ASSESSMENT)
+                .where(
+                    CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
+                    CAPAAction.tenant_id == current_user.tenant_id,
+                )
                 .order_by(CAPAAction.created_at.desc())
             )
             if status_filter:
@@ -465,7 +492,10 @@ async def list_actions(
         try:
             q = (
                 select(CAPAAction)
-                .where(CAPAAction.source_type == CAPASource.INDUCTION)
+                .where(
+                    CAPAAction.source_type == CAPASource.INDUCTION,
+                    CAPAAction.tenant_id == current_user.tenant_id,
+                )
                 .order_by(CAPAAction.created_at.desc())
             )
             if status_filter:
@@ -486,7 +516,10 @@ async def list_actions(
         try:
             q = (
                 select(CAPAAction)
-                .where(CAPAAction.source_type == CAPASource.AUDIT_FINDING)
+                .where(
+                    CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                    CAPAAction.tenant_id == current_user.tenant_id,
+                )
                 .order_by(CAPAAction.created_at.desc())
             )
             if status_filter:
@@ -923,6 +956,7 @@ async def get_action(
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -933,6 +967,7 @@ async def get_action(
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.INDUCTION,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -943,6 +978,7 @@ async def get_action(
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -1074,6 +1110,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         action = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -1084,6 +1121,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.INDUCTION,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         action = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -1094,6 +1132,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             select(CAPAAction).where(
                 CAPAAction.id == action_id,
                 CAPAAction.source_type == CAPASource.AUDIT_FINDING,
+                CAPAAction.tenant_id == current_user.tenant_id,
             )
         )
         action = cast(Optional[CAPAAction], result.scalar_one_or_none())

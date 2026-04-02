@@ -215,6 +215,7 @@ jobs:
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv 2>/dev/null || true)
           
           if [ -z "$DB_URL" ]; then
             echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
@@ -257,6 +258,9 @@ jobs:
               MISTRAL_API_KEY="${MISTRAL_API_KEY_VAL}" \
               GOOGLE_GEMINI_API_KEY="${GEMINI_API_KEY_VAL}" \
               UAT_MODE="READ_WRITE" \
+              CELERY_BROKER_URL="${REDIS_URL_VAL}" \
+              CELERY_RESULT_BACKEND="${REDIS_URL_VAL}" \
+              REDIS_URL="${REDIS_URL_VAL}" \
             --output none
           
           echo "   ✅ Application settings configured"
@@ -265,7 +269,7 @@ jobs:
           az webapp config set \
             --name "${{ env.AZURE_WEBAPP_NAME }}" \
             --resource-group rg-qgp-staging \
-            --startup-file "uvicorn src.main:app --host 0.0.0.0 --port 8000" \
+            --startup-file "uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips '*'" \
             --always-on true \
             --generic-configurations '{"healthCheckPath":"/healthz"}' \
             --output none

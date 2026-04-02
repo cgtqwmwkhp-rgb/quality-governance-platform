@@ -28,6 +28,7 @@ from src.api.routes import (
     evidence_assets,
     executive_dashboard,
     external_audit_imports,
+    external_audit_records,
     feature_flags,
     form_config,
     global_search,
@@ -138,6 +139,11 @@ router.include_router(
     external_audit_imports.router,
     prefix="/external-audit-imports",
     tags=["External Audit Imports"],
+)
+router.include_router(
+    external_audit_records.router,
+    prefix="/external-audit-records",
+    tags=["External Audit Records"],
 )
 # Workflow Engine (SLA, Escalation, Automation)
 router.include_router(workflow.router, tags=["Workflow Engine"])

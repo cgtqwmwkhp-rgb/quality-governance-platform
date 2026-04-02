@@ -77,7 +77,6 @@ class CAPAAction(Base):
     assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     verified_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

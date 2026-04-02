@@ -1288,13 +1288,21 @@ class AuditService:
             return None
 
         title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
-        existing_result = await self.db.execute(
+        source_result = await self.db.execute(
             select(EnterpriseRisk).where(
                 EnterpriseRisk.tenant_id == run.tenant_id,
-                EnterpriseRisk.title == title,
+                EnterpriseRisk.linked_audits.contains([finding.reference_number]),
             )
         )
-        existing = existing_result.scalar_one_or_none()
+        existing = source_result.scalar_one_or_none()
+        if existing is None:
+            title_result = await self.db.execute(
+                select(EnterpriseRisk).where(
+                    EnterpriseRisk.tenant_id == run.tenant_id,
+                    EnterpriseRisk.title == title,
+                )
+            )
+            existing = title_result.scalar_one_or_none()
         if existing is not None:
             linked_audits = set(existing.linked_audits or [])
             linked_audits.update([run.reference_number, finding.reference_number])

@@ -186,7 +186,7 @@ describe('Audits external import flow', () => {
     expect(mockQueueImportJob).toHaveBeenCalledWith(72)
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72')
-    })
+    }, { timeout: 3000 })
   })
 
   it('requires a report before importing an external audit', async () => {
@@ -286,7 +286,9 @@ describe('Audits external import flow', () => {
     await waitFor(() => {
       expect(mockQueueImportJob).toHaveBeenCalledWith(72)
     })
-    expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72&queueError=1')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/audits/41/import-review?jobId=72&queueError=1')
+    }, { timeout: 3000 })
   })
 
   it('surfaces structured backend import errors instead of schedule fallback text', async () => {

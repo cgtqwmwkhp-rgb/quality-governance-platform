@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
@@ -182,7 +182,9 @@ def _determine_specialist_home(job: ExternalAuditImportJobResponse) -> tuple[str
         return "/planet-mark", "Open Planet Mark"
     if scheme == "iso":
         return "/compliance", "Open ISO Compliance"
-    return "/compliance", "Open Compliance Summary"
+    if scheme in ("customer_other", "other"):
+        return "/customer-audits", "Open Customer Audits"
+    return "/customer-audits", "Open Customer Audits"
 
 
 _REDACTED_PROVENANCE_KEYS = frozenset({"storage_key"})
@@ -219,6 +221,7 @@ async def queue_import_job(
     job_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
+    background_tasks: BackgroundTasks,
 ) -> ExternalAuditImportJobResponse:
     """Set an import job to QUEUED status (fast — no inline processing).
 
@@ -234,10 +237,17 @@ async def queue_import_job(
     )
 
     if should_enqueue:
-        try:
-            process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
-        except Exception:
-            logger.warning("Celery dispatch unavailable for job %s", job.id)
+
+        def _dispatch_celery() -> None:
+            try:
+                process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+            except Exception:
+                logger.warning(
+                    "Celery dispatch unavailable for job %s — use the Process button on the review page",
+                    job.id,
+                )
+
+        background_tasks.add_task(_dispatch_celery)
 
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 

@@ -4292,4 +4292,55 @@ export const externalAuditImportsApi = {
     api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
 }
 
+// ======================== External Audit Records (Cross-Scheme) ========================
+
+export interface ExternalAuditRecordSummary {
+  id: number
+  tenant_id: number | null
+  scheme: string
+  scheme_version: string | null
+  scheme_label: string | null
+  audit_run_id: number | null
+  import_job_id: number | null
+  issuer_name: string | null
+  company_name: string | null
+  report_date: string | null
+  overall_score: number | null
+  max_score: number | null
+  score_percentage: number | null
+  section_scores: Record<string, unknown> | null
+  outcome_status: string | null
+  findings_count: number | null
+  major_findings: number | null
+  minor_findings: number | null
+  observations: number | null
+  analysis_summary: string | null
+  status: string
+}
+
+export interface ExternalAuditRecordListResponse {
+  total: number
+  records: ExternalAuditRecordSummary[]
+}
+
+export interface ExternalAuditRecordDashboardResponse {
+  total_records: number
+  average_score_percentage: number | null
+  total_findings: number
+  total_major: number
+  total_minor: number
+  total_observations: number
+}
+
+export const externalAuditRecordsApi = {
+  list: (params?: { scheme?: string; status?: string; skip?: number; limit?: number }) =>
+    api.get<ExternalAuditRecordListResponse>('/api/v1/external-audit-records', { params }),
+
+  get: (recordId: number) =>
+    api.get<ExternalAuditRecordSummary>(`/api/v1/external-audit-records/${recordId}`),
+
+  dashboard: (params?: { scheme?: string }) =>
+    api.get<ExternalAuditRecordDashboardResponse>('/api/v1/external-audit-records/dashboard', { params }),
+}
+
 export default api
