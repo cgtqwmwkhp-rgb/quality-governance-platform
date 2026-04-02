@@ -208,9 +208,12 @@ function formatDate(value: string | null | undefined): string {
   }
 }
 
-function describeReconciliationFailure(error: unknown): string {
+function describeReconciliationFailure(error: unknown, jobStatus?: string): string {
   const apiError = createApiError(error)
   if (apiError.error_class === ErrorClass.NOT_FOUND) {
+    if (!jobStatus || !['completed', 'promoting'].includes(jobStatus)) {
+      return ''
+    }
     return 'Downstream workflow diagnostics are unavailable for this job on the current backend.'
   }
   if (apiError.error_class === ErrorClass.VALIDATION_ERROR) {
@@ -306,7 +309,10 @@ function deriveSpecialistHome(job: ExternalAuditImportJob | null): { path: strin
   if (scheme === 'iso') {
     return { path: '/compliance', label: 'Open ISO Compliance' }
   }
-  return { path: '/compliance', label: 'Open Compliance Summary' }
+  if (scheme === 'customer_other' || scheme === 'other') {
+    return { path: '/customer-audits', label: 'Open Customer Audits' }
+  }
+  return { path: '/customer-audits', label: 'Open Customer Audits' }
 }
 
 export default function AuditImportReview() {
@@ -374,7 +380,7 @@ export default function AuditImportReview() {
           .then((res) => ({ data: res.data, notice: null }))
           .catch((reconciliationErr) => ({
             data: null,
-            notice: describeReconciliationFailure(reconciliationErr),
+            notice: describeReconciliationFailure(reconciliationErr, resolvedJobRes.data.status) || null,
           })),
       ])
       if (
@@ -562,7 +568,7 @@ export default function AuditImportReview() {
       await load()
     } catch (err) {
       console.error('Failed to bulk approve draft findings', err)
-      setError('Failed to approve all pending findings. Please retry.')
+      setError(getApiErrorMessage(err) || 'Failed to approve all pending findings. Please retry.')
     } finally {
       setIsBulkReviewing(false)
     }
@@ -583,7 +589,7 @@ export default function AuditImportReview() {
         nextReconciliation = reconciliationRes.data
         setReconciliationNotice(null)
       } catch (reconciliationErr) {
-        setReconciliationNotice(describeReconciliationFailure(reconciliationErr))
+        setReconciliationNotice(describeReconciliationFailure(reconciliationErr, 'completed') || null)
       }
       setReconciliation(nextReconciliation)
       if (nextReconciliation?.failed_total) {

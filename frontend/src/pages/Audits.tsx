@@ -466,9 +466,12 @@ export default function Audits() {
       await loadData()
 
       if (isImportFlow && importJobId) {
-        navigate(
-          `${getAuditWorkspacePath(result, importJobId)}${importQueueFailed ? '&queueError=1' : ''}`,
-        )
+        // STATIC_UI_CONFIG_OK: UX delay to show success before navigating to import review
+        setTimeout(() => {
+          navigate(
+            `${getAuditWorkspacePath(result, importJobId)}${importQueueFailed ? '&queueError=1' : ''}`,
+          )
+        }, 2000)
         return
       }
 

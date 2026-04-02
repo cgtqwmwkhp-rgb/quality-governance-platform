@@ -90,7 +90,9 @@ class ExternalAuditImportService:
             return "/planet-mark", "Planet Mark"
         if normalized == "iso":
             return "/compliance", "ISO Compliance"
-        return "/compliance", "Compliance Summary"
+        if normalized in ("customer_other", "other"):
+            return "/customer-audits", "Customer Audits"
+        return "/customer-audits", "Customer Audits"
 
     async def create_job(
         self,
@@ -584,7 +586,12 @@ class ExternalAuditImportService:
             .where(
                 ExternalAuditImportJob.id == job_id,
                 ExternalAuditImportJob.tenant_id == effective_tenant_id,
-                ExternalAuditImportJob.status == ExternalAuditImportStatus.QUEUED,
+                ExternalAuditImportJob.status.in_(
+                    [
+                        ExternalAuditImportStatus.QUEUED,
+                        ExternalAuditImportStatus.PROCESSING,
+                    ]
+                ),
             )
             .values(**transition_values)
         )
@@ -604,7 +611,7 @@ class ExternalAuditImportService:
             raise
 
         asset = await self._get_asset(asset_id=job.source_document_asset_id, tenant_id=effective_tenant_id)
-        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=tenant_id)
+        run = await self._get_run(audit_run_id=job.audit_run_id, tenant_id=effective_tenant_id)
 
         job.updated_by_id = user_id or job.updated_by_id
         job.error_code = None
@@ -676,7 +683,7 @@ class ExternalAuditImportService:
             ai_result = self.consensus_service.reconcile(mistral_result, gemini_result)
 
             scheme_warnings = validate_against_scheme(
-                scheme=run.assurance_scheme or "",
+                scheme=job.detected_scheme or "",
                 overall_score=ai_result.overall_score,
                 max_score=ai_result.max_score,
                 score_percentage=ai_result.score_percentage,
@@ -916,8 +923,6 @@ class ExternalAuditImportService:
                     title=job.source_filename,
                 )
 
-            self._apply_run_completion(run, job)
-
             scheme_alignment = await self._sync_scheme_records(
                 job=job,
                 run=run,
@@ -940,6 +945,7 @@ class ExternalAuditImportService:
                 )
                 job.processing_warnings_json = existing_warnings
             else:
+                self._apply_run_completion(run, job)
                 job.status = ExternalAuditImportStatus.COMPLETED
                 job.promoted_at = datetime.now(timezone.utc)
             job.updated_by_id = user_id
@@ -1047,6 +1053,8 @@ class ExternalAuditImportService:
                     document_clause_ids.update(clause_ids)
             except Exception as exc:
                 logger.error("Failed to promote draft %s: %s", draft.id, exc, exc_info=True)
+                draft.status = ExternalAuditDraftStatus.DRAFT
+                draft.review_notes = f"Promotion failed: {str(exc)[:200]}"
                 failed_drafts.append(
                     {
                         "draft_id": draft.id,
@@ -1463,11 +1471,38 @@ class ExternalAuditImportService:
         home_route, home_label = self._scheme_home(job.detected_scheme)
         findings_count, major, minor, obs = self._count_findings(drafts)
 
+        existing_record = await self.db.execute(
+            select(ExternalAuditRecord).where(
+                ExternalAuditRecord.import_job_id == job.id,
+            )
+        )
+        existing = existing_record.scalar_one_or_none()
+        if existing is not None:
+            logger.info("ExternalAuditRecord for job %s already exists — skipping duplicate insert", job.id)
+            uvdb_audit_id = None
+            if self._is_uvdb_scheme(job, run):
+                uvdb_result = await self.db.execute(
+                    select(UVDBAudit).where(
+                        UVDBAudit.tenant_id == tenant_id,
+                        UVDBAudit.audit_reference == run.reference_number,
+                    )
+                )
+                uvdb_row = uvdb_result.scalar_one_or_none()
+                uvdb_audit_id = uvdb_row.id if uvdb_row else None
+            return {
+                "status": "already_synced",
+                "scheme": job.detected_scheme,
+                "external_audit_record_id": existing.id,
+                "uvdb_audit_id": uvdb_audit_id,
+                "home_route": home_route,
+                "home_label": home_label,
+            }
+
         record = ExternalAuditRecord(
             tenant_id=tenant_id,
             scheme=job.detected_scheme or "unknown",
             scheme_version=job.scheme_version,
-            scheme_label=job.detected_scheme,
+            scheme_label=run.assurance_scheme or home_label,
             audit_run_id=job.audit_run_id,
             import_job_id=job.id,
             issuer_name=job.issuer_name,

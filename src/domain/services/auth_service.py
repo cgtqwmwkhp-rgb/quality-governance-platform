@@ -27,6 +27,7 @@ from src.core.security import (
     verify_password,
     verify_password_reset_token,
 )
+from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.domain.services.email_service import email_service
 from src.domain.services.token_service import TokenService
@@ -85,6 +86,34 @@ class AuthService:
         user.last_login = datetime.now(timezone.utc).isoformat()
         await self.db.commit()
         await self.db.refresh(user)
+
+    async def _resolve_default_tenant(self, user: User) -> Tenant | None:
+        """Assign a new user to the first active tenant and create a TenantUser row."""
+        existing = await self.db.execute(select(TenantUser).where(TenantUser.user_id == user.id).limit(1))
+        if existing.scalar_one_or_none() is not None:
+            return None
+
+        tenant_result = await self.db.execute(
+            select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if tenant is None:
+            logger.warning("No active tenant found for new user %s", user.id)
+            return None
+
+        user.tenant_id = tenant.id
+        self.db.add(
+            TenantUser(
+                tenant_id=tenant.id,
+                user_id=user.id,
+                is_active=True,
+                is_primary=True,
+                role="user",
+            )
+        )
+        await self.db.commit()
+        await self.db.refresh(user)
+        return tenant
 
     async def authenticate(self, email: str, password: str) -> tuple[User, str, str]:
         """Authenticate user with email/password credentials.
@@ -340,6 +369,15 @@ class AuthService:
             self.db.add(user)
             await self.db.commit()
             await self.db.refresh(user)
+
+            default_tenant = await self._resolve_default_tenant(user)
+            if default_tenant is not None:
+                logger.info(
+                    "Assigned new Azure AD user to tenant %s",
+                    default_tenant.id,
+                    extra={"email_masked": _mask_email(email)},
+                )
+
             logger.info(
                 "Created new user from Azure AD",
                 extra={"email_masked": _mask_email(email), "azure_oid": azure_oid or "missing"},

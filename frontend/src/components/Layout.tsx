@@ -86,6 +86,7 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/compliance', icon: Shield, label: t('nav.iso_compliance') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
         { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
+        { path: '/customer-audits', icon: Users, label: 'Customer Audits' },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
         { path: '/standards', icon: BookOpen, label: t('nav.standards') },
         { path: '/actions', icon: ListTodo, label: t('nav.actions') },

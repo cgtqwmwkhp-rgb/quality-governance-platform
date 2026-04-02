@@ -113,6 +113,10 @@ celery_app.conf.beat_schedule = {
         "task": "src.infrastructure.tasks.pams_sync_tasks.sync_pams_checklists",
         "schedule": crontab(minute="*/15"),  # Every 15 minutes
     },
+    "recover-stale-import-jobs": {
+        "task": "src.infrastructure.tasks.external_audit_import_tasks.recover_stale_import_jobs",
+        "schedule": crontab(minute="*/10"),
+    },
 }
 
 celery_app.autodiscover_tasks(

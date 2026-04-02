@@ -209,7 +209,7 @@ export default function Login({ onLogin }: LoginProps) {
   // Pre-warm the backend on mount so cold-start latency is absorbed before
   // the user actually submits credentials or returns from SSO redirect.
   useEffect(() => {
-    fetch(`${API_BASE}/api/health`, { method: 'GET', mode: 'no-cors' }).catch(() => {})
+    fetch(`${API_BASE}/healthz`, { method: 'GET', mode: 'no-cors' }).catch(() => {})
   }, [])
 
   // Check for OAuth callback on mount

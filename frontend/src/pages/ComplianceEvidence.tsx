@@ -25,6 +25,7 @@ import {
 import {
   complianceApi,
   crossStandardMappingsApi,
+  externalAuditRecordsApi,
   getApiErrorMessage,
   type ComplianceClauseRecord,
   type ComplianceCoverageResponse,
@@ -32,6 +33,7 @@ import {
   type ComplianceStandardRecord,
   type CrossStandardMappingRecord,
   type EvidenceLinkRecord,
+  type ExternalAuditRecordSummary,
 } from '../api/client'
 
 const evidenceTypeConfig: Record<
@@ -45,6 +47,7 @@ const evidenceTypeConfig: Record<
   action: { icon: Zap, label: 'Action', color: 'bg-yellow-500' },
   risk: { icon: Shield, label: 'Risk', color: 'bg-orange-500' },
   training: { icon: Award, label: 'Training', color: 'bg-cyan-500' },
+  audit_finding: { icon: ClipboardCheck, label: 'Audit Finding', color: 'bg-teal-500' },
 }
 
 const standardIcons: Record<string, React.ElementType> = {
@@ -69,7 +72,7 @@ export default function ComplianceEvidence() {
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'clauses' | 'evidence' | 'gaps'>('clauses')
+  const [viewMode, setViewMode] = useState<'clauses' | 'evidence' | 'gaps' | 'imported'>('clauses')
   const [selectedClauseId, setSelectedClauseId] = useState<string | null>(null)
   const [showAutoTagger, setShowAutoTagger] = useState(false)
   const [autoTagText, setAutoTagText] = useState('')
@@ -80,6 +83,9 @@ export default function ComplianceEvidence() {
   const [report, setReport] = useState<ComplianceReportResponse | null>(null)
   const [evidenceLinks, setEvidenceLinks] = useState<EvidenceLinkRecord[]>([])
   const [mappings, setMappings] = useState<CrossStandardMappingRecord[]>([])
+  const [importedRecords, setImportedRecords] = useState<ExternalAuditRecordSummary[]>([])
+  const [importedTotal, setImportedTotal] = useState(0)
+  const [loadingImported, setLoadingImported] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingMappings, setLoadingMappings] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -140,6 +146,28 @@ export default function ComplianceEvidence() {
       cancelled = true
     }
   }, [searchQuery, selectedStandard, selectedClauseId])
+
+  useEffect(() => {
+    if (viewMode !== 'imported') return
+    let cancelled = false
+    const loadImported = async () => {
+      setLoadingImported(true)
+      setError(null)
+      try {
+        const res = await externalAuditRecordsApi.list({ scheme: 'iso' })
+        if (!cancelled) {
+          setImportedRecords(res.data.records)
+          setImportedTotal(res.data.total)
+        }
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorMessage(err))
+      } finally {
+        if (!cancelled) setLoadingImported(false)
+      }
+    }
+    void loadImported()
+    return () => { cancelled = true }
+  }, [viewMode])
 
   const selectedClause = useMemo(
     () => clauses.find((clause) => clause.id === selectedClauseId) ?? null,
@@ -224,7 +252,7 @@ export default function ComplianceEvidence() {
       return acc
     }, {})
     return {
-      auditLinks: counts.audit || 0,
+      auditLinks: (counts.audit || 0) + (counts.audit_finding || 0),
       actionLinks: counts.action || 0,
       riskLinks: counts.risk || 0,
       totalLinks: selectedClauseEvidence.length,
@@ -484,6 +512,7 @@ export default function ComplianceEvidence() {
               { id: 'clauses', label: 'Clause View', icon: BookOpen },
               { id: 'evidence', label: 'Evidence List', icon: FileText },
               { id: 'gaps', label: 'Gap Analysis', icon: AlertTriangle },
+              { id: 'imported', label: 'Imported Audits', icon: ClipboardCheck },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -621,6 +650,85 @@ export default function ComplianceEvidence() {
                     </div>
                   )
                 })}
+              </div>
+            </>
+          )}
+
+          {viewMode === 'imported' && (
+            <>
+              <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5 text-teal-400" />
+                Imported ISO Audits ({importedTotal})
+              </h2>
+              {loadingImported && (
+                <div className="text-sm text-muted-foreground mb-4">Loading imported audit records...</div>
+              )}
+              {!loadingImported && importedRecords.length === 0 && (
+                <div className="text-center py-12">
+                  <ClipboardCheck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold text-muted-foreground mb-2">No imported ISO audits</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Import ISO audit reports via the Audits page to see them here.
+                  </p>
+                </div>
+              )}
+              <div className="space-y-3">
+                {importedRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    className="p-4 bg-surface rounded-lg border border-border hover:border-primary/40 transition-all"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-medium text-foreground">
+                          {record.scheme_label || record.scheme_version || 'ISO Audit'}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          {record.issuer_name && `${record.issuer_name} · `}
+                          {record.report_date
+                            ? new Date(record.report_date).toLocaleDateString()
+                            : 'Date not available'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {record.score_percentage != null && (
+                          <span className="text-lg font-bold text-primary">
+                            {Math.round(record.score_percentage)}%
+                          </span>
+                        )}
+                        <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
+                          record.outcome_status === 'pass' || record.outcome_status === 'approved'
+                            ? 'bg-success/20 text-success'
+                            : record.outcome_status === 'fail'
+                              ? 'bg-destructive/20 text-destructive'
+                              : 'bg-warning/20 text-warning'
+                        }`}>
+                          {record.outcome_status || record.status}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>{record.findings_count ?? 0} findings</span>
+                      {(record.major_findings ?? 0) > 0 && (
+                        <span className="text-destructive">{record.major_findings} major</span>
+                      )}
+                      {(record.minor_findings ?? 0) > 0 && (
+                        <span className="text-warning">{record.minor_findings} minor</span>
+                      )}
+                      {(record.observations ?? 0) > 0 && (
+                        <span>{record.observations} observations</span>
+                      )}
+                      {record.import_job_id && (
+                        <a
+                          href={`/audits/0/import-review?jobId=${record.import_job_id}`}
+                          className="text-primary hover:underline flex items-center gap-1 ml-auto"
+                        >
+                          View Import <ArrowUpRight className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </>
           )}
