@@ -903,6 +903,13 @@ class ExternalAuditImportService:
         if resolved_tenant_id is None:
             raise ValidationError("Cannot promote external audit findings without a tenant context")
 
+        await self._backfill_tenant_ids(
+            resolved_tenant_id=resolved_tenant_id,
+            run=run,
+            job=job,
+            drafts=drafts,
+        )
+
         try:
             promotion_result: PromotionResult = await self._promote_accepted_drafts(
                 accepted=accepted,
@@ -982,6 +989,36 @@ class ExternalAuditImportService:
             logger.debug("Cache invalidation after promotion skipped (not available)")
 
         return job
+
+    async def _backfill_tenant_ids(
+        self,
+        *,
+        resolved_tenant_id: int,
+        run: AuditRun,
+        job: ExternalAuditImportJob,
+        drafts: list[ExternalAuditDraft],
+    ) -> None:
+        """Patch NULL tenant_id on entities created before tenant auto-assign was deployed."""
+        touched = False
+        if run.tenant_id is None:
+            run.tenant_id = resolved_tenant_id
+            touched = True
+        if job.tenant_id is None:
+            job.tenant_id = resolved_tenant_id
+            touched = True
+        for draft in drafts:
+            if draft.tenant_id is None:
+                draft.tenant_id = resolved_tenant_id
+                touched = True
+        if touched:
+            await self.db.flush()
+            logger.info(
+                "Backfilled tenant_id=%s on run %s / job %s / %d drafts",
+                resolved_tenant_id,
+                run.id,
+                job.id,
+                len(drafts),
+            )
 
     async def _promote_accepted_drafts(
         self,
