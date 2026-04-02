@@ -1267,7 +1267,11 @@ class AuditService:
             source_id=finding.id,
             created_by_id=actor_user_id,
             assigned_to_id=run.assigned_to_id,
-            due_date=finding.corrective_action_due_date,
+            due_date=(
+                finding.corrective_action_due_date.replace(tzinfo=None)
+                if finding.corrective_action_due_date and finding.corrective_action_due_date.tzinfo
+                else finding.corrective_action_due_date
+            ),
             iso_standard=run.assurance_scheme,
             clause_reference=run.external_reference,
         )
@@ -1349,10 +1353,10 @@ class AuditService:
             risk_owner_id=run.assigned_to_id,
             status="open",
             review_frequency_days=30,
-            next_review_date=datetime.now(timezone.utc) + timedelta(days=30),
+            next_review_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
             is_escalated=True,
             escalation_reason=f"Auto-escalated from {finding.reference_number}",
-            escalation_date=datetime.now(timezone.utc),
+            escalation_date=datetime.now(timezone.utc).replace(tzinfo=None),
             linked_audits=[run.reference_number, finding.reference_number],
             linked_actions=[action.reference_number] if action is not None else [],
             created_by=actor_user_id,

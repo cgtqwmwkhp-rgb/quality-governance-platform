@@ -984,12 +984,21 @@ class ExternalAuditImportService:
             await self.db.refresh(job)
         except Exception as exc:
             logger.error("Promotion failed for job %s: %s", job_id, exc, exc_info=True)
-            job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
-            job.updated_by_id = user_id
-            existing_warnings = job.processing_warnings_json or []
-            existing_warnings.append(f"Promotion failed: {str(exc)[:300]}")
-            job.processing_warnings_json = existing_warnings
-            await self.db.flush()
+            try:
+                await self.db.rollback()
+                job_reload = await self.db.execute(
+                    select(ExternalAuditImportJob).where(ExternalAuditImportJob.id == job_id)
+                )
+                job = job_reload.scalar_one_or_none() or job
+                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+                job.updated_by_id = user_id
+                existing_warnings = list(job.processing_warnings_json or [])
+                existing_warnings.append(f"Promotion failed: {str(exc)[:300]}")
+                job.processing_warnings_json = existing_warnings
+                await self.db.flush()
+                await self.db.commit()
+            except Exception as cleanup_exc:
+                logger.warning("Could not persist promotion error for job %s: %s", job_id, cleanup_exc)
             raise
 
         try:
@@ -1558,7 +1567,9 @@ class ExternalAuditImportService:
             import_job_id=job.id,
             issuer_name=job.issuer_name,
             company_name=run.title or run.location,
-            report_date=job.report_date,
+            report_date=(
+                job.report_date.replace(tzinfo=None) if job.report_date and job.report_date.tzinfo else job.report_date
+            ),
             overall_score=job.overall_score,
             max_score=job.max_score,
             score_percentage=job.score_percentage,
