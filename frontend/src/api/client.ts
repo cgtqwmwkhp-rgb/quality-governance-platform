@@ -26,6 +26,11 @@ const UPLOAD_TIMEOUT_MS = 120000
 // PDF extraction + OCR + dual AI analysis (Mistral + Gemini) runs synchronously
 const PROCESSING_TIMEOUT_MS = 300000
 
+// Extended timeout for promotion (3 minutes)
+// Batch-creates findings, CAPA actions, enterprise risks, evidence links,
+// scheme records, and UVDB sync — 500+ DB round-trips for large audits
+const PROMOTE_TIMEOUT_MS = 180000
+
 // ============ Bounded Error Codes (LOGIN_UX_CONTRACT.md) ============
 // These are the ONLY allowed error codes for login
 export type LoginErrorCode =
@@ -4289,7 +4294,9 @@ export const externalAuditImportsApi = {
   ) => api.post<ExternalAuditImportDraft[]>(`/api/v1/external-audit-imports/jobs/${jobId}/bulk-review`, data),
 
   promoteJob: (jobId: number) =>
-    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`),
+    api.post<ExternalAuditImportJob>(`/api/v1/external-audit-imports/jobs/${jobId}/promote`, null, {
+      timeout: PROMOTE_TIMEOUT_MS,
+    }),
 }
 
 // ======================== External Audit Records (Cross-Scheme) ========================
