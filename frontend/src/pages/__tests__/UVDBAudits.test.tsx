@@ -17,7 +17,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }))
 
+const mockApiGet = vi.fn()
+
 vi.mock('../../api/client', () => ({
+  default: {
+    get: (...args: unknown[]) => mockApiGet(...args),
+    defaults: { baseURL: '' },
+  },
   uvdbApi: {
     getDashboard: (...args: unknown[]) => mockGetDashboard(...args),
     listSections: (...args: unknown[]) => mockListSections(...args),
@@ -103,6 +109,7 @@ describe('UVDBAudits', () => {
       },
     })
     mockCreateApiError.mockReturnValue({ error_class: 'UNKNOWN' })
+    mockApiGet.mockResolvedValue({ data: { sections: {} } })
   })
 
   it('renders live UVDB data and shows ISO mappings from the backend contract', async () => {
