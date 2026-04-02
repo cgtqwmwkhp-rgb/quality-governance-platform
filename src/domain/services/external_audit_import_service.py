@@ -922,28 +922,42 @@ class ExternalAuditImportService:
             reconciled_drafts = [draft for draft in drafts if draft.promoted_finding_id]
 
             if document_clause_ids:
-                await self._link_source_document_evidence(
-                    asset_id=job.source_document_asset_id,
-                    clause_ids=sorted(document_clause_ids),
-                    tenant_id=resolved_tenant_id,
-                    user_id=user_id,
-                    title=job.source_filename,
-                )
+                try:
+                    await self._link_source_document_evidence(
+                        asset_id=job.source_document_asset_id,
+                        clause_ids=sorted(document_clause_ids),
+                        tenant_id=resolved_tenant_id,
+                        user_id=user_id,
+                        title=job.source_filename,
+                    )
+                except Exception as link_exc:
+                    logger.warning("Source document evidence linking failed (non-fatal): %s", link_exc)
 
-            scheme_alignment = await self._sync_scheme_records(
-                job=job,
-                run=run,
-                tenant_id=resolved_tenant_id,
-                drafts=reconciled_drafts,
-            )
-            reconciliation = await self._build_promotion_reconciliation(
-                job=job,
-                run=run,
-                drafts=drafts,
-                tenant_id=resolved_tenant_id,
-                failed_drafts=failed_drafts,
-                scheme_alignment=scheme_alignment,
-            )
+            scheme_alignment: dict[str, object] | None = None
+            try:
+                scheme_alignment = await self._sync_scheme_records(
+                    job=job,
+                    run=run,
+                    tenant_id=resolved_tenant_id,
+                    drafts=reconciled_drafts,
+                )
+            except Exception as sync_exc:
+                logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc)
+                scheme_alignment = {"status": "sync_failed", "error": str(sync_exc)[:200]}
+
+            reconciliation: dict[str, object] = {}
+            try:
+                reconciliation = await self._build_promotion_reconciliation(
+                    job=job,
+                    run=run,
+                    drafts=drafts,
+                    tenant_id=resolved_tenant_id,
+                    failed_drafts=failed_drafts,
+                    scheme_alignment=scheme_alignment,
+                )
+            except Exception as recon_exc:
+                logger.warning("Promotion reconciliation build failed (non-fatal): %s", recon_exc)
+                reconciliation = {"status": "reconciliation_failed", "error": str(recon_exc)[:200]}
             if failed_drafts:
                 job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
                 existing_warnings = list(job.processing_warnings_json or [])
