@@ -24,6 +24,11 @@ import {
   ClipboardList,
   Link2,
   XCircle,
+  ExternalLink,
+  Eye,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -33,6 +38,7 @@ import {
   isSetupRequired,
   SetupRequiredResponse,
 } from '../api/client'
+import api from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
 
 interface UVDBSection {
@@ -54,6 +60,46 @@ interface UVDBAudit {
   lead_auditor: string | null
 }
 
+interface ScoreBreakdownEntry {
+  label: string
+  score: number
+  max_score: number
+  percentage: number
+}
+
+interface UVDBAuditDetail {
+  id: number
+  audit_reference: string
+  company_name: string
+  company_id: string | null
+  audit_type: string
+  audit_scope: string | null
+  audit_date: string | null
+  status: string
+  lead_auditor: string | null
+  total_score: number | null
+  max_possible_score: number | null
+  percentage_score: number | null
+  section_scores: { sections: ScoreBreakdownEntry[] } | null
+  score_breakdown: ScoreBreakdownEntry[]
+  source_document_asset_id: number | null
+  source_filename: string | null
+  findings_count: number
+  major_findings: number
+  minor_findings: number
+  observations: number
+  certifications: Record<string, boolean>
+  audit_notes: string | null
+}
+
+interface SectionScoreData {
+  label: string
+  score: number
+  max_score: number
+  percentage: number
+  audit_reference: string
+}
+
 interface UVDBDashboardState {
   total_audits: number
   active_audits: number
@@ -73,8 +119,205 @@ interface UVDBIsoMappingRow {
   iso_27001: string[]
 }
 
-// Bounded error state for deterministic UX
 type LoadState = 'idle' | 'loading' | 'success' | 'error' | 'setup_required'
+
+function ScoreBar({ percentage }: { percentage: number }) {
+  const color =
+    percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full rounded-full transition-all ${color}`}
+        style={{ width: `${Math.min(percentage, 100)}%` }}
+      />
+    </div>
+  )
+}
+
+function AuditDetailPanel({
+  detail,
+  isLoading,
+  onViewPdf,
+}: {
+  detail: UVDBAuditDetail | null
+  isLoading: boolean
+  onViewPdf: (assetId: number) => void
+}) {
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center gap-3">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <span className="text-muted-foreground text-sm">Loading audit details...</span>
+      </div>
+    )
+  }
+
+  if (!detail) return null
+
+  const breakdown = detail.score_breakdown || detail.section_scores?.sections || []
+
+  return (
+    <div className="p-6 space-y-6 border-t border-border bg-surface/50 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Score overview */}
+        <div className="space-y-4">
+          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+            Overall Score
+          </h4>
+          {detail.percentage_score != null ? (
+            <div className="flex items-end gap-3">
+              <span className="text-4xl font-bold text-success">{detail.percentage_score}%</span>
+              {detail.total_score != null && detail.max_possible_score != null && (
+                <span className="text-sm text-muted-foreground pb-1">
+                  {detail.total_score} / {detail.max_possible_score}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No score data available</p>
+          )}
+
+          {detail.percentage_score != null && (
+            <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  detail.percentage_score >= 80
+                    ? 'bg-emerald-500'
+                    : detail.percentage_score >= 50
+                      ? 'bg-amber-500'
+                      : 'bg-red-500'
+                }`}
+                style={{ width: `${Math.min(detail.percentage_score, 100)}%` }}
+              />
+            </div>
+          )}
+
+          {/* Findings */}
+          <div className="flex gap-3 flex-wrap">
+            {detail.major_findings > 0 && (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-destructive/10 text-destructive">
+                {detail.major_findings} Major
+              </span>
+            )}
+            {detail.minor_findings > 0 && (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-warning/10 text-warning">
+                {detail.minor_findings} Minor
+              </span>
+            )}
+            {detail.observations > 0 && (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-info/10 text-info">
+                {detail.observations} Observations
+              </span>
+            )}
+            {detail.findings_count === 0 && (
+              <span className="px-2 py-1 rounded text-xs font-medium bg-success/10 text-success flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> No findings
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Score breakdown */}
+        <div className="space-y-3">
+          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+            Section Breakdown
+          </h4>
+          {breakdown.length > 0 ? (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+              {breakdown.map((item, index) => {
+                const pct = Number(item.percentage ?? 0)
+                return (
+                  <div key={`breakdown-${index}`} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-foreground truncate mr-2">
+                        {String(item.label || `Section ${index + 1}`)}
+                      </span>
+                      <span className="text-muted-foreground whitespace-nowrap">
+                        {String(item.score ?? '-')} / {String(item.max_score ?? '-')}
+                      </span>
+                    </div>
+                    <ScoreBar percentage={pct} />
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No section breakdown available</p>
+          )}
+        </div>
+
+        {/* Source PDF + audit info */}
+        <div className="space-y-4">
+          <h4 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">
+            Audit Details
+          </h4>
+          {detail.source_document_asset_id ? (
+            <button
+              onClick={() => onViewPdf(detail.source_document_asset_id!)}
+              className="flex items-center gap-2 w-full px-4 py-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors border border-primary/20"
+            >
+              <Eye className="w-5 h-5" />
+              <div className="text-left">
+                <div className="font-medium text-sm">View Source PDF</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {detail.source_filename || 'Audit document'}
+                </div>
+              </div>
+              <ExternalLink className="w-4 h-4 ml-auto" />
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-lg bg-muted text-muted-foreground text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              No source document linked
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-muted-foreground text-xs uppercase">Reference</p>
+              <p className="text-foreground font-medium">{detail.audit_reference}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs uppercase">Company</p>
+              <p className="text-foreground font-medium">{detail.company_name}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs uppercase">Lead Auditor</p>
+              <p className="text-foreground font-medium">{detail.lead_auditor || '—'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground text-xs uppercase">Type</p>
+              <p className="text-foreground font-medium">{detail.audit_type}</p>
+            </div>
+          </div>
+
+          {/* Certifications */}
+          {detail.certifications && (
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(detail.certifications).map(([key, verified]) =>
+                verified ? (
+                  <span
+                    key={key}
+                    className="px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success"
+                  >
+                    {key.replace('_', ' ').toUpperCase()}
+                  </span>
+                ) : null,
+              )}
+            </div>
+          )}
+
+          {detail.audit_notes && (
+            <div>
+              <p className="text-muted-foreground text-xs uppercase mb-1">Notes</p>
+              <p className="text-sm text-foreground-secondary line-clamp-3">{detail.audit_notes}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function UVDBAudits() {
   const { t } = useTranslation()
@@ -103,8 +346,13 @@ export default function UVDBAudits() {
   const [auditSearch, setAuditSearch] = useState(auditRefFromQuery)
   const [auditStatusFilter, setAuditStatusFilter] = useState<string>('')
   const [expandedAuditId, setExpandedAuditId] = useState<number | null>(null)
+  const [auditDetail, setAuditDetail] = useState<UVDBAuditDetail | null>(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+  const [sectionScores, setSectionScores] = useState<Record<string, SectionScoreData>>({})
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [sectionQuestions, setSectionQuestions] = useState<Record<string, unknown[]>>({})
+  const [loadingSectionQuestions, setLoadingSectionQuestions] = useState<string | null>(null)
 
-  // Transform API section to component type
   const transformSection = (apiSection: {
     number: string
     title: string
@@ -119,7 +367,6 @@ export default function UVDBAudits() {
     iso_mapping: apiSection.iso_mapping || {},
   })
 
-  // Transform API audit to component type
   const transformAudit = (apiAudit: {
     id: number
     audit_reference: string
@@ -141,13 +388,14 @@ export default function UVDBAudits() {
   })
 
   const loadData = useCallback(async (isRetry = false) => {
-      setLoadState('loading')
-      setErrorClass(null)
-      setSetupRequired(null)
-      setCreateAuditError(null)
+    setLoadState('loading')
+    setErrorClass(null)
+    setSetupRequired(null)
+    setCreateAuditError(null)
 
-      try {
-        const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse] = await Promise.all([
+    try {
+      const [dashboardResponse, sectionsResponse, auditsResponse, mappingResponse, scoresResponse] =
+        await Promise.all([
           uvdbApi.getDashboard(),
           uvdbApi.listSections(),
           uvdbApi.listAudits({
@@ -157,79 +405,155 @@ export default function UVDBAudits() {
             ...(auditStatusFilter ? { status: auditStatusFilter } : {}),
           }),
           uvdbApi.getISOMapping(),
+          api.get('/api/v1/uvdb/sections/scores').catch(() => ({ data: { sections: {} } })),
         ])
 
-        if (isSetupRequired(dashboardResponse.data)) {
-          setSetupRequired(dashboardResponse.data)
-          setLoadState('setup_required')
-          return
-        }
-        if (isSetupRequired(auditsResponse.data)) {
-          setSetupRequired(auditsResponse.data)
-          setLoadState('setup_required')
-          return
-        }
-        if (isSetupRequired(sectionsResponse.data)) {
-          setSetupRequired(sectionsResponse.data)
-          setLoadState('setup_required')
-          return
-        }
-        if (isSetupRequired(mappingResponse.data)) {
-          setSetupRequired(mappingResponse.data)
-          setLoadState('setup_required')
-          return
-        }
-
-        setDashboard({
-          total_audits: dashboardResponse.data.summary.total_audits,
-          active_audits: dashboardResponse.data.summary.active_audits,
-          completed_audits: dashboardResponse.data.summary.completed_audits,
-          average_score: dashboardResponse.data.summary.average_score,
-          protocol_name: dashboardResponse.data.protocol.name,
-          protocol_version: dashboardResponse.data.protocol.version,
-        })
-
-        const transformedSections = sectionsResponse.data.sections.map(transformSection)
-        transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
-        const mappings = mappingResponse.data.mappings
-        const enrichedSections = transformedSections.map((section) => {
-          const sectionMappings = mappings.filter((mapping) => mapping.uvdb_section === section.number)
-          if (sectionMappings.length === 0) return section
-          return {
-            ...section,
-            iso_mapping: {
-              ...(sectionMappings.some((mapping) => mapping.iso_9001.length > 0) ? { '9001': 'aligned' } : {}),
-              ...(sectionMappings.some((mapping) => mapping.iso_14001.length > 0) ? { '14001': 'aligned' } : {}),
-              ...(sectionMappings.some((mapping) => mapping.iso_45001.length > 0) ? { '45001': 'aligned' } : {}),
-              ...(sectionMappings.some((mapping) => mapping.iso_27001.length > 0) ? { '27001': 'aligned' } : {}),
-            },
-          }
-        })
-        setSections(enrichedSections)
-
-        const transformedAudits = auditsResponse.data.audits.map(transformAudit)
-        transformedAudits.sort((a, b) => b.id - a.id)
-        setAudits(transformedAudits)
-        setIsoMappings(mappings)
-
-        setLoadState('success')
-      } catch (err) {
-        const apiError = createApiError(err)
-        setErrorClass(apiError.error_class)
-
-        // Auto-retry once for transient network errors
-        if (
-          !isRetry &&
-          (apiError.error_class === ErrorClass.NETWORK_ERROR ||
-            apiError.error_class === ErrorClass.SERVER_ERROR)
-        ) {
-          await loadData(true)
-          return
-        }
-
-        setLoadState('error')
+      if (isSetupRequired(dashboardResponse.data)) {
+        setSetupRequired(dashboardResponse.data)
+        setLoadState('setup_required')
+        return
       }
-    }, [auditSearch, auditStatusFilter])
+      if (isSetupRequired(auditsResponse.data)) {
+        setSetupRequired(auditsResponse.data)
+        setLoadState('setup_required')
+        return
+      }
+      if (isSetupRequired(sectionsResponse.data)) {
+        setSetupRequired(sectionsResponse.data)
+        setLoadState('setup_required')
+        return
+      }
+      if (isSetupRequired(mappingResponse.data)) {
+        setSetupRequired(mappingResponse.data)
+        setLoadState('setup_required')
+        return
+      }
+
+      setDashboard({
+        total_audits: dashboardResponse.data.summary.total_audits,
+        active_audits: dashboardResponse.data.summary.active_audits,
+        completed_audits: dashboardResponse.data.summary.completed_audits,
+        average_score: dashboardResponse.data.summary.average_score,
+        protocol_name: dashboardResponse.data.protocol.name,
+        protocol_version: dashboardResponse.data.protocol.version,
+      })
+
+      const transformedSections = sectionsResponse.data.sections.map(transformSection)
+      transformedSections.sort((a, b) => parseInt(a.number) - parseInt(b.number))
+      const mappings = mappingResponse.data.mappings
+      const enrichedSections = transformedSections.map((section) => {
+        const sectionMappings = mappings.filter(
+          (mapping: UVDBIsoMappingRow) => mapping.uvdb_section === section.number,
+        )
+        if (sectionMappings.length === 0) return section
+        return {
+          ...section,
+          iso_mapping: {
+            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_9001.length > 0)
+              ? { '9001': 'aligned' }
+              : {}),
+            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_14001.length > 0)
+              ? { '14001': 'aligned' }
+              : {}),
+            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_45001.length > 0)
+              ? { '45001': 'aligned' }
+              : {}),
+            ...(sectionMappings.some((mapping: UVDBIsoMappingRow) => mapping.iso_27001.length > 0)
+              ? { '27001': 'aligned' }
+              : {}),
+          },
+        }
+      })
+      setSections(enrichedSections)
+
+      const transformedAudits = auditsResponse.data.audits.map(transformAudit)
+      transformedAudits.sort((a, b) => b.id - a.id)
+      setAudits(transformedAudits)
+      setIsoMappings(mappings)
+
+      if (scoresResponse.data?.sections) {
+        setSectionScores(scoresResponse.data.sections as Record<string, SectionScoreData>)
+      }
+
+      setLoadState('success')
+    } catch (err) {
+      const apiError = createApiError(err)
+      setErrorClass(apiError.error_class)
+
+      if (
+        !isRetry &&
+        (apiError.error_class === ErrorClass.NETWORK_ERROR ||
+          apiError.error_class === ErrorClass.SERVER_ERROR)
+      ) {
+        await loadData(true)
+        return
+      }
+
+      setLoadState('error')
+    }
+  }, [auditSearch, auditStatusFilter])
+
+  const handleToggleAuditDetail = useCallback(
+    async (auditId: number) => {
+      if (expandedAuditId === auditId) {
+        setExpandedAuditId(null)
+        setAuditDetail(null)
+        return
+      }
+
+      setExpandedAuditId(auditId)
+      setIsLoadingDetail(true)
+      setAuditDetail(null)
+
+      try {
+        const response = await uvdbApi.getAudit(auditId)
+        setAuditDetail(response.data as unknown as UVDBAuditDetail)
+      } catch {
+        setAuditDetail(null)
+      } finally {
+        setIsLoadingDetail(false)
+      }
+    },
+    [expandedAuditId],
+  )
+
+  const handleViewPdf = useCallback(async (assetId: number) => {
+    try {
+      const response = await api.get(`/api/v1/evidence-assets/${assetId}/signed-url`)
+      const rawUrl = response.data.signed_url as string
+      const fullUrl = new URL(rawUrl, api.defaults.baseURL || window.location.origin).toString()
+      window.open(fullUrl, '_blank', 'noopener,noreferrer')
+    } catch {
+      /* signed URL retrieval failed — silently ignore */
+    }
+  }, [])
+
+  const handleToggleSection = useCallback(
+    async (sectionNumber: string) => {
+      if (expandedSection === sectionNumber) {
+        setExpandedSection(null)
+        return
+      }
+      setExpandedSection(sectionNumber)
+
+      if (!sectionQuestions[sectionNumber]) {
+        setLoadingSectionQuestions(sectionNumber)
+        try {
+          const response = await uvdbApi.getSectionQuestions(parseInt(sectionNumber, 10))
+          const data = response.data as { questions?: unknown[] }
+          setSectionQuestions((prev) => ({
+            ...prev,
+            [sectionNumber]: data.questions || [],
+          }))
+        } catch {
+          setSectionQuestions((prev) => ({ ...prev, [sectionNumber]: [] }))
+        } finally {
+          setLoadingSectionQuestions(null)
+        }
+      }
+    },
+    [expandedSection, sectionQuestions],
+  )
 
   const handleOpenCreateAuditForm = () => {
     setCreateAuditError(null)
@@ -328,10 +652,10 @@ export default function UVDBAudits() {
       '11': 'bg-emerald-500',
       '12': 'bg-purple-500',
       '13': 'bg-purple-500',
-      '14': 'bg-yellow-500',
-      '15': 'bg-gray-500',
+      '14': 'bg-warning',
+      '15': 'bg-muted-foreground',
     }
-    return colors[number] || 'bg-gray-500'
+    return colors[number] || 'bg-muted-foreground'
   }
 
   if (loadState === 'setup_required' && setupRequired) {
@@ -411,7 +735,9 @@ export default function UVDBAudits() {
               <input
                 className="w-full rounded-lg border border-border bg-background px-3 py-2"
                 value={createAuditForm.company_name}
-                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, company_name: e.target.value }))}
+                onChange={(e) =>
+                  setCreateAuditForm((prev) => ({ ...prev, company_name: e.target.value }))
+                }
               />
             </label>
             <label className="space-y-2 text-sm text-foreground">
@@ -419,7 +745,9 @@ export default function UVDBAudits() {
               <input
                 className="w-full rounded-lg border border-border bg-background px-3 py-2"
                 value={createAuditForm.audit_type}
-                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, audit_type: e.target.value }))}
+                onChange={(e) =>
+                  setCreateAuditForm((prev) => ({ ...prev, audit_type: e.target.value }))
+                }
               />
             </label>
             <label className="space-y-2 text-sm text-foreground">
@@ -428,7 +756,9 @@ export default function UVDBAudits() {
                 type="date"
                 className="w-full rounded-lg border border-border bg-background px-3 py-2"
                 value={createAuditForm.audit_date}
-                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, audit_date: e.target.value }))}
+                onChange={(e) =>
+                  setCreateAuditForm((prev) => ({ ...prev, audit_date: e.target.value }))
+                }
               />
             </label>
             <label className="space-y-2 text-sm text-foreground">
@@ -436,7 +766,9 @@ export default function UVDBAudits() {
               <input
                 className="w-full rounded-lg border border-border bg-background px-3 py-2"
                 value={createAuditForm.lead_auditor}
-                onChange={(e) => setCreateAuditForm((prev) => ({ ...prev, lead_auditor: e.target.value }))}
+                onChange={(e) =>
+                  setCreateAuditForm((prev) => ({ ...prev, lead_auditor: e.target.value }))
+                }
               />
             </label>
             <div className="md:col-span-2 flex flex-col gap-3">
@@ -474,7 +806,9 @@ export default function UVDBAudits() {
               {dashboard?.protocol_name || t('uvdb.protocol_ref')}
             </h2>
             <p className="text-primary-foreground/80">
-              {dashboard ? `${t('uvdb.protocol_version')} ${dashboard.protocol_version}` : t('uvdb.protocol_version')}
+              {dashboard
+                ? `${t('uvdb.protocol_version')} ${dashboard.protocol_version}`
+                : t('uvdb.protocol_version')}
             </p>
           </div>
           <div className="mt-4 md:mt-0 flex items-center gap-6">
@@ -487,7 +821,9 @@ export default function UVDBAudits() {
               <div className="text-primary-foreground/80 text-sm">{t('uvdb.max_score')}</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-primary-foreground">{dashboard?.active_audits ?? 0}</div>
+              <div className="text-3xl font-bold text-primary-foreground">
+                {dashboard?.active_audits ?? 0}
+              </div>
               <div className="text-primary-foreground/80 text-sm">Active audits</div>
             </div>
           </div>
@@ -609,19 +945,20 @@ export default function UVDBAudits() {
                   return (
                     <div
                       key={iso.standard}
-                      className="bg-slate-800 rounded-xl p-5 border border-slate-700"
+                      className="bg-card rounded-xl p-5 border border-border"
                     >
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`p-2 ${iso.color} rounded-lg`}>
                           <Icon className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                          <div className="font-bold text-white">{iso.standard}</div>
-                          <div className="text-xs text-gray-400">{t(iso.titleKey)}</div>
+                          <div className="font-bold text-card-foreground">{iso.standard}</div>
+                          <div className="text-xs text-muted-foreground">{t(iso.titleKey)}</div>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-300">
-                        <span className="text-gray-400">UVDB Sections:</span> {iso.sections}
+                      <div className="text-sm text-foreground-secondary">
+                        <span className="text-muted-foreground">UVDB Sections:</span>{' '}
+                        {iso.sections}
                       </div>
                     </div>
                   )
@@ -629,27 +966,35 @@ export default function UVDBAudits() {
               </div>
 
               {/* Recent Audits */}
-              <div className="bg-slate-800 rounded-xl border border-slate-700">
-                <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-white">{t('uvdb.audit_status')}</h3>
-                    <p className="text-sm text-gray-400">Plantexpand Limited (00019685)</p>
+                    <h3 className="font-bold text-card-foreground">{t('uvdb.audit_status')}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Plantexpand Limited (00019685)
+                    </p>
                   </div>
-                  <Award className="w-8 h-8 text-yellow-400" />
+                  <Award className="w-8 h-8 text-warning" />
                 </div>
                 <div className="p-4 space-y-4">
                   {audits.map((audit) => (
                     <div
                       key={audit.id}
-                      className="flex items-center justify-between p-4 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      className="flex items-center justify-between p-4 bg-surface/50 rounded-lg hover:bg-surface transition-colors cursor-pointer"
+                      onClick={() => handleToggleAuditDetail(audit.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleAuditDetail(audit.id) } }}
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-3 bg-yellow-500/20 rounded-lg">
-                          <FileText className="w-5 h-5 text-yellow-400" />
+                        <div className="p-3 bg-warning/20 rounded-lg">
+                          <FileText className="w-5 h-5 text-warning" />
                         </div>
                         <div>
-                          <div className="font-medium text-white">{audit.audit_reference}</div>
-                          <div className="text-sm text-gray-400">
+                          <div className="font-medium text-card-foreground">
+                            {audit.audit_reference}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
                             {audit.audit_type} Audit • {audit.audit_date || 'TBD'} •{' '}
                             {audit.lead_auditor}
                           </div>
@@ -658,10 +1003,12 @@ export default function UVDBAudits() {
                       <div className="flex items-center gap-4">
                         {audit.percentage_score != null && (
                           <div className="text-right">
-                            <div className="text-2xl font-bold text-emerald-400">
+                            <div className="text-2xl font-bold text-success">
                               {audit.percentage_score}%
                             </div>
-                            <div className="text-xs text-gray-400">{t('uvdb.audit_score')}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {t('uvdb.audit_score')}
+                            </div>
                           </div>
                         )}
                         <span
@@ -669,28 +1016,45 @@ export default function UVDBAudits() {
                         >
                           {audit.status}
                         </span>
-                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                        {expandedAuditId === audit.id ? (
+                          <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                        )}
                       </div>
                     </div>
                   ))}
+                  {expandedAuditId && audits.some((a) => a.id === expandedAuditId) && activeTab === 'dashboard' && (
+                    <AuditDetailPanel
+                      detail={auditDetail}
+                      isLoading={isLoadingDetail}
+                      onViewPdf={handleViewPdf}
+                    />
+                  )}
                 </div>
               </div>
 
               {/* KPI Summary */}
-              <div className="bg-slate-800 rounded-xl border border-slate-700">
-                <div className="p-4 bg-slate-700 border-b border-slate-600">
-                  <h3 className="font-bold text-white">{t('uvdb.audit_status')}</h3>
+              <div className="bg-card rounded-xl border border-border">
+                <div className="p-4 bg-surface border-b border-border">
+                  <h3 className="font-bold text-card-foreground">{t('uvdb.audit_status')}</h3>
                 </div>
                 <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: 'Total audits', value: dashboard?.total_audits ?? audits.length },
+                    {
+                      label: 'Total audits',
+                      value: dashboard?.total_audits ?? audits.length,
+                    },
                     { label: 'Active', value: dashboard?.active_audits ?? 0 },
                     { label: 'Completed', value: dashboard?.completed_audits ?? 0 },
-                    { label: 'Average score', value: `${dashboard?.average_score ?? 0}%` },
+                    {
+                      label: 'Average score',
+                      value: `${dashboard?.average_score ?? 0}%`,
+                    },
                   ].map((kpi) => (
-                    <div key={kpi.label} className="bg-slate-700/50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-white">{kpi.value}</div>
-                      <div className="text-xs text-gray-400">{kpi.label}</div>
+                    <div key={kpi.label} className="bg-surface/50 rounded-lg p-4 text-center">
+                      <div className="text-2xl font-bold text-card-foreground">{kpi.value}</div>
+                      <div className="text-xs text-muted-foreground">{kpi.label}</div>
                     </div>
                   ))}
                 </div>
@@ -704,45 +1068,135 @@ export default function UVDBAudits() {
               {sections.map((section) => {
                 const Icon = getSectionIcon(section.number)
                 const bgColor = getSectionColor(section.number)
+                const scoreData = sectionScores[section.number]
+                const isExpanded = expandedSection === section.number
+                const questions = sectionQuestions[section.number]
+                const isLoadingQuestions = loadingSectionQuestions === section.number
+
                 return (
-                  <div
-                    key={section.number}
-                    className="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-slate-500 transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 ${bgColor} rounded-xl`}>
-                        <Icon className="w-6 h-6 text-white" />
+                  <div key={section.number} className="flex flex-col">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="bg-card rounded-xl p-5 border border-border hover:border-border-strong transition-colors cursor-pointer"
+                      onClick={() => handleToggleSection(section.number)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleSection(section.number) } }}
+                    >
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`p-3 ${bgColor} rounded-xl`}>
+                          <Icon className="w-6 h-6 text-white" />
+                        </div>
+                        <div className="text-right">
+                          {scoreData ? (
+                            <>
+                              <div className="text-2xl font-bold text-success">
+                                {scoreData.score}
+                                <span className="text-base text-muted-foreground font-normal">
+                                  /{scoreData.max_score}
+                                </span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {scoreData.percentage.toFixed(0)}%
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="text-2xl font-bold text-card-foreground">
+                                {section.max_score}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {t('uvdb.max_score')}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-white">{section.max_score}</div>
-                        <div className="text-xs text-gray-400">{t('uvdb.max_score')}</div>
+
+                      {scoreData && (
+                        <div className="mb-3">
+                          <ScoreBar percentage={scoreData.percentage} />
+                        </div>
+                      )}
+
+                      <div className="text-lg font-bold text-card-foreground mb-1">
+                        Section {section.number}
+                      </div>
+                      <div className="text-sm text-foreground-secondary mb-4">{section.title}</div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {section.question_count} Questions
+                        </span>
+                        <div className="flex gap-1 items-center">
+                          {Object.keys(section.iso_mapping).map((iso) => (
+                            <span
+                              key={iso}
+                              className={`px-2 py-0.5 rounded text-xs ${
+                                iso === '9001'
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : iso === '14001'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : iso === '45001'
+                                      ? 'bg-orange-500/20 text-orange-400'
+                                      : 'bg-purple-500/20 text-purple-400'
+                              }`}
+                            >
+                              {iso}
+                            </span>
+                          ))}
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-muted-foreground ml-1" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-lg font-bold text-white mb-1">
-                      Section {section.number}
-                    </div>
-                    <div className="text-sm text-gray-300 mb-4">{section.title}</div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-400">{section.question_count} Questions</span>
-                      <div className="flex gap-1">
-                        {Object.keys(section.iso_mapping).map((iso) => (
-                          <span
-                            key={iso}
-                            className={`px-2 py-0.5 rounded text-xs ${
-                              iso === '9001'
-                                ? 'bg-blue-500/20 text-blue-400'
-                                : iso === '14001'
-                                  ? 'bg-emerald-500/20 text-emerald-400'
-                                  : iso === '45001'
-                                    ? 'bg-orange-500/20 text-orange-400'
-                                    : 'bg-purple-500/20 text-purple-400'
-                            }`}
-                          >
-                            {iso}
-                          </span>
-                        ))}
+
+                    {isExpanded && (
+                      <div className="bg-surface rounded-b-xl border border-t-0 border-border p-4 -mt-1 animate-fade-in">
+                        {isLoadingQuestions ? (
+                          <div className="flex items-center justify-center gap-2 py-4">
+                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Loading questions...
+                            </span>
+                          </div>
+                        ) : questions && questions.length > 0 ? (
+                          <div className="space-y-3">
+                            {questions.map((q: unknown, idx: number) => {
+                              const question = q as {
+                                number?: string
+                                text?: string
+                                sub_questions?: string[]
+                              }
+                              return (
+                                <div key={idx} className="text-sm">
+                                  <p className="text-foreground font-medium">
+                                    Q{question.number}: {question.text}
+                                  </p>
+                                  {question.sub_questions && question.sub_questions.length > 0 && (
+                                    <ul className="mt-1 ml-4 space-y-1">
+                                      {question.sub_questions.map((sq, sqIdx) => (
+                                        <li
+                                          key={sqIdx}
+                                          className="text-muted-foreground text-xs list-disc"
+                                        >
+                                          {sq}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-2">
+                            No questions available for this section.
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 )
               })}
@@ -751,24 +1205,28 @@ export default function UVDBAudits() {
 
           {/* Audit History Tab */}
           {activeTab === 'audits' && (
-            <div className="bg-slate-800 rounded-xl border border-slate-700">
-              <div className="p-4 bg-slate-700 border-b border-slate-600 flex items-center justify-between">
+            <div className="bg-card rounded-xl border border-border">
+              <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
                       type="text"
                       placeholder={t('uvdb.search_placeholder')}
                       value={auditSearch}
                       onChange={(e) => setAuditSearch(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') void loadData() }}
-                      className="pl-10 pr-4 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-500 focus:border-transparent"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void loadData()
+                      }}
+                      className="pl-10 pr-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
                     />
                   </div>
                   <select
                     value={auditStatusFilter}
-                    onChange={(e) => { setAuditStatusFilter(e.target.value); }}
-                    className="px-3 py-2 bg-slate-600 border border-slate-500 rounded-lg text-white focus:ring-2 focus:ring-yellow-500"
+                    onChange={(e) => {
+                      setAuditStatusFilter(e.target.value)
+                    }}
+                    className="px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:ring-2 focus:ring-ring"
                     aria-label="Filter by status"
                   >
                     <option value="">All Statuses</option>
@@ -777,127 +1235,125 @@ export default function UVDBAudits() {
                     <option value="scheduled">Scheduled</option>
                   </select>
                   <button
-                    className="flex items-center gap-2 px-3 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 bg-secondary hover:bg-muted rounded-lg transition-colors"
                     onClick={() => void loadData()}
                   >
                     <Filter className="w-4 h-4" />
                     {t('uvdb.filter')}
                   </button>
                 </div>
-                <button className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg transition-colors">
+                <button
+                  onClick={handleOpenCreateAuditForm}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+                >
                   <Plus className="w-4 h-4" />
                   {t('uvdb.new_audit')}
                 </button>
               </div>
               {auditRefFromQuery && audits.length === 0 ? (
-                <div className="mx-4 mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
-                  No synced UVDB audit row is visible yet for <strong>{auditRefFromQuery}</strong>. If this
-                  import was promoted successfully, use the External Audit Review diagnostics panel to verify
-                  whether the UVDB sync step completed or whether the audit was routed to a different
-                  specialist surface.
+                <div className="mx-4 mt-4 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+                  No synced UVDB audit row is visible yet for{' '}
+                  <strong>{auditRefFromQuery}</strong>. If this import was promoted successfully,
+                  use the External Audit Review diagnostics panel to verify whether the UVDB sync
+                  step completed or whether the audit was routed to a different specialist surface.
                 </div>
               ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-700/50">
+                  <thead className="bg-surface/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.reference')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.company')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.type')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.date')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.lead_auditor')}
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.score')}
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.status')}
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.actions')}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700">
-                    {audits.map((audit) => (<React.Fragment key={`audit-group-${audit.id}`}>
-                      <tr className="hover:bg-slate-700/50">
-                        <td className="px-4 py-3 font-medium text-white">
-                          {audit.audit_reference}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300">{audit.company_name}</td>
-                        <td className="px-4 py-3">
-                          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded text-xs font-medium">
-                            {audit.audit_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-300">{audit.audit_date || 'TBD'}</td>
-                        <td className="px-4 py-3 text-gray-300">{audit.lead_auditor}</td>
-                        <td className="px-4 py-3 text-center">
-                          {audit.percentage_score != null ? (
-                            <span className="text-emerald-400 font-bold">
-                              {audit.percentage_score}%
+                  <tbody className="divide-y divide-border">
+                    {audits.map((audit) => (
+                      <React.Fragment key={`audit-group-${audit.id}`}>
+                        <tr
+                          className="hover:bg-surface/50 cursor-pointer"
+                          onClick={() => handleToggleAuditDetail(audit.id)}
+                        >
+                          <td className="px-4 py-3 font-medium text-card-foreground">
+                            {audit.audit_reference}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">{audit.company_name}</td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 bg-warning/20 text-warning rounded text-xs font-medium">
+                              {audit.audit_type}
                             </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
-                          >
-                            {audit.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            aria-label={`View details for ${audit.audit_reference}`}
-                            className="p-2 hover:bg-slate-600 rounded-lg transition-colors"
-                            onClick={() => setExpandedAuditId(expandedAuditId === audit.id ? null : audit.id)}
-                          >
-                            {expandedAuditId === audit.id ? (
-                              <ChevronUp className="w-4 h-4 text-gray-400" />
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {audit.audit_date || 'TBD'}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">{audit.lead_auditor}</td>
+                          <td className="px-4 py-3 text-center">
+                            {audit.percentage_score != null ? (
+                              <span className="text-success font-bold">
+                                {audit.percentage_score}%
+                              </span>
                             ) : (
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
+                              <span className="text-muted-foreground">—</span>
                             )}
-                          </button>
-                        </td>
-                      </tr>
-                      {expandedAuditId === audit.id && (
-                        <tr>
-                          <td colSpan={8} className="px-6 py-4 bg-slate-750 border-b border-slate-700">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              <div>
-                                <p className="text-gray-400 text-xs uppercase">Reference</p>
-                                <p className="text-white font-medium">{audit.audit_reference}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-400 text-xs uppercase">Company</p>
-                                <p className="text-white font-medium">{audit.company_name}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-400 text-xs uppercase">Lead Auditor</p>
-                                <p className="text-white font-medium">{audit.lead_auditor || '—'}</p>
-                              </div>
-                              <div>
-                                <p className="text-gray-400 text-xs uppercase">Score</p>
-                                <p className="text-emerald-400 font-bold text-lg">
-                                  {audit.percentage_score != null ? `${audit.percentage_score}%` : '—'}
-                                </p>
-                              </div>
-                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(audit.status)}`}
+                            >
+                              {audit.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              aria-label={`View details for ${audit.audit_reference}`}
+                              className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleAuditDetail(audit.id)
+                              }}
+                            >
+                              {expandedAuditId === audit.id ? (
+                                <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                              )}
+                            </button>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>))}
+                        {expandedAuditId === audit.id && (
+                          <tr>
+                            <td colSpan={8} className="p-0">
+                              <AuditDetailPanel
+                                detail={auditDetail}
+                                isLoading={isLoadingDetail}
+                                onViewPdf={handleViewPdf}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -906,43 +1362,45 @@ export default function UVDBAudits() {
 
           {/* ISO Cross-Mapping Tab */}
           {activeTab === 'mapping' && (
-            <div className="bg-slate-800 rounded-xl border border-slate-700">
-              <div className="p-4 bg-slate-700 border-b border-slate-600">
-                <h3 className="font-bold text-white">{t('uvdb.iso_cross_mapping')}</h3>
-                <p className="text-sm text-gray-400">{t('uvdb.iso_mapping_subtitle')}</p>
+            <div className="bg-card rounded-xl border border-border">
+              <div className="p-4 bg-surface border-b border-border">
+                <h3 className="font-bold text-card-foreground">{t('uvdb.iso_cross_mapping')}</h3>
+                <p className="text-sm text-muted-foreground">{t('uvdb.iso_mapping_subtitle')}</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-700/50">
+                  <thead className="bg-surface/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.uvdb_section')}
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase">
                         {t('uvdb.topic')}
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         ISO 9001
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         ISO 14001
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         ISO 45001
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground uppercase">
                         ISO 27001
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-700">
+                  <tbody className="divide-y divide-border">
                     {isoMappings.map((row) => (
                       <tr
                         key={`${row.uvdb_section}-${row.uvdb_question}`}
-                        className="hover:bg-slate-700/50"
+                        className="hover:bg-surface/50"
                       >
-                        <td className="px-4 py-3 font-medium text-white">{row.uvdb_section}</td>
-                        <td className="px-4 py-3 text-gray-300">{row.uvdb_text}</td>
+                        <td className="px-4 py-3 font-medium text-card-foreground">
+                          {row.uvdb_section}
+                        </td>
+                        <td className="px-4 py-3 text-foreground">{row.uvdb_text}</td>
                         <td className="px-4 py-3 text-center">
                           {row.iso_9001.length > 0 && (
                             <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
@@ -975,7 +1433,7 @@ export default function UVDBAudits() {
                     ))}
                     {isoMappings.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                        <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                           No ISO cross-mapping data is available yet.
                         </td>
                       </tr>

@@ -10,6 +10,7 @@ Provides endpoints for:
 """
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -20,6 +21,8 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.setup_required import setup_required_response
+from src.domain.models.audit import AuditRun
+from src.domain.models.external_audit_import import ExternalAuditImportJob
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -672,11 +675,37 @@ async def get_audit(
     db: DbSession,
     current_user: CurrentUser = None,
 ) -> dict[str, Any]:
-    """Get audit details"""
+    """Get audit details including linked source PDF and score breakdown."""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
+
+    source_asset_id: int | None = None
+    source_filename: str | None = None
+
+    try:
+        run_result = await db.execute(select(AuditRun).where(AuditRun.reference_number == audit.audit_reference))
+        run = run_result.scalar_one_or_none()
+        if run:
+            job_result = await db.execute(
+                select(ExternalAuditImportJob)
+                .where(ExternalAuditImportJob.audit_run_id == run.id)
+                .order_by(ExternalAuditImportJob.id.desc())
+                .limit(1)
+            )
+            job = job_result.scalar_one_or_none()
+            if job:
+                source_asset_id = job.source_document_asset_id
+                source_filename = job.source_filename
+            elif run.source_document_asset_id:
+                source_asset_id = run.source_document_asset_id
+                source_filename = run.source_document_label
+    except (ProgrammingError, OperationalError):
+        logger.debug("Could not resolve source document for audit %s", audit_id)
+
+    scores = audit.section_scores or {}
+    score_breakdown = scores.get("sections", []) if isinstance(scores, dict) else []
 
     return {
         "id": audit.id,
@@ -689,8 +718,12 @@ async def get_audit(
         "status": audit.status,
         "lead_auditor": audit.lead_auditor,
         "total_score": audit.total_score,
+        "max_possible_score": audit.max_possible_score,
         "percentage_score": audit.percentage_score,
         "section_scores": audit.section_scores,
+        "score_breakdown": score_breakdown,
+        "source_document_asset_id": source_asset_id,
+        "source_filename": source_filename,
         "findings_count": audit.findings_count,
         "major_findings": audit.major_findings,
         "minor_findings": audit.minor_findings,
@@ -896,6 +929,63 @@ async def get_iso_cross_mapping(current_user: CurrentUser = None) -> dict[str, A
             "iso_27001_aligned": "Section 2.3 (Information Security)",
         },
     }
+
+
+# ============ Section Scores ============
+
+
+def _extract_section_number(label: str) -> str | None:
+    """Extract a UVDB section number from an OCR-generated label string."""
+    m = re.search(r"(?:Section\s+)?(\d{1,2})", label, re.IGNORECASE)
+    return m.group(1) if m else None
+
+
+@router.get("/sections/scores", response_model=dict)
+async def get_section_scores(
+    db: DbSession,
+    current_user: CurrentUser = None,
+) -> dict[str, Any]:
+    """Return per-section scores from the most recent completed UVDB audit."""
+    tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
+    tenant_filter = [UVDBAudit.tenant_id == tenant_id] if tenant_id is not None else []
+
+    try:
+        result = await db.execute(
+            select(UVDBAudit)
+            .where(
+                UVDBAudit.status == "completed",
+                UVDBAudit.section_scores.isnot(None),
+                *tenant_filter,
+            )
+            .order_by(UVDBAudit.audit_date.desc().nulls_last(), UVDBAudit.id.desc())
+            .limit(1)
+        )
+        latest = result.scalar_one_or_none()
+    except (ProgrammingError, OperationalError):
+        return {"sections": {}}
+
+    if not latest or not latest.section_scores:
+        return {"sections": {}}
+
+    raw = latest.section_scores
+    entries: list[dict[str, object]] = raw.get("sections", []) if isinstance(raw, dict) else []
+
+    sections_map: dict[str, dict[str, object]] = {}
+    for idx, entry in enumerate(entries):
+        label = str(entry.get("label", f"Section {idx + 1}"))
+        sec_num = _extract_section_number(label)
+        if sec_num is None:
+            sec_num = str(idx + 1)
+
+        sections_map[sec_num] = {
+            "label": label,
+            "score": entry.get("score", 0),
+            "max_score": entry.get("max_score", 0),
+            "percentage": entry.get("percentage", 0),
+            "audit_reference": latest.audit_reference,
+        }
+
+    return {"sections": sections_map}
 
 
 # ============ Dashboard ============
