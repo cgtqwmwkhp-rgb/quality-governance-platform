@@ -31,6 +31,17 @@ class ReferenceNumberService:
     }
 
     @classmethod
+    def _ref_column(cls, model_class: type[Any]) -> Any:
+        """Return the reference-number column, supporting both naming conventions."""
+        col = getattr(model_class, "reference_number", None)
+        if col is not None:
+            return col
+        col = getattr(model_class, "reference", None)
+        if col is not None:
+            return col
+        raise AttributeError(f"{model_class.__name__} has neither 'reference_number' nor 'reference'")
+
+    @classmethod
     async def _next_sequence(
         cls,
         db: AsyncSession,
@@ -43,10 +54,10 @@ class ReferenceNumberService:
         except Exception:
             pass
 
+        ref_col = cls._ref_column(model_class)
+
         max_seq = 0
-        result = await db.execute(
-            select(func.max(model_class.reference_number)).where(model_class.reference_number.like(pattern))
-        )
+        result = await db.execute(select(func.max(ref_col)).where(ref_col.like(pattern)))
         max_ref = result.scalar()
         if max_ref:
             try:
@@ -54,9 +65,7 @@ class ReferenceNumberService:
             except (ValueError, IndexError):
                 pass
 
-        count_result = await db.execute(
-            select(func.count()).select_from(model_class).where(model_class.reference_number.like(pattern))
-        )
+        count_result = await db.execute(select(func.count()).select_from(model_class).where(ref_col.like(pattern)))
         count = count_result.scalar() or 0
 
         return max(max_seq, count) + 1
