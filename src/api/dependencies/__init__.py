@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.core.security import decode_token
-from src.domain.models.tenant import TenantUser
+from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
 
@@ -149,14 +149,36 @@ async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
         .order_by(TenantUser.is_primary.desc(), TenantUser.id.asc())
     )
     membership = membership_result.scalars().first()
-    if membership is None:
+    if membership is not None:
+        user.tenant_id = membership.tenant_id
+        await db.flush()
+        logger.info(
+            "Persisted tenant_id=%s on user %s from TenantUser membership",
+            membership.tenant_id,
+            user.id,
+        )
         return
 
-    user.tenant_id = membership.tenant_id
+    tenant_result = await db.execute(select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1))
+    tenant = tenant_result.scalar_one_or_none()
+    if tenant is None:
+        logger.warning("No active tenant available for user %s — cannot auto-assign", user.id)
+        return
+
+    user.tenant_id = tenant.id
+    db.add(
+        TenantUser(
+            tenant_id=tenant.id,
+            user_id=user.id,
+            is_active=True,
+            is_primary=True,
+            role="user",
+        )
+    )
     await db.flush()
     logger.info(
-        "Persisted tenant_id=%s on user %s from TenantUser membership",
-        membership.tenant_id,
+        "Auto-assigned tenant_id=%s to existing user %s (no prior membership)",
+        tenant.id,
         user.id,
     )
 
