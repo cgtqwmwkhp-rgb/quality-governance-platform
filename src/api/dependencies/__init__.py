@@ -162,8 +162,16 @@ async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
     tenant_result = await db.execute(select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1))
     tenant = tenant_result.scalar_one_or_none()
     if tenant is None:
-        logger.warning("No active tenant available for user %s — cannot auto-assign", user.id)
-        return
+        tenant = Tenant(
+            name="Default Organisation",
+            slug="default",
+            admin_email="admin@qgp.local",
+            is_active=True,
+            subscription_tier="enterprise",
+        )
+        db.add(tenant)
+        await db.flush()
+        logger.warning("Bootstrapped default tenant id=%s for user %s (no tenants existed)", tenant.id, user.id)
 
     user.tenant_id = tenant.id
     db.add(
