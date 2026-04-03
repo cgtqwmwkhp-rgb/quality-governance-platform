@@ -882,24 +882,35 @@ async def list_runs(
                     )
                 )
             except Exception as item_exc:
-                logger.error(
-                    "Failed to serialize run id=%s (index %d): %s\n%s",
+                logger.warning(
+                    "Soft-failed to serialize run id=%s (index %d): %s – building fallback",
                     getattr(run, "id", "?"),
                     idx,
                     item_exc,
-                    traceback.format_exc(),
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=api_error(
-                        ErrorCode.INTERNAL_ERROR,
-                        "Run serialization failed",
-                        details={
-                            "run_id": getattr(run, "id", "?"),
-                            "error_type": type(item_exc).__name__,
-                        },
-                    ),
-                ) from item_exc
+                try:
+                    fallback = AuditRunResponse(
+                        id=run.id,
+                        reference_number=getattr(run, "reference_number", "???"),
+                        template_id=getattr(run, "template_id", 0),
+                        template_version=getattr(run, "template_version", 0),
+                        title=getattr(run, "title", None),
+                        status=str(run.status) if run.status else "unknown",
+                        created_at=run.created_at,
+                        updated_at=run.updated_at,
+                    )
+                    validated_items.append(
+                        _annotate_run_response_import_mode(
+                            fallback,
+                            template=getattr(run, "template", None),
+                        )
+                    )
+                except Exception as fallback_exc:
+                    logger.error(
+                        "Cannot construct fallback for run id=%s, skipping: %s",
+                        getattr(run, "id", "?"),
+                        fallback_exc,
+                    )
 
         return AuditRunListResponse(
             items=validated_items,
