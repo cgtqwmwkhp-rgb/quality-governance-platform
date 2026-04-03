@@ -234,7 +234,7 @@ def upgrade() -> None:
                         :owner, 'open', 30,
                         :review_date, true,
                         :esc_reason, :esc_date,
-                        :linked_audits::jsonb, :linked_actions::jsonb,
+                        CAST(:linked_audits AS jsonb), CAST(:linked_actions AS jsonb),
                         :now, :now, :now, :created_by
                     )
                     RETURNING id
@@ -278,7 +278,7 @@ def upgrade() -> None:
             conn.execute(
                 text("""
                     UPDATE audit_findings
-                    SET risk_ids_json = :ids::jsonb,
+                    SET risk_ids_json = CAST(:ids AS jsonb),
                         updated_at = :now
                     WHERE id = :fid
                 """),
