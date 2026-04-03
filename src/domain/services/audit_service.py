@@ -1288,7 +1288,7 @@ class AuditService:
         actor_user_id: int,
         suggested_title: str | None = None,
     ) -> EnterpriseRisk | None:
-        if finding.severity not in {"critical", "high", "medium"}:
+        if finding.severity not in {"critical", "high", "medium", "low"}:
             return None
 
         title = (suggested_title or f"Audit escalation: {run.reference_number} / {finding.reference_number}")[:255]
@@ -1323,8 +1323,10 @@ class AuditService:
             likelihood, impact = 4, 5
         elif finding.severity == "high":
             likelihood, impact = 3, 4
-        else:
+        elif finding.severity == "medium":
             likelihood, impact = 2, 3
+        else:
+            likelihood, impact = 1, 2
         score = likelihood * impact
 
         risk = EnterpriseRisk(

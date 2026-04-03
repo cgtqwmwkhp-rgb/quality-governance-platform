@@ -1064,15 +1064,8 @@ class ExternalAuditImportService:
             try:
                 async with self.db.begin_nested():
                     clause_ids = self._extract_clause_ids(draft)
-                    requires_action = draft.finding_type in {
-                        "nonconformity",
-                        "major_nonconformity",
-                        "minor_nonconformity",
-                        "competence_gap",
-                        "finding",
-                        "flagged_item",
-                        "question_answered_no",
-                    }
+                    _POSITIVE_ONLY_TYPES = {"positive_practice", "strength", "commendation"}
+                    requires_action = draft.finding_type not in _POSITIVE_ONLY_TYPES
                     finding_data: dict = {
                         "title": draft.title,
                         "description": draft.description,
