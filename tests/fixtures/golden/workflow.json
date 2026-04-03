@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "name": "Incident Escalation",
+  "description": "Auto-escalation workflow for unacknowledged incidents",
+  "trigger_type": "time_based",
+  "trigger_config": {
+    "delay_hours": 24,
+    "condition": "status == 'reported'"
+  },
+  "actions": [
+    {"type": "notify", "target": "manager"},
+    {"type": "update_field", "field": "priority", "value": "high"}
+  ],
+  "is_active": true,
+  "created_at": "2026-03-15T10:00:00Z"
+}

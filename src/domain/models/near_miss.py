@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import DataClassification, TimestampMixin
@@ -14,6 +14,12 @@ class NearMiss(Base):
     """Near Miss report - events that could have resulted in injury or damage but didn't."""
 
     __tablename__ = "near_misses"
+    __table_args__ = (
+        CheckConstraint(
+            "potential_severity IN ('low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
+            name="ck_nm_severity_values",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)

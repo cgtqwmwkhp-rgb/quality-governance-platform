@@ -7,6 +7,8 @@ Usage:
     python scripts/admin_cli.py feature-flags
     python scripts/admin_cli.py migration-status
     python scripts/admin_cli.py config-check
+    python scripts/admin_cli.py tenant-info
+    python scripts/admin_cli.py user-lookup --email user@example.com
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import argparse
 import json
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -101,6 +104,66 @@ def cmd_migration_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tenant_info(args: argparse.Namespace) -> int:
+    """List all tenants via API."""
+    base = args.url.rstrip("/")
+    url = f"{base}/api/v1/tenants"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        if args.token:
+            req.add_header("Authorization", f"Bearer {args.token}")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            tenants = data if isinstance(data, list) else data.get("items", [])
+            if not tenants:
+                print("  No tenants found.")
+                return 0
+            print(f"  {'ID':<38} {'Name':<30} {'Active'}")
+            print(f"  {'—'*38} {'—'*30} {'—'*6}")
+            for t in tenants:
+                tid = str(t.get("id", "—"))
+                name = t.get("name", "—")
+                active = "Yes" if t.get("active", t.get("is_active", False)) else "No"
+                print(f"  {tid:<38} {name:<30} {active}")
+            print(f"\n  Total: {len(tenants)} tenant(s)")
+        return 0
+    except Exception as exc:
+        print(f"  Failed to fetch tenants: {exc}")
+        return 1
+
+
+def cmd_user_lookup(args: argparse.Namespace) -> int:
+    """Look up a user by email via API."""
+    if not args.email:
+        print("  --email is required for user-lookup")
+        return 1
+    base = args.url.rstrip("/")
+    encoded_email = urllib.parse.quote(args.email, safe="")
+    url = f"{base}/api/v1/users?search={encoded_email}"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        if args.token:
+            req.add_header("Authorization", f"Bearer {args.token}")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            users = data if isinstance(data, list) else data.get("items", [])
+            if not users:
+                print(f"  No user found for: {args.email}")
+                return 0
+            for u in users:
+                print(f"  ID:         {u.get('id', '—')}")
+                print(f"  Email:      {u.get('email', '—')}")
+                print(f"  Role:       {u.get('role', '—')}")
+                print(f"  Last Login: {u.get('last_login', 'Never')}")
+                if args.verbose:
+                    print(f"  Full:       {json.dumps(u, indent=2)}")
+                print()
+        return 0
+    except Exception as exc:
+        print(f"  Failed to look up user: {exc}")
+        return 1
+
+
 def cmd_config_check(args: argparse.Namespace) -> int:
     """Verify .env.example vs required config."""
     env_example = Path(".env.example")
@@ -142,6 +205,9 @@ def main() -> int:
     sub.add_parser("feature-flags", help="List feature flags")
     sub.add_parser("migration-status", help="Count and list migrations")
     sub.add_parser("config-check", help="Verify environment config")
+    sub.add_parser("tenant-info", help="List all tenants")
+    user_lookup_parser = sub.add_parser("user-lookup", help="Look up a user by email")
+    user_lookup_parser.add_argument("--email", required=True, help="Email address to search for")
 
     args = parser.parse_args()
     commands = {
@@ -150,6 +216,8 @@ def main() -> int:
         "feature-flags": cmd_feature_flags,
         "migration-status": cmd_migration_status,
         "config-check": cmd_config_check,
+        "tenant-info": cmd_tenant_info,
+        "user-lookup": cmd_user_lookup,
     }
     return commands[args.command](args)
 

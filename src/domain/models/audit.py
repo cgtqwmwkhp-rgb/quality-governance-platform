@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
@@ -63,6 +63,10 @@ class AuditTemplate(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin)
     """Audit template model for defining audit structures."""
 
     __tablename__ = "audit_templates"
+    __table_args__ = (
+        CheckConstraint("version >= 1", name="ck_tpl_version_positive"),
+        CheckConstraint("passing_score >= 0", name="ck_tpl_passing_score"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
@@ -269,6 +273,12 @@ class AuditRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __table_args__ = (
         Index("ix_audit_runs_tenant_status", "tenant_id", "status"),
         Index("ix_audit_runs_tenant_created", "tenant_id", "created_at"),
+        CheckConstraint("score >= 0", name="ck_audit_run_score_positive"),
+        CheckConstraint(
+            "score_percentage >= 0 AND score_percentage <= 100",
+            name="ck_audit_run_pct_range",
+        ),
+        CheckConstraint("template_version >= 1", name="ck_audit_run_tpl_ver"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

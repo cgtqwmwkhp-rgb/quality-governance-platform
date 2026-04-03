@@ -101,7 +101,7 @@ Access: JWT-authenticated users → tenant_id filter → role check → data
 | Rectification (Art. 16) | Implemented | PATCH endpoints with audit trail |
 | Erasure (Art. 17) | Partial | Soft-delete implemented; hard-delete not available for RIDDOR-reportable incidents (legal retention override) |
 | Restriction (Art. 18) | Not implemented | Requires status flag on records |
-| Portability (Art. 20) | Not implemented | JSON export available via API but no self-service |
+| Portability (Art. 20) | Implemented | JSON export via GDPRService.data_portability_export() |
 | Object (Art. 21) | N/A | Processing based on legal obligation, not consent |
 
 ### 5.1 Gaps & Remediation
