@@ -8,7 +8,7 @@ Documentation of data integrity mechanisms in the Quality Governance Platform.
 
 | Mechanism | Location | Scope |
 |-----------|----------|-------|
-| Redis-based idempotency keys | `src/infrastructure/middleware/rate_limiter.py` | POST/PUT/PATCH requests |
+| Redis-based idempotency keys | `src/api/middleware/idempotency.py` | POST/PUT/PATCH requests |
 | Database unique constraints | Model definitions | Reference number uniqueness |
 | External audit import dedup | `ExternalAuditImportJob` model | `uq_external_audit_import_job_idempotency` |
 
@@ -16,7 +16,7 @@ Documentation of data integrity mechanisms in the Quality Governance Platform.
 
 When Redis is unavailable:
 1. Idempotency checking is **skipped** (fail-open)
-2. A warning is logged: `"Redis unavailable, idempotency check skipped"`
+2. A debug message is logged: `"Idempotency middleware: Redis unavailable, processing request normally"`
 3. Database unique constraints serve as the last line of defense
 4. Duplicate reference numbers are caught by `UniqueConstraint` and return 409 Conflict
 
@@ -60,5 +60,6 @@ existing.version += 1
 ## Related Documents
 
 - [`src/infrastructure/database.py`](../../src/infrastructure/database.py) — session management
-- [`src/infrastructure/middleware/rate_limiter.py`](../../src/infrastructure/middleware/rate_limiter.py) — rate limiting + idempotency
+- [`src/api/middleware/idempotency.py`](../../src/api/middleware/idempotency.py) — idempotency middleware
+- [`src/infrastructure/middleware/rate_limiter.py`](../../src/infrastructure/middleware/rate_limiter.py) — rate limiting
 - [`src/domain/models/investigation.py`](../../src/domain/models/investigation.py) — optimistic locking example

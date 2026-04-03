@@ -34,13 +34,18 @@ Azure App Service deployment slots provide zero-downtime deployments:
 2. **Verification**: Check `/healthz` and `/readyz` return 200
 3. **Communication**: Notify team of rollback and open incident for investigation
 
-## Future Enhancements
+## Current vs Planned Capabilities
 
-| Enhancement | Status |
-|-------------|--------|
-| Automated rollback on health check failure | Planned |
-| Traffic splitting (10%/50%/100%) | Planned (requires Azure Front Door or Traffic Manager) |
-| Feature flag-gated rollout | Partially implemented (feature flag service exists) |
+| Capability | Status | Implementation |
+|------------|--------|----------------|
+| Zero-downtime slot swap | **Implemented** | Azure App Service deployment slots |
+| Health check validation pre-swap | **Implemented** | `/healthz` and `/readyz` verified before swap |
+| Automated rollback workflow | **Implemented** | `.github/workflows/rollback-production.yml` |
+| Release signoff gate | **Implemented** | `docs/evidence/release_signoff.json` |
+| Deploy freeze windows | **Implemented** | `deploy-production.yml` freeze check |
+| Traffic splitting (10%/50%/100%) | Planned | Requires Azure Front Door or Traffic Manager |
+| Feature flag-gated rollout | Partial | Feature flag service exists; used for telemetry gating |
+| Automated rollback on error spike | Planned | Requires production telemetry enablement |
 
 ## Related Documents
 

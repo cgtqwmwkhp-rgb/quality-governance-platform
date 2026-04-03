@@ -32,4 +32,4 @@ Tracking log for internal security reviews of the Quality Governance Platform.
 ## Related Documents
 
 - [`docs/security/pentest-plan.md`](../security/pentest-plan.md) — external pentest plan
-- [`docs/security/threat-model.md`](../security/threat-model.md) — threat model
+- [`docs/security/threat-model.md`](../security/threat-model.md) — STRIDE-based threat model

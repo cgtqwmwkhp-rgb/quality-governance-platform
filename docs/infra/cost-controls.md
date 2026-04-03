@@ -30,7 +30,7 @@
 ### 2.1 Compute (App Service)
 
 - **Current**: B1/B2 tier (1–2 vCPU, 1.75–3.5 GB RAM)
-- **Control**: Auto-scale configured with min 2, max 6 instances (see `scripts/infra/autoscale-settings.json`). Scale-out triggers on CPU > 70% sustained 5 minutes; scale-in on CPU < 40% sustained 10 minutes.
+- **Control**: Auto-scale configured with min 2, max 6 instances (see `scripts/infra/autoscale-settings.json`). Scale-out triggers on CPU > 70% sustained 5 minutes; scale-in on CPU < 30% sustained 10 minutes.
 - **Alert**: If CPU consistently >80% over 1 hour across all instances → evaluate scale-up to S1
 - **Savings opportunity**: Consider reserved instance pricing if commitment >1 year
 

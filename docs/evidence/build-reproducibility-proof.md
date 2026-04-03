@@ -18,9 +18,9 @@ Every production deployment can be traced back to a specific git commit.
 | npm dependencies pinned | `package-lock.json` | `npm ci` (not `npm install`) |
 | Python version pinned | `python-version: "3.11"` in CI | `.github/workflows/ci.yml` |
 | Node version pinned | `node-version: "20"` in CI | `.github/workflows/ci.yml` |
-| Docker base image pinned | `python:3.11-slim` with digest | `Dockerfile` |
+| Docker base image pinned | `python:3.11-slim-bookworm` with SHA digest | `Dockerfile` |
 | Build SHA embedded | `VITE_BUILD_SHA` env var | Frontend build step |
-| Backend SHA available | `/api/v1/health/build` endpoint | Health route |
+| Backend SHA available | `GET /api/v1/meta/version` endpoint | `src/main.py` |
 
 ## Lockfile Freshness Verification
 
@@ -50,7 +50,7 @@ The `frontend-tests` CI job uses `npm ci` which:
 
 To verify a production deployment matches source:
 
-1. Get the build SHA from production: `curl https://app-qgp-prod.azurewebsites.net/api/v1/health/build`
+1. Get the build SHA from production: `curl https://app-qgp-prod.azurewebsites.net/api/v1/meta/version`
 2. Check the frontend build SHA in browser console: `[QGP] Build: <sha> @ <timestamp>`
 3. Match both SHAs to the git commit: `git log --oneline <sha>`
 4. Verify the lockfiles at that commit match current production dependencies

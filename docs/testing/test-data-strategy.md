@@ -5,24 +5,30 @@ This document defines how automated tests obtain data: factories, golden baselin
 ## Factory discipline
 
 - **Single source**: All persisted test entities are created through [factory_boy](https://factoryboy.readthedocs.io/) factories.
-- **Location**: Shared factories live in `tests/factories/core.py` (domain-specific splits may extend submodules, but the twelve canonical factories are registered and imported from this module).
+- **Location**: Shared factories live in `tests/factories/core.py` (domain-specific splits may extend submodules, but the eighteen canonical factories are registered and imported from this module).
 - **Determinism**: Factories use fixed sequences, explicit attributes, and `FIXED_EPOCH` (see below)—never `Faker`, `random`, or non-seeded variability.
-- **Twelve deterministic factories** (canonical set):
+- **Eighteen deterministic factories** (canonical set):
 
   | # | Factory | Primary model / aggregate |
   |---|---------|---------------------------|
   | 1 | `UserFactory` | Platform user account |
-  | 2 | `OrganizationFactory` | Tenant / org |
+  | 2 | `TenantFactory` | Tenant / org |
   | 3 | `IncidentFactory` | Incident record |
   | 4 | `RiskFactory` | Risk register entry |
   | 5 | `RTAFactory` | Right-to-access / RTA workflow entity |
   | 6 | `ComplaintFactory` | Complaint case |
-  | 7 | `AuditFactory` | Audit / assessment container |
-  | 8 | `AuditSectionFactory` | Audit section |
-  | 9 | `EvidenceDocumentFactory` | Evidence / attachment metadata |
+  | 7 | `AuditRunFactory` | Audit run container |
+  | 8 | `AuditTemplateFactory` | Audit template definition |
+  | 9 | `AuditFindingFactory` | Individual audit finding |
   | 10 | `ActionFactory` | Corrective / follow-up action |
-  | 11 | `NotificationFactory` | In-app / digest notification |
-  | 12 | `ApiTokenFactory` | API key or service token (as applicable) |
+  | 11 | `IncidentActionFactory` | Incident-linked action |
+  | 12 | `NearMissFactory` | Near-miss report |
+  | 13 | `PolicyFactory` | Policy document |
+  | 14 | `RTAActionFactory` | RTA-linked action |
+  | 15 | `InvestigationFactory` | Investigation run |
+  | 16 | `EnterpriseRiskFactory` | Enterprise risk register entry |
+  | 17 | `EvidenceAssetFactory` | Evidence / attachment metadata |
+  | 18 | `ExternalAuditImportJobFactory` | External audit import job |
 
 Tests must not construct ORM rows with bare `Model.objects.create(...)` except in factory implementation code.
 
@@ -46,9 +52,10 @@ Golden data is updated only deliberately (e.g. schema change PR) and referenced 
 
 ## Deterministic timestamps
 
-- **Fixed epoch**: `FIXED_EPOCH = "2026-01-15T10:00:00Z"` (use timezone-aware `datetime` in code, UTC).
+- **Fixed epoch**: `FIXED_EPOCH = datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc)` — timezone-aware UTC datetime.
+- **`uuid.uuid4()` policy**: Prohibited in test assertions. Permitted inside factory `LazyFunction` calls (e.g. `AuditTemplateFactory`) where deterministic UUIDs are not required for test correctness.
 - All factories default `created_at`, `updated_at`, due dates, and SLA anchors relative to `FIXED_EPOCH` via `factory.LazyFunction` or explicit kwargs—not “now”.
-- **Prohibited in tests**: `Faker`, `uuid.uuid4()` without fixed seed, `random.*`, wall-clock–dependent assertions.
+- **Prohibited in tests**: `Faker`, `random.*`, wall-clock–dependent assertions.
 
 ## Property-based testing plan (Hypothesis)
 

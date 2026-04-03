@@ -8,32 +8,39 @@ All API error responses should use the structured format:
 
 ```json
 {
-  "detail": "Human-readable description",
-  "error_code": "VALIDATION_ERROR",
-  "field_errors": [
-    {"field": "title", "message": "Field required", "code": "missing"}
-  ]
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable description",
+    "details": {
+      "errors": [
+        {"field": "title", "message": "Field required", "code": "missing"}
+      ]
+    },
+    "request_id": "abc-123-def"
+  }
 }
 ```
+
+This envelope is produced by `src/api/middleware/error_handler.py` (`_build_envelope`).
 
 ## Migration Status by Route Module
 
 | Module | Total Endpoints | Structured Errors | Plain String | Progress |
 |--------|----------------|-------------------|--------------|----------|
-| `audits.py` | 12 | 10 | 2 | 83% |
-| `incidents.py` | 8 | 6 | 2 | 75% |
+| `audits.py` | 28 | 24 | 4 | 86% |
+| `incidents.py` | 9 | 7 | 2 | 78% |
 | `complaints.py` | 6 | 4 | 2 | 67% |
-| `risks.py` | 6 | 5 | 1 | 83% |
-| `actions.py` | 6 | 4 | 2 | 67% |
+| `risks.py` | 13 | 11 | 2 | 85% |
+| `actions.py` | 4 | 3 | 1 | 75% |
 | `investigations.py` | 8 | 6 | 2 | 75% |
-| `near_miss.py` | 5 | 3 | 2 | 60% |
-| `rta.py` | 5 | 3 | 2 | 60% |
-| `compliance.py` | 4 | 3 | 1 | 75% |
+| `near_miss.py` | 9 | 7 | 2 | 78% |
+| `rta.py` | 13 | 10 | 3 | 77% |
+| `compliance.py` | 10 | 8 | 2 | 80% |
 | `health.py` | 3 | 3 | 0 | 100% |
-| `uvdb.py` | 5 | 4 | 1 | 80% |
-| Other | ~15 | ~10 | ~5 | ~67% |
+| `uvdb.py` | 14 | 12 | 2 | 86% |
+| Other | ~20 | ~15 | ~5 | ~75% |
 
-**Overall**: ~75% migrated to structured error responses.
+**Overall**: ~80% migrated to structured error responses.
 
 ## Graceful Degradation Pattern
 
