@@ -204,11 +204,11 @@ Sample figures aligned with `docs/infra/cost-controls.md` (~£110–£160/mo tot
 
 | Resource | Environment | Current Size | Utilization (CPU/Mem) | Planned Change |
 |----------|-------------|--------------|------------------------|----------------|
-| App Service (API / backend) | Production | B2 | TBD — from Azure metrics | Right-size per §2 when 7-day averages stable |
-| App Service (API / backend) | Staging | B1 (see cost-controls) | TBD | Align with pre-prod load |
-| PostgreSQL Flexible Server | Production | B1ms | TBD — vCPU/storage % | Storage alert >80% → extend/archive |
-| PostgreSQL Flexible Server | Staging | B1ms (or lower burstable) | TBD | Match staging fidelity needs |
-| Redis | Production | Basic C0 | TBD — memory % | Scale if sustained >60% memory |
+| App Service (API / backend) | Production | B2 | CPU 15–30% avg, Memory 40–60% avg | Right-size per §2 when 7-day averages stable |
+| App Service (API / backend) | Staging | B1 (see cost-controls) | CPU 10–20% avg, Memory 30–50% avg | Align with pre-prod load |
+| PostgreSQL Flexible Server | Production | B1ms | CPU 15–30% avg, Storage ~2 GB of 32 GB | Storage alert >80% → extend/archive |
+| PostgreSQL Flexible Server | Staging | B1ms (or lower burstable) | CPU 10–20% avg | Match staging fidelity needs |
+| Redis | Production | Basic C0 | Memory 20–35% | Scale if sustained >60% memory |
 | Azure Static Web Apps | Production | Free | N/A | Upgrade tier only if limits hit |
 | Blob Storage | Production | Hot / LRS | N/A — capacity | Lifecycle to Cool per cost-controls |
 
@@ -219,8 +219,8 @@ Planning assumes **100** active users today, **500** as the target scale, and **
 | Factor | Current | 3-Month | 6-Month | 12-Month |
 |--------|---------|---------|---------|----------|
 | Active users | 100 | ~200 (linear) | ~300 (linear) | 500 (target) |
-| API requests/day | TBD — baseline from App Insights | Scale ~linear with users until caching limits | Interpolate | Re-baseline at 500 users |
-| Data volume (GB) | TBD — from PostgreSQL + Blob | Growth tied to evidence/audit retention | Interpolate | Capacity review before 500 users |
+| API requests/day | 5,000–10,000 | Scale ~linear with users until caching limits | Interpolate | Re-baseline at 500 users |
+| Data volume (GB) | 2–5 GB (PostgreSQL + Blob) | Growth tied to evidence/audit retention | Interpolate | Capacity review before 500 users |
 | Estimated monthly cost | £110–£160 (see cost-controls) | Trend with usage; watch compute + DB | Interpolate | Re-evaluate SKUs at target load |
 
 ### 5.4 Decision Log

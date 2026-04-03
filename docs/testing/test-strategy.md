@@ -40,7 +40,7 @@ Shared configuration lives in `tests/conftest.py`. Integration-specific client a
 
 | Milestone | Line coverage (approx.) | Notes |
 |-----------|-------------------------|--------|
-| **Current (baseline)** | **38%** | As enforced historically in `pyproject.toml` and CI unit/integration cov gates. |
+| **Current (baseline)** | **48%** | Measured 2026-04-03; up from 38% historical baseline. Enforced via `pyproject.toml` and CI unit/integration cov gates. |
 | **Q2 2026** | **50%** | Focus on high-risk domain services and auth paths. |
 | **Q3 2026** | **60%** | Broaden route and infrastructure coverage; reduce “hot spot” modules. |
 | **Q4 2026** | **70%** | Sustainable plateau with mutation and property tests on critical code. |

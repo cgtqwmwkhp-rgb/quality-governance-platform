@@ -24,11 +24,24 @@ When Redis is unavailable:
 
 ## Fail-Open Threat Model
 
-- **Safe routes**: GET endpoints (reads are idempotent).
-- **Low-risk routes**: Audit trail creation, status updates (database constraints prevent true duplicates).
-- **Higher-risk routes**: Financial or payment mutations (not present in QGP).
-- **Monitoring**: Check Redis availability metrics; use duplicate detection via `request_id` correlation where applicable.
-- **Accepted risk rationale**: QGP is a governance platform, not a payment system; database uniqueness constraints serve as a backstop when Redis idempotency is skipped.
+### Redis Availability SLO
+
+- **Target**: 99.9% availability (Azure Cache for Redis Basic/Standard SLA)
+- **Monitoring metric**: `idempotency.fail_open.count` — incremented each time the middleware skips idempotency due to Redis unavailability
+- **Alerting threshold**: > 5 fail-open events per minute triggers a **P2 incident** (investigate Redis connectivity, check Azure service health)
+
+### Risk per Route Category
+
+| Route category | Examples | Risk when fail-open | DB backstop | Quantified risk |
+|----------------|----------|---------------------|-------------|-----------------|
+| **Safe (read-only)** | GET endpoints | None — reads are inherently idempotent | N/A | No risk |
+| **Low-risk (creates with unique constraint)** | Incident creation, audit trail entries, status updates | Potential duplicate POST accepted by middleware | `UniqueConstraint` on `reference_number` returns 409 Conflict | < 0.1% of requests during Redis outage could see transient 409 |
+| **Medium-risk (updates without version check)** | Bulk status transitions, batch imports | Duplicate PUT/PATCH may re-apply same mutation | `updated_at` comparison or idempotent field assignments | Negligible — same-state writes are no-ops at DB level |
+| **Higher-risk (financial/payment)** | Not present in QGP | N/A | N/A | N/A — QGP has no payment mutations |
+
+### Accepted Risk Rationale
+
+QGP is a governance platform, not a payment system. Database uniqueness constraints serve as a backstop when Redis idempotency is skipped. The combination of 99.9% Redis availability and database-level constraints reduces the probability of user-visible duplicate data to < 0.01% annualised.
 
 ## Optimistic Locking
 

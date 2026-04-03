@@ -3,9 +3,9 @@
 OpenAPI Contract Validator
 
 Enforces canonical error envelope contract in OpenAPI schema:
-1. Error envelope schema component exists
-2. 403/404/409 responses reference the canonical error envelope schema
-3. request_id is required and is a string
+1. Error envelope schema component exists with {code, message, details, request_id}
+2. 4xx responses reference the canonical error envelope via {"error": {...}}
+3. $ref references are resolved before property checks
 """
 
 import json
@@ -19,76 +19,108 @@ def load_openapi_schema(path: Path) -> dict:
         return json.load(f)
 
 
+def resolve_ref(ref: str, schema: dict) -> dict:
+    """Resolve a $ref like '#/components/schemas/Foo' against the full schema."""
+    if not ref.startswith("#/"):
+        return {}
+    parts = ref.lstrip("#/").split("/")
+    node = schema
+    for part in parts:
+        node = node.get(part, {})
+        if not isinstance(node, dict):
+            return {}
+    return node
+
+
+def _resolve_schema(obj: dict, root: dict) -> dict:
+    """If *obj* is a $ref wrapper, resolve it; otherwise return as-is."""
+    if "$ref" in obj:
+        return resolve_ref(obj["$ref"], root)
+    return obj
+
+
+ENVELOPE_FIELDS = {"code", "message", "details", "request_id"}
+
+
 def validate_error_envelope_schema(schema: dict) -> list[str]:
-    """Validate that canonical error envelope schema exists and is correct."""
+    """Validate that a canonical error envelope schema exists in components."""
     errors = []
+    schemas = schema.get("components", {}).get("schemas", {})
 
-    # Check if HTTPValidationError schema exists (FastAPI default)
-    components = schema.get("components", {})
-    schemas = components.get("schemas", {})
+    if not schemas:
+        errors.append("No components.schemas found in OpenAPI spec")
+        return errors
 
-    # Look for error envelope schema (FastAPI generates HTTPValidationError)
-    # We need to check if our custom error envelope is being used
-    # For now, we'll validate that 403/404/409 responses have proper structure
+    found = False
+    for name, defn in schemas.items():
+        props = defn.get("properties", {})
+        prop_names = set(props.keys())
+
+        if ENVELOPE_FIELDS <= prop_names:
+            found = True
+            break
+
+        if "error" in prop_names:
+            inner = _resolve_schema(props["error"], schema)
+            inner_props = set(inner.get("properties", {}).keys())
+            if ENVELOPE_FIELDS <= inner_props:
+                found = True
+                break
+
+    if not found:
+        errors.append(
+            "No error envelope schema found in components.schemas with "
+            f"required fields {sorted(ENVELOPE_FIELDS)}"
+        )
 
     return errors
 
 
 def validate_error_responses(schema: dict) -> list[str]:
-    """Validate that 403/404/409 responses have canonical error envelope."""
+    """Validate that 4xx responses use the canonical error envelope."""
     errors = []
     paths = schema.get("paths", {})
 
     for path, methods in paths.items():
         for method, operation in methods.items():
-            if method in ["get", "post", "put", "patch", "delete"]:
-                responses = operation.get("responses", {})
+            if method not in ("get", "post", "put", "patch", "delete"):
+                continue
+            responses = operation.get("responses", {})
 
-                # Check 403/404/409 responses
-                for status_code in ["403", "404", "409"]:
-                    if status_code in responses:
-                        response = responses[status_code]
-                        content = response.get("content", {})
+            for status_code, response in responses.items():
+                if not status_code.startswith("4"):
+                    continue
 
-                        if "application/json" not in content:
-                            errors.append(
-                                f"{method.upper()} {path} - {status_code} response missing application/json content"
-                            )
-                            continue
+                content = response.get("content", {})
+                if "application/json" not in content:
+                    errors.append(
+                        f"{method.upper()} {path} - {status_code} response "
+                        "missing application/json content"
+                    )
+                    continue
 
-                        json_content = content["application/json"]
-                        response_schema = json_content.get("schema", {})
+                response_schema = content["application/json"].get("schema", {})
+                response_schema = _resolve_schema(response_schema, schema)
 
-                        # Check if schema has required error envelope fields
-                        properties = response_schema.get("properties", {})
+                properties = response_schema.get("properties", {})
 
-                        required_fields = [
-                            "error_code",
-                            "message",
-                            "details",
-                            "request_id",
-                        ]
-                        for field in required_fields:
-                            if field not in properties:
-                                errors.append(
-                                    f"{method.upper()} {path} - {status_code} response missing '{field}' in schema"
-                                )
+                if "error" in properties:
+                    inner = _resolve_schema(properties["error"], schema)
+                    inner_props = set(inner.get("properties", {}).keys())
 
-                        # Check request_id is string
-                        if "request_id" in properties:
-                            request_id_type = properties["request_id"].get("type")
-                            if request_id_type != "string":
-                                errors.append(
-                                    f"{method.upper()} {path} - {status_code} response 'request_id' must be string, got {request_id_type}"
-                                )
-
-                        # Check error_code is string
-                        if "error_code" in properties:
-                            error_code_type = properties["error_code"].get("type")
-                            if error_code_type != "string":
-                                errors.append(
-                                    f"{method.upper()} {path} - {status_code} response 'error_code' must be string, got {error_code_type}"
-                                )
+                    missing = ENVELOPE_FIELDS - inner_props
+                    if missing:
+                        errors.append(
+                            f"{method.upper()} {path} - {status_code} "
+                            f"error envelope missing fields: {sorted(missing)}"
+                        )
+                elif ENVELOPE_FIELDS <= set(properties.keys()):
+                    pass
+                else:
+                    errors.append(
+                        f"{method.upper()} {path} - {status_code} response "
+                        "schema missing 'error' wrapper property"
+                    )
 
     return errors
 
@@ -106,10 +138,7 @@ def main():
 
     print("🔍 Validating OpenAPI contract...")
 
-    # Validate error envelope schema
     schema_errors = validate_error_envelope_schema(schema)
-
-    # Validate error responses
     response_errors = validate_error_responses(schema)
 
     all_errors = schema_errors + response_errors

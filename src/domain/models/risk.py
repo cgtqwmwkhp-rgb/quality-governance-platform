@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
@@ -22,6 +22,11 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     __tablename__ = "risks"
     __data_classification__ = DataClassification.C3_CONFIDENTIAL
+    __table_args__ = (
+        CheckConstraint("likelihood BETWEEN 1 AND 5", name="ck_risk_likelihood_range"),
+        CheckConstraint("impact BETWEEN 1 AND 5", name="ck_risk_impact_range"),
+        CheckConstraint("risk_score >= 0", name="ck_risk_score_positive"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -138,6 +143,12 @@ class RiskAssessment(Base, TimestampMixin):
     """Risk assessment history model for tracking changes over time."""
 
     __tablename__ = "risk_assessments"
+    __table_args__ = (
+        CheckConstraint("inherent_likelihood BETWEEN 1 AND 5", name="ck_ra_inh_likelihood"),
+        CheckConstraint("inherent_impact BETWEEN 1 AND 5", name="ck_ra_inh_impact"),
+        CheckConstraint("residual_likelihood BETWEEN 1 AND 5", name="ck_ra_res_likelihood"),
+        CheckConstraint("residual_impact BETWEEN 1 AND 5", name="ck_ra_res_impact"),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -186,6 +186,30 @@ For a full inventory, use Alembic history and PostgreSQL catalog queries (`pg_co
 
 ---
 
+### Additional Domain Models
+
+The following models exist in the codebase but are not covered in the primary entity table above. They support cross-cutting platform concerns.
+
+| Domain model | Table name | Purpose |
+|--------------|------------|---------|
+| **FeatureFlag** | `feature_flags` | Runtime feature toggles for staged rollout and A/B testing |
+| **VehicleRegistry** | `vehicle_registry` | Fleet vehicle identity, compliance status, and MOT tracking |
+| **DriverProfile** | `driver_profiles` | One-to-one driver extension of `users` for licence, CPC, and vehicle allocation |
+| **Workflow** | `workflows` | Configurable multi-step workflow definitions for governance processes |
+| **Assessment** | `assessments` | Structured risk or compliance assessments linked to standards |
+| **Notification** | `notifications` | In-app and delivery-tracked notification records per user |
+| **Standard** | `standards` | ISO / regulatory framework definitions with linked clauses and controls |
+| **Asset** | `assets` | Physical or logical asset register entries for maintenance and compliance |
+| **DocumentControl** | `document_control` | Controlled document metadata, version history, and approval status |
+| **Induction** | `inductions` | Employee induction records tracking completion and expiry |
+| **AuditLog** | `audit_log` | Immutable append-only audit trail with hash-chain integrity |
+| **AuditorCompetence** | `auditor_competence` | Auditor qualification, training, and competence records |
+| **FormConfig** | `form_configs` | Dynamic form schema definitions for configurable data capture |
+| **Permissions** | `permissions` | RBAC/ABAC permission definitions mapping roles to resource actions |
+| **Engineer** | `engineers` | Engineer profile and competence records for maintenance workflows |
+
+---
+
 ## Related documents
 
 - [Data classification policy](../privacy/data-classification.md)  

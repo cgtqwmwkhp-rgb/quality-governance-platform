@@ -48,3 +48,37 @@ class TestPaginationContract:
         response = test_client.get("/api/v1/incidents/", headers=optional_auth_headers)
         assert response.status_code == 200
         _assert_list_pagination_shape(response.json())
+
+    def test_complaints_list_pagination_shape(
+        self, test_client: TestClient, optional_auth_headers: dict[str, str]
+    ) -> None:
+        if not optional_auth_headers:
+            pytest.skip("Auth not available in test environment")
+        response = test_client.get("/api/v1/complaints/", headers=optional_auth_headers)
+        assert response.status_code == 200
+        _assert_list_pagination_shape(response.json())
+
+    def test_risks_list_pagination_shape(self, test_client: TestClient, optional_auth_headers: dict[str, str]) -> None:
+        if not optional_auth_headers:
+            pytest.skip("Auth not available in test environment")
+        response = test_client.get("/api/v1/risks", headers=optional_auth_headers)
+        assert response.status_code == 200
+        _assert_list_pagination_shape(response.json())
+
+    def test_near_misses_list_pagination_shape(
+        self, test_client: TestClient, optional_auth_headers: dict[str, str]
+    ) -> None:
+        if not optional_auth_headers:
+            pytest.skip("Auth not available in test environment")
+        response = test_client.get("/api/v1/near-misses", headers=optional_auth_headers)
+        assert response.status_code == 200
+        _assert_list_pagination_shape(response.json())
+
+    def test_audit_runs_list_pagination_shape(
+        self, test_client: TestClient, optional_auth_headers: dict[str, str]
+    ) -> None:
+        if not optional_auth_headers:
+            pytest.skip("Auth not available in test environment")
+        response = test_client.get("/api/v1/audits/runs", headers=optional_auth_headers)
+        assert response.status_code == 200
+        _assert_list_pagination_shape(response.json())

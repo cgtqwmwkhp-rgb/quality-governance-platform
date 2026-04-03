@@ -94,4 +94,4 @@ For records **beyond active operational retention** but still within legal hold 
 
 This policy is reviewed **annually** or when retention law or insurer requirements change.
 
-**Last updated:** _[YYYY-MM-DD]_
+**Last updated:** 2026-04-03

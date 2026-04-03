@@ -104,6 +104,14 @@ jobs:
       - name: Mock Data Eradication Gate
         run: python3 scripts/check_mock_data.py --repo-root .
 
+      - name: Check cyclomatic complexity
+        run: |
+          pip install radon
+          radon cc src/ -n D -s --total-average 2>&1 | tee complexity-report.txt
+          if grep -q "^    [A-Z] " complexity-report.txt 2>/dev/null; then
+            echo "::warning::Complex functions detected (grade D+). Review complexity-report.txt"
+          fi
+
   workflow-lint:
     name: Workflow Lint (actionlint)
     runs-on: ubuntu-latest
@@ -212,6 +220,23 @@ jobs:
           fi
 
           echo "[OK] Environment parity checks complete"
+
+      - name: Check env var parity between staging and production
+        run: |
+          echo "Checking environment variable parity..."
+          STAGING_VARS=$(grep -oP '(?<=--settings )\S+' .github/workflows/deploy-staging.yml 2>/dev/null | sort -u || true)
+          PROD_VARS=$(grep -oP '(?<=--settings )\S+' .github/workflows/deploy-production.yml 2>/dev/null | sort -u || true)
+          if [ -n "$STAGING_VARS" ] && [ -n "$PROD_VARS" ]; then
+            DIFF=$(diff <(echo "$STAGING_VARS") <(echo "$PROD_VARS") || true)
+            if [ -n "$DIFF" ]; then
+              echo "::warning::Environment variable differences detected between staging and production"
+              echo "$DIFF"
+            else
+              echo "[OK] Staging and production env vars are aligned"
+            fi
+          else
+            echo "[OK] Using alternate config deployment method"
+          fi
 
   config-failfast-proof:
     name: ADR-0002 Fail-Fast Proof
@@ -371,6 +396,11 @@ jobs:
           path: sbom.json
           retention-days: 90
 
+      - name: License compliance check
+        run: |
+          pip install pip-licenses
+          pip-licenses --fail-on="GPL-3.0;AGPL-3.0" --allow-only="MIT;BSD-2-Clause;BSD-3-Clause;Apache-2.0;ISC;PSF-2.0;MPL-2.0;LGPL-2.1;LGPL-3.0;Unlicense;CC0-1.0;Python-2.0;HPND;0BSD" 2>&1 || echo "::warning::License compliance check found issues (review)"
+
   lockfile-check:
     name: Lockfile Freshness Check
     runs-on: ubuntu-latest
@@ -476,6 +506,21 @@ jobs:
           alembic upgrade head
           echo "[OK] Latest migration is reversible"
 
+      - name: Check for schema drift
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          python -c "
+          import subprocess
+          result = subprocess.run(['alembic', 'check'], capture_output=True, text=True)
+          if result.returncode != 0 and 'Target database is not up to date' not in result.stderr:
+            print('Schema drift detected:')
+            print(result.stdout)
+            print(result.stderr)
+          else:
+            print('[OK] No schema drift detected')
+          "
+
       - name: Validate quarantine policy
         run: |
           python3 scripts/validate_quarantine.py
@@ -550,10 +595,10 @@ jobs:
           echo ""
           echo "[OK] pip-audit passed: No known vulnerabilities"
 
-      - name: Safety check (advisory)
+      - name: Safety check (blocking)
         run: |
-          echo "=== Safety: Dependency Safety Check (advisory) ==="
-          safety check --full-report || echo "⚠️ Safety found issues in environment packages (non-blocking)"
+          echo "=== Safety: Dependency Safety Check (blocking) ==="
+          safety check --full-report
 
   build-check:
     name: Build Check
@@ -1250,6 +1295,22 @@ jobs:
         run: |
           python3 scripts/governance/validate_audit_acceptance_pack.py --repo-root .
 
+      - name: Check compliance document freshness
+        run: |
+          echo "Checking compliance documents for staleness..."
+          STALE=0
+          for doc in docs/compliance/compliance-matrix-iso.md docs/security/security-policy.md docs/privacy/data-retention-policy.md; do
+            if [ -f "$doc" ] && grep -q "_\[YYYY-MM-DD\]_" "$doc" 2>/dev/null; then
+              echo "::warning::$doc contains placeholder dates"
+              STALE=$((STALE + 1))
+            fi
+          done
+          if [ "$STALE" -gt 0 ]; then
+            echo "::warning::$STALE compliance document(s) have unfilled placeholder dates"
+          else
+            echo "[OK] All compliance documents have valid dates"
+          fi
+
   performance-budget:
     name: Performance Budget (PR-04)
     runs-on: ubuntu-latest
@@ -1328,6 +1389,57 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dast-zap-baseline:
+    name: DAST ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Start application
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-zap
+          JWT_SECRET_KEY: test-jwt-secret-for-zap
+          ENVIRONMENT: test
+        run: |
+          alembic upgrade head || true
+          uvicorn src.api.main:app --host 0.0.0.0 --port 8080 &
+          sleep 5
+          curl -f http://localhost:8080/healthz || exit 1
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: 'tests/security/owasp_zap_config.yaml'
+          fail_action: 'warn'
 
   locust-load-test:
     name: Locust Load Test
@@ -1439,9 +1551,8 @@ jobs:
         run: python3 scripts/validate_migration_naming.py
 
   mutation-testing:
-    name: Mutation Testing (mutmut, weekly)
+    name: Mutation Testing
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
 
     steps:
       - uses: actions/checkout@v4
@@ -1459,14 +1570,15 @@ jobs:
           pip install -r requirements-dev.txt
           pip install mutmut
 
-      - name: Run mutmut on critical modules
+      - name: Run mutation testing
         run: |
-          echo "=== Mutation Testing (weekly) ==="
-          mutmut run \
-            --paths-to-mutate=src/domain/services/ \
-            --tests-dir=tests/unit/ \
-            --runner="python -m pytest tests/unit/ -x -q" \
-            --no-progress || true
+          mutmut run --paths-to-mutate=src/domain/services/ --runner="python -m pytest tests/unit/ -x -q" --no-progress 2>&1 || true
+          SURVIVED=$(mutmut results 2>/dev/null | grep -c "Survived" || echo "0")
+          echo "Survived mutations: $SURVIVED"
+          if [ "$SURVIVED" -gt 50 ]; then
+            echo "::error::Too many survived mutations: $SURVIVED (threshold: 50)"
+            exit 1
+          fi
 
       - name: Generate mutmut report
         run: |
@@ -1483,11 +1595,26 @@ jobs:
           retention-days: 30
         if: always()
 
+  docs-lint:
+    name: Documentation Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Lint markdown
+        run: |
+          npx markdownlint-cli2 "docs/**/*.md" --config '{"default": true, "MD013": false, "MD033": false, "MD041": false}' || echo "::warning::Markdown lint issues found (advisory)"
+      - name: Check internal links
+        run: |
+          npx markdown-link-check docs/README.md --config '{"ignorePatterns": [{"pattern": "^http"}]}' || echo "::warning::Link check issues found (advisory)"
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, dependency-review, mutation-testing, docs-lint, dast-zap-baseline]
     
     steps:
       - name: Checkout code

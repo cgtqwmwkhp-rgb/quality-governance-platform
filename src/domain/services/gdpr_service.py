@@ -48,6 +48,19 @@ class GDPRService:
         }
         return data
 
+    async def data_portability_export(self, user_id: int, tenant_id: int) -> dict[str, Any]:
+        """Export user data in machine-readable format (GDPR Art. 20 - Right to Data Portability)."""
+        data = await self.export_user_data(user_id, tenant_id)
+        data["format"] = "application/json"
+        data["schema_version"] = "1.0"
+        data["portability_info"] = {
+            "export_type": "data_portability",
+            "article": "GDPR Art. 20",
+            "format": "JSON (machine-readable)",
+            "includes": list(data.keys()),
+        }
+        return data
+
     async def _collect_user_entities(
         self, model_name: str, user_field: str, user_id: int, tenant_id: int
     ) -> list[dict]:

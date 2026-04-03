@@ -127,6 +127,56 @@ def cmd_config_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cache_status(args: argparse.Namespace) -> int:
+    """Check Redis cache connectivity and basic stats."""
+    base = args.url.rstrip("/")
+    url = f"{base}/diagnostics"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            db = data.get("database", {})
+            print(f"  Database connected: {db.get('connected', 'unknown')}")
+            print(f"  Pool usage: {db.get('pool_usage_pct', 'N/A')}%")
+            print(f"  Memory: {data.get('memory_rss_mb', 'N/A')} MB")
+            print(f"  Config hash: {data.get('config_hash', 'N/A')}")
+        return 0
+    except Exception as exc:
+        print(f"  Failed: {exc}")
+        return 1
+
+
+def cmd_pool_status(args: argparse.Namespace) -> int:
+    """Show database connection pool status."""
+    base = args.url.rstrip("/")
+    url = f"{base}/readyz"
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            checks = data.get("checks", {})
+            print(f"  Database: {checks.get('database', 'unknown')}")
+            print(f"  Latency: {checks.get('database_latency_ms', 'N/A')}ms")
+            print(f"  Redis: {checks.get('redis', 'unknown')}")
+            print(f"  Memory: {checks.get('memory_mb', 'N/A')} MB")
+            print(f"  CPU: {checks.get('cpu_percent', 'N/A')}%")
+        return 0
+    except Exception as exc:
+        print(f"  Failed: {exc}")
+        return 1
+
+
+def cmd_log_level(args: argparse.Namespace) -> int:
+    """Display current application log level."""
+    import logging
+    root_level = logging.getLogger().getEffectiveLevel()
+    print(f"  Root logger level: {logging.getLevelName(root_level)}")
+    for name in ["src", "uvicorn", "sqlalchemy"]:
+        lvl = logging.getLogger(name).getEffectiveLevel()
+        print(f"  {name}: {logging.getLevelName(lvl)}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Quality Governance Platform Admin CLI",
@@ -142,6 +192,9 @@ def main() -> int:
     sub.add_parser("feature-flags", help="List feature flags")
     sub.add_parser("migration-status", help="Count and list migrations")
     sub.add_parser("config-check", help="Verify environment config")
+    sub.add_parser("cache-status", help="Check cache/DB connectivity via diagnostics")
+    sub.add_parser("pool-status", help="Show DB pool and resource status")
+    sub.add_parser("log-level", help="Display current log levels")
 
     args = parser.parse_args()
     commands = {
@@ -150,6 +203,9 @@ def main() -> int:
         "feature-flags": cmd_feature_flags,
         "migration-status": cmd_migration_status,
         "config-check": cmd_config_check,
+        "cache-status": cmd_cache_status,
+        "pool-status": cmd_pool_status,
+        "log-level": cmd_log_level,
     }
     return commands[args.command](args)
 

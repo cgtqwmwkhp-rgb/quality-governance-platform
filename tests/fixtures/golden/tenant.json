@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "name": "Default Organisation",
+  "slug": "default-org",
+  "is_active": true,
+  "subscription_tier": "standard",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

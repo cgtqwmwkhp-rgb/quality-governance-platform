@@ -447,6 +447,13 @@ jobs:
             --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
+      - name: Capture current image for rollback
+        id: pre-deploy
+        run: |
+          CURRENT_IMAGE=$(az webapp config container show --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query '[0].value' -o tsv 2>/dev/null || echo "none")
+          echo "previous_image=$CURRENT_IMAGE" >> $GITHUB_OUTPUT
+          echo "Captured current image: $CURRENT_IMAGE"
+
       - name: Deploy to Azure Web App
         run: |
           echo "🚀 Updating Azure Web App container image..."
@@ -1011,6 +1018,18 @@ jobs:
             echo "| OpenAPI (/openapi.json) | $([ "$DOCS_STATUS" = "200" ] && echo "✅ Passed" || echo "⚠️ Warning") | HTTP $DOCS_STATUS |"
             echo "| Total Time | - | ${TOTAL_ELAPSED}s |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Auto-rollback on health failure
+        if: failure() && steps.pre-deploy.outputs.previous_image != 'none'
+        run: |
+          echo "::error::Health check failed — initiating automatic rollback"
+          az webapp config container set \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name "${{ steps.pre-deploy.outputs.previous_image }}"
+          sleep 30
+          curl -sf "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/healthz" || echo "::warning::Rollback health check inconclusive"
+          echo "Rollback completed to: ${{ steps.pre-deploy.outputs.previous_image }}"
 
       - name: Deterministic SHA verification with stability gate
         id: stability_gate

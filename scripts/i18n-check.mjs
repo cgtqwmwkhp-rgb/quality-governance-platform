@@ -62,6 +62,11 @@ try {
   if (missingInCy.length > 0) {
     cyParityMessage += ` — ${missingInCy.length} key(s) missing (advisory)`;
   }
+  if (parseFloat(coverage) < 65) {
+    console.error(cyParityMessage);
+    console.error(`\n❌ Welsh (cy) locale coverage ${coverage}% is below the required 65% threshold.`);
+    process.exit(1);
+  }
 } catch {
   cyParityMessage = '⚠️  Could not read cy.json for parity check (file missing or invalid)';
 }
