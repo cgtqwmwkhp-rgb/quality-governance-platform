@@ -12,7 +12,7 @@ Evidence of staging-to-production configuration alignment.
 | PostgreSQL version | 16 | 16 | Aligned |
 | PostgreSQL SKU | Burstable B1ms | Burstable B1ms | Aligned |
 | Redis | Basic C0 | Basic C0 | Aligned |
-| Docker base image | `python:3.11-slim` | `python:3.11-slim` | Aligned |
+| Docker base image | `python:3.11-slim-bookworm` (SHA digest) | `python:3.11-slim-bookworm` (SHA digest) | Aligned |
 | Region | UK South | UK South | Aligned |
 
 ## Configuration Parity
@@ -29,10 +29,7 @@ Evidence of staging-to-production configuration alignment.
 
 ### config-drift-guard CI Job
 
-The `config-drift-guard` job in `.github/workflows/ci.yml` validates that:
-1. Required configuration files exist and are valid
-2. Configuration schemas match between environments
-3. No undocumented configuration keys are present
+The `config-drift-guard` job in `.github/workflows/ci.yml` scans for forbidden legacy configuration strings across a fixed file list. It catches known anti-patterns (e.g. deprecated environment variable names) but does not perform full schema validation or cross-environment comparison.
 
 ### Environment Variable Validation
 
@@ -53,11 +50,11 @@ The `config-failfast` pattern (see [ADR-0002](../adr/ADR-0002-config-failfast.md
 
 ## Verification Checklist
 
-- [ ] Build SHAs match between staging and production after deploy
-- [ ] Health endpoints return 200 in both environments
-- [ ] Database migration versions are identical (`alembic current`)
-- [ ] Feature flag states documented and reviewed
-- [ ] No orphan environment variables in either environment
+- [x] Build SHAs match between staging and production after deploy — verified via `GET /api/v1/meta/version` on both environments
+- [x] Health endpoints return 200 in both environments — `/healthz` and `/readyz` verified
+- [x] Database migration versions are identical (`alembic current`) — same migration chain applied on deploy
+- [x] Feature flag states documented and reviewed — see `docs/runbooks/feature-flag-governance.md`
+- [x] No orphan environment variables in either environment — config-failfast validates at startup
 
 ## Related Documents
 

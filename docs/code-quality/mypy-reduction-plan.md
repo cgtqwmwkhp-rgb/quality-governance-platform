@@ -6,9 +6,9 @@ Progressive plan to eliminate `type: ignore` comments and `ignore_errors = true`
 
 | Metric | Value |
 |--------|-------|
-| `type: ignore` count (src/) | 186 |
+| `type: ignore` count (src/) | 188 |
 | MAX_TYPE_IGNORES ceiling | 190 |
-| `ignore_errors = true` modules | 65 |
+| `ignore_errors = true` modules | 64 |
 | Target `type: ignore` count | < 100 |
 | Target `ignore_errors` modules | 0 |
 

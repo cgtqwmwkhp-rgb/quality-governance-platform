@@ -18,15 +18,16 @@ All gates in the `all-checks` job must pass before merge:
 
 | Gate | Job Name | Tool |
 |------|----------|------|
-| Code quality (lint, format, type-check) | `code-quality` | black, isort, ruff, mypy |
+| Code quality (lint, format, type-check) | `code-quality` | black, isort, flake8, mypy, validate_type_ignores |
 | Workflow lint | `workflow-lint` | actionlint |
-| Unit tests (coverage >= 50%) | `unit-tests` | pytest |
-| Frontend tests | `frontend-tests` | vitest |
-| Integration tests (coverage >= 50%) | `integration-tests` | pytest |
-| Security scan | `security-scan` | gitleaks, pip-audit |
-| SBOM generation | `sbom` | cyclonedx |
-| Build check | `build-check` | docker build |
+| Unit tests (coverage >= 43%) | `unit-tests` | pytest (`--cov-fail-under=43`) |
+| Frontend tests | `frontend-tests` | vitest, ESLint, jsx-a11y, i18n-check |
+| Integration tests (coverage >= 43%) | `integration-tests` | pytest (`--cov-fail-under=43`) |
+| Security scan | `security-scan` | bandit, pip-audit, waiver validation |
+| SBOM generation | `sbom` | cyclonedx-bom |
+| Build check | `build-check` | Python import check (`from src.main import app`) |
 | Smoke tests | `smoke-tests` | pytest |
+| Smoke gate selftest | `smoke-gate-selftest` | custom script |
 | E2E tests | `e2e-tests` | playwright |
 | UAT tests | `uat-tests` | pytest |
 | Performance budget | `performance-budget` | Lighthouse, size-limit |
@@ -36,7 +37,11 @@ All gates in the `all-checks` job must pass before merge:
 | Contract tests | `contract-tests` | schemathesis |
 | Secret scanning | `secret-scanning` | gitleaks |
 | API path drift | `api-path-drift` | custom script |
-| Config drift guard | `config-drift-guard` | custom script |
+| Config drift guard | `config-drift-guard` | custom script (forbidden string scan) |
+| Config failfast proof | `config-failfast-proof` | custom script |
+| Quality trend | `quality-trend` | custom script |
+| OpenAPI contract check | `openapi-contract-check` | custom script |
+| Audit acceptance artifacts | `audit-acceptance-artifacts` | custom script |
 
 ## PR Body Template
 

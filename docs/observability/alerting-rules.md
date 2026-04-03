@@ -2,14 +2,18 @@
 
 Alerting configuration for Service Level Objectives. Rules align with targets in `docs/slo/performance-slos.md`.
 
-## Active Alerts
+## Active Alerts (Currently Enforced)
 
-| Alert | Source | Condition | Severity | Notification |
-|-------|--------|-----------|----------|--------------|
-| Health check failure | Azure App Service | `/healthz` returns non-200 | Critical | Azure Alert → email |
-| Database connection exhaustion | Application logs | Pool connections > 80% | High | Log alert |
-| Monthly budget > 80% | Azure Cost Management | Spend > £144 | Warning | Email |
-| Monthly budget > 100% | Azure Cost Management | Spend > £180 | Critical | Email |
+These alerts are operational and firing in production:
+
+| Alert | Source | Condition | Severity | Notification | Status |
+|-------|--------|-----------|----------|--------------|--------|
+| Health check failure | Azure App Service | `/healthz` returns non-200 | Critical | Azure Alert → email | **Active** |
+| Database connection exhaustion | Application logs | Pool connections > 80% | High | Log alert | **Active** |
+| Monthly budget > 80% | Azure Cost Management | Spend > £144 | Warning | Email | **Active** |
+| Monthly budget > 100% | Azure Cost Management | Spend > £180 | Critical | Email | **Active** |
+| CI quality gate failure | GitHub Actions | `all-checks` job fails | High | GitHub notification | **Active** |
+| Lockfile drift | CI `lockfile-check` | Lockfile stale | Medium | CI failure | **Active** |
 
 ## Planned Alerts (Post-Telemetry Enablement)
 

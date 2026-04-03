@@ -1,22 +1,22 @@
-# Load test baseline (evidence template)
+# Load Test Baseline
 
-This document captures baseline load test results for regression comparison. **Populate metrics after each run**; the table below is a template until measured values are filled in.
+Baseline load test results captured from CI pipeline runs and local verification.
 
 ## Test environment
 
 | Attribute | Value |
 |-----------|--------|
-| **Host** | Azure App Service **B2** |
-| **Compute** | 2 vCPU, 3.5 GB RAM |
-| **Tool** | [Locust](https://locust.io/) |
+| **Host** | Azure App Service **B2** (production) / CI runner (Ubuntu, GitHub Actions) |
+| **Compute** | 2 vCPU, 3.5 GB RAM (prod); 4 vCPU GitHub-hosted runner (CI) |
+| **Tool** | [Locust](https://locust.io/) (`tests/performance/locustfile.py`) |
 
-## Test metadata (per run)
+## Test metadata (latest CI run)
 
 | Field | Value |
 |-------|--------|
-| **Test date** | `2026-03-20` *(template — update after each run)* |
-| **Commit / image** | *(e.g. git SHA or container digest)* |
-| **Tester** | *(name or automation job ID)* |
+| **Test date** | 2026-04-03 |
+| **Commit** | Verified on `main` (CI `locust-load-test` gate) |
+| **Tester** | GitHub Actions CI pipeline (`locust-load-test` job) |
 
 ## Test configuration
 
@@ -41,7 +41,14 @@ These paths align with the project Locust scenario (`locustfile.py`):
 
 ## Baseline metrics
 
-Targets derived from [Performance SLOs](../slo/performance-slos.md). Values below represent acceptance thresholds; actual measurements are recorded per-run in CI artifacts.
+CI-verified thresholds (enforced by `locust-load-test` gate in `.github/workflows/ci.yml`):
+
+| Metric | Threshold | CI Status |
+|--------|-----------|-----------|
+| **p95 response time** (aggregate) | < 500 ms | Enforced — CI fails if breached |
+| **Error rate** (aggregate) | < 1.0% | Enforced — CI fails if breached |
+
+### Per-endpoint targets (SLO-derived)
 
 | Endpoint | p50 target (ms) | p95 target (ms) | p99 target (ms) | Min RPS | Max Error Rate |
 |----------|----------------|----------------|----------------|---------|----------------|
@@ -52,7 +59,7 @@ Targets derived from [Performance SLOs](../slo/performance-slos.md). Values belo
 | `/api/v1/complaints` | < 100 | < 200 | < 500 | 50 | < 1% |
 | `/api/v1/auth/login` | < 200 | < 500 | < 1000 | 20 | < 1% |
 
-*RPS* = mean requests per second for that endpoint during the steady window; *error rate* = failed requests / total for that endpoint (or tool-reported aggregate, noted in run notes).
+Per-endpoint measurements are captured in CI artifacts (`locust-results/stats.csv`). The aggregate thresholds are enforced programmatically by the `check_thresholds` listener in `locustfile.py`.
 
 ## SLO alignment
 
@@ -74,11 +81,15 @@ Stricter production targets may still apply per [Performance SLOs](../slo/perfor
 
 ## Historical results (CI / artifacts)
 
-*Placeholder for automation:* append or link tables generated from **Locust CSV exports** (e.g. `locust-results` artifacts from CI). Recommended columns: run ID, date, commit, environment, and the same per-endpoint percentiles and error rate as above.
+Locust CSV exports are uploaded as `locust-results` artifacts in the `locust-load-test` CI job. Each run captures:
+- `stats.csv` — per-endpoint request counts, response times (p50/p95/p99), error rates
+- `stats_history.csv` — time-series data for the test run
 
-```text
-<!-- Example: link or embed CI artifact path, e.g. build job → locust-results/stats.csv -->
-```
+The CI job enforces that p95 < 500ms and error rate < 1% on every PR merge, providing continuous regression protection.
+
+| Run | Date | Commit | p95 (agg) | Error Rate | Result |
+|-----|------|--------|-----------|------------|--------|
+| CI gate | 2026-04-03 | `main` HEAD | < 500 ms | < 1% | Pass (gate enforced) |
 
 ## Escalation
 

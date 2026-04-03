@@ -4,9 +4,25 @@ Plan to re-enable production telemetry, currently quarantined per [ADR-0008](../
 
 ## Current State
 
-- **Production**: Telemetry disabled (`TELEMETRY_ENABLED = false`)
-- **Staging**: Telemetry enabled, monitoring for CORS issues
+- **Production**: Telemetry disabled (`TELEMETRY_ENABLED = false`) — quarantined per ADR-0008
+- **Staging**: Telemetry enabled and operational; CORS issues do not affect staging (same-origin API)
 - **Development**: Telemetry enabled with console logging
+
+### Framework Maturity (Independent of Production State)
+
+The telemetry framework is fully implemented and operational in non-production environments:
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Frontend telemetry service | Implemented | `frontend/src/services/telemetry.ts` |
+| Feature flag gating | Implemented | `telemetry.enabled` flag in DB |
+| Backend structured logging | Implemented | `src/infrastructure/middleware/request_logger.py` |
+| Correlation ID propagation | Implemented | `X-Request-ID` header chain |
+| SLO alerting rules documented | Implemented | `docs/observability/alerting-rules.md` |
+| Enablement criteria defined | Implemented | ADR-0008 enablement criteria section |
+| Rollout plan documented | Implemented | This document (3-phase plan below) |
+
+The only blocker to production telemetry is the CORS configuration for the custom SWA domain, which is an infrastructure configuration change, not a code deficiency.
 
 ## CORS Fix Requirements
 

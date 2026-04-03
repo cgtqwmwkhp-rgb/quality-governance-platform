@@ -8,14 +8,14 @@ Reference for all administrative and diagnostic endpoints in the Quality Governa
 |----------|--------|---------|---------------|
 | `/healthz` | GET | Liveness probe — confirms the process is running | No |
 | `/readyz` | GET | Readiness probe — confirms DB connectivity and dependency health | No |
-| `/api/v1/health/metrics/resources` | GET | Resource utilization (CPU, memory, connections) | Yes (admin) |
+| `/api/v1/health/metrics/resources` | GET | Resource utilization (CPU, memory, connections) | No |
 
 ## System Information
 
 | Endpoint | Method | Purpose | Auth Required |
 |----------|--------|---------|---------------|
-| `/api/v1/health/build` | GET | Build SHA, timestamp, version info | No |
-| `/api/v1/feature-flags` | GET | List all feature flags and their states | Yes (admin) |
+| `/api/v1/meta/version` | GET | Build SHA (`build_sha`), timestamp (`build_time`), app name, environment | No |
+| `/api/v1/feature-flags` | GET | List all feature flags and their states | Yes (any authenticated user) |
 
 ## Data Diagnostics
 
@@ -39,7 +39,7 @@ curl https://app-qgp-prod.azurewebsites.net/healthz
 curl https://app-qgp-prod.azurewebsites.net/readyz
 
 # Check build version
-curl https://app-qgp-prod.azurewebsites.net/api/v1/health/build
+curl https://app-qgp-prod.azurewebsites.net/api/v1/meta/version
 ```
 
 ### 2. Database Connectivity Issues
