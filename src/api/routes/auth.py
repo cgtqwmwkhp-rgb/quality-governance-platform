@@ -20,6 +20,7 @@ from src.api.utils.errors import api_error
 from src.core.security import decode_token
 from src.domain.services.auth_service import AuthService
 from src.domain.services.email_service import email_service
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +101,13 @@ async def login(request: LoginRequest, db: DbSession) -> TokenResponse:
     try:
         _user, access_token, refresh_token = await service.authenticate(request.email, request.password)
     except PermissionError as exc:
+        track_metric("auth.failures")
         raise _auth_http_error(status.HTTP_403_FORBIDDEN, ErrorCode.ACCOUNT_LOCKED, str(exc)) from exc
     except ValueError as exc:
+        track_metric("auth.failures")
         raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, str(exc)) from exc
+
+    track_metric("auth.login")
 
     return TokenResponse(access_token=access_token, refresh_token=refresh_token)
 

@@ -7,7 +7,7 @@ Tracking of translation coverage across supported locales.
 | Locale | Language | Status | Key Count | Coverage |
 |--------|----------|--------|-----------|----------|
 | `en` | English | Primary (complete) | 2171 | 100% |
-| `cy` | Welsh | Partial | 187 | 8.6% |
+| `cy` | Welsh | Partial | 1606 | 74.0% |
 
 ## Coverage Strategy
 
@@ -25,7 +25,8 @@ Welsh (`cy`) is maintained as a partial locale. The i18n framework (`react-i18ne
 
 | Milestone | Target Coverage | Key Categories |
 |-----------|----------------|----------------|
-| Phase 1 (current) | ~9% | Navigation, common UI, dashboard, incidents, audits, risks, complaints, actions, settings, auth, errors, a11y |
+| Phase 1 | ~9% | Navigation, common UI, dashboard, incidents, audits, risks, complaints, actions, settings, auth, errors, a11y |
+| Phase 2 (current) | ~74% | + exports, IMS, mobile audit, risk register, signatures, standards, workflows, report generator, workforce, portal |
 | Phase 2 | 20% | Form labels, status values, priority levels |
 | Phase 3 | 50% | All static UI text, error messages |
 | Phase 4 | 80% | Full coverage excluding domain-specific terms |

@@ -1,5 +1,6 @@
 """Risk Register API routes."""
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -27,7 +28,10 @@ from src.api.schemas.risk import (
 from src.api.utils.errors import api_error
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
+from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.reference_number import ReferenceNumberService
+
+logger = logging.getLogger(__name__)
 
 RISK_TRANSITIONS: dict[RiskStatus, set[RiskStatus]] = {
     RiskStatus.OPEN: {RiskStatus.MITIGATING, RiskStatus.ACCEPTED, RiskStatus.CLOSED},
@@ -223,6 +227,8 @@ async def create_risk(
     db.add(risk)
     await db.commit()
     await db.refresh(risk)
+
+    track_metric("risks.created")
 
     return RiskResponse.model_validate(risk)
 

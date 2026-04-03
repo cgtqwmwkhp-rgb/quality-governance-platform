@@ -1,0 +1,14 @@
+{
+  "id": 1,
+  "title": "Replace worn brake pads on vehicle VR-42",
+  "description": "Brake pads below minimum thickness on front axle",
+  "action_type": "corrective",
+  "status": "open",
+  "priority": "high",
+  "assigned_to_id": 2,
+  "due_date": "2026-04-30T00:00:00Z",
+  "source_type": "incident",
+  "source_id": 1,
+  "created_at": "2026-04-01T09:00:00Z",
+  "updated_at": "2026-04-01T09:00:00Z"
+}

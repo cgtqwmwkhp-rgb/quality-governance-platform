@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
@@ -62,6 +62,10 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __table_args__ = (
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),
+        CheckConstraint(
+            "source_type IN ('manual', 'email', 'api', 'phone')",
+            name="ck_complaint_source_type",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

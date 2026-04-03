@@ -1,0 +1,18 @@
+{
+  "id": 1,
+  "vehicle_reg": "AB12CDE",
+  "check_type": "daily_walkaround",
+  "check_date": "2026-04-01",
+  "driver_name": "John Smith",
+  "brakes": "pass",
+  "tyres": "pass",
+  "lights": "pass",
+  "mirrors": "pass",
+  "windscreen": "pass",
+  "horn": "pass",
+  "fuel_level": "adequate",
+  "overall_result": "pass",
+  "defects_found": false,
+  "notes": null,
+  "created_at": "2026-04-01T06:30:00Z"
+}

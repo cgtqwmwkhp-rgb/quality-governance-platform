@@ -27,20 +27,20 @@ This envelope is produced by `src/api/middleware/error_handler.py` (`_build_enve
 
 | Module | Total Endpoints | Structured Errors | Plain String | Progress |
 |--------|----------------|-------------------|--------------|----------|
-| `audits.py` | 28 | 24 | 4 | 86% |
-| `incidents.py` | 9 | 7 | 2 | 78% |
-| `complaints.py` | 6 | 4 | 2 | 67% |
-| `risks.py` | 13 | 11 | 2 | 85% |
-| `actions.py` | 4 | 3 | 1 | 75% |
-| `investigations.py` | 8 | 6 | 2 | 75% |
-| `near_miss.py` | 9 | 7 | 2 | 78% |
-| `rta.py` | 13 | 10 | 3 | 77% |
-| `compliance.py` | 10 | 8 | 2 | 80% |
+| `audits.py` | 28 | 28 | 0 | 100% |
+| `incidents.py` | 9 | 9 | 0 | 100% |
+| `complaints.py` | 6 | 6 | 0 | 100% |
+| `risks.py` | 13 | 13 | 0 | 100% |
+| `actions.py` | 4 | 4 | 0 | 100% |
+| `investigations.py` | 8 | 8 | 0 | 100% |
+| `near_miss.py` | 9 | 9 | 0 | 100% |
+| `rta.py` | 13 | 13 | 0 | 100% |
+| `compliance.py` | 10 | 10 | 0 | 100% |
 | `health.py` | 3 | 3 | 0 | 100% |
-| `uvdb.py` | 14 | 12 | 2 | 86% |
-| Other | ~20 | ~15 | ~5 | ~75% |
+| `uvdb.py` | 14 | 14 | 0 | 100% |
+| Other | ~20 | ~20 | 0 | 100% |
 
-**Overall**: ~80% migrated to structured error responses.
+**Overall**: 100% migrated to structured error responses (re-audited 2026-04-03).
 
 ## Graceful Degradation Pattern
 

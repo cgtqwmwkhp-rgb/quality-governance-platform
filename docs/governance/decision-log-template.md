@@ -18,6 +18,7 @@ Use this template for significant technical decisions. Store completed ADRs as m
 | [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) | Telemetry CORS Quarantine Policy | Accepted |
 | [ADR-0009](../adr/ADR-0009-csrf-not-required.md) | CSRF Protection Not Required | Accepted |
 | [ADR-0010](../adr/ADR-0010-backend-i18n-strategy.md) | Backend I18n Strategy | Accepted |
+| [ADR-0013](../adr/ADR-0013-iac-adoption.md) | Adopt Bicep for Infrastructure-as-Code | Proposed |
 
 ---
 
@@ -102,6 +103,17 @@ The repository maintains **ten** recorded decisions under **[docs/adr/](../adr/)
 When adding ADR-0011+, follow the same numbering and linking conventions as existing files.
 
 ---
+
+## ADR Review Cadence
+
+All accepted ADRs are reviewed **annually** (Q1) to ensure they remain current:
+
+1. Engineering leads review each ADR against current architecture
+2. ADRs that no longer apply are marked **Deprecated** or **Superseded**
+3. New ADRs are created for decisions made since the last review
+4. The Decision Index above is updated after each review cycle
+
+**Next review due**: Q1 2027
 
 ## Related documentation
 
