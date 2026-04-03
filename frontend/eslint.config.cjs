@@ -41,7 +41,7 @@ module.exports = [
       'jsx-a11y/anchor-is-valid': 'error',
       'jsx-a11y/click-events-have-key-events': 'error',
       'jsx-a11y/no-static-element-interactions': 'error',
-      'jsx-a11y/no-noninteractive-element-interactions': 'warn',
+      'jsx-a11y/no-noninteractive-element-interactions': 'error',
       'jsx-a11y/alt-text': 'error',
       'jsx-a11y/label-has-associated-control': ['error', {
         controlComponents: ['Input', 'Textarea', 'Select', 'SelectTrigger'],
@@ -52,7 +52,7 @@ module.exports = [
       'jsx-a11y/aria-props': 'error',
       'jsx-a11y/aria-role': 'error',
       'jsx-a11y/role-has-required-aria-props': 'error',
-      'jsx-a11y/no-redundant-roles': 'warn',
+      'jsx-a11y/no-redundant-roles': 'error',
       'jsx-a11y/tabindex-no-positive': 'error',
     },
   },

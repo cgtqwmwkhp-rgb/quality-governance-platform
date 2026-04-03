@@ -82,7 +82,7 @@ async def get_complaint(
     if not complaint:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Complaint with ID {complaint_id} not found",
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint with ID {complaint_id} not found"),
         )
 
     return complaint
@@ -125,7 +125,7 @@ async def list_complaints(
             if user_email and complainant_email.lower() != user_email.lower():
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only view your own complaints",
+                    detail=api_error(ErrorCode.PERMISSION_DENIED, "You can only view your own complaints"),
                 )
 
         # AUDIT: Log email filter usage for security monitoring
@@ -196,11 +196,14 @@ async def list_complaints(
             logger.warning("Database column missing - migration may be pending")
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Database migration pending. Please wait for migrations to complete.",
+                detail=api_error(
+                    ErrorCode.DATABASE_ERROR,
+                    "Database migration pending. Please wait for migrations to complete.",
+                ),
             )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing complaints: {type(e).__name__}: {str(e)[:200]}",
+            detail=api_error(ErrorCode.INTERNAL_ERROR, f"Error listing complaints: {type(e).__name__}"),
         )
 
 

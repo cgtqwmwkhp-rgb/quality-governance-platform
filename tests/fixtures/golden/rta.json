@@ -1,0 +1,16 @@
+{
+  "id": 1,
+  "reference_number": "RTA-2026-0001",
+  "title": "Multi-vehicle collision on A470",
+  "description": "Three-vehicle RTA at junction 42, wet conditions",
+  "severity": "high",
+  "status": "under_investigation",
+  "incident_date": "2026-03-15T08:30:00Z",
+  "location": "A470 Junction 42, Cardiff",
+  "driver_id": 1,
+  "vehicle_id": 1,
+  "third_party_involved": true,
+  "police_reference": "SW-2026-0142",
+  "created_at": "2026-03-15T09:00:00Z",
+  "updated_at": "2026-03-15T09:00:00Z"
+}

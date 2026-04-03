@@ -13,8 +13,10 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python dependencies (use lockfile for reproducible builds)
-COPY requirements.txt requirements.lock* ./
-RUN pip install --no-cache-dir --upgrade pip setuptools && \
+# Build requires requirements.lock — fail if missing (intentional)
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir setuptools==75.8.0 wheel==0.45.1 && \
     if [ -f requirements.lock ]; then \
       pip install --no-cache-dir -r requirements.lock; \
     else \
@@ -32,8 +34,8 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade system setuptools and wheel to resolve vendored CVEs
-RUN pip install --no-cache-dir --upgrade setuptools wheel
+# Pin system setuptools and wheel to resolve vendored CVEs deterministically
+RUN pip install --no-cache-dir setuptools==75.8.0 wheel==0.45.1
 
 # Create non-root user for security
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser

@@ -124,3 +124,61 @@ async def resource_metrics():
             "disk_used_percent": psutil.disk_usage("/").percent,
         },
     }
+
+
+@router.get("/diagnostics", response_model=Dict[str, Any])
+async def diagnostics():
+    """Aggregated diagnostic snapshot for operational triage."""
+    import hashlib
+
+    from src.core.config import settings
+
+    config_keys = sorted(k for k in dir(settings) if not k.startswith("_") and k.isupper())
+    config_hash = hashlib.sha256("|".join(f"{k}={getattr(settings, k, '')}" for k in config_keys).encode()).hexdigest()[
+        :16
+    ]
+
+    db_ok = True
+    pool_usage = None
+    try:
+        from src.infrastructure.database import get_pool_usage_percent
+
+        pool_usage = get_pool_usage_percent()
+    except Exception:
+        pass
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+
+    feature_flags = {}
+    try:
+        from src.domain.services.feature_flag_service import FeatureFlagService  # noqa: F401
+
+        feature_flags = {"source": "database", "status": "available"}
+    except Exception:
+        feature_flags = {"source": "unavailable"}
+
+    circuit_breakers = {}
+    try:
+        from src.infrastructure.resilience.circuit_breaker import get_all_circuits
+
+        for cb in get_all_circuits():
+            circuit_breakers[cb.name] = cb.get_health()
+    except Exception:
+        pass
+
+    process = psutil.Process()
+    mem = process.memory_info()
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": os.getenv("APP_VERSION", "dev"),
+        "config_hash": config_hash,
+        "database": {"connected": db_ok, "pool_usage_pct": pool_usage},
+        "memory_rss_mb": round(mem.rss / 1024 / 1024, 1),
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "feature_flags": feature_flags,
+        "circuit_breakers": circuit_breakers,
+    }

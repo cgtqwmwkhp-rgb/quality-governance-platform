@@ -6,6 +6,9 @@ Rules:
   - src/domain/ must NOT import from src/infrastructure/ (except resilience)
   - src/core/ must NOT import from src/api/
   - src/core/ must NOT import from src/infrastructure/
+  - src/services/ must NOT import from src/api/
+  - src/infrastructure/ must NOT import from src/api/ (except tasks/)
+  - src/infrastructure/ must NOT import from src/services/
 """
 
 from __future__ import annotations
@@ -20,6 +23,9 @@ RULES: list[tuple[str, list[str], list[str]]] = [
     ("src/domain", ["src.infrastructure"], ["src.infrastructure.resilience"]),
     ("src/core", ["src.api"], []),
     ("src/core", ["src.infrastructure"], []),
+    ("src/services", ["src.api"], []),
+    ("src/infrastructure", ["src.api"], ["src.infrastructure.tasks"]),
+    ("src/infrastructure", ["src.services"], []),
 ]
 
 
@@ -51,6 +57,11 @@ def _check(filepath: str, module_name: str, violations: list[str]) -> None:
             if module_name.startswith(forbidden_prefix):
                 if any(module_name.startswith(a) for a in allowlist):
                     continue
+                if any(
+                    filepath.startswith(a.replace(".", "/"))
+                    for a in allowlist
+                ):
+                    continue
                 violations.append(
                     f"{filepath}: illegal import '{module_name}' "
                     f"({source_pkg} must not import from {forbidden_prefix})"
@@ -61,7 +72,7 @@ def main() -> int:
     root = Path(".")
     all_violations: list[str] = []
 
-    for source_dir in ["src/domain", "src/core"]:
+    for source_dir in ["src/domain", "src/core", "src/services", "src/infrastructure"]:
         src_path = root / source_dir
         if not src_path.exists():
             continue

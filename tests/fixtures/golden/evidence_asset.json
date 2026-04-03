@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "filename": "incident-photo-001.jpg",
+  "content_type": "image/jpeg",
+  "file_size_bytes": 2048576,
+  "storage_path": "evidence/2026/03/incident-photo-001.jpg",
+  "entity_type": "incident",
+  "entity_id": 1,
+  "uploaded_by_id": 1,
+  "description": "Photo of damaged vehicle front bumper",
+  "created_at": "2026-03-15T09:15:00Z"
+}

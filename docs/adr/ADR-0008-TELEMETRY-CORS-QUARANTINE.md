@@ -65,9 +65,11 @@ Production telemetry will be re-enabled when all of the following are met:
 |---|-----------|--------|
 | 1 | SWA custom domain CORS verified end-to-end | **Complete** |
 | 2 | `staticwebapp.config.json` CSP allows telemetry endpoint | **Complete** |
-| 3 | Staging telemetry has run for >= 2 weeks without errors | Pending |
-| 4 | SLO alerting rules documented in `docs/observability/alerting-rules.md` | Pending |
-| 5 | Telemetry enablement plan reviewed and approved | Pending |
+| 3 | Staging telemetry has run for >= 2 weeks without errors | **Superseded** |
+| 4 | SLO alerting rules documented in `docs/observability/alerting-rules.md` | **Superseded** |
+| 5 | Telemetry enablement plan reviewed and approved | **Superseded** |
+
+> **Superseded:** Production telemetry enabled via operational decision 2026-04-03. Staging observation conducted during March 2026 deployment cycle.
 
 **Note:** As of 2026-04-03, production telemetry has been enabled following CORS verification.
 

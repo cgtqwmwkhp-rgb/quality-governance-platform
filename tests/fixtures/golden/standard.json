@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "name": "ISO 45001:2018",
+  "code": "ISO-45001",
+  "version": "2018",
+  "description": "Occupational health and safety management systems",
+  "category": "safety",
+  "is_active": true,
+  "clauses_count": 10,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}

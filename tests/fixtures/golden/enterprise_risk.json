@@ -1,0 +1,17 @@
+{
+  "id": 1,
+  "reference": "ER-2026-0001",
+  "title": "Supply chain disruption risk",
+  "description": "Critical supplier single-source dependency for fleet maintenance parts",
+  "category": "operational",
+  "likelihood": 3,
+  "impact": 4,
+  "risk_score": 12,
+  "risk_level": "high",
+  "status": "open",
+  "owner_id": 1,
+  "treatment_strategy": "mitigate",
+  "review_frequency_months": 6,
+  "created_at": "2026-01-15T10:00:00Z",
+  "updated_at": "2026-03-20T14:30:00Z"
+}

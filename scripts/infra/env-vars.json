@@ -1,0 +1,20 @@
+{
+  "_description": "Canonical environment variable definitions for QGP. Both deploy workflows should reference these.",
+  "common": {
+    "ENVIRONMENT": {"description": "Runtime environment identifier", "values": {"staging": "staging", "production": "production"}},
+    "APP_VERSION": {"description": "Deployed application version (git SHA)", "source": "CI"},
+    "SECRET_KEY": {"description": "Django/FastAPI secret key", "source": "Key Vault"},
+    "JWT_SECRET_KEY": {"description": "JWT signing key", "source": "Key Vault"},
+    "DATABASE_URL": {"description": "PostgreSQL connection string", "source": "Key Vault"},
+    "REDIS_URL": {"description": "Redis connection string", "source": "Key Vault"},
+    "CORS_ORIGINS": {"description": "Allowed CORS origins (comma-separated)", "varies_by_env": true},
+    "PSEUDONYMIZATION_PEPPER": {"description": "GDPR pseudonymization pepper", "source": "Key Vault"},
+    "LOG_LEVEL": {"description": "Application log level", "default": "INFO"},
+    "TELEMETRY_ENABLED": {"description": "Enable OpenTelemetry", "default": "true"},
+    "APPLICATIONINSIGHTS_CONNECTION_STRING": {"description": "Azure App Insights connection", "source": "Key Vault"}
+  },
+  "intentional_differences": {
+    "CORS_ORIGINS": "Staging uses single origin; production uses multiple",
+    "APP_SERVICE_SKU": "Staging: B1, Production: B2"
+  }
+}

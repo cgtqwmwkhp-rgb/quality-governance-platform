@@ -23,6 +23,8 @@
 
 **Estimated Monthly Total**: ~£110–£160
 
+> **Clarification:** Monthly running cost: ~£130 (~$165 USD). Azure budget alert threshold: $500 USD (3× headroom for burst/scaling).
+
 ---
 
 ## 2. Cost Drivers & Optimisation Controls
@@ -193,6 +195,19 @@ This cadence complements the operational steps in **Cost Review Process** (secti
 - Use Azure Cost Management tags and custom dimensions for attribution
 - Generate monthly per-tenant cost reports from Azure Cost Management API
 - Backend telemetry enrichment enables usage-proportional chargeback
+
+---
+
+## Unit Economics
+
+| Metric | Value | Assumptions |
+|--------|-------|-------------|
+| Cost per user per month | ~£0.07 | At 2,000 active users on current ~£130/mo infrastructure |
+| Cost per 1,000 API requests | ~£0.013–£0.026 | Based on 5,000–10,000 requests/day (~150k–300k/month) against ~£130/mo total |
+| Marginal cost of next 1,000 users | ~£0 (within current SKU headroom) | B2 App Service and B1ms PostgreSQL support 2,000+ users before scale-up |
+| Scale-up trigger cost delta | +£30–£50/mo | Moving App Service to S1 or PostgreSQL to GP when utilisation warrants |
+
+These figures assume current B1/B2 App Service and B1ms PostgreSQL Flexible Server tiers. Re-evaluate when active users exceed 500 or API throughput exceeds 20,000 requests/day.
 
 ---
 

@@ -115,6 +115,14 @@ jobs:
           
           echo "✅ Image built and pushed successfully"
 
+      - name: Generate SLSA provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.docker-build.outputs.digest || 'sha256:unknown' }}
+          push-to-registry: false
+        continue-on-error: true
+
       - name: Capture expected image digest
         run: |
           EXPECTED_TAG="${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}"

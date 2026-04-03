@@ -57,4 +57,4 @@ Severity is assessed by impact and exploitability in our environment, not only C
 
 Review this policy **at least annually** or after major architecture or hosting changes.
 
-**Last updated:** _[YYYY-MM-DD]_
+**Last updated:** 2026-04-03
