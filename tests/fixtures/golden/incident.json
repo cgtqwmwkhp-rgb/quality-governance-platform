@@ -1,0 +1,25 @@
+{
+  "title": "Forklift near-miss in Warehouse B",
+  "description": "Forklift reversed without audible alarm near pedestrian walkway.",
+  "reference_number": "INC-2026-00001",
+  "incident_type": "near_miss",
+  "severity": "HIGH",
+  "status": "REPORTED",
+  "location": "Warehouse B, Bay 7",
+  "incident_date": "2026-01-15T10:00:00Z",
+  "reported_date": "2026-01-15T10:00:00Z",
+  "first_aid_given": false,
+  "emergency_services_called": false,
+  "is_sif": false,
+  "is_psif": false,
+  "life_altering_potential": false,
+  "tenant_id": 1,
+  "actions": [
+    {
+      "title": "Install reversing alarm on forklift FL-007",
+      "description": "Fit audible reversing alarm and test before return to service.",
+      "status": "OPEN",
+      "priority": "high"
+    }
+  ]
+}

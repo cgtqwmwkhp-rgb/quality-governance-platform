@@ -1,0 +1,14 @@
+{
+  "reference_number": "CAPA-2026-00001",
+  "title": "Action plan: Missing toolbox talk records",
+  "description": "Establish formal toolbox talk record-keeping process for all sites.",
+  "capa_type": "corrective",
+  "status": "open",
+  "priority": "medium",
+  "source_type": "audit_finding",
+  "source_id": 1,
+  "iso_standard": "UVDB",
+  "clause_reference": "8.1",
+  "due_date": "2026-02-15T10:00:00Z",
+  "tenant_id": 1
+}

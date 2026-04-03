@@ -1,0 +1,67 @@
+%% Quality Governance Platform - System Architecture (D09)
+%% Render with: https://mermaid.live or VS Code Mermaid extension
+
+graph TB
+    subgraph "Frontend (Azure Static Web Apps)"
+        SPA["React SPA<br/>Vite + TypeScript"]
+        I18N["i18n (en/cy)"]
+        SPA --> I18N
+    end
+
+    subgraph "Backend (Azure App Service)"
+        API["FastAPI<br/>Python 3.11"]
+        MW["Middleware Stack<br/>Auth / CORS / Rate Limit / Audit"]
+        API --> MW
+
+        subgraph "Domain Services"
+            AuditSvc["Audit Service"]
+            IncidentSvc["Incident Service"]
+            RiskSvc["Risk Service"]
+            CAPASvc["CAPA Service"]
+            ComplaintSvc["Complaint Service"]
+            InvestSvc["Investigation Service"]
+            ImportSvc["External Audit Import"]
+            GDPRSvc["GDPR Service"]
+        end
+
+        MW --> AuditSvc
+        MW --> IncidentSvc
+        MW --> RiskSvc
+        MW --> CAPASvc
+        MW --> ComplaintSvc
+        MW --> InvestSvc
+        MW --> ImportSvc
+        MW --> GDPRSvc
+    end
+
+    subgraph "Data Layer"
+        PG["PostgreSQL Flexible<br/>(Burstable B1ms)"]
+        Redis["Redis<br/>(Rate Limit + Cache)"]
+        Blob["Azure Blob Storage<br/>(Evidence Assets)"]
+    end
+
+    subgraph "External"
+        PAMS["PAMS MySQL<br/>(Fleet Data, Read-Only)"]
+        OCR["OCR Service<br/>(Audit PDF Processing)"]
+    end
+
+    subgraph "CI/CD"
+        GHA["GitHub Actions<br/>(25+ CI Jobs)"]
+        ACR["Azure Container Registry"]
+    end
+
+    SPA -->|"HTTPS/REST"| API
+    AuditSvc --> PG
+    IncidentSvc --> PG
+    RiskSvc --> PG
+    CAPASvc --> PG
+    ComplaintSvc --> PG
+    InvestSvc --> PG
+    ImportSvc --> PG
+    ImportSvc --> Blob
+    ImportSvc --> OCR
+    GDPRSvc --> PG
+    MW --> Redis
+    API --> PAMS
+    GHA --> ACR
+    ACR --> API

@@ -1,0 +1,12 @@
+{
+  "reference_number": "CMP-2026-00001",
+  "title": "Late delivery to customer site",
+  "description": "Delivery arrived 3 hours after agreed window, customer escalated.",
+  "complaint_type": "delivery",
+  "priority": "HIGH",
+  "status": "RECEIVED",
+  "complainant_name": "ABC Construction Ltd",
+  "complainant_email": "complaints@abcconstruction.example.com",
+  "received_date": "2026-01-15T10:00:00Z",
+  "tenant_id": 1
+}

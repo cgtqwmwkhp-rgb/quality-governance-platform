@@ -236,7 +236,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=38 --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -460,7 +460,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           TESTING: "1"
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=40 --junit-xml=junit-integration.xml
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -1446,7 +1446,7 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test]
     
     steps:
       - name: Checkout code

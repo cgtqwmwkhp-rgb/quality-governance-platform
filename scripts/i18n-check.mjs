@@ -9,6 +9,7 @@ import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 
 const LOCALE_FILE = join(import.meta.dirname, '..', 'frontend', 'src', 'i18n', 'locales', 'en.json');
+const CY_LOCALE_FILE = join(import.meta.dirname, '..', 'frontend', 'src', 'i18n', 'locales', 'cy.json');
 const SRC_DIR = join(import.meta.dirname, '..', 'frontend', 'src');
 
 const T_CALL_RE = /\bt\(\s*['"`]([^'"`\n]+?)['"`]/g;
@@ -50,14 +51,31 @@ for (const file of files) {
   }
 }
 
+// --- Locale parity check (cy.json vs en.json) – advisory, non-blocking ---
+let cyParityMessage = '';
+try {
+  const cyLocale = JSON.parse(readFileSync(CY_LOCALE_FILE, 'utf-8'));
+  const cyKeys = new Set(Object.keys(cyLocale));
+  const missingInCy = [...knownKeys].filter(k => !cyKeys.has(k));
+  const coverage = ((cyKeys.size / knownKeys.size) * 100).toFixed(1);
+  cyParityMessage = `ℹ️  cy.json locale coverage: ${cyKeys.size}/${knownKeys.size} keys (${coverage}%)`;
+  if (missingInCy.length > 0) {
+    cyParityMessage += ` — ${missingInCy.length} key(s) missing (advisory)`;
+  }
+} catch {
+  cyParityMessage = '⚠️  Could not read cy.json for parity check (file missing or invalid)';
+}
+
 if (missing.length > 0) {
   console.error(`\n❌ Found ${missing.length} missing i18n key(s):\n`);
   for (const { file, key, line } of missing) {
     console.error(`  ${file}:${line}  →  "${key}"`);
   }
   console.error(`\nAdd them to frontend/src/i18n/locales/en.json\n`);
+  console.log(cyParityMessage);
   process.exit(1);
 } else {
   console.log(`✅ All i18n keys validated (${knownKeys.size} keys, ${files.length} files scanned)`);
+  console.log(cyParityMessage);
   process.exit(0);
 }

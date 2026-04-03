@@ -13,13 +13,19 @@ from datetime import datetime, timezone
 
 import factory
 
+from src.domain.models.audit import AuditFinding as AuditFindingModel
+from src.domain.models.audit import AuditRun as AuditRunModel
 from src.domain.models.audit import AuditTemplate
 from src.domain.models.capa import CAPAAction
 from src.domain.models.complaint import Complaint
+from src.domain.models.evidence_asset import EvidenceAsset
+from src.domain.models.external_audit_import import ExternalAuditImportJob
 from src.domain.models.incident import ActionStatus, Incident, IncidentAction
+from src.domain.models.investigation import InvestigationRun
 from src.domain.models.near_miss import NearMiss
 from src.domain.models.policy import Policy
 from src.domain.models.risk import Risk
+from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.tenant import Tenant
 from src.domain.models.user import User
@@ -328,3 +334,128 @@ GOLDEN_COMPLAINT = {
     "complainant_name": "ABC Construction Ltd",
     "complainant_email": "complaints@abcconstruction.example.com",
 }
+
+
+# ---------------------------------------------------------------------------
+# Audit Run
+# ---------------------------------------------------------------------------
+
+
+class AuditRunFactory(factory.Factory):
+    class Meta:
+        model = AuditRunModel
+
+    title = factory.Sequence(lambda n: f"Audit Run {n}")
+    reference_number = _ref("AUD")
+    template_id = 1
+    template_version = 1
+    status = "in_progress"
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
+
+
+# ---------------------------------------------------------------------------
+# Audit Finding
+# ---------------------------------------------------------------------------
+
+
+class AuditFindingFactory(factory.Factory):
+    class Meta:
+        model = AuditFindingModel
+
+    title = factory.Sequence(lambda n: f"Audit Finding {n}")
+    description = factory.Sequence(lambda n: f"Finding description for item {n}.")
+    reference_number = _ref("FND")
+    finding_type = "nonconformity"
+    severity = "medium"
+    status = "open"
+    corrective_action_required = True
+    run_id = 1
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
+
+
+# ---------------------------------------------------------------------------
+# Investigation Run
+# ---------------------------------------------------------------------------
+
+
+class InvestigationFactory(factory.Factory):
+    class Meta:
+        model = InvestigationRun
+
+    reference_number = _ref("INV")
+    status = "draft"
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
+
+
+# ---------------------------------------------------------------------------
+# Enterprise Risk
+# ---------------------------------------------------------------------------
+
+
+class EnterpriseRiskFactory(factory.Factory):
+    class Meta:
+        model = EnterpriseRisk
+
+    reference = factory.Sequence(lambda n: f"RSK-{n + 1:05d}")
+    title = factory.Sequence(lambda n: f"Enterprise Risk {n}")
+    description = factory.Sequence(lambda n: f"Risk description for case {n}.")
+    category = "compliance"
+    subcategory = "audit_finding"
+    source = "audit_finding"
+    status = "open"
+    treatment_strategy = "treat"
+    inherent_likelihood = 3
+    inherent_impact = 4
+    inherent_score = 12
+    residual_likelihood = 2
+    residual_impact = 4
+    residual_score = 8
+    risk_appetite = "cautious"
+    appetite_threshold = 12
+    is_within_appetite = True
+    review_frequency_days = 30
+    is_escalated = False
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
+
+
+# ---------------------------------------------------------------------------
+# Evidence Asset
+# ---------------------------------------------------------------------------
+
+
+class EvidenceAssetFactory(factory.Factory):
+    class Meta:
+        model = EvidenceAsset
+
+    storage_key = factory.Sequence(lambda n: f"evidence/asset-{n}.pdf")
+    original_filename = factory.Sequence(lambda n: f"document-{n}.pdf")
+    content_type = "application/pdf"
+    file_size_bytes = 102400
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
+
+
+# ---------------------------------------------------------------------------
+# External Audit Import Job
+# ---------------------------------------------------------------------------
+
+
+class ExternalAuditImportJobFactory(factory.Factory):
+    class Meta:
+        model = ExternalAuditImportJob
+
+    reference_number = _ref("IMPORT")
+    status = "pending"
+    source_filename = factory.Sequence(lambda n: f"audit-report-{n}.pdf")
+    tenant_id = 1
+    created_at = factory.LazyFunction(_fixed_ts)
+    updated_at = factory.LazyFunction(_fixed_ts)
