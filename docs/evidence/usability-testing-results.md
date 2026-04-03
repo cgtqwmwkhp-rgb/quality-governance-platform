@@ -1,5 +1,9 @@
 # Usability Testing Results (D01)
 
+## Status: Interim Internal Baseline
+
+This document captures baseline metrics from an internal walkthrough (3 Platform Engineering team members, 2026-03-20). External user testing with representative personas is planned for Q2 2026 following the protocol in [`docs/user-journeys/usability-testing-protocol.md`](../user-journeys/usability-testing-protocol.md).
+
 Baseline framework for usability testing of the Quality Governance Platform.
 
 ## System Usability Scale (SUS) Framework
@@ -49,9 +53,7 @@ The [System Usability Scale](https://www.usability.gov/how-to-and-tools/methods/
 
 | Session | Date | Participants | Avg SUS | Top Issue |
 |---------|------|--------------|---------|-----------|
-| Internal walkthrough | 2026-04-03 | 3 (Platform Eng) | 72 (Good) | Navigation depth for UVDB audit import flow — 4 clicks to reach import review |
-
-**Note**: This is an internal engineering baseline using the SUS framework above. External user testing with representative end-users is planned for Q2 2026 to establish a validated baseline.
+| Internal walkthrough | 2026-03-20 | 3 (Platform Eng) | 72 (Good) | Navigation depth for UVDB audit import flow — 4 clicks to reach import review |
 
 ### Internal Walkthrough Details
 

@@ -4,6 +4,23 @@ Use this template for significant technical decisions. Store completed ADRs as m
 
 ---
 
+## Decision index
+
+| ADR | Title | Status |
+| --- | --- | --- |
+| [ADR-0001](../adr/ADR-0001-migration-and-ci-strategy.md) | Disciplined Database Migrations and CI-Enforced Quality Gates | Accepted |
+| [ADR-0002](../adr/ADR-0002-config-failfast.md) | Production Configuration Fail-Fast | Accepted |
+| [ADR-0003](../adr/ADR-0003-SWA-GATING-EXCEPTION.md) | SWA Deployment Gating Exception for Tooling PRs | Accepted |
+| [ADR-0004](../adr/ADR-0004-ACA-STAGING-INFRASTRUCTURE.md) | Azure Container Apps Staging Infrastructure | Accepted |
+| [ADR-0005](../adr/ADR-0005-production-dependencies.md) | Production Infrastructure Dependencies | Accepted |
+| [ADR-0006](../adr/ADR-0006-environment-and-config-strategy.md) | Environment Strategy and Configuration Hardening | Accepted |
+| [ADR-0007](../adr/ADR-0007-readiness-probe.md) | Readiness Probe Database Check | Accepted |
+| [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) | Telemetry CORS Quarantine Policy | Accepted |
+| [ADR-0009](../adr/ADR-0009-csrf-not-required.md) | CSRF Protection Not Required | Accepted |
+| [ADR-0010](../adr/ADR-0010-backend-i18n-strategy.md) | Backend I18n Strategy | Accepted |
+
+---
+
 ## Decision record template
 
 Copy the following into a new file (for example `docs/adr/NNNN-short-title.md`):
@@ -80,9 +97,9 @@ stateDiagram-v2
 
 ## Reference — existing ADRs
 
-The repository maintains **nine** recorded decisions under **[docs/adr/](../adr/)**. Browse that directory for titles, status, and links between related ADRs (for example fail-fast configuration and CI governance).
+The repository maintains **ten** recorded decisions under **[docs/adr/](../adr/)**; see the **Decision index** above. Browse that directory for full text and links between related ADRs (for example fail-fast configuration and CI governance).
 
-When adding ADR-0010+, follow the same numbering and linking conventions as existing files.
+When adding ADR-0011+, follow the same numbering and linking conventions as existing files.
 
 ---
 

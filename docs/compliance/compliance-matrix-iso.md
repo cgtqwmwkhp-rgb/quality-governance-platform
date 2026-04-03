@@ -21,7 +21,7 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 | **7.1–7.5** | Support (resources, competence, awareness, documented information) | Document control, training/competence hooks, attachments | `src/api/routes/document_control.py`, `src/api/routes/auditor_competence.py` |
 | **8.1** | Operational planning and control | Incident / complaint / audit lifecycles | `src/api/routes/incidents.py`, `src/api/routes/complaints.py`, `src/api/routes/audits.py` |
 | **8.2** | Requirements for products and services | Contract / requirement traceability via documents & compliance links | `src/api/routes/document_control.py`, `src/api/routes/compliance.py` |
-| **8.3** | Design and development of products and services | **Gap** — not a PLM/ALM tool; use external design controls | See §5 |
+| **8.3** | Design and development of products and services | **Partial** — QGP document control module provides version-controlled document lifecycle; formal PLM/ALM design controls are out of scope as QGP is a governance/compliance platform, not a product design tool | See §5 |
 | **8.4** | Control of externally provided processes | Supplier / UVDB-style integrations (where enabled) | `src/api/routes/uvdb.py` |
 | **8.5** | Production and service provision | Operational checklists, vehicle checks, workflows | `src/api/routes/vehicle_checklists.py`, `src/services/workflow_engine.py` |
 | **8.6** | Release of products and services | Approvals / signatures (where configured) | `src/api/routes/signatures.py` |

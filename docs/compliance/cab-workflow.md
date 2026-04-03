@@ -20,11 +20,17 @@ The `release_signoff.json` file acts as a lightweight CAB approval mechanism:
 ```json
 {
   "release_sha": "<approved commit SHA>",
-  "approved_by": "<approver>",
-  "approved_at": "<ISO timestamp>",
-  "reason": "<change description>"
+  "governance_lead": "<name or id>",
+  "governance_lead_approved": true,
+  "cab_chair": "<name or id>",
+  "cab_approved": true,
+  "uat_report_path": "<path to UAT evidence>",
+  "rollback_drill_path": "<path to rollback drill evidence>",
+  "approved_at_utc": "<ISO-8601 timestamp in UTC>"
 }
 ```
+
+Required keys and types match `REQUIRED_FIELDS` in `scripts/governance/validate_release_signoff.py`.
 
 Production deployment is blocked unless the merge commit SHA matches the signed-off SHA.
 

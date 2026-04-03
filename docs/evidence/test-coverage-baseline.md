@@ -6,9 +6,11 @@ Current coverage targets and enforcement points across the CI pipeline.
 
 | Gate | Location | Previous Threshold | Current Threshold |
 |------|----------|--------------------|-------------------|
-| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` (unit-tests job) | 38% | 43% |
-| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` (integration-tests job) | 40% | 43% |
+| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` (unit-tests job) | 38% | 48% |
+| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` (integration-tests job) | 40% | 48% |
 | Combined report `fail_under` | `pyproject.toml` `[tool.coverage.report]` | 45% | 48% |
+
+Unit tests, integration tests, and the combined `fail_under` are all **48%**, aligned between `.github/workflows/ci.yml` and `pyproject.toml`.
 
 ## Coverage Tracking Strategy
 

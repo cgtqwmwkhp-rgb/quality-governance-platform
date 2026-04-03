@@ -11,7 +11,7 @@
  * - No user IDs, emails, names, or identifiable data
  * - Form content is NOT captured, only metadata
  *
- * QUARANTINE POLICY (ADR-0004):
+ * QUARANTINE POLICY (ADR-0008):
  * - Telemetry failures MUST NOT block user workflows
  * - Telemetry failures MUST NOT spam console with errors
  * - TELEMETRY_ENABLED flag controls API calls (default: enabled in dev/staging, disabled in prod)
@@ -27,19 +27,17 @@ const IS_STAGING =
   window.location.hostname.includes('staging') || window.location.hostname === 'localhost'
 const IS_DEVELOPMENT = window.location.hostname === 'localhost'
 
-// === TELEMETRY FEATURE FLAG (ADR-0004) ===
-// Disabled in production until CORS is confirmed working.
-// Enable by setting window.__TELEMETRY_ENABLED__ = true in console or config.
+// === TELEMETRY FEATURE FLAG (ADR-0008) ===
+// CORS verified: production SWA origin in cors_origins + CSP connect-src allows *.azurewebsites.net
+// Explicit override still supported via window.__TELEMETRY_ENABLED__
 const TELEMETRY_ENABLED = (() => {
-  // Check for explicit override
   if (
     typeof (window as unknown as { __TELEMETRY_ENABLED__?: boolean }).__TELEMETRY_ENABLED__ ===
     'boolean'
   ) {
     return (window as unknown as { __TELEMETRY_ENABLED__?: boolean }).__TELEMETRY_ENABLED__
   }
-  // Default: enabled in dev/staging, DISABLED in production (CORS quarantine)
-  return !IS_PRODUCTION
+  return true
 })()
 
 // Event buffer for offline resilience

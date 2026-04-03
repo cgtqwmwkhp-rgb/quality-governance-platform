@@ -2,7 +2,7 @@
 
 This document describes every job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml): what it enforces, whether it blocks merges, what evidence it leaves behind, and how jobs depend on each other.
 
-**Note:** On pull requests, `dependency-review` runs; on branch pushes it is skipped. The `all-checks` job lists explicit `needs` (and excludes PR-only, advisory, and schedule-only jobs); jobs **not** listed there (for example `uat-tests`, `smoke-gate-selftest`, `config-drift-guard`, `sbom`, `locust-load-test`, `mutation-testing`) still run as part of the same workflow and should pass for a healthy pipeline—treat them as **blocking** unless their logs are explicitly advisory.
+**Note:** On pull requests, `dependency-review` runs; on branch pushes it is skipped. **`dependency-review` is not listed in `all-checks.needs`** — ensure branch protection (or team process) still requires it on PRs if it must block merge. The `all-checks` job aggregates blocking gates including `smoke-gate-selftest`, `config-drift-guard`, `sbom`, `uat-tests`, `locust-load-test`, and `import-boundary-check`. `mutation-testing` is schedule-only and advisory (not in `all-checks.needs`).
 
 ---
 
@@ -17,11 +17,11 @@ All jobs below are defined in **`CI`** (`.github/workflows/ci.yml`).
 | 3 | **Smoke Gate Self-Test** | Self-test for `scripts/governance/runtime-smoke-gate.sh` | Blocking | Console logs |
 | 4 | **Configuration Drift Guard** | Fails if forbidden legacy env string appears in pinned config/deploy files | Blocking | Console logs |
 | 5 | **ADR-0002 Fail-Fast Proof** | `pytest tests/test_config_failfast.py` | Blocking | Console logs |
-| 6 | **Unit Tests** | `pytest tests/unit/` with coverage floor (≥38%) | Blocking | `coverage.xml`, `junit-unit.xml` → artifacts `codecov-*`, `junit-unit-tests` |
+| 6 | **Unit Tests** | `pytest tests/unit/` with coverage floor (≥48%, `--cov-fail-under=48`) | Blocking | `coverage.xml`, `junit-unit.xml` → artifacts `codecov-*`, `junit-unit-tests` |
 | 7 | **Frontend Tests** | `npm ci`, lockfile coverage, `npm audit`, ESLint + jsx-a11y, Vitest + coverage, i18n check | Blocking | Console logs; coverage under `frontend/` |
 | 8 | **SBOM Generation** | CycloneDX SBOM for Python env | Blocking | `sbom.json` → artifact `sbom-cyclonedx` |
 | 9 | **Lockfile Freshness Check** | `requirements.lock` present and consistent with `pip-compile --generate-hashes` | Blocking | diff output on failure |
-| 10 | **Integration Tests** | Alembic up/down safety; quarantine policy; `pytest tests/integration/` (≥40% cov) | Blocking | `coverage.xml`, `junit-integration.xml` → artifacts |
+| 10 | **Integration Tests** | Alembic up/down safety; quarantine policy; `pytest tests/integration/` (≥48% cov, `--cov-fail-under=48`) | Blocking | `coverage.xml`, `junit-integration.xml` → artifacts |
 | 11 | **Security Scan** | Waivers validation; Bandit (high blocking); `pip-audit --strict`; Safety (non-blocking) | Mixed | Console logs |
 | 12 | **Build Check** | Install prod deps; import `src.main:app` | Blocking | Console logs |
 | 13 | **CI Security Covenant (Stage 2.0)** | `scripts/validate_ci_security_covenant.py` | Blocking | Console logs |
@@ -37,9 +37,10 @@ All jobs below are defined in **`CI`** (`.github/workflows/ci.yml`).
 | 23 | **Dependency Review** | GitHub dependency review on PRs; `fail-on-severity: high` | Blocking on PR when run | GitHub Security tab / step summary |
 | 24 | **Secret Scanning (Gitleaks)** | Repository secret scan | Blocking | gitleaks output |
 | 25 | **Migration Naming Lint** | `scripts/validate_migration_naming.py` — validates Alembic filenames start with YYYYMMDD | Blocking | Console logs |
-| 26 | **Locust Load Test (advisory)** | Headless Locust run (20 users, 60s) on `main` only, after smoke tests | Advisory | `locust-results*.csv` → artifact `locust-load-test` |
-| 27 | **Mutation Testing (weekly)** | `mutmut run` on `src/domain/services/` — runs on `schedule` cron only | Advisory | `mutmut-results.txt`, `html/` → artifact `mutation-testing-report` |
-| 28 | **All Checks Passed** | Aggregates listed `needs`; runs `scripts/generate_gate_summary.sh` | Blocking | `gate-summary.txt` → artifact |
+| 26 | **Import Boundary Check** | `scripts/check_import_boundaries.py` — enforces layered import rules | Blocking | Console logs |
+| 27 | **Locust Load Test** | Headless Locust (20 users, 60s) after smoke tests; runs on **`main` pushes and pull requests**; enforces aggregate **p95 < 500ms** and **error rate < 1%** | Blocking | `locust-results*.csv` → artifact `locust-load-test` |
+| 28 | **Mutation Testing (weekly)** | `mutmut run` on `src/domain/services/` — runs on `schedule` cron only | Advisory | `mutmut-results.txt`, `html/` → artifact `mutation-testing-report` |
+| 29 | **All Checks Passed** | Aggregates listed `needs`; runs `scripts/generate_gate_summary.sh` | Blocking | `gate-summary.txt` → artifact |
 
 ---
 
@@ -71,6 +72,7 @@ flowchart TD
     GS[Secret Scanning]
     DR[Dependency Review]
     MNL[Migration Naming Lint]
+    IBC[Import Boundary Check]
   end
 
   BC --> SM[Smoke Tests]
@@ -92,15 +94,19 @@ flowchart TD
 
   CQ --> AC
   WL --> AC
+  SGS --> AC
+  CDG --> AC
   CFP --> AC
   UT --> AC
   FT --> AC
+  SBOM --> AC
   IT --> AC
   SS --> AC
   BC --> AC
   CSC --> AC
   SM --> AC
   E2E --> AC
+  UAT --> AC
   APD --> AC
   QT --> AC
   OCC --> AC
@@ -110,9 +116,11 @@ flowchart TD
   CT --> AC
   GS --> AC
   MNL --> AC
+  LLT --> AC
+  IBC --> AC
 ```
 
-**Important:** `all-checks` does **not** currently list `smoke-gate-selftest`, `config-drift-guard`, `sbom`, or `uat-tests` in `needs`. Those jobs still run in parallel with the rest; failures still fail the workflow. When interpreting “merge readiness,” require **all** jobs green, not only `all-checks`’s `needs` subgraph.
+**Important:** `dependency-review` is not a `needs` dependency of `all-checks`. For pull requests, it still runs in the same workflow; confirm branch protection requires it if merges must wait on it. `mutation-testing` is cron-only and does not gate `all-checks`.
 
 ---
 
@@ -147,14 +155,15 @@ flowchart TD
 | **E2E baseline** | Pass count below minimum | Fix regressions or, if intentional, update `docs/evidence/e2e_baseline.json` via governed change. |
 | **API path drift** | Bare `/api/` in tests | Use `/api/v1/` per `scripts/check_api_path_drift.py`. |
 | **OpenAPI** | Baseline mismatch | Regenerate and review diff; update `openapi-baseline.json` when change is approved. |
-| **Contract tests** | Schema or example drift | Align `tests/contract/` with OpenAPI and implementation. |
+| **Contract tests** | Error envelope, pagination, or schema drift | Align `tests/contract/` with OpenAPI and implementation. |
+| **Import boundary check** | Disallowed cross-layer import | Refactor to satisfy `scripts/check_import_boundaries.py` rules. |
 | **Audit acceptance** | Missing pack files | Satisfy `validate_audit_acceptance_pack.py` expectations under `scripts/governance/`. |
 | **Performance budget** | Bundle or Lighthouse regression | Optimize bundle or adjust limits with product approval. |
 | **Gitleaks** | Secret in history | Rotate secret; remove from commits per security procedure. |
 | **Dependency review** | High severity on PR | Upgrade vulnerable dependency or document exception. |
 | **Config drift guard** | Forbidden hostname fragment | Replace legacy ACA reference with current staging platform URLs/paths. |
 | **Migration naming lint** | Migration filename pattern violation | Rename file to `YYYYMMDD_description.py` per `scripts/validate_migration_naming.py`. |
-| **Locust load test** | Performance degradation (advisory) | Review `locust-results*.csv` artifact; investigate slow endpoints against SLOs. |
+| **Locust load test** | p95 or error-rate threshold breach (blocking) | Review `locust-results*.csv` artifact; tune app or Locust scenario; compare to [load test baseline](../evidence/load-test-baseline.md) and performance SLOs. |
 | **Mutation testing** | Low mutation kill rate (advisory, weekly) | Review `mutmut-results.txt` artifact; add missing assertions in unit tests. |
 
 ---

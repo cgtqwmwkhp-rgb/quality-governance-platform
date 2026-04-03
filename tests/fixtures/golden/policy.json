@@ -1,0 +1,10 @@
+{
+  "title": "Control of Hazardous Energy (Lockout/Tagout)",
+  "description": "Defines minimum requirements for isolation of energy sources before maintenance or repair on plant equipment.",
+  "status": "published",
+  "version": "3.2",
+  "effective_date": "2026-01-01",
+  "review_date": "2026-12-31",
+  "owner": "EHS Programs (ehs.programs@example.com)",
+  "category": "health_and_safety"
+}

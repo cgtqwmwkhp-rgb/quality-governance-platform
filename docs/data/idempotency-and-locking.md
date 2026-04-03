@@ -22,6 +22,14 @@ When Redis is unavailable:
 
 **Rationale**: Fail-open is preferred over fail-closed to maintain availability. The database constraints prevent actual data corruption even without Redis.
 
+## Fail-Open Threat Model
+
+- **Safe routes**: GET endpoints (reads are idempotent).
+- **Low-risk routes**: Audit trail creation, status updates (database constraints prevent true duplicates).
+- **Higher-risk routes**: Financial or payment mutations (not present in QGP).
+- **Monitoring**: Check Redis availability metrics; use duplicate detection via `request_id` correlation where applicable.
+- **Accepted risk rationale**: QGP is a governance platform, not a payment system; database uniqueness constraints serve as a backstop when Redis idempotency is skipped.
+
 ## Optimistic Locking
 
 ### Current Implementation

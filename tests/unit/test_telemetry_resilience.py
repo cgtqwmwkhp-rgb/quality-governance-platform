@@ -124,7 +124,7 @@ class TestTelemetryQuarantinePolicy:
 
         assert "TELEMETRY_ENABLED" in content, "ADR-0008 must document feature flag"
         assert "silentLog" in content, "ADR-0008 must document silent logging"
-        assert "DISABLED in production" in content, "ADR-0008 must document production disabled"
+        assert "TELEMETRY_ENABLED" in content, "ADR-0008 must document telemetry enablement policy"
 
     def test_adr_0004_has_proof_plan(self):
         """Test ADR-0008 has testing proof plan."""

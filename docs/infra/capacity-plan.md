@@ -15,7 +15,7 @@ Current and target capacity for the Quality Governance Platform.
 
 | Metric | Current | Threshold | Action |
 |--------|---------|-----------|--------|
-| PostgreSQL SKU | Burstable B1ms | N/A | Right-size quarterly |
+| PostgreSQL SKU | Burstable B1ms (matches [`cost-controls.md`](cost-controls.md) inventory) | N/A | Right-size quarterly |
 | Storage | 32 GB provisioned | 80% (25.6 GB) | Extend or archive |
 | Connections | Pool 10 + overflow 20 | 80% pool usage | Increase pool_size |
 | Statement timeout | 30s | N/A | Enforce via `database.py` |

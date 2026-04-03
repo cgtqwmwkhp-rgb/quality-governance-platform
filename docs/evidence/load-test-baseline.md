@@ -41,12 +41,14 @@ These paths align with the project Locust scenario (`locustfile.py`):
 
 ## Baseline metrics
 
+Locust load test runs on main branch pushes and pull requests as a blocking CI gate. Threshold enforcement: p95 < 500ms response time, error rate < 1%. The gate is included in all-checks and failures block merge.
+
 CI-verified thresholds (enforced by `locust-load-test` gate in `.github/workflows/ci.yml`):
 
 | Metric | Threshold | CI Status |
 |--------|-----------|-----------|
-| **p95 response time** (aggregate) | < 500 ms | Enforced — CI fails if breached |
-| **Error rate** (aggregate) | < 1.0% | Enforced — CI fails if breached |
+| **p95 response time** (aggregate) | < 500 ms | Blocking gate — CI fails if breached |
+| **Error rate** (aggregate) | < 1.0% | Blocking gate — CI fails if breached |
 
 ### Per-endpoint targets (SLO-derived)
 
@@ -85,7 +87,7 @@ Locust CSV exports are uploaded as `locust-results` artifacts in the `locust-loa
 - `stats.csv` — per-endpoint request counts, response times (p50/p95/p99), error rates
 - `stats_history.csv` — time-series data for the test run
 
-The CI job enforces that p95 < 500ms and error rate < 1% on every PR merge, providing continuous regression protection.
+The same thresholds apply on each run (main pushes and pull requests); failures block merge via `all-checks`.
 
 | Run | Date | Commit | p95 (agg) | Error Rate | Result |
 |-----|------|--------|-----------|------------|--------|
