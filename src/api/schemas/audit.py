@@ -670,6 +670,11 @@ class AuditFindingResponse(BaseModel):
     Deliberately does NOT inherit AuditFindingBase so that input-only
     validators (sanitize, min_length, pattern) don't re-run on output
     serialization and cause 500s when legacy data doesn't match.
+
+    JSON list columns use ``list`` (not ``List[int]``) because the import
+    promotion path stores clause references as strings (e.g. "8.1") while
+    other paths store integer IDs.  Using an untyped list prevents Pydantic
+    coercion failures on heterogeneous data.
     """
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -683,9 +688,9 @@ class AuditFindingResponse(BaseModel):
     severity: str
     finding_type: str
     status: str
-    clause_ids: Optional[List[int]] = Field(None, validation_alias="clause_ids_json_legacy")
-    control_ids: Optional[List[int]] = Field(None, validation_alias="control_ids_json")
-    risk_ids: Optional[List[int]] = Field(None, validation_alias="risk_ids_json")
+    clause_ids: Optional[list] = Field(None, validation_alias="clause_ids_json_legacy")
+    control_ids: Optional[list] = Field(None, validation_alias="control_ids_json")
+    risk_ids: Optional[list] = Field(None, validation_alias="risk_ids_json")
     corrective_action_required: bool = True
     corrective_action_due_date: Optional[datetime] = None
     created_by_id: Optional[int] = None

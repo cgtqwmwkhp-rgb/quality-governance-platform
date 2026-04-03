@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from src.api.schemas.audit import (
     AuditFindingCreate,
+    AuditFindingResponse,
     AuditQuestionCreate,
     AuditQuestionUpdate,
     AuditResponseCreate,
@@ -403,3 +404,68 @@ class TestAuditFindingCreate:
                 description="Test description",
                 severity="invalid_severity",
             )
+
+
+class TestAuditFindingResponseSerialization:
+    """Verify AuditFindingResponse handles heterogeneous JSON column data."""
+
+    _BASE = {
+        "id": 1,
+        "run_id": 10,
+        "title": "Finding",
+        "description": "desc",
+        "severity": "major",
+        "finding_type": "nonconformity",
+        "status": "open",
+        "corrective_action_required": True,
+        "created_at": datetime(2026, 1, 1),
+        "updated_at": datetime(2026, 1, 1),
+    }
+
+    def test_string_clause_ids_do_not_crash(self):
+        """Import promotion stores clause refs as strings like '8.1'."""
+        resp = AuditFindingResponse(
+            **self._BASE,
+            clause_ids=["8.1", "iso-9001-8.1"],
+        )
+        assert resp.clause_ids == ["8.1", "iso-9001-8.1"]
+
+    def test_int_clause_ids_still_work(self):
+        resp = AuditFindingResponse(**self._BASE, clause_ids=[1, 2, 3])
+        assert resp.clause_ids == [1, 2, 3]
+
+    def test_mixed_type_list_accepted(self):
+        resp = AuditFindingResponse(**self._BASE, risk_ids=[1, "legacy"])
+        assert resp.risk_ids == [1, "legacy"]
+
+    def test_none_json_fields_accepted(self):
+        resp = AuditFindingResponse(**self._BASE)
+        assert resp.clause_ids is None
+        assert resp.control_ids is None
+        assert resp.risk_ids is None
+
+    def test_from_attributes_with_string_clause_ids(self):
+        """Simulate ORM object with string clause data."""
+
+        class FakeORM:
+            id = 99
+            reference_number = "FND-2026-0001"
+            run_id = 10
+            question_id = None
+            title = "Test"
+            description = "desc"
+            severity = "major"
+            finding_type = "nonconformity"
+            status = "open"
+            clause_ids_json_legacy = ["8.1", "14.2"]
+            control_ids_json = None
+            risk_ids_json = [42]
+            corrective_action_required = True
+            corrective_action_due_date = None
+            created_by_id = None
+            created_at = datetime(2026, 1, 1)
+            updated_at = datetime(2026, 1, 1)
+
+        resp = AuditFindingResponse.model_validate(FakeORM())
+        assert resp.clause_ids == ["8.1", "14.2"]
+        assert resp.risk_ids == [42]
