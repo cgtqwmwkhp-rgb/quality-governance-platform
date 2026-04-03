@@ -39,13 +39,15 @@ Azure App Service deployment slots provide zero-downtime deployments:
 | Capability | Status | Implementation |
 |------------|--------|----------------|
 | Zero-downtime slot swap | **Implemented** | Azure App Service deployment slots |
-| Health check validation pre-swap | **Implemented** | `/healthz` and `/readyz` verified before swap |
+| Health check pre-deploy (before traffic moves) | **Implemented** | `/healthz` and `/readyz` verified before swap |
 | Automated rollback workflow | **Implemented** | `.github/workflows/rollback-production.yml` |
 | Release signoff gate | **Implemented** | `docs/evidence/release_signoff.json` |
-| Deploy freeze windows | **Implemented** | `deploy-production.yml` freeze check |
-| Traffic splitting (10%/50%/100%) | Planned | Requires Azure Front Door or Traffic Manager |
+| Deploy freeze window | **Implemented** | `deploy-production.yml` freeze check |
+| Traffic splitting (percentage-based canary) | **Planned** | Azure App Service deployment slots with percentage routing — **requires slot provisioning and routing configuration** |
 | Feature flag-gated rollout | Partial | Feature flag service exists; used for telemetry gating |
-| Automated rollback on error spike | Planned | Requires production telemetry enablement |
+| Automated rollback on error-rate spike | **Planned** | Requires production telemetry enablement |
+
+Traffic splitting is the recommended path for canary deployments. Azure App Service supports percentage-based routing via deployment slots.
 
 ## Related Documents
 

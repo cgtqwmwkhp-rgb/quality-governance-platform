@@ -1,10 +1,10 @@
 # Telemetry Enablement Plan (D28)
 
-Plan to re-enable production telemetry, currently quarantined per [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md).
+Plan originally tracked re-enabling production telemetry (previously quarantined per [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). **Production telemetry is enabled as of 2026-04-03** following CORS and configuration verification.
 
 ## Current State
 
-- **Production**: Telemetry disabled (`TELEMETRY_ENABLED = false`) — quarantined per ADR-0008
+- **Production**: Production telemetry enabled as of 2026-04-03. CORS verified: production SWA origin (`purple-water-03205fa03.6.azurestaticapps.net`) is in `cors_origins` list; CSP `connect-src` includes `*.azurewebsites.net`. Frontend `telemetry.ts` default changed from `!IS_PRODUCTION` to `true`.
 - **Staging**: Telemetry enabled and operational; CORS issues do not affect staging (same-origin API)
 - **Development**: Telemetry enabled with console logging
 
@@ -22,25 +22,29 @@ The telemetry framework is fully implemented and operational in non-production e
 | Enablement criteria defined | Implemented | ADR-0008 enablement criteria section |
 | Rollout plan documented | Implemented | This document (3-phase plan below) |
 
-The only blocker to production telemetry is the CORS configuration for the custom SWA domain, which is an infrastructure configuration change, not a code deficiency.
+The prior blocker (CORS for the production SWA origin and CSP `connect-src` for the API) has been addressed; production telemetry is active.
 
 ## CORS Fix Requirements
 
 ### Root Cause
 
-The SWA custom domain does not match the CORS `allow_origin_regex` pattern in `src/main.py`. Preflight `OPTIONS` requests fail, causing telemetry `POST` requests to be blocked.
+The SWA custom domain did not match the CORS `allow_origin_regex` pattern in `src/main.py`. Preflight `OPTIONS` requests failed, causing telemetry `POST` requests to be blocked.
 
 ### Fix Steps
 
 | Step | Action | Owner | Status |
 |------|--------|-------|--------|
-| 1 | Verify SWA custom domain URL matches `allow_origin_regex` | Platform Eng | Pending |
-| 2 | Update `staticwebapp.config.json` CSP `connect-src` to include API domain | Platform Eng | Pending |
+| 1 | Verify SWA custom domain URL matches `allow_origin_regex` | Platform Eng | **Complete** |
+| 2 | Update `staticwebapp.config.json` CSP `connect-src` to include API domain | Platform Eng | **Complete** |
 | 3 | Test CORS preflight in staging with custom domain | Platform Eng | Pending |
 | 4 | Monitor staging telemetry for 2 weeks | Platform Eng | Pending |
-| 5 | Enable `TELEMETRY_ENABLED = true` in production config | Platform Eng | Pending |
+| 5 | Enable `TELEMETRY_ENABLED = true` in production config | Platform Eng | **Complete** |
+
+Steps **1** and **2** are satisfied by CORS and CSP configuration; **5** reflects production telemetry being on. Steps **3** and **4** remain on the checklist for extended staging observation where teams still want that gate; production enablement proceeded after direct CORS verification on 2026-04-03.
 
 ## Rollout Plan
+
+Production enablement was completed on 2026-04-03 after CORS verification. The phases below describe the original rollout sequence and remain useful for future changes.
 
 ### Phase 1: Staging Verification (Week 1-2)
 
@@ -86,11 +90,11 @@ The SWA custom domain does not match the CORS `allow_origin_regex` pattern in `s
 
 ### Alerting Documentation
 
-SLO alerting rules will be documented in `docs/observability/alerting-rules.md` once telemetry is re-enabled and OpenTelemetry metrics are flowing.
+SLO alerting rules are documented in `docs/observability/alerting-rules.md`. OpenTelemetry-backed alerts remain **Planned** until an OTel dashboard and alert rules are configured.
 
 ## Related Documents
 
-- [`docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md`](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) — quarantine decision
+- [`docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md`](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) — quarantine decision (amended after production enablement)
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — performance SLOs
 - [`src/main.py`](../../src/main.py) — CORS configuration
 - [`frontend/src/services/telemetry.ts`](../../frontend/src/services/telemetry.ts) — frontend telemetry service

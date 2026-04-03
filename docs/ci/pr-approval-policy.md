@@ -20,9 +20,9 @@ All gates in the `all-checks` job must pass before merge:
 |------|----------|------|
 | Code quality (lint, format, type-check) | `code-quality` | black, isort, flake8, mypy, validate_type_ignores |
 | Workflow lint | `workflow-lint` | actionlint |
-| Unit tests (coverage >= 43%) | `unit-tests` | pytest (`--cov-fail-under=43`) |
+| Unit tests (coverage >= 48%) | `unit-tests` | pytest (`--cov-fail-under=48`) |
 | Frontend tests | `frontend-tests` | vitest, ESLint, jsx-a11y, i18n-check |
-| Integration tests (coverage >= 43%) | `integration-tests` | pytest (`--cov-fail-under=43`) |
+| Integration tests (coverage >= 48%) | `integration-tests` | pytest (`--cov-fail-under=48`) |
 | Security scan | `security-scan` | bandit, pip-audit, waiver validation |
 | SBOM generation | `sbom` | cyclonedx-bom |
 | Build check | `build-check` | Python import check (`from src.main import app`) |
@@ -31,10 +31,10 @@ All gates in the `all-checks` job must pass before merge:
 | E2E tests | `e2e-tests` | playwright |
 | UAT tests | `uat-tests` | pytest |
 | Performance budget | `performance-budget` | Lighthouse, size-limit |
-| Locust load test | `locust-load-test` | Locust |
+| Locust load test (blocking) | `locust-load-test` | Locust — p95 < 500ms, error rate < 1% |
 | Lockfile freshness | `lockfile-check` | pip-compile |
 | Migration naming | `migration-naming-lint` | custom script |
-| Contract tests | `contract-tests` | schemathesis |
+| Contract tests | `contract-tests` | pytest contract tests (`tests/contract/`) — validates error envelope shape, pagination contracts, and API response schemas |
 | Secret scanning | `secret-scanning` | gitleaks |
 | API path drift | `api-path-drift` | custom script |
 | Config drift guard | `config-drift-guard` | custom script (forbidden string scan) |

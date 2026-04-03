@@ -23,7 +23,9 @@ Validate system resilience by deliberately introducing failures in controlled co
 | Drill | Last Run | Result | Next Scheduled |
 |-------|----------|--------|----------------|
 | Production rollback via slot swap | 2026-03-15 | Successful — 8s swap time | 2026-06-15 |
-| Database point-in-time restore | TBD | Not yet conducted | 2026-Q2 |
+| Database point-in-time restore | TBD | Not yet conducted | `Scheduled Q2 2026 | Owner: Platform Engineering | Prerequisites: staging DB backup verification` |
+
+**DB PITR drill planning:** Schedule the point-in-time restore drill in staging only after backup retention and restore steps are verified on a non-production database copy; document RTO/RPO assumptions and cutover checklist in the rollback runbook before the Q2 window.
 
 ## Verification Evidence
 

@@ -1,0 +1,15 @@
+{
+  "title": "Unsecured load shifted on FLT during cornering",
+  "description": "Pallet load tilted while turning at 5 mph; no contact with persons or structures. Stop-work called; load resecured.",
+  "severity": "medium",
+  "location": "Warehouse B — aisle C12",
+  "reported_by": "m.ortiz@example.com",
+  "reported_at": "2026-03-28T11:18:00Z",
+  "status": "closed",
+  "root_cause": "Load not wrapped to standard; cornering speed exceeded site guideline for partial-height loads.",
+  "corrective_actions": [
+    "Refresher on load securing standard for FLT operators (completed 2026-04-01).",
+    "Spot checks on wrap quality for third-party pallets — 2-week cadence.",
+    "Posted cornering speed reminder at aisle C12."
+  ]
+}

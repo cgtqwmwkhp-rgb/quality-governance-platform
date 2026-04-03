@@ -1,0 +1,19 @@
+{
+  "title": "Investigation: Repeat near-miss at Warehouse B loading dock",
+  "description": "Structured review of three similar near-miss reports involving pedestrian and FLT interaction.",
+  "status": "in_progress",
+  "priority": "high",
+  "assigned_to": "investigations@example.com",
+  "related_entity_type": "near_miss",
+  "related_entity_id": "nm-2026-00412",
+  "findings": [
+    "Reversing alarms not consistently audible in ambient noise.",
+    "Pedestrian walkways not always marked during peak shifts.",
+    "Supervisor handovers omitted FLT traffic plans on two occasions."
+  ],
+  "recommendations": [
+    "Mandate daily FLT pre-use alarm check with sign-off.",
+    "Refresh floor marking in Bay 7–9 and add temporary barriers during peaks.",
+    "Add FLT/pedestrian coordination item to shift handover template."
+  ]
+}

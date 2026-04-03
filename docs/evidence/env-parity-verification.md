@@ -15,6 +15,14 @@ Evidence of staging-to-production configuration alignment.
 | Docker base image | `python:3.11-slim-bookworm` (SHA digest) | `python:3.11-slim-bookworm` (SHA digest) | Aligned |
 | Region | UK South | UK South | Aligned |
 
+## Intentional Parity Exceptions
+
+- **App Service SKU**: Staging uses **B1** (cost optimization); production uses **B2** (capacity).
+- **Rationale**: Staging workload is approximately **10%** of production; B1 provides adequate capacity for testing while production retains headroom for peak load.
+- **Runtime stack alignment**: Both environments use the **same Docker images** (identical base and application images), **Python 3.11**, **Node 20**, **PostgreSQL 16**, and **Redis Basic C0** — only the App Service compute SKU differs intentionally.
+
+**Deploy workflow**: [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) implements a **cyclic SHA bypass** for manual runs with `staging_verified=true`: sign-off validation uses the `release_sha` recorded in `release_signoff.json` instead of requiring an exact match to the workflow’s resolved `RELEASE_SHA`, avoiding a chicken-and-egg when updating the signoff for the promoted commit. Introduced in **[PR #401](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/401)** (see the “skipping SHA-exact match (cyclic signoff)” branch in the governance UAT + CAB sign-off step).
+
 ## Configuration Parity
 
 | Config Category | Mechanism | Drift Control |
@@ -62,4 +70,4 @@ The `config-failfast` pattern (see [ADR-0002](../adr/ADR-0002-config-failfast.md
 - [`docs/adr/ADR-0006-environment-and-config-strategy.md`](../adr/ADR-0006-environment-and-config-strategy.md) — env strategy
 - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — config-drift-guard job
 - [`.github/workflows/deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) — staging deploy
-- [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) — production deploy
+- [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) — production deploy (includes cyclic SHA bypass on manual `staging_verified` dispatch; PR #401)

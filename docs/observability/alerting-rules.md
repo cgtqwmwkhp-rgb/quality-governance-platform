@@ -17,15 +17,17 @@ These alerts are operational and firing in production:
 
 ## Planned Alerts (Post-Telemetry Enablement)
 
-| Alert | Metric Source | Condition | Severity | Action |
-|-------|--------------|-----------|----------|--------|
-| API CRUD p95 > 200ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | High | Page on-call |
-| API CRUD p99 > 500ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | Critical | Page on-call |
-| API CRUD p50 > 100ms | OpenTelemetry `api.response_time_ms` | Sustained 1 hour | Warning | Create ticket |
-| DB indexed p95 > 50ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate |
-| DB complex p99 > 200ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate |
-| Error rate > 1% | OpenTelemetry error counter | 5 min window | High | Page on-call |
-| Throughput drop | OpenTelemetry request counter | < 10 req/s for 10 min (during business hours) | Warning | Investigate |
+Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) and [Telemetry Enablement Plan](telemetry-enablement-plan.md)). The rules below remain **Planned (requires OTel dashboard setup)** until OpenTelemetry metrics are wired to dashboards and alert definitions.
+
+| Alert | Metric Source | Condition | Severity | Action | Status |
+|-------|--------------|-----------|----------|--------|--------|
+| API CRUD p95 > 200ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | High | Page on-call | Planned (requires OTel dashboard setup) |
+| API CRUD p99 > 500ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | Critical | Page on-call | Planned (requires OTel dashboard setup) |
+| API CRUD p50 > 100ms | OpenTelemetry `api.response_time_ms` | Sustained 1 hour | Warning | Create ticket | Planned (requires OTel dashboard setup) |
+| DB indexed p95 > 50ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate | Planned (requires OTel dashboard setup) |
+| DB complex p99 > 200ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate | Planned (requires OTel dashboard setup) |
+| Error rate > 1% | OpenTelemetry error counter | 5 min window | High | Page on-call | Planned (requires OTel dashboard setup) |
+| Throughput drop | OpenTelemetry request counter | < 10 req/s for 10 min (during business hours) | Warning | Investigate | Planned (requires OTel dashboard setup) |
 
 ## Alert Routing
 
@@ -37,7 +39,7 @@ These alerts are operational and firing in production:
 
 ## Implementation Status
 
-Telemetry is currently quarantined in production (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). Planned alerts will be activated once telemetry is re-enabled per the [Telemetry Enablement Plan](telemetry-enablement-plan.md).
+Production telemetry is enabled; client and API telemetry traffic are no longer quarantined for CORS reasons (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). OpenTelemetry-based alerts in the table above can be configured as soon as the OTel dashboard and metric-backed alert rules are in place.
 
 ## Related Documents
 

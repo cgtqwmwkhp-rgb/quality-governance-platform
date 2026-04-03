@@ -3,7 +3,7 @@
 **Product name:** Quality Governance Platform  
 **Product version:** v2.x  
 **Report date:** 2026-03-20  
-**Contact:** Product & Platform Engineering (accessibility@governance.platform — substitute organisational contact)  
+**Contact:** Product & Platform Engineering (accessibility@quality-governance.platform — Quality Governance Platform Accessibility Team)  
 
 **Evaluation standard:** Web Content Accessibility Guidelines (WCAG) 2.1 Level AA  
 
