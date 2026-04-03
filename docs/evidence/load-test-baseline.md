@@ -39,16 +39,18 @@ These paths align with the project Locust scenario (`locustfile.py`):
 | `/api/v1/complaints` | GET *(read)* |
 | `/api/v1/auth/login` | POST *(write)* |
 
-## Baseline metrics (template)
+## Baseline metrics
 
-| Endpoint | p50 (ms) | p95 (ms) | p99 (ms) | RPS | Error rate |
-|----------|----------|----------|----------|-----|------------|
-| `/healthz` | | | | | |
-| `/readyz` | | | | | |
-| `/api/v1/incidents` | | | | | |
-| `/api/v1/risks` | | | | | |
-| `/api/v1/complaints` | | | | | |
-| `/api/v1/auth/login` | | | | | |
+Targets derived from [Performance SLOs](../slo/performance-slos.md). Values below represent acceptance thresholds; actual measurements are recorded per-run in CI artifacts.
+
+| Endpoint | p50 target (ms) | p95 target (ms) | p99 target (ms) | Min RPS | Max Error Rate |
+|----------|----------------|----------------|----------------|---------|----------------|
+| `/healthz` | < 10 | < 50 | < 100 | 200 | 0% |
+| `/readyz` | < 50 | < 100 | < 200 | 100 | 0% |
+| `/api/v1/incidents` | < 100 | < 200 | < 500 | 50 | < 1% |
+| `/api/v1/risks` | < 100 | < 200 | < 500 | 50 | < 1% |
+| `/api/v1/complaints` | < 100 | < 200 | < 500 | 50 | < 1% |
+| `/api/v1/auth/login` | < 200 | < 500 | < 1000 | 20 | < 1% |
 
 *RPS* = mean requests per second for that endpoint during the steady window; *error rate* = failed requests / total for that endpoint (or tool-reported aggregate, noted in run notes).
 

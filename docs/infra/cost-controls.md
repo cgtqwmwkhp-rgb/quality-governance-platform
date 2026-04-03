@@ -30,8 +30,8 @@
 ### 2.1 Compute (App Service)
 
 - **Current**: B1/B2 tier (1–2 vCPU, 1.75–3.5 GB RAM)
-- **Control**: No auto-scale beyond single instance in production (sufficient for <100 concurrent users)
-- **Alert**: If CPU consistently >80% over 1 hour → evaluate scale-up to S1
+- **Control**: Auto-scale configured with min 2, max 6 instances (see `scripts/infra/autoscale-settings.json`). Scale-out triggers on CPU > 70% sustained 5 minutes; scale-in on CPU < 40% sustained 10 minutes.
+- **Alert**: If CPU consistently >80% over 1 hour across all instances → evaluate scale-up to S1
 - **Savings opportunity**: Consider reserved instance pricing if commitment >1 year
 
 ### 2.2 Database (PostgreSQL Flexible)
@@ -174,14 +174,25 @@ This cadence complements the operational steps in **Cost Review Process** (secti
 
 ### Current State
 
-- **Not implemented** — all tenants share the same infrastructure
-- The platform is single-deployment, multi-tenant (tenant isolation is at the DB row level via `tenant_id`)
+- **Partial** — all tenants share the same infrastructure (single-deployment, multi-tenant with `tenant_id` row-level isolation)
+- Backend request logging includes `tenant_id` in structured logs (`src/infrastructure/middleware/request_logger.py`)
+- Blob storage is tenant-scoped by key prefix (`evidence/{tenant_id}/...`)
 
-### Target Model (when needed)
+### Implementation Plan
+
+| Phase | Action | Status |
+|-------|--------|--------|
+| Phase 1 | Log `tenant_id` with every request for usage-based attribution | Done |
+| Phase 2 | Tag Azure Blob containers per tenant for storage cost breakdown | Planned |
+| Phase 3 | Azure Cost Management custom dimensions for per-tenant cost views | Planned |
+| Phase 4 | Monthly per-tenant cost report generation and delivery | Planned |
+
+### Target Model
 
 - Tag resources with `tenant_id` where possible (Blob containers per tenant)
-- Use Azure Cost Management tags for attribution
-- Backend: log `tenant_id` with request telemetry (`src/infrastructure/middleware/request_logger.py`) for usage-based attribution
+- Use Azure Cost Management tags and custom dimensions for attribution
+- Generate monthly per-tenant cost reports from Azure Cost Management API
+- Backend telemetry enrichment enables usage-proportional chargeback
 
 ---
 

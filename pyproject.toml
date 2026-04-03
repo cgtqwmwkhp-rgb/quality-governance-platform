@@ -180,7 +180,7 @@ source = ["src"]
 omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 45
+fail_under = 48
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

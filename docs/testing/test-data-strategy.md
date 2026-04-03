@@ -28,16 +28,21 @@ Tests must not construct ORM rows with bare `Model.objects.create(...)` except i
 
 ## Golden datasets
 
-Regression and snapshot tests use **frozen** dictionaries (or equivalent fixtures) exported next to factories or in `tests/fixtures/golden/`:
+Regression and snapshot tests use **frozen** dictionaries (or equivalent fixtures) exported next to factories and as JSON files in `tests/fixtures/golden/`:
 
-| Constant | Purpose |
-|----------|---------|
-| `GOLDEN_INCIDENT` | Baseline incident payload + expected API shape for list/detail and reporting joins |
-| `GOLDEN_RISK` | Baseline risk scores, statuses, and filter facets |
-| `GOLDEN_RTA` | Baseline RTA lifecycle fields and transition guards |
-| `GOLDEN_COMPLAINT` | Baseline complaint categorization and SLA timestamps |
+| Source | Purpose |
+|--------|---------|
+| `tests/factories/core.py::GOLDEN_INCIDENT` | Baseline incident dict for in-code tests |
+| `tests/factories/core.py::GOLDEN_RISK` | Baseline risk scores, statuses, and filter facets |
+| `tests/factories/core.py::GOLDEN_RTA` | Baseline RTA lifecycle fields and transition guards |
+| `tests/factories/core.py::GOLDEN_COMPLAINT` | Baseline complaint categorization and SLA timestamps |
+| `tests/fixtures/golden/incident.json` | Full incident payload with actions for API response comparison |
+| `tests/fixtures/golden/risk.json` | Enterprise Risk with linked audits/actions |
+| `tests/fixtures/golden/audit.json` | Audit run with findings, corrective actions, risk links |
+| `tests/fixtures/golden/capa.json` | CAPA action with source linkage |
+| `tests/fixtures/golden/complaint.json` | Complaint with categorization and SLA timestamps |
 
-Golden data is updated only deliberately (e.g. schema change PR) and referenced in tests by constant name so diffs stay reviewable.
+Golden data is updated only deliberately (e.g. schema change PR) and referenced in tests by constant name or file path so diffs stay reviewable.
 
 ## Deterministic timestamps
 

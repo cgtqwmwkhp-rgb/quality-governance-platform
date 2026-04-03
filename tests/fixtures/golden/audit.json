@@ -1,0 +1,25 @@
+{
+  "reference_number": "AUD-2026-00001",
+  "title": "UVDB Achilles Verify B2 Annual Audit",
+  "status": "completed",
+  "template_id": 1,
+  "template_version": 1,
+  "audit_date": "2026-01-15T10:00:00Z",
+  "assurance_scheme": "UVDB",
+  "tenant_id": 1,
+  "findings": [
+    {
+      "reference_number": "FND-2026-00001",
+      "title": "Non-conformance: Missing toolbox talk records",
+      "description": "Site-level toolbox talk records not available for Q4 2025.",
+      "finding_type": "minor_nonconformity",
+      "severity": "medium",
+      "status": "open",
+      "corrective_action_required": true,
+      "corrective_action_due_date": "2026-02-15T10:00:00Z",
+      "clause_ids_json_legacy": ["8.1", "8.2"],
+      "control_ids_json": [],
+      "risk_ids_json": [1]
+    }
+  ]
+}

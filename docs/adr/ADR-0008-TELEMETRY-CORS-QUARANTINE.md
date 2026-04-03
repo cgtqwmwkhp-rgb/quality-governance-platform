@@ -57,6 +57,22 @@ Telemetry is **quarantined in production** and **non-blocking everywhere**:
 3. Filter console for "Telemetry" or "CORS" — should be empty
 4. Network tab should show NO telemetry requests when disabled
 
+## Enablement Criteria
+
+Production telemetry will be re-enabled when all of the following are met:
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | SWA custom domain CORS verified end-to-end | Pending |
+| 2 | `staticwebapp.config.json` CSP allows telemetry endpoint | Pending |
+| 3 | Staging telemetry has run for >= 2 weeks without errors | Pending |
+| 4 | SLO alerting rules documented in `docs/observability/alerting-rules.md` | Pending |
+| 5 | Telemetry enablement plan reviewed and approved | Pending |
+
+**Target**: Re-enable production telemetry by end of Q2 2026.
+
+See `docs/observability/telemetry-enablement-plan.md` for the detailed rollout plan.
+
 ## Related
 - Issue: #TBD - Investigate SWA custom domain CORS
-- Timeline: Enable production telemetry after CORS verification
+- Timeline: Enable production telemetry after CORS verification (target: Q2 2026)
