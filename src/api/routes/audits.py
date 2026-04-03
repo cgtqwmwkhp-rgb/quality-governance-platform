@@ -1375,29 +1375,44 @@ async def list_findings(
             run_id=run_id,
         )
 
-        validated_items = []
+        validated_items: list[AuditFindingResponse] = []
         for idx, f in enumerate(result.items):
             try:
                 validated_items.append(AuditFindingResponse.model_validate(f))
             except Exception as item_exc:
-                logger.error(
-                    "Failed to serialize finding id=%s (index %d): %s\n%s",
+                logger.warning(
+                    "Soft-failed to serialize finding id=%s (index %d): %s – building fallback",
                     getattr(f, "id", "?"),
                     idx,
                     item_exc,
-                    traceback.format_exc(),
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=api_error(
-                        ErrorCode.INTERNAL_ERROR,
-                        "Finding serialization failed",
-                        details={
-                            "finding_id": getattr(f, "id", "?"),
-                            "error_type": type(item_exc).__name__,
-                        },
-                    ),
-                ) from item_exc
+                try:
+                    fallback = AuditFindingResponse(
+                        id=f.id,
+                        reference_number=getattr(f, "reference_number", None),
+                        run_id=f.run_id,
+                        question_id=getattr(f, "question_id", None),
+                        title=getattr(f, "title", None) or "(untitled)",
+                        description=getattr(f, "description", None) or "",
+                        severity=getattr(f, "severity", None) or "unknown",
+                        finding_type=getattr(f, "finding_type", None) or "unknown",
+                        status=str(f.status) if f.status else "open",
+                        clause_ids=None,
+                        control_ids=None,
+                        risk_ids=None,
+                        corrective_action_required=getattr(f, "corrective_action_required", True),
+                        corrective_action_due_date=getattr(f, "corrective_action_due_date", None),
+                        created_by_id=getattr(f, "created_by_id", None),
+                        created_at=f.created_at,
+                        updated_at=f.updated_at,
+                    )
+                    validated_items.append(fallback)
+                except Exception as fallback_exc:
+                    logger.error(
+                        "Cannot construct fallback for finding id=%s, skipping: %s",
+                        getattr(f, "id", "?"),
+                        fallback_exc,
+                    )
 
         return AuditFindingListResponse(
             items=validated_items,
