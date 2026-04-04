@@ -57,7 +57,7 @@ def run_data_retention(self) -> dict:  # type: ignore[override]
                 try:
                     cutoff = now - timedelta(days=retention_days)
                     result = conn.execute(
-                        text(f"DELETE FROM {table} WHERE {date_col} < :cutoff"),  # noqa: S608
+                        text(f"DELETE FROM {table} WHERE {date_col} < :cutoff"),  # nosec B608  # noqa: S608
                         {"cutoff": cutoff},
                     )
                     deleted = result.rowcount or 0
