@@ -36,8 +36,10 @@ async def list_regulatory_updates(
 ):
     """List regulatory updates with filters."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     updates = await service.get_regulatory_updates(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         source=source,
         impact=impact,
         reviewed=reviewed,
@@ -59,9 +61,11 @@ async def review_regulatory_update(
 ):
     """Mark a regulatory update as reviewed."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     try:
         response = await service.mark_update_reviewed(
-            tenant_id=current_user.tenant_id,
+            tenant_id=tenant_id,
             update_id=update_id,
             reviewed_by=current_user.id,
             requires_action=requires_action,
@@ -87,8 +91,10 @@ async def run_gap_analysis(
 ):
     """Run automated gap analysis."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     response = await service.run_gap_analysis(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         regulatory_update_id=regulatory_update_id,
         standard_id=standard_id,
         actor_user_id=current_user.id,
@@ -105,7 +111,9 @@ async def list_gap_analyses(
 ):
     """List gap analyses."""
     service = ComplianceAutomationService(db)
-    analyses = await service.get_gap_analyses(tenant_id=current_user.tenant_id, status=status)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    analyses = await service.get_gap_analyses(tenant_id=tenant_id, status=status)
     return {"analyses": analyses, "total": len(analyses)}
 
 
@@ -125,8 +133,10 @@ async def list_certificates(
 ):
     """List certificates with filters."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     certificates = await service.get_certificates(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         certificate_type=certificate_type,
         entity_type=entity_type,
         status=status,
@@ -139,7 +149,9 @@ async def list_certificates(
 async def get_expiring_certificates_summary(db: DbSession, current_user: CurrentUser):
     """Get summary of expiring certificates."""
     service = ComplianceAutomationService(db)
-    return await service.get_expiring_certificates_summary(tenant_id=current_user.tenant_id)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
+    return await service.get_expiring_certificates_summary(tenant_id=tenant_id)
 
 
 # ============================================================================
@@ -156,8 +168,10 @@ async def list_scheduled_audits(
 ):
     """List scheduled audits."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     audits = await service.get_scheduled_audits(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         upcoming_days=upcoming_days,
         overdue=overdue,
     )
@@ -178,8 +192,10 @@ async def get_compliance_score(
 ):
     """Calculate current compliance score."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     return await service.calculate_compliance_score(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         scope_type=scope_type,
         scope_id=scope_id,
     )
@@ -194,8 +210,10 @@ async def get_compliance_trend(
 ):
     """Get compliance score trend over time."""
     service = ComplianceAutomationService(db)
+    tenant_id = current_user.tenant_id
+    assert tenant_id is not None
     trend = await service.get_compliance_trend(
-        tenant_id=current_user.tenant_id,
+        tenant_id=tenant_id,
         scope_type=scope_type,
         months=months,
     )

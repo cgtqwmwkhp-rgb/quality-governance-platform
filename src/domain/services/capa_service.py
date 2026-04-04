@@ -88,7 +88,8 @@ class CAPAService:
         self.db.add(action)
         await self.db.commit()
         await self.db.refresh(action)
-        await invalidate_tenant_cache(tenant_id, "capa")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "capa")
         track_metric("capa.created")
 
         await record_audit_event(
@@ -137,7 +138,8 @@ class CAPAService:
         apply_updates(action, data)
         await self.db.commit()
         await self.db.refresh(action)
-        await invalidate_tenant_cache(tenant_id, "capa")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "capa")
         return action
 
     async def transition_status(
@@ -222,7 +224,8 @@ class CAPAService:
 
         await self.db.delete(action)
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "capa")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "capa")
 
     async def get_stats(self, tenant_id: int | None) -> dict[str, int]:
         """Get aggregate CAPA statistics for a tenant."""

@@ -14,12 +14,19 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.exceptions import NotFoundError
 from src.domain.services.audit_log_service import AuditLogService
 
 router = APIRouter()
+
+
+def _tid(user: CurrentUser) -> int:
+    tid = user.tenant_id
+    assert tid is not None, "Tenant context required"
+    return tid
 
 
 # ============================================================================
@@ -83,6 +90,7 @@ class ExportRequest(BaseModel):
 @router.get("/", response_model=list[AuditLogEntryResponse])
 async def list_audit_logs(
     current_user: CurrentUser,
+    db: DbSession,
     entity_type: Optional[str] = None,
     entity_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -91,11 +99,10 @@ async def list_audit_logs(
     date_to: Optional[datetime] = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=100),
-    db: DbSession = None,
 ) -> Any:
     """List audit log entries with filters."""
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     entries = await service.get_entries(
         tenant_id=tenant_id,
@@ -121,7 +128,7 @@ async def get_entity_history(
 ) -> Any:
     """Get complete audit history for an entity."""
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     entries = await service.get_entity_history(
         tenant_id=tenant_id,
@@ -136,12 +143,12 @@ async def get_entity_history(
 async def get_user_activity(
     user_id: int,
     current_user: CurrentUser,
+    db: DbSession,
     days: int = Query(30, ge=1, le=365),
-    db: DbSession = None,
 ) -> Any:
     """Get recent activity for a user."""
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     entries = await service.get_user_activity(
         tenant_id=tenant_id,
@@ -178,9 +185,9 @@ async def get_audit_entry(
 @router.post("/verify", response_model=VerificationResponse)
 async def verify_chain(
     current_user: CurrentUser,
+    db: DbSession,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
-    db: DbSession = None,
 ) -> Any:
     """
     Verify the integrity of the audit log hash chain.
@@ -189,7 +196,7 @@ async def verify_chain(
     and comparing cryptographic hashes.
     """
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     verification = await service.verify_chain(
         tenant_id=tenant_id,
@@ -204,12 +211,12 @@ async def verify_chain(
 @router.get("/verifications", response_model=list[VerificationResponse])
 async def list_verifications(
     current_user: CurrentUser,
+    db: DbSession,
     limit: int = Query(10, ge=1, le=50),
-    db: DbSession = None,
 ) -> Any:
     """Get history of chain verifications."""
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     verifications = await service.get_verifications(
         tenant_id=tenant_id,
@@ -237,7 +244,7 @@ async def export_audit_logs(
     for audit purposes.
     """
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     exported_data, export_record = await service.export_logs(
         tenant_id=tenant_id,
@@ -265,12 +272,12 @@ async def export_audit_logs(
 @router.get("/stats")
 async def get_audit_stats(
     current_user: CurrentUser,
+    db: DbSession,
     days: int = Query(30, ge=1, le=365),
-    db: DbSession = None,
 ) -> Any:
     """Get audit log statistics."""
     service = AuditLogService(db)
-    tenant_id = current_user.tenant_id
+    tenant_id = _tid(current_user)
 
     stats = await service.get_stats(tenant_id=tenant_id, days=days)
 

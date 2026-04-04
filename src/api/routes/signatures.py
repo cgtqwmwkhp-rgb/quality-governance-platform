@@ -133,7 +133,7 @@ class AuditLogResponse(BaseModel):
 async def create_signature_request(
     data: SignatureRequestCreate,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Create a new signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -182,7 +182,7 @@ async def list_signature_requests(
 @router.get("/requests/pending")
 async def get_pending_requests(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signature requests pending user's signature."""
     from src.domain.services.signature_service import SignatureService
@@ -202,7 +202,7 @@ async def get_pending_requests(
 async def get_signature_request(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get a signature request by ID."""
     from src.domain.services.signature_service import SignatureService
@@ -220,7 +220,7 @@ async def get_signature_request(
 async def send_signature_request(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Send a signature request to signers."""
     from src.domain.services.signature_service import SignatureService
@@ -257,7 +257,7 @@ async def void_signature_request(
 async def get_audit_log(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get audit log for a signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -277,7 +277,7 @@ async def get_audit_log(
 async def get_signing_page(
     token: str,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signing page data for external signer."""
     from src.domain.services.signature_service import SignatureService
@@ -323,7 +323,7 @@ async def sign_document(
     token: str,
     data: SignInput,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Apply signature to document."""
     from src.domain.services.signature_service import SignatureService
@@ -360,7 +360,7 @@ async def decline_signing(
     token: str,
     data: DeclineInput,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Decline to sign."""
     from src.domain.services.signature_service import SignatureService
@@ -396,7 +396,7 @@ async def decline_signing(
 async def create_template(
     data: TemplateCreate,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Create a signature template."""
     from src.domain.services.signature_service import SignatureService
@@ -421,7 +421,7 @@ async def create_template(
 @router.get("/templates", response_model=list[TemplateResponse])
 async def list_templates(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """List signature templates."""
     from src.domain.models.digital_signature import SignatureTemplate
@@ -473,7 +473,7 @@ async def use_template(
 @router.get("/stats")
 async def get_signature_stats(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signature statistics."""
     from src.domain.models.digital_signature import Signature, SignatureRequest
@@ -515,7 +515,7 @@ async def get_signature_stats(
 @router.post("/admin/send-reminders")
 async def send_reminders(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Send reminders for pending signatures (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService
@@ -530,7 +530,7 @@ async def send_reminders(
 @router.post("/admin/expire-old")
 async def expire_old_requests(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Expire old signature requests (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService

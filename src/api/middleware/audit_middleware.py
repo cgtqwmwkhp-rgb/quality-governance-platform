@@ -195,8 +195,8 @@ async def _log_audit_entry(
 
             # Extract entity info from path (e.g., /api/v1/risks/123 -> entity_type="risks", entity_id="123")
             path_parts = request.url.path.strip("/").split("/")
-            entity_type = None
-            entity_id = None
+            entity_type: str | None = None
+            entity_id: int | str | None = None
 
             # Try to extract entity type and ID from path
             # Pattern: /api/v1/{entity_type}/{entity_id}

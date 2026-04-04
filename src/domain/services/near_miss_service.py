@@ -81,7 +81,8 @@ class NearMissService:
 
         await self.db.commit()
         await self.db.refresh(near_miss)
-        await invalidate_tenant_cache(tenant_id, "near_miss")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
         return near_miss
@@ -191,7 +192,8 @@ class NearMissService:
 
         await self.db.commit()
         await self.db.refresh(near_miss)
-        await invalidate_tenant_cache(tenant_id, "near_miss")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
         return near_miss
@@ -225,7 +227,8 @@ class NearMissService:
 
         await self.db.delete(near_miss)
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "near_miss")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "near_miss")
         track_metric("near_miss.mutation", 1)
 
     async def list_investigations(

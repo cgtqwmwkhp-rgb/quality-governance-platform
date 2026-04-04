@@ -113,7 +113,8 @@ class ComplaintService:
         )
 
         await self.db.flush()
-        await invalidate_tenant_cache(tenant_id, "complaints")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "complaints")
         track_metric("complaints.created")
 
         return complaint
@@ -198,7 +199,8 @@ class ComplaintService:
         )
 
         await self.db.flush()
-        await invalidate_tenant_cache(tenant_id, "complaints")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "complaints")
 
         return complaint
 

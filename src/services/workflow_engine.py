@@ -100,7 +100,7 @@ class ConditionEvaluator:
     def _get_nested_value(data: Dict, field: str) -> Any:
         """Get value from nested dictionary using dot notation."""
         keys = field.split(".")
-        value = data
+        value: Any = data
         for key in keys:
             if isinstance(value, dict):
                 value = value.get(key)
@@ -569,7 +569,7 @@ class WorkflowEngine:
 
         This should be called periodically (e.g., every 5 minutes) by a scheduler.
         """
-        results = []
+        results: list[dict[str, Any]] = []
 
         # Get escalation rules with time-based triggers
         query = select(WorkflowRule).where(

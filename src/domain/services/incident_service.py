@@ -129,7 +129,8 @@ class IncidentService:
 
         await self.db.flush()
         await self.db.refresh(incident)
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
         track_business_event("incident_created", {"severity": data.get("severity", "unknown")})
         from src.infrastructure.monitoring.azure_monitor import record_incident_created
@@ -230,7 +231,8 @@ class IncidentService:
 
         await self.db.flush()
         await self.db.refresh(incident)
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
         return incident
 
@@ -267,7 +269,8 @@ class IncidentService:
 
         await self.db.delete(incident)
         await self.db.flush()
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
     async def check_reporter_email_access(
         self,
