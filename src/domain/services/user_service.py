@@ -111,7 +111,8 @@ class UserService:
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
-        await invalidate_tenant_cache(tenant_id, "users")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "users")
 
         return user
 
@@ -158,7 +159,8 @@ class UserService:
 
         await self.db.commit()
         await self.db.refresh(user)
-        await invalidate_tenant_cache(tenant_id, "users")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "users")
 
         return user
 
@@ -176,7 +178,8 @@ class UserService:
 
         user.is_active = False
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "users")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "users")
 
     # ======================== Role operations ========================
 

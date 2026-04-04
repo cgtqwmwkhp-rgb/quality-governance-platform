@@ -275,7 +275,7 @@ class ABACService:
             stmt = stmt.where(or_(ABACPolicy.tenant_id == tenant_id, ABACPolicy.tenant_id == None))
 
         result = await self.db.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Role Management
@@ -375,7 +375,7 @@ class ABACService:
                 ),
             )
         )
-        policies = result.scalars().all()
+        policies = list(result.scalars().all())
 
         self._policy_cache[cache_key] = policies
         return policies

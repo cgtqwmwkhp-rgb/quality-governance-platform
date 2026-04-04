@@ -135,7 +135,7 @@ async def list_notifications(
     items = result.scalars().all()
 
     return NotificationListResponse(
-        items=items,
+        items=list(items),  # type: ignore[arg-type]  # ORM→Pydantic coercion
         total=total,
         unread_count=unread,
         page=page,

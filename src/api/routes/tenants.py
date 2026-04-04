@@ -129,6 +129,8 @@ async def get_current_tenant(
 ) -> Any:
     """Get the current tenant context."""
     service = TenantService(db)
+    if current_user.tenant_id is None:
+        raise NotFoundError("No tenant context")
     tenant = await service.get_tenant(current_user.tenant_id)
 
     if not tenant:

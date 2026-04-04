@@ -73,7 +73,7 @@ def send_push_notification(self, user_id: int, title: str, body: str, data: Opti
             )
 
             for sub in subs:
-                ok = _send_webpush(sub.endpoint, sub.p256dh_key, sub.auth_key, payload)
+                ok = _send_webpush(str(sub.endpoint), str(sub.p256dh_key), str(sub.auth_key), payload)
                 if ok:
                     sent += 1
                 else:

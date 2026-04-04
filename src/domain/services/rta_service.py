@@ -64,7 +64,8 @@ class RTAService:
 
         await self.db.commit()
         await self.db.refresh(rta)
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
         track_metric("rta.created", 1)
         return rta
@@ -147,7 +148,8 @@ class RTAService:
 
         await self.db.commit()
         await self.db.refresh(rta)
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
         return rta
 
@@ -179,7 +181,8 @@ class RTAService:
 
         await self.db.delete(rta)
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
 
     # ---- Email access check ----

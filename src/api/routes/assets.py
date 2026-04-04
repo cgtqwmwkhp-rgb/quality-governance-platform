@@ -45,6 +45,12 @@ def _assert_asset_write_access(user: CurrentUser) -> None:
     )
 
 
+def _tid(user: CurrentUser) -> int:
+    tid = user.tenant_id
+    assert tid is not None, "Tenant context required"
+    return tid
+
+
 # ============== Asset Type endpoints ==============
 # Declare /asset-types routes first so they take precedence over /{id}
 
@@ -62,7 +68,7 @@ async def list_asset_types(
     """List asset types with filtering and pagination."""
     service = AssetService(db)
     result = await service.list_asset_types(
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         page=page,
         page_size=page_size,
         search=search,
@@ -94,7 +100,7 @@ async def create_asset_type(
     asset_type = await service.create_asset_type(
         data=data.model_dump(exclude_unset=True),
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AssetTypeResponse.model_validate(asset_type)
 
@@ -107,7 +113,7 @@ async def get_asset_type(
 ):
     """Get a specific asset type."""
     service = AssetService(db)
-    asset_type = await service._get_entity(AssetType, asset_type_id, tenant_id=user.tenant_id)
+    asset_type = await service._get_entity(AssetType, asset_type_id, tenant_id=_tid(user))
     return AssetTypeResponse.model_validate(asset_type)
 
 
@@ -124,7 +130,7 @@ async def update_asset_type(
     asset_type = await service.update_asset_type(
         asset_type_id=asset_type_id,
         update_data=updates.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return AssetTypeResponse.model_validate(asset_type)
@@ -141,7 +147,7 @@ async def delete_asset_type(
     service = AssetService(db)
     await service.delete_asset_type(
         asset_type_id=asset_type_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
 
 
@@ -155,7 +161,7 @@ async def get_templates_for_asset_type(
     service = AssetService(db)
     templates = await service.get_templates_for_asset_type(
         asset_type_id=asset_type_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return TemplateListResponse(
         items=[AuditTemplateSummaryResponse.model_validate(t) for t in templates],
@@ -180,7 +186,7 @@ async def list_assets(
     """List assets with filtering and pagination."""
     service = AssetService(db)
     result = await service.list_assets(
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         page=page,
         page_size=page_size,
         search=search,
@@ -209,7 +215,7 @@ async def create_asset(
     asset = await service.create_asset(
         data=data.model_dump(exclude_unset=True),
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AssetResponse.model_validate(asset)
 
@@ -224,7 +230,7 @@ async def get_asset(
     service = AssetService(db)
     asset = await service.get_asset(
         asset_id=asset_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AssetResponse.model_validate(asset)
 
@@ -242,7 +248,7 @@ async def update_asset(
     asset = await service.update_asset(
         asset_id=asset_id,
         update_data=updates.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return AssetResponse.model_validate(asset)

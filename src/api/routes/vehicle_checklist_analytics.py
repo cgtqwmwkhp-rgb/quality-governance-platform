@@ -199,7 +199,7 @@ async def export_daily_csv(
         (await db.execute(select(PAMSVanChecklistCache).order_by(PAMSVanChecklistCache.pams_id.desc()))).scalars().all()
     )
 
-    return _build_csv_response(rows, "daily_checklists.csv")
+    return _build_csv_response(list(rows), "daily_checklists.csv")
 
 
 @router.get("/export/monthly")
@@ -214,7 +214,7 @@ async def export_monthly_csv(
         .all()
     )
 
-    return _build_csv_response(rows, "monthly_checklists.csv")
+    return _build_csv_response(list(rows), "monthly_checklists.csv")
 
 
 @router.get("/export/defects")

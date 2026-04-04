@@ -215,7 +215,8 @@ class EvidenceService:
         from src.infrastructure.monitoring.azure_monitor import record_document_uploaded
 
         record_document_uploaded()
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
         track_metric("evidence.uploaded", 1)
 
@@ -316,7 +317,8 @@ class EvidenceService:
 
         await self.db.commit()
         await self.db.refresh(asset)
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
 
         return asset
@@ -343,7 +345,8 @@ class EvidenceService:
         asset.updated_by_id = user_id
 
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
 
     # ------------------------------------------------------------------
