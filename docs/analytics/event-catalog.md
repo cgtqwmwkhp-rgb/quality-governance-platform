@@ -24,7 +24,32 @@ Catalog of business metrics, frontend telemetry, backend observability signals, 
 | `record_5xx_error` | `src/api/middleware/error_handler.py` | Counter in global error handler |
 | `emit_db_pool_usage_metric` | `src/infrastructure/database.py` | Pool usage gauge via periodic task |
 
-All core business metrics are now wired with direct call-sites. Remaining instruments (`auth.logout`, `celery.*`) are defined and ready for wiring when those code paths are enabled.
+All core business metrics are now wired with direct call-sites.
+
+### Instrument Wiring Status
+
+| Instrument | Status | Call-site | Notes |
+|-----------|--------|-----------|-------|
+| `record_incident_created` | **Live** | `src/domain/services/incident_service.py` | Counter on incident create |
+| `record_incident_resolved` | **Live** | `src/domain/services/incident_service.py` | Counter on status → CLOSED |
+| `record_risk_created` | **Live** | `src/domain/services/risk_service.py` | Counter after DB commit |
+| `record_document_uploaded` | **Live** | `src/domain/services/evidence_service.py` | Counter after upload + commit |
+| `record_workflow_completed` | **Live** | `src/domain/services/workflow_service.py` | Counter + duration histogram |
+| `record_auth_login` | **Live** | `src/domain/services/auth_service.py` | Counter on success |
+| `record_auth_failure` | **Live** | `src/domain/services/auth_service.py` | Counter on failure |
+| `record_5xx_error` | **Live** | `src/api/middleware/error_handler.py` | Counter in global handler |
+| `emit_db_pool_usage_metric` | **Live** | `src/infrastructure/database.py` | Gauge via periodic task |
+| `record_cache_miss` | **Live** | `src/infrastructure/monitoring/azure_monitor.py` | Counter |
+| `track_metric("capa.created")` | **Live** | `src/domain/services/capa_service.py` | Counter on create |
+| `track_metric("capa.closed")` | **Live** | `src/domain/services/capa_service.py` | Counter on status → closed |
+| `track_metric("complaints.created")` | **Live** | `src/domain/services/complaint_service.py` | Counter on create |
+| `track_metric("audits.completed")` | **Live** | `src/domain/services/audit_service.py` | Counter on run complete |
+| `track_metric("audits.findings")` | **Live** | `src/domain/services/audit_service.py` | Counter on finding create |
+| `auth.logout` | **Defined** | — | Wire when logout endpoint is enabled |
+| `celery.task_failures` | **Defined** | — | Wire when Celery failure hook is enabled |
+| `celery.queue_depth` | **Defined** | — | Wire when Celery monitoring is enabled |
+
+**15 of 18 instruments live** (83%). Remaining 3 await code path enablement (logout endpoint, Celery monitoring hooks). These are non-critical — core business and platform health metrics are fully covered.
 
 ### `track_metric(name, value=1.0, tags=None)`
 
