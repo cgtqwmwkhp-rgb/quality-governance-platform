@@ -249,7 +249,7 @@ class AuditService:
     ) -> Any:
         """Fetch entity by PK, optionally scoped to *tenant_id*."""
         model_any: Any = model
-        stmt = select(model).where(model_any.id == entity_id)
+        stmt: Any = select(model).where(model_any.id == entity_id)
         if tenant_id is not None:
             stmt = stmt.where(
                 or_(

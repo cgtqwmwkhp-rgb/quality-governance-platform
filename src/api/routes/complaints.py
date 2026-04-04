@@ -265,7 +265,7 @@ async def list_complaint_investigations(
     total_pages = ceil(total / page_size) if total > 0 else 1
 
     # Get paginated results
-    query = (
+    inv_query = (
         select(InvestigationRun)
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.COMPLAINT,
@@ -275,7 +275,7 @@ async def list_complaint_investigations(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    result = await db.execute(query)
+    result = await db.execute(inv_query)
     investigations = result.scalars().all()
 
     return {

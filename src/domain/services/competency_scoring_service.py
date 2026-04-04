@@ -67,7 +67,7 @@ class CompetencyScoringService:
             elif verdict_val == "not_competent":
                 not_competent += 1
                 crit = criticality_map.get(r.question_id)
-                crit_val = crit.value if hasattr(crit, "value") else str(crit) if crit else None
+                crit_val = crit.value if crit is not None and hasattr(crit, "value") else (str(crit) if crit else None)
                 if crit_val == "essential":
                     essential_failures += 1
                 else:

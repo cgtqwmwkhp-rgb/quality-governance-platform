@@ -51,7 +51,7 @@ class InMemoryCache:
     """Thread-safe in-memory LRU cache with TTL support."""
 
     def __init__(self, max_size: int = 1000):
-        self._cache: OrderedDict[str, tuple[Any, float]] = OrderedDict()
+        self._cache: OrderedDict[str, tuple[Any, float | None]] = OrderedDict()
         self._max_size = max_size
         self._lock = asyncio.Lock()
         self._stats = {"hits": 0, "misses": 0, "sets": 0, "deletes": 0}
