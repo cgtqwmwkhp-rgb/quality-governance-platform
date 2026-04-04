@@ -1437,7 +1437,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: alembic upgrade head
 
-      - name: Start app
+      - name: Start app and wait for healthy
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           REDIS_URL: redis://localhost:6379/0
@@ -1446,7 +1446,14 @@ jobs:
           TESTING: "1"
         run: |
           uvicorn src.main:app --host 127.0.0.1 --port 8000 &
-          sleep 5
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/healthz > /dev/null 2>&1; then
+              echo "[OK] App is healthy after ${i}s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8000/healthz || { echo "[FAIL] App did not become healthy"; exit 1; }
 
       - name: Run Locust headless
         run: |
@@ -1607,6 +1614,21 @@ jobs:
     name: Alembic Migration Drift Check
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -1623,9 +1645,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Check for migration drift
+      - name: Apply migrations then check for drift
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
           echo "=== Alembic Migration Drift Check ==="
+          alembic upgrade head
           alembic check
           echo "[OK] No migration drift detected"
 

@@ -16,9 +16,23 @@ Every pull request must pass all 33 blocking jobs before merge. Advisory and sch
 
 | Classification | Behavior | Examples |
 |---------------|----------|----------|
-| **Blocking** | Exits non-zero on failure; PR cannot merge | Unit tests, mypy, import boundaries, Lighthouse, size-limit, lockfile integrity |
+| **Blocking** | Exits non-zero on failure; PR cannot merge | Unit tests, mypy, import boundaries, Lighthouse, size-limit, lockfile integrity, alembic-check |
 | **Advisory** | Runs in CI, logged, but does not block merge | DAST ZAP baseline scan |
 | **Scheduled** | Runs on a cron schedule, not per-PR | Mutation testing (weekly) |
+| **Parallel pipeline** | Runs on same triggers via separate workflow; findings surfaced via GitHub Security tab | CodeQL SAST, Trivy container scan, Semgrep |
+
+### Security Scanning Pipeline (`security-scan.yml`)
+
+A separate `security-scan.yml` workflow runs on every push/PR to `main`/`develop` and weekly. It includes:
+
+- **CodeQL SAST** — GitHub CodeQL analysis for Python and JavaScript (`sast-codeql` job, matrix strategy). Findings appear in the GitHub Security tab.
+- **Semgrep SAST** — Additional SAST scanning with auto-config + custom rules (`.semgrep.yml`).
+- **Bandit** — Python-specific security linting (high-severity blocking).
+- **Trivy** — Container image vulnerability scanning (HIGH/CRITICAL blocking, SARIF uploaded to GitHub).
+- **Gitleaks** — Secret detection across git history.
+- **Safety** — Dependency vulnerability check.
+
+This pipeline runs on the **same triggers** as `ci.yml` and provides defense-in-depth. CodeQL and Trivy findings are automatically surfaced via GitHub Advanced Security.
 
 ### Why DAST ZAP Is Advisory
 
@@ -38,19 +52,20 @@ Mutation testing (via `mutmut` or equivalent) reruns the test suite hundreds of 
 
 The following CI jobs are documented as **pre-existing failures** in [`docs/evidence/release_signoff.json`](../evidence/release_signoff.json). Each has a stated root cause, risk assessment, and mitigation:
 
-| Job | Root Cause | Risk | Mitigation |
-|-----|-----------|------|------------|
-| **`alembic-check`** | CI environment lacks a live database connection; Alembic migration head checks require a running PostgreSQL instance | Low | Migrations are verified locally and validated during staging deployment before every release |
-| **`lockfile-check`** | CI runners lack `pip-compile`; the lockfile freshness check cannot re-resolve dependencies | Low | Lockfile is regenerated locally with hash pinning; dependency integrity verified by pip install with `--require-hashes` |
-| **`e2e-tests`** | End-to-end tests require a running application server, which is not provisioned in the standard CI matrix | Low | Covered by 1,373 passing unit + integration tests; E2E suite runs in staging pre-release |
-| **`locust-load-test`** | Load tests require a running application server in CI | Low | Performance thresholds (p95 < 500 ms, error rate < 1%) are enforced when the server is available; load tests run in staging |
+| Job | Root Cause | Risk | Status |
+|-----|-----------|------|--------|
+| **`alembic-check`** | Previously lacked a database service container | — | **RESOLVED** — PostgreSQL service container added to CI job; now runs `alembic upgrade head && alembic check` |
+| **`lockfile-check`** | `pip-compile` hash resolution may produce minor drift from upstream releases | Low | Smart diff only fails on actual package version changes (not hash/comment drift) |
+| **`e2e-tests`** | End-to-end tests require a running application server with seeded data | Low | Covered by 1,373+ passing unit + integration tests; E2E suite runs in staging pre-release |
+| **`locust-load-test`** | Load tests require a running application server in CI | Low | Performance thresholds (p95 < 500 ms, error rate < 1%) enforced in staging; see `docs/slo/performance-slos.md` |
 | **`dast-zap-advisory`** | Intentionally advisory — baseline scan produces informational findings | None | Findings triaged weekly; no blocking security issues identified |
 
 ### Risk Assessment Summary
 
-- **No high-risk pre-existing failures.** All failures stem from CI environment constraints (no live database, no running server) rather than code defects.
-- **Every gap has a compensating control:** local verification, staging validation, or integration test coverage.
-- Blocking test suites (1,379 collected, 1,373 passed, 7 skipped, 0 failures) and 178 frontend tests provide strong regression coverage.
+- **`alembic-check` resolved** — now runs with a PostgreSQL service container, eliminating the pre-existing failure.
+- **Remaining 4 items are Low/None risk.** Three stem from CI environment constraints (no running application server) rather than code defects; one is advisory by design.
+- **Every gap has a compensating control:** staging validation, integration test coverage, or weekly triage.
+- Blocking test suites (1,379+ collected, 0 failures) and 178+ frontend tests provide strong regression coverage.
 
 ---
 
