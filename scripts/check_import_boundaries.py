@@ -6,6 +6,7 @@ Rules:
   - src/domain/ must NOT import from src/infrastructure/ (except resilience)
   - src/core/ must NOT import from src/api/
   - src/core/ must NOT import from src/infrastructure/
+  - src/services/ must NOT import from src/api/
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ RULES: list[tuple[str, list[str], list[str]]] = [
     ),
     ("src/core", ["src.api"], []),
     ("src/core", ["src.infrastructure"], []),
+    ("src/services", ["src.api"], []),
 ]
 
 
@@ -72,7 +74,7 @@ def main() -> int:
     root = Path(".")
     all_violations: list[str] = []
 
-    for source_dir in ["src/domain", "src/core"]:
+    for source_dir in ["src/domain", "src/core", "src/services"]:
         src_path = root / source_dir
         if not src_path.exists():
             continue

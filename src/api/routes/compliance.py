@@ -13,6 +13,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
+import sqlalchemy
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -214,7 +215,7 @@ async def _load_evidence_links(
     query = select(ComplianceEvidenceLink).where(ComplianceEvidenceLink.deleted_at.is_(None))
 
     if tenant_id is None:
-        query = query.where(False)
+        query = query.where(sqlalchemy.false())
     else:
         query = query.where(ComplianceEvidenceLink.tenant_id == tenant_id)
 

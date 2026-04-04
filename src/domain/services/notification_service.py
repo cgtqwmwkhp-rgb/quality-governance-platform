@@ -241,7 +241,7 @@ class NotificationService:
             user_id=notification.user_id,
             title=notification.title,
             body=notification.message,
-            data={"type": notification.notification_type, "id": notification.id},
+            data={"type": notification.type, "id": notification.id},
         )
         logger.info("Push notification dispatched for user %d", notification.user_id)
 

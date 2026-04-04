@@ -52,7 +52,7 @@ for (const file of files) {
 }
 
 // --- Locale parity check (cy.json vs en.json) – blocking if below threshold ---
-const CY_MIN_COVERAGE = 88;
+const CY_MIN_COVERAGE = 95;
 let cyParityMessage = '';
 let cyBelowThreshold = false;
 try {
