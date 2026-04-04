@@ -1,19 +1,21 @@
 {
-  "release_sha": "541fb73f84a539750ba25fbe4235ec79e4efd868",
+  "release_sha": "62b99eae5f7f63041a2e8fc6692390691fedf4e8",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/RUNNER_SHEET_RELEASE_ROLLOUT_2026-03-24.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-04T11:56:00Z",
+  "approved_at_utc": "2026-04-04T13:25:00Z",
   "deployment_evidence": {
-    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/411",
-    "deploy_run_id": "23978389433",
-    "unit_tests": "1379 collected, 1373 passed, 7 skipped, 0 failures",
+    "ci_run": "fix/wcs-9.5-transformation",
+    "deploy_run_id": "pending",
+    "unit_tests": "1380 collected, 1373 passed, 7 skipped, 0 failures",
     "mypy": "323 files, 0 errors (12 modules in ignore_errors, down from 64)",
     "frontend_tests": "178 passed",
+    "coverage_threshold": "fail_under = 65 (raised from 60)",
     "pr_checks_passed": 38,
+    "new_documentation": "11 new files, 6 updated files, 3 golden fixtures",
     "pre_existing_failures": [
       {
         "job": "alembic-check",
@@ -27,7 +29,7 @@
       },
       {
         "job": "dast-zap-advisory",
-        "reason": "ZAP baseline scan marked Advisory — informational only, not blocking.",
+        "reason": "ZAP baseline scan marked Advisory — informational only, not blocking. See docs/compliance/ci-gate-hygiene.md.",
         "risk": "none"
       },
       {
@@ -37,7 +39,7 @@
       },
       {
         "job": "locust-load-test",
-        "reason": "Requires running application server in CI; thresholds enforced: p95 < 500ms, error < 1%.",
+        "reason": "Requires running application server in CI; thresholds enforced: p95 < 500ms, error < 1%. See docs/slo/performance-slos.md § CI vs Production Threshold Reconciliation.",
         "risk": "low"
       }
     ]
