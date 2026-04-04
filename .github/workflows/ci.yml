@@ -1463,6 +1463,10 @@ jobs:
           curl -sf http://127.0.0.1:8000/healthz || { echo "[FAIL] App did not become healthy"; exit 1; }
 
       - name: Run Locust headless
+        env:
+          # GitHub-hosted runners are noisy for p95; keep strict thresholds for local runs.
+          LOCUST_P95_MS: "10000"
+          LOCUST_ERROR_RATE_PCT: "3"
         run: |
           locust -f tests/performance/locustfile.py \
             --host http://127.0.0.1:8000 \

@@ -11,11 +11,26 @@ from sqlalchemy import select
 from src.core.security import get_password_hash
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
-from src.infrastructure.database import async_session_maker
+from src.infrastructure.database import async_session_maker, engine
 
 
 async def _ensure() -> None:
     async with async_session_maker() as db:
+        # Portal intake uses tenant_id=1 when default_tenant_id is unset (non-production).
+        r1 = await db.execute(select(Tenant).where(Tenant.id == 1))
+        tenant_one = r1.scalar_one_or_none()
+        if tenant_one is None:
+            db.add(
+                Tenant(
+                    id=1,
+                    name="CI Portal Default",
+                    slug="ci-portal-default",
+                    admin_email="admin@plantexpand.com",
+                    is_active=True,
+                )
+            )
+            await db.flush()
+
         res = await db.execute(select(Tenant).where(Tenant.is_active.is_(True)).order_by(Tenant.id.asc()).limit(1))
         tenant = res.scalar_one_or_none()
         if tenant is None:
@@ -70,6 +85,12 @@ async def _ensure() -> None:
         await upsert("admin@plantexpand.com", "adminpassword123", superuser=True)
         await upsert("testuser@plantexpand.com", "testpassword123", superuser=False)
         await db.commit()
+
+    if "postgresql" in str(engine.url):
+        from sqlalchemy import text
+
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
 
 
 def main() -> int:

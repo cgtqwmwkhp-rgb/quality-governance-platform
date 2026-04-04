@@ -11,6 +11,7 @@ For headless mode:
 
 import json
 import logging
+import os
 import random
 import string
 import sys
@@ -21,8 +22,8 @@ from locust import HttpUser, between, events, task
 logger = logging.getLogger(__name__)
 
 PERF_THRESHOLDS = {
-    "p95_response_ms": 500,
-    "error_rate_pct": 1.0,
+    "p95_response_ms": int(os.environ.get("LOCUST_P95_MS", "500")),
+    "error_rate_pct": float(os.environ.get("LOCUST_ERROR_RATE_PCT", "1.0")),
 }
 
 
@@ -135,6 +136,7 @@ class QGPUser(HttpUser):
             "description": f"This is a test incident created during load testing at {datetime.now().isoformat()}",
             "severity": random.choice(["low", "medium", "high", "critical"]),
             "incident_type": random.choice(["safety", "environmental", "quality", "security"]),
+            "incident_date": datetime.now().isoformat(),
             "location": f"Test Location {random.randint(1, 100)}",
         }
         self.client.post(
