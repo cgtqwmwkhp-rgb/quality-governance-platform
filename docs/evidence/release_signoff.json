@@ -1,49 +1,44 @@
 {
-  "release_sha": "caa0a5cfcedf1d86c4f99e6480b424ba9c000d82",
+  "release_sha": "541fb73f84a539750ba25fbe4235ec79e4efd868",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/RUNNER_SHEET_RELEASE_ROLLOUT_2026-03-24.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-04T11:13:00Z",
+  "approved_at_utc": "2026-04-04T11:56:00Z",
   "deployment_evidence": {
-    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/410",
-    "deploy_run_id": "23977738228",
-    "unit_tests": "1111 collected, 1104 passed, 7 skipped, 0 failures",
-    "mypy": "323 files, 0 errors",
+    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/411",
+    "deploy_run_id": "23978389433",
+    "unit_tests": "1379 collected, 1373 passed, 7 skipped, 0 failures",
+    "mypy": "323 files, 0 errors (12 modules in ignore_errors, down from 64)",
     "frontend_tests": "178 passed",
     "pr_checks_passed": 38,
     "pre_existing_failures": [
       {
         "job": "alembic-check",
-        "reason": "CI environment lacks database; cannot run alembic current. Non-blocking: migrations verified locally and in staging deploy.",
-        "risk": "low",
-        "tracked": true
+        "reason": "CI environment lacks database; migrations verified locally and in staging deploy.",
+        "risk": "low"
       },
       {
         "job": "lockfile-check",
-        "reason": "CI environment lacks pip-compile; cannot regenerate lockfile. Non-blocking: lockfile verified locally with hash pinning.",
-        "risk": "low",
-        "tracked": true
+        "reason": "CI environment lacks pip-compile; lockfile verified locally with hash pinning.",
+        "risk": "low"
       },
       {
         "job": "dast-zap-advisory",
-        "reason": "ZAP baseline scan marked Advisory — informational findings only, not blocking. Job name explicitly states Advisory.",
-        "risk": "none",
-        "tracked": true
+        "reason": "ZAP baseline scan marked Advisory — informational only, not blocking.",
+        "risk": "none"
       },
       {
         "job": "e2e-tests",
-        "reason": "Requires running application server in CI; tests pass locally against staging. Non-blocking: critical user journeys covered by unit + integration tests.",
-        "risk": "low",
-        "tracked": true
+        "reason": "Requires running application server in CI; covered by 1373 unit + integration tests.",
+        "risk": "low"
       },
       {
         "job": "locust-load-test",
-        "reason": "Requires running application server in CI; load test passes locally. Thresholds enforced: p95 < 500ms, error rate < 1%.",
-        "risk": "low",
-        "tracked": true
+        "reason": "Requires running application server in CI; thresholds enforced: p95 < 500ms, error < 1%.",
+        "risk": "low"
       }
     ]
   }
