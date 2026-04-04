@@ -2,16 +2,11 @@
 # Line length to match black
 max-line-length = 120
 
-# Global ignores - patterns that are intentional, black-compatible, or pre-existing tech debt
-# E203: whitespace before ':' (conflicts with black slice formatting)
-# E501: line too long (pre-existing in many files, 120 char limit from black)
-# E741: ambiguous variable name (pre-existing in list comprehensions)
-# W291: trailing whitespace (should be handled by black, pre-existing in docstrings)
-# W503: line break before binary operator (conflicts with black)
-# F401: imported but unused (pre-existing tech debt - many files)
-# F841: local variable assigned but never used (pre-existing tech debt)
-# E711: comparison to None - required for SQLAlchemy column filters (== None is intentional)
-# E712: comparison to True/False - required for SQLAlchemy column filters (== True is intentional)
+# Global ignores — categorised by justification
+#   Black-compatible (permanent): E203, W291, W503
+#   SQLAlchemy filter idiom (permanent): E711, E712
+#   Line length delegated to black (permanent): E501
+#   Tech-debt (ratchet — aim to remove): E741, F401, F841
 extend-ignore = E203, E501, E741, W291, W503, F401, F841, E711, E712
 
 # Per-file ignores for specific pre-existing issues
@@ -43,7 +38,8 @@ per-file-ignores =
     src/api/routes/rca_tools.py:F401
     src/api/routes/uvdb.py:F401,E501
     src/api/routes/workflow.py:E741
-    # Schema files
+    # Schema files (re-exports)
+    src/api/schemas/error_codes.py:F401
     src/api/schemas/form_config.py:F401
     # Test files
     tests/security/test_owasp_comprehensive.py:E203

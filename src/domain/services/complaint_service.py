@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.services.audit_service import record_audit_event
@@ -139,7 +139,7 @@ class ComplaintService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         status_filter: Optional[str] = None,
         complainant_email: Optional[str] = None,
     ):
@@ -220,7 +220,7 @@ class ComplaintService:
         self,
         complaint_id: int,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List investigations for a specific complaint (paginated).
 

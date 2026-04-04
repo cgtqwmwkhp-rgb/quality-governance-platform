@@ -13,7 +13,7 @@ from typing import Optional
 from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class PAMSVanChecklistCache(Base):

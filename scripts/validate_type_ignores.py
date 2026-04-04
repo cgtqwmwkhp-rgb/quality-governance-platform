@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 188  # Adjusted for error migration type-ignore additions (current: 187, target: <100)
+MAX_TYPE_IGNORES = 187  # Ratchet ceiling: must not increase. Target: <100.
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"

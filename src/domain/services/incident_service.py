@@ -13,8 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
@@ -132,6 +132,9 @@ class IncidentService:
         await invalidate_tenant_cache(tenant_id, "incidents")
 
         track_business_event("incident_created", {"severity": data.get("severity", "unknown")})
+        from src.infrastructure.monitoring.azure_monitor import record_incident_created
+
+        record_incident_created()
 
         return incident
 
@@ -161,7 +164,7 @@ class IncidentService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         reporter_email: Optional[str] = None,
         skip_tenant_check: bool = False,
     ):

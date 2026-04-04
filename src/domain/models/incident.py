@@ -9,12 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
     AuditTrailMixin,
+    Base,
     CaseInsensitiveEnum,
     DataClassification,
     ReferenceNumberMixin,
     TimestampMixin,
 )
-from src.infrastructure.database import Base
 
 
 class IncidentType(str, enum.Enum):

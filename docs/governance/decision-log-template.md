@@ -18,6 +18,9 @@ Use this template for significant technical decisions. Store completed ADRs as m
 | [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) | Telemetry CORS Quarantine Policy | Accepted |
 | [ADR-0009](../adr/ADR-0009-csrf-not-required.md) | CSRF Protection Not Required | Accepted |
 | [ADR-0010](../adr/ADR-0010-backend-i18n-strategy.md) | Backend I18n Strategy | Accepted |
+| [ADR-0011](../adr/ADR-0011-api-versioning-strategy.md) | API Versioning Strategy | Accepted |
+| [ADR-0012](../adr/ADR-0012-testing-strategy.md) | Testing Strategy | Accepted |
+| [ADR-0013](../adr/ADR-0013-readiness-probe-db-check.md) | Readiness Probe Database Check | Accepted |
 
 ---
 
@@ -97,9 +100,9 @@ stateDiagram-v2
 
 ## Reference — existing ADRs
 
-The repository maintains **ten** recorded decisions under **[docs/adr/](../adr/)**; see the **Decision index** above. Browse that directory for full text and links between related ADRs (for example fail-fast configuration and CI governance).
+The repository maintains **thirteen** recorded decisions under **[docs/adr/](../adr/)**; see the **Decision index** above. Browse that directory for full text and links between related ADRs (for example fail-fast configuration and CI governance).
 
-When adding ADR-0011+, follow the same numbering and linking conventions as existing files.
+When adding ADR-0014+, follow the same numbering and linking conventions as existing files.
 
 ---
 

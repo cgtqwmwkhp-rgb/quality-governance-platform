@@ -21,7 +21,7 @@ from typing import Optional
 from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 # ============ Enums ============
 

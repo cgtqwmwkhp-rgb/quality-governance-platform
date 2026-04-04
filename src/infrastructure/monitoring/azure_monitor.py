@@ -262,6 +262,68 @@ def track_business_event(event_name: str, properties: dict[str, str] | None = No
         logger.info("Business event: %s", event_name, extra={"event": event_name, **properties})
 
 
+def record_incident_created() -> None:
+    if _incidents_created:
+        _incidents_created.add(1)
+
+
+def record_incident_resolved() -> None:
+    if _incidents_resolved:
+        _incidents_resolved.add(1)
+
+
+def record_audit_completed() -> None:
+    if _audits_completed:
+        _audits_completed.add(1)
+
+
+def record_risk_created() -> None:
+    if _risks_created:
+        _risks_created.add(1)
+
+
+def record_auth_login() -> None:
+    if _auth_login:
+        _auth_login.add(1)
+
+
+def record_auth_logout() -> None:
+    if _auth_logout:
+        _auth_logout.add(1)
+
+
+def record_auth_failure() -> None:
+    if _auth_failures:
+        _auth_failures.add(1)
+
+
+def record_document_uploaded() -> None:
+    if _documents_uploaded:
+        _documents_uploaded.add(1)
+
+
+def record_workflow_completed(duration_hours: float | None = None) -> None:
+    if _workflows_completed:
+        _workflows_completed.add(1)
+    if duration_hours is not None and _workflow_completion_time:
+        _workflow_completion_time.record(duration_hours)
+
+
+def record_5xx_error() -> None:
+    if _error_rate_5xx:
+        _error_rate_5xx.add(1)
+
+
+def record_cache_miss() -> None:
+    if _cache_miss_rate:
+        _cache_miss_rate.add(1)
+
+
+def record_celery_task_failure() -> None:
+    if _celery_task_failures:
+        _celery_task_failures.add(1)
+
+
 def get_tracer() -> "trace.Tracer | None":
     """Get the OpenTelemetry tracer, or None if OTel is unavailable."""
     global _tracer

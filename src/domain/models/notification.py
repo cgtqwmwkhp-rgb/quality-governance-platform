@@ -17,7 +17,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class NotificationType(str, Enum):

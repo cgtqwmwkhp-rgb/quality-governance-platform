@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -90,7 +90,7 @@ class RTAService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         severity: Optional[str] = None,
         status_filter: Optional[str] = None,
         reporter_email: Optional[str] = None,
@@ -247,7 +247,7 @@ class RTAService:
         self,
         rta_id: int,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List actions for an RTA with pagination.
 
@@ -339,7 +339,7 @@ class RTAService:
         self,
         rta_id: int,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List investigations for a specific RTA (paginated).
 

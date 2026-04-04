@@ -100,8 +100,8 @@ Access: JWT-authenticated users → tenant_id filter → role check → data
 | Access (Art. 15) | Partial | API supports record retrieval; no self-service portal for data subjects yet |
 | Rectification (Art. 16) | Implemented | PATCH endpoints with audit trail |
 | Erasure (Art. 17) | Partial | Soft-delete implemented; hard-delete not available for RIDDOR-reportable incidents (legal retention override) |
-| Restriction (Art. 18) | Not implemented | Requires status flag on records |
-| Portability (Art. 20) | Not implemented | JSON export available via API but no self-service |
+| Restriction (Art. 18) | Implemented | `processing_restricted` column + `GDPRService.restrict_processing()` (src/domain/services/gdpr_service.py) |
+| Portability (Art. 20) | Partial | JSON export available via API but no self-service portal |
 | Object (Art. 21) | N/A | Processing based on legal obligation, not consent |
 
 ### 5.1 Gaps & Remediation
@@ -110,7 +110,7 @@ Access: JWT-authenticated users → tenant_id filter → role check → data
 |-----|----------|-------------|--------|
 | No self-service data access portal | P2 | Build DSAR endpoint `/api/v1/privacy/my-data` | Q3 2026 |
 | No automated retention enforcement | P2 | Celery task to flag records past retention | Q3 2026 |
-| No restriction-of-processing flag | P3 | Add `processing_restricted` boolean to models | Q4 2026 |
+| ~~No restriction-of-processing flag~~ | ~~P3~~ | ~~Resolved: `processing_restricted` column added via Alembic migration; `GDPRService.restrict_processing()` enforces Art. 18~~ | Done |
 
 ---
 

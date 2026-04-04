@@ -1,12 +1,23 @@
-"""Base model mixins for common functionality."""
+"""Base model mixins and ORM declarative base for all domain models."""
 
 import enum
 from datetime import datetime, timezone
 from typing import Optional, Type
 
 from sqlalchemy import DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import VARCHAR, TypeDecorator
+
+
+class Base(DeclarativeBase):
+    """Base class for all database models.
+
+    Defined here in the domain layer so that model modules never need to
+    import from ``src.infrastructure``.  The infrastructure database module
+    re-imports this ``Base`` for engine/session binding.
+    """
+
+    pass
 
 
 class CaseInsensitiveEnum(TypeDecorator):

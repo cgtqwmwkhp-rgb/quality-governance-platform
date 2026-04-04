@@ -14,8 +14,7 @@ if TYPE_CHECKING:
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, TimestampMixin
 
 
 class InductionStatus(str, enum.Enum):

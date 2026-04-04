@@ -8,10 +8,11 @@ from typing import Any, AsyncGenerator
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
+from src.domain.models.base import Base  # noqa: F401 – re-exported for metadata binding
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,6 @@ _is_testing = (
     or "pytest" in os.environ.get("_", "")
     or "pytest" in sys.modules
 )
-
-
-class Base(DeclarativeBase):
-    """Base class for all database models."""
-
-    pass
 
 
 # Create async engine with conditional pooling (SQLite doesn't support pool_size)

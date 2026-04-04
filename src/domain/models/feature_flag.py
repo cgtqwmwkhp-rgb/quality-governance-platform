@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, Uuid
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class FeatureFlag(Base):

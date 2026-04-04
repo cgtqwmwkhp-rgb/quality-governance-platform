@@ -10,7 +10,7 @@ from __future__ import annotations
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class ExternalAuditRecord(Base):
