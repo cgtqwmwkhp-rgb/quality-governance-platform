@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class Standard(Base, TimestampMixin):

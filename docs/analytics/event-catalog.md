@@ -30,14 +30,14 @@ Registers a point on a **named counter** when the string matches a predefined in
 | `capa.closed` | When CAPA transitions to closed (`CAPAService`) | — | **Business Metrics** |
 | `complaints.created` | On complaint create (`ComplaintService`) | — | **Business Metrics** |
 | `risks.created` | Instrument defined; wire at risk-create path when enabled | — | **Business Metrics** |
-| `auth.login` | Instrument defined; wire at successful login when enabled | — | **Security** / **Business Metrics** |
+| `auth.login` | Wired via `record_auth_login()` on successful `AuthService.authenticate()` | — | **Security** / **Business Metrics** |
 | `auth.logout` | Instrument defined; wire at logout when enabled | — | **Security** |
-| `auth.failures` | Instrument defined; wire on auth failure when enabled | — | **Security** |
+| `auth.failures` | Wired via `record_auth_failure()` on failed `AuthService.authenticate()` | — | **Security** |
 | `documents.uploaded` | Instrument defined; wire on successful upload when enabled | — | **Business Metrics** |
-| `workflows.completed` | Instrument defined; wire when workflow instances complete | — | **Business Metrics** |
-| `api.error_rate_5xx` | Instrument defined; increment from global error path when wired | — | **Platform Health** / **API Performance** |
-| `cache.miss_rate` | Instrument defined; optional explicit miss counter | — | **Platform Health** |
-| `db.pool_usage_percent` | Instrument defined; pool saturation gauge when wired | — | **Platform Health** |
+| `workflows.completed` | Wired via `record_workflow_completed()` (azure_monitor) | — | **Business Metrics** |
+| `api.error_rate_5xx` | Wired via `record_5xx_error()` in global error handler | — | **Platform Health** / **API Performance** |
+| `cache.miss_rate` | Wired via `record_cache_miss()` (azure_monitor) | — | **Platform Health** |
+| `db.pool_usage_percent` | Wired via `emit_db_pool_usage_metric()` (database.py) | — | **Platform Health** |
 | `celery.task_failures` | On task failure when instrumented | — | **Platform Health** |
 | `celery.queue_depth` | Queue depth gauge when instrumented | — | **Platform Health** |
 

@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationParams, paginate
+from src.core.update import apply_updates
 from src.domain.models.standard import Clause, Control, Standard
 from src.infrastructure.monitoring.azure_monitor import track_metric
 

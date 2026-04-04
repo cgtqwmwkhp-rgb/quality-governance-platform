@@ -19,7 +19,7 @@ from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignK
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.enums import EnterpriseRiskStatus
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class RiskCategory(str, Enum):

@@ -15,7 +15,7 @@ from src.domain.models.base import (
     TimestampMixin,
 )
 from src.domain.models.incident import ActionStatus
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class ComplaintType(str, enum.Enum):

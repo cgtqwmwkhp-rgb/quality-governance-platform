@@ -17,7 +17,18 @@ from pathlib import Path
 RULES: list[tuple[str, list[str], list[str]]] = [
     # (source_package, forbidden_imports, allowlist)
     ("src/domain", ["src.api"], []),
-    ("src/domain", ["src.infrastructure"], ["src.infrastructure.resilience"]),
+    (
+        "src/domain",
+        ["src.infrastructure"],
+        [
+            "src.infrastructure.resilience",
+            "src.infrastructure.cache",
+            "src.infrastructure.monitoring",
+            "src.infrastructure.storage",
+            "src.infrastructure.websocket",
+            "src.infrastructure.tasks",
+        ],
+    ),
     ("src/core", ["src.api"], []),
     ("src/core", ["src.infrastructure"], []),
 ]

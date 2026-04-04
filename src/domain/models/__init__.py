@@ -38,7 +38,7 @@ from src.domain.models.audit import (
     TemplateLifecycleStatus,
     TemplateVersion,
 )
-from src.domain.models.base import AuditTrailMixin, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, Base, ReferenceNumberMixin, SoftDeleteMixin, TimestampMixin
 from src.domain.models.capa import CAPAAction
 from src.domain.models.complaint import Complaint, ComplaintAction
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
@@ -193,6 +193,8 @@ from src.domain.models.uvdb_achilles import (
 from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
 
 __all__ = [
+    # ORM base
+    "Base",
     # Base mixins
     "TimestampMixin",
     "ReferenceNumberMixin",

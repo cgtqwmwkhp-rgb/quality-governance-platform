@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationParams, paginate
+from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.complaint import Complaint, ComplaintStatus
 from src.domain.services.audit_service import record_audit_event

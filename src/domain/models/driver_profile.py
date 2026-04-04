@@ -13,7 +13,7 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Te
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class AcknowledgementStatus(str, enum.Enum):

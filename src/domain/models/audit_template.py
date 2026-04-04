@@ -13,7 +13,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 # Using SQLAlchemy 2.0 style Mapped/mapped_column for type checking
 

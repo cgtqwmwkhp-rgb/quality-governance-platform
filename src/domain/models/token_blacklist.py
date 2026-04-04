@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class TokenBlacklist(Base):

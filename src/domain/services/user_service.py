@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationParams, paginate
+from src.core.update import apply_updates
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache

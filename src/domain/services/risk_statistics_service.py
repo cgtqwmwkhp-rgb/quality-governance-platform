@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, func, select
@@ -9,6 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.risk import Risk, RiskStatus
 from src.domain.services.risk_scoring import calculate_risk_level
+
+
+@dataclass
+class RiskMatrixCell:
+    """Domain-level value object for a single risk-matrix cell."""
+
+    likelihood: int
+    impact: int
+    score: int
+    level: str
+    color: str
+    risk_count: int = 0
 
 
 class RiskStatisticsService:
@@ -89,8 +102,6 @@ class RiskStatisticsService:
         Returns a dict matching the ``RiskMatrixResponse`` schema with keys:
         matrix, total_risks, risks_by_level.
         """
-        from src.api.schemas.risk import RiskMatrixCell
-
         result = await db.execute(
             select(Risk.likelihood, Risk.impact, func.count())
             .where(Risk.is_active == True, Risk.tenant_id == tenant_id)

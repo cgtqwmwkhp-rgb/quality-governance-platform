@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 if False:
     from src.domain.models.incident import Incident

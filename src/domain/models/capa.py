@@ -8,7 +8,7 @@ from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class CAPAStatus(str, PyEnum):

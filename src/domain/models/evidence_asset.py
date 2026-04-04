@@ -16,7 +16,7 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class EvidenceAssetType(str, enum.Enum):

@@ -145,6 +145,9 @@ class AuthService:
 
         if user is None or not verify_password(password, user.hashed_password):
             _failed_login_attempts.setdefault(normalized_email, []).append(now)
+            from src.infrastructure.monitoring.azure_monitor import record_auth_failure
+
+            record_auth_failure()
             raise ValueError("Invalid email or password")
 
         if not user.is_active:
@@ -156,6 +159,10 @@ class AuthService:
 
         access_token = _access_token_for_user(user)
         refresh_token = create_refresh_token(subject=user.id)
+
+        from src.infrastructure.monitoring.azure_monitor import record_auth_login
+
+        record_auth_login()
 
         return user, access_token, refresh_token
 

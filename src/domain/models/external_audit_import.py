@@ -10,7 +10,7 @@ from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Intege
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class ExternalAuditImportStatus(str, enum.Enum):

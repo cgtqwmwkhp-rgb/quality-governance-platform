@@ -14,7 +14,7 @@ from src.domain.models.base import (
     TimestampMixin,
 )
 from src.domain.models.enums import RiskStatus
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):

@@ -15,8 +15,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.schemas.error_codes import ErrorCode
-from src.api.utils.update import apply_updates
+from src.domain.error_codes import ErrorCode
+from src.core.update import apply_updates
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event

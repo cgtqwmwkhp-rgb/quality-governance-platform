@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, In
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import DataClassification, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class NearMiss(Base):

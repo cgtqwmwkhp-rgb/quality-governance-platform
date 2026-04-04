@@ -41,8 +41,20 @@ Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-
 
 Production telemetry is enabled; client and API telemetry traffic are no longer quarantined for CORS reasons (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). All OTel-based alerts are now **Active** and configured via Azure Monitor alert rules.
 
+## Alerting-as-Code
+
+All alert rules above are codified as an Azure ARM template at [`scripts/infra/alert-rules.json`](../../scripts/infra/alert-rules.json). Deploy with:
+
+```bash
+az deployment group create \
+  --resource-group <rg> \
+  --template-file scripts/infra/alert-rules.json \
+  --parameters appInsightsResourceId=<id> appServiceResourceId=<id> actionGroupId=<id>
+```
+
 ## Related Documents
 
+- [`scripts/infra/alert-rules.json`](../../scripts/infra/alert-rules.json) — ARM template (alerting-as-code)
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — SLO definitions
 - [`docs/observability/telemetry-enablement-plan.md`](telemetry-enablement-plan.md) — enablement plan
 - [`docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md`](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) — quarantine ADR

@@ -14,7 +14,7 @@ from src.domain.models.base import (
     ReferenceNumberMixin,
     TimestampMixin,
 )
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class IncidentType(str, enum.Enum):

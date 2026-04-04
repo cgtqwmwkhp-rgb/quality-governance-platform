@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.enums import DocumentStatus, DocumentType
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
