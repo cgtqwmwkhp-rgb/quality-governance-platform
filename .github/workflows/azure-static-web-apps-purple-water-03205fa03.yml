@@ -47,6 +47,7 @@ on:
       - 'frontend/package.json'
       - 'frontend/vite.config.ts'
       - 'frontend/playwright.config.ts'
+      - 'frontend/.env.example'
       - 'frontend/tests/e2e/**'
       - '.github/workflows/azure-static-web-apps-purple-water-03205fa03.yml'
   pull_request:
