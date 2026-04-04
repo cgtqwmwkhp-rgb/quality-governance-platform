@@ -9,13 +9,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
     AuditTrailMixin,
+    Base,
     CaseInsensitiveEnum,
     DataClassification,
     ReferenceNumberMixin,
     TimestampMixin,
 )
 from src.domain.models.incident import ActionStatus
-from src.domain.models.base import Base
 
 
 class ComplaintType(str, enum.Enum):

@@ -6,8 +6,7 @@ from typing import Optional
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import DataClassification, TimestampMixin
-from src.domain.models.base import Base
+from src.domain.models.base import Base, DataClassification, TimestampMixin
 
 
 class NearMiss(Base):

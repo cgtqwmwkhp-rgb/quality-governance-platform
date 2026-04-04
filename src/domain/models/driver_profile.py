@@ -12,8 +12,7 @@ from typing import Optional
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
-from src.domain.models.base import Base
+from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
 
 
 class AcknowledgementStatus(str, enum.Enum):

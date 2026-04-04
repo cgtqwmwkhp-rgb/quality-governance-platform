@@ -11,8 +11,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
-from src.domain.models.base import Base
+from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
 
 
 class AcknowledgmentType(str, enum.Enum):
