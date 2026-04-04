@@ -223,6 +223,11 @@ class IncidentService:
             request_id=request_id,
         )
 
+        if "status" in raw_update and raw_update["status"] == IncidentStatus.CLOSED.value:
+            from src.infrastructure.monitoring.azure_monitor import record_incident_resolved
+
+            record_incident_resolved()
+
         await self.db.flush()
         await self.db.refresh(incident)
         await invalidate_tenant_cache(tenant_id, "incidents")

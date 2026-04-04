@@ -16,7 +16,9 @@
     "lighthouse": "lhci autorun",
     "test:coverage": "vitest run --coverage",
     "test:a11y": "vitest run --reporter=verbose a11y",
-    "i18n:check": "node ../scripts/i18n-check.mjs"
+    "i18n:check": "node ../scripts/i18n-check.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",

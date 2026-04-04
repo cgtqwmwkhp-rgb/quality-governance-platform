@@ -163,7 +163,7 @@ def cmd_logs(args: argparse.Namespace) -> int:
 
 
 def cmd_cache_stats(args: argparse.Namespace) -> int:
-    """Print Redis cache statistics (stub)."""
+    """Print Redis cache statistics."""
     import os
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")

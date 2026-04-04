@@ -95,13 +95,12 @@ disable_error_code = ["return-value"]
 module = "src.api.routes.ai_intelligence"
 disable_error_code = ["call-overload"]
 
-# ── GOVPLAT-005: Pre-existing type errors — consolidated ignore_errors block ──
-# Remove modules from this list as they are type-fixed.
+# ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 54 modules ──
+# 10 modules promoted to full type checking. Remove more as cross-module errors are fixed.
 [[tool.mypy.overrides]]
 module = [
     "src.api.middleware.audit_middleware",
     "src.api.routes.actions",
-    "src.api.routes.assessments",
     "src.api.routes.assets",
     "src.api.routes.audit_templates",
     "src.api.routes.audit_trail",
@@ -109,13 +108,9 @@ module = [
     "src.api.routes.complaints",
     "src.api.routes.compliance",
     "src.api.routes.compliance_automation",
-    "src.api.routes.copilot",
     "src.api.routes.document_control",
     "src.api.routes.feature_flags",
-    "src.api.routes.health",
-    "src.api.routes.investigation_templates",
     "src.api.routes.iso27001",
-    "src.api.routes.near_miss",
     "src.api.routes.notifications",
     "src.api.routes.planet_mark",
     "src.api.routes.signatures",
@@ -126,12 +121,10 @@ module = [
     "src.api.routes.vehicle_checklists",
     "src.api.routes.workflows",
     "src.api.routes.xml_import",
-    "src.domain.models.capa",
     "src.domain.services.abac_service",
     "src.domain.services.asset_service",
     "src.domain.services.audit_log_service",
     "src.domain.services.audit_service",
-    "src.domain.services.auth_service",
     "src.domain.services.capa_service",
     "src.domain.services.collaboration_service",
     "src.domain.services.competency_scoring_service",
@@ -154,13 +147,10 @@ module = [
     "src.domain.services.telemetry_service",
     "src.domain.services.tenant_service",
     "src.domain.services.user_service",
-    "src.domain.services.workflow_service",
     "src.domain.services.xml_importer_service",
     "src.infrastructure.cache.redis_cache",
-    "src.infrastructure.middleware.rate_limiter",
     "src.infrastructure.tasks.notification_tasks",
     "src.infrastructure.tasks.pams_sync_tasks",
-    "src.infrastructure.websocket.connection_manager",
     "src.services.risk_scoring",
     "src.services.workflow_engine",
 ]
@@ -180,7 +170,7 @@ source = ["src"]
 omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 40
+fail_under = 52
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

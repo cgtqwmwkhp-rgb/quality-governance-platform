@@ -38,8 +38,8 @@ Azure App Service deployment slots provide zero-downtime deployments:
 
 | Capability | Status | Implementation |
 |------------|--------|----------------|
-| Zero-downtime slot swap | **Implemented** | Azure App Service deployment slots |
-| Health check pre-deploy (before traffic moves) | **Implemented** | `/healthz` and `/readyz` verified before swap |
+| Zero-downtime deploy | **Implemented** | Container image update with SHA256 digest + auto-rollback job |
+| Health check pre-deploy | **Implemented** | `/healthz` and `/readyz` verified before deploy proceeds |
 | Automated rollback workflow | **Implemented** | `.github/workflows/rollback-production.yml` |
 | Release signoff gate | **Implemented** | `docs/evidence/release_signoff.json` |
 | Deploy freeze window | **Implemented** | `deploy-production.yml` freeze check |

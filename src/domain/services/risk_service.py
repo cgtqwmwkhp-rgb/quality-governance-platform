@@ -176,6 +176,10 @@ class RiskService:
         await self.db.commit()
         await self.db.refresh(risk)
 
+        from src.infrastructure.monitoring.azure_monitor import record_risk_created
+
+        record_risk_created()
+
         await self._record_assessment(risk)
 
         return risk
