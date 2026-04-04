@@ -319,6 +319,7 @@ async def upload_evidence_asset(
     )
 
 
+@router.get("", response_model=EvidenceAssetListResponse)
 @router.get("/", response_model=EvidenceAssetListResponse)
 async def list_evidence_assets(
     db: DbSession,

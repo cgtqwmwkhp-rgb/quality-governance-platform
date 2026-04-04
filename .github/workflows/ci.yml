@@ -1438,6 +1438,11 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: alembic upgrade head
 
+      - name: Seed Locust user accounts
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: PYTHONPATH="${{ github.workspace }}" python scripts/seed_ci_locust_users.py
+
       - name: Start app and wait for healthy
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
@@ -1445,6 +1450,7 @@ jobs:
           SECRET_KEY: test-secret-key-minimum16chars
           JWT_SECRET_KEY: test-jwt-secret-min16chars
           TESTING: "1"
+          APP_ENV: development
         run: |
           uvicorn src.main:app --host 127.0.0.1 --port 8000 &
           for i in $(seq 1 30); do

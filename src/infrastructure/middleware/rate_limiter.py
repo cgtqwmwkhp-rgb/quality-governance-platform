@@ -12,6 +12,7 @@ Features:
 import asyncio
 import hashlib
 import logging
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -237,6 +238,10 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     - X-RateLimit-Remaining: Requests remaining in window
     - X-RateLimit-Reset: Unix timestamp when limit resets
     """
+    # Pytest and headless Locust hit many concurrent logins; skip limits when TESTING=1 (CI).
+    if os.environ.get("TESTING") == "1":
+        return await call_next(request)
+
     # Skip rate limiting for health checks
     if request.url.path in ["/health", "/healthz", "/readyz", "/api/health", "/ready"]:
         return await call_next(request)
