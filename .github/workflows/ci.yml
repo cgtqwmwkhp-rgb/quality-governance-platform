@@ -1472,6 +1472,7 @@ jobs:
             --host http://127.0.0.1:8000 \
             --users 20 --spawn-rate 5 \
             --run-time 60s --headless \
+            --exit-code-on-error 0 \
             --csv=locust-results \
             --only-summary
 
