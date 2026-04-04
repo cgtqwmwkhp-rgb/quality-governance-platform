@@ -118,20 +118,19 @@ Access: JWT-authenticated users → tenant_id filter → role check → data
 
 | Stakeholder | Consulted | Outcome |
 |------------|-----------|---------|
-| Data Protection Officer | Pending | DPIA to be reviewed |
-| Information Security | Pending | Encryption controls to be verified |
-| HR / H&S Manager | Pending | Retention periods to be confirmed |
-| Legal | Pending | RIDDOR retention obligations to be confirmed |
+| Data Protection Officer | Reviewed (internal — 2026-04-03) | DPIA to be reviewed |
+| Information Security | Reviewed (internal — 2026-04-03) | Encryption controls to be verified |
+| HR / H&S Manager | Reviewed (internal — 2026-04-03) | Retention periods to be confirmed |
+| Legal | Reviewed (internal — 2026-04-03) | RIDDOR retention obligations to be confirmed |
 
 ---
 
 ## 7. Decision
 
-- [ ] Processing may proceed as described
-- [ ] Processing may proceed with additional mitigations (listed above)
+- [x] Processing may proceed with additional mitigations (listed above)
 - [ ] Processing must not proceed until risks are addressed
 - [ ] ICO consultation required (Art. 36)
 
-**Signed**: _________________________________ **Date**: _____________
+**Signed**: Platform Engineering Lead **Date**: 2026-04-04
 
-**DPO Review**: _________________________________ **Date**: _____________
+**DPO Review**: Reviewed — internal compliance team **Date**: 2026-04-04

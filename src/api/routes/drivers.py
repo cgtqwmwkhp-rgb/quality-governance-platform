@@ -9,7 +9,7 @@ import math
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +23,7 @@ from src.api.schemas.driver_profile import (
     DriverProfileResponse,
     DriverProfileUpdate,
 )
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ async def create_driver_profile(
     """Create a new driver profile linking a user to PAMS driver data."""
     existing = await db.execute(select(DriverProfile).where(DriverProfile.user_id == body.user_id))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Driver profile already exists for this user")
+        raise ConflictError("Driver profile already exists for this user")
 
     profile = DriverProfile(
         user_id=body.user_id,
@@ -107,7 +108,7 @@ async def get_driver(driver_id: int, db: DbSession, user: CurrentUser):
     result = await db.execute(query)
     profile = result.scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
+        raise NotFoundError("Driver profile not found")
     return DriverProfileResponse.model_validate(profile)
 
 
@@ -125,7 +126,7 @@ async def update_driver(
     result = await db.execute(query)
     profile = result.scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
+        raise NotFoundError("Driver profile not found")
 
     update_data = body.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -152,7 +153,7 @@ async def create_acknowledgement_request(
         query = query.where(DriverProfile.tenant_id == user.tenant_id)
     profile = (await db.execute(query)).scalar_one_or_none()
     if not profile:
-        raise HTTPException(status_code=404, detail="Driver profile not found")
+        raise NotFoundError("Driver profile not found")
 
     ack = DriverAcknowledgement(
         driver_profile_id=driver_id,
@@ -183,7 +184,7 @@ async def list_acknowledgements(
         try:
             ack_status = AcknowledgementStatus(status_filter.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid status: {status_filter}")
+            raise BadRequestError(f"Invalid status: {status_filter}")
         query = query.where(DriverAcknowledgement.status == ack_status)
 
     query = query.order_by(DriverAcknowledgement.created_at.desc())
@@ -206,10 +207,10 @@ async def respond_to_acknowledgement(
     result = await db.execute(query)
     ack = result.scalar_one_or_none()
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgement not found")
+        raise NotFoundError("Acknowledgement not found")
 
     if ack.status != AcknowledgementStatus.PENDING:
-        raise HTTPException(status_code=409, detail="Acknowledgement already responded to")
+        raise ConflictError("Acknowledgement already responded to")
 
     if body.action == "acknowledge":
         ack.status = AcknowledgementStatus.ACKNOWLEDGED
@@ -217,7 +218,7 @@ async def respond_to_acknowledgement(
     elif body.action == "refuse":
         ack.status = AcknowledgementStatus.REFUSED
     else:
-        raise HTTPException(status_code=400, detail="action must be 'acknowledge' or 'refuse'")
+        raise BadRequestError("action must be 'acknowledge' or 'refuse'")
 
     if body.notes:
         ack.notes = body.notes

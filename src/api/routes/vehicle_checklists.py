@@ -23,6 +23,7 @@ from src.api.schemas.vehicle_checklist import (
     DefectResponse,
     DefectUpdate,
 )
+from src.domain.exceptions import AuthorizationError, DomainError, NotFoundError, ValidationError
 from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.services.audit_service import record_audit_event
@@ -43,12 +44,15 @@ CACHE_MODEL_MAP = {
 }
 
 
+def _service_unavailable(message: str) -> None:
+    exc = DomainError(message, code="SERVICE_UNAVAILABLE")
+    exc.http_status = 503
+    raise exc
+
+
 def _require_pams() -> None:
     if not is_pams_available():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PAMS database connection is not configured or unavailable.",
-        )
+        _service_unavailable("PAMS database connection is not configured or unavailable.")
 
 
 def _defect_to_response(d: VehicleDefect) -> DefectResponse:
@@ -126,7 +130,7 @@ async def _list_from_live_pams(
     _require_pams()
     pams_tbl = get_pams_table(table_name)
     if pams_tbl is None:
-        raise HTTPException(status_code=404, detail=f"PAMS table {table_name} not found")
+        raise NotFoundError(f"PAMS table {table_name} not found")
 
     try:
         async for pams_session in get_pams_db():
@@ -155,12 +159,9 @@ async def _list_from_live_pams(
         raise
     except Exception:
         logger.exception("PAMS live query failed for %s", table_name)
-        raise HTTPException(
-            status_code=503,
-            detail="PAMS database is temporarily unavailable. Please try again shortly.",
-        )
+        _service_unavailable("PAMS database is temporarily unavailable. Please try again shortly.")
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 def _serialise_value(v: Any) -> Any:
@@ -228,17 +229,17 @@ async def get_daily_record(
     _require_pams()
     pams_tbl = get_pams_table("vanchecklist")
     if pams_tbl is None:
-        raise HTTPException(status_code=404, detail="PAMS vanchecklist table not found")
+        raise NotFoundError("PAMS vanchecklist table not found")
 
     pk_col = list(pams_tbl.primary_key.columns)[0]
     async for pams_session in get_pams_db():
         result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
         row = result.mappings().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Record not found")
+            raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 @router.get("/monthly/{record_id}")
@@ -260,17 +261,17 @@ async def get_monthly_record(
     _require_pams()
     pams_tbl = get_pams_table("vanchecklistmonthly")
     if pams_tbl is None:
-        raise HTTPException(status_code=404, detail="PAMS vanchecklistmonthly table not found")
+        raise NotFoundError("PAMS vanchecklistmonthly table not found")
 
     pk_col = list(pams_tbl.primary_key.columns)[0]
     async for pams_session in get_pams_db():
         result = await pams_session.execute(select(pams_tbl).where(pk_col == record_id))
         row = result.mappings().first()
         if not row:
-            raise HTTPException(status_code=404, detail="Record not found")
+            raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 # ─── Defect CRUD ─────────────────────────────────────────────────────
@@ -348,7 +349,7 @@ async def get_defect(
     """Get a single defect by ID."""
     defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
-        raise HTTPException(status_code=404, detail="Defect not found")
+        raise NotFoundError("Defect not found")
     return _defect_to_response(defect)
 
 
@@ -362,7 +363,7 @@ async def update_defect(
     """Update a vehicle defect (priority, status, notes)."""
     defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
-        raise HTTPException(status_code=404, detail="Defect not found")
+        raise NotFoundError("Defect not found")
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -385,7 +386,7 @@ async def create_defect_action(
 
     defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
     if not defect:
-        raise HTTPException(status_code=404, detail="Defect not found")
+        raise NotFoundError("Defect not found")
 
     priority_map = {"P1": CAPAPriority.CRITICAL, "P2": CAPAPriority.HIGH, "P3": CAPAPriority.MEDIUM}
     defect_priority_str = defect.priority.value if hasattr(defect.priority, "value") else str(defect.priority)
@@ -398,7 +399,7 @@ async def create_defect_action(
         try:
             due_date_parsed = datetime.fromisoformat(payload.due_date)
         except ValueError:
-            raise HTTPException(status_code=422, detail="Invalid due_date format. Use YYYY-MM-DD.")
+            raise ValidationError("Invalid due_date format. Use YYYY-MM-DD.")
 
     action = CAPAAction(
         reference_number=ref_num,
@@ -509,7 +510,7 @@ async def trigger_sync(
 ) -> dict[str, str]:
     """Manually trigger a PAMS sync (admin only)."""
     if not current_user.is_superuser:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise AuthorizationError("Admin access required")
 
     _require_pams()
 
@@ -520,4 +521,4 @@ async def trigger_sync(
         return {"status": "sync_queued", "message": "PAMS sync task has been queued."}
     except Exception:
         logger.exception("Failed to queue PAMS sync task")
-        raise HTTPException(status_code=500, detail="Failed to queue sync task")
+        raise DomainError("Failed to queue sync task")

@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.services.audit_log_service import AuditLogService
 
 router = APIRouter()
@@ -164,7 +165,7 @@ async def get_audit_entry(
     entry = result.scalar_one_or_none()
 
     if not entry:
-        raise HTTPException(status_code=404, detail="Audit entry not found")
+        raise NotFoundError("Audit entry not found")
 
     return entry
 

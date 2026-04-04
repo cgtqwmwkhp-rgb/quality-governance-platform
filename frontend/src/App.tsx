@@ -140,6 +140,22 @@ function RouteErrorFallback() {
   )
 }
 
+function PageViewTracker() {
+  const location = useLocation()
+  useEffect(() => {
+    const payload = {
+      name: 'page_view',
+      path: location.pathname,
+      timestamp: new Date().toISOString(),
+    }
+    if (navigator.sendBeacon) {
+      const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' })
+      navigator.sendBeacon('/api/v1/telemetry/events', blob)
+    }
+  }, [location.pathname])
+  return null
+}
+
 function AnimatedOutlet() {
   const location = useLocation()
   return (
@@ -190,6 +206,7 @@ function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
+        <PageViewTracker />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Portal Login - Public */}

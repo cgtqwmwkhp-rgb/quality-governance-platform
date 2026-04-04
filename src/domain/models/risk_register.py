@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.enums import EnterpriseRiskStatus
@@ -80,6 +80,10 @@ class EnterpriseRisk(Base):
     """Main risk entity (Enterprise Risk Register)"""
 
     __tablename__ = "risks_v2"
+    __table_args__ = (
+        CheckConstraint("inherent_likelihood BETWEEN 1 AND 5", name="ck_risks_v2_inherent_likelihood_range"),
+        CheckConstraint("inherent_impact BETWEEN 1 AND 5", name="ck_risks_v2_inherent_impact_range"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -177,6 +181,9 @@ class EnterpriseRiskControl(Base):
     """Controls linked to risks (Enterprise Risk Register)"""
 
     __tablename__ = "enterprise_risk_controls"
+    __table_args__ = (
+        CheckConstraint("effectiveness_score BETWEEN 1 AND 5", name="ck_enterprise_risk_controls_effectiveness_range"),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

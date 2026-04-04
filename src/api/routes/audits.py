@@ -48,7 +48,7 @@ from src.api.schemas.audit import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
-from src.domain.exceptions import ConflictError, NotFoundError, ValidationError
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.audit import (
     AuditFinding,
     AuditQuestion,
@@ -516,10 +516,7 @@ async def update_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"),
-        )
+        raise NotFoundError("Template not found")
 
     # Increment version if published template is modified
     if template.is_published:
@@ -717,10 +714,7 @@ async def create_question(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Template not found"),
-        )
+        raise NotFoundError("Template not found")
 
     # Convert options to JSON if provided
     question_dict = question_data.model_dump()
@@ -796,10 +790,7 @@ async def update_question(
     question = result.scalar_one_or_none()
 
     if not question:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Question not found"),
-        )
+        raise NotFoundError("Question not found")
 
     update_data = question_data.model_dump(exclude_unset=True)
 
@@ -956,12 +947,8 @@ async def create_run(
                 (time.perf_counter() - started) * 1000,
                 "tenant_context_missing",
             )
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=api_error(
-                    ErrorCode.VALIDATION_ERROR,
-                    "External audit imports require an active tenant context. Assign the user to a tenant and retry.",
-                ),
+            raise ValidationError(
+                "External audit imports require an active tenant context. Assign the user to a tenant and retry."
             )
         resolver = ExternalAuditIntakeTemplateResolver(db)
         try:
@@ -977,10 +964,7 @@ async def create_run(
                 (time.perf_counter() - started) * 1000,
                 "intake_template_not_found",
             )
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, str(exc)),
-            ) from exc
+            raise
         except ConflictError as exc:
             _record_audit_endpoint_event(
                 "POST /api/v1/audits/runs",
@@ -988,10 +972,7 @@ async def create_run(
                 (time.perf_counter() - started) * 1000,
                 "intake_template_ambiguous",
             )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=api_error(ErrorCode.VALIDATION_ERROR, str(exc)),
-            ) from exc
+            raise
     else:
         # Verify template exists and is published
         result = await db.execute(
@@ -1016,10 +997,7 @@ async def create_run(
             (time.perf_counter() - started) * 1000,
             "template_not_published",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Published template not found"),
-        )
+        raise NotFoundError("Published template not found")
 
     payload = _normalize_run_create_payload(run_data)
     payload["template_id"] = template.id
@@ -1098,10 +1076,7 @@ async def update_run(
             (time.perf_counter() - started) * 1000,
             "run_not_found",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
-        )
+        raise NotFoundError("Audit run not found")
     except ValidationError as exc:
         _record_audit_endpoint_event(
             "PATCH /api/v1/audits/runs/{id}",
@@ -1109,10 +1084,7 @@ async def update_run(
             (time.perf_counter() - started) * 1000,
             "invalid_status_transition",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, str(exc)),
-        )
+        raise BadRequestError(str(exc))
     response = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),
@@ -1143,10 +1115,7 @@ async def start_run(
             (time.perf_counter() - started) * 1000,
             "run_not_found",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
-        )
+        raise NotFoundError("Audit run not found")
     except ValidationError as exc:
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/start",
@@ -1154,10 +1123,7 @@ async def start_run(
             (time.perf_counter() - started) * 1000,
             "invalid_status_transition",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.INVALID_STATE_TRANSITION, str(exc)),
-        )
+        raise BadRequestError(str(exc))
     response = _annotate_run_response_import_mode(
         AuditRunResponse.model_validate(run),
         template=run.__dict__.get("template"),
@@ -1192,10 +1158,7 @@ async def complete_run(
             (time.perf_counter() - started) * 1000,
             "run_not_found",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
-        )
+        raise NotFoundError("Audit run not found")
     except ValidationError as exc:
         _record_audit_endpoint_event(
             "POST /api/v1/audits/runs/{id}/complete",
@@ -1203,13 +1166,7 @@ async def complete_run(
             (time.perf_counter() - started) * 1000,
             "invalid_status_transition",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                str(exc),
-            ),
-        )
+        raise BadRequestError(str(exc))
 
     await db.commit()
     await db.refresh(run)
@@ -1263,10 +1220,7 @@ async def create_response(
             (time.perf_counter() - started) * 1000,
             "run_not_found",
         )
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Audit run not found"),
-        )
+        raise NotFoundError("Audit run not found")
 
     if _is_external_import_intake_template(run.template):
         _record_audit_endpoint_event(
@@ -1275,13 +1229,7 @@ async def create_response(
             (time.perf_counter() - started) * 1000,
             "external_import_non_executable",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                "Imported external audit outcomes cannot be executed from the audit run workflow",
-            ),
-        )
+        raise BadRequestError("Imported external audit outcomes cannot be executed from the audit run workflow")
 
     if run.status not in [AuditStatus.SCHEDULED, AuditStatus.IN_PROGRESS]:
         _record_audit_endpoint_event(
@@ -1290,13 +1238,7 @@ async def create_response(
             (time.perf_counter() - started) * 1000,
             "run_not_writable",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION,
-                "Cannot submit responses to a completed audit",
-            ),
-        )
+        raise BadRequestError("Cannot submit responses to a completed audit")
 
     # Auto-start if scheduled
     if run.status == AuditStatus.SCHEDULED:
@@ -1319,13 +1261,7 @@ async def create_response(
             (time.perf_counter() - started) * 1000,
             "duplicate_response",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.DUPLICATE_ENTITY,
-                "Response already exists for this question. Use PATCH to update.",
-            ),
-        )
+        raise BadRequestError("Response already exists for this question. Use PATCH to update.")
 
     response = AuditResponse(
         run_id=run_id,

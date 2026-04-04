@@ -236,7 +236,11 @@ class TestSourceRecordsValidation:
         data = response.json()
         if response.status_code == 400:
             error = data.get("error", data.get("detail", data))
-            assert error.get("code", error.get("error_code")) in {"INVALID_SOURCE_TYPE", "VALIDATION_ERROR"}
+            assert error.get("code", error.get("error_code")) in {
+                "INVALID_SOURCE_TYPE",
+                "VALIDATION_ERROR",
+                "BAD_REQUEST",
+            }
 
     async def test_missing_source_type_returns_422(self, client: AsyncClient, auth_headers: dict):
         """Test missing source_type returns 422."""

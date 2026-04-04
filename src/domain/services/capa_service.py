@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.pagination import PaginatedResponse, PaginationInput, paginate
 from src.core.update import apply_updates
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -157,8 +158,12 @@ class CAPAService:
         action = await self.get_capa_action(capa_id, tenant_id)
         current = action.status
 
-        if new_status not in self.VALID_TRANSITIONS.get(current, []):
-            raise ValueError(f"Invalid status transition from {current} to {new_status}")
+        allowed = self.VALID_TRANSITIONS.get(current, [])
+        if new_status not in allowed:
+            raise StateTransitionError(
+                f"Cannot transition from '{current.value}' to '{new_status.value}'",
+                details={"allowed": [s.value for s in allowed]},
+            )
 
         action.status = new_status
         if new_status == CAPAStatus.VERIFICATION:

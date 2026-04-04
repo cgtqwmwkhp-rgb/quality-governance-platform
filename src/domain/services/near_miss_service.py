@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from src.api.utils.pagination import PaginationParams, paginate
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -29,6 +30,14 @@ class NearMissService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    VALID_TRANSITIONS: dict[str, set[str]] = {
+        "REPORTED": {"UNDER_REVIEW", "CLOSED"},
+        "UNDER_REVIEW": {"ACTION_REQUIRED", "IN_PROGRESS", "CLOSED"},
+        "ACTION_REQUIRED": {"IN_PROGRESS", "CLOSED"},
+        "IN_PROGRESS": {"CLOSED", "ACTION_REQUIRED"},
+        "CLOSED": set(),
+    }
 
     async def create_near_miss(
         self,
@@ -143,6 +152,15 @@ class NearMissService:
         """
         near_miss = await self.get_near_miss(near_miss_id, tenant_id)
         old_status = near_miss.status
+        update_dict = data.model_dump(exclude_unset=True)
+        new_status = update_dict.get("status")
+        if new_status and new_status != old_status:
+            allowed = self.VALID_TRANSITIONS.get(old_status, set())
+            if new_status not in allowed:
+                raise StateTransitionError(
+                    f"Cannot transition from '{old_status}' to '{new_status}'",
+                    details={"allowed": sorted(allowed)},
+                )
         update_data = apply_updates(near_miss, data, set_updated_at=False)
 
         if "status" in update_data:

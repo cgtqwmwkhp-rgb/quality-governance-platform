@@ -23,7 +23,7 @@ This document records the results of production rollback drills, verifying that 
 
 | # | Date | Type | Duration | Result | Notes |
 |---|------|------|----------|--------|-------|
-| — | TBD | PostgreSQL PITR | — | Not yet conducted | Scheduled for Q2 2026; requires coordination with Azure support for production environment |
+| — | Planned: 2026-Q2 | PostgreSQL PITR | — | Not yet conducted | Planned: 2026-Q2 in staging environment |
 
 ---
 

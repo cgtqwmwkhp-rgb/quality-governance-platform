@@ -7,7 +7,7 @@ and risk score tracking.
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import and_, func, select
 
 from src.api.deps import CurrentUser, DbSession
@@ -26,6 +26,7 @@ from src.api.schemas.kri import (
     SIFAssessmentCreate,
     SIFAssessmentResponse,
 )
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.services.risk_scoring import KRIService, RiskScoringService
@@ -81,7 +82,7 @@ async def create_kri(
     # Check for duplicate code
     existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="KRI code already exists")
+        raise BadRequestError("KRI code already exists")
 
     kri = KeyRiskIndicator(
         **kri_data.dict(),
@@ -132,7 +133,7 @@ async def get_kri(
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     return KRIResponse.from_orm(kri)
 
@@ -149,7 +150,7 @@ async def update_kri(
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     update_data = kri_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -174,7 +175,7 @@ async def delete_kri(
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     await db.delete(kri)
     await db.commit()
@@ -191,7 +192,7 @@ async def calculate_kri(
     result = await kri_service.calculate_kri(kri_id)
 
     if not result:
-        raise HTTPException(status_code=400, detail="Could not calculate KRI")
+        raise BadRequestError("Could not calculate KRI")
 
     return result
 
@@ -240,7 +241,7 @@ async def get_pending_alerts(
             and_(
                 KRIAlert.is_acknowledged == False,
                 KRIAlert.is_resolved == False,
-            )
+            ),
         )
         .order_by(KRIAlert.triggered_at.desc())
     )
@@ -264,7 +265,7 @@ async def acknowledge_alert(
     alert = result.scalar_one_or_none()
 
     if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise NotFoundError("Alert not found")
 
     alert.is_acknowledged = True
     alert.acknowledged_at = datetime.now(timezone.utc)
@@ -288,7 +289,7 @@ async def resolve_alert(
     alert = result.scalar_one_or_none()
 
     if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise NotFoundError("Alert not found")
 
     alert.is_resolved = True
     alert.resolved_at = datetime.now(timezone.utc)
@@ -339,7 +340,7 @@ async def assess_incident_sif(
     incident = result.scalar_one_or_none()
 
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     # Update SIF fields
     incident.is_sif = assessment.is_sif
@@ -385,10 +386,10 @@ async def get_incident_sif_assessment(
     incident = result.scalar_one_or_none()
 
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     if not incident.sif_classification:
-        raise HTTPException(status_code=404, detail="No SIF assessment found for this incident")
+        raise NotFoundError("No SIF assessment found for this incident")
 
     return SIFAssessmentResponse(
         incident_id=incident.id,

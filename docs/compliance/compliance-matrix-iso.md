@@ -98,4 +98,4 @@ This matrix maps major QGP capabilities to standard clauses and lists **evidence
 
 Review this matrix **annually** or when ISO certification scope changes.
 
-**Last updated:** _[YYYY-MM-DD]_
+**Last updated:** 2026-04-03

@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.services.workflow_engine import workflow_engine
 
 router = APIRouter()
@@ -97,7 +98,7 @@ async def get_workflow_template(template_code: str, current_user: CurrentUser):
     """Get workflow template details."""
     template = workflow_engine.templates.get(template_code)
     if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
+        raise NotFoundError("Template not found")
     return template
 
 
@@ -119,7 +120,7 @@ async def start_workflow(request: WorkflowStartRequest, current_user: CurrentUse
     )
 
     if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
+        raise BadRequestError(result["error"])
 
     return result
 
@@ -139,7 +140,7 @@ async def get_workflow_instance(workflow_id: str, current_user: CurrentUser):
     """Get workflow instance details."""
     instance = workflow_engine.get_workflow_instance(workflow_id)
     if not instance:
-        raise HTTPException(status_code=404, detail="Workflow instance not found")
+        raise NotFoundError("Workflow instance not found")
     return instance
 
 
@@ -199,7 +200,7 @@ async def approve_request(approval_id: str, current_user: CurrentUser, response:
 async def reject_request(approval_id: str, current_user: CurrentUser, response: ApprovalResponse):
     """Reject an approval request."""
     if not response.reason:
-        raise HTTPException(status_code=400, detail="Reason required for rejection")
+        raise BadRequestError("Reason required for rejection")
 
     result = workflow_engine.reject(
         approval_id=approval_id,

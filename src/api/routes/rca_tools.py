@@ -6,10 +6,11 @@ Provides endpoints for 5-Whys, Fishbone diagrams, and CAPA management.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.deps import CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
@@ -125,7 +126,7 @@ async def get_five_whys_analysis(
     analysis = await service.get_analysis(analysis_id)
 
     if not analysis:
-        raise HTTPException(status_code=404, detail="Analysis not found")
+        raise NotFoundError("Analysis not found")
 
     return {
         "id": analysis.id,
@@ -159,7 +160,7 @@ async def add_why_iteration(
             evidence=request.evidence,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": analysis.id,
@@ -185,7 +186,7 @@ async def set_five_whys_root_cause(
             contributing_factors=request.contributing_factors,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": analysis.id,
@@ -211,7 +212,7 @@ async def complete_five_whys_analysis(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": analysis.id,
@@ -284,7 +285,7 @@ async def get_fishbone_diagram(
     diagram = await service.get_diagram(diagram_id)
 
     if not diagram:
-        raise HTTPException(status_code=404, detail="Diagram not found")
+        raise NotFoundError("Diagram not found")
 
     return {
         "id": diagram.id,
@@ -317,7 +318,7 @@ async def add_fishbone_cause(
             sub_causes=request.sub_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return {
         "id": diagram.id,
@@ -344,7 +345,7 @@ async def set_fishbone_root_cause(
             primary_causes=request.primary_causes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": diagram.id,
@@ -370,7 +371,7 @@ async def complete_fishbone_diagram(
             proposed_actions=request.proposed_actions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": diagram.id,
@@ -430,7 +431,7 @@ async def update_capa_status(
             notes=request.notes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": capa.id,
@@ -457,7 +458,7 @@ async def verify_capa(
             is_effective=request.is_effective,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": capa.id,

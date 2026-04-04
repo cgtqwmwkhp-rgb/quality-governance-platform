@@ -245,11 +245,15 @@ class UtilityReadingCreate(BaseModel):
 async def list_reporting_years(
     request: Request,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """List all carbon reporting years with comparison"""
     try:
-        result = await db.execute(select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)))
+        result = await db.execute(
+            select(CarbonReportingYear)
+            .where(CarbonReportingYear.tenant_id == current_user.tenant_id)
+            .order_by(desc(CarbonReportingYear.year_number))
+        )
         years = result.scalars().all()
     except (ProgrammingError, OperationalError) as e:
         logger.warning(
@@ -304,7 +308,7 @@ async def list_reporting_years(
 async def create_reporting_year(
     year_data: ReportingYearCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
     year = CarbonReportingYear(
@@ -338,16 +342,26 @@ async def create_reporting_year(
 async def get_reporting_year(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get detailed reporting year data"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     # Get emission sources
-    result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
+    result = await db.execute(
+        select(EmissionSource).where(
+            EmissionSource.reporting_year_id == year_id,
+            EmissionSource.tenant_id == current_user.tenant_id,
+        )
+    )
     sources = result.scalars().all()
 
     # Calculate scope breakdowns
@@ -408,10 +422,15 @@ async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
@@ -454,12 +473,15 @@ async def add_emission_source(
 @router.get("/years/{year_id}/sources", response_model=dict)
 async def list_emission_sources(
     year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     scope: Optional[str] = Query(None),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List emission sources for a year"""
-    stmt = select(EmissionSource).where(EmissionSource.reporting_year_id == year_id)
+    stmt = select(EmissionSource).where(
+        EmissionSource.reporting_year_id == year_id,
+        EmissionSource.tenant_id == current_user.tenant_id,
+    )
 
     if scope:
         stmt = stmt.where(EmissionSource.scope == scope)
@@ -496,13 +518,16 @@ async def list_emission_sources(
 async def get_scope3_breakdown(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get Scope 3 category breakdown"""
     try:
         result = await db.execute(
             select(Scope3CategoryData)
-            .where(Scope3CategoryData.reporting_year_id == year_id)
+            .where(
+                Scope3CategoryData.reporting_year_id == year_id,
+                Scope3CategoryData.tenant_id == current_user.tenant_id,
+            )
             .order_by(Scope3CategoryData.category_number)
         )
         categories = result.scalars().all()
@@ -555,13 +580,16 @@ async def get_scope3_breakdown(
 @router.get("/years/{year_id}/actions", response_model=dict)
 async def list_improvement_actions(
     year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
     status: Optional[str] = Query(None),
-    db: DbSession = None,
-    current_user: CurrentUser = None,
 ) -> dict[str, Any]:
     """List SMART improvement actions"""
     try:
-        stmt = select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
+        stmt = select(ImprovementAction).where(
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
 
         if status:
             stmt = stmt.where(ImprovementAction.status == status)
@@ -614,16 +642,26 @@ async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
     count_result = await db.execute(
-        select(func.count()).select_from(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id)
+        select(func.count())
+        .select_from(ImprovementAction)
+        .where(
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
     )
     count = count_result.scalar()
     action_id = f"ACT-{(count + 1):03d}"
@@ -651,13 +689,14 @@ async def update_action_status(
     action_id: int,
     status_data: ActionStatusUpdate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update improvement action status"""
     result = await db.execute(
         select(ImprovementAction).where(
             ImprovementAction.id == action_id,
             ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
         )
     )
     action = result.scalar_one_or_none()
@@ -681,15 +720,25 @@ async def update_action_status(
 async def get_data_quality_assessment(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get data quality assessment with recommendations"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year_id))
+    result = await db.execute(
+        select(EmissionSource).where(
+            EmissionSource.reporting_year_id == year_id,
+            EmissionSource.tenant_id == current_user.tenant_id,
+        )
+    )
     sources = result.scalars().all()
 
     # Calculate quality by scope
@@ -768,10 +817,15 @@ async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
@@ -807,10 +861,15 @@ async def add_fleet_record(
 async def get_fleet_summary(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get fleet emissions summary with driver leaderboard"""
-    result = await db.execute(select(FleetEmissionRecord).where(FleetEmissionRecord.reporting_year_id == year_id))
+    result = await db.execute(
+        select(FleetEmissionRecord).where(
+            FleetEmissionRecord.reporting_year_id == year_id,
+            FleetEmissionRecord.tenant_id == current_user.tenant_id,
+        )
+    )
     records = result.scalars().all()
 
     if not records:
@@ -863,10 +922,15 @@ async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add utility meter reading"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
@@ -889,18 +953,33 @@ async def add_utility_reading(
 async def get_certification_status(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get certification status and evidence checklist"""
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.id == year_id))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.id == year_id,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     year = result.scalar_one_or_none()
     if not year:
         raise HTTPException(status_code=404, detail="Reporting year not found")
 
-    result = await db.execute(select(CarbonEvidence).where(CarbonEvidence.reporting_year_id == year_id))
+    result = await db.execute(
+        select(CarbonEvidence).where(
+            CarbonEvidence.reporting_year_id == year_id,
+            CarbonEvidence.tenant_id == current_user.tenant_id,
+        )
+    )
     evidence = result.scalars().all()
 
-    result = await db.execute(select(ImprovementAction).where(ImprovementAction.reporting_year_id == year_id))
+    result = await db.execute(
+        select(ImprovementAction).where(
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
+    )
     actions = result.scalars().all()
 
     # Evidence checklist
@@ -966,14 +1045,16 @@ async def get_certification_status(
         "actions_total": len(actions),
         "data_quality_met": year.overall_data_quality >= 12,
         "next_steps": (
-            [
-                "Complete all required evidence uploads",
-                "Verify Scope 1 & 2 data quality ≥ 12/16",
-                "Complete improvement actions",
-                "Submit for Planet Mark assessment",
-            ]
-            if year.certification_status == "draft"
-            else []
+            (
+                [
+                    "Complete all required evidence uploads",
+                    "Verify Scope 1 & 2 data quality ≥ 12/16",
+                    "Complete improvement actions",
+                    "Submit for Planet Mark assessment",
+                ]
+                if year.certification_status == "draft"
+                else []
+            ),
         ),
     }
 
@@ -985,11 +1066,16 @@ async def get_certification_status(
 async def get_carbon_dashboard(
     request: Request,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get Planet Mark carbon management dashboard"""
     try:
-        result = await db.execute(select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)).limit(3))
+        result = await db.execute(
+            select(CarbonReportingYear)
+            .where(CarbonReportingYear.tenant_id == current_user.tenant_id)
+            .order_by(desc(CarbonReportingYear.year_number))
+            .limit(3)
+        )
         years = result.scalars().all()
     except (ProgrammingError, OperationalError) as e:
         logger.warning(
@@ -1027,7 +1113,12 @@ async def get_carbon_dashboard(
 
     current_year = years[0]
 
-    result = await db.execute(select(CarbonReportingYear).where(CarbonReportingYear.is_baseline_year == True))
+    result = await db.execute(
+        select(CarbonReportingYear).where(
+            CarbonReportingYear.is_baseline_year == True,
+            CarbonReportingYear.tenant_id == current_user.tenant_id,
+        )
+    )
     baseline = result.scalar_one_or_none()
 
     # Calculate year-on-year change
@@ -1036,11 +1127,16 @@ async def get_carbon_dashboard(
         prev_year = years[1]
         if prev_year.emissions_per_fte and current_year.emissions_per_fte:
             yoy_change = (
-                (current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte
-            ) * 100
+                ((current_year.emissions_per_fte - prev_year.emissions_per_fte) / prev_year.emissions_per_fte,) * 100,
+            )
 
     # Action summary
-    result = await db.execute(select(ImprovementAction).where(ImprovementAction.reporting_year_id == current_year.id))
+    result = await db.execute(
+        select(ImprovementAction).where(
+            ImprovementAction.reporting_year_id == current_year.id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
+    )
     actions = result.scalars().all()
 
     overdue_actions = [a for a in actions if a.status != "completed" and a.time_bound < datetime.now(timezone.utc)]
@@ -1099,7 +1195,7 @@ async def get_carbon_dashboard(
 
 
 @router.get("/iso14001-mapping", response_model=dict)
-async def get_iso14001_mapping(current_user: CurrentUser = None) -> dict[str, Any]:
+async def get_iso14001_mapping(current_user: CurrentUser) -> dict[str, Any]:
     """Get Planet Mark to ISO 14001 cross-mapping"""
     return {
         "description": "Cross-mapping between Planet Mark requirements and ISO 14001:2015 clauses",
@@ -1177,7 +1273,12 @@ async def get_iso14001_mapping(current_user: CurrentUser = None) -> dict[str, An
 
 async def _recalculate_year_totals(db: AsyncSession, year: CarbonReportingYear) -> None:
     """Recalculate total emissions for a reporting year"""
-    result = await db.execute(select(EmissionSource).where(EmissionSource.reporting_year_id == year.id))
+    result = await db.execute(
+        select(EmissionSource).where(
+            EmissionSource.reporting_year_id == year.id,
+            EmissionSource.tenant_id == year.tenant_id,
+        )
+    )
     sources = result.scalars().all()
 
     scope1 = sum(s.co2e_tonnes for s in sources if s.scope == "scope_1")

@@ -150,6 +150,60 @@ class GDPRService:
             logger.warning("GDPR export: audit entries unavailable: %s", ex)
             return []
 
+    _RECORD_TYPE_MAP: dict[str, type] = {}
+
+    @classmethod
+    def _get_model_map(cls) -> dict[str, type]:
+        if not cls._RECORD_TYPE_MAP:
+            from src.domain.models.complaint import Complaint
+            from src.domain.models.incident import Incident
+            from src.domain.models.near_miss import NearMiss
+
+            cls._RECORD_TYPE_MAP = {
+                "incident": Incident,
+                "complaint": Complaint,
+                "near_miss": NearMiss,
+            }
+        return cls._RECORD_TYPE_MAP
+
+    async def restrict_processing(self, user_id: int, record_type: str, record_id: int) -> dict[str, Any]:
+        """Restrict processing of a specific record (GDPR Art. 18).
+
+        Sets the ``processing_restricted`` flag on the target record so
+        downstream queries can exclude it from normal processing.
+        """
+        model_map = self._get_model_map()
+        model_cls = model_map.get(record_type)
+        if model_cls is None:
+            from src.domain.exceptions import BadRequestError
+
+            raise BadRequestError(f"Unsupported record type: {record_type}. Allowed: {', '.join(model_map)}")
+
+        from src.domain.exceptions import NotFoundError
+
+        result = await self.db.execute(select(model_cls).where(model_cls.id == record_id))
+        record = result.scalar_one_or_none()
+        if record is None:
+            raise NotFoundError(f"{record_type} with id {record_id} not found")
+
+        record.processing_restricted = True
+        await self.db.commit()
+
+        timestamp = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            "Art. 18 restriction applied: user_id=%d record_type=%s record_id=%d",
+            user_id,
+            record_type,
+            record_id,
+        )
+        return {
+            "status": "restriction_applied",
+            "user_id": user_id,
+            "record_type": record_type,
+            "record_id": record_id,
+            "restricted_at": timestamp,
+        }
+
     async def request_erasure(self, user_id: int, tenant_id: int, reason: str = "") -> dict:
         """Initiate data erasure request (Right to Erasure, GDPR Art. 17).
 

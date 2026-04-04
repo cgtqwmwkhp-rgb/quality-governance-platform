@@ -9,13 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.audit import AuditTemplateResponse
-from src.domain.exceptions import ValidationError
+from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.models.audit import AuditTemplate
 from src.domain.services.audit_service import AuditService
 from src.domain.services.xml_importer_service import (
@@ -70,16 +70,13 @@ async def parse_xml_file(
     Does not create anything in the database. Use /import to create the template.
     """
     if not file.filename or not file.filename.lower().endswith(".xml"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an XML file (.xml extension)",
-        )
+        raise BadRequestError("File must be an XML file (.xml extension)")
     try:
         content = await file.read()
         template = parse_xml_to_template(content, source_filename=file.filename)
         return template
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
@@ -90,15 +87,12 @@ async def import_xml_file(
 ) -> Any:
     """Upload XML file and create the audit template in the database."""
     if not file.filename or not file.filename.lower().endswith(".xml"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an XML file (.xml extension)",
-        )
+        raise BadRequestError("File must be an XML file (.xml extension)")
     try:
         content = await file.read()
         template_data = parse_xml_to_template(content, source_filename=file.filename)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
     audit_service = AuditService(db)
     template_payload = template_structure_to_audit_payload(template_data)
@@ -150,20 +144,14 @@ async def batch_parse(
     resolved = os.path.realpath(request.directory_path)
     allowed_base = os.path.realpath(ALLOWED_IMPORT_DIR)
     if not resolved.startswith(allowed_base):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Directory not in allowed import path",
-        )
+        raise BadRequestError("Directory not in allowed import path")
     if not os.path.isdir(resolved):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path is not a valid directory",
-        )
+        raise BadRequestError("Path is not a valid directory")
     try:
         templates = batch_parse_directory(resolved)
         return templates
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post(
@@ -183,15 +171,9 @@ async def batch_import(
     resolved = os.path.realpath(request.directory_path)
     allowed_base = os.path.realpath(ALLOWED_IMPORT_DIR)
     if not resolved.startswith(allowed_base):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Directory not in allowed import path",
-        )
+        raise BadRequestError("Directory not in allowed import path")
     if not os.path.isdir(resolved):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path is not a valid directory",
-        )
+        raise BadRequestError("Path is not a valid directory")
 
     audit_service = AuditService(db)
 

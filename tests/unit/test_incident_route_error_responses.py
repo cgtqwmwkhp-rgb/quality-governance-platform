@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from src.api.routes.incidents import list_incidents
 from src.api.schemas.error_codes import ErrorCode
+from src.domain.exceptions import AuthorizationError
 
 
 @pytest.mark.asyncio
@@ -23,7 +24,7 @@ async def test_list_incidents_denies_foreign_reporter_email_with_structured_erro
     )
 
     with patch("src.api.routes.incidents.IncidentService", return_value=service):
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AuthorizationError) as exc_info:
             await list_incidents(
                 db=SimpleNamespace(),
                 current_user=current_user,
@@ -33,12 +34,8 @@ async def test_list_incidents_denies_foreign_reporter_email_with_structured_erro
                 page_size=50,
             )
 
-    assert exc_info.value.status_code == 403
-    assert exc_info.value.detail == {
-        "code": ErrorCode.PERMISSION_DENIED,
-        "message": "You can only view your own incidents",
-        "details": {},
-    }
+    assert exc_info.value.message == "You can only view your own incidents"
+    assert exc_info.value.code == "PERMISSION_DENIED"
     service.list_incidents.assert_not_awaited()
 
 

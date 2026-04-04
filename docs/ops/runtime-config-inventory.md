@@ -132,4 +132,4 @@ Frontend Azure AD variables (`VITE_*`) are documented in **`frontend/.env.exampl
 - **`frontend/.env.example`** — frontend build-time variables.
 - **`docs/ops/SECRETS_ROTATION_RUNBOOK.md`** — secret rotation practices.
 
-**Last updated:** _[YYYY-MM-DD]_
+**Last updated:** 2026-04-03

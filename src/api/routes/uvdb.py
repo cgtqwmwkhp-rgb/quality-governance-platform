@@ -14,13 +14,14 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.setup_required import setup_required_response
+from src.domain.exceptions import NotFoundError
 from src.domain.models.audit import AuditRun
 from src.domain.models.external_audit_import import ExternalAuditImportJob
 from src.domain.models.uvdb_achilles import (
@@ -489,7 +490,7 @@ class KPICreate(BaseModel):
 
 
 @router.get("/protocol", response_model=dict)
-async def get_protocol_structure(current_user: CurrentUser = None) -> dict[str, Any]:
+async def get_protocol_structure(current_user: CurrentUser) -> dict[str, Any]:
     """Get the complete UVDB B2 Audit Protocol structure"""
     return {
         "protocol_name": "UVDB Verify B2 Audit Protocol",
@@ -516,7 +517,7 @@ async def get_protocol_structure(current_user: CurrentUser = None) -> dict[str, 
 @router.get("/sections", response_model=dict)
 async def list_sections(
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """List all UVDB B2 sections"""
     # Return from static data or database
@@ -542,7 +543,7 @@ async def list_sections(
 async def get_section_questions(
     section_number: str,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get questions for a specific UVDB section"""
     section_data = None
@@ -552,7 +553,7 @@ async def get_section_questions(
             break
 
     if not section_data:
-        raise HTTPException(status_code=404, detail="Section not found")
+        raise NotFoundError("Section not found")
 
     return {
         "section_number": section_data["number"],
@@ -569,7 +570,7 @@ async def get_section_questions(
 @router.get("/audits", response_model=dict)
 async def list_audits(
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
     status: Optional[str] = Query(None),
     company_name: Optional[str] = Query(None),
     audit_type: Optional[str] = Query(None),
@@ -646,7 +647,7 @@ async def list_audits(
 async def create_audit(
     audit_data: AuditCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
     count_result = await db.execute(select(func.count()).select_from(UVDBAudit))
@@ -673,13 +674,13 @@ async def create_audit(
 async def get_audit(
     audit_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get audit details including linked source PDF and score breakdown."""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise NotFoundError("Audit not found")
 
     source_asset_id: int | None = None
     source_filename: str | None = None
@@ -747,13 +748,13 @@ async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Update audit"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise NotFoundError("Audit not found")
 
     update_data = audit_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -773,13 +774,13 @@ async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Record an audit response"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise NotFoundError("Audit not found")
 
     response = UVDBAuditResponse(
         audit_id=audit_id,
@@ -796,13 +797,13 @@ async def create_response(
 async def get_audit_responses(
     audit_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get all responses for an audit"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise NotFoundError("Audit not found")
 
     resp_result = await db.execute(select(UVDBAuditResponse).where(UVDBAuditResponse.audit_id == audit_id))
     responses = resp_result.scalars().all()
@@ -832,13 +833,13 @@ async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
     audit = result.scalar_one_or_none()
     if not audit:
-        raise HTTPException(status_code=404, detail="Audit not found")
+        raise NotFoundError("Audit not found")
 
     # Calculate rates if man hours provided
     ltifr = None
@@ -862,7 +863,7 @@ async def add_kpi_record(
 async def get_audit_kpis(
     audit_id: int,
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get KPI records for an audit"""
     kpi_result = await db.execute(
@@ -897,7 +898,7 @@ async def get_audit_kpis(
 
 
 @router.get("/iso-mapping", response_model=dict)
-async def get_iso_cross_mapping(current_user: CurrentUser = None) -> dict[str, Any]:
+async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     """Get cross-mapping between UVDB sections and ISO standards"""
     mappings = []
 
@@ -943,7 +944,7 @@ def _extract_section_number(label: str) -> str | None:
 @router.get("/sections/scores", response_model=dict)
 async def get_section_scores(
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Return per-section scores from the most recent completed UVDB audit."""
     tenant_id = getattr(current_user, "tenant_id", None) if current_user else None
@@ -994,7 +995,7 @@ async def get_section_scores(
 @router.get("/dashboard", response_model=dict)
 async def get_uvdb_dashboard(
     db: DbSession,
-    current_user: CurrentUser = None,
+    current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Get UVDB audit dashboard summary"""
     tenant_id = getattr(current_user, "tenant_id", None) if current_user else None

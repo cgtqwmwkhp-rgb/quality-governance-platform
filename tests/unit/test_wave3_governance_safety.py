@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 from pydantic import ValidationError
 
 from src.api.routes.employee_portal import (
@@ -12,6 +11,7 @@ from src.api.routes.employee_portal import (
     validate_tracking_code,
 )
 from src.api.routes.telemetry import TelemetryEvent
+from src.domain.exceptions import NotFoundError
 from src.domain.models.incident import IncidentSeverity, IncidentStatus
 from src.domain.models.user import Role, User
 
@@ -48,10 +48,11 @@ def test_portal_reference_generation_is_unique() -> None:
 
 @pytest.mark.asyncio
 async def test_track_report_rejects_missing_tracking_code() -> None:
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(NotFoundError) as exc_info:
         await track_report(reference_number="INC-2026-0001", db=_TrackingDb(None), tracking_code=None)
 
-    assert exc_info.value.status_code == 404
+    assert exc_info.value.http_status == 404
+    assert exc_info.value.message == "Report not found. Please check your reference details."
 
 
 @pytest.mark.asyncio

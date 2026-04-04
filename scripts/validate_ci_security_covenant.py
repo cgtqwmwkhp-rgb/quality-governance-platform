@@ -68,16 +68,17 @@ def check_unsafe_secret_usage(workflow_path: Path) -> List[str]:
     errors = []
     content = workflow_path.read_text()
 
-    # Pattern: secrets used in contexts that might be influenced by PR authors
-    # This is a basic check; more sophisticated analysis may be needed
+    # Pattern: *custom* secrets used in contexts influenced by PR authors.
+    # secrets.GITHUB_TOKEN is excluded — it is a built-in, scoped token
+    # managed by GitHub and safe in standard pull_request workflows.
     unsafe_patterns = [
         (
-            r"\$\{\{\s*secrets\.\w+\s*\}\}.*\$\{\{\s*github\.event\.pull_request",
-            "Secret used in same expression as pull_request data",
+            r"\$\{\{\s*secrets\.(?!GITHUB_TOKEN\b)\w+\s*\}\}.*\$\{\{\s*github\.event\.pull_request",
+            "Custom secret used in same expression as pull_request data",
         ),
         (
-            r"run:.*\$\{\{\s*secrets\.\w+\s*\}\}.*\$\{\{\s*github\.event\.pull_request",
-            "Secret and pull_request data in same run command",
+            r"run:.*\$\{\{\s*secrets\.(?!GITHUB_TOKEN\b)\w+\s*\}\}.*\$\{\{\s*github\.event\.pull_request",
+            "Custom secret and pull_request data in same run command",
         ),
     ]
 

@@ -1,7 +1,9 @@
 """Structured error codes for consistent API error responses."""
 
+from enum import Enum
 
-class ErrorCode:
+
+class ErrorCode(str, Enum):
     # Entity errors
     ENTITY_NOT_FOUND = "ENTITY_NOT_FOUND"
     DUPLICATE_ENTITY = "DUPLICATE_ENTITY"
