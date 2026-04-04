@@ -45,11 +45,11 @@ All core business metrics are now wired with direct call-sites.
 | `track_metric("complaints.created")` | **Live** | `src/domain/services/complaint_service.py` | Counter on create |
 | `track_metric("audits.completed")` | **Live** | `src/domain/services/audit_service.py` | Counter on run complete |
 | `track_metric("audits.findings")` | **Live** | `src/domain/services/audit_service.py` | Counter on finding create |
-| `auth.logout` | **Defined** | — | Wire when logout endpoint is enabled |
-| `celery.task_failures` | **Defined** | — | Wire when Celery failure hook is enabled |
-| `celery.queue_depth` | **Defined** | — | Wire when Celery monitoring is enabled |
+| `auth.logout` | **Live** | `src/api/routes/auth.py` → `POST /logout` | Wired via `record_auth_logout()` |
+| `celery.task_failures` | **Deferred** | — | Wire when Celery failure hook is enabled (Celery worker not yet deployed) |
+| `celery.queue_depth` | **Deferred** | — | Wire when Celery monitoring is enabled (Celery worker not yet deployed) |
 
-**15 of 18 instruments live** (83%). Remaining 3 await code path enablement (logout endpoint, Celery monitoring hooks). These are non-critical — core business and platform health metrics are fully covered.
+**16 of 18 instruments live** (89%). Remaining 2 are explicitly **deferred** pending Celery worker deployment — the instruments are defined in `azure_monitor.py` and will be wired when the Celery infrastructure is enabled. Core business, security, and platform health metrics are fully covered.
 
 ### `track_metric(name, value=1.0, tags=None)`
 
@@ -66,7 +66,7 @@ Registers a point on a **named counter** when the string matches a predefined in
 | `complaints.created` | On complaint create (`ComplaintService`) | — | **Business Metrics** |
 | `risks.created` | Wired via `record_risk_created()` in `RiskService.create_risk()` | — | **Business Metrics** |
 | `auth.login` | Wired via `record_auth_login()` on successful `AuthService.authenticate()` | — | **Security** / **Business Metrics** |
-| `auth.logout` | Instrument defined; wire at logout when enabled | — | **Security** |
+| `auth.logout` | Wired via `record_auth_logout()` on `POST /auth/logout` | — | **Security** |
 | `auth.failures` | Wired via `record_auth_failure()` on failed `AuthService.authenticate()` | — | **Security** |
 | `documents.uploaded` | Wired via `record_document_uploaded()` in `EvidenceService.upload()` | — | **Business Metrics** |
 | `workflows.completed` | Wired via `record_workflow_completed()` in `WorkflowService._complete_workflow()` | duration_hours | **Business Metrics** |
@@ -121,7 +121,7 @@ Route changes are not centrally named as “page_view” events in a single help
 - **HTTP**: OpenTelemetry FastAPI instrumentation (when OTel packages are installed) plus `api.response_time_ms` when `track_response_time` is used.
 - **Database**: SQLAlchemy instrumentation (optional) and `db.query_time_ms` histogram.
 - **Cache**: `cache.operations` up-down counter via `track_cache_operation`.
-- **Celery**: `celery.task_failures`, `celery.queue_depth` when wired from workers.
+- **Celery**: `celery.task_failures`, `celery.queue_depth` — instruments defined, wiring deferred until Celery worker deployment.
 - **Business counters**: See tables above.
 
 ## Custom dashboards

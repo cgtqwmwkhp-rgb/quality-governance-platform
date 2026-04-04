@@ -8,6 +8,7 @@ Reference for all administrative and diagnostic endpoints in the Quality Governa
 |----------|--------|---------|---------------|
 | `/healthz` | GET | Liveness probe — confirms the process is running | No |
 | `/readyz` | GET | Readiness probe — confirms DB connectivity and dependency health | No |
+| `/api/v1/health/diagnostics` | GET | Runtime diagnostics: Python version, PID, uptime, migration head, feature-flag count, dependency snapshot | No |
 | `/api/v1/health/metrics/resources` | GET | Resource utilization (CPU, memory, connections) | No |
 
 ## System Information

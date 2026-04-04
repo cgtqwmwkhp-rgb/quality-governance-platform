@@ -9,6 +9,7 @@
 | mypy override blocks | 8 | Consolidated |
 | Modules promoted to full checking | 52 | Increasing |
 | mypy strict mode | Enabled | — |
+| Coverage threshold | `fail_under = 70` (raised from 65) | Increasing |
 
 ## Promotion History
 
@@ -21,22 +22,9 @@
 
 ## Remaining `ignore_errors` Modules (12)
 
-Each module below has known cross-module type errors. They are on `ignore_errors` because fixing them requires coordinated changes across multiple files (typically route + service + model layers).
+Each module below has cross-module type errors (assignment, operator, attr-defined). They require coordinated fixes across route + service + model layers. Individual-file mypy passes, but full-codebase checks surface cross-module conflicts.
 
-| Module | Category | Reason | Estimated Effort |
-|--------|----------|--------|-----------------|
-| `src.api.routes.actions` | Route | Complex multi-model query building | Medium |
-| `src.api.routes.audits` | Route | Audit run + finding + response model mismatches | Medium |
-| `src.api.routes.document_control` | Route | `db: DbSession = None` FastAPI pattern | Low |
-| `src.api.routes.iso27001` | Route | `db: DbSession = None` FastAPI pattern | Low |
-| `src.api.routes.planet_mark` | Route | Carbon calculation model types | Medium |
-| `src.api.routes.signatures` | Route | `db: DbSession = None` FastAPI pattern | Low |
-| `src.api.routes.xml_import` | Route | `db: DbSession = None` FastAPI pattern | Low |
-| `src.domain.services.form_config_service` | Service | Dynamic form schema type complexity | High |
-| `src.domain.services.risk_service` | Service | Risk scoring model type unions | Medium |
-| `src.domain.services.search_service` | Service | Full-text search query builder types | Medium |
-| `src.infrastructure.tasks.pams_sync_tasks` | Infra | External API response typing | Medium |
-| `src.services.risk_scoring` | Service | Mathematical scoring algorithm types | Medium |
+Five targeted `disable_error_code` overrides remain for specific error categories where suppression is intentional (third-party stubs, FastAPI dependency injection patterns).
 
 ## Type-Ignore Ratchet
 

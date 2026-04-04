@@ -97,7 +97,8 @@ module = "src.api.routes.ai_intelligence"
 disable_error_code = ["call-overload"]
 
 # ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 12 modules ──
-# 52 modules promoted to full type checking total. Remove more as cross-module errors are fixed.
+# 52 modules promoted to full type checking total. Remaining 12 have cross-module type
+# conflicts (assignment, operator, attr-defined) that require coordinated model+route fixes.
 [[tool.mypy.overrides]]
 module = [
     "src.api.routes.actions",
@@ -129,7 +130,7 @@ source = ["src"]
 omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
-fail_under = 65
+fail_under = 70
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

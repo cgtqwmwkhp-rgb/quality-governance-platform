@@ -1,9 +1,10 @@
 # Alembic Migration Squash Runbook
 
 **Owner**: Platform Engineering  
-**Target**: Q3 2026  
-**Last updated**: 2026-04-03  
-**Review cycle**: After each major schema release
+**Target**: Q3 2026 (sprint 2026-07-14)  
+**Last updated**: 2026-04-04  
+**Review cycle**: After each major schema release  
+**Risk**: Low — squash is a single atomic change; rollback = restore from backup
 
 ---
 
