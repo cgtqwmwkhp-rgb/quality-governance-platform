@@ -19,6 +19,15 @@ A workflow run can report **conclusion: success** while individual jobs are **sk
 
 Cross-check `docs/evidence/release_signoff.json` with the **production** workflow run IDs recorded in GitHub Actions. Update the sign-off when promoting a new `release_sha`.
 
+### Auto production: signed SHA vs staging head
+
+For `workflow_run` triggers, production auto-approves when either:
+
+1. **Exact match:** staging `head_sha` equals `release_sha` in `release_signoff.json`, or  
+2. **Descendant:** staging `head_sha` is a **git descendant** of `release_sha` (so governance-only commits merged after the application merge do not block promotion).
+
+Outside the deploy-freeze window, this allows CI → staging → production without re-editing `release_sha` for every docs/signoff-only merge on `main`. See **Validate deployment request** in `deploy-production.yml`.
+
 ### Rollback
 
 Emergency path: `.github/workflows/rollback-production.yml` (`workflow_dispatch`).
