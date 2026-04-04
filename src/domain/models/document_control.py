@@ -16,8 +16,8 @@ from typing import Optional
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.domain.models.enums import DocumentStatus, DocumentType
 from src.domain.models.base import Base
+from src.domain.models.enums import DocumentStatus, DocumentType
 
 
 class ControlledDocument(Base):
