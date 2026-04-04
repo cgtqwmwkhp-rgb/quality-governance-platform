@@ -63,6 +63,18 @@
 
 ---
 
+## Unit Economics
+
+| Metric | Estimated Value | Notes |
+|--------|----------------|-------|
+| Cost per tenant (monthly) | ~£15–25 | Shared infrastructure; scales sub-linearly with tenants |
+| Cost per active user (monthly) | ~£2–5 | Based on ~£110–160 total / ~50–100 active users |
+| Infrastructure cost per API request | ~£0.0001 | Compute + DB amortised across ~5,000 req/day baseline |
+
+Unit economics will be refined as per-tenant cost attribution (§8) matures and Azure Cost Management custom dimensions are enabled.
+
+---
+
 ## 3. Resource Tagging Policy
 
 All Azure resources provisioned for the Quality Governance Platform **must** carry the following tags for cost allocation, ownership, and automation:

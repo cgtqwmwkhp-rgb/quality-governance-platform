@@ -111,7 +111,7 @@ Retention is enforced through policy, configuration, and scheduled retention tas
   - A data breach or near-miss affects this processing
   - Material change to vendors, hosting region, or AI/automation touching personal data
 
-**Next review date:** _[YYYY-MM-DD]_  
+**Next review date:** 2026-10-03  
 **Owner:** _[Name / role]_  
 **Approver:** _[DPO / privacy lead]_
 

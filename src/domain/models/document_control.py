@@ -13,7 +13,7 @@ Features:
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.enums import DocumentStatus, DocumentType
@@ -24,6 +24,10 @@ class ControlledDocument(Base):
     """Main controlled document entity"""
 
     __tablename__ = "controlled_documents"
+    __table_args__ = (
+        CheckConstraint("major_version >= 1", name="ck_controlled_docs_major_version_positive"),
+        CheckConstraint("minor_version >= 0", name="ck_controlled_docs_minor_version_nonneg"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

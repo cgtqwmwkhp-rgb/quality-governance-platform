@@ -127,6 +127,37 @@ def cmd_config_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_logs(args: argparse.Namespace) -> int:
+    """Print recent structured log entries (stub)."""
+    print("  Log aggregation via Azure Monitor — use KQL queries in docs/ops/kql-queries.md")
+    print("  For local logs: docker logs -f qgp-app --tail 100")
+    return 0
+
+
+def cmd_cache_stats(args: argparse.Namespace) -> int:
+    """Print Redis cache statistics (stub)."""
+    import os
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    print(f"  Redis URL: {redis_url}")
+    try:
+        import redis
+
+        r = redis.from_url(redis_url, socket_connect_timeout=3)
+        dbsize = r.dbsize()
+        info = r.info(section="memory")
+        print(f"  Connection: OK")
+        print(f"  DBSIZE (keys): {dbsize}")
+        print(f"  Used memory: {info.get('used_memory_human', 'unknown')}")
+        print(f"  Peak memory: {info.get('used_memory_peak_human', 'unknown')}")
+        r.close()
+    except ImportError:
+        print("  redis package not installed — pip install redis")
+    except Exception as exc:
+        print(f"  Connection failed: {exc}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Quality Governance Platform Admin CLI",
@@ -142,6 +173,8 @@ def main() -> int:
     sub.add_parser("feature-flags", help="List feature flags")
     sub.add_parser("migration-status", help="Count and list migrations")
     sub.add_parser("config-check", help="Verify environment config")
+    sub.add_parser("logs", help="Show recent log entries")
+    sub.add_parser("cache-stats", help="Show Redis cache statistics")
 
     args = parser.parse_args()
     commands = {
@@ -150,6 +183,8 @@ def main() -> int:
         "feature-flags": cmd_feature_flags,
         "migration-status": cmd_migration_status,
         "config-check": cmd_config_check,
+        "logs": cmd_logs,
+        "cache-stats": cmd_cache_stats,
     }
     return commands[args.command](args)
 

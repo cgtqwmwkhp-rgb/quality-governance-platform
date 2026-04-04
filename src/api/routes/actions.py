@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.assessment import AssessmentRun
 from src.domain.models.audit import AuditFinding, AuditRun
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
@@ -22,6 +23,7 @@ from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -565,26 +567,12 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         src_id = 0
         source_ref = action_data.source_reference
         if not source_ref:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=api_error(
-                    ErrorCode.VALIDATION_ERROR,
-                    "source_reference is required for this source type",
-                    details={"source_type": src_type},
-                ),
-            )
+            raise ValidationError("source_reference is required for this source type")
     else:
         src_id = action_data.source_id or 0
         source_ref = None
         if src_id == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=api_error(
-                    ErrorCode.VALIDATION_ERROR,
-                    "source_id is required for this source type",
-                    details={"source_type": src_type},
-                ),
-            )
+            raise ValidationError("source_id is required for this source type")
 
     # Diagnostic logging for 500 error investigation
     logger.info(
@@ -597,104 +585,37 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     if src_type == "assessment":
         result = await db.execute(select(AssessmentRun).where(AssessmentRun.id == source_ref))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Assessment run not found",
-                    details={"entity": "assessment_run", "id": source_ref},
-                ),
-            )
+            raise NotFoundError("Assessment run not found")
     elif src_type == "induction":
         result = await db.execute(select(InductionRun).where(InductionRun.id == source_ref))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Induction run not found",
-                    details={"entity": "induction_run", "id": source_ref},
-                ),
-            )
+            raise NotFoundError("Induction run not found")
     elif src_type == "incident":
         result = await db.execute(select(Incident).where(Incident.id == src_id))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Incident not found",
-                    details={"entity": "incident", "id": src_id},
-                ),
-            )
+            raise NotFoundError("Incident not found")
     elif src_type == "rta":
         result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == src_id))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "RTA not found",
-                    details={"entity": "rta", "id": src_id},
-                ),
-            )
+            raise NotFoundError("RTA not found")
     elif src_type == "complaint":
         result = await db.execute(select(Complaint).where(Complaint.id == src_id))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Complaint not found",
-                    details={"entity": "complaint", "id": src_id},
-                ),
-            )
+            raise NotFoundError("Complaint not found")
     elif src_type == "investigation":
         logger.info(f"Validating investigation exists: id={src_id}")
         result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == src_id))
         investigation = result.scalar_one_or_none()
         if not investigation:
             logger.warning(f"Investigation not found: id={src_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Investigation not found",
-                    details={"entity": "investigation", "id": src_id},
-                ),
-            )
+            raise NotFoundError("Investigation not found")
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     elif src_type == "audit_finding":
         result = await db.execute(select(AuditFinding).where(AuditFinding.id == src_id))
         if not result.scalar_one_or_none():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Audit finding not found",
-                    details={"entity": "audit_finding", "id": src_id},
-                ),
-            )
+            raise NotFoundError("Audit finding not found")
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid source_type",
-                details={
-                    "source_type": src_type,
-                    "allowed": [
-                        "incident",
-                        "rta",
-                        "complaint",
-                        "investigation",
-                        "assessment",
-                        "induction",
-                        "audit_finding",
-                    ],
-                },
-            ),
-        )
+        raise BadRequestError("Invalid source_type")
 
     # Find owner by email if provided
     owner_id: Optional[int] = None
@@ -850,25 +771,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             reference_number=ref_number,
         )
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid source_type",
-                details={
-                    "source_type": src_type,
-                    "allowed": [
-                        "incident",
-                        "rta",
-                        "complaint",
-                        "investigation",
-                        "assessment",
-                        "induction",
-                        "audit_finding",
-                    ],
-                },
-            ),
-        )
+        raise BadRequestError("Invalid source_type")
 
     try:
         logger.info(f"Adding action to session: ref_number={ref_number}, status={action.status}")
@@ -883,19 +786,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         error_msg = str(e.orig) if hasattr(e, "orig") else str(e)
         logger.error(f"IntegrityError creating action: {error_msg}")
         if "foreign key" in error_msg.lower() or "violates foreign key constraint" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(
-                    ErrorCode.ENTITY_NOT_FOUND,
-                    "Source entity not found or was deleted",
-                    details={"entity": src_type, "id": src_id},
-                ),
-            )
+            raise NotFoundError("Source entity not found or was deleted")
         elif "unique" in error_msg.lower() or "duplicate" in error_msg.lower():
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=api_error(ErrorCode.DUPLICATE_ENTITY, "An action with this reference number already exists"),
-            )
+            raise ConflictError("An action with this reference number already exists")
         else:
             logger.error("Database error creating action: %s", error_msg[:500])
             raise HTTPException(
@@ -909,6 +802,8 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=api_error(ErrorCode.INTERNAL_ERROR, "An unexpected error occurred while creating the action"),
         )
+
+    track_metric("actions.created")
 
     if isinstance(action, CAPAAction):
         return await _capa_to_response(db, action, src_type)
@@ -1014,10 +909,7 @@ async def get_action(
                 owner_email=email,
             )
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Action not found"),
-    )
+    raise NotFoundError("Action not found")
 
 
 @router.patch("/{action_id}", response_model=ActionResponse)
@@ -1048,25 +940,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         "induction",
         "audit_finding",
     ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid source_type",
-                details={
-                    "source_type": src_type,
-                    "allowed": [
-                        "incident",
-                        "rta",
-                        "complaint",
-                        "investigation",
-                        "assessment",
-                        "induction",
-                        "audit_finding",
-                    ],
-                },
-            ),
-        )
+        raise BadRequestError("Invalid source_type")
 
     # Bounded error class: validate status if provided
     valid_statuses = {
@@ -1080,26 +954,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         "overdue",  # CAPA statuses
     }
     if action_data.status and action_data.status.lower() not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid status value",
-                details={"status": action_data.status, "allowed": sorted(valid_statuses)},
-            ),
-        )
+        raise BadRequestError("Invalid status value")
 
     # Bounded error class: validate priority if provided
     valid_priorities = {"low", "medium", "high", "critical"}
     if action_data.priority and action_data.priority.lower() not in valid_priorities:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid priority value",
-                details={"priority": action_data.priority, "allowed": sorted(valid_priorities)},
-            ),
-        )
+        raise BadRequestError("Invalid priority value")
 
     # Find the action by type
     action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]] = None
@@ -1160,10 +1020,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             source_id = action.investigation_id
 
     if not action:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Action not found"),
-        )
+        raise NotFoundError("Action not found")
 
     # Apply updates - only update fields that were provided
     if action_data.title is not None:
@@ -1214,26 +1071,12 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 try:
                     action.status = InvestigationActionStatus(status_value)
                 except ValueError:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=api_error(
-                            ErrorCode.VALIDATION_ERROR,
-                            f"Invalid status '{status_value}' for investigation action",
-                            details={"allowed": [s.value for s in InvestigationActionStatus]},
-                        ),
-                    )
+                    raise BadRequestError(f"Invalid status '{status_value}' for investigation action")
             else:
                 try:
                     action.status = ActionStatus(status_value)
                 except ValueError:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=api_error(
-                            ErrorCode.VALIDATION_ERROR,
-                            f"Invalid status '{status_value}' for {src_type} action",
-                            details={"allowed": [s.value for s in ActionStatus]},
-                        ),
-                    )
+                    raise BadRequestError(f"Invalid status '{status_value}' for {src_type} action")
             if status_value == "completed" and not action.completed_at:
                 action.completed_at = datetime.now(timezone.utc)
             elif status_value != "completed":

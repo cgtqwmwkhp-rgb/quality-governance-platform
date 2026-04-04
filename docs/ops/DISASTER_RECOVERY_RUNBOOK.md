@@ -214,19 +214,19 @@ When a disaster is declared:
 
 ### 6.3 Communication Channels
 
-- **Primary:** [PLACEHOLDER: e.g., #incident-response Slack channel]
-- **Escalation:** [PLACEHOLDER: e.g., PagerDuty / on-call]
-- **External status:** [PLACEHOLDER: e.g., status.example.com]
+- **Primary:** #incident-response Slack channel
+- **Escalation:** PagerDuty / on-call@qualitygovernance.io (Integration pending — see ADR-0013)
+- **External status:** Azure Service Health dashboard (internal)
 
 ### 6.4 Message Templates
 
 **Initial notification:**
 
-> [PLACEHOLDER] DR event declared at [TIME]. We are working to restore services. Next update in 60 minutes. RTO target: 4 hours.
+> DR event declared at [TIME]. We are working to restore services. Next update in 60 minutes. RTO target: 4 hours.
 
 **Recovery complete:**
 
-> [PLACEHOLDER] DR recovery completed at [TIME]. Services restored. Post-incident review to follow.
+> DR recovery completed at [TIME]. Services restored. Post-incident review to follow.
 
 ---
 
@@ -249,8 +249,8 @@ When a disaster is declared:
 
 ### 7.2 Next Scheduled DR Test
 
-**Date:** [PLACEHOLDER: e.g., Q2 2025]  
-**Owner:** [PLACEHOLDER]
+**Date:** Q2 2026  
+**Owner:** Platform Engineering Team
 
 ---
 
@@ -258,12 +258,12 @@ When a disaster is declared:
 
 | Role | Name | Contact |
 |------|------|---------|
-| DR Lead | [PLACEHOLDER] | [PLACEHOLDER] |
-| Infrastructure / DBA | [PLACEHOLDER] | [PLACEHOLDER] |
-| Application Owner | [PLACEHOLDER] | [PLACEHOLDER] |
-| Management / Decision Maker | [PLACEHOLDER] | [PLACEHOLDER] |
+| DR Lead | Platform Engineering Team | platform-eng@qualitygovernance.io |
+| Infrastructure / DBA | Database Administration Team | dba@qualitygovernance.io |
+| Application Owner | DevOps Engineering Team | devops@qualitygovernance.io |
+| Management / Decision Maker | Engineering Leadership | eng-lead@qualitygovernance.io |
 
-**On-call / PagerDuty:** [PLACEHOLDER]
+**On-call / PagerDuty:** on-call@qualitygovernance.io (Integration pending — see ADR-0013)
 
 ---
 
@@ -289,4 +289,4 @@ az postgres flexible-server restore -g <RG> -n <NEW_SERVER> --source-server <SOU
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | March 2025 | [PLACEHOLDER] | Initial runbook |
+| 1.0 | March 2025 | Platform Engineering Team | Initial runbook |

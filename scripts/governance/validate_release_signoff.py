@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -48,6 +49,12 @@ def main() -> int:
         if expected_type is str and not data[field].strip():
             print(f"ERROR: Field '{field}' cannot be empty")
             return 1
+
+    try:
+        datetime.fromisoformat(data["approved_at_utc"])
+    except ValueError:
+        print(f"ERROR: approved_at_utc is not a valid ISO8601 datetime: {data['approved_at_utc']}")
+        return 1
 
     if data["release_sha"] != args.sha:
         print(f"ERROR: release_sha mismatch. expected={args.sha} actual={data['release_sha']}")

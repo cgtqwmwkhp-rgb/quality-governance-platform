@@ -1,0 +1,12 @@
+{
+  "DATABASE_URL": {"required": true, "description": "PostgreSQL connection string", "example": "postgresql://user:pass@host:5432/db"},
+  "REDIS_URL": {"required": false, "description": "Redis connection string for caching and rate limiting", "example": "redis://localhost:6379/0"},
+  "SECRET_KEY": {"required": true, "description": "Application secret key for JWT signing", "example": "change-me-in-production"},
+  "AZURE_STORAGE_CONNECTION_STRING": {"required": false, "description": "Azure Blob Storage connection", "example": "DefaultEndpointsProtocol=https;..."},
+  "APPLICATIONINSIGHTS_CONNECTION_STRING": {"required": false, "description": "Azure Application Insights telemetry", "example": "InstrumentationKey=..."},
+  "CORS_ORIGINS": {"required": true, "description": "Comma-separated list of allowed CORS origins", "example": "https://app.qualitygovernance.io"},
+  "TELEMETRY_ENABLED": {"required": false, "description": "Enable OpenTelemetry instrumentation", "default": "true"},
+  "LOG_LEVEL": {"required": false, "description": "Application log level", "default": "INFO"},
+  "RATE_LIMIT_PER_MINUTE": {"required": false, "description": "API rate limit per minute per user", "default": "60"},
+  "DATA_RETENTION_DAYS": {"required": false, "description": "Default data retention period in days", "default": "365"}
+}

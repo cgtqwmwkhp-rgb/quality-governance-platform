@@ -28,6 +28,7 @@ from src.api.schemas.workflow import (
     WorkflowRuleResponse,
     WorkflowRuleUpdate,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -36,6 +37,7 @@ from src.domain.models.workflow_rules import (
     SLATracking,
     WorkflowRule,
 )
+from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.workflow_engine import SLAService, WorkflowEngine
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
@@ -121,7 +123,7 @@ async def get_workflow_rule(
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     return WorkflowRuleResponse.from_orm(rule)
 
@@ -138,7 +140,7 @@ async def update_workflow_rule(
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     update_data = rule_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -162,7 +164,7 @@ async def delete_workflow_rule(
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     await db.delete(rule)
     await db.commit()
@@ -261,7 +263,7 @@ async def get_sla_configuration(
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     return SLAConfigurationResponse.from_orm(config)
 
@@ -278,7 +280,7 @@ async def update_sla_configuration(
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     update_data = config_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -302,7 +304,7 @@ async def delete_sla_configuration(
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     await db.delete(config)
     await db.commit()
@@ -337,7 +339,7 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found for this entity")
+        raise NotFoundError("SLA tracking not found for this entity")
 
     now = datetime.now(timezone.utc)
 
@@ -384,7 +386,7 @@ async def pause_sla_tracking(
     tracking = await sla_service.pause_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise NotFoundError("SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -401,7 +403,7 @@ async def resume_sla_tracking(
     tracking = await sla_service.resume_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise NotFoundError("SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -470,7 +472,7 @@ async def get_escalation_level(
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     return EscalationLevelResponse.from_orm(level)
 
@@ -487,7 +489,7 @@ async def update_escalation_level(
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     update_data = level_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -509,7 +511,7 @@ async def delete_escalation_level(
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     await db.delete(level)
     await db.commit()
@@ -530,6 +532,8 @@ async def trigger_sla_check(
 
     escalation_results = await engine.check_escalations()
     sla_results = await engine.check_sla_breaches()
+
+    track_metric("workflows.completed")
 
     return {
         "message": "SLA and escalation check completed",

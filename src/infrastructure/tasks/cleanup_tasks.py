@@ -44,6 +44,11 @@ def run_data_retention(self) -> dict:  # type: ignore[override]
         ("audit_log_entries", "created_at", 365),
         ("token_blacklist", "expires_at", 0),
         ("notification_log", "created_at", 90),
+        ("incidents", "created_at", 365),
+        ("complaints", "created_at", 365),
+        ("road_traffic_collisions", "created_at", 365),
+        ("near_misses", "created_at", 365),
+        ("investigations", "created_at", 365),
     ]
 
     try:

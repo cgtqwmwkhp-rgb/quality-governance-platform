@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -280,12 +281,12 @@ async def get_bow_tie(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     service = BowTieService(db)
     try:
         return await service.get_bow_tie(risk_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=201)
@@ -304,7 +305,7 @@ async def add_bow_tie_element(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     service = BowTieService(db)
     bow_tie_element = await service.add_bow_tie_element(
@@ -343,7 +344,7 @@ async def delete_bow_tie_element(
     element = result.scalar_one_or_none()
 
     if not element:
-        raise HTTPException(status_code=404, detail="Element not found")
+        raise NotFoundError("Element not found")
 
     await db.delete(element)
     await db.commit()
@@ -377,7 +378,7 @@ async def create_kri(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
     db.add(kri)
@@ -398,7 +399,7 @@ async def update_kri_value(
     result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     result = await db.execute(
         select(EnterpriseRisk).where(
@@ -408,7 +409,7 @@ async def update_kri_value(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     service = KRIService(db)
     try:
@@ -419,7 +420,7 @@ async def update_kri_value(
             "current_status": kri.current_status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.get("/kris/{kri_id}/history", response_model=list)
@@ -432,7 +433,7 @@ async def get_kri_history(
     result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     result = await db.execute(
         select(EnterpriseRisk).where(
@@ -442,7 +443,7 @@ async def get_kri_history(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     return kri.historical_values or []
 
@@ -521,9 +522,9 @@ async def link_control_to_risk(
     control = result.scalar_one_or_none()
 
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+        raise NotFoundError("Control not found")
 
     result = await db.execute(
         select(RiskControlMapping).where(
@@ -534,7 +535,7 @@ async def link_control_to_risk(
     existing = result.scalar_one_or_none()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Control already linked to this risk")
+        raise BadRequestError("Control already linked to this risk")
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
@@ -694,7 +695,7 @@ async def get_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()
@@ -803,7 +804,7 @@ async def update_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     update_data = risk_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -832,7 +833,7 @@ async def assess_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     service = RiskService(db)
     try:
         risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
@@ -844,7 +845,7 @@ async def assess_risk(
             "is_within_appetite": risk.is_within_appetite,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.delete("/{risk_id}", status_code=204)
@@ -862,7 +863,7 @@ async def delete_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     risk.status = "closed"
     risk.updated_at = _naive_utc_now()

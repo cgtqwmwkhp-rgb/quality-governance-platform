@@ -380,10 +380,10 @@ docker volume prune
 
 ## Emergency Contacts
 
-**Platform Owner**: [TBD]  
-**Database Administrator**: [TBD]  
-**DevOps Team**: [TBD]  
-**On-Call Rotation**: [TBD]
+**Platform Owner**: Platform Engineering Team  
+**Database Administrator**: Database Administration Team  
+**DevOps Team**: DevOps Engineering Team  
+**On-Call Rotation**: on-call@qualitygovernance.io
 
 ---
 

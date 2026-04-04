@@ -3,6 +3,9 @@
 import asyncio
 import logging
 import os
+import platform
+import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -12,6 +15,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from src.infrastructure.database import engine
+
+_start_time = time.monotonic()
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +105,40 @@ async def readiness_check():
     }
 
     return JSONResponse(content=payload, status_code=status_code)
+
+
+@router.get("/diagnostics", response_model=Dict[str, Any])
+async def diagnostics():
+    """Runtime diagnostics for operational visibility. No DB queries."""
+    migration_head = "unknown"
+    try:
+        result = subprocess.run(
+            ["alembic", "current"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            migration_head = result.stdout.strip().split("\n")[-1]
+    except Exception:
+        migration_head = "unavailable"
+
+    feature_flag_count = 0
+    try:
+        from src.core.config import settings
+
+        feature_flag_count = len([k for k in dir(settings) if k.startswith("feature_") or k.startswith("ff_")])
+    except Exception:
+        pass
+
+    return {
+        "app_version": os.getenv("APP_VERSION", "dev"),
+        "python_version": platform.python_version(),
+        "migration_head": migration_head,
+        "telemetry_enabled": os.getenv("TELEMETRY_ENABLED", "true"),
+        "feature_flag_count": feature_flag_count,
+        "uptime_seconds": round(time.monotonic() - _start_time, 1),
+    }
 
 
 @router.get("/metrics/resources", response_model=Dict[str, Any])

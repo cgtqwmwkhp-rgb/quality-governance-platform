@@ -26,6 +26,7 @@ from src.api.schemas.investigation import (
     SourceRecordItem,
     SourceRecordsResponse,
 )
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.investigation import (
     AssignedEntityType,
     InvestigationComment,
@@ -75,14 +76,7 @@ async def _get_investigation_or_404(
     result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == investigation_id))
     investigation = result.scalar_one_or_none()
     if not investigation or not _user_can_access_investigation(current_user, investigation):
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ENTITY_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-                "details": {"entity_type": "investigation", "entity_id": investigation_id},
-            },
-        )
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
     return investigation
 
 
@@ -105,18 +99,7 @@ async def validate_assigned_entity(
     }
 
     if entity_type not in entity_models:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_ENTITY_TYPE",
-                "message": f"Invalid entity type: {entity_type}",
-                "details": {
-                    "entity_type": entity_type,
-                    "valid_types": list(entity_models.keys()),
-                },
-                "request_id": request_id,
-            },
-        )
+        raise BadRequestError(f"Invalid entity type: {entity_type}")
 
     # Import the model dynamically
     model_path = entity_models[entity_type]
@@ -130,18 +113,7 @@ async def validate_assigned_entity(
     entity = result.scalar_one_or_none()
 
     if not entity:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ENTITY_NOT_FOUND",
-                "message": f"{entity_type.replace('_', ' ').title()} with ID {entity_id} not found",
-                "details": {
-                    "entity_type": entity_type,
-                    "entity_id": entity_id,
-                },
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"{entity_type.replace('_', ' ').title()} with ID {entity_id} not found")
 
 
 @router.post("/", response_model=InvestigationRunResponse, status_code=201)
@@ -216,15 +188,7 @@ async def create_investigation(
             await db.refresh(default_template)
             template = default_template
         else:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error_code": "TEMPLATE_NOT_FOUND",
-                    "message": f"Investigation template with ID {investigation_data.template_id} not found",
-                    "details": {"template_id": investigation_data.template_id},
-                    "request_id": request_id,
-                },
-            )
+            raise NotFoundError(f"Investigation template with ID {investigation_data.template_id} not found")
 
     # Validate assigned entity exists
     await validate_assigned_entity(
@@ -322,14 +286,7 @@ async def get_investigation_comments(
         has_permission = getattr(current_user, "has_permission", None)
         can_read_deleted = callable(has_permission) and has_permission("investigations:comments:read_deleted")
         if not getattr(current_user, "is_superuser", False) and not can_read_deleted:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error_code": "ENTITY_NOT_FOUND",
-                    "message": f"Investigation with ID {investigation_id} not found",
-                    "details": {"entity_type": "investigation", "entity_id": investigation_id},
-                },
-            )
+            raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     query = select(
         InvestigationComment.id,
@@ -466,18 +423,7 @@ async def list_investigations(
             entity_type_enum = AssignedEntityType(entity_type)
             query = query.where(InvestigationRun.assigned_entity_type == entity_type_enum)
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "INVALID_ENTITY_TYPE",
-                    "message": f"Invalid entity type: {entity_type}",
-                    "details": {
-                        "entity_type": entity_type,
-                        "valid_types": [e.value for e in AssignedEntityType],
-                    },
-                    "request_id": request_id,
-                },
-            )
+            raise BadRequestError(f"Invalid entity type: {entity_type}")
 
     if entity_id is not None:
         query = query.where(InvestigationRun.assigned_entity_id == entity_id)
@@ -487,18 +433,7 @@ async def list_investigations(
             status_enum = InvestigationStatus(status)
             query = query.where(InvestigationRun.status == status_enum)
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "INVALID_STATUS",
-                    "message": f"Invalid status: {status}",
-                    "details": {
-                        "status": status,
-                        "valid_statuses": [s.value for s in InvestigationStatus],
-                    },
-                    "request_id": request_id,
-                },
-            )
+            raise BadRequestError(f"Invalid status: {status}")
 
     # Deterministic ordering: created_at DESC, id ASC
     query = query.order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
@@ -541,15 +476,7 @@ async def get_investigation(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-                "details": {"investigation_id": investigation_id},
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     return investigation
 
@@ -575,15 +502,7 @@ async def update_investigation(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-                "details": {"investigation_id": investigation_id},
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found")
 
     # Update fields
     update_data = investigation_data.model_dump(exclude_unset=True)
@@ -671,36 +590,12 @@ async def create_investigation_from_record(
     existing_investigation = existing_result.scalar_one_or_none()
 
     if existing_investigation:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error_code": "INV_ALREADY_EXISTS",
-                "message": f"An investigation already exists for this {source_type.replace('_', ' ')}",
-                "details": {
-                    "existing_investigation_id": existing_investigation.id,
-                    "existing_reference_number": existing_investigation.reference_number,
-                    "source_type": source_type,
-                    "source_id": source_id,
-                },
-                "request_id": request_id,
-            },
-        )
+        raise ConflictError(f"An investigation already exists for this {source_type.replace('_', ' ')}")
 
     # Get source record
     record, error = await InvestigationService.get_source_record(db, source_type_enum, source_id)
     if error:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "SOURCE_NOT_FOUND",
-                "message": error,
-                "details": {
-                    "source_type": source_type,
-                    "source_id": source_id,
-                },
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(error)
 
     # Create source snapshot (immutable)
     source_snapshot = InvestigationService.create_source_snapshot(record, source_type_enum)
@@ -731,14 +626,7 @@ async def create_investigation_from_record(
         await db.refresh(template)
 
     if not template:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "TEMPLATE_NOT_FOUND",
-                "message": f"Template {template_id} not found",
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Template {template_id} not found")
 
     # Generate reference number
     reference_number = await ReferenceNumberService.generate(db, "investigation", InvestigationRun)
@@ -829,15 +717,7 @@ async def list_source_records(
     try:
         source_type_enum = AssignedEntityType(source_type)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_SOURCE_TYPE",
-                "message": f"Invalid source type: {source_type}",
-                "details": {"valid_types": [e.value for e in AssignedEntityType]},
-                "request_id": request_id,
-            },
-        )
+        raise BadRequestError(f"Invalid source type: {source_type}")
 
     # Import models dynamically based on source type
     entity_models = {
@@ -849,14 +729,7 @@ async def list_source_records(
 
     model_path = entity_models.get(source_type)
     if not model_path:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "UNSUPPORTED_SOURCE_TYPE",
-                "message": f"Source type {source_type} is not supported",
-                "request_id": request_id,
-            },
-        )
+        raise BadRequestError(f"Source type {source_type} is not supported")
 
     module_path, class_name = model_path.split(":")
     module = __import__(module_path, fromlist=[class_name])
@@ -972,29 +845,11 @@ async def autosave_investigation(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation {investigation_id} not found")
 
     # Optimistic locking: check version
     if investigation.version != version:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "error_code": "VERSION_CONFLICT",
-                "message": "Investigation was modified by another user",
-                "details": {
-                    "expected_version": version,
-                    "current_version": investigation.version,
-                },
-                "request_id": request_id,
-            },
-        )
+        raise ConflictError("Investigation was modified by another user")
 
     # Store old data for revision event
     old_data = investigation.data
@@ -1065,14 +920,7 @@ async def add_comment(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation {investigation_id} not found")
 
     # Validate parent comment if provided
     if payload.parent_comment_id:
@@ -1084,14 +932,7 @@ async def add_comment(
         parent_result = await db.execute(parent_query)
         parent_comment = parent_result.scalar_one_or_none()
         if not parent_comment:
-            raise HTTPException(
-                status_code=404,
-                detail={
-                    "error_code": "PARENT_COMMENT_NOT_FOUND",
-                    "message": f"Parent comment {payload.parent_comment_id} not found",
-                    "request_id": request_id,
-                },
-            )
+            raise NotFoundError(f"Parent comment {payload.parent_comment_id} not found")
 
     # Create comment
     comment = InvestigationComment(
@@ -1155,28 +996,14 @@ async def approve_investigation(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation {investigation_id} not found")
 
     # Check status allows approval
     if investigation.status not in (
         InvestigationStatus.UNDER_REVIEW,
         InvestigationStatus.IN_PROGRESS,
     ):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_STATUS_TRANSITION",
-                "message": f"Cannot approve investigation in status {investigation.status.value}",
-                "request_id": request_id,
-            },
-        )
+        raise BadRequestError(f"Cannot approve investigation in status {investigation.status.value}")
 
     old_status = investigation.status
 
@@ -1189,14 +1016,7 @@ async def approve_investigation(
         event_type = "APPROVED"
     else:
         if not rejection_reason:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "REJECTION_REASON_REQUIRED",
-                    "message": "Rejection reason is required",
-                    "request_id": request_id,
-                },
-            )
+            raise BadRequestError("Rejection reason is required")
         investigation.status = InvestigationStatus.IN_PROGRESS
         investigation.rejection_reason = rejection_reason
         event_type = "REJECTED"
@@ -1248,15 +1068,7 @@ async def generate_customer_pack(
     try:
         audience_enum = CustomerPackAudience(audience)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_AUDIENCE",
-                "message": f"Invalid audience: {audience}",
-                "details": {"valid_audiences": [e.value for e in CustomerPackAudience]},
-                "request_id": request_id,
-            },
-        )
+        raise BadRequestError(f"Invalid audience: {audience}")
 
     # Get investigation
     query = select(InvestigationRun).where(InvestigationRun.id == investigation_id)
@@ -1264,14 +1076,7 @@ async def generate_customer_pack(
     investigation = result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation {investigation_id} not found",
-                "request_id": request_id,
-            },
-        )
+        raise NotFoundError(f"Investigation {investigation_id} not found")
 
     # Get linked evidence assets
     from src.domain.models.evidence_asset import EvidenceAsset

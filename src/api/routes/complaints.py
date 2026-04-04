@@ -12,9 +12,11 @@ from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, Co
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
+from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.complaint_service import ComplaintService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter(tags=["Complaints"])
 
@@ -40,26 +42,13 @@ async def create_complaint(
             tenant_id=current_user.tenant_id,
             request_id=request_id,
         )
+        track_metric("complaints.created")
         return complaint
     except ValueError as e:
         msg = str(e)
         if "DUPLICATE_EXTERNAL_REF" in msg:
-            parts = msg.split(":")
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=api_error(
-                    ErrorCode.DUPLICATE_ENTITY,
-                    f"Complaint with external_ref '{complaint_in.external_ref}' already exists",
-                    details={
-                        "existing_id": int(parts[1]) if len(parts) > 1 else None,
-                        "existing_reference_number": parts[2] if len(parts) > 2 else "",
-                    },
-                ),
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, msg),
-        )
+            raise ConflictError(f"Complaint with external_ref '{complaint_in.external_ref}' already exists")
+        raise BadRequestError(msg)
 
 
 @router.get("/{complaint_id}", response_model=ComplaintResponse)
@@ -80,10 +69,7 @@ async def get_complaint(
     complaint = result.scalar_one_or_none()
 
     if not complaint:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Complaint with ID {complaint_id} not found",
-        )
+        raise NotFoundError(f"Complaint with ID {complaint_id} not found")
 
     return complaint
 
@@ -123,10 +109,7 @@ async def list_complaints(
         if not has_view_all and not is_superuser:
             # Non-admin users can only filter by their own email
             if user_email and complainant_email.lower() != user_email.lower():
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="You can only view your own complaints",
-                )
+                raise AuthorizationError("You can only view your own complaints")
 
         # AUDIT: Log email filter usage for security monitoring
         # Note: We log the filter type but NOT the raw email (privacy compliance)
@@ -229,10 +212,7 @@ async def update_complaint(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
-        )
+        raise NotFoundError(f"Complaint {complaint_id} not found")
 
 
 @router.get("/{complaint_id}/investigations", response_model=dict)
@@ -262,10 +242,7 @@ async def list_complaint_investigations(
     complaint = result.scalar_one_or_none()
 
     if not complaint:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
-        )
+        raise NotFoundError(f"Complaint {complaint_id} not found")
 
     # Get total count
     count_query = (
@@ -320,10 +297,7 @@ async def list_complaint_running_sheet_entries(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
-        )
+        raise NotFoundError(f"Complaint {complaint_id} not found")
 
     query = select(ComplaintRunningSheetEntry).where(ComplaintRunningSheetEntry.complaint_id == complaint_id)
     if complaint.tenant_id is None:
@@ -358,10 +332,7 @@ async def add_complaint_running_sheet_entry(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
-        )
+        raise NotFoundError(f"Complaint {complaint_id} not found")
 
     entry = ComplaintRunningSheetEntry(
         tenant_id=complaint.tenant_id,
@@ -408,10 +379,7 @@ async def delete_complaint_running_sheet_entry(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Complaint {complaint_id} not found"),
-        )
+        raise NotFoundError(f"Complaint {complaint_id} not found")
 
     result = await db.execute(
         select(ComplaintRunningSheetEntry).where(
@@ -422,10 +390,7 @@ async def delete_complaint_running_sheet_entry(
     )
     entry = result.scalar_one_or_none()
     if entry is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
-        )
+        raise NotFoundError("Runner-sheet entry not found")
 
     assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "complaint")
 
