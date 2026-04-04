@@ -46,6 +46,20 @@ def _has_tenant_fk(insp: sa.Inspector, table: str) -> bool:
     return False
 
 
+def _driver_profiles_vehicle_reg_fk_name(insp: sa.Inspector) -> str | None:
+    """FK from driver_profiles.allocated_vehicle_reg -> vehicle_registry.vehicle_reg blocks unique constraint drop."""
+    if not _has_table(insp, "driver_profiles"):
+        return None
+    for fk in insp.get_foreign_keys("driver_profiles"):
+        if fk.get("referred_table") != "vehicle_registry":
+            continue
+        if (fk.get("constrained_columns") or []) == ["allocated_vehicle_reg"] and (
+            fk.get("referred_columns") or []
+        ) == ["vehicle_reg"]:
+            return fk.get("name")
+    return None
+
+
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name != "postgresql":
@@ -82,6 +96,16 @@ def upgrade() -> None:
     op.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_vehicle_registry_vehicle_reg ON vehicle_registry (vehicle_reg)"
     )
+
+    if driver_vr_fk and _has_table(insp, "driver_profiles"):
+        op.create_foreign_key(
+            "driver_profiles_allocated_vehicle_reg_fkey",
+            "driver_profiles",
+            "vehicle_registry",
+            ["allocated_vehicle_reg"],
+            ["vehicle_reg"],
+            ondelete="SET NULL",
+        )
 
 
 def downgrade() -> None:
