@@ -17,11 +17,11 @@ All jobs below are defined in **`CI`** (`.github/workflows/ci.yml`).
 | 3 | **Smoke Gate Self-Test** | Self-test for `scripts/governance/runtime-smoke-gate.sh` | Blocking | Console logs |
 | 4 | **Configuration Drift Guard** | Fails if forbidden legacy env string appears in pinned config/deploy files | Blocking | Console logs |
 | 5 | **ADR-0002 Fail-Fast Proof** | `pytest tests/test_config_failfast.py` | Blocking | Console logs |
-| 6 | **Unit Tests** | `pytest tests/unit/` with coverage floor (≥52%, `--cov-fail-under=52`) | Blocking | `coverage.xml`, `junit-unit.xml` → artifacts `codecov-*`, `junit-unit-tests` |
+| 6 | **Unit Tests** | `pytest tests/unit/` with coverage floor (≥44%, `--cov-fail-under=44`) | Blocking | `coverage.xml`, `junit-unit.xml` → artifacts `codecov-*`, `junit-unit-tests` |
 | 7 | **Frontend Tests** | `npm ci`, lockfile coverage, `npm audit`, ESLint + jsx-a11y, Vitest + coverage, i18n check | Blocking | Console logs; coverage under `frontend/` |
 | 8 | **SBOM Generation** | CycloneDX SBOM for Python env | Blocking | `sbom.json` → artifact `sbom-cyclonedx` |
 | 9 | **Lockfile Freshness Check** | `requirements.lock` present and consistent with `pip-compile --generate-hashes` | Blocking | diff output on failure |
-| 10 | **Integration Tests** | Alembic up/down safety; quarantine policy; `pytest tests/integration/` (≥52% cov, `--cov-fail-under=52`) | Blocking | `coverage.xml`, `junit-integration.xml` → artifacts |
+| 10 | **Integration Tests** | Alembic up/down safety; quarantine policy; `pytest tests/integration/` (≥44% cov, `--cov-fail-under=44`) | Blocking | `coverage.xml`, `junit-integration.xml` → artifacts |
 | 11 | **Security Scan** | Waivers validation; Bandit (high blocking); `pip-audit --strict`; Safety (non-blocking) | Mixed | Console logs |
 | 12 | **Build Check** | Install prod deps; import `src.main:app` | Blocking | Console logs |
 | 13 | **CI Security Covenant (Stage 2.0)** | `scripts/validate_ci_security_covenant.py` | Blocking | Console logs |
