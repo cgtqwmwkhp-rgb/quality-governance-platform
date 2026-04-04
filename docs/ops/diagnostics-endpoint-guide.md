@@ -4,6 +4,8 @@ Reference for all administrative and diagnostic endpoints in the Quality Governa
 
 ## Health & Readiness
 
+Paths below are on the **API host** (e.g. `https://app-qgp-prod.azurewebsites.net`), not under `/api/v1/...`. For frontend (SWA) URLs, use [`docs/evidence/environment_endpoints.json`](../evidence/environment_endpoints.json).
+
 | Endpoint | Method | Purpose | Auth Required |
 |----------|--------|---------|---------------|
 | `/healthz` | GET | Liveness probe — confirms the process is running | No |

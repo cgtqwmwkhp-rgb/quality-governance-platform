@@ -1,19 +1,19 @@
 {
   "$schema": "./environment_endpoints.schema.json",
-  "_comment": "Single source of truth for environment API endpoints. Updated by deploy workflows.",
-  "_last_updated": "2026-03-06T00:00:00Z",
-  "_updated_by": "world-class-parity-hardening",
+  "_comment": "Single source of truth for environment API endpoints. SWA hostnames must match Azure default cert + CI (see azure-static-web-apps-purple-water-03205fa03.yml STAGING_SWA_URL).",
+  "_last_updated": "2026-04-04T00:00:00Z",
+  "_updated_by": "swa-hostname-ssot-alignment",
   "_platform": "Azure App Service",
   
   "environments": {
     "staging": {
       "platform": "azure-app-service",
-      "_note": "Staging deployment uses Azure Web App target in deploy-staging workflow",
+      "_note": "API: deploy-staging workflow. SWA: verified against CI STAGING_SWA_URL (Playwright + curl gates).",
       "container_app_name": null,
       "container_environment": null,
       "region": "uksouth",
       "api_base_url": "https://app-qgp-staging.azurewebsites.net",
-      "swa_url": "https://purple-water-03205fa03-staging.uksouth.azurestaticapps.net",
+      "swa_url": "https://purple-water-03205fa03.6.azurestaticapps.net",
       "health_endpoints": {
         "health": "/healthz",
         "ready": "/readyz",
@@ -24,12 +24,12 @@
     },
     "production": {
       "platform": "azure-app-service",
-      "_note": "Production ACA not yet provisioned - using App Service",
+      "_note": "API: App Service prod. SWA: default hostname verified HTTP 200; optional custom domain app-qgp-prod.azurestaticapps.net must be DNS-bound before Entra redirect URIs.",
       "container_app_name": null,
       "container_environment": null,
       "region": "uksouth",
       "api_base_url": "https://app-qgp-prod.azurewebsites.net",
-      "swa_url": "https://purple-water-03205fa03.uksouth.azurestaticapps.net",
+      "swa_url": "https://purple-water-03205fa03.6.azurestaticapps.net",
       "health_endpoints": {
         "health": "/healthz",
         "ready": "/readyz",
