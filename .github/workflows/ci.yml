@@ -1710,6 +1710,7 @@ jobs:
       - name: Install dependencies and start app
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           pip install -r requirements.txt
           alembic upgrade head
