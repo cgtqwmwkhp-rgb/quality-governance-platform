@@ -888,6 +888,7 @@ jobs:
       - name: Run E2E Tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          REDIS_URL: redis://localhost:6379/0
           SECRET_KEY: test-secret-key
           JWT_SECRET_KEY: test-jwt-secret
           TESTING: "1"
