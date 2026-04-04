@@ -1710,11 +1710,10 @@ jobs:
       - name: Install dependencies and start app
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           pip install -r requirements.txt
           alembic upgrade head
-          uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+          PYTHONPATH="${{ github.workspace }}" uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
           sleep 10
           curl -f http://localhost:8000/healthz || exit 1
 

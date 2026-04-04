@@ -1,6 +1,7 @@
 """Alembic environment configuration for database migrations."""
 
 import asyncio
+import importlib
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -11,8 +12,30 @@ from alembic import context
 from src.core.config import settings
 
 # Import ALL models so autogenerate sees the complete schema.
-# The package __init__.py re-exports every model via __all__.
+# The package __init__.py re-exports many models via __all__; side-effect-import the rest
+# so Base.metadata matches migrated tables for `alembic check`.
 from src.domain.models import *  # noqa: F401,F403
+
+for _metadata_mod in (
+    "src.domain.models.audit_log",
+    "src.domain.models.auditor_competence",
+    "src.domain.models.collaboration",
+    "src.domain.models.compliance_automation",
+    "src.domain.models.kri",
+    "src.domain.models.near_miss",
+    "src.domain.models.notification",
+    "src.domain.models.pams_cache",
+    "src.domain.models.permissions",
+    "src.domain.models.policy_acknowledgment",
+    "src.domain.models.rca_tools",
+    "src.domain.models.rta_analysis",
+    "src.domain.models.token_blacklist",
+    "src.domain.models.vehicle_defect",
+    "src.domain.models.workflow",
+    "src.domain.models.workflow_rules",
+):
+    importlib.import_module(_metadata_mod)
+
 from src.infrastructure.database import Base
 
 # this is the Alembic Config object
@@ -72,6 +95,14 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         "soa_control_entries",
         "supplier_security_assessments",
         "unified_audit_plans",
+        # Junction / config tables present in DB without SQLAlchemy models
+        "audit_finding_clause_mapping",
+        "audit_section_clause_mapping",
+        "escalation_rules_config",
+        "risk_audit_mapping",
+        "risk_clause_mapping",
+        "risk_control_mapping",
+        "risk_incident_mapping",
     }
 )
 
