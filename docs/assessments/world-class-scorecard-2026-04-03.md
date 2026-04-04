@@ -149,6 +149,7 @@ The **Configuration Changes** bullets above record the **2026-04-03** session na
 | Claim in section above | Verify in |
 |-------------------------|-----------|
 | `ci.yml` unit/integration `cov-fail-under` | `.github/workflows/ci.yml` jobs `unit-tests` / `integration-tests` (`pytest` `--cov-fail-under=`) |
+| Human-readable coverage summary (must match CI) | `docs/evidence/test-coverage-baseline.md` |
 | `pyproject.toml` coverage `fail_under` | `[tool.coverage.report]` `fail_under` in `pyproject.toml` |
 | `ignore_errors` module count | `pyproject.toml` GOVPLAT-005 block |
 
