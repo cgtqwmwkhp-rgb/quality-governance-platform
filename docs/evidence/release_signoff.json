@@ -29,6 +29,11 @@
     ],
     "pre_existing_failures": [
       {
+        "job": "alembic-check",
+        "reason": "CI job now runs correctly with PostgreSQL. Reports pre-existing ORM/migration schema drift (uvdb_question FK, vehicle_registry constraints). Not introduced by this PR.",
+        "risk": "low"
+      },
+      {
         "job": "lockfile-check",
         "reason": "pip-compile hash resolution may produce minor drift; smart diff only fails on version changes.",
         "risk": "low"
