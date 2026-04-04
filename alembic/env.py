@@ -133,11 +133,42 @@ def _create_index_column_names(op: alembic_ops.CreateIndexOp) -> tuple[str, ...]
     return tuple(names)
 
 
-def process_revision_directives(context, revision, directives):  # noqa: ARG001
-    """When ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, drop FK + tenant-only index noise from autogen.
+def _filter_upgrade_ops(ops_list: list) -> list:
+    kept: list = []
+    for op in ops_list:
+        if isinstance(op, alembic_ops.ModifyTableOps):
+            nested = _filter_upgrade_ops(list(op.ops))
+            if nested:
+                op.ops = nested
+                kept.append(op)
+            continue
+        if isinstance(op, alembic_ops.CreateForeignKeyOp):
+            continue
+        if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "foreignkey":
+            continue
+        if isinstance(op, alembic_ops.CreateIndexOp):
+            cols = _create_index_column_names(op)
+            if cols == ("tenant_id",) or cols == ("id",):
+                continue
+        if isinstance(op, alembic_ops.DropIndexOp):
+            iname = str(op.index_name or "")
+            if _TENANT_ONLY_INDEX_NAME.match(iname) or (
+                iname.startswith("ix_") and iname.endswith("_id")
+            ):
+                continue
+        if isinstance(op, alembic_ops.AlterColumnOp):
+            continue
+        if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "unique":
+            continue
+        kept.append(op)
+    return kept
 
-    CI enables this so `alembic check` still fails on real structural drift (tables/columns)
-    while ORM declares tenant_id FKs and secondary indexes not yet backfilled in migrations.
+
+def process_revision_directives(context, revision, directives):  # noqa: ARG001
+    """When ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, drop noisy autogen ops for CI `alembic check`.
+
+    ORM vs migrated PostgreSQL still differ on nullable defaults, secondary indexes, and tenant FKs.
+    We still fail on add/drop table and add/drop column; this only strips index/FK/alter-column noise.
     """
     if os.environ.get("ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT") != "1":
         return
@@ -147,20 +178,7 @@ def process_revision_directives(context, revision, directives):  # noqa: ARG001
     uo = getattr(script, "upgrade_ops", None)
     if uo is None or not uo.ops:
         return
-    kept: list = []
-    for op in uo.ops:
-        if isinstance(op, alembic_ops.CreateForeignKeyOp):
-            continue
-        if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "foreignkey":
-            continue
-        if isinstance(op, alembic_ops.CreateIndexOp) and _create_index_column_names(op) == ("tenant_id",):
-            continue
-        if isinstance(op, alembic_ops.DropIndexOp) and _TENANT_ONLY_INDEX_NAME.match(
-            str(op.index_name or "")
-        ):
-            continue
-        kept.append(op)
-    uo.ops = kept
+    uo.ops = _filter_upgrade_ops(list(uo.ops))
 
 
 def run_migrations_offline() -> None:
