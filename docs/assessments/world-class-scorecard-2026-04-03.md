@@ -139,3 +139,17 @@ The 0.9 gap represents the difference between "documented plans and evidence" (C
 
 ### Code Changes (2 files)
 - `tests/factories/core.py` — added 6 new factories (AuditRun, AuditFinding, Investigation, EnterpriseRisk, EvidenceAsset, ExternalAuditImportJob)
+
+---
+
+### Repository reconciliation note (evidence refresh, not a rescore)
+
+The **Configuration Changes** bullets above record the **2026-04-03** session narrative. **Authoritative current values** must be read from the repo:
+
+| Claim in section above | Verify in |
+|-------------------------|-----------|
+| `ci.yml` unit/integration `cov-fail-under` | `.github/workflows/ci.yml` jobs `unit-tests` / `integration-tests` (`pytest` `--cov-fail-under=`) |
+| `pyproject.toml` coverage `fail_under` | `[tool.coverage.report]` `fail_under` in `pyproject.toml` |
+| `ignore_errors` module count | `pyproject.toml` GOVPLAT-005 block |
+
+This avoids treating stale narrative as live CI truth when reconciling later scorecards.
