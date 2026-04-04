@@ -1,42 +1,40 @@
 {
-  "release_sha": "pending-wcs-9.5-round3",
+  "release_sha": "2dc6abf6d833ffec9a208788f78d54a745b2c5ed",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/RUNNER_SHEET_RELEASE_ROLLOUT_2026-03-24.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-04T18:00:00Z",
+  "approved_at_utc": "2026-04-04T19:45:00Z",
   "deployment_evidence": {
-    "ci_run": "fix/wcs-9.5-round3",
+    "ci_run": "main",
     "deploy_run_id": "pending",
-    "unit_tests": "1380+ collected, 0 failures",
-    "mypy": "323+ files, 0 errors (12 modules in ignore_errors, down from 64)",
-    "frontend_tests": "178+ passed (including 13 new a11y tests)",
-    "coverage_threshold": "fail_under = 70 (raised from 65)",
-    "pr_checks_passed": "pending",
+    "production_baseline_build_sha": "62b99eae5f7f63041a2e8fc6692390691fedf4e8",
+    "production_baseline_observed_utc": "2026-04-04T12:38:36Z",
+    "mainline_commits_ahead_of_production_first_parent": 3,
+    "mainline_promotion_steps": [
+      "e6c43de13be8afc61fd90aef69a31181b09f3cc6 — Merge PR #412 (fix/wcs-9.5-transformation)",
+      "05ebd56b1ded538a3f178fc8c601a90da29d8193 — Merge PR #413 (fix/wcs-9.5-round2)",
+      "2dc6abf6d833ffec9a208788f78d54a745b2c5ed — Merge PR #414 (fix/wcs-9.5-round3)"
+    ],
+    "staging_last_recorded_deploy_sha": "05ebd56b1ded538a3f178fc8c601a90da29d8193",
+    "governance_note": "release_sha is the application merge commit (PR #414). A docs-only signoff commit may sit on main tip; use manual production dispatch with release_sha equal to this value after staging verification. Auto production after staging requires staged head SHA to equal release_sha (see deploy-production.yml).",
+    "pr_checks_passed": "CI green before merge of PR #414; subsequent signoff PR validates governance artifact only",
+    "unit_tests": "Per CI at merge of PR #414",
+    "mypy": "Per CI at merge of PR #414",
+    "frontend_tests": "Per CI at merge of PR #414",
+    "coverage_threshold": "Per CI fail_under at merge of PR #414",
     "changes_this_release": [
-      "Alembic e1a2b3c4d5e6: UVDB tenant_id FKs to tenants; vehicle_registry unique index alignment",
-      "CI e2e-tests: REDIS_URL=redis://localhost:6379/0 (matches redis service container)",
-      "Regenerated requirements.lock via scripts/generate_lockfile.sh",
-      "Storybook page stories: Pages/Auth/Login, Pages/Auth/ForgotPassword",
-      "Prior round2: logout telemetry, a11y suite, coverage 70, diagnostics guide, etc."
+      "PR #414: Alembic UVDB/vehicle_registry, CI (Alembic drift, DAST, Locust, E2E), requirements.lock, Storybook auth pages",
+      "PR #413 (staging as of 2026-04-04T13:28Z): round2 — logout, a11y, CI",
+      "PR #412 (ancestor): WCS 9.5 transformation merge"
     ],
     "pre_existing_failures": [
       {
-        "job": "dast-zap-advisory",
-        "reason": "Intentionally advisory. See docs/compliance/ci-gate-hygiene.md.",
+        "job": "dast-zap-baseline",
+        "reason": "Advisory per docs/compliance/ci-gate-hygiene.md",
         "risk": "none"
-      },
-      {
-        "job": "e2e-tests",
-        "reason": "REDIS_URL added in this release; remaining failures triaged per junit-e2e.xml if any.",
-        "risk": "low"
-      },
-      {
-        "job": "locust-load-test",
-        "reason": "Startup now health-checked. See docs/slo/performance-slos.md § CI vs Production.",
-        "risk": "low"
       }
     ]
   }
