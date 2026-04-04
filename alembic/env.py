@@ -103,6 +103,10 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         "risk_clause_mapping",
         "risk_control_mapping",
         "risk_incident_mapping",
+        # ORM table name differs from migrated table (escalation_rules_config in DB)
+        "escalation_rules",
+        # Model retained after migration dropped root_cause_analyses
+        "root_cause_analyses",
     }
 )
 

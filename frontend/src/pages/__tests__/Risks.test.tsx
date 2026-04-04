@@ -102,12 +102,13 @@ describe('Risks', () => {
   it('renders page header, search input, and new button', async () => {
     render(<Risks />, { wrapper: Wrapper })
 
+    // Title is visible during loading skeleton; wait until search mounts after data load
     await waitFor(() => {
-      expect(screen.getByText('risks.title')).toBeInTheDocument()
+      expect(screen.getByPlaceholderText('risks.search_placeholder')).toBeInTheDocument()
     })
 
+    expect(screen.getByText('risks.title')).toBeInTheDocument()
     expect(screen.getByText('risks.subtitle')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('risks.search_placeholder')).toBeInTheDocument()
     expect(screen.getByText('risks.new')).toBeInTheDocument()
   })
 
