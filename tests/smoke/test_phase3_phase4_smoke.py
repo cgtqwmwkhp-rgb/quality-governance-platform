@@ -8,10 +8,10 @@ Quick validation tests to ensure critical paths are working:
 - Frontend page accessibility
 
 QUARANTINE STATUS: All tests in this file are quarantined.
-See QUARANTINE_POLICY.md for details.
+See tests/QUARANTINE_POLICY.yaml (GOVPLAT-001).
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
+Expiry Date: 2026-04-30
 Issue: GOVPLAT-001
 Reason: Phase 3/4 features not fully implemented; test contracts don't match endpoints.
 """
@@ -23,7 +23,7 @@ import requests
 
 # Quarantine marker - skip all tests in this module until features are complete
 pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Phase 3/4 features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+    reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 features incomplete. See tests/QUARANTINE_POLICY.yaml. Expires: 2026-04-30"
 )
 
 

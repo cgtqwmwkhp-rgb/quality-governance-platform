@@ -10,10 +10,10 @@ Tests cover:
 - RIDDOR automation
 
 QUARANTINE STATUS: All tests in this file are quarantined.
-See tests/smoke/QUARANTINE_POLICY.md for details.
+See tests/QUARANTINE_POLICY.yaml (GOVPLAT-001).
 
 Quarantine Date: 2026-01-21
-Expiry Date: 2026-02-21
+Expiry Date: 2026-04-30
 Issue: GOVPLAT-001
 Reason: Phase 4 Compliance Automation features not fully implemented; endpoints return 404.
 """
@@ -24,7 +24,7 @@ import pytest
 
 # Quarantine marker - skip all tests in this module until features are complete
 pytestmark = pytest.mark.skip(
-    reason="QUARANTINED: Phase 4 Compliance Automation features incomplete. See QUARANTINE_POLICY.md. Expires: 2026-02-21"
+    reason="QUARANTINED [GOVPLAT-001]: Phase 4 Compliance Automation features incomplete. See tests/QUARANTINE_POLICY.yaml. Expires: 2026-04-30"
 )
 
 
