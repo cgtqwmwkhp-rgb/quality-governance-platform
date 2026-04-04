@@ -47,7 +47,12 @@ async def create_complaint(
     except ValueError as e:
         msg = str(e)
         if "DUPLICATE_EXTERNAL_REF" in msg:
-            raise ConflictError(f"Complaint with external_ref '{complaint_in.external_ref}' already exists")
+            parts = msg.split(":")
+            existing_id = int(parts[1]) if len(parts) > 1 else None
+            raise ConflictError(
+                f"Complaint with external_ref '{complaint_in.external_ref}' already exists",
+                details={"existing_id": existing_id, "external_ref": complaint_in.external_ref},
+            )
         raise BadRequestError(msg)
 
 
