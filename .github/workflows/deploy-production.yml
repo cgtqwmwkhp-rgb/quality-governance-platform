@@ -115,6 +115,8 @@ jobs:
       - name: Checkout code
         if: steps.freeze.outputs.allowed == 'true'
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Resolve signed release SHA
         id: signoff
@@ -140,8 +142,13 @@ jobs:
               echo "skip_reason=missing_release_signoff" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            if [[ "$STAGED_SHA" != "$SIGNED_RELEASE_SHA" ]]; then
-              echo "⚠️ Auto-deployment skipped: staged SHA $STAGED_SHA is not the signed release SHA $SIGNED_RELEASE_SHA."
+            if [[ "$STAGED_SHA" == "$SIGNED_RELEASE_SHA" ]]; then
+              echo "✅ Staged SHA matches signed release_sha exactly"
+            elif git merge-base --is-ancestor "$SIGNED_RELEASE_SHA" "$STAGED_SHA"
+            then
+              echo "✅ Staged SHA $STAGED_SHA is a descendant of signed release_sha $SIGNED_RELEASE_SHA (governance/docs commits on main after sign-off)"
+            else
+              echo "⚠️ Auto-deployment skipped: staged SHA $STAGED_SHA is not the signed release SHA $SIGNED_RELEASE_SHA and is not in its first-parent lineage."
               echo "approved=false" >> "$GITHUB_OUTPUT"
               echo "release_sha=$SIGNED_RELEASE_SHA" >> "$GITHUB_OUTPUT"
               echo "skip_reason=signed_sha_mismatch" >> "$GITHUB_OUTPUT"
