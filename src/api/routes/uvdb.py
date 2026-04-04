@@ -528,7 +528,7 @@ async def list_sections(
                 "number": section["number"],
                 "title": section["title"],
                 "max_score": section["max_score"],
-                "question_count": len(section.get("questions", [])),
+                "question_count": len(section.get("questions", [])),  # type: ignore[arg-type]
                 "iso_mapping": section.get("iso_mapping", {}),
             }
         )
@@ -652,7 +652,7 @@ async def create_audit(
     """Create a new UVDB audit"""
     count_result = await db.execute(select(func.count()).select_from(UVDBAudit))
     count = count_result.scalar()
-    audit_reference = f"UVDB-{datetime.now(timezone.utc).year}-{(count + 1):04d}"
+    audit_reference = f"UVDB-{datetime.now(timezone.utc).year}-{((count or 0) + 1):04d}"
 
     audit = UVDBAudit(
         audit_reference=audit_reference,
@@ -903,7 +903,7 @@ async def get_iso_cross_mapping(current_user: CurrentUser) -> dict[str, Any]:
     mappings = []
 
     for section in UVDB_B2_SECTIONS:
-        for question in section.get("questions", []):
+        for question in section.get("questions", []):  # type: ignore[attr-defined]
             if "iso_mapping" in question and question["iso_mapping"]:
                 mappings.append(
                     {

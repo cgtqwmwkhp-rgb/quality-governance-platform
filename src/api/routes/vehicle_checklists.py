@@ -7,7 +7,7 @@ plus governance defect management stored in QGP PostgreSQL.
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, text
@@ -44,7 +44,7 @@ CACHE_MODEL_MAP = {
 }
 
 
-def _service_unavailable(message: str) -> None:
+def _service_unavailable(message: str) -> NoReturn:
     exc = DomainError(message, code="SERVICE_UNAVAILABLE")
     exc.http_status = 503
     raise exc
@@ -93,7 +93,7 @@ async def get_schema(
 
 async def _list_from_cache(
     db: AsyncSession,
-    cache_model: type,
+    cache_model: Any,
     page: int,
     page_size: int,
     search: Optional[str],
@@ -416,7 +416,7 @@ async def create_defect_action(
     )
     db.add(action)
 
-    defect.status = "action_assigned"
+    defect.status = "action_assigned"  # type: ignore[assignment]
     await db.flush()
 
     await _log_audit_trail(db, current_user, defect, "action_created")

@@ -21,7 +21,10 @@
 | PAMS MySQL (External) | Existing | Azure | Fleet/vehicle data (read-only) | N/A (shared) |
 | GitHub Actions | Free tier (2000 min/mo) | — | CI/CD pipeline | £0 |
 
-**Estimated Monthly Total**: ~£110–£160
+**Estimated Monthly Total**: ~£130–£140 (all environments)
+
+> **Note**: Production-only cost is ~£80/month (see [`docs/evidence/capacity-profile.md`](../evidence/capacity-profile.md)).
+> The higher range here includes staging, ACR, Redis, and Blob storage.
 
 ---
 

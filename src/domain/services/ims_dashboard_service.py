@@ -203,7 +203,8 @@ class IMSDashboardService:
         avg_score = 0.0
         latest_score = None
         if completed:
-            avg_score = sum(a.percentage_score for a in completed) / len(completed)
+            scores = [a.percentage_score for a in completed if a.percentage_score is not None]
+            avg_score = sum(scores) / len(scores) if scores else 0.0
             latest = sorted(
                 completed,
                 key=lambda a: a.created_at or datetime.min,
@@ -243,12 +244,12 @@ class IMSDashboardService:
             }
 
         current = years[0]
-        total_emissions = (current.scope1_total or 0) + (current.scope2_total or 0) + (current.scope3_total or 0)
+        total_emissions = (current.scope_1_total or 0) + (current.scope_2_location or 0) + (current.scope_3_total or 0)
 
         reduction = None
         if len(years) >= 2:
             prev = years[1]
-            prev_total = (prev.scope1_total or 0) + (prev.scope2_total or 0) + (prev.scope3_total or 0)
+            prev_total = (prev.scope_1_total or 0) + (prev.scope_2_location or 0) + (prev.scope_3_total or 0)
             if prev_total > 0:
                 reduction = round(((prev_total - total_emissions) / prev_total) * 100, 1)
 
@@ -258,9 +259,9 @@ class IMSDashboardService:
             "total_emissions": round(total_emissions, 2),
             "certification_status": current.certification_status or "pending",
             "reduction_vs_previous": reduction,
-            "scope1": round(current.scope1_total or 0, 2),
-            "scope2": round(current.scope2_total or 0, 2),
-            "scope3": round(current.scope3_total or 0, 2),
+            "scope1": round(current.scope_1_total or 0, 2),
+            "scope2": round(current.scope_2_location or 0, 2),
+            "scope3": round(current.scope_3_total or 0, 2),
         }
 
     # ------------------------------------------------------------------
