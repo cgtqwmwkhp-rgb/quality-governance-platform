@@ -45,7 +45,8 @@ exclude = ["alembic/versions", "tests"]
 # Baseline  (2026-03-01): 30 overrides, ~85 suppressed error codes
 # Revised   (2026-03-07): 30 overrides, ~71 suppressed error codes
 # Current   (2026-03-21):  8 override blocks (consolidated)
-# Promoted  (2026-04-04): ignore_errors 20→12 modules (8 promoted)
+# Promoted  (2026-04-04): ignore_errors 20→11 modules in this block (xml_import promoted 2026-04-05)
+# Promoted  (2026-04-05): xml_import removed from ignore_errors (GOVPLAT-005)
 # Target    (Q2 2026):    ≤5 override blocks
 
 # ── Group 1: AI / ML service modules (attr-defined, arg-type, return-value, union-attr, no-any-return) ──
@@ -96,8 +97,8 @@ disable_error_code = ["return-value"]
 module = "src.api.routes.ai_intelligence"
 disable_error_code = ["call-overload"]
 
-# ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 12 modules ──
-# 52 modules promoted to full type checking total. Remaining 12 have cross-module type
+# ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 11 modules ──
+# 53 modules promoted to full type checking total (incl. xml_import). Remaining 11 have cross-module type
 # conflicts (assignment, operator, attr-defined) that require coordinated model+route fixes.
 [[tool.mypy.overrides]]
 module = [
@@ -107,7 +108,6 @@ module = [
     "src.api.routes.iso27001",
     "src.api.routes.planet_mark",
     "src.api.routes.signatures",
-    "src.api.routes.xml_import",
     "src.domain.services.form_config_service",
     "src.domain.services.risk_service",
     "src.domain.services.search_service",

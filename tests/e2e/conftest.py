@@ -182,7 +182,9 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Auto-skip quarantined tests."""
-    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
+    skip_phase34 = pytest.mark.skip(
+        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Policy: tests/QUARANTINE_POLICY.yaml. Expiry: 2026-04-30"
+    )
     for item in items:
         if "phase34" in item.keywords:
             item.add_marker(skip_phase34)
