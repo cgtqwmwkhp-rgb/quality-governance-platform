@@ -27,8 +27,8 @@ Every production deployment can be traced back to a specific git commit.
 The `lockfile-check` CI job (`.github/workflows/ci.yml`) verifies that `requirements.lock` matches a fresh `pip-compile` output. If the lockfile drifts due to upstream package updates, the CI job fails and requires a lockfile regeneration.
 
 ```bash
-# Regenerate lockfile
-pip-compile requirements.in -o requirements.lock --strip-extras
+# Regenerate lockfile (uses requirements.txt as input, outputs requirements.lock)
+pip-compile requirements.txt -o requirements.lock --generate-hashes --strip-extras
 ```
 
 ## npm Lockfile Verification
