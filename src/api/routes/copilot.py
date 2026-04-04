@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.core.security import decode_token
+from src.domain.exceptions import NotFoundError
 from src.infrastructure.database import async_session_maker
 
 router = APIRouter()
@@ -132,7 +133,7 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise NotFoundError("Session not found")
 
     return session
 
@@ -195,7 +196,7 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
@@ -236,7 +237,7 @@ async def submit_feedback(
         )
         return {"status": "submitted", "feedback_id": feedback.id}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 # ============================================================================
@@ -266,7 +267,7 @@ async def execute_action(
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
+        raise NotFoundError(f"Action {data.action_name} not found")
 
     # Execute the action
     # This would actually perform the action

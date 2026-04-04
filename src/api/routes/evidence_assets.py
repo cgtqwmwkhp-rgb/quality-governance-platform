@@ -28,6 +28,7 @@ from src.api.schemas.evidence_asset import (
     EvidenceAssetUploadResponse,
 )
 from src.core.config import settings
+from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -35,6 +36,7 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -105,13 +107,10 @@ async def validate_source_exists(
     entity = result.scalar_one_or_none()
 
     if not entity:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "SOURCE_NOT_FOUND",
-                "message": f"Source {source_module} with ID {source_id} not found",
-                "details": {"source_module": source_module, "source_id": source_id},
-            },
+        raise NotFoundError(
+            f"Source {source_module} with ID {source_id} not found",
+            code="SOURCE_NOT_FOUND",
+            details={"source_module": source_module, "source_id": source_id},
         )
 
     return True
@@ -150,13 +149,10 @@ async def upload_evidence_asset(
     try:
         source_module_enum = EvidenceSourceModule(source_module)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_SOURCE_MODULE",
-                "message": f"Invalid source module: {source_module}",
-                "details": {"valid_modules": [e.value for e in EvidenceSourceModule]},
-            },
+        raise BadRequestError(
+            f"Invalid source module: {source_module}",
+            code="INVALID_SOURCE_MODULE",
+            details={"valid_modules": [e.value for e in EvidenceSourceModule]},
         )
 
     # Validate source exists
@@ -167,13 +163,10 @@ async def upload_evidence_asset(
     # Validate content type
     content_type = file.content_type or "application/octet-stream"
     if content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_CONTENT_TYPE",
-                "message": f"Content type {content_type} is not allowed",
-                "details": {"allowed_types": list(ALLOWED_CONTENT_TYPES.keys())},
-            },
+        raise BadRequestError(
+            f"Content type {content_type} is not allowed",
+            code="INVALID_CONTENT_TYPE",
+            details={"allowed_types": list(ALLOWED_CONTENT_TYPES.keys())},
         )
 
     # Auto-detect asset type from content type if not provided
@@ -184,13 +177,10 @@ async def upload_evidence_asset(
     try:
         asset_type_enum = EvidenceAssetType(final_asset_type)
     except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "INVALID_ASSET_TYPE",
-                "message": f"Invalid asset type: {final_asset_type}",
-                "details": {"valid_types": [e.value for e in EvidenceAssetType]},
-            },
+        raise BadRequestError(
+            f"Invalid asset type: {final_asset_type}",
+            code="INVALID_ASSET_TYPE",
+            details={"valid_types": [e.value for e in EvidenceAssetType]},
         )
 
     # Read file content
@@ -199,13 +189,10 @@ async def upload_evidence_asset(
 
     # Validate file size
     if file_size > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "FILE_TOO_LARGE",
-                "message": f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
-                "details": {"file_size": file_size, "max_size": MAX_FILE_SIZE_BYTES},
-            },
+        raise BadRequestError(
+            f"File size {file_size} bytes exceeds maximum {MAX_FILE_SIZE_BYTES} bytes",
+            code="FILE_TOO_LARGE",
+            details={"file_size": file_size, "max_size": MAX_FILE_SIZE_BYTES},
         )
 
     # Calculate checksum
@@ -321,6 +308,7 @@ async def upload_evidence_asset(
             },
         )
 
+    track_metric("documents.uploaded")
     return EvidenceAssetUploadResponse(
         id=evidence_asset.id,
         storage_key=evidence_asset.storage_key,
@@ -361,13 +349,10 @@ async def list_evidence_assets(
             source_module_enum = EvidenceSourceModule(source_module)
             query = query.where(EvidenceAsset.source_module == source_module_enum)
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "INVALID_SOURCE_MODULE",
-                    "message": f"Invalid source module: {source_module}",
-                    "details": {"valid_modules": [e.value for e in EvidenceSourceModule]},
-                },
+            raise BadRequestError(
+                f"Invalid source module: {source_module}",
+                code="INVALID_SOURCE_MODULE",
+                details={"valid_modules": [e.value for e in EvidenceSourceModule]},
             )
 
     if source_id is not None:
@@ -378,13 +363,10 @@ async def list_evidence_assets(
             asset_type_enum = EvidenceAssetType(asset_type)
             query = query.where(EvidenceAsset.asset_type == asset_type_enum)
         except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "error_code": "INVALID_ASSET_TYPE",
-                    "message": f"Invalid asset type: {asset_type}",
-                    "details": {"valid_types": [e.value for e in EvidenceAssetType]},
-                },
+            raise BadRequestError(
+                f"Invalid asset type: {asset_type}",
+                code="INVALID_ASSET_TYPE",
+                details={"valid_types": [e.value for e in EvidenceAssetType]},
             )
 
     if linked_investigation_id is not None:
@@ -431,13 +413,8 @@ async def get_evidence_asset(
     asset = result.scalar_one_or_none()
 
     if not asset:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ASSET_NOT_FOUND",
-                "message": f"Evidence asset with ID {asset_id} not found",
-                "details": {"asset_id": asset_id},
-            },
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
         )
 
     return asset
@@ -459,13 +436,8 @@ async def update_evidence_asset(
     asset = result.scalar_one_or_none()
 
     if not asset:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ASSET_NOT_FOUND",
-                "message": f"Evidence asset with ID {asset_id} not found",
-                "details": {"asset_id": asset_id},
-            },
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
         )
 
     # Update fields
@@ -505,13 +477,8 @@ async def delete_evidence_asset(
     asset = result.scalar_one_or_none()
 
     if not asset:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ASSET_NOT_FOUND",
-                "message": f"Evidence asset with ID {asset_id} not found",
-                "details": {"asset_id": asset_id},
-            },
+        raise NotFoundError(
+            f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND", details={"asset_id": asset_id}
         )
 
     # Soft delete
@@ -545,13 +512,7 @@ async def link_asset_to_investigation(
     asset = result.scalar_one_or_none()
 
     if not asset:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ASSET_NOT_FOUND",
-                "message": f"Evidence asset with ID {asset_id} not found",
-            },
-        )
+        raise NotFoundError(f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND")
 
     # Validate investigation exists
     from src.domain.models.investigation import InvestigationRun
@@ -561,13 +522,7 @@ async def link_asset_to_investigation(
     investigation = inv_result.scalar_one_or_none()
 
     if not investigation:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "INVESTIGATION_NOT_FOUND",
-                "message": f"Investigation with ID {investigation_id} not found",
-            },
-        )
+        raise NotFoundError(f"Investigation with ID {investigation_id} not found", code="INVESTIGATION_NOT_FOUND")
 
     # Link asset to investigation
     asset.linked_investigation_id = investigation_id
@@ -599,13 +554,7 @@ async def get_signed_download_url(
     asset = result.scalar_one_or_none()
 
     if not asset:
-        raise HTTPException(
-            status_code=404,
-            detail={
-                "error_code": "ASSET_NOT_FOUND",
-                "message": f"Evidence asset with ID {asset_id} not found",
-            },
-        )
+        raise NotFoundError(f"Evidence asset with ID {asset_id} not found", code="ASSET_NOT_FOUND")
 
     # Generate signed URL
     from src.infrastructure.storage import storage_service
@@ -646,21 +595,12 @@ async def download_file_direct(
     # Only allow this endpoint for local storage
     svc = storage_service()
     if not isinstance(svc, LocalFileStorageService):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "error_code": "NOT_AVAILABLE",
-                "message": "Direct download not available in production",
-            },
-        )
+        raise BadRequestError("Direct download not available in production", code="NOT_AVAILABLE")
 
     # Validate expiry
     now_ts = int(datetime.now(timezone.utc).timestamp())
     if expires < now_ts:
-        raise HTTPException(
-            status_code=403,
-            detail={"error_code": "URL_EXPIRED", "message": "Download URL has expired"},
-        )
+        raise AuthorizationError("Download URL has expired", code="URL_EXPIRED")
 
     # Validate signature
     message = f"{key}:{expires}"
@@ -671,22 +611,13 @@ async def download_file_direct(
     ).hexdigest()[:16]
 
     if not hmac_lib.compare_digest(sig, expected_sig):
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "error_code": "INVALID_SIGNATURE",
-                "message": "Invalid download signature",
-            },
-        )
+        raise AuthorizationError("Invalid download signature", code="INVALID_SIGNATURE")
 
     # Download and serve
     try:
         content = await svc.download(key)
     except StorageError as e:
-        raise HTTPException(
-            status_code=404,
-            detail={"error_code": "FILE_NOT_FOUND", "message": str(e)},
-        )
+        raise NotFoundError(str(e), code="FILE_NOT_FOUND")
 
     # Determine content type from file extension
     import mimetypes

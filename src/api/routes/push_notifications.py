@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import AuthorizationError, NotFoundError
 from src.infrastructure.database import Base
 
 router = APIRouter(tags=["Push Notifications"])
@@ -393,7 +394,7 @@ async def unsubscribe_from_push(
     success = await service.unsubscribe(endpoint)
 
     if not success:
-        raise HTTPException(status_code=404, detail="Subscription not found")
+        raise NotFoundError("Subscription not found")
 
     return {"success": True, "message": "Unsubscribed from push notifications"}
 
@@ -466,10 +467,7 @@ async def send_notification(
 ) -> dict[str, Any]:
     """Send notification to users (admin only)."""
     if not current_user.is_superuser and not current_user.has_permission("notifications:send"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required to send notifications",
-        )
+        raise AuthorizationError("Admin role required to send notifications")
 
     service = PushNotificationService(db)
 

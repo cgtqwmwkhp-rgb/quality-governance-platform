@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
 from src.domain.models.user import User
 
@@ -174,7 +175,7 @@ async def mark_notification_read(notification_id: int, current_user: CurrentUser
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotFoundError("Notification not found")
     notification.is_read = True
     await db.commit()
     return {"success": True, "notification_id": notification_id}
@@ -211,7 +212,7 @@ async def delete_notification(notification_id: int, current_user: CurrentUser, d
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotFoundError("Notification not found")
     await db.delete(notification)
     await db.commit()
     return {"success": True, "notification_id": notification_id}

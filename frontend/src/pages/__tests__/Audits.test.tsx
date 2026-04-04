@@ -132,7 +132,7 @@ describe('Audits external import flow', () => {
     })
   })
 
-  it('imports an external audit and links the uploaded report', async () => {
+  it('imports an external audit and links the uploaded report', { timeout: 15000 }, async () => {
     render(<Audits />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))

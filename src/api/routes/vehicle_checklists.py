@@ -23,7 +23,7 @@ from src.api.schemas.vehicle_checklist import (
     DefectResponse,
     DefectUpdate,
 )
-from src.domain.exceptions import AuthorizationError, NotFoundError, ValidationError
+from src.domain.exceptions import AuthorizationError, DomainError, NotFoundError, ValidationError
 from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.services.audit_service import record_audit_event
@@ -44,12 +44,15 @@ CACHE_MODEL_MAP = {
 }
 
 
+def _service_unavailable(message: str) -> None:
+    exc = DomainError(message, code="SERVICE_UNAVAILABLE")
+    exc.http_status = 503
+    raise exc
+
+
 def _require_pams() -> None:
     if not is_pams_available():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PAMS database connection is not configured or unavailable.",
-        )
+        _service_unavailable("PAMS database connection is not configured or unavailable.")
 
 
 def _defect_to_response(d: VehicleDefect) -> DefectResponse:
@@ -156,12 +159,9 @@ async def _list_from_live_pams(
         raise
     except Exception:
         logger.exception("PAMS live query failed for %s", table_name)
-        raise HTTPException(
-            status_code=503,
-            detail="PAMS database is temporarily unavailable. Please try again shortly.",
-        )
+        _service_unavailable("PAMS database is temporarily unavailable. Please try again shortly.")
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 def _serialise_value(v: Any) -> Any:
@@ -239,7 +239,7 @@ async def get_daily_record(
             raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 @router.get("/monthly/{record_id}")
@@ -271,7 +271,7 @@ async def get_monthly_record(
             raise NotFoundError("Record not found")
         return {k: _serialise_value(v) for k, v in dict(row).items()}
 
-    raise HTTPException(status_code=503, detail="Could not obtain PAMS session")
+    _service_unavailable("Could not obtain PAMS session")
 
 
 # ─── Defect CRUD ─────────────────────────────────────────────────────
@@ -521,4 +521,4 @@ async def trigger_sync(
         return {"status": "sync_queued", "message": "PAMS sync task has been queued."}
     except Exception:
         logger.exception("Failed to queue PAMS sync task")
-        raise HTTPException(status_code=500, detail="Failed to queue sync task")
+        raise DomainError("Failed to queue sync task")

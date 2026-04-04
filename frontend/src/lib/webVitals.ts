@@ -53,8 +53,9 @@ function sendMetric(metric: Metric): void {
 }
 
 export function reportWebVitals(): void {
-  import('web-vitals').then(({ onCLS, onFID, onLCP, onTTFB, onINP }) => {
+  import('web-vitals').then(({ onCLS, onFCP, onFID, onLCP, onTTFB, onINP }) => {
     onCLS(sendMetric)
+    onFCP(sendMetric)
     onFID(sendMetric)
     onLCP(sendMetric)
     onTTFB(sendMetric)

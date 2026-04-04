@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
@@ -62,6 +62,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     __table_args__ = (
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),
+        CheckConstraint(
+            "priority IN ('critical', 'high', 'medium', 'low')",
+            name="ck_complaints_priority",
+        ),
+        CheckConstraint(
+            "status IN ('received', 'acknowledged', 'under_investigation', "
+            "'pending_response', 'awaiting_customer', 'resolved', 'closed', 'escalated')",
+            name="ck_complaints_status",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -133,6 +142,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     reporter_submission: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
     )  # Immutable snapshot of reporter-entered intake data
+
+    # GDPR Art. 18 — restriction of processing
+    processing_restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

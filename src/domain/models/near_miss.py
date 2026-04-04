@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import DataClassification, TimestampMixin
@@ -14,6 +14,16 @@ class NearMiss(Base):
     """Near Miss report - events that could have resulted in injury or damage but didn't."""
 
     __tablename__ = "near_misses"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('REPORTED', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'IN_PROGRESS', 'CLOSED')",
+            name="ck_near_misses_status",
+        ),
+        CheckConstraint(
+            "priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')",
+            name="ck_near_misses_priority",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     reference_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
@@ -73,6 +83,9 @@ class NearMiss(Base):
     # Assignment
     assigned_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # GDPR Art. 18 — restriction of processing
+    processing_restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Resolution
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

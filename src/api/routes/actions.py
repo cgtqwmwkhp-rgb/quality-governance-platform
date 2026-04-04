@@ -158,6 +158,17 @@ async def _resolve_owner_email(db: Any, owner_id: Optional[int]) -> Optional[str
         return None
 
 
+async def _batch_resolve_owner_emails(db: Any, owner_ids: set[int]) -> dict[int, str]:
+    """Batch-resolve user emails to avoid N+1 queries."""
+    if not owner_ids:
+        return {}
+    try:
+        result = await db.execute(select(User.id, User.email).where(User.id.in_(owner_ids)))
+        return {row.id: row.email for row in result.all()}
+    except Exception:
+        return {}
+
+
 def _parse_capa_priority(priority: Optional[str]) -> CAPAPriority:
     """Map a user-supplied priority string to the CAPA enum."""
     normalized = (priority or "medium").lower()
@@ -382,6 +393,7 @@ async def list_actions(
     # When listing across all sources, cap each sub-query to avoid full table scans
     _cross_source_cap = offset + page_size
 
+    _pending_incident: list = []
     if not source_type or source_type == "incident":
         try:
             q = (
@@ -398,12 +410,12 @@ async def list_actions(
             else:
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
-            for a in result.scalars().all():
-                email = await _resolve_owner_email(db, a.owner_id)
-                actions_list.append(_action_to_response(a, "incident", a.incident_id, owner_email=email))
+            _pending_incident = result.scalars().all()
         except Exception:
+            _pending_incident = []
             logger.warning("list_actions: incident query failed", exc_info=True)
 
+    _pending_rta: list = []
     if not source_type or source_type == "rta":
         try:
             q = select(RTAAction).options(selectinload(RTAAction.rta)).order_by(RTAAction.created_at.desc())
@@ -416,12 +428,11 @@ async def list_actions(
             else:
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
-            for a in result.scalars().all():
-                email = await _resolve_owner_email(db, a.owner_id)
-                actions_list.append(_action_to_response(a, "rta", a.rta_id, owner_email=email))
+            _pending_rta = result.scalars().all()
         except Exception:
             logger.warning("list_actions: rta query failed", exc_info=True)
 
+    _pending_complaint: list = []
     if not source_type or source_type == "complaint":
         try:
             q = (
@@ -438,12 +449,11 @@ async def list_actions(
             else:
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
-            for a in result.scalars().all():
-                email = await _resolve_owner_email(db, a.owner_id)
-                actions_list.append(_action_to_response(a, "complaint", a.complaint_id, owner_email=email))
+            _pending_complaint = result.scalars().all()
         except Exception:
             logger.warning("list_actions: complaint query failed", exc_info=True)
 
+    _pending_investigation: list = []
     if not source_type or source_type == "investigation":
         try:
             q = (
@@ -460,11 +470,27 @@ async def list_actions(
             else:
                 q = q.limit(_cross_source_cap)
             result = await db.execute(q)
-            for a in result.scalars().all():
-                email = await _resolve_owner_email(db, a.owner_id)
-                actions_list.append(_action_to_response(a, "investigation", a.investigation_id, owner_email=email))
+            _pending_investigation = result.scalars().all()
         except Exception:
             logger.warning("list_actions: investigation query failed", exc_info=True)
+
+    _all_owner_ids: set[int] = set()
+    for _batch in (_pending_incident, _pending_rta, _pending_complaint, _pending_investigation):
+        for a in _batch:
+            if a.owner_id:
+                _all_owner_ids.add(a.owner_id)
+    _email_map = await _batch_resolve_owner_emails(db, _all_owner_ids)
+
+    for a in _pending_incident:
+        actions_list.append(_action_to_response(a, "incident", a.incident_id, owner_email=_email_map.get(a.owner_id)))
+    for a in _pending_rta:
+        actions_list.append(_action_to_response(a, "rta", a.rta_id, owner_email=_email_map.get(a.owner_id)))
+    for a in _pending_complaint:
+        actions_list.append(_action_to_response(a, "complaint", a.complaint_id, owner_email=_email_map.get(a.owner_id)))
+    for a in _pending_investigation:
+        actions_list.append(
+            _action_to_response(a, "investigation", a.investigation_id, owner_email=_email_map.get(a.owner_id))
+        )
 
     if not source_type or source_type == "assessment":
         try:

@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
@@ -154,7 +155,7 @@ def _parse_standard_filter(standard: Optional[str]) -> Optional[ISOStandard]:
         for iso_standard, matchers in _STANDARD_DB_MATCHERS.items():
             if any(token in normalized for token in matchers):
                 return iso_standard
-        raise HTTPException(status_code=400, detail=f"Invalid standard: {standard}")
+        raise BadRequestError(f"Invalid standard: {standard}")
 
 
 def _match_standard_record(record: Standard) -> Optional[ISOStandard]:
@@ -316,7 +317,7 @@ async def get_clause(clause_id: str, current_user: CurrentUser):
     """Get a specific ISO clause by ID."""
     clause = iso_compliance_service.get_clause(clause_id)
     if not clause:
-        raise HTTPException(status_code=404, detail=f"Clause not found: {clause_id}")
+        raise NotFoundError(f"Clause not found: {clause_id}")
 
     return ClauseResponse(
         id=clause.id,
@@ -361,12 +362,12 @@ async def link_evidence(request: EvidenceLinkRequest, db: DbSession, current_use
     # Validate clause IDs exist
     for clause_id in request.clause_ids:
         if not iso_compliance_service.get_clause(clause_id):
-            raise HTTPException(status_code=400, detail=f"Invalid clause ID: {clause_id}")
+            raise BadRequestError(f"Invalid clause ID: {clause_id}")
 
     try:
         link_method = EvidenceLinkMethod(request.linked_by.lower())
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid linked_by value: {request.linked_by}") from exc
+        raise BadRequestError(f"Invalid linked_by value: {request.linked_by}") from exc
 
     existing_result = await db.execute(
         select(ComplianceEvidenceLink).where(
@@ -444,7 +445,7 @@ async def delete_evidence_link(link_id: int, db: DbSession, current_user: Curren
     )
     link = result.scalar_one_or_none()
     if link is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
+        raise NotFoundError("Evidence link not found")
 
     link.deleted_at = datetime.now(timezone.utc)
     await db.commit()

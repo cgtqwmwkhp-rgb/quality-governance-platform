@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
@@ -34,6 +34,7 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 
@@ -92,10 +93,7 @@ async def create_form_template(
     # Check for duplicate slug
     existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Form template with slug '{data.slug}' already exists",
-        )
+        raise ConflictError(f"Form template with slug '{data.slug}' already exists")
 
     template = FormTemplate(
         name=data.name,
@@ -184,10 +182,7 @@ async def get_form_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     return template
 
@@ -207,10 +202,7 @@ async def get_form_template_by_slug(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template '{slug}' not found or not published",
-        )
+        raise NotFoundError(f"Form template '{slug}' not found or not published")
 
     return template
 
@@ -228,10 +220,7 @@ async def update_form_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     # Update fields
     update_data = data.model_dump(exclude_unset=True)
@@ -269,10 +258,7 @@ async def publish_form_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     template.is_published = True
     template.published_at = datetime.now(timezone.utc)
@@ -306,10 +292,7 @@ async def delete_form_template(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     await record_audit_event(
         db=db,
@@ -345,10 +328,7 @@ async def create_form_step(
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     step = FormStep(
         template_id=template_id,
@@ -397,10 +377,7 @@ async def update_form_step(
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -423,10 +400,7 @@ async def delete_form_step(
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     await db.delete(step)
     await db.commit()
@@ -452,10 +426,7 @@ async def create_form_field(
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     field = FormField(
         step_id=step_id,
@@ -496,10 +467,7 @@ async def update_form_field(
     field = result.scalar_one_or_none()
 
     if not field:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form field {field_id} not found",
-        )
+        raise NotFoundError(f"Form field {field_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for attr, value in update_data.items():
@@ -522,10 +490,7 @@ async def delete_form_field(
     field = result.scalar_one_or_none()
 
     if not field:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form field {field_id} not found",
-        )
+        raise NotFoundError(f"Form field {field_id} not found")
 
     await db.delete(field)
     await db.commit()
@@ -566,10 +531,7 @@ async def create_contract(
     # Check for duplicate code
     existing = await db.execute(select(Contract).where(Contract.code == data.code))
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Contract with code '{data.code}' already exists",
-        )
+        raise ConflictError(f"Contract with code '{data.code}' already exists")
 
     contract = Contract(
         name=data.name,
@@ -614,10 +576,7 @@ async def get_contract(
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     return contract
 
@@ -635,10 +594,7 @@ async def update_contract(
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -674,10 +630,7 @@ async def delete_contract(
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     await record_audit_event(
         db=db,
@@ -732,10 +685,7 @@ async def create_system_setting(
     # Check for duplicate key
     existing = await db.execute(select(SystemSetting).where(SystemSetting.key == data.key))
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Setting with key '{data.key}' already exists",
-        )
+        raise ConflictError(f"Setting with key '{data.key}' already exists")
 
     setting = SystemSetting(
         key=data.key,
@@ -768,16 +718,10 @@ async def update_system_setting(
     setting = result.scalar_one_or_none()
 
     if not setting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Setting '{key}' not found",
-        )
+        raise NotFoundError(f"Setting '{key}' not found")
 
     if not setting.is_editable:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Setting '{key}' is not editable",
-        )
+        raise AuthorizationError(f"Setting '{key}' is not editable")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -864,10 +808,7 @@ async def update_lookup_option(
     option = result.scalar_one_or_none()
 
     if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
-        )
+        raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -893,10 +834,7 @@ async def delete_lookup_option(
     option = result.scalar_one_or_none()
 
     if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
-        )
+        raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     await db.delete(option)
     await db.commit()

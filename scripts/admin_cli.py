@@ -128,10 +128,38 @@ def cmd_config_check(args: argparse.Namespace) -> int:
 
 
 def cmd_logs(args: argparse.Namespace) -> int:
-    """Print recent structured log entries (stub)."""
-    print("  Log aggregation via Azure Monitor — use KQL queries in docs/ops/kql-queries.md")
-    print("  For local logs: docker logs -f qgp-app --tail 100")
-    return 0
+    """Print recent structured log entries from local or Docker."""
+    tail_count = getattr(args, "tail", 100)
+
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--tail", str(tail_count), "qgp-app"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0:
+            print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+            return 0
+        print(f"  Docker container 'qgp-app' not running: {result.stderr.strip()}")
+    except FileNotFoundError:
+        print("  Docker not found on PATH")
+    except subprocess.TimeoutExpired:
+        print("  Docker logs timed out")
+
+    log_file = Path("logs/app.log")
+    if log_file.exists():
+        lines = log_file.read_text().splitlines()
+        for line in lines[-tail_count:]:
+            print(line)
+        return 0
+
+    print("  No local log source available.")
+    print("  Azure Monitor KQL queries: docs/ops/kql-queries.md")
+    print("  Local Docker: docker logs -f qgp-app --tail 100")
+    return 1
 
 
 def cmd_cache_stats(args: argparse.Namespace) -> int:
@@ -173,7 +201,8 @@ def main() -> int:
     sub.add_parser("feature-flags", help="List feature flags")
     sub.add_parser("migration-status", help="Count and list migrations")
     sub.add_parser("config-check", help="Verify environment config")
-    sub.add_parser("logs", help="Show recent log entries")
+    logs_parser = sub.add_parser("logs", help="Show recent log entries")
+    logs_parser.add_argument("--tail", type=int, default=100, help="Number of lines to show")
     sub.add_parser("cache-stats", help="Show Redis cache statistics")
 
     args = parser.parse_args()

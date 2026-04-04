@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.models.iso27001 import (
     AccessControlRecord,
     BusinessContinuityPlan,
@@ -213,7 +214,7 @@ async def get_asset(
     result = await db.execute(select(InformationAsset).where(InformationAsset.id == asset_id))
     asset = result.scalar_one_or_none()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
 
     return {
         "id": asset.id,
@@ -329,7 +330,7 @@ async def update_control(
     result = await db.execute(select(ISO27001Control).where(ISO27001Control.id == control_id))
     control = result.scalar_one_or_none()
     if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+        raise NotFoundError("Control not found")
 
     update_data = control_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -576,7 +577,7 @@ async def update_security_incident(
     result = await db.execute(select(SecurityIncident).where(SecurityIncident.id == incident_id))
     incident = result.scalar_one_or_none()
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     update_data = incident_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():

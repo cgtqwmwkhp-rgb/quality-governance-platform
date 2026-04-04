@@ -693,12 +693,9 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Modify test collection to handle quarantined tests."""
-    skip_phase34 = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Expiry: 2026-03-23")
-    skip_contract = pytest.mark.skip(reason="QUARANTINED [GOVPLAT-002]: API contract mismatch. Expiry: 2026-03-23")
+    """Modify test collection to handle quarantined tests.
 
-    for item in items:
-        if "phase34" in item.keywords:
-            item.add_marker(skip_phase34)
-        if "api_contract_mismatch" in item.keywords:
-            item.add_marker(skip_contract)
+    NOTE: GOVPLAT-001 and GOVPLAT-002 expired 2026-03-23 and have been removed.
+    New quarantine entries must include a valid future expiry date.
+    """
+    pass

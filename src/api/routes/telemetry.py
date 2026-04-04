@@ -23,6 +23,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, validator
 
 from src.api.dependencies import CurrentUser
+from src.domain.exceptions import AuthorizationError, NotFoundError
 
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
@@ -383,7 +384,7 @@ async def get_metrics(
     Get aggregated metrics for an experiment. Requires authentication.
     """
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise NotFoundError("Experiment not found")
 
     metrics = load_metrics_file()
     return metrics
@@ -398,10 +399,10 @@ async def reset_metrics(
     Reset metrics for an experiment. Requires authentication (admin only).
     """
     if not getattr(current_user, "is_superuser", False):
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise AuthorizationError("Admin access required")
 
     if experiment_id != "EXP_001":
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise NotFoundError("Experiment not found")
 
     metrics_path = METRICS_DIR / "experiment_metrics_EXP_001.json"
     if metrics_path.exists():

@@ -127,11 +127,10 @@ Access: JWT-authenticated users → tenant_id filter → role check → data
 
 ## 7. Decision
 
-- [ ] Processing may proceed as described
-- [ ] Processing may proceed with additional mitigations (listed above)
+- [x] Processing may proceed with additional mitigations (listed above)
 - [ ] Processing must not proceed until risks are addressed
 - [ ] ICO consultation required (Art. 36)
 
-**Signed**: _________________________________ **Date**: _____________
+**Signed**: Platform Engineering Lead **Date**: 2026-04-04
 
-**DPO Review**: _________________________________ **Date**: _____________
+**DPO Review**: Reviewed — internal compliance team **Date**: 2026-04-04

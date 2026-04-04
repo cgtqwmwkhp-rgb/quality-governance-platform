@@ -6,7 +6,7 @@ REST endpoints for engineer profiles and competency tracking.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +23,7 @@ from src.api.schemas.engineer import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter
+from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.asset import AssetType
 from src.domain.models.engineer import CompetencyRecord, Engineer
 from src.domain.models.user import User
@@ -40,13 +41,7 @@ def _assert_engineer_access(user: CurrentUser, engineer: Engineer, *, allow_self
         return
     if allow_self_read and engineer.user_id == user.id:
         return
-    raise HTTPException(
-        status_code=403,
-        detail=api_error(
-            ErrorCode.PERMISSION_DENIED,
-            "You do not have permission to access this engineer record",
-        ),
-    )
+    raise AuthorizationError("You do not have permission to access this engineer record")
 
 
 def _latest_competency_records(records: list[CompetencyRecord]) -> list[CompetencyRecord]:
@@ -80,29 +75,19 @@ async def _validate_engineer_user_assignment(db: DbSession, user: CurrentUser, t
     user_result = await db.execute(user_query)
     target_user = user_result.scalar_one_or_none()
     if target_user is None:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, "Assigned user was not found or is inactive"),
-        )
+        raise BadRequestError("Assigned user was not found or is inactive")
 
     if user.tenant_id is not None and target_user.tenant_id != user.tenant_id:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(ErrorCode.TENANT_ACCESS_DENIED, "Assigned user is not in tenant scope"),
-        )
+        raise BadRequestError("Assigned user is not in tenant scope")
 
     existing_query = select(Engineer.id).where(Engineer.user_id == target_user_id)
     existing_query = apply_tenant_filter(existing_query, Engineer, user.tenant_id)
     existing_result = await db.execute(existing_query)
     existing_engineer_id = existing_result.scalar_one_or_none()
     if existing_engineer_id is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=api_error(
-                ErrorCode.DUPLICATE_ENTITY,
-                "An engineer profile already exists for this user",
-                details={"engineer_id": existing_engineer_id, "user_id": target_user_id},
-            ),
+        raise ConflictError(
+            "An engineer profile already exists for this user",
+            details={"engineer_id": existing_engineer_id, "user_id": target_user_id},
         )
 
 
@@ -157,10 +142,7 @@ async def create_engineer(
 ):
     """Create a new engineer."""
     if not _is_workforce_manager(user):
-        raise HTTPException(
-            status_code=403,
-            detail=api_error(ErrorCode.PERMISSION_DENIED, "You do not have permission to create engineer records"),
-        )
+        raise AuthorizationError("You do not have permission to create engineer records")
     await _validate_engineer_user_assignment(db, user, data.user_id)
     engineer = Engineer(
         user_id=data.user_id,
@@ -191,7 +173,7 @@ async def get_engineer(
     result = await db.execute(query)
     engineer = result.scalar_one_or_none()
     if engineer is None:
-        raise HTTPException(status_code=404, detail="Engineer not found")
+        raise NotFoundError("Engineer not found")
     _assert_engineer_access(user, engineer, allow_self_read=True)
     return EngineerResponse.model_validate(engineer)
 
@@ -209,18 +191,12 @@ async def update_engineer(
     result = await db.execute(query)
     engineer = result.scalar_one_or_none()
     if engineer is None:
-        raise HTTPException(status_code=404, detail="Engineer not found")
+        raise NotFoundError("Engineer not found")
     _assert_engineer_access(user, engineer)
 
     updates = data.model_dump(exclude_unset=True)
     if "user_id" in updates and updates["user_id"] != engineer.user_id:
-        raise HTTPException(
-            status_code=400,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Engineer user assignment cannot be changed via update",
-            ),
-        )
+        raise BadRequestError("Engineer user assignment cannot be changed via update")
     if "specialisations" in updates:
         updates["specialisations_json"] = updates.pop("specialisations")
     if "certifications" in updates:
@@ -244,7 +220,7 @@ async def list_engineer_competencies(
     engineer_result = await db.execute(engineer_query)
     engineer = engineer_result.scalar_one_or_none()
     if engineer is None:
-        raise HTTPException(status_code=404, detail="Engineer not found")
+        raise NotFoundError("Engineer not found")
     _assert_engineer_access(user, engineer, allow_self_read=True)
 
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
@@ -266,7 +242,7 @@ async def get_skills_matrix(
     engineer_result = await db.execute(engineer_query)
     engineer = engineer_result.scalar_one_or_none()
     if engineer is None:
-        raise HTTPException(status_code=404, detail="Engineer not found")
+        raise NotFoundError("Engineer not found")
     _assert_engineer_access(user, engineer, allow_self_read=True)
 
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)

@@ -11,11 +11,12 @@ Provides endpoints for:
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentActiveUser, CurrentSuperuser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.services.tenant_service import TenantService
 
 router = APIRouter()
@@ -103,7 +104,7 @@ async def create_tenant(
         )
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.get("/", response_model=list[TenantResponse])
@@ -131,7 +132,7 @@ async def get_current_tenant(
     tenant = await service.get_tenant(current_user.tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise NotFoundError("Tenant not found")
 
     return tenant
 
@@ -147,7 +148,7 @@ async def get_tenant(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise NotFoundError("Tenant not found")
 
     return tenant
 
@@ -167,7 +168,7 @@ async def update_tenant(
         tenant = await service.update_tenant(tenant_id, **updates)
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -189,7 +190,7 @@ async def update_branding(
         tenant = await service.update_branding(tenant_id, **data.dict(exclude_unset=True))
         return tenant
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -217,7 +218,7 @@ async def list_tenant_users(
                 "joined_at": u.joined_at,
             }
             for u in users
-        ]
+        ],
     }
 
 
@@ -232,7 +233,7 @@ async def add_user_to_tenant(
     service = TenantService(db)
 
     if not await service.can_add_user(tenant_id):
-        raise HTTPException(status_code=400, detail="User limit reached")
+        raise BadRequestError("User limit reached")
 
     try:
         tenant_user = await service.add_user_to_tenant(
@@ -242,7 +243,7 @@ async def add_user_to_tenant(
         )
         return {"id": tenant_user.id, "role": tenant_user.role}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.delete("/{tenant_id}/users/{user_id}")
@@ -259,7 +260,7 @@ async def remove_user_from_tenant(
         await service.remove_user_from_tenant(tenant_id, user_id)
         return {"status": "removed"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -305,7 +306,7 @@ async def accept_invitation(
         tenant_user = await service.accept_invitation(token, user_id=current_user.id)
         return {"status": "accepted", "tenant_id": tenant_user.tenant_id}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -324,7 +325,7 @@ async def get_features(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise NotFoundError("Tenant not found")
 
     return tenant.features_enabled
 
@@ -364,7 +365,7 @@ async def get_limits(
     tenant = await service.get_tenant(tenant_id)
 
     if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+        raise NotFoundError("Tenant not found")
 
     current_users, max_users = await service.check_user_limit(tenant_id)
 

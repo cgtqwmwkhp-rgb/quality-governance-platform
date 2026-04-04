@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_, select
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
+from src.domain.exceptions import ConflictError, NotFoundError
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -91,7 +92,7 @@ async def _resolve_canonical_clause(
     )
     standard = standard_result.scalars().first()
     if standard is None:
-        raise HTTPException(status_code=404, detail=f"Standard not found: {standard_name}")
+        raise NotFoundError(f"Standard not found: {standard_name}")
 
     clause_result = await db.execute(
         select(Clause).where(
@@ -103,7 +104,7 @@ async def _resolve_canonical_clause(
     )
     clause = clause_result.scalars().first()
     if clause is None:
-        raise HTTPException(status_code=404, detail=f"Clause not found: {standard.name} {clause_number}")
+        raise NotFoundError(f"Clause not found: {standard.name} {clause_number}")
 
     return standard, clause
 
@@ -219,7 +220,7 @@ async def create_mapping(
     )
     existing = existing_result.scalars().first()
     if existing is not None:
-        raise HTTPException(status_code=409, detail="Cross-standard mapping already exists")
+        raise ConflictError("Cross-standard mapping already exists")
 
     primary_requirement = await _get_or_create_ims_requirement(
         db,

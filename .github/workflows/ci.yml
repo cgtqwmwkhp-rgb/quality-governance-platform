@@ -211,12 +211,37 @@ jobs:
             echo "Environment vars in .env.example: $EXAMPLE_VARS"
           fi
 
+          # Cross-reference env-vars.json registry against .env.example
+          if [ -f "scripts/infra/env-vars.json" ] && [ -f ".env.example" ]; then
+            echo "=== Env Var Registry Cross-Check ==="
+            REGISTRY_VARS=$(python3 -c "
+import json, sys
+data = json.load(open('scripts/infra/env-vars.json'))
+for v in data.get('variables', data) if isinstance(data, list) else data.get('variables', []):
+    name = v.get('name', '') if isinstance(v, dict) else v
+    if name:
+        print(name)
+" 2>/dev/null || true)
+            if [ -n "$REGISTRY_VARS" ]; then
+              MISSING_FROM_EXAMPLE=0
+              while IFS= read -r var; do
+                if ! grep -q "^${var}=" .env.example 2>/dev/null; then
+                  echo "[WARN] $var in env-vars.json but missing from .env.example"
+                  MISSING_FROM_EXAMPLE=$((MISSING_FROM_EXAMPLE + 1))
+                fi
+              done <<< "$REGISTRY_VARS"
+              if [ "$MISSING_FROM_EXAMPLE" -gt 0 ]; then
+                echo "[INFO] $MISSING_FROM_EXAMPLE vars in registry not in .env.example"
+              fi
+            fi
+          fi
+
           echo "[OK] Environment parity checks complete"
 
       - name: Check env-var completeness
         run: |
           if [ -f ".env.example" ] && [ -f "scripts/check_env_completeness.py" ]; then
-            python scripts/check_env_completeness.py || echo "::warning::Env completeness issues found"
+            python scripts/check_env_completeness.py
           else
             echo "[SKIP] .env.example or check script not found"
           fi
@@ -270,7 +295,7 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=48 --junit-xml=junit-unit.xml
+          pytest tests/unit/ -v --cov=src --cov-branch --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-unit.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -494,7 +519,7 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           TESTING: "1"
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=48 --junit-xml=junit-integration.xml
+          pytest tests/integration/ -v --cov=src --cov-branch --cov-report=xml --cov-report=term --cov-fail-under=55 --junit-xml=junit-integration.xml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -1603,12 +1628,44 @@ jobs:
           echo "[OK] All documentation links valid"
 
   dast-zap-baseline:
-    name: DAST ZAP Baseline
+    name: DAST ZAP Baseline (Advisory)
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies and start app
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: |
+          pip install -r requirements.txt
+          alembic upgrade head
+          uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+          sleep 10
+          curl -f http://localhost:8000/healthz || exit 1
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
@@ -1617,11 +1674,55 @@ jobs:
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
 
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Check Python licenses
+        run: |
+          pip install -r requirements.txt pip-licenses
+          pip-licenses --fail-on="GPL-3.0-only;AGPL-3.0-only;SSPL-1.0" --format=json --output-file=python-licenses.json
+          echo "[OK] Python license check passed"
+
+      - name: Check npm licenses
+        run: |
+          cd frontend && npm ci
+          npx license-checker --failOn "GPL-3.0;AGPL-3.0;SSPL-1.0" --json --out npm-licenses.json
+          echo "[OK] npm license check passed"
+
+      - name: Upload license reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: license-reports
+          path: |
+            python-licenses.json
+            frontend/npm-licenses.json
+          retention-days: 90
+
   all-checks:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance]
     
     steps:
       - name: Checkout code

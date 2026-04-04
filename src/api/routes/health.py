@@ -138,6 +138,13 @@ async def diagnostics():
         "telemetry_enabled": os.getenv("TELEMETRY_ENABLED", "true"),
         "feature_flag_count": feature_flag_count,
         "uptime_seconds": round(time.monotonic() - _start_time, 1),
+        "runbooks": {
+            "deployment": "docs/DEPLOYMENT_RUNBOOK.md",
+            "disaster_recovery": "docs/ops/DISASTER_RECOVERY_RUNBOOK.md",
+            "rollback": "docs/runbooks/rollback-drills.md",
+            "support_escalation": "docs/runbooks/support-escalation.md",
+            "kql_queries": "docs/ops/kql-queries.md",
+        },
     }
 
 

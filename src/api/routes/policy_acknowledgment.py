@@ -1,12 +1,12 @@
 """Policy Acknowledgment API Routes.
 
-Provides endpoints for managing policy acknowledgment requirements,
+Provides endpoints for managing policy acknowledgment requirements
 tracking user acknowledgments, and compliance reporting.
 """
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, Query, Request, status
 from sqlalchemy import and_, select
 
 from src.api.deps import CurrentUser, DbSession
@@ -23,6 +23,7 @@ from src.api.schemas.policy_acknowledgment import (
     PolicyAcknowledgmentStatusResponse,
     RecordAcknowledgmentRequest,
 )
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.policy_acknowledgment import (
     AcknowledgmentStatus,
     PolicyAcknowledgment,
@@ -78,7 +79,7 @@ async def get_acknowledgment_requirement(
     requirement = result.scalar_one_or_none()
 
     if not requirement:
-        raise HTTPException(status_code=404, detail="Requirement not found")
+        raise NotFoundError("Requirement not found")
 
     return AcknowledgmentRequirementResponse.from_orm(requirement)
 
@@ -103,7 +104,7 @@ async def assign_acknowledgments(
             policy_version=assign_data.policy_version,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return PolicyAcknowledgmentListResponse(
         items=[PolicyAcknowledgmentResponse.from_orm(a) for a in acknowledgments],
@@ -142,7 +143,7 @@ async def get_acknowledgment(
     ack = result.scalar_one_or_none()
 
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
+        raise NotFoundError("Acknowledgment not found")
 
     return PolicyAcknowledgmentResponse.from_orm(ack)
 
@@ -158,7 +159,7 @@ async def record_policy_opened(
     ack = await service.record_policy_opened(acknowledgment_id)
 
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
+        raise NotFoundError("Acknowledgment not found")
 
     return {"message": "Policy opened recorded", "first_opened_at": ack.first_opened_at}
 
@@ -175,7 +176,7 @@ async def update_reading_time(
     ack = await service.update_reading_time(acknowledgment_id, additional_seconds)
 
     if not ack:
-        raise HTTPException(status_code=404, detail="Acknowledgment not found")
+        raise NotFoundError("Acknowledgment not found")
 
     return {"message": "Reading time updated", "total_seconds": ack.time_spent_seconds}
 
@@ -205,7 +206,7 @@ async def record_acknowledgment(
             user_agent=user_agent,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return PolicyAcknowledgmentResponse.from_orm(ack)
 

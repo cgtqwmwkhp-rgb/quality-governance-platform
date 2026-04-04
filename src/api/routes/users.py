@@ -70,7 +70,7 @@ async def search_users(
         .where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
-            | (User.last_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter)),
         )
         .where(User.is_active == True)  # noqa: E712
         .order_by(User.email)
@@ -105,7 +105,7 @@ async def list_users(
         query = query.where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
-            | (User.last_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter)),
         )
     if department:
         query = query.where(User.department == department)

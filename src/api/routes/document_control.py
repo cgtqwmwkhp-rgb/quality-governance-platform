@@ -12,11 +12,12 @@ Provides endpoints for:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.models.document_control import (
     ControlledDocument,
     ControlledDocumentVersion,
@@ -136,7 +137,7 @@ async def list_documents(
         stmt = stmt.where(ControlledDocument.status == status)
     if search:
         stmt = stmt.where(
-            ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%")
+            ControlledDocument.title.ilike(f"%{search}%") | ControlledDocument.document_number.ilike(f"%{search}%"),
         )
 
     count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
@@ -223,7 +224,7 @@ async def get_document(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     # Get version history
     result = await db.execute(
@@ -318,7 +319,7 @@ async def update_document(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     update_data = document_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -345,7 +346,7 @@ async def create_new_version(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     # Calculate new version number
     if version_data.is_major_version:
@@ -404,7 +405,7 @@ async def get_version_diff(
     version = result.scalar_one_or_none()
 
     if not version:
-        raise HTTPException(status_code=404, detail="Version not found")
+        raise NotFoundError("Version not found")
 
     diff_result = {
         "version": {
@@ -484,12 +485,12 @@ async def submit_for_approval(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id))
     workflow = result.scalar_one_or_none()
     if not workflow:
-        raise HTTPException(status_code=404, detail="Workflow not found")
+        raise NotFoundError("Workflow not found")
 
     # Create approval instance
     instance = DocumentApprovalInstance(
@@ -528,7 +529,7 @@ async def take_approval_action(
     result = await db.execute(select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id))
     instance = result.scalar_one_or_none()
     if not instance:
-        raise HTTPException(status_code=404, detail="Approval instance not found")
+        raise NotFoundError("Approval instance not found")
 
     # Record the action
     action = DocumentApprovalAction(
@@ -563,7 +564,7 @@ async def take_approval_action(
                 document.approved_date = datetime.now(timezone.utc)
                 document.effective_date = datetime.now(timezone.utc)
                 document.next_review_date = datetime.now(timezone.utc) + timedelta(
-                    days=document.review_frequency_months * 30
+                    days=document.review_frequency_months * 30,
                 )
         else:
             instance.current_step += 1
@@ -603,7 +604,7 @@ async def distribute_document(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     dist = DocumentDistribution(
         document_id=document_id,
@@ -640,7 +641,7 @@ async def acknowledge_distribution(
     dist = result.scalar_one_or_none()
 
     if not dist:
-        raise HTTPException(status_code=404, detail="Distribution not found")
+        raise NotFoundError("Distribution not found")
 
     dist.acknowledged = True
     dist.acknowledged_date = datetime.now(timezone.utc)
@@ -663,7 +664,7 @@ async def mark_document_obsolete(
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
 
     # Update document
     document.status = "obsolete"

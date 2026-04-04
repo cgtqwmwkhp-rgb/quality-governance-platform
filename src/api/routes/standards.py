@@ -47,7 +47,7 @@ async def list_standards(
         query = query.where(
             (Standard.code.ilike(search_filter))
             | (Standard.name.ilike(search_filter))
-            | (Standard.full_name.ilike(search_filter))
+            | (Standard.full_name.ilike(search_filter)),
         )
     if is_active is not None:
         query = query.where(Standard.is_active == is_active)

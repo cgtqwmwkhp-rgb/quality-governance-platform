@@ -1,7 +1,7 @@
 """Vehicle Registry API routes — fleet governance.
 
 Provides fleet management endpoints: list vehicles, inspect individual
-vehicles with defect history, compliance gate checks, fleet health analytics,
+vehicles with defect history, compliance gate checks, fleet health analytics
 and vehicle status updates.
 """
 
@@ -10,7 +10,7 @@ import math
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from src.api.schemas.vehicle_registry import (
     VehicleRegistryResponse,
     VehicleRegistryUpdate,
 )
+from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
 
@@ -55,7 +56,7 @@ async def list_vehicles(
         try:
             fs = FleetStatus(fleet_status.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid fleet_status: {fleet_status}")
+            raise BadRequestError(f"Invalid fleet_status: {fleet_status}")
         query = query.where(VehicleRegistry.fleet_status == fs)
         count_query = count_query.where(VehicleRegistry.fleet_status == fs)
 
@@ -63,7 +64,7 @@ async def list_vehicles(
         try:
             cs = ComplianceStatus(compliance_status.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid compliance_status: {compliance_status}")
+            raise BadRequestError(f"Invalid compliance_status: {compliance_status}")
         query = query.where(VehicleRegistry.compliance_status == cs)
         count_query = count_query.where(VehicleRegistry.compliance_status == cs)
 
@@ -147,7 +148,7 @@ async def get_vehicle(reg: str, db: DbSession, user: CurrentUser):
     vehicle = result.scalar_one_or_none()
 
     if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle '{reg}' not found")
+        raise NotFoundError(f"Vehicle '{reg}' not found")
 
     defect_q = (
         select(VehicleDefect)
@@ -178,7 +179,7 @@ async def compliance_gate(reg: str, db: DbSession, user: CurrentUser):
     vehicle = result.scalar_one_or_none()
 
     if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle '{reg}' not found")
+        raise NotFoundError(f"Vehicle '{reg}' not found")
 
     open_statuses = ["open", "auto_detected", "acknowledged", "action_assigned"]
 
@@ -250,13 +251,13 @@ async def update_vehicle(
     vehicle = result.scalar_one_or_none()
 
     if vehicle is None:
-        raise HTTPException(status_code=404, detail=f"Vehicle '{reg}' not found")
+        raise NotFoundError(f"Vehicle '{reg}' not found")
 
     if body.fleet_status is not None:
         try:
             vehicle.fleet_status = FleetStatus(body.fleet_status.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid fleet_status: {body.fleet_status}")
+            raise BadRequestError(f"Invalid fleet_status: {body.fleet_status}")
 
     if body.assigned_driver_id is not None:
         vehicle.assigned_driver_id = body.assigned_driver_id
@@ -297,7 +298,7 @@ async def create_capa_from_defect(
     defect = defect_result.scalar_one_or_none()
 
     if defect is None:
-        raise HTTPException(status_code=404, detail=f"Defect {body.defect_id} not found")
+        raise NotFoundError(f"Defect {body.defect_id} not found")
 
     from src.domain.services.vehicle_capa_pipeline import create_capa_from_defect_async
 
@@ -313,7 +314,7 @@ async def create_capa_from_defect(
     )
 
     if result is None:
-        raise HTTPException(status_code=409, detail="CAPA already exists for this defect")
+        raise ConflictError("CAPA already exists for this defect")
 
     return DefectCAPAResponse(**result)
 
@@ -347,10 +348,7 @@ async def allocate_vehicle(
         force=body.force,
     )
     if not result["allocated"]:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=result,
-        )
+        raise ValidationError(str(result))
     return result
 
 

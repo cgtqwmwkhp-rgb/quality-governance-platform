@@ -158,7 +158,7 @@ async def list_assessment_runs(
         )
         engineer_ids = engineer_id_result.scalars().all()
         query = query.where(
-            (AssessmentRun.supervisor_id == user.id) | (AssessmentRun.engineer_id.in_(engineer_ids or [-1]))
+            (AssessmentRun.supervisor_id == user.id) | (AssessmentRun.engineer_id.in_(engineer_ids or [-1])),
         )
     if engineer_id is not None:
         query = query.where(AssessmentRun.engineer_id == engineer_id)
@@ -191,17 +191,22 @@ async def create_assessment_run(
 ):
     """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN."""
     supervisor_check = await GovernanceService.validate_supervisor(
-        db, user.id, data.engineer_id, tenant_id=user.tenant_id
+        db,
+        user.id,
+        data.engineer_id,
+        tenant_id=user.tenant_id,
     )
     if not supervisor_check["valid"]:
         raise HTTPException(
-            status_code=400, detail=api_error(ErrorCode.VALIDATION_ERROR, "Supervisor validation failed")
+            status_code=400,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Supervisor validation failed"),
         )
 
     template_check = await GovernanceService.check_template_approval(db, data.template_id, tenant_id=user.tenant_id)
     if not template_check["approved"]:
         raise HTTPException(
-            status_code=400, detail=api_error(ErrorCode.VALIDATION_ERROR, "Template approval check failed")
+            status_code=400,
+            detail=api_error(ErrorCode.VALIDATION_ERROR, "Template approval check failed"),
         )
 
     for attempt in range(_REFERENCE_RETRY_LIMIT):
@@ -422,7 +427,7 @@ async def complete_assessment(
         failed_questions = []
         for resp in run.responses:
             verdict_val = (
-                resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict) if resp.verdict else None
+                resp.verdict.value if hasattr(resp.verdict, "value") else str(resp.verdict) if resp.verdict else None,
             )
             if verdict_val == "not_competent":
                 q = next((q for q in template.questions if q.id == resp.question_id), None)
@@ -434,7 +439,7 @@ async def complete_assessment(
                         "question_text": q_text,
                         "criticality": q_crit,
                         "feedback": resp.feedback or "",
-                    }
+                    },
                 )
         if failed_questions:
             await CAPAAutoService.create_from_assessment(
@@ -488,7 +493,8 @@ async def create_assessment_response(
         raise HTTPException(
             status_code=400,
             detail=api_error(
-                ErrorCode.INVALID_STATE_TRANSITION, "Cannot add responses to a completed or cancelled assessment"
+                ErrorCode.INVALID_STATE_TRANSITION,
+                "Cannot add responses to a completed or cancelled assessment",
             ),
         )
 
@@ -555,7 +561,8 @@ async def update_assessment_response(
     response = result.scalar_one_or_none()
     if response is None:
         raise HTTPException(
-            status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment response not found")
+            status_code=404,
+            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Assessment response not found"),
         )
 
     query_run = select(AssessmentRun).where(AssessmentRun.id == response.run_id)
