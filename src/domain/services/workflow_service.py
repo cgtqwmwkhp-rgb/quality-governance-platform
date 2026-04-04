@@ -553,6 +553,16 @@ class WorkflowService:
                 "timestamp": datetime.now().isoformat(),
             }
         )
+
+        started = getattr(instance, "started_at", None)
+        duration_hours = None
+        if started and instance.completed_at:
+            duration_hours = (instance.completed_at - started).total_seconds() / 3600
+
+        from src.infrastructure.monitoring.azure_monitor import record_workflow_completed
+
+        record_workflow_completed(duration_hours=duration_hours)
+
         logger.info(f"Workflow {instance.id} completed successfully")
 
     async def get_workflow_instance(self, instance_id: str) -> Optional[WorkflowInstance]:

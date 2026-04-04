@@ -211,6 +211,10 @@ class EvidenceService:
         self.db.add(evidence_asset)
         await self.db.commit()
         await self.db.refresh(evidence_asset)
+
+        from src.infrastructure.monitoring.azure_monitor import record_document_uploaded
+
+        record_document_uploaded()
         await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
         track_metric("evidence.uploaded", 1)
