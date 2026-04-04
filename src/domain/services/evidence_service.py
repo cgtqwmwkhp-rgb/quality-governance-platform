@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.pagination import PaginationParams, paginate
+from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
@@ -225,7 +225,7 @@ class EvidenceService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         source_module: str | None = None,
         source_id: int | None = None,
         asset_type: str | None = None,

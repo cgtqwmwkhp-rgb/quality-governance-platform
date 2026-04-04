@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.core.pagination import PaginationParams, paginate
+from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.incident import Incident, IncidentStatus
@@ -164,7 +164,7 @@ class IncidentService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         reporter_email: Optional[str] = None,
         skip_tenant_check: bool = False,
     ):

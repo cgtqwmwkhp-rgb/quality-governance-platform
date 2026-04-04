@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.core.pagination import PaginationParams, paginate
+from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss
@@ -104,7 +104,7 @@ class NearMissService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         reporter_email: Optional[str] = None,
         status_filter: Optional[str] = None,
         priority: Optional[str] = None,
@@ -233,7 +233,7 @@ class NearMissService:
         near_miss_id: int,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List investigations linked to a near miss.
 

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.core.pagination import PaginationParams, paginate
+from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.domain.models.standard import Clause, Control, Standard
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -50,7 +50,7 @@ class StandardService:
             query = query.where(Standard.is_active == is_active)
 
         query = query.order_by(Standard.code)
-        params = PaginationParams(page=page, page_size=page_size)
+        params = PaginationInput(page=page, page_size=page_size)
         paginated = await paginate(self.db, query, params)
         track_metric("standards.accessed")
         return paginated

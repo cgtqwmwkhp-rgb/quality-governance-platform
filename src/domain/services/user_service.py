@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.core.pagination import PaginationParams, paginate
+from src.core.pagination import PaginationInput, paginate
 from src.core.update import apply_updates
 from src.core.security import get_password_hash
 from src.domain.models.user import Role, User
@@ -46,7 +46,7 @@ class UserService:
     async def list_users(
         self,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         search: Optional[str] = None,
         department: Optional[str] = None,
         is_active: Optional[bool] = None,
