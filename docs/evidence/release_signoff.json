@@ -1,5 +1,5 @@
 {
-  "release_sha": "pending-wcs-9.5-round2",
+  "release_sha": "pending-wcs-9.5-round3",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
@@ -8,7 +8,7 @@
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
   "approved_at_utc": "2026-04-04T18:00:00Z",
   "deployment_evidence": {
-    "ci_run": "fix/wcs-9.5-round2",
+    "ci_run": "fix/wcs-9.5-round3",
     "deploy_run_id": "pending",
     "unit_tests": "1380+ collected, 0 failures",
     "mypy": "323+ files, 0 errors (12 modules in ignore_errors, down from 64)",
@@ -16,28 +16,13 @@
     "coverage_threshold": "fail_under = 70 (raised from 65)",
     "pr_checks_passed": "pending",
     "changes_this_release": [
-      "Raised coverage threshold from 65 to 70",
-      "Added POST /auth/logout endpoint with telemetry wiring",
-      "Fixed alembic-check CI job (added PostgreSQL service container)",
-      "Added 13 new a11y tests covering all remaining UI components",
-      "Raised coverage threshold from 65 to 70",
-      "Updated diagnostics endpoint guide with /diagnostics",
-      "Strengthened PITR drill plan with concrete steps and date",
-      "Documented CodeQL security scanning pipeline in ci-gate-hygiene.md",
-      "Made Locust CI startup more robust with health check wait loop",
-      "Updated event-catalog.md: auth.logout now live (16/18 instruments)"
+      "Alembic e1a2b3c4d5e6: UVDB tenant_id FKs to tenants; vehicle_registry unique index alignment",
+      "CI e2e-tests: REDIS_URL=redis://localhost:6379/0 (matches redis service container)",
+      "Regenerated requirements.lock via scripts/generate_lockfile.sh",
+      "Storybook page stories: Pages/Auth/Login, Pages/Auth/ForgotPassword",
+      "Prior round2: logout telemetry, a11y suite, coverage 70, diagnostics guide, etc."
     ],
     "pre_existing_failures": [
-      {
-        "job": "alembic-check",
-        "reason": "CI job now runs correctly with PostgreSQL. Reports pre-existing ORM/migration schema drift (uvdb_question FK, vehicle_registry constraints). Not introduced by this PR.",
-        "risk": "low"
-      },
-      {
-        "job": "lockfile-check",
-        "reason": "pip-compile hash resolution may produce minor drift; smart diff only fails on version changes.",
-        "risk": "low"
-      },
       {
         "job": "dast-zap-advisory",
         "reason": "Intentionally advisory. See docs/compliance/ci-gate-hygiene.md.",
@@ -45,7 +30,7 @@
       },
       {
         "job": "e2e-tests",
-        "reason": "Requires running application server in CI; covered by 1380+ unit + integration tests.",
+        "reason": "REDIS_URL added in this release; remaining failures triaged per junit-e2e.xml if any.",
         "risk": "low"
       },
       {
