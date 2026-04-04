@@ -40,8 +40,8 @@ def _has_tenant_fk(insp: sa.Inspector, table: str) -> bool:
     for fk in insp.get_foreign_keys(table):
         if fk.get("referred_table") != "tenants":
             continue
-        cols = fk.get("constrained_columns") or []
-        if cols == ["tenant_id"]:
+        cols = tuple(fk.get("constrained_columns") or ())
+        if cols == ("tenant_id",):
             return True
     return False
 
@@ -53,9 +53,9 @@ def _driver_profiles_vehicle_reg_fk_name(insp: sa.Inspector) -> str | None:
     for fk in insp.get_foreign_keys("driver_profiles"):
         if fk.get("referred_table") != "vehicle_registry":
             continue
-        if (fk.get("constrained_columns") or []) == ["allocated_vehicle_reg"] and (
-            fk.get("referred_columns") or []
-        ) == ["vehicle_reg"]:
+        ccols = tuple(fk.get("constrained_columns") or ())
+        rcols = tuple(fk.get("referred_columns") or ())
+        if ccols == ("allocated_vehicle_reg",) and rcols == ("vehicle_reg",):
             return fk.get("name")
     return None
 
@@ -84,6 +84,14 @@ def upgrade() -> None:
     if not _has_table(insp, "vehicle_registry"):
         return
 
+    if _has_table(insp, "driver_profiles"):
+        driver_vr_fk = _driver_profiles_vehicle_reg_fk_name(insp)
+        if driver_vr_fk:
+            op.drop_constraint(driver_vr_fk, "driver_profiles", type_="foreignkey")
+        op.execute(
+            "ALTER TABLE driver_profiles DROP CONSTRAINT IF EXISTS driver_profiles_allocated_vehicle_reg_fkey"
+        )
+
     for uc in insp.get_unique_constraints("vehicle_registry"):
         cols = tuple(uc.get("column_names") or ())
         if cols == ("vehicle_reg",):
@@ -97,7 +105,7 @@ def upgrade() -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_vehicle_registry_vehicle_reg ON vehicle_registry (vehicle_reg)"
     )
 
-    if driver_vr_fk and _has_table(insp, "driver_profiles"):
+    if _has_table(insp, "driver_profiles"):
         op.create_foreign_key(
             "driver_profiles_allocated_vehicle_reg_fkey",
             "driver_profiles",
