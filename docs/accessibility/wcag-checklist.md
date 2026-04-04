@@ -11,7 +11,7 @@
 | 1 | `jsx-a11y` ESLint plugin (all rules at warn+) | ESLint | Active |
 | 2 | `axe-core` violations in component tests | vitest + jest-axe | Active |
 | 3 | Radix UI primitives used for interactive elements | Code review | Active |
-| 4 | Lighthouse accessibility score >= 90 | @lhci/cli | Active |
+| 4 | Lighthouse accessibility score >= 95 | @lhci/cli (`lighthouserc.json` minScore 0.95) | Active |
 
 ## Perceivable (1.x)
 

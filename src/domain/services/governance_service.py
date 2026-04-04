@@ -5,8 +5,9 @@ and supervisor validation for assessments and inductions.
 """
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,8 +28,8 @@ class GovernanceService:
         )
 
     @staticmethod
-    def _latest_records_by_asset_type(records: list) -> list:
-        latest_records = {}
+    def _latest_records_by_asset_type(records: list | Sequence) -> list:  # type: ignore[type-arg]
+        latest_records: dict[Any, Any] = {}
         for record in records:
             current = latest_records.get(record.asset_type_id)
             if current is None or GovernanceService._competency_record_sort_key(
@@ -92,9 +93,9 @@ class GovernanceService:
         if engineer.user_id == supervisor_id:
             return {"valid": False, "reason": "Supervisors cannot assess themselves"}
 
-        stmt = select(User).where(User.id == supervisor_id).options(selectinload(User.roles))
-        result = await db.execute(stmt)
-        supervisor = result.scalar_one_or_none()
+        user_stmt = select(User).where(User.id == supervisor_id).options(selectinload(User.roles))
+        user_result = await db.execute(user_stmt)
+        supervisor = user_result.scalar_one_or_none()
         if not supervisor or not supervisor.is_active:
             return {"valid": False, "reason": "Supervisor not found or inactive"}
 

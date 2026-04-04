@@ -297,7 +297,7 @@ async def search_users_for_mention(
         .where(
             User.is_active == True,
             or_(
-                User.full_name.ilike(f"%{q}%"),
+                User.full_name.ilike(f"%{q}%"),  # type: ignore[attr-defined]
                 User.email.ilike(f"%{q}%"),
             ),
         )

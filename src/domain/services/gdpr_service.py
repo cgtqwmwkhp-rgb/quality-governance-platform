@@ -53,6 +53,8 @@ class GDPRService:
     ) -> list[dict]:
         """Collect entities associated with a user."""
         try:
+            stmt: Any = None
+            model_class: Any = None
             # Handle action models that don't have tenant_id directly
             if model_name == "IncidentAction":
                 from src.domain.models.incident import Incident, IncidentAction
@@ -150,10 +152,10 @@ class GDPRService:
             logger.warning("GDPR export: audit entries unavailable: %s", ex)
             return []
 
-    _RECORD_TYPE_MAP: dict[str, type] = {}
+    _RECORD_TYPE_MAP: dict[str, Any] = {}
 
     @classmethod
-    def _get_model_map(cls) -> dict[str, type]:
+    def _get_model_map(cls) -> dict[str, Any]:
         if not cls._RECORD_TYPE_MAP:
             from src.domain.models.complaint import Complaint
             from src.domain.models.incident import Incident

@@ -33,6 +33,25 @@ Evidence of staging-to-production configuration alignment.
 | Database connection | Environment variable | Validated in `readyz` |
 | Blob storage | Environment variable | Validated in service layer |
 
+## Required Environment Variables (Parity Checklist)
+
+All variables below must be set in **both** staging and production (values differ per environment).
+Source: `src/core/config.py` settings class + `config-failfast` startup validation.
+
+| Variable | Staging | Production | Parity |
+|----------|---------|------------|--------|
+| `DATABASE_URL` | `postgresql+asyncpg://...staging...` | `postgresql+asyncpg://...prod...` | Set in both (values differ) |
+| `SECRET_KEY` | Set (unique per env) | Set (unique per env) | Aligned |
+| `AZURE_AD_CLIENT_ID` | Set | Set | Aligned |
+| `AZURE_AD_TENANT_ID` | Set | Set | Aligned (same tenant) |
+| `REDIS_URL` | Set | Set | Aligned |
+| `BLOB_STORAGE_CONNECTION_STRING` | Set | Set | Aligned (same account) |
+| `ENVIRONMENT` | `staging` | `production` | Intentionally different |
+| `ALLOWED_ORIGINS` | Staging URLs | Production URLs | Intentionally different |
+| `APP_SERVICE_PLAN` | B1 | B2 | Intentionally different |
+
+Missing any required variable triggers immediate startup failure via `config-failfast` (ADR-0002).
+
 ## Drift Controls
 
 ### config-drift-guard CI Job

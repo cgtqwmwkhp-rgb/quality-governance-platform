@@ -14,7 +14,11 @@
 | PostgreSQL Flexible | Burstable B1ms (1 vCPU, 2 GB) | ~£25 | Azure portal |
 | Static Web App | Free tier | £0 | Azure portal |
 | Azure Monitor | Basic (included) | ~£5 | Azure portal |
-| **Total** | | **~£80/month** | Azure Cost Management |
+| **Total (production only)** | | **~£80/month** | Azure Cost Management |
+
+> **Scope note**: This table covers **production infrastructure only**. The full platform cost
+> including staging (£35), ACR (£4), Redis (£12), and Blob storage (£1-5) is **~£130-£140/month**.
+> See [`docs/infra/cost-controls.md`](../../docs/infra/cost-controls.md) for the complete inventory.
 
 ## Cost Attribution
 

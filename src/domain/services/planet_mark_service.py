@@ -8,6 +8,7 @@ improvement actions, fleet, utilities, dashboard).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -148,7 +149,7 @@ SCOPE3_CATEGORIES = [
 
 async def _get_entity(db: AsyncSession, model: type, entity_id: int, *, tenant_id: int | None = None) -> Any:
     """Fetch entity by PK or raise ``NotFoundError``."""
-    stmt = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
+    stmt: Any = select(model).where(model.id == entity_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
     if tenant_id is not None:
         stmt = stmt.where(model.tenant_id == tenant_id)  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
     result = await db.execute(stmt)
@@ -252,7 +253,7 @@ class PlanetMarkService:
         return required_complete / required_total * 100
 
     @staticmethod
-    def calculate_year_totals(sources: list) -> dict:
+    def calculate_year_totals(sources: list | Sequence) -> dict:  # type: ignore[type-arg]
         """Aggregate emission totals and quality scores by scope.
 
         Returns a dict suitable for patching onto a ``CarbonReportingYear``.
@@ -838,7 +839,7 @@ class PlanetMarkService:
             "expiry_date": year.expiry_date.isoformat() if year.expiry_date else None,
             "readiness_percent": round(readiness, 0),
             "evidence_checklist": required_evidence,
-            "actions_completed": len([a for a in actions if a.status == "completed"]),
+            "actions_completed": len([a for a in actions if a.status == "completed"]),  # type: ignore[attr-defined]
             "actions_total": len(actions),
             "data_quality_met": int(year.overall_data_quality or 0) >= 12,
             "next_steps": (
