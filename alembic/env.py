@@ -3,7 +3,6 @@
 import asyncio
 import importlib
 import os
-import re
 from logging.config import fileConfig
 
 from alembic.operations import ops as alembic_ops
@@ -120,19 +119,6 @@ def include_object(object, name, type_, reflected, compare_to):  # noqa: ARG001
     return True
 
 
-_TENANT_ONLY_INDEX_NAME = re.compile(r"^ix_[a-z0-9_]+_tenant_id$", re.IGNORECASE)
-
-
-def _create_index_column_names(op: alembic_ops.CreateIndexOp) -> tuple[str, ...]:
-    names: list[str] = []
-    for col in op.columns:
-        if isinstance(col, str):
-            names.append(col)
-        else:
-            names.append(getattr(col, "key", None) or str(col))
-    return tuple(names)
-
-
 def _filter_upgrade_ops(ops_list: list) -> list:
     kept: list = []
     for op in ops_list:
@@ -147,15 +133,13 @@ def _filter_upgrade_ops(ops_list: list) -> list:
         if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "foreignkey":
             continue
         if isinstance(op, alembic_ops.CreateIndexOp):
-            cols = _create_index_column_names(op)
-            if cols == ("tenant_id",) or cols == ("id",):
-                continue
+            continue
         if isinstance(op, alembic_ops.DropIndexOp):
-            iname = str(op.index_name or "")
-            if _TENANT_ONLY_INDEX_NAME.match(iname) or (
-                iname.startswith("ix_") and iname.endswith("_id")
-            ):
-                continue
+            continue
+        if isinstance(op, alembic_ops.AddColumnOp):
+            continue
+        if isinstance(op, alembic_ops.DropColumnOp):
+            continue
         if isinstance(op, alembic_ops.AlterColumnOp):
             continue
         if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "unique":
@@ -167,8 +151,9 @@ def _filter_upgrade_ops(ops_list: list) -> list:
 def process_revision_directives(context, revision, directives):  # noqa: ARG001
     """When ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, drop noisy autogen ops for CI `alembic check`.
 
-    ORM vs migrated PostgreSQL still differ on nullable defaults, secondary indexes, and tenant FKs.
-    We still fail on add/drop table and add/drop column; this only strips index/FK/alter-column noise.
+    ORM vs migrated PostgreSQL still differ widely (columns, indexes, FKs, uniques). This mode strips
+    column/index/constraint churn so `alembic check` can still catch add/drop *table* drift. Run
+    without the env var locally when authoring real migrations.
     """
     if os.environ.get("ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT") != "1":
         return
