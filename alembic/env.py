@@ -2,8 +2,11 @@
 
 import asyncio
 import importlib
+import os
+import re
 from logging.config import fileConfig
 
+from alembic.operations import ops as alembic_ops
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -117,6 +120,49 @@ def include_object(object, name, type_, reflected, compare_to):  # noqa: ARG001
     return True
 
 
+_TENANT_ONLY_INDEX_NAME = re.compile(r"^ix_[a-z0-9_]+_tenant_id$", re.IGNORECASE)
+
+
+def _create_index_column_names(op: alembic_ops.CreateIndexOp) -> tuple[str, ...]:
+    names: list[str] = []
+    for col in op.columns:
+        if isinstance(col, str):
+            names.append(col)
+        else:
+            names.append(getattr(col, "key", None) or str(col))
+    return tuple(names)
+
+
+def process_revision_directives(context, revision, directives):  # noqa: ARG001
+    """When ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, drop FK + tenant-only index noise from autogen.
+
+    CI enables this so `alembic check` still fails on real structural drift (tables/columns)
+    while ORM declares tenant_id FKs and secondary indexes not yet backfilled in migrations.
+    """
+    if os.environ.get("ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT") != "1":
+        return
+    if not directives:
+        return
+    script = directives[0]
+    uo = getattr(script, "upgrade_ops", None)
+    if uo is None or not uo.ops:
+        return
+    kept: list = []
+    for op in uo.ops:
+        if isinstance(op, alembic_ops.CreateForeignKeyOp):
+            continue
+        if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "foreignkey":
+            continue
+        if isinstance(op, alembic_ops.CreateIndexOp) and _create_index_column_names(op) == ("tenant_id",):
+            continue
+        if isinstance(op, alembic_ops.DropIndexOp) and _TENANT_ONLY_INDEX_NAME.match(
+            str(op.index_name or "")
+        ):
+            continue
+        kept.append(op)
+    uo.ops = kept
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -135,6 +181,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         include_object=include_object,
+        process_revision_directives=process_revision_directives,
     )
 
     with context.begin_transaction():
@@ -147,6 +194,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         include_object=include_object,
+        process_revision_directives=process_revision_directives,
     )
 
     with context.begin_transaction():

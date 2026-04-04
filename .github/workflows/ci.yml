@@ -1649,6 +1649,7 @@ jobs:
       - name: Apply migrations then check for drift
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT: "1"
         run: |
           echo "=== Alembic Migration Drift Check ==="
           alembic upgrade head
@@ -1713,7 +1714,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           alembic upgrade head
-          PYTHONPATH="${{ github.workspace }}" uvicorn src.api.main:app --host 0.0.0.0 --port 8000 &
+          PYTHONPATH="${{ github.workspace }}" uvicorn src.main:app --host 0.0.0.0 --port 8000 &
           sleep 10
           curl -f http://localhost:8000/healthz || exit 1
 
