@@ -129,7 +129,8 @@ async def analytics_trends(
     """Defect creation trend over time grouped by day."""
     cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
-    q = text("""
+    q = text(
+        """
         SELECT
             DATE(created_at) as dt,
             COUNT(*) FILTER (WHERE priority = 'P1') as p1,
@@ -140,7 +141,8 @@ async def analytics_trends(
         WHERE created_at >= :cutoff
         GROUP BY DATE(created_at)
         ORDER BY dt
-    """)
+    """
+    )
 
     result = await db.execute(q, {"cutoff": cutoff})
     rows = result.mappings().all()
