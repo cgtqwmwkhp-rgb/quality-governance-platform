@@ -2,8 +2,8 @@
 
 **Program:** Quality Governance Platform (QGP)  
 **Document type:** Cross-release rollup (governance + engineering + security + QA)  
-**Baseline `origin/main`:** `054658e6bdf2b3210738cdf65198ddc97d1233be` (includes merged **PR #444**)  
-**Document version:** 1.1  
+**Baseline `origin/main`:** `5c82a70be7fef614c15c4b758d0dbfd143d7cd4a` (includes merged **PR #445**)  
+**Document version:** 1.2  
 **Last updated:** 2026-04-05  
 **Classification:** Internal — release governance
 
@@ -11,7 +11,7 @@
 
 ## 1. Purpose
 
-This plan **rolls up** outcomes, residual risks, and opportunities from **approximately the last twenty-eight merged pull requests** on `main` (roughly **#415–#444**, with emphasis **#417–#444**), plus **documented gap programs** (`GAP-001–003`, WCS blueprint, best-in-class gap analysis), and **recent pre-production audit themes** (contract alignment, container scanning, coverage policy, i18n, readiness probes).
+This plan **rolls up** outcomes, residual risks, and opportunities from **approximately the last twenty-nine merged pull requests** on `main` (roughly **#415–#445**, with emphasis **#417–#445**), plus **documented gap programs** (`GAP-001–003`, WCS blueprint, best-in-class gap analysis), and **recent pre-production audit themes** (contract alignment, container scanning, coverage policy, i18n, readiness probes).
 
 It is intended for **Fortune 500-style operating discipline**: traceability, staged delivery, explicit gates, rollback, and evidence packs—not a flat backlog list.
 
@@ -78,6 +78,24 @@ It is intended for **Fortune 500-style operating discipline**: traceability, sta
 - **KPI scorecard** → §15 (review cadence targets; not numeric SLAs unless ops adopts).  
 - **Production clarity:** Merging **documentation-only** commits updates `origin/main` and may trigger deploy workflows, but **`GET /api/v1/meta/version` `build_sha`** only advances when a **new application image** is built and promoted—track both **git SHA** and **`build_sha`** in signoff packs.
 
+### Revision 3.1 — Post-merge accuracy (self-inclusive rollup)
+
+**Objective:** Keep the plan **self-consistent** with the tip of `main` after each governance-doc merge.
+
+- Header **baseline SHA** matches **`origin/main`** after **PR #445**.  
+- PR table includes **#445** (this revision’s merge vehicle when applicable).
+
+### Revision 3.2 — “Four runs” traceability (audit iterations)
+
+**Objective:** Map repeated review cycles to document revisions (for CAB narrative).
+
+| Iteration | Document anchor | Intent |
+|-----------|-----------------|--------|
+| **Run 1** | Rev 1 (§3) | Consolidate ~20+ PRs into themes |
+| **Run 2** | Rev 2 (§3) | Waves, RACI, RIR/OPP registers |
+| **Run 3** | Rev 2.1 / 2.2 (§3) | Errors/issues/options vocabulary + KPIs + `build_sha` clarity |
+| **Run 4** | Rev 3.1 / 3.2 (§3) | Tip SHA sync + audit-iteration table |
+
 ---
 
 ## 4. Merged PR rollup (recent window)
@@ -112,6 +130,7 @@ It is intended for **Fortune 500-style operating discipline**: traceability, sta
 | #442 | Evidence | Signoff #441 |
 | #443 | Evidence | Production `httpsOnly` note |
 | #444 | Governance | Enterprise consolidated action plan (this document; PR rollup + R1/R2 structure) |
+| #445 | Governance | Action plan **v1.1**: Rev 2.1/2.2 — errors/issues/options table, automation §14, KPI §15 |
 
 **Cross-cutting wins already in production narrative:** contract SSOT movement, smoke/E2E stabilisation threads, portal stats routing, governance hand-off UX, import risk triage, release evidence hygiene, Azure https-only hardening (per signoff notes).
 
@@ -221,7 +240,7 @@ Maps to `scripts/governance/pr_body_template.md` and enterprise **Gates A–F**:
 | #417–#430 | CI/security parallel failures (Trivy); ongoing typing debt |
 | #431–#437 | GAP deeper automation (Pillar III backlog); i18n phases |
 | #439–#441 | Contract drift without generator; bow-tie UX completeness |
-| #442–#444 | #442–#443: operational discipline (evidence). **#444:** program backbone doc; no runtime defect implied |
+| #442–#445 | #442–#443: operational discipline (evidence). **#444–#445:** program backbone docs only; no runtime defect implied |
 
 ---
 
@@ -291,4 +310,5 @@ Maps to `scripts/governance/pr_body_template.md` and enterprise **Gates A–F**:
 
 - **Owner:** Platform / Quality governance (rotating).  
 - **Review cadence:** Monthly rollup diff against `main` merge log; quarterly opportunity refresh.  
-- **Supersedes:** Informal chat summaries; does **not** replace per-PR Change Ledgers.
+- **Supersedes:** Informal chat summaries; does **not** replace per-PR Change Ledgers.  
+- **Changelog:** v1.1 (PR #445): Rev 2.1/2.2. v1.2: Rev 3.1/3.2 — `main` tip SHA in header, PR #445 in rollup, “four runs” traceability table.
