@@ -200,7 +200,7 @@ class TestIncidentsSmoke:
         """✓ Incidents list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/incidents", headers=auth_headers)
+        response = client.get("/api/v1/incidents/", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "items" in data or isinstance(data, list)
@@ -210,7 +210,7 @@ class TestIncidentsSmoke:
         if not auth_headers:
             pytest.skip("Auth not available")
         response = client.get(
-            "/api/v1/incidents?page=1&per_page=10",
+            "/api/v1/incidents/?page=1&per_page=10",
             headers=auth_headers,
         )
         assert response.status_code == 200
@@ -437,7 +437,7 @@ class TestUserManagementSmoke:
         """✓ Current user endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/users/me", headers=auth_headers)
+        response = client.get("/api/v1/auth/me", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert "email" in data or "id" in data
@@ -513,7 +513,7 @@ class TestSecuritySmoke:
 
         # Try SQL injection in query param
         response = client.get(
-            "/api/v1/incidents?search='; DROP TABLE incidents; --",
+            "/api/v1/incidents/?search='; DROP TABLE incidents; --",
             headers=auth_headers,
         )
         # Should not cause 500 error
@@ -537,7 +537,7 @@ class TestDataIntegritySmoke:
 
         # Create
         create_response = client.post(
-            "/api/v1/incidents",
+            "/api/v1/incidents/",
             json={
                 "title": unique_title,
                 "description": "Smoke test incident for data integrity.",
@@ -579,7 +579,7 @@ class TestPerformanceSmoke:
         import time
 
         endpoints = [
-            "/api/v1/incidents?page=1&per_page=10",
+            "/api/v1/incidents/?page=1&per_page=10",
             "/api/v1/audits/runs?page=1&per_page=10",
             "/api/v1/risks?page=1&per_page=10",
         ]
