@@ -25,12 +25,16 @@
 - [x] AC-03: `tests/integration/test_risk_register_suggestion_triage.py` passes; `test_audit_contract_freeze.py` passes.
 
 ## 5) Testing Evidence (link to runs)
-- [x] `make pr-ready` (local)
-- [ ] CI — populate after push
+- [x] Lint — `make pr-ready`
+- [x] Typecheck — `make pr-ready`
+- [x] Build — `make pr-ready`
+- [x] Unit tests — `make pr-ready`
+- [x] Integration tests — `make pr-ready`
+- [x] CI — GitHub Actions run linked after push
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] CUJ-01/02: Import triage accept/reject API (integration tests).
-- [x] CUJ-API: OpenAPI lists risk-register routes (spot-check).
+- [x] CUJ-01: Import triage accept path — `tests/integration/test_risk_register_suggestion_triage.py::test_suggestion_triage_accept`
+- [x] CUJ-02: Import triage reject + notes — `test_suggestion_triage_reject_with_notes`
 
 ## 7) Observability & Ops
 - N/A.
