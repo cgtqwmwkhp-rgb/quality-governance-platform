@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useDeferredValue } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useState, useCallback, useDeferredValue, useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   Search,
@@ -14,6 +14,11 @@ import {
   ArrowUpRight,
   Filter,
   Loader2,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  ExternalLink,
+  ArrowRight,
 } from 'lucide-react'
 import { TableSkeleton } from '../components/ui/SkeletonLoader'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -38,6 +43,22 @@ import {
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
 import { actionsApi, Action as ApiAction, ActionCreate } from '../api/client'
+import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
+
+function startOfDay(d: Date): number {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+/** Human-readable due date vs today (calendar days). */
+function formatDueRelative(dueDate: string): string {
+  const due = new Date(dueDate)
+  if (Number.isNaN(due.getTime())) return ''
+  const diff = Math.round((startOfDay(due) - startOfDay(new Date())) / 86400000)
+  if (diff < 0) return `${Math.abs(diff)}d overdue`
+  if (diff === 0) return 'Due today'
+  if (diff === 1) return 'Due tomorrow'
+  return `Due in ${diff}d`
+}
 
 // Bounded error taxonomy for deterministic error handling
 type ErrorClass =
@@ -79,7 +100,7 @@ function classifyError(error: unknown): ApiError {
 }
 
 // Local UI type extending API type with computed fields
-interface Action extends Omit<ApiAction, 'source_id' | 'owner_id' | 'owner_email'> {
+interface Action extends Omit<ApiAction, 'source_id' | 'owner_email'> {
   source_ref: string
   owner?: string
 }
@@ -87,6 +108,7 @@ interface Action extends Omit<ApiAction, 'source_id' | 'owner_id' | 'owner_email
 type ViewMode = 'all' | 'my' | 'overdue'
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
 type SourceTypeFilter = 'all' | 'audit_finding' | 'incident' | 'complaint' | 'investigation' | 'rta'
+type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
 interface CreateActionForm {
@@ -123,6 +145,18 @@ export default function Actions() {
   const sourceIdFilter = Number(searchParams.get('sourceId') || '')
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [sortMode, setSortMode] = useState<SortMode>('newest')
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
+  const currentUserId = useMemo(() => {
+    const token = getPlatformToken()
+    if (!token) return null
+    const payload = decodeTokenPayload(token)
+    const sub = payload?.sub
+    if (sub === undefined || sub === null) return null
+    const id = parseInt(String(sub), 10)
+    return Number.isFinite(id) ? id : null
+  }, [])
 
   // Form state
   const [formData, setFormData] = useState<CreateActionForm>(INITIAL_FORM)
@@ -292,8 +326,32 @@ export default function Actions() {
     if (viewMode === 'overdue' && !isOverdue(action.due_date, action.status)) {
       return false
     }
+    if (viewMode === 'my' && currentUserId != null) {
+      if (action.owner_id !== currentUserId) {
+        return false
+      }
+    }
     return true
   })
+
+  const sortedActions = useMemo(() => {
+    const arr = [...filteredActions]
+    if (sortMode === 'due_first') {
+      const rank = (a: Action) => {
+        if (!a.due_date || a.status === 'completed' || a.status === 'cancelled') {
+          return Number.POSITIVE_INFINITY
+        }
+        const t = new Date(a.due_date).getTime()
+        if (Number.isNaN(t)) return Number.POSITIVE_INFINITY
+        if (t < Date.now()) {
+          return t - 1e15
+        }
+        return t
+      }
+      arr.sort((a, b) => rank(a) - rank(b))
+    }
+    return arr
+  }, [filteredActions, sortMode])
 
   const stats = {
     total: actions.length,
@@ -418,6 +476,7 @@ export default function Actions() {
           {(['all', 'my', 'overdue'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
+              type="button"
               onClick={() => setViewMode(mode)}
               className={cn(
                 'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
@@ -426,7 +485,11 @@ export default function Actions() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {mode === 'my' ? 'My Actions' : mode.charAt(0).toUpperCase() + mode.slice(1)}
+              {mode === 'all'
+                ? t('actions.view_mode.all')
+                : mode === 'my'
+                  ? t('actions.view_mode.my')
+                  : t('actions.view_mode.overdue')}
             </button>
           ))}
         </div>
@@ -465,11 +528,43 @@ export default function Actions() {
             <SelectItem value="rta">RTAs</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={sortMode} onValueChange={(value) => setSortMode(value as SortMode)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder={t('actions.sort_newest')} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">{t('actions.sort_newest')}</SelectItem>
+            <SelectItem value="due_first">{t('actions.sort_due')}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {sourceTypeFilter === 'audit_finding' ? (
+        <Card className="border-info/30 bg-info/5">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="p-2 rounded-lg bg-info/15 text-info shrink-0">
+              <Info className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-foreground">{t('actions.audit_playbook.title')}</p>
+              <p className="text-sm text-muted-foreground">{t('actions.audit_playbook.body')}</p>
+              <div>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/risk-register?triage=import">
+                    {t('actions.audit_playbook.risk_triage')}
+                    <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Actions List */}
       <div className="space-y-4">
-        {filteredActions.length === 0 ? (
+        {sortedActions.length === 0 ? (
           <EmptyState
             icon={<ListTodo className="w-8 h-8 text-muted-foreground" />}
             title={t('actions.empty.title')}
@@ -480,8 +575,9 @@ export default function Actions() {
             }
           />
         ) : (
-          filteredActions.map((action) => {
+          sortedActions.map((action) => {
             const overdue = isOverdue(action.due_date, action.status)
+            const isOpen = expandedId === action.id
 
             return (
               <Card
@@ -522,9 +618,9 @@ export default function Actions() {
                         <h3 className="text-lg font-semibold text-foreground mb-1">
                           {action.title}
                         </h3>
-                        <p className="text-sm text-muted-foreground line-clamp-1">
-                          {action.description}
-                        </p>
+                        {!isOpen ? (
+                          <p className="text-sm text-muted-foreground line-clamp-1">{action.description}</p>
+                        ) : null}
                         {(action.source_scheme || action.clause_reference || action.source_title) && (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {action.source_scheme && (
@@ -558,14 +654,80 @@ export default function Actions() {
                         {action.due_date && (
                           <div
                             className={cn(
-                              'flex items-center gap-2 text-sm',
+                              'flex flex-col gap-0.5 text-sm',
                               overdue ? 'text-destructive' : 'text-muted-foreground',
                             )}
                           >
-                            <Calendar className="w-4 h-4" />
-                            <span>Due {new Date(action.due_date).toLocaleDateString()}</span>
+                            <div className="flex items-center gap-2">
+                              <Calendar className="w-4 h-4 shrink-0" />
+                              <span>Due {new Date(action.due_date).toLocaleDateString()}</span>
+                            </div>
+                            <span className="text-xs pl-6 opacity-90">
+                              {formatDueRelative(action.due_date)}
+                            </span>
                           </div>
                         )}
+
+                        {action.source_type === 'audit_finding' &&
+                        action.audit_run_id != null &&
+                        action.audit_run_id > 0 ? (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                              <Link to={`/audits/${action.audit_run_id}/execute`}>
+                                {t('actions.open_audit_run')}
+                                <ExternalLink className="w-3 h-3 ml-1" />
+                              </Link>
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 text-xs" asChild>
+                              <Link to={`/audits/${action.audit_run_id}/import-review`}>
+                                {t('actions.open_import_review')}
+                              </Link>
+                            </Button>
+                          </div>
+                        ) : null}
+
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-xs -ml-2"
+                            onClick={() => setExpandedId(isOpen ? null : action.id)}
+                          >
+                            {isOpen ? (
+                              <>
+                                <ChevronUp className="w-3.5 h-3.5 mr-1" />
+                                {t('actions.collapse_details')}
+                              </>
+                            ) : (
+                              <>
+                                <ChevronDown className="w-3.5 h-3.5 mr-1" />
+                                {t('actions.expand_details')}
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        {isOpen ? (
+                          <div className="mt-3 pt-3 border-t border-border space-y-2 text-sm">
+                            {action.completion_notes ? (
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                  {t('actions.detail.verification')}
+                                </p>
+                                <p className="text-foreground whitespace-pre-wrap">{action.completion_notes}</p>
+                              </div>
+                            ) : null}
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                                {t('actions.detail.description')}
+                              </p>
+                              <p className="text-foreground whitespace-pre-wrap">
+                                {action.description || '—'}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {action.owner && (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">

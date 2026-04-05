@@ -120,6 +120,13 @@ export default function RiskRegister() {
   const [triageSubmitting, setTriageSubmitting] = useState(false)
 
   useEffect(() => {
+    if (searchParams.get('triage') === 'import') {
+      setRegisterMode('import_triage')
+      setView('register')
+    }
+  }, [searchParams])
+
+  useEffect(() => {
     const next = new URLSearchParams(searchParams)
     if (auditOnly) next.set('auditOnly', '1')
     else next.delete('auditOnly')
@@ -378,14 +385,27 @@ export default function RiskRegister() {
             <Button
               size="sm"
               variant={registerMode === 'active' ? 'default' : 'secondary'}
-              onClick={() => setRegisterMode('active')}
+              onClick={() => {
+                setRegisterMode('active')
+                const next = new URLSearchParams(searchParams)
+                next.delete('triage')
+                if (next.toString() !== searchParams.toString()) {
+                  setSearchParams(next, { replace: true })
+                }
+              }}
             >
               Active register
             </Button>
             <Button
               size="sm"
               variant={registerMode === 'import_triage' ? 'default' : 'secondary'}
-              onClick={() => setRegisterMode('import_triage')}
+              onClick={() => {
+                setRegisterMode('import_triage')
+                setView('register')
+                const next = new URLSearchParams(searchParams)
+                next.set('triage', 'import')
+                setSearchParams(next, { replace: true })
+              }}
             >
               Import triage
               {pendingTriageCount > 0 ? ` (${pendingTriageCount})` : ''}

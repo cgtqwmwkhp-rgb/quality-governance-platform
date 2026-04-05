@@ -96,6 +96,10 @@ class ActionResponse(BaseModel):
     source_title: Optional[str] = None
     source_scheme: Optional[str] = None
     clause_reference: Optional[str] = None
+    audit_run_id: Optional[int] = Field(
+        None,
+        description="When source_type is audit_finding, the parent audit run id for deep links",
+    )
     owner_id: Optional[int] = None
     owner_email: Optional[str] = None
     assigned_to_email: Optional[str] = None
@@ -139,6 +143,7 @@ def _action_to_response(
         source_title=None,
         source_scheme=None,
         clause_reference=None,
+        audit_run_id=None,
         owner_id=action.owner_id,
         owner_email=owner_email,
         assigned_to_email=owner_email,
@@ -185,11 +190,12 @@ async def _build_capa_provenance(
     db: "DbSession",
     capa: CAPAAction,
     source_type: str,
-) -> dict[str, Optional[str]]:
+) -> dict[str, Any]:
     source_reference = capa.source_reference
     source_title: Optional[str] = None
     source_scheme: Optional[str] = None
     clause_reference: Optional[str] = capa.clause_reference
+    audit_run_id: Optional[int] = None
 
     if source_type == "audit_finding" and capa.source_id:
         result = await db.execute(select(AuditFinding).where(AuditFinding.id == capa.source_id))
@@ -201,6 +207,8 @@ async def _build_capa_provenance(
             if clause_reference is None and clause_ids:
                 clause_reference = ", ".join(str(value) for value in clause_ids[:3])
             run_id = getattr(finding, "run_id", None)
+            if isinstance(run_id, int):
+                audit_run_id = run_id
             run = None
             if run_id is not None:
                 run_result = await db.execute(select(AuditRun).where(AuditRun.id == run_id))
@@ -215,6 +223,7 @@ async def _build_capa_provenance(
         "source_title": source_title,
         "source_scheme": source_scheme,
         "clause_reference": clause_reference,
+        "audit_run_id": audit_run_id,
     }
 
 
@@ -222,6 +231,8 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction, source_type: str)
     """Convert a CAPA action to unified action response."""
     capa_status = capa.status.value if hasattr(capa.status, "value") else str(capa.status)
     provenance = await _build_capa_provenance(db, capa, source_type)
+    arid = provenance.get("audit_run_id")
+    audit_run_id = int(arid) if isinstance(arid, int) else None
     return ActionResponse(
         id=capa.id,
         reference_number=capa.reference_number,
@@ -235,10 +246,11 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction, source_type: str)
         completion_notes=capa.verification_result,
         source_type=source_type,
         source_id=capa.source_id or 0,
-        source_reference=provenance["source_reference"],
-        source_title=provenance["source_title"],
-        source_scheme=provenance["source_scheme"],
-        clause_reference=provenance["clause_reference"],
+        source_reference=cast(Optional[str], provenance["source_reference"]),
+        source_title=cast(Optional[str], provenance["source_title"]),
+        source_scheme=cast(Optional[str], provenance["source_scheme"]),
+        clause_reference=cast(Optional[str], provenance["clause_reference"]),
+        audit_run_id=audit_run_id,
         owner_id=capa.assigned_to_id,
         owner_email=None,
         created_at=capa.created_at.isoformat() if capa.created_at else "",
@@ -570,6 +582,8 @@ async def list_actions(
         actions_list.sort(key=lambda x: x.created_at, reverse=True)
         actions_list = actions_list[offset : offset + page_size]
 
+    actions_list = await _hydrate_action_owner_emails(db, actions_list)
+
     return ActionListResponse(
         items=actions_list,
         total=total,
@@ -852,11 +866,31 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         source_title=None,
         source_scheme=None,
         clause_reference=None,
+        audit_run_id=None,
         owner_id=action.owner_id,
         owner_email=resolved_email,
         assigned_to_email=resolved_email,
         created_at=action.created_at.isoformat() if action.created_at else "",
     )
+
+
+async def _hydrate_action_owner_emails(db: "DbSession", items: list[ActionResponse]) -> list[ActionResponse]:
+    """Fill owner_email for CAPA rows (and any others) that omitted it in list views."""
+    need_ids = {x.owner_id for x in items if x.owner_id and not x.owner_email}
+    if not need_ids:
+        return items
+    emap = await _batch_resolve_owner_emails(db, need_ids)
+    if not emap:
+        return items
+    out: list[ActionResponse] = []
+    for x in items:
+        if x.owner_id and not x.owner_email:
+            em = emap.get(x.owner_id)
+            if em:
+                out.append(x.model_copy(update={"owner_email": em, "assigned_to_email": em}))
+                continue
+        out.append(x)
+    return out
 
 
 @router.get("/{action_id}")

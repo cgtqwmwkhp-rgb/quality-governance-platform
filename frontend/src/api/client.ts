@@ -1460,6 +1460,8 @@ export interface Action {
   source_title?: string
   source_scheme?: string
   clause_reference?: string
+  /** Present when source_type is audit_finding — parent run for navigation */
+  audit_run_id?: number | null
   owner_id?: number
   owner_email?: string
   assigned_to_email?: string
