@@ -223,7 +223,7 @@ class TestAuditsSmoke:
         """✓ Audit templates endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/audit-templates", headers=auth_headers)
+        response = client.get("/api/v1/audit-templates/", headers=auth_headers)
         assert response.status_code == 200
 
     def test_audit_runs_endpoint(self, client, auth_headers):
@@ -248,7 +248,7 @@ class TestRisksSmoke:
         """✓ Risks list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/risks", headers=auth_headers)
+        response = client.get("/api/v1/risks/", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -259,7 +259,7 @@ class TestComplianceSmoke:
         """✓ Standards endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/standards", headers=auth_headers)
+        response = client.get("/api/v1/standards/", headers=auth_headers)
         assert response.status_code == 200
 
 
@@ -270,7 +270,7 @@ class TestDocumentsSmoke:
         """✓ Documents list endpoint works."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/documents", headers=auth_headers)
+        response = client.get("/api/v1/documents/", headers=auth_headers)
         assert response.status_code == 200
 
     def test_policies_list_endpoint(self, client, auth_headers):
@@ -446,7 +446,7 @@ class TestUserManagementSmoke:
         """✓ User list available for admin."""
         if not admin_headers:
             pytest.skip("Admin auth not available")
-        response = client.get("/api/v1/users", headers=admin_headers)
+        response = client.get("/api/v1/users/", headers=admin_headers)
         assert response.status_code in [200, 403]
 
 
@@ -581,7 +581,7 @@ class TestPerformanceSmoke:
         endpoints = [
             "/api/v1/incidents/?page=1&per_page=10",
             "/api/v1/audits/runs?page=1&per_page=10",
-            "/api/v1/risks?page=1&per_page=10",
+            "/api/v1/risks/?page=1&per_page=10",
         ]
 
         for endpoint in endpoints:
