@@ -713,6 +713,11 @@ jobs:
         run: |
           alembic upgrade head
 
+      - name: Seed default CI auth accounts (smoke / portal parity)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: PYTHONPATH="${{ github.workspace }}" python scripts/seed_ci_locust_users.py
+
       - name: Run Smoke Tests (BLOCKING)
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
@@ -860,6 +865,11 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
           alembic upgrade head
+
+      - name: Seed default CI auth accounts (E2E login parity)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: PYTHONPATH="${{ github.workspace }}" python scripts/seed_ci_locust_users.py
 
       - name: Read baseline from artifact (SINGLE SOURCE OF TRUTH)
         id: baseline

@@ -5,6 +5,8 @@ Seeds default tenant and user for FK integrity.
 Overrides ``get_current_user`` so authenticated endpoints return 200.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from src.api.dependencies import get_current_user
@@ -17,6 +19,7 @@ async def _seed_default_data():
     from sqlalchemy import select
 
     from src.core.security import get_password_hash
+    from src.domain.models.compliance_automation import RegulatoryUpdate
     from src.domain.models.tenant import Tenant
     from src.domain.models.user import User
     from src.infrastructure.database import async_session_maker, engine
@@ -48,6 +51,26 @@ async def _seed_default_data():
                     tenant_id=1,
                 )
             )
+            await session.flush()
+
+        result_ru = await session.execute(select(RegulatoryUpdate).where(RegulatoryUpdate.id == 1))
+        if result_ru.scalar_one_or_none() is None:
+            session.add(
+                RegulatoryUpdate(
+                    id=1,
+                    tenant_id=None,
+                    source="hse_uk",
+                    source_reference="E2E-SEED-1",
+                    source_url="https://example.com/e2e-regulatory",
+                    title="Seeded regulatory update for E2E",
+                    summary="Synthetic row for compliance automation contract tests",
+                    category="health_safety",
+                    impact="medium",
+                    affected_standards=["ISO 9001:2015"],
+                    published_date=datetime.now(timezone.utc).replace(tzinfo=None),
+                    is_reviewed=False,
+                )
+            )
         await session.commit()
 
     if "postgresql" in str(engine.url):
@@ -56,8 +79,40 @@ async def _seed_default_data():
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
             await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
+            await conn.execute(
+                text(
+                    "SELECT setval('regulatory_updates_id_seq', "
+                    "GREATEST((SELECT MAX(id) FROM regulatory_updates), 1))"
+                )
+            )
 
     yield
+
+
+@pytest.fixture(scope="module")
+def auth_client(client):
+    """API client for E2E routes: identity comes from ``get_current_user`` override, not JWT."""
+
+    class E2EAuthClient:
+        def __init__(self, c):
+            self._client = c
+
+        def get(self, url, **kwargs):
+            return self._client.get(url, **kwargs)
+
+        def post(self, url, **kwargs):
+            return self._client.post(url, **kwargs)
+
+        def put(self, url, **kwargs):
+            return self._client.put(url, **kwargs)
+
+        def patch(self, url, **kwargs):
+            return self._client.patch(url, **kwargs)
+
+        def delete(self, url, **kwargs):
+            return self._client.delete(url, **kwargs)
+
+    return E2EAuthClient(client)
 
 
 # ---------------------------------------------------------------------------
@@ -163,28 +218,13 @@ def _override_auth(request):
     app.dependency_overrides.pop(get_current_user, None)
 
 
-# ---------------------------------------------------------------------------
-# Quarantine hooks – skip Phase 3/4 tests that hit unimplemented endpoints
-# ---------------------------------------------------------------------------
-
-
 def pytest_configure(config):
     """Register custom markers for E2E tests."""
     config.addinivalue_line(
         "markers",
-        "phase34: marks tests requiring Phase 3/4 features (quarantined)",
+        "phase34: marks tests focused on Phase 3/4 workflow and compliance automation",
     )
     config.addinivalue_line(
         "markers",
         "no_auth_override: skip the autouse auth override for this test",
     )
-
-
-def pytest_collection_modifyitems(config, items):
-    """Auto-skip quarantined tests."""
-    skip_phase34 = pytest.mark.skip(
-        reason="QUARANTINED [GOVPLAT-001]: Phase 3/4 not implemented. Policy: tests/QUARANTINE_POLICY.yaml. Expiry: 2026-04-30"
-    )
-    for item in items:
-        if "phase34" in item.keywords:
-            item.add_marker(skip_phase34)
