@@ -1132,13 +1132,14 @@ async def test_external_audit_promote_skips_accepted_draft_already_linked_to_fin
     await test_session.commit()
     await test_session.refresh(run)
 
+    idem_ref = generate_test_reference("IDM")
     asset = EvidenceAsset(
         tenant_id=DEFAULT_TEST_TENANT_ID,
-        storage_key="evidence/audit/test/idempotent.pdf",
+        storage_key=f"evidence/audit/test/idempotent-{idem_ref}.pdf",
         original_filename="idempotent.pdf",
         content_type="application/pdf",
         file_size_bytes=1024,
-        checksum_sha256="idempotent-promotion-sha",
+        checksum_sha256=f"idempotent-promotion-sha-{idem_ref}",
         asset_type=EvidenceAssetType.PDF,
         source_module=EvidenceSourceModule.AUDIT,
         source_id=str(run.id),
