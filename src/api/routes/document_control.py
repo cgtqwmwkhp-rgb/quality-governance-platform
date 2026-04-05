@@ -9,10 +9,11 @@ Provides endpoints for:
 - Access tracking
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
@@ -175,16 +176,15 @@ async def create_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
-    count_result = await db.execute(select(func.count()).select_from(ControlledDocument))
-    count = count_result.scalar()
     type_prefix = document_data.document_type[:3].upper()
-    document_number = f"{type_prefix}-{(count + 1):05d}"
+    unique_suffix = uuid.uuid4().hex[:8].upper()
+    document_number = f"{type_prefix}-{unique_suffix}"
 
     document = ControlledDocument(
         document_number=document_number,
-        current_version="0.1",
-        major_version=0,
-        minor_version=1,
+        current_version="1.0",
+        major_version=1,
+        minor_version=0,
         status="draft",
         **document_data.model_dump(),
     )
@@ -549,6 +549,8 @@ async def take_approval_action(
         select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == instance.workflow_id)
     )
     workflow = result.scalar_one_or_none()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Approval workflow not found")
 
     result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == instance.document_id))
     document = result.scalar_one_or_none()
@@ -578,6 +580,8 @@ async def take_approval_action(
             document.status = "draft"
 
     elif action_request.action == "returned":
+        instance.status = "returned"
+        instance.current_step = 1
         if document:
             document.status = "draft"
 

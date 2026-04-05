@@ -296,6 +296,7 @@ async def search_users_for_mention(
         select(User)
         .where(
             User.is_active == True,
+            User.tenant_id == current_user.tenant_id,
             or_(
                 User.full_name.ilike(f"%{q}%"),  # type: ignore[attr-defined]
                 User.email.ilike(f"%{q}%"),

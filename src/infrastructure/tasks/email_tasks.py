@@ -38,7 +38,7 @@ def send_email(self, to: str, subject: str, body: str, html: bool = False) -> di
 
         if not email_service.enabled:
             logger.warning("Email service not configured — skipping send to %s", masked_to)
-            return {"status": "skipped", "to": to, "subject": subject}
+            return {"status": "skipped", "to": masked_to, "subject": subject}
 
         success = _run_async(
             email_service.send_email(to=[to], subject=subject, html_content=body if html else f"<pre>{body}</pre>")

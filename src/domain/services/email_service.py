@@ -5,6 +5,7 @@ Provides HTML email templating, SMTP integration, and notification management
 for the Quality Governance Platform.
 """
 
+import html as html_mod
 import logging
 import os
 import smtplib
@@ -288,29 +289,30 @@ class EmailService:
         }
         alert_color = severity_colors.get(severity.lower(), "#64748b")
 
+        esc = html_mod.escape
         content = f"""
         <h2>🚨 New Incident Reported</h2>
-        <div class="alert-box {severity.lower()}">
-            <h3>{title}</h3>
-            <p>{description}</p>
+        <div class="alert-box {esc(severity.lower())}">
+            <h3>{esc(title)}</h3>
+            <p>{esc(description)}</p>
         </div>
         <table class="details-table">
             <tr>
                 <th>Reference</th>
-                <td>{incident_id}</td>
+                <td>{esc(str(incident_id))}</td>
             </tr>
             <tr>
                 <th>Severity</th>
-                <td><span class="status-badge status-open">{severity.upper()}</span></td>
+                <td><span class="status-badge status-open">{esc(severity.upper())}</span></td>
             </tr>
-            {f'<tr><th>Location</th><td>{location}</td></tr>' if location else ''}
-            {f'<tr><th>Reported By</th><td>{reported_by}</td></tr>' if reported_by else ''}
+            {f'<tr><th>Location</th><td>{esc(location)}</td></tr>' if location else ''}
+            {f'<tr><th>Reported By</th><td>{esc(reported_by)}</td></tr>' if reported_by else ''}
             <tr>
                 <th>Time</th>
                 <td>{datetime.now().strftime('%Y-%m-%d %H:%M')}</td>
             </tr>
         </table>
-        {f'<a href="{action_url}" class="button">View Incident →</a>' if action_url else ''}
+        {f'<a href="{esc(action_url)}" class="button">View Incident →</a>' if action_url else ''}
         """
 
         html = self._safe_format(
@@ -339,30 +341,31 @@ class EmailService:
 
         status_text = f"{days_overdue} days overdue" if is_overdue else "Due soon"
 
+        esc = html_mod.escape
         content = f"""
         <h2>{'⚠️ Action Overdue' if is_overdue else '🔔 Action Reminder'}</h2>
         <div class="alert-box {'high' if is_overdue else 'medium'}">
-            <h3>{title}</h3>
-            <p>{status_text}</p>
+            <h3>{esc(title)}</h3>
+            <p>{esc(status_text)}</p>
         </div>
         <table class="details-table">
             <tr>
                 <th>Reference</th>
-                <td>{action_id}</td>
+                <td>{esc(str(action_id))}</td>
             </tr>
             <tr>
                 <th>Due Date</th>
-                <td>{due_date}</td>
+                <td>{esc(str(due_date))}</td>
             </tr>
-            {f'<tr><th>Assigned To</th><td>{assignee}</td></tr>' if assignee else ''}
+            {f'<tr><th>Assigned To</th><td>{esc(assignee)}</td></tr>' if assignee else ''}
             <tr>
                 <th>Status</th>
                 <td><span class="status-badge {'status-open' if is_overdue else 'status-in-progress'}">
-                    {status_text}
+                    {esc(status_text)}
                 </span></td>
             </tr>
         </table>
-        {f'<a href="{action_url}" class="button">View Action →</a>' if action_url else ''}
+        {f'<a href="{esc(action_url)}" class="button">View Action →</a>' if action_url else ''}
         """
 
         html = self._safe_format(
