@@ -159,6 +159,9 @@ class EnterpriseRisk(Base):
     linked_audits: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     linked_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
+    # External audit import: pending until accepted/rejected in risk register triage
+    suggestion_triage_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+
     # Timestamps
     identified_date: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None)

@@ -163,6 +163,11 @@ Settings
 | WDP Analytics | Workforce Insights | User-friendly |
 | KRI | Key Risk Indicators | Spell out on first encounter |
 
+### Trademarks and programme names
+
+Canonical product and third-party names (including **Planet Mark**) are listed in
+[`glossary-trademarks.md`](./glossary-trademarks.md). Use that file as the SSOT for UI copy and docs.
+
 ---
 
 ## 3. Search & Discovery

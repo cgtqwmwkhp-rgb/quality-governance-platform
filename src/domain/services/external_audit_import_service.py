@@ -1083,6 +1083,7 @@ class ExternalAuditImportService:
                         finding_data["_suggested_action_description"] = draft.suggested_action_description
                     if draft.suggested_risk_title:
                         finding_data["_suggested_risk_title"] = draft.suggested_risk_title
+                    finding_data["_external_import_risk_triage_pending"] = True
 
                     draft_tid = draft.tenant_id if draft.tenant_id is not None else resolved_tenant_id
                     finding = await audit_service.create_finding(

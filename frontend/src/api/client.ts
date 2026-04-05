@@ -2737,6 +2737,8 @@ export interface RiskEntry {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  /** pending | accepted | rejected — import-sourced suggestions only */
+  suggestion_triage_status?: string | null
 }
 
 export interface RiskHeatmapData {
@@ -2764,6 +2766,8 @@ export const riskRegisterApi = {
     status?: string
     category?: string
     search?: string
+    /** pending = import triage queue; all = no triage filter; omit = hide pending */
+    suggestion_triage?: 'pending' | 'all'
   }) => {
     const sp = new URLSearchParams()
     if (params?.skip != null) sp.set('skip', String(params.skip))
@@ -2771,6 +2775,7 @@ export const riskRegisterApi = {
     if (params?.status) sp.set('status', params.status)
     if (params?.category) sp.set('category', params.category)
     if (params?.search) sp.set('search', params.search)
+    if (params?.suggestion_triage) sp.set('suggestion_triage', params.suggestion_triage)
     return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register/?${sp}`)
   },
   create: (data: Partial<RiskEntry>) => api.post<RiskEntry>('/api/v1/risk-register/', data),
@@ -2780,6 +2785,13 @@ export const riskRegisterApi = {
   delete: (id: number) => api.delete<void>(`/api/v1/risk-register/${id}`),
   assess: (id: number, scores: { likelihood: number; impact: number }) =>
     api.post<RiskEntry>(`/api/v1/risk-register/${id}/assess`, scores),
+  resolveSuggestionTriage: (id: number, body: { decision: 'accept' | 'reject'; notes?: string }) =>
+    api.post<{
+      id: number
+      reference: string
+      suggestion_triage_status: string | null
+      status: string
+    }>(`/api/v1/risk-register/${id}/suggestion-triage`, body),
   getHeatmap: () => api.get<RiskHeatmapData>('/api/v1/risk-register/heatmap'),
   getSummary: () => api.get<RiskSummary>('/api/v1/risk-register/summary'),
   getTrends: (days = 90) => api.get<unknown>(`/api/v1/risk-register/trends?days=${days}`),
