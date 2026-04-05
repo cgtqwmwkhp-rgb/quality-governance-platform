@@ -363,13 +363,56 @@ async def bulk_review_import_job_drafts(
     return [ExternalAuditDraftResponse.model_validate(draft) for draft in drafts]
 
 
-@router.post("/jobs/{job_id}/promote", response_model=ExternalAuditImportJobResponse)
+@router.post(
+    "/jobs/{job_id}/promote",
+    response_model=ExternalAuditImportJobResponse,
+    responses={
+        422: {
+            "description": (
+                "Promotion cannot complete: e.g. job not in review_required, no accepted drafts, "
+                "or every accepted draft failed to materialize into live findings."
+            ),
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": (
+                                "All 3 accepted draft(s) failed to materialize into live findings. "
+                                "First draft id=101: (constraint detail)"
+                            ),
+                            "details": {
+                                "failed_total": 3,
+                                "failed_drafts": [
+                                    {
+                                        "draft_id": 101,
+                                        "title": "Example nonconformity",
+                                        "finding_type": "nonconformity",
+                                        "severity": "high",
+                                        "error": "IntegrityError: ...",
+                                        "error_type": "IntegrityError",
+                                    }
+                                ],
+                            },
+                            "request_id": "00000000-0000-0000-0000-000000000000",
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
 async def promote_import_job(
     job_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> ExternalAuditImportJobResponse:
-    """Promote approved drafts into live audit findings and downstream remediation."""
+    """Promote approved drafts into live audit findings, scheme alignment, and reconciliation.
+
+    **422 responses:** When every accepted draft fails materialization, the API returns
+    ``VALIDATION_ERROR`` with ``error.details.failed_drafts`` (up to 20 rows) so operators
+    can fix data and retry without inferring from a generic 500.
+    """
     service = ExternalAuditImportService(db)
     job = await service.promote_job(job_id=job_id, tenant_id=current_user.tenant_id, user_id=current_user.id)
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))

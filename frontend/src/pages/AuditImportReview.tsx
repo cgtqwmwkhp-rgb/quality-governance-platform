@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import axios from 'axios'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -255,6 +256,27 @@ function describePromotionFailure(error: unknown): string {
   return 'Promotion failed. Review the accepted drafts and try again.'
 }
 
+type PromotionFailedDraftRow = {
+  draft_id?: number
+  title?: string
+  error?: string
+  error_type?: string
+}
+
+/** Server returns failed_drafts inside error.details on 422 when materialization fails. */
+function extractPromotionFailedDrafts(err: unknown): PromotionFailedDraftRow[] | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return null
+  const data = err.response?.data as { error?: { details?: { failed_drafts?: unknown } } } | undefined
+  const raw = data?.error?.details?.failed_drafts
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  return raw.slice(0, 20).map((row: Record<string, unknown>) => ({
+    draft_id: typeof row.draft_id === 'number' ? row.draft_id : undefined,
+    title: typeof row.title === 'string' ? row.title : undefined,
+    error: typeof row.error === 'string' ? row.error : undefined,
+    error_type: typeof row.error_type === 'string' ? row.error_type : undefined,
+  }))
+}
+
 function readProvenanceString(job: ExternalAuditImportJob | null, key: string) {
   const value = job?.provenance_json?.[key]
   return typeof value === 'string' && value.trim() ? value : null
@@ -360,6 +382,7 @@ export default function AuditImportReview() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [promotionFailedDrafts, setPromotionFailedDrafts] = useState<PromotionFailedDraftRow[] | null>(null)
   const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
   const processingTriggered = useRef(false)
 
@@ -378,6 +401,7 @@ export default function AuditImportReview() {
       setLoading(true)
     }
     setError(null)
+    setPromotionFailedDrafts(null)
     setReconciliationNotice(null)
     try {
       let resolvedJobRes = null
@@ -427,6 +451,7 @@ export default function AuditImportReview() {
       setDrafts(draftsRes.data)
       setReconciliation(reconciliationResult.data)
       setReconciliationNotice(reconciliationResult.notice)
+      setPromotionFailedDrafts(null)
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
@@ -598,6 +623,7 @@ export default function AuditImportReview() {
     setShowPromoteConfirm(false)
     setIsPromoting(true)
     setError(null)
+    setPromotionFailedDrafts(null)
     setSuccessMessage(null)
     try {
       const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
@@ -628,6 +654,7 @@ export default function AuditImportReview() {
       }
     } catch (err) {
       console.error('Failed to promote imported audit findings', err)
+      setPromotionFailedDrafts(extractPromotionFailedDrafts(err))
       setError(describePromotionFailure(err))
     } finally {
       setIsPromoting(false)
@@ -787,7 +814,9 @@ export default function AuditImportReview() {
               Canonical read model: {reconciliation.canonical_read_model.replace(/_/g, ' ')}.
               {reconciliation.failed_total > 0
                 ? ` ${reconciliation.failed_total} accepted draft(s) still need recovery before the workflow is complete.`
-                : ' All downstream workflow steps are traceable from this import.'}
+                : ' All downstream workflow steps are traceable from this import.'}{' '}
+              UVDB and unified registry rows appear here only after findings materialize; if promotion did not finish,
+              sync or registry proof may show as missing—that usually reflects sequencing, not a separate outage.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -907,14 +936,35 @@ export default function AuditImportReview() {
 
       {error ? (
         <Card className="border-destructive/30 bg-destructive/5" role="alert">
-          <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              <p className="text-sm text-destructive">{error}</p>
+          <CardContent className="space-y-3 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                Retry
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void load()}>
-              Retry
-            </Button>
+            {promotionFailedDrafts && promotionFailedDrafts.length > 0 ? (
+              <details className="rounded-md border border-destructive/20 bg-background/80 p-3 text-sm">
+                <summary className="cursor-pointer font-medium text-foreground">
+                  First {promotionFailedDrafts.length} draft failure(s) from server
+                </summary>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
+                  {promotionFailedDrafts.map((row, idx) => (
+                    <li key={`promo-fail-${row.draft_id ?? idx}`}>
+                      {row.draft_id != null ? <>Draft #{row.draft_id}: </> : null}
+                      {row.error_type ? (
+                        <span className="text-foreground">[{row.error_type}] </span>
+                      ) : null}
+                      {row.title ? <span className="text-foreground">{row.title} — </span> : null}
+                      {row.error ?? 'Unknown error'}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
