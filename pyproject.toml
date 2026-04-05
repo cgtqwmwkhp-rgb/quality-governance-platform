@@ -97,8 +97,8 @@ disable_error_code = ["return-value"]
 module = "src.api.routes.ai_intelligence"
 disable_error_code = ["call-overload"]
 
-# ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 10 modules (risk_scoring promoted) ──
-# 54 modules promoted to full type checking total (incl. xml_import). Remaining 10 have cross-module type
+# ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 9 modules (planet_mark promoted) ──
+# 55 modules promoted to full type checking total (incl. xml_import, planet_mark). Remaining 9 have cross-module type
 # conflicts (assignment, operator, attr-defined) that require coordinated model+route fixes.
 [[tool.mypy.overrides]]
 module = [
@@ -106,7 +106,6 @@ module = [
     "src.api.routes.audits",
     "src.api.routes.document_control",
     "src.api.routes.iso27001",
-    "src.api.routes.planet_mark",
     "src.api.routes.signatures",
     "src.domain.services.form_config_service",
     "src.domain.services.risk_service",
