@@ -66,6 +66,9 @@ class NearMiss(Base):
         String(50), nullable=True
     )  # environmental, safety, equipment, etc.
     potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # low, medium, high, critical
+    linked_risk_ids: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Comma-separated risk IDs (see alembic)
 
     # Attachments (JSON array of file URLs)
     attachments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
