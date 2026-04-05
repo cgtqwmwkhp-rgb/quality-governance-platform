@@ -929,8 +929,9 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       }
 
   const handleSubmit = async (formData: DynamicFormData): Promise<{ reference_number: string }> => {
-    // Debug: log what we received
-    console.log('[PortalDynamicForm] Form data received:', formData)
+    if (import.meta.env.DEV) {
+      console.log('[PortalDynamicForm] Form data received:', formData)
+    }
 
     // Build the portal report payload from dynamic form data
     // Map form type to correct report type for proper routing
@@ -983,12 +984,16 @@ export default function PortalDynamicForm({ formType: propFormType }: PortalDyna
       is_anonymous: false,
     }
 
-    console.log('[PortalDynamicForm] Submitting payload:', payload)
+    if (import.meta.env.DEV) {
+      console.log('[PortalDynamicForm] Submitting payload:', payload)
+    }
 
     // Call the real API
     const result = await submitPortalReport(payload)
 
-    console.log('[PortalDynamicForm] API response:', result)
+    if (import.meta.env.DEV) {
+      console.log('[PortalDynamicForm] API response:', result)
+    }
 
     // Store tracking code for later access
     if (result.tracking_code) {

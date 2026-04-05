@@ -98,7 +98,9 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
       }
 
       const data: TokenExchangeResponse = await response.json()
-      console.log('[PortalAuth] Token exchange successful for user:', data.user.email)
+      if (import.meta.env.DEV) {
+        console.log('[PortalAuth] Token exchange successful for user:', data.user.email)
+      }
 
       // Store platform tokens securely (sessionStorage clears on tab close)
       sessionStorage.setItem('platform_access_token', data.access_token)

@@ -63,6 +63,13 @@ export function clearTokens(): void {
 }
 
 /**
+ * Check if the current session is an admin session (token in localStorage).
+ */
+export function isAdminSession(): boolean {
+  return localStorage.getItem(ADMIN_TOKEN_KEY) !== null
+}
+
+/**
  * Set the admin token (used by admin login flow).
  */
 export function setAdminToken(token: string, refreshToken?: string): void {
