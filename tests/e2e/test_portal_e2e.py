@@ -7,15 +7,6 @@ Comprehensive E2E coverage for all portal user journeys.
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def client():
-    """Get test client."""
-    from src.main import app
-
-    return TestClient(app)
 
 
 class TestPortalAuthentication:
