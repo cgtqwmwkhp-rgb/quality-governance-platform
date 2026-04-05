@@ -4,7 +4,7 @@
 - **Feature / Change name:** CUJ evidence pack + import triage API integration tests.
 - **User goal (1-2 lines):** Capture four critical journeys and four intensive review passes; close test gap on `POST /risk-register/{id}/suggestion-triage`.
 - **In scope:** `docs/evidence/CUJ_REVIEW_IMPORT_CAPA_GOVERNANCE_2026-04-05.md`, `tests/integration/test_risk_register_suggestion_triage.py`.
-- **Out of scope:** OpenAPI regeneration, full Risk Register i18n (documented as follow-ups).
+- **Out of scope:** OpenAPI regeneration; product is English-speaking (no locale assurance gate).
 - **Feature flag / kill switch:** None.
 
 ## 2) Impact Map (what changed)

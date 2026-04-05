@@ -75,7 +75,7 @@ Each pillar is a **separate governance surface**: different users, different dat
 
 | Follow-up | Action executed | Robustness / controls |
 |-----------|-----------------|------------------------|
-| **Reject + notes in UI** | **Reject** opens a dialog with optional **Notes** (trimmed, max length enforced in UI). Non-empty notes are sent on `resolveSuggestionTriage`. **Accept** remains one-click. | While a triage request runs, triage controls are disabled; dismiss / escape on the reject dialog is blocked until the request finishes. **Success and failure** surface via toasts (i18n: `risk_register.import_triage_toast_*`). |
+| **Reject + notes in UI** | **Reject** opens a dialog with optional **Notes** (trimmed, max length enforced in UI). Non-empty notes are sent on `resolveSuggestionTriage`. **Accept** remains one-click. | While a triage request runs, triage controls are disabled; dismiss / escape on the reject dialog is blocked until the request finishes. **Success and failure** surface via toasts (`risk_register.import_triage_toast_*` in `en.json`; English-speaking product). |
 | **API parity** | `POST /risk-register/{id}/suggestion-triage` accepts `decision` and optional `notes`. | Server-side validation unchanged; client shows operator feedback on failure. |
 
 **Primary evidence:** `frontend/src/pages/RiskRegister.tsx`, `src/api/routes/risk_register.py`.
@@ -84,7 +84,7 @@ Each pillar is a **separate governance surface**: different users, different dat
 
 | Follow-up | Action executed | Robustness / controls |
 |-----------|-----------------|------------------------|
-| **Clarify dual path (not a second CAPA triage)** | **Documented in product copy**, not rebuilt as a second triage workflow. Actions page **playbook** explains that CAPA from the same import stays in **Actions**; only **register suggestions** use Import triage. | Welsh parity for new `actions.*` strings in `cy.json`. |
+| **Clarify dual path (not a second CAPA triage)** | **Documented in product copy**, not rebuilt as a second triage workflow. Actions page **playbook** explains that CAPA from the same import stays in **Actions**; only **register suggestions** use Import triage. | English copy in `en.json` for playbook and related strings (product is English-speaking). |
 | **Operator wayfinding** | Actions: links to audit run execute, import review, and **Risk Register** `?triage=import`. Risk Register: URL sync for `?triage=import`. | **Import review → reconciliation:** “Governance hand-off after promotion” panel when `capa_actions` or `enterprise_risks` is non-zero, with shortcuts to audit-sourced actions and import risk triage. |
 | **API traceability** | `audit_run_id` on action list/detail responses; owner email hydration for list rows. | Unit test: `tests/unit/test_actions_audit_finding.py` (provenance + `audit_run_id`). |
 
@@ -109,7 +109,7 @@ Each pillar is a **separate governance surface**: different users, different dat
 | **I** | Reject path must not lose operator feedback on network/API failure | **Addressed:** error toast + existing loading/disable behaviour. |
 | **I** | Success path should confirm accept vs reject for audit trail in the UI session | **Addressed:** distinct success toasts per decision. |
 | **II** | Operators may not read Actions playbook before triaging risks | **Addressed:** reconciliation **governance hand-off** panel on import review after promotion. |
-| **II** | i18n drift (Cymraeg) on new governance strings | **Addressed:** `cy.json` keys aligned to new `actions.*` copy. |
+| **II** | Governance copy must be clear and consistent in English | **Addressed:** playbook + triage helper text + keyed strings in `en.json`. |
 
 ---
 
@@ -117,7 +117,7 @@ Each pillar is a **separate governance surface**: different users, different dat
 
 | Pillar | Finding | Disposition |
 |--------|---------|------------|
-| **I** | Toasts must be translatable and consistent with the rest of the app | **Addressed:** `risk_register.import_triage_toast_*` in `en.json` / `cy.json`; `useTranslation` in `RiskRegister`. |
+| **I** | Toasts must be consistent and keyed for the English UI | **Addressed:** `risk_register.import_triage_toast_*` in `en.json`; `useTranslation` in `RiskRegister`. |
 | **II** | Deep links should prefer server-provided `view_links.actions` when present | **Addressed:** hand-off **Open audit-sourced actions** uses `reconciliation.view_links.actions` with fallback to `/actions?sourceType=audit_finding`. |
 | **II** | Avoid duplicating a full second triage workflow | **Accepted:** single triage workflow for **enterprise risks** only; CAPA remains authoritative in Actions. |
 
@@ -129,9 +129,9 @@ Each pillar is a **separate governance surface**: different users, different dat
 
 | Step | Deliverable | Verification |
 |------|-------------|--------------|
-| 1 | Import triage operator feedback (toasts + i18n) | Manual: accept/reject and reject+notes; force API error → error toast. |
+| 1 | Import triage operator feedback (toasts + English strings) | Manual: accept/reject and reject+notes; force API error → error toast. |
 | 2 | Import review governance hand-off panel | Manual: reconciliation with non-zero capa or enterprise risk counts → panel visible; buttons navigate correctly. |
-| 3 | Cymraeg parity for governance `actions.*` keys | `cy.json` key parity with `en.json` for those strings. |
+| 3 | English governance copy for Actions / triage (`en.json`) | Playbook, triage toasts, and related keys reviewed for clarity. |
 | 4 | Documentation (this file) | Reviewer can trace pillar → code → test. |
 | 5 | CI + PR merge + staging + production | `make pr-ready`; green checks; governed `workflow_dispatch` production promotion per runbook. |
 

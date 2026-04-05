@@ -46,15 +46,15 @@ This evidence pack answers: **Is everything captured, wired, and flowing?** It u
 
 ## 4. Intensive review — pass 3 (frontend UX & flow)
 
-**Verdict:** **Best-in-class for clarity** on dual-path messaging; **partial i18n** on Risk Register shell.
+**Verdict:** **Best-in-class for clarity** on dual-path messaging. **Assurance scope is English-only** (Welsh locale files may exist in-repo but are not a review or UAT gate).
 
 | Area | Status | Notes |
 |------|--------|--------|
 | **Import triage UX** | **Strong** | Mode toggle + URL sync `?triage=import`; helper copy explains CAPA vs register triage; reject dialog with `maxLength={2000}`; loading disables actions; Radix dismiss guarded while submitting. |
-| **Toasts** | **Strong** | Success/error for triage via `toast` + `risk_register.import_triage_toast_*` (en + cy). |
+| **Toasts** | **Strong** | Success/error for triage via `toast` + `risk_register.import_triage_toast_*` in `en.json` (English-speaking product). |
 | **Actions bridge** | **Strong** | Playbook + deep links; `audit_run_id` guarded links. |
 | **Import review hand-off** | **Strong** | Reconciliation panel + navigation to Actions / import triage. |
-| **i18n gap** | **Medium** | Risk Register page title, mode labels, and helper paragraph remain **hard-coded English** (only triage toasts use `useTranslation`). Welsh users see mixed language. **Recommendation:** Migrate register strings to `en.json` / `cy.json` in a follow-up. |
+| **Register chrome** | **Low (optional)** | Page title, mode labels, and helper copy are mostly **inline English**; triage toasts use `useTranslation` + `en.json`. For an English-only product this is acceptable; centralising register strings in `en.json` remains an optional consistency tidy-up. |
 | **Reconciliation `view_links`** | **OK** | Top-level reconciliation `view_links.actions` is generic `/actions?sourceType=audit_finding`; per-draft rows include `sourceId` — acceptable; hand-off uses top-level link with fallback. |
 
 ---
@@ -89,7 +89,6 @@ This evidence pack answers: **Is everything captured, wired, and flowing?** It u
 2. **CUJ-02:** Repeat with **Reject** → enter notes → confirm → error toast if API blocked; on success, risk closed, toast shown, dialog closes.
 3. **CUJ-03:** Open **Actions** with audit-sourced rows → read playbook → follow **Risk import triage** link → land in import triage mode. Open import review reconciliation with non-zero capa/risk counts → verify **Governance hand-off** panel and both buttons.
 4. **CUJ-04:** From Actions, open **audit run** and **import review** links where `audit_run_id` present; confirm no broken routes.
-5. **Locale:** Switch UI to **Cymraeg** → verify triage toasts and Actions playbook strings (not full register page — known gap).
 
 ---
 
@@ -99,7 +98,7 @@ This evidence pack answers: **Is everything captured, wired, and flowing?** It u
 |----|----------|---------|-------------|
 | E-01 | Low | Error JSON uses `error.message` not always `detail` | Integration test updated to accept both; frontend uses shared API client. |
 | E-02 | Medium | `docs/contracts/openapi.json` missing enterprise `risk-register` paths | Track as contract debt; regenerate OpenAPI or extend gate. |
-| E-03 | Medium | Risk Register page mostly English while triage toasts are translated | UX/i18n follow-up. |
+| E-03 | — | *(Retired.)* English-only product; no Welsh/locale gate. |
 | E-04 | Low | Trivy / container gate may fail on `Security Scan` workflow while `CI` is green | Already noted in release signoff; remediate under security chapter. |
 
 ---
@@ -116,7 +115,7 @@ This evidence pack answers: **Is everything captured, wired, and flowing?** It u
 - `frontend/src/pages/Actions.tsx` — playbook, links, `audit_run_id`
 - `frontend/src/pages/AuditImportReview.tsx` — governance hand-off panel
 - `frontend/src/api/client.ts` — `resolveSuggestionTriage`, list query param
-- `frontend/src/i18n/locales/en.json`, `cy.json` — triage toasts + actions playbook keys
+- `frontend/src/i18n/locales/en.json` — triage toasts + actions playbook keys (English assurance)
 - `tests/integration/test_risk_register_suggestion_triage.py` — **new**
 - `tests/unit/test_actions_audit_finding.py` — `audit_run_id` provenance
 - `docs/governance/GAP-001-003-remediation-plan.md` — pillar narrative
@@ -129,7 +128,7 @@ This evidence pack answers: **Is everything captured, wired, and flowing?** It u
 |-------------|-----------|-----------------|
 | Pass 1 — Data / DB / domain | Yes | Trace promotion → pending → resolve |
 | Pass 2 — API / contracts | Yes | Confirmed runtime + flagged OpenAPI gap |
-| Pass 3 — Frontend / UX | Yes | Confirmed flows + flagged i18n gap |
+| Pass 3 — Frontend / UX | Yes | Confirmed flows; English-only scope |
 | Pass 4 — Quality / ops | Yes | Added integration tests + UAT script |
 
 **Automated:** `python3.11 -m pytest tests/integration/test_risk_register_suggestion_triage.py` — 4 passed (local 2026-04-05).
