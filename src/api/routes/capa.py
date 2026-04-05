@@ -10,7 +10,7 @@ from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, requi
 from src.api.schemas.capa import CAPAListResponse, CAPAResponse, CAPAStatsResponse
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.validators import sanitize_field
-from src.domain.exceptions import NotFoundError, ValidationError
+from src.domain.exceptions import NotFoundError, StateTransitionError, ValidationError
 from src.domain.models.capa import CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.user import User
 from src.domain.services.capa_service import CAPAService
@@ -195,7 +195,7 @@ async def transition_capa_status(
         )
     except LookupError:
         raise NotFoundError(f"CAPA action with id {capa_id} not found", code=ErrorCode.ENTITY_NOT_FOUND)
-    except ValueError:
+    except (ValueError, StateTransitionError):
         raise ValidationError(ErrorCode.INVALID_STATE_TRANSITION)
 
 
