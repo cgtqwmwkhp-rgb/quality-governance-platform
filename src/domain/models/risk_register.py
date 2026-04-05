@@ -16,6 +16,7 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.domain.models.base import Base
@@ -154,10 +155,10 @@ class EnterpriseRisk(Base):
     escalation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     escalation_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Linked entities
-    linked_incidents: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_audits: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Linked entities (JSONB for PostgreSQL containment queries)
+    linked_incidents: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    linked_audits: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    linked_actions: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
 
     # External audit import: pending until accepted/rejected in risk register triage
     suggestion_triage_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
