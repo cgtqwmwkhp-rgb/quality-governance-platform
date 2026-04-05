@@ -10,6 +10,11 @@ import {
 import { API_BASE_URL } from '../config/apiBase'
 import { toast } from '../contexts/ToastContext'
 import { useAppStore } from '../stores/useAppStore'
+import {
+  riskRegisterBowtieElementPath,
+  riskRegisterBowtieElementsPath,
+  riskRegisterKriValuePath,
+} from './riskRegisterPaths'
 
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL
@@ -2799,9 +2804,9 @@ export const riskRegisterApi = {
   getTrends: (days = 90) => api.get<unknown>(`/api/v1/risk-register/trends?days=${days}`),
   getBowtie: (id: number) => api.get<unknown>(`/api/v1/risk-register/${id}/bowtie`),
   addBowtieElement: (id: number, data: Record<string, unknown>) =>
-    api.post<unknown>(`/api/v1/risk-register/${id}/bowtie`, data),
+    api.post<unknown>(riskRegisterBowtieElementsPath(id), data),
   deleteBowtieElement: (id: number, elementId: number) =>
-    api.delete<void>(`/api/v1/risk-register/${id}/bowtie/${elementId}`),
+    api.delete<void>(riskRegisterBowtieElementPath(id, elementId)),
   listControls: () => api.get<unknown[]>('/api/v1/risk-register/controls'),
   createControl: (data: Record<string, unknown>) =>
     api.post<unknown>('/api/v1/risk-register/controls', data),
@@ -2811,7 +2816,7 @@ export const riskRegisterApi = {
   createKRI: (data: Record<string, unknown>) =>
     api.post<unknown>('/api/v1/risk-register/kris', data),
   updateKRIValue: (id: number, value: number) =>
-    api.post<unknown>(`/api/v1/risk-register/kris/${id}/value`, { value }),
+    api.put<unknown>(riskRegisterKriValuePath(id), { value }),
   getKRIHistory: (id: number) => api.get<unknown>(`/api/v1/risk-register/kris/${id}/history`),
   getAppetiteStatements: () => api.get<unknown[]>('/api/v1/risk-register/appetite/statements'),
 }
