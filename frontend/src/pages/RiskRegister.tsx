@@ -1010,8 +1010,8 @@ export default function RiskRegister() {
               for audit trail.
             </DialogDescription>
           </DialogHeader>
-          <label htmlFor="import-triage-reject-notes" className="text-sm font-medium text-foreground sr-only">
-            Rejection notes
+          <label htmlFor="import-triage-reject-notes" className="text-sm font-medium text-foreground">
+            Notes
           </label>
           <textarea
             id="import-triage-reject-notes"
