@@ -49,6 +49,22 @@ CUJ baseline: `docs/evidence/CUJ_REVIEW_IMPORT_CAPA_GOVERNANCE_2026-04-05.md` (o
 
 Merge PR to `main` → CI green → staging deploy (if configured) → `workflow_dispatch` **Deploy to Azure Production** with `staging_verified=true`, `release_sha=<merge SHA>`, `force_deploy` if within freeze window → post-deploy: `GET /healthz`, `GET /api/v1/meta/version`, spot CUJ checks → update `docs/evidence/release_signoff.json`.
 
+## Production deployment (completed — PR #439)
+
+| Gate | Evidence |
+|------|----------|
+| Staging | [Deploy to Azure Staging](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24002714695) — **success**, head SHA `2351fa04bda0d9c5f56a1aef99531866c984d205` |
+| CI (merge-blocking) | [CI](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24002621167) — **success** on same SHA |
+| Production | [Deploy to Azure Production](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24002867809) — **success**, `workflow_dispatch`, `force_deploy=true` (Sun UTC freeze) |
+
+**Live verification (production API host):**
+
+- `GET https://app-qgp-prod.azurewebsites.net/healthz` → `200`, `{"status":"ok",...}`
+- `GET https://app-qgp-prod.azurewebsites.net/readyz` → `{"status":"ready","database":"connected","redis":"not_configured",...}`
+- `GET https://app-qgp-prod.azurewebsites.net/api/v1/meta/version` → `build_sha` **2351fa04bda0d9c5f56a1aef99531866c984d205**, `environment` **production**, `build_time` **2026-04-05T13:52:07Z**
+
+Governance artifact updated: `docs/evidence/release_signoff.json` (this branch / follow-up PR).
+
 ## Post-execution WCS (honest)
 
 | Dimension | Before (CUJ follow-on score) | After this change | Notes |
