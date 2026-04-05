@@ -213,7 +213,7 @@ jobs:
 
       - name: Create GitHub Issue on Persistent Failure
         if: failure() && steps.check-history.outputs.consecutive_failures >= env.CONSECUTIVE_FAILURE_THRESHOLD
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const outcome = '${{ steps.probe.outputs.outcome }}';
