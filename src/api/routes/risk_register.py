@@ -742,9 +742,7 @@ async def resolve_suggestion_triage(
         risk.suggestion_triage_status = "accepted"
         risk.is_escalated = True
         base_reason = "Accepted from import triage."
-        risk.escalation_reason = (
-            f"{base_reason} {body.notes}".strip() if body.notes else base_reason
-        )[:500]
+        risk.escalation_reason = (f"{base_reason} {body.notes}".strip() if body.notes else base_reason)[:500]
     else:
         risk.suggestion_triage_status = "rejected"
         risk.status = "closed"
