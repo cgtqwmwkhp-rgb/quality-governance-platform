@@ -874,6 +874,33 @@ export default function AuditImportReview() {
                 </Button>
               ) : null}
             </div>
+
+            {reconciliation.materialized.capa_actions > 0 || reconciliation.materialized.enterprise_risks > 0 ? (
+              <div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Governance hand-off after promotion</p>
+                <p className="mt-2">
+                  CAPA actions from this import are live in <span className="text-foreground">Actions</span> as usual.
+                  Enterprise risk suggestions from the same import may appear under{' '}
+                  <span className="text-foreground">Risk Register → Import triage</span> until accepted or rejected.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      navigate(
+                        reconciliation.view_links.actions || '/actions?sourceType=audit_finding',
+                      )
+                    }
+                  >
+                    Open audit-sourced actions
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/risk-register?triage=import')}>
+                    Open import risk triage
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

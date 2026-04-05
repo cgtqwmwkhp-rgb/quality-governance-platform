@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -30,6 +31,7 @@ import {
   DialogTitle,
 } from '../components/ui/Dialog'
 import { riskRegisterApi } from '../api/client'
+import { toast } from '../contexts/ToastContext'
 
 interface Risk {
   id: number
@@ -96,6 +98,7 @@ const TREATMENT_STRATEGIES = [
 ]
 
 export default function RiskRegister() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
@@ -303,8 +306,14 @@ export default function RiskRegister() {
         ...(trimmed ? { notes: trimmed } : {}),
       })
       await loadRisks()
+      toast.success(
+        decision === 'accept'
+          ? t('risk_register.import_triage_toast_accept')
+          : t('risk_register.import_triage_toast_reject'),
+      )
     } catch (err) {
       console.error('Import triage resolution failed:', err)
+      toast.error(t('risk_register.import_triage_toast_error'))
     } finally {
       setTriageSubmitting(false)
     }
