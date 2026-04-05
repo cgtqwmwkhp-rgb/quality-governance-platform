@@ -25,7 +25,7 @@
     ],
     "staging_deploy_head_sha": "027ed34cb84805bf99f8abf430454afb345aa2db",
     "staging_last_recorded_deploy_sha_before_promotion": "027ed34cb84805bf99f8abf430454afb345aa2db",
-    "governance_note": "Signed release_sha aligned to 027ed34c (PR #441). Staging run 24003756424; production run 24003860248 with force_deploy (UTC deploy freeze window). CI workflow 24003668176 green on main. Security Scan workflow 24003668173 failure on Container Security Scan (Trivy) at 027ed34c — parallel workflow, not merge-blocking per repo gate hygiene. Post-deploy: GET /api/v1/meta/version build_sha matches 027ed34c; az webapp show app-qgp-prod state=Running (rg-qgp-staging). Azure CLI observed httpsOnly=false on app — confirm policy vs front-door TLS. Redis may show not_configured if REDIS_URL unset — docs/ops/diagnostics-endpoint-guide.md.",
+    "governance_note": "Signed release_sha aligned to 027ed34c (PR #441). Staging run 24003756424; production run 24003860248 with force_deploy (UTC deploy freeze window). CI workflow 24003668176 green on main. Security Scan workflow 24003668173 failure on Container Security Scan (Trivy) at 027ed34c — parallel workflow, not merge-blocking per repo gate hygiene. Post-deploy: GET /api/v1/meta/version build_sha matches 027ed34c; az webapp show app-qgp-prod state=Running (rg-qgp-staging). Azure CLI: httpsOnly set true on app-qgp-prod (rg-qgp-staging) post-signoff hardening. Redis may show not_configured if REDIS_URL unset — docs/ops/diagnostics-endpoint-guide.md.",
     "pr_checks_passed": "CI success on main at 027ed34c — run 24003668176",
     "unit_tests": "Per CI run 24003668176",
     "mypy": "Per CI run 24003668176",
