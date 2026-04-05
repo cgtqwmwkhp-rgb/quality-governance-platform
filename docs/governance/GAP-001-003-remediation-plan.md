@@ -67,6 +67,16 @@ This document records **two independent revisions** of the gap analysis and reme
 
 ---
 
+## Optional follow-ups (post-production)
+
+| Item | Status | Notes |
+|------|--------|--------|
+| **Reject triage notes in UI** | Done | Risk Register **Import triage** opens a dialog on **Reject** with optional notes (API already supported `notes`). |
+| **CAPA parity with import triage** | Backlog | CAPA actions from promoted findings remain **open in CAPA immediately**; only **enterprise risks** use `suggestion_triage_status`. Future: optional `pending` CAPA + triage UI if product wants symmetric workflow. |
+| **Deeper GAP-001** | Backlog | Auto `ComplianceEvidenceLink` on promote; UVDB / Planet Mark matrix seed data—out of scope for the delivered slice. |
+
+---
+
 ## References
 
 - `src/domain/services/iso_cross_mapping_service.py`

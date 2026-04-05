@@ -21,6 +21,14 @@ import {
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog'
 import { riskRegisterApi } from '../api/client'
 
 interface Risk {
@@ -106,6 +114,10 @@ export default function RiskRegister() {
   })
   const [registerMode, setRegisterMode] = useState<'active' | 'import_triage'>('active')
   const [pendingTriageCount, setPendingTriageCount] = useState(0)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
+  const [rejectNotes, setRejectNotes] = useState('')
+  const [triageSubmitting, setTriageSubmitting] = useState(false)
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
@@ -271,13 +283,42 @@ export default function RiskRegister() {
     void loadRisks()
   }, [loadRisks])
 
-  const resolveImportTriage = async (riskId: number, decision: 'accept' | 'reject') => {
+  const resolveImportTriage = async (
+    riskId: number,
+    decision: 'accept' | 'reject',
+    notes?: string,
+  ) => {
     try {
-      await riskRegisterApi.resolveSuggestionTriage(riskId, { decision })
+      setTriageSubmitting(true)
+      const trimmed = notes?.trim()
+      await riskRegisterApi.resolveSuggestionTriage(riskId, {
+        decision,
+        ...(trimmed ? { notes: trimmed } : {}),
+      })
       await loadRisks()
     } catch (err) {
       console.error('Import triage resolution failed:', err)
+    } finally {
+      setTriageSubmitting(false)
     }
+  }
+
+  const openRejectDialog = (riskId: number) => {
+    setRejectTargetId(riskId)
+    setRejectNotes('')
+    setRejectDialogOpen(true)
+  }
+
+  const closeRejectDialog = () => {
+    setRejectDialogOpen(false)
+    setRejectTargetId(null)
+    setRejectNotes('')
+  }
+
+  const confirmRejectWithNotes = async () => {
+    if (rejectTargetId == null) return
+    await resolveImportTriage(rejectTargetId, 'reject', rejectNotes)
+    closeRejectDialog()
   }
 
   const visibleRisks = risks.filter((risk) => {
@@ -353,7 +394,8 @@ export default function RiskRegister() {
           {registerMode === 'import_triage' ? (
             <p className="text-xs text-muted-foreground mt-2 max-w-2xl">
               Risks raised from external audit import appear here until you accept them into the live register
-              or reject them (closed, auditable).
+              or reject them (closed, auditable). Corrective actions (CAPA) linked from the same findings stay in
+              CAPA as usual—only register suggestions are triaged here.
             </p>
           ) : null}
         </div>
@@ -626,6 +668,7 @@ export default function RiskRegister() {
                           <Button
                             size="sm"
                             className="text-xs"
+                            disabled={triageSubmitting}
                             onClick={(e) => {
                               e.stopPropagation()
                               void resolveImportTriage(risk.id, 'accept')
@@ -637,9 +680,10 @@ export default function RiskRegister() {
                             size="sm"
                             variant="destructive"
                             className="text-xs"
+                            disabled={triageSubmitting}
                             onClick={(e) => {
                               e.stopPropagation()
-                              void resolveImportTriage(risk.id, 'reject')
+                              openRejectDialog(risk.id)
                             }}
                           >
                             Reject
@@ -947,6 +991,53 @@ export default function RiskRegister() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={rejectDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !triageSubmitting) closeRejectDialog()
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onEscapeKeyDown={(e) => triageSubmitting && e.preventDefault()}
+          onPointerDownOutside={(e) => triageSubmitting && e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Reject import suggestion</DialogTitle>
+            <DialogDescription>
+              This closes the risk as rejected (auditable). Add an optional note for the escalation record—recommended
+              for audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <label htmlFor="import-triage-reject-notes" className="text-sm font-medium text-foreground">
+            Notes
+          </label>
+          <textarea
+            id="import-triage-reject-notes"
+            value={rejectNotes}
+            onChange={(e) => setRejectNotes(e.target.value)}
+            maxLength={2000}
+            rows={4}
+            placeholder="Reason or context (optional, max 2000 characters)"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            disabled={triageSubmitting}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeRejectDialog} disabled={triageSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmRejectWithNotes()}
+              disabled={triageSubmitting}
+            >
+              {triageSubmitting ? 'Rejecting…' : 'Confirm reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
