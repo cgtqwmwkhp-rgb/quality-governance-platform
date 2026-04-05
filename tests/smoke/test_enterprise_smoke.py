@@ -179,15 +179,14 @@ class TestAuthSmoke:
         ], f"Protected endpoint accessible without auth: {response.status_code}"
 
     def test_authenticated_access_works(self, client, auth_headers):
-        """✓ Authenticated requests must succeed."""
+        """✓ Authenticated requests must succeed on a tenant-scoped list route."""
         if not auth_headers:
             pytest.skip("Auth not available")
-        response = client.get("/api/v1/users/", headers=auth_headers)
-        # 200 = success, 404 = route not in test config
-        assert response.status_code in [
-            200,
-            404,
-        ], f"Authenticated request failed: {response.status_code}"
+        # CI seed user is role "user" (not admin); /users may return 403 RBAC.
+        response = client.get("/api/v1/incidents", headers=auth_headers)
+        assert response.status_code == 200, f"Authenticated request failed: {response.status_code}"
+        data = response.json()
+        assert "items" in data or isinstance(data, list)
 
 
 # ============================================================================

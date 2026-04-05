@@ -9,7 +9,7 @@ Current coverage targets and enforcement points across the CI pipeline.
 | Gate | Location | Enforced threshold | Evidence (line) |
 |------|----------|-------------------|-----------------|
 | Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `unit-tests` | **44%** | `pytest` step line **322** |
-| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **43%** | `pytest` step line **546** |
+| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **42%** | `pytest` step in `integration-tests` job |
 | Combined report `fail_under` | `pyproject.toml` `[tool.coverage.report]` | **70%** | `fail_under = 70` line **133** |
 
 **Note:** Unit and integration jobs enforce **per-job** coverage of `src` during that job’s pytest run; `pyproject.toml` `fail_under` applies to **combined** coverage reports (e.g. local/aggregate tooling), not necessarily the same numerator as either job alone.
