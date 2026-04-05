@@ -15,7 +15,8 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1296,7 +1297,7 @@ class AuditService:
         source_result = await self.db.execute(
             select(EnterpriseRisk).where(
                 EnterpriseRisk.tenant_id == run.tenant_id,
-                EnterpriseRisk.linked_audits.contains([finding.reference_number]),
+                cast(EnterpriseRisk.linked_audits, JSONB).contains(cast([finding.reference_number], JSONB)),
             )
         )
         existing = source_result.scalar_one_or_none()
