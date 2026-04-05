@@ -700,6 +700,11 @@ async def track_report(
 
 
 @router.get(
+    "/stats",
+    response_model=PortalStatsResponse,
+    include_in_schema=False,
+)
+@router.get(
     "/stats/",
     response_model=PortalStatsResponse,
     summary="Portal Statistics",

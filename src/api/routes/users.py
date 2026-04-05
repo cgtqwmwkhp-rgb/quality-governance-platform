@@ -84,6 +84,13 @@ async def search_users(
     return [UserResponse.model_validate(u) for u in users]
 
 
+@router.get("/me", response_model=UserResponse)
+async def read_users_me(current_user: CurrentUser) -> UserResponse:
+    """Current user profile (alias for clients that use /users/me instead of /auth/me)."""
+    return UserResponse.model_validate(current_user)
+
+
+@router.get("", response_model=UserListResponse, include_in_schema=False)
 @router.get("/", response_model=UserListResponse)
 async def list_users(
     db: DbSession,

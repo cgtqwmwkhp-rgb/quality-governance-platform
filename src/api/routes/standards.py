@@ -30,6 +30,7 @@ router = APIRouter()
 # ============== Standard Endpoints ==============
 
 
+@router.get("", response_model=StandardListResponse, include_in_schema=False)
 @router.get("/", response_model=StandardListResponse)
 async def list_standards(
     db: DbSession,
@@ -72,6 +73,12 @@ async def list_standards(
     )
 
 
+@router.post(
+    "",
+    response_model=StandardResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
 async def create_standard(
     standard_data: StandardCreate,

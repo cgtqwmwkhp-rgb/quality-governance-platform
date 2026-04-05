@@ -13,7 +13,9 @@ Paths below are on the **API host** (e.g. `https://app-qgp-prod.azurewebsites.ne
 | `/api/v1/health/diagnostics` | GET | Runtime diagnostics: Python version, PID, uptime, migration head, feature-flag count, dependency snapshot | No |
 | `/api/v1/health/metrics/resources` | GET | Resource utilization (CPU, memory, connections) | No |
 
-**Redis in `/readyz`:** Implementation in `src/api/routes/health.py` — if `settings.redis_url` is empty, the JSON shows `redis: not_configured` while DB may still be `ok`. That reflects **missing App Setting `REDIS_URL`** (or equivalent), not necessarily a fault. Enable Redis when idempotency/Celery features require it (`pyproject.toml` / `.env.example` document `REDIS_URL`).
+**Redis in `/readyz`:** Root `/readyz` (`src/main.py`) and `/api/v1/health/readyz` (`src/api/routes/health.py`) surface Redis status. If `settings.redis_url` is empty, the JSON shows `redis: not_configured` while the database may still be `ok`. That reflects **missing App Setting `REDIS_URL`**, not a fault. Enable Redis when idempotency, rate limiting, or cache-backed behaviour is required (see `.env.example` and `docs/ops/runtime-config-inventory.md`).
+
+**Enable Redis in Azure (production):** (1) Provision **Azure Cache for Redis** (or compatible Redis). (2) Set App Service application setting **`REDIS_URL`** to the connection string (`rediss://…` recommended). (3) Prefer a **Key Vault reference** for the secret if policy requires it. (4) Restart the app; `GET /readyz` should report `redis: ok` after a successful ping.
 
 ## System Information
 

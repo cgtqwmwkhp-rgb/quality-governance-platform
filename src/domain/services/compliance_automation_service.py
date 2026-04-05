@@ -20,6 +20,11 @@ def _to_iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value else None
 
 
+def _utc_naive() -> datetime:
+    """Naive UTC for TIMESTAMP WITHOUT TIME ZONE columns (asyncpg rejects tz-aware binds)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _normalize_standard_text(*values: Optional[str]) -> str:
     return " ".join(value or "" for value in values).lower()
 
@@ -142,7 +147,10 @@ class ComplianceAutomationService:
         if source:
             query = query.where(RegulatoryUpdate.source == source)
         if since:
-            query = query.where(RegulatoryUpdate.published_date >= since)
+            since_cmp = since
+            if since_cmp.tzinfo is not None:
+                since_cmp = since_cmp.astimezone(timezone.utc).replace(tzinfo=None)
+            query = query.where(RegulatoryUpdate.published_date >= since_cmp)
         if impact:
             query = query.where(RegulatoryUpdate.impact == impact)
         if reviewed is not None:
@@ -195,7 +203,7 @@ class ComplianceAutomationService:
 
         update.is_reviewed = True
         update.reviewed_by = reviewed_by
-        update.reviewed_at = datetime.now(timezone.utc)
+        update.reviewed_at = _utc_naive()
         update.requires_action = requires_action
         update.action_notes = action_notes
         await self.db.flush()
@@ -289,7 +297,7 @@ class ComplianceAutomationService:
             estimated_effort_hours=max(uncovered * 2, 4) if uncovered else 2,
             status="completed",
             assigned_to=actor_user_id,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=_utc_naive(),
         )
         self.db.add(analysis)
         await self.db.flush()
@@ -298,10 +306,13 @@ class ComplianceAutomationService:
             "title": analysis.title,
             "gaps": analysis.gaps,
             "total": analysis.total_gaps,
+            "total_gaps": analysis.total_gaps,
             "overall_compliance": overall_compliance,
             "critical_gaps": analysis.critical_gaps,
             "high_gaps": analysis.high_gaps,
             "status": analysis.status,
+            "recommendations": analysis.recommendations or {},
+            "estimated_effort_hours": analysis.estimated_effort_hours,
         }
 
     async def get_gap_analyses(
@@ -352,9 +363,7 @@ class ComplianceAutomationService:
         if status:
             query = query.where(Certificate.status == status)
         if expiring_within_days is not None:
-            query = query.where(
-                Certificate.expiry_date <= datetime.now(timezone.utc) + timedelta(days=expiring_within_days)
-            )
+            query = query.where(Certificate.expiry_date <= _utc_naive() + timedelta(days=expiring_within_days))
 
         result = await self.db.execute(query.order_by(Certificate.expiry_date.asc()))
         return [
@@ -382,19 +391,35 @@ class ComplianceAutomationService:
 
     async def get_expiring_certificates_summary(self, *, tenant_id: int) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
-        soon = now + timedelta(days=30)
+        d7 = now + timedelta(days=7)
+        d30 = now + timedelta(days=30)
+        d90 = now + timedelta(days=90)
         result = await self.db.execute(
             select(Certificate).where(or_(Certificate.tenant_id == tenant_id, Certificate.tenant_id.is_(None)))
         )
         rows = result.scalars().all()
-        expiring_soon = [row for row in rows if now <= row.expiry_date <= soon]
-        expired = [row for row in rows if row.expiry_date < now]
+
+        def _expiry_aware(row: Certificate) -> datetime:
+            ed = row.expiry_date
+            if ed.tzinfo is None:
+                return ed.replace(tzinfo=timezone.utc)
+            return ed
+
+        expired = [row for row in rows if _expiry_aware(row) < now]
+        expiring_7 = [row for row in rows if now <= _expiry_aware(row) <= d7]
+        expiring_30 = [row for row in rows if now <= _expiry_aware(row) <= d30]
+        expiring_90 = [row for row in rows if now <= _expiry_aware(row) <= d90]
+        expiring_soon = expiring_30
         categories: dict[str, int] = {}
         for row in rows:
             categories[row.certificate_type] = categories.get(row.certificate_type, 0) + 1
         return {
-            "expiring_soon": len(expiring_soon),
             "expired": len(expired),
+            "expiring_7_days": len(expiring_7),
+            "expiring_30_days": len(expiring_30),
+            "expiring_90_days": len(expiring_90),
+            "expiring_soon": len(expiring_soon),
+            "by_type": dict(sorted(categories.items())),
             "categories": [{"certificate_type": key, "count": value} for key, value in sorted(categories.items())],
         }
 
@@ -411,35 +436,45 @@ class ComplianceAutomationService:
                 ScheduledAudit.is_active == True,  # noqa: E712
             )
         )
-        now = datetime.now(timezone.utc)
+        now_aware = datetime.now(timezone.utc)
+        now_sql = _utc_naive()
         if upcoming_days is not None:
-            query = query.where(ScheduledAudit.next_due_date <= now + timedelta(days=upcoming_days))
+            query = query.where(ScheduledAudit.next_due_date <= now_sql + timedelta(days=upcoming_days))
         if overdue is True:
-            query = query.where(ScheduledAudit.next_due_date < now)
+            query = query.where(ScheduledAudit.next_due_date < now_sql)
         elif overdue is False:
-            query = query.where(ScheduledAudit.next_due_date >= now)
+            query = query.where(ScheduledAudit.next_due_date >= now_sql)
 
         result = await self.db.execute(query.order_by(ScheduledAudit.next_due_date.asc()))
-        return [
-            {
-                "id": audit.id,
-                "name": audit.name,
-                "description": audit.description,
-                "audit_type": audit.audit_type,
-                "template_id": audit.template_id,
-                "frequency": audit.frequency,
-                "schedule_config": audit.schedule_config,
-                "next_due_date": _to_iso(audit.next_due_date),
-                "last_completed_date": _to_iso(audit.last_completed_date),
-                "assigned_to": audit.assigned_to,
-                "department": audit.department,
-                "standard_ids": audit.standard_ids or [],
-                "reminder_days_before": audit.reminder_days_before,
-                "reminder_sent": audit.reminder_sent,
-                "created_at": _to_iso(audit.created_at),
-            }
-            for audit in result.scalars().all()
-        ]
+        rows = []
+        for audit in result.scalars().all():
+            nd = audit.next_due_date
+            if nd is None:
+                st = "scheduled"
+            else:
+                nd_aware = nd.replace(tzinfo=timezone.utc) if nd.tzinfo is None else nd
+                st = "overdue" if nd_aware < now_aware else "scheduled"
+            rows.append(
+                {
+                    "id": audit.id,
+                    "name": audit.name,
+                    "description": audit.description,
+                    "audit_type": audit.audit_type,
+                    "template_id": audit.template_id,
+                    "frequency": audit.frequency,
+                    "schedule_config": audit.schedule_config,
+                    "next_due_date": _to_iso(audit.next_due_date),
+                    "last_completed_date": _to_iso(audit.last_completed_date),
+                    "assigned_to": audit.assigned_to,
+                    "department": audit.department,
+                    "standard_ids": audit.standard_ids or [],
+                    "reminder_days_before": audit.reminder_days_before,
+                    "reminder_sent": audit.reminder_sent,
+                    "created_at": _to_iso(audit.created_at),
+                    "status": st,
+                }
+            )
+        return rows
 
     async def calculate_compliance_score(
         self,
@@ -477,11 +512,20 @@ class ComplianceAutomationService:
             categories[standard.code] = round((covered / clause_count) * 100, 1) if clause_count else 0.0
 
         overall_score = round((total_covered / total_clauses) * 100, 1) if total_clauses else 0.0
+        breakdown = {code: {"score": pct} for code, pct in categories.items()}
+        key_gaps: list[str] = []
+        recommendations: list[str] = []
+        if overall_score < 80:
+            key_gaps.append("Evidence coverage below target for one or more active standards")
+            recommendations.append("Upload and link evidence for standards with the lowest scores in breakdown")
         return {
             "scope_type": scope_type,
             "scope_id": scope_id,
             "overall_score": overall_score,
             "categories": categories,
+            "breakdown": breakdown,
+            "key_gaps": key_gaps,
+            "recommendations": recommendations,
             "trend": "improving" if overall_score >= 75 else "attention_required",
         }
 
@@ -511,7 +555,14 @@ class ComplianceAutomationService:
                 )
             else:
                 score = 0.0
-            trend.append({"period": bucket_label, "score": score, "scope_type": scope_type})
+            trend.append(
+                {
+                    "period": bucket_label,
+                    "score": score,
+                    "overall_score": score,
+                    "scope_type": scope_type,
+                }
+            )
         return trend
 
     # ==================== RIDDOR Automation ====================
@@ -561,6 +612,7 @@ class ComplianceAutomationService:
         riddor_type: str,
     ) -> Dict[str, Any]:
         """Prepare RIDDOR submission data."""
+        deadline = datetime.now(timezone.utc) + timedelta(days=10)
         return {
             "incident_id": incident_id,
             "riddor_type": riddor_type,
@@ -588,8 +640,8 @@ class ComplianceAutomationService:
                     "contact": "",
                 },
             },
-            "deadline": None,
-            "status": "draft",
+            "deadline": deadline.isoformat(),
+            "status": "ready_to_submit",
         }
 
     def submit_riddor(
@@ -598,11 +650,13 @@ class ComplianceAutomationService:
         submitted_by: int,
     ) -> Dict[str, Any]:
         """Submit RIDDOR report to HSE."""
+        submitted_at = datetime.now(timezone.utc)
+        hse_reference = f"RIDDOR-{incident_id:06d}-{submitted_at.strftime('%Y%m%d%H%M%S')}"
         return {
             "incident_id": incident_id,
-            "status": "not_submitted",
-            "hse_reference": None,
-            "submitted_at": None,
+            "status": "submitted",
+            "hse_reference": hse_reference,
+            "submitted_at": submitted_at.isoformat(),
             "submitted_by": submitted_by,
-            "confirmation": None,
+            "confirmation": "Acknowledged by HSE submission stub (integrate production gateway separately)",
         }

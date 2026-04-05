@@ -138,7 +138,7 @@ async def list_workflow_instances(
 @router.get("/instances/{workflow_id}")
 async def get_workflow_instance(workflow_id: str, current_user: CurrentUser):
     """Get workflow instance details."""
-    instance = workflow_engine.get_workflow_instance(workflow_id)  # type: ignore[attr-defined]
+    instance = workflow_engine.get_workflow_instance(workflow_id)
     if not instance:
         raise NotFoundError("Workflow instance not found")
     return instance

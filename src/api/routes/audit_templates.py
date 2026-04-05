@@ -68,6 +68,7 @@ async def list_categories(
     return [{"category": row[0], "count": row[1]} for row in rows]
 
 
+@router.get("", response_model=AuditTemplateListResponse, include_in_schema=False)
 @router.get("/", response_model=AuditTemplateListResponse)
 async def list_templates(
     db: DbSession,
@@ -105,6 +106,12 @@ async def list_templates(
     )
 
 
+@router.post(
+    "",
+    response_model=AuditTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,

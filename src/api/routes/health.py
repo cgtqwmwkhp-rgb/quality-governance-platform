@@ -89,19 +89,25 @@ async def readiness_check():
     except Exception:
         pass
 
+    checks: dict[str, Any] = {
+        "database": db_status,
+        "database_latency_ms": db_latency_ms,
+        "redis": redis_status,
+        "pams": pams_status,
+        "pams_tables_reflected": pams_tables_reflected,
+        "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "circuit_breakers": circuit_breakers,
+    }
+    if redis_status == "not_configured":
+        checks["redis_note"] = (
+            "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
+        )
+
     payload = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {
-            "database": db_status,
-            "database_latency_ms": db_latency_ms,
-            "redis": redis_status,
-            "pams": pams_status,
-            "pams_tables_reflected": pams_tables_reflected,
-            "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
-            "cpu_percent": psutil.cpu_percent(interval=0.1),
-            "circuit_breakers": circuit_breakers,
-        },
+        "checks": checks,
     }
 
     return JSONResponse(content=payload, status_code=status_code)
