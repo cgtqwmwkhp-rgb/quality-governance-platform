@@ -2,7 +2,8 @@
 
 **Program:** Quality Governance Platform (QGP)  
 **Document type:** Cross-release rollup (governance + engineering + security + QA)  
-**Baseline `origin/main`:** `701d6a52c24c41ea55292db858cc8bab4c534b80` (as of branch creation)  
+**Baseline `origin/main`:** `054658e6bdf2b3210738cdf65198ddc97d1233be` (includes merged **PR #444**)  
+**Document version:** 1.1  
 **Last updated:** 2026-04-05  
 **Classification:** Internal — release governance
 
@@ -10,7 +11,7 @@
 
 ## 1. Purpose
 
-This plan **rolls up** outcomes, residual risks, and opportunities from **approximately the last twenty-five merged pull requests** on `main` (roughly **#417–#443**), plus **documented gap programs** (`GAP-001–003`, WCS blueprint, best-in-class gap analysis), and **recent pre-production audit themes** (contract alignment, container scanning, coverage policy, i18n, readiness probes).
+This plan **rolls up** outcomes, residual risks, and opportunities from **approximately the last twenty-eight merged pull requests** on `main` (roughly **#415–#444**, with emphasis **#417–#444**), plus **documented gap programs** (`GAP-001–003`, WCS blueprint, best-in-class gap analysis), and **recent pre-production audit themes** (contract alignment, container scanning, coverage policy, i18n, readiness probes).
 
 It is intended for **Fortune 500-style operating discipline**: traceability, staged delivery, explicit gates, rollback, and evidence packs—not a flat backlog list.
 
@@ -57,6 +58,26 @@ It is intended for **Fortune 500-style operating discipline**: traceability, sta
 | **Opportunities** | Mixed with defects | Separate **opportunity register** (value / cost / risk) |
 | **Traceability** | PR titles | **PR → outcome → residual** matrix |
 
+### Revision 2.1 — Second editorial pass (errors / issues / options unification)
+
+**Objective:** Map informal language (“errors”, “issues”, “options”) to **one** program vocabulary so CAB and engineering share definitions.
+
+| Informal term | Maps to in this plan |
+|---------------|----------------------|
+| **Errors** | CI/workflow **failures** with logs (e.g. Security Scan / Trivy) → **RIR-001** |
+| **Issues** | Product/engineering **defects or debt** → **RIR-002–RIR-010** |
+| **Options** | **Decision forks** (Redis on/off, Trivy waiver vs fix, coverage interpretation) → Wave notes + CAB minutes |
+| **Opportunities** | Strategic **enhancements** → **OPP-001–OPP-007** |
+
+**Additions:** §13 rollup table; §14 automation + CLI evidence standard.
+
+### Revision 2.2 — Third editorial pass (KPIs + production clarity)
+
+**Objective:** Fortune 500 **scorecard** hygiene and explicit **docs-only vs application promotion** behaviour.
+
+- **KPI scorecard** → §15 (review cadence targets; not numeric SLAs unless ops adopts).  
+- **Production clarity:** Merging **documentation-only** commits updates `origin/main` and may trigger deploy workflows, but **`GET /api/v1/meta/version` `build_sha`** only advances when a **new application image** is built and promoted—track both **git SHA** and **`build_sha`** in signoff packs.
+
 ---
 
 ## 4. Merged PR rollup (recent window)
@@ -90,6 +111,7 @@ It is intended for **Fortune 500-style operating discipline**: traceability, sta
 | #441 | Frontend | Risk-register client OpenAPI alignment (bowtie + KRI) |
 | #442 | Evidence | Signoff #441 |
 | #443 | Evidence | Production `httpsOnly` note |
+| #444 | Governance | Enterprise consolidated action plan (this document; PR rollup + R1/R2 structure) |
 
 **Cross-cutting wins already in production narrative:** contract SSOT movement, smoke/E2E stabilisation threads, portal stats routing, governance hand-off UX, import risk triage, release evidence hygiene, Azure https-only hardening (per signoff notes).
 
@@ -199,21 +221,73 @@ Maps to `scripts/governance/pr_body_template.md` and enterprise **Gates A–F**:
 | #417–#430 | CI/security parallel failures (Trivy); ongoing typing debt |
 | #431–#437 | GAP deeper automation (Pillar III backlog); i18n phases |
 | #439–#441 | Contract drift without generator; bow-tie UX completeness |
-| #442–#443 | Operational discipline only (evidence); no code defects implied |
+| #442–#444 | #442–#443: operational discipline (evidence). **#444:** program backbone doc; no runtime defect implied |
 
 ---
 
-## 11. Definition of program success
+## 13. Single rollup — errors, issues, options, opportunities
 
-1. **Production** remains **Running** with **httpsOnly** and verifiable **`build_sha`** (existing Azure + version endpoint pattern).  
+*Deterministic ordering: by register ID.*
+
+| Bucket | ID | Title | Disposition |
+|--------|-----|-------|-------------|
+| **Error (CI)** | RIR-001 | Trivy / Security Scan can fail on `main` | **W1** — remediate or governed waiver |
+| **Issue** | RIR-002 | Redis `not_configured` in `/readyz` | **W2** — product decision + Azure `REDIS_URL` if required |
+| **Issue** | RIR-003 | Dual coverage enforcement story | **W4** — CAB-authoritative interpretation |
+| **Issue** | RIR-004 | Mypy overrides | **W3** — burn-down |
+| **Issue** | RIR-005 | `type: ignore` ratchet | **W3** — burn-down |
+| **Issue** | RIR-006 | Bow-tie static UX | **W2** — API-backed UI |
+| **Issue** | RIR-007 | Partial Welsh locale | **W4** — phased `cy` |
+| **Issue** | RIR-008 | ZAP advisory | **W4** — promotion criteria |
+| **Issue** | RIR-009 | No automated OpenAPI↔FE matrix | **W2** — CI report |
+| **Issue** | RIR-010 | `main` ahead of signed app `release_sha` | **W0** — normal; signoff on app promote |
+| **Opportunity** | OPP-001–007 | Strategic enhancements | Quarterly portfolio review |
+| **Option** | OPT-A | **Redis:** required vs optional in prod | Architecture + SRE; document in runtime inventory |
+| **Option** | OPT-B | **Trivy:** fix vs time-bound waiver | Security + CAB |
+| **Option** | OPT-C | **Coverage:** single published “gate of record” | QA lead + chapter in `test-coverage-baseline.md` |
+
+---
+
+## 14. Automation, evidence tooling, and “standard” CLI usage
+
+**Should Azure CLI and GitHub CLI be standard?** For **release evidence**, **yes** as the default toolchain: they produce reproducible artefacts (App Service state, workflow run IDs) already referenced in `docs/evidence/release_signoff.json`. Formal **policy** (“must use az/gh for signoff”) belongs in CAB / platform standards outside this file; this plan **recommends** adoption.
+
+| Automation target | Purpose | Suggested owner | Wave |
+|-------------------|---------|-----------------|------|
+| OpenAPI × TS client coverage report | **RIR-009** | Platform Eng | W2 |
+| Weekly Security Scan triage export | **RIR-001** | Security | W0 |
+| `readyz` JSON in post-deploy script | **RIR-002** visibility | DevOps | W0 |
+| Locale coverage trend | **RIR-007** | FE + Content | W4 |
+
+---
+
+## 15. KPI scorecard (review targets)
+
+*Targets are **governance review triggers**, not deployed metrics unless wired to observability.*
+
+| KPI | Measurement | Review frequency | Healthy signal |
+|-----|-------------|------------------|----------------|
+| **Merge-blocking CI** | GitHub required checks on `main` | Every merge | Green |
+| **Security Scan (parallel)** | `Security Scan` workflow | Weekly | Green or waiver on file |
+| **Prod readiness** | `GET /readyz` | Each deploy | `status: ready`, DB connected |
+| **Release integrity** | `build_sha` vs `release_signoff.json` | Each production cut | Match for **app** releases |
+| **Contract drift** | OpenAPI vs client report | Monthly | Zero unapproved drift |
+| **Typing debt** | Mypy override count / `MAX_TYPE_IGNORES` | Quarterly | Downward trend |
+
+---
+
+## 16. Definition of program success
+
+1. **Production** remains **Running** with **httpsOnly** and verifiable **`build_sha`** for **application** releases (Azure + `GET /api/v1/meta/version`).  
 2. **Merge-blocking CI** stays green; **Security Scan** either green or **explicitly governed** waivers for Trivy.  
 3. **No silent FE/BE contract drift**—generator or contract tests in CI.  
-4. **CUJ smoke** evidence attached to each production signoff.  
-5. **Opportunity register** reviewed quarterly; waves re-prioritised by risk and value.
+4. **CUJ smoke** evidence attached to each production **application** signoff.  
+5. **Opportunity register** reviewed quarterly; waves re-prioritised by risk and value.  
+6. **`origin/main` git SHA** may advance on **docs-only** merges without changing **`build_sha`** until the next backend/frontend artefact promotion—both SHAs recorded where relevant.
 
 ---
 
-## 12. Maintenance
+## 17. Maintenance
 
 - **Owner:** Platform / Quality governance (rotating).  
 - **Review cadence:** Monthly rollup diff against `main` merge log; quarterly opportunity refresh.  
