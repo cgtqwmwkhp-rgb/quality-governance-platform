@@ -116,6 +116,12 @@ async def validate_assigned_entity(
         raise NotFoundError(f"{entity_type.replace('_', ' ').title()} with ID {entity_id} not found")
 
 
+@router.post(
+    "",
+    response_model=InvestigationRunResponse,
+    status_code=201,
+    include_in_schema=False,
+)
 @router.post("/", response_model=InvestigationRunResponse, status_code=201)
 async def create_investigation(
     request: Request,
@@ -396,6 +402,7 @@ async def get_closure_validation(
     return {"can_close": len(reasons) == 0, "reasons": reasons}
 
 
+@router.get("", response_model=InvestigationRunListResponse, include_in_schema=False)
 @router.get("/", response_model=InvestigationRunListResponse)
 async def list_investigations(
     request: Request,

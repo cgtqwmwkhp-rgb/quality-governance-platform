@@ -20,6 +20,11 @@ def _to_iso(value: Optional[datetime]) -> Optional[str]:
     return value.isoformat() if value else None
 
 
+def _utc_naive() -> datetime:
+    """Naive UTC for TIMESTAMP WITHOUT TIME ZONE columns (asyncpg rejects tz-aware binds)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def _normalize_standard_text(*values: Optional[str]) -> str:
     return " ".join(value or "" for value in values).lower()
 
@@ -142,7 +147,10 @@ class ComplianceAutomationService:
         if source:
             query = query.where(RegulatoryUpdate.source == source)
         if since:
-            query = query.where(RegulatoryUpdate.published_date >= since)
+            since_cmp = since
+            if since_cmp.tzinfo is not None:
+                since_cmp = since_cmp.astimezone(timezone.utc).replace(tzinfo=None)
+            query = query.where(RegulatoryUpdate.published_date >= since_cmp)
         if impact:
             query = query.where(RegulatoryUpdate.impact == impact)
         if reviewed is not None:
@@ -195,7 +203,7 @@ class ComplianceAutomationService:
 
         update.is_reviewed = True
         update.reviewed_by = reviewed_by
-        update.reviewed_at = datetime.now(timezone.utc)
+        update.reviewed_at = _utc_naive()
         update.requires_action = requires_action
         update.action_notes = action_notes
         await self.db.flush()
@@ -289,7 +297,7 @@ class ComplianceAutomationService:
             estimated_effort_hours=max(uncovered * 2, 4) if uncovered else 2,
             status="completed",
             assigned_to=actor_user_id,
-            completed_at=datetime.now(timezone.utc),
+            completed_at=_utc_naive(),
         )
         self.db.add(analysis)
         await self.db.flush()
@@ -355,9 +363,7 @@ class ComplianceAutomationService:
         if status:
             query = query.where(Certificate.status == status)
         if expiring_within_days is not None:
-            query = query.where(
-                Certificate.expiry_date <= datetime.now(timezone.utc) + timedelta(days=expiring_within_days)
-            )
+            query = query.where(Certificate.expiry_date <= _utc_naive() + timedelta(days=expiring_within_days))
 
         result = await self.db.execute(query.order_by(Certificate.expiry_date.asc()))
         return [
@@ -430,13 +436,14 @@ class ComplianceAutomationService:
                 ScheduledAudit.is_active == True,  # noqa: E712
             )
         )
-        now = datetime.now(timezone.utc)
+        now_aware = datetime.now(timezone.utc)
+        now_sql = _utc_naive()
         if upcoming_days is not None:
-            query = query.where(ScheduledAudit.next_due_date <= now + timedelta(days=upcoming_days))
+            query = query.where(ScheduledAudit.next_due_date <= now_sql + timedelta(days=upcoming_days))
         if overdue is True:
-            query = query.where(ScheduledAudit.next_due_date < now)
+            query = query.where(ScheduledAudit.next_due_date < now_sql)
         elif overdue is False:
-            query = query.where(ScheduledAudit.next_due_date >= now)
+            query = query.where(ScheduledAudit.next_due_date >= now_sql)
 
         result = await self.db.execute(query.order_by(ScheduledAudit.next_due_date.asc()))
         rows = []
@@ -446,7 +453,7 @@ class ComplianceAutomationService:
                 st = "scheduled"
             else:
                 nd_aware = nd.replace(tzinfo=timezone.utc) if nd.tzinfo is None else nd
-                st = "overdue" if nd_aware < now else "scheduled"
+                st = "overdue" if nd_aware < now_aware else "scheduled"
             rows.append(
                 {
                     "id": audit.id,

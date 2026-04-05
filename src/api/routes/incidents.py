@@ -26,6 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 @router.post(
+    "",
+    response_model=IncidentResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+@router.post(
     "/",
     response_model=IncidentResponse,
     status_code=status.HTTP_201_CREATED,
@@ -82,6 +88,7 @@ async def get_incident(
         raise NotFoundError(f"Incident {incident_id} not found")
 
 
+@router.get("", response_model=IncidentListResponse, include_in_schema=False)
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
