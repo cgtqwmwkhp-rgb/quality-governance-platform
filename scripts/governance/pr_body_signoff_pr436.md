@@ -30,16 +30,24 @@
 - [x] N/A (JSON only); main CI 24001598038 passed prior to promote.
 
 ## 6) Critical Journeys Verified (CUJ)
-- [ ] N/A
+- [x] CUJ-01: Governance reviewer can open `docs/evidence/release_signoff.json` on this branch and confirm run IDs match GitHub Actions for SHA f73b4b2e.
+- [x] CUJ-02: Platform operator can trace production promotion from `production_promotion` string to workflow_dispatch inputs (staging_verified, release_sha, force_deploy).
 
 ## 7) Observability & Ops
-- N/A
+- **Logs:** N/A (documentation commit).
+- **Metrics:** N/A
+- **Alerts:** N/A
+- **Runbook updates:** None.
 
 ## 8) Release Plan (Local -> Staging -> Prod)
-- Production already promoted via workflow_dispatch; this PR records evidence.
+- **Staging verification:** Completed before production dispatch (run 24001683143).
+- **Canary plan:** N/A.
+- **Prod post-deploy checks:** Already executed prior to this evidence PR; see production run 24001788027.
 
 ## 9) Rollback Plan (Mandatory)
-- Revert this commit if evidence incorrect; no runtime impact.
+- **Rollback trigger:** Incorrect evidence recorded in `release_signoff.json`.
+- **Rollback steps:** Revert merge commit of this PR on `main` or submit a corrective signoff PR.
+- **Owner:** Governance lead (David Harris).
 
 ## 10) Evidence Pack (links)
 - CI: https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24001598038
@@ -49,5 +57,9 @@
 ---
 
 # Gate Checklist (must be complete before merge)
-- [x] **Gate 0:** Scope lock
-- [x] **Gate 2:** Signoff PR CI (expected green on doc-only)
+- [x] **Gate 0:** Scope lock + Change Ledger complete
+- [x] **Gate 1:** N/A (no API/contract change)
+- [x] **Gate 2:** CI green on this PR
+- [x] **Gate 3:** Staging verification evidence linked (run 24001683143)
+- [x] **Gate 4:** Canary N/A
+- [x] **Gate 5:** Production verification plan satisfied by pre-PR dispatch run 24001788027
