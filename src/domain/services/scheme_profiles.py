@@ -101,8 +101,16 @@ SCHEME_PROFILES: dict[str, SchemeProfile] = {
 }
 
 
+def canonical_scheme_id(scheme: str) -> str:
+    """Map granular or hyphenated ISO ids onto the shared ISO validation profile."""
+    s = (scheme or "").strip().lower()
+    if s == "iso" or s.startswith("iso_") or s.startswith("iso-"):
+        return "iso"
+    return s
+
+
 def get_profile(scheme: str) -> SchemeProfile | None:
-    return SCHEME_PROFILES.get(scheme)
+    return SCHEME_PROFILES.get(canonical_scheme_id(scheme))
 
 
 def validate_against_scheme(

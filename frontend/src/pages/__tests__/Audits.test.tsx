@@ -205,6 +205,62 @@ describe('Audits external import flow', () => {
     expect(mockCreateRun).not.toHaveBeenCalled()
   })
 
+  it('requires ISO standard selection before importing an ISO external audit', async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
+      target: { value: 'iso' },
+    })
+
+    const file = new File(['audit pdf'], 'iso-audit.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
+
+    expect(await screen.findByText('Please select which ISO standard applies')).toBeInTheDocument()
+    expect(mockCreateRun).not.toHaveBeenCalled()
+  })
+
+  it('imports an ISO external audit with a preset standard', { timeout: 15000 }, async () => {
+    render(<Audits />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Import External Audit' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/External Audit Program/i), {
+      target: { value: 'iso' },
+    })
+
+    fireEvent.change(within(dialog).getByLabelText(/ISO Standard/i), {
+      target: { value: 'ISO 9001:2015' },
+    })
+
+    const file = new File(['audit pdf'], 'iso-audit.pdf', { type: 'application/pdf' })
+    fireEvent.change(within(dialog).getByLabelText(/Source Audit Report/i), {
+      target: { files: [file] },
+    })
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create Intake' }))
+
+    await waitFor(() => {
+      expect(mockCreateRun).toHaveBeenCalledTimes(1)
+    })
+
+    expect(mockCreateRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        template_id: 21,
+        external_audit_type: 'iso',
+        source_origin: 'certification',
+        assurance_scheme: 'ISO 9001:2015',
+      }),
+    )
+  })
+
   it('allows historical dates for imported audits while retaining schedule-date guardrails', async () => {
     render(<Audits />)
 
