@@ -132,6 +132,15 @@ const EXTERNAL_AUDIT_TYPE_OPTIONS: Array<{
   },
 ]
 
+/** Preset assurance_scheme values for ISO imports (matches analysis keyword patterns). */
+const ISO_STANDARD_IMPORT_PRESETS: Array<{ value: string; label: string }> = [
+  { value: 'ISO 9001:2015', label: 'ISO 9001:2015 (Quality management)' },
+  { value: 'ISO 14001:2015', label: 'ISO 14001:2015 (Environmental)' },
+  { value: 'ISO 45001:2018', label: 'ISO 45001:2018 (Occupational health & safety)' },
+  { value: 'ISO/IEC 27001:2022', label: 'ISO/IEC 27001:2022 (Information security)' },
+  { value: '__custom__', label: 'Other (specify below)' },
+]
+
 const INTAKE_TEMPLATE_TAG = 'external_audit_intake'
 
 function hasTemplateTag(template: AuditTemplate, tag: string): boolean {
@@ -202,6 +211,7 @@ export default function Audits() {
   const [showVersionSelector, setShowVersionSelector] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reportFile, setReportFile] = useState<File | null>(null)
+  const [isoSchemePreset, setIsoSchemePreset] = useState('')
   const { toasts, dismiss: dismissToast } = useToast()
 
   const loadData = async () => {
@@ -233,6 +243,23 @@ export default function Audits() {
   useEffect(() => {
     loadData()
   }, [])
+
+  useEffect(() => {
+    if (formData.external_audit_type !== 'iso') {
+      return
+    }
+    const next = formData.assurance_scheme
+    const match = ISO_STANDARD_IMPORT_PRESETS.find(
+      (p) => p.value === next && p.value !== '__custom__',
+    )
+    if (match) {
+      setIsoSchemePreset(match.value)
+    } else if (next.trim()) {
+      setIsoSchemePreset('__custom__')
+    } else {
+      setIsoSchemePreset('')
+    }
+  }, [formData.external_audit_type, formData.assurance_scheme])
 
   const scheduleTemplates = useMemo(
     () => templates.filter((template) => !isSystemIntakeTemplate(template)),
@@ -312,6 +339,7 @@ export default function Audits() {
   const handleOpenModal = (mode: AuditModalMode) => {
     setModalMode(mode)
     setFormData(buildDefaultForm(mode))
+    setIsoSchemePreset('')
     setFormError(null)
     setSuccessMessage(null)
     setSuccessTone('success')
@@ -324,6 +352,7 @@ export default function Audits() {
     setShowModal(false)
     setModalMode('schedule')
     setFormData(buildDefaultForm('schedule'))
+    setIsoSchemePreset('')
     setFormError(null)
     setSuccessMessage(null)
     setSuccessTone('success')
@@ -342,6 +371,7 @@ export default function Audits() {
     const selectedOption =
       EXTERNAL_AUDIT_TYPE_OPTIONS.find((option) => option.value === value) ?? null
 
+    setIsoSchemePreset('')
     setFormData((prev) => ({
       ...prev,
       external_audit_type: (selectedOption?.value ?? '') as CreateAuditForm['external_audit_type'],
@@ -363,7 +393,16 @@ export default function Audits() {
         setFormError('Please choose the external audit type')
         return
       }
-      if (!formData.assurance_scheme.trim()) {
+      if (formData.external_audit_type === 'iso') {
+        if (!isoSchemePreset) {
+          setFormError('Please select which ISO standard applies')
+          return
+        }
+        if (isoSchemePreset === '__custom__' && !formData.assurance_scheme.trim()) {
+          setFormError('Please enter the ISO standard (for example ISO 50001:2018)')
+          return
+        }
+      } else if (!formData.assurance_scheme.trim()) {
         setFormError('Please enter the audit scheme or standard')
         return
       }
@@ -1287,6 +1326,42 @@ export default function Audits() {
                           'This drives the source metadata, searchability, and internal processing path for the import.'}
                       </p>
                     </div>
+
+                    {formData.external_audit_type === 'iso' && (
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="audit-iso-preset"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          ISO Standard <span className="text-destructive">*</span>
+                        </label>
+                        <select
+                          id="audit-iso-preset"
+                          value={isoSchemePreset}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setIsoSchemePreset(v)
+                            if (v && v !== '__custom__') {
+                              setFormData((prev) => ({ ...prev, assurance_scheme: v }))
+                            } else if (v === '__custom__') {
+                              setFormData((prev) => ({ ...prev, assurance_scheme: '' }))
+                            }
+                          }}
+                          className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
+                          <option value="">Select ISO standard…</option>
+                          {ISO_STANDARD_IMPORT_PRESETS.map((preset) => (
+                            <option key={preset.value} value={preset.value}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          This pre-fills the scheme field so extraction and ISO cross-mapping use the
+                          correct standard family.
+                        </p>
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <label

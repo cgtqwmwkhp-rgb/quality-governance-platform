@@ -88,7 +88,7 @@ class ExternalAuditImportService:
             return "/uvdb", "Achilles / UVDB"
         if normalized == "planet_mark":
             return "/planet-mark", "Planet Mark"
-        if normalized == "iso":
+        if normalized == "iso" or normalized.startswith("iso_") or normalized.startswith("iso-"):
             return "/compliance", "ISO Compliance"
         if normalized in ("customer_other", "other"):
             return "/customer-audits", "Customer Audits"
