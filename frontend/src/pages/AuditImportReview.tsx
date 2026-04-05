@@ -49,6 +49,25 @@ const ACTION_FINDING_TYPES = [
   'question_answered_no',
 ]
 
+/** Deep-link to Compliance & evidence with optional standard filter (matches listClauses API slugs). */
+function buildComplianceClauseUrl(mapping: Record<string, unknown>): string {
+  const clauseRaw =
+    (typeof mapping.clause_number === 'string' && mapping.clause_number) ||
+    (typeof mapping.clause === 'string' && mapping.clause) ||
+    ''
+  const clause = clauseRaw.trim()
+  const stdRaw = (typeof mapping.standard === 'string' ? mapping.standard : '').toLowerCase()
+  const sp = new URLSearchParams()
+  if (clause) sp.set('clause', clause)
+  const compact = stdRaw.replace(/\s+/g, '').replace(/\//g, '')
+  if (compact.includes('9001')) sp.set('standard', 'iso9001')
+  else if (compact.includes('14001')) sp.set('standard', 'iso14001')
+  else if (compact.includes('45001')) sp.set('standard', 'iso45001')
+  else if (compact.includes('27001')) sp.set('standard', 'iso27001')
+  const q = sp.toString()
+  return q ? `/compliance?${q}` : '/compliance'
+}
+
 function getFindingTypeStyle(findingType: string): {
   label: string
   badgeClasses: string
@@ -1625,17 +1644,86 @@ function DraftFindingsList({
                 )
               })()}
 
-              <div className="flex flex-wrap gap-2">
-                {draft.mapped_frameworks_json?.map((mapping, index) => (
-                  <Badge key={`framework-${draft.id}-${index}`} variant="info">
-                    {String(mapping.framework || 'Framework')}
-                  </Badge>
-                ))}
-                {draft.mapped_standards_json?.map((mapping, index) => (
-                  <Badge key={`standard-${draft.id}-${index}`} variant="secondary">
-                    {String(mapping.clause_number || mapping.standard || 'ISO')}
-                  </Badge>
-                ))}
+              <div className="space-y-3">
+                {draft.mapped_frameworks_json && draft.mapped_frameworks_json.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                      Frameworks &amp; schemes
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {draft.mapped_frameworks_json.map((mapping, index) => (
+                        <Badge key={`framework-${draft.id}-${index}`} variant="info">
+                          {String(mapping.framework || 'Framework')}
+                          {mapping.confidence != null
+                            ? ` · ${Math.round(Number(mapping.confidence) * 100)}%`
+                            : ''}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {draft.mapped_standards_json && draft.mapped_standards_json.length > 0 ? (
+                  <div className="rounded-lg border border-border bg-surface/40 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface/60">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Cross-standard evidence (ISO &amp; clauses)
+                      </p>
+                      <Link
+                        to="/compliance"
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        Open compliance <ExternalLink size={10} />
+                      </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-muted-foreground border-b border-border">
+                            <th className="px-3 py-2 font-medium">Standard / reference</th>
+                            <th className="px-3 py-2 font-medium">Clause</th>
+                            <th className="px-3 py-2 font-medium">Confidence</th>
+                            <th className="px-3 py-2 font-medium">Basis</th>
+                            <th className="px-3 py-2 font-medium w-28"> </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draft.mapped_standards_json.map((mapping, index) => {
+                            const row = mapping as Record<string, unknown>
+                            const label =
+                              String(row.standard || row.clause_number || row.clause || 'Mapping')
+                            const clause =
+                              String(row.clause_number || row.clause || '—')
+                            const conf =
+                              row.confidence != null
+                                ? `${Math.round(Number(row.confidence) * 100)}%`
+                                : '—'
+                            const basis = String(row.basis || '—')
+                            const href = buildComplianceClauseUrl(row)
+                            return (
+                              <tr key={`std-map-${draft.id}-${index}`} className="border-b border-border/80">
+                                <td className="px-3 py-2 text-foreground">{label}</td>
+                                <td className="px-3 py-2 font-mono text-foreground">{clause}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{conf}</td>
+                                <td className="px-3 py-2 text-muted-foreground max-w-[200px] truncate" title={basis}>
+                                  {basis}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Link
+                                    to={href}
+                                    className="text-primary hover:underline inline-flex items-center gap-0.5"
+                                  >
+                                    View <ExternalLink size={10} />
+                                  </Link>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {(draft.suggested_action_title || draft.suggested_risk_title) && (
@@ -1683,7 +1771,9 @@ function DraftFindingsList({
                             View in Risk Register <ExternalLink size={10} />
                           </Link>
                         ) : (
-                          <span className="text-xs text-rose-500">Created on promotion</span>
+                          <span className="text-xs text-rose-500">
+                            Queued for risk register triage on promotion
+                          </span>
                         )}
                       </div>
                       <p className="mt-1.5 text-sm font-medium text-foreground">

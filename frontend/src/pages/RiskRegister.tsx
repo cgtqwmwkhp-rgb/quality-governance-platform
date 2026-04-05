@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -42,6 +42,7 @@ interface Risk {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  suggestion_triage_status?: string | null
 }
 
 interface MatrixCell {
@@ -103,10 +104,8 @@ export default function RiskRegister() {
     overdue_review: 0,
     escalated: 0,
   })
-
-  useEffect(() => {
-    loadRisks()
-  }, [])
+  const [registerMode, setRegisterMode] = useState<'active' | 'import_triage'>('active')
+  const [pendingTriageCount, setPendingTriageCount] = useState(0)
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
@@ -120,14 +119,22 @@ export default function RiskRegister() {
     }
   }, [auditOnly, auditRefFilter, searchParams, setSearchParams])
 
-  const loadRisks = async () => {
+  const loadRisks = useCallback(async () => {
     setLoading(true)
     try {
-      const [risksResponse, summaryResponse, heatmapResponse] = await Promise.all([
-        riskRegisterApi.list({ limit: 100 }),
+      const listParams =
+        registerMode === 'import_triage'
+          ? ({ limit: 100, suggestion_triage: 'pending' } as const)
+          : ({ limit: 100 } as const)
+      const [risksResponse, summaryResponse, heatmapResponse, pendingRes] = await Promise.all([
+        riskRegisterApi.list(listParams),
         riskRegisterApi.getSummary(),
         riskRegisterApi.getHeatmap(),
+        riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
       ])
+      setPendingTriageCount(
+        typeof pendingRes.data?.total === 'number' ? pendingRes.data.total : 0,
+      )
 
       const apiRisks = risksResponse.data?.items ?? []
       const mappedRisks: Risk[] = apiRisks.map((r) => {
@@ -165,6 +172,7 @@ export default function RiskRegister() {
           escalation_reason: r.escalation_reason,
           linked_audits: r.linked_audits ?? [],
           linked_actions: r.linked_actions ?? [],
+          suggestion_triage_status: r.suggestion_triage_status ?? null,
         }
       })
       setRisks(mappedRisks)
@@ -257,6 +265,19 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
+  }, [registerMode])
+
+  useEffect(() => {
+    void loadRisks()
+  }, [loadRisks])
+
+  const resolveImportTriage = async (riskId: number, decision: 'accept' | 'reject') => {
+    try {
+      await riskRegisterApi.resolveSuggestionTriage(riskId, { decision })
+      await loadRisks()
+    } catch (err) {
+      console.error('Import triage resolution failed:', err)
+    }
   }
 
   const visibleRisks = risks.filter((risk) => {
@@ -312,6 +333,29 @@ export default function RiskRegister() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
           <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <Button
+              size="sm"
+              variant={registerMode === 'active' ? 'default' : 'secondary'}
+              onClick={() => setRegisterMode('active')}
+            >
+              Active register
+            </Button>
+            <Button
+              size="sm"
+              variant={registerMode === 'import_triage' ? 'default' : 'secondary'}
+              onClick={() => setRegisterMode('import_triage')}
+            >
+              Import triage
+              {pendingTriageCount > 0 ? ` (${pendingTriageCount})` : ''}
+            </Button>
+          </div>
+          {registerMode === 'import_triage' ? (
+            <p className="text-xs text-muted-foreground mt-2 max-w-2xl">
+              Risks raised from external audit import appear here until you accept them into the live register
+              or reject them (closed, auditable).
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
@@ -502,7 +546,9 @@ export default function RiskRegister() {
                 {visibleRisks.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center py-12 text-muted-foreground">
-                      No risks found in the register
+                      {registerMode === 'import_triage'
+                        ? 'No import-sourced risks awaiting triage.'
+                        : 'No risks found in the register'}
                     </td>
                   </tr>
                 )}
@@ -510,6 +556,14 @@ export default function RiskRegister() {
                   <tr
                     key={risk.id}
                     className="hover:bg-muted/30 transition-colors cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedRisk(risk)
+                      }
+                    }}
                     onClick={() => setSelectedRisk(risk)}
                   >
                     <td className="px-4 py-4">
@@ -567,14 +621,40 @@ export default function RiskRegister() {
                       </div>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      {registerMode === 'import_triage' ? (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+                          <Button
+                            size="sm"
+                            className="text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void resolveImportTriage(risk.id, 'accept')
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void resolveImportTriage(risk.id, 'reject')
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

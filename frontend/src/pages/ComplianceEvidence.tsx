@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Award,
   Leaf,
@@ -69,6 +70,10 @@ const standardColors: Record<string, string> = {
 }
 
 export default function ComplianceEvidence() {
+  const [searchParams] = useSearchParams()
+  const clauseFromUrl = (searchParams.get('clause') || '').trim()
+  const standardFromUrl = (searchParams.get('standard') || '').trim()
+
   const [selectedStandard, setSelectedStandard] = useState<string | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedClauses, setExpandedClauses] = useState<Set<string>>(new Set())
@@ -94,6 +99,26 @@ export default function ComplianceEvidence() {
     () => standards.find((standard) => standard.canonical_data_degraded)?.canonical_data_message ?? null,
     [standards],
   )
+
+  useEffect(() => {
+    if (!standardFromUrl) return
+    setSelectedStandard(standardFromUrl)
+  }, [standardFromUrl])
+
+  useEffect(() => {
+    if (!clauseFromUrl || clauses.length === 0) return
+    const needle = clauseFromUrl.toLowerCase()
+    const match = clauses.find(
+      (c) =>
+        c.clause_number.toLowerCase() === needle ||
+        String(c.id).toLowerCase() === needle ||
+        c.clause_number.toLowerCase().replace(/\s+/g, '') === needle.replace(/\s+/g, ''),
+    )
+    if (match) {
+      setSelectedClauseId(match.id)
+      setViewMode('clauses')
+    }
+  }, [clauseFromUrl, clauses])
 
   useEffect(() => {
     let cancelled = false

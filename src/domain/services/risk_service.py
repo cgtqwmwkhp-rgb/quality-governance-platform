@@ -12,7 +12,7 @@ Provides:
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.risk_register import (
@@ -251,6 +251,12 @@ class RiskService:
     ) -> dict[str, Any]:
         """Generate heat map data for visualization"""
         stmt = select(EnterpriseRisk).where(EnterpriseRisk.status != "closed")
+        stmt = stmt.where(
+            or_(
+                EnterpriseRisk.suggestion_triage_status.is_(None),
+                EnterpriseRisk.suggestion_triage_status == "accepted",
+            )
+        )
         if tenant_id is not None:
             stmt = stmt.where(EnterpriseRisk.tenant_id == tenant_id)
         if category:

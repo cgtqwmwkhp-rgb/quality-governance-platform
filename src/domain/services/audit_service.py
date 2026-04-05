@@ -1287,6 +1287,7 @@ class AuditService:
         action: CAPAAction | None,
         actor_user_id: int,
         suggested_title: str | None = None,
+        external_import_triage_pending: bool = False,
     ) -> EnterpriseRisk | None:
         if finding.severity not in {"critical", "high", "medium", "low"}:
             return None
@@ -1329,6 +1330,24 @@ class AuditService:
             likelihood, impact = 1, 2
         score = likelihood * impact
 
+        if external_import_triage_pending:
+            risk_status = "identified"
+            triage_plan = (
+                "Raised from external audit import — review under Risk Register → Import triage "
+                "before treating as a live register entry."
+            )
+            esc_reason = "Awaiting risk register triage (external audit import)."
+            is_esc = False
+            esc_date = None
+            triage_flag = "pending"
+        else:
+            risk_status = "open"
+            triage_plan = "Raised automatically from an audit finding requiring remediation."
+            esc_reason = f"Auto-escalated from {finding.reference_number}"
+            is_esc = True
+            esc_date = datetime.now(timezone.utc).replace(tzinfo=None)
+            triage_flag = None
+
         risk = EnterpriseRisk(
             tenant_id=run.tenant_id,
             reference=await ReferenceNumberService.generate(self.db, "risk", EnterpriseRisk),
@@ -1351,17 +1370,18 @@ class AuditService:
             appetite_threshold=12,
             is_within_appetite=score <= 12,
             treatment_strategy="treat",
-            treatment_plan="Raised automatically from an audit finding requiring remediation.",
+            treatment_plan=triage_plan,
             risk_owner_id=run.assigned_to_id,
-            status="open",
+            status=risk_status,
             review_frequency_days=30,
             next_review_date=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=30),
-            is_escalated=True,
-            escalation_reason=f"Auto-escalated from {finding.reference_number}",
-            escalation_date=datetime.now(timezone.utc).replace(tzinfo=None),
+            is_escalated=is_esc,
+            escalation_reason=esc_reason,
+            escalation_date=esc_date,
             linked_audits=[run.reference_number, finding.reference_number],
             linked_actions=[action.reference_number] if action is not None else [],
             created_by=actor_user_id,
+            suggestion_triage_status=triage_flag,
         )
         self.db.add(risk)
         await self.db.flush()
@@ -1604,6 +1624,7 @@ class AuditService:
         suggested_action_title = finding_dict.pop("_suggested_action_title", None)
         suggested_action_description = finding_dict.pop("_suggested_action_description", None)
         suggested_risk_title = finding_dict.pop("_suggested_risk_title", None)
+        external_import_triage_pending = bool(finding_dict.pop("_external_import_risk_triage_pending", False))
         # Strip any remaining internal keys that aren't AuditFinding columns
         finding_dict = {k: v for k, v in finding_dict.items() if not k.startswith("_")}
 
@@ -1636,6 +1657,7 @@ class AuditService:
             action=action,
             actor_user_id=user_id,
             suggested_title=suggested_risk_title,
+            external_import_triage_pending=external_import_triage_pending,
         )
         await self.db.refresh(finding)
         await invalidate_tenant_cache(tenant_id, "audits")

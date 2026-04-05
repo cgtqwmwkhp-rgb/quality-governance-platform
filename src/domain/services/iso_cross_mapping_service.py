@@ -6,7 +6,12 @@ import re
 
 
 class ISOCrossMappingService:
-    """Lightweight ISO reference detector with provenance-friendly outputs."""
+    """Lightweight ISO reference detector with provenance-friendly outputs.
+
+    Used by external audit analysis to seed ``mapped_standards`` for draft review. For
+    bi-directional clause-level matrices (UVDB ↔ ISO, compliance evidence, IMS), see
+    ``cross_standard_mappings`` APIs and ``ComplianceEvidence`` / ``UVDBAudits`` UIs.
+    """
 
     _STANDARD_PATTERNS: tuple[tuple[str, str], ...] = (
         ("ISO 9001", r"\biso\s*9001\b"),
