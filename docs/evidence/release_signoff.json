@@ -1,5 +1,5 @@
 {
-  "release_sha": "d026a74e8920a6ae5ca3d3eec90b4dd5069eb62a",
+  "release_sha": "b481a59c0c9fab8a752b8b050ee99945f63842f2",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
@@ -25,7 +25,7 @@
     ],
     "staging_deploy_head_sha": "ecc3072a0c9588704a55ea00637baca0f89a65c7",
     "staging_last_recorded_deploy_sha_before_promotion": "ecc3072a0c9588704a55ea00637baca0f89a65c7",
-    "governance_note": "Signed release_sha remains d026a74e (historic anchor). Production live at ecc3072a (PR #430). Verified GET /healthz 200 and /api/v1/meta/version. Redis may show not_configured if REDIS_URL unset — see docs/ops/diagnostics-endpoint-guide.md.",
+    "governance_note": "Signed release_sha updated to b481a59c (PR #433 GAP-001-003). Production live at ecc3072a prior. Verified GET /healthz 200 and /api/v1/meta/version. Redis may show not_configured if REDIS_URL unset — see docs/ops/diagnostics-endpoint-guide.md.",
     "pr_checks_passed": "CI success on main at ecc3072a — run 23998920769",
     "unit_tests": "Per CI run 23998920769",
     "mypy": "Per CI run 23998920769",
