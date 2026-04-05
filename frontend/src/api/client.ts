@@ -6,6 +6,8 @@ import {
   isTokenExpired,
   clearTokens,
   setPortalToken,
+  setAdminToken,
+  isAdminSession,
 } from '../utils/auth'
 import { API_BASE_URL } from '../config/apiBase'
 import { toast } from '../contexts/ToastContext'
@@ -244,7 +246,11 @@ async function doRefreshToken(): Promise<string | null> {
     )
     const data = res.data
     if (data.access_token) {
-      setPortalToken(data.access_token, data.refresh_token)
+      if (isAdminSession()) {
+        setAdminToken(data.access_token, data.refresh_token)
+      } else {
+        setPortalToken(data.access_token, data.refresh_token)
+      }
       return data.access_token
     }
     return null

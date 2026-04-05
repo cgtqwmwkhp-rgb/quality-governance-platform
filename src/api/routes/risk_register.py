@@ -754,7 +754,7 @@ async def resolve_suggestion_triage(
         risk.review_notes = f"{prev}\n{reject_note}".strip()[:4000]
 
     risk.updated_at = _naive_utc_now()
-    await db.flush()
+    await db.commit()
     if current_user.tenant_id is not None:
         await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
         await invalidate_tenant_cache(current_user.tenant_id, "risks")
