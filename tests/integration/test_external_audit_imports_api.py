@@ -1243,3 +1243,108 @@ async def test_external_audit_partial_promotion_stays_recoverable(
     reconciliation = promoted_job.promotion_summary_json["reconciliation"]
     assert reconciliation["failed_total"] == 1
     assert reconciliation["promoted_total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_external_audit_all_accepted_drafts_fail_promote_raises_validation_error(
+    test_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When every accepted draft fails materialization, surface 422-style ValidationError (not opaque 500)."""
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="All-fail promotion run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        assurance_scheme="Achilles UVDB",
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/allfail.pdf",
+        original_filename="allfail.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="all-fail-promotion-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    run.source_document_asset_id = asset.id
+    await test_session.commit()
+
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+    job.score_percentage = 88
+    job.overall_score = 88
+    job.max_score = 100
+    job.outcome_status = "pass"
+    await test_session.flush()
+
+    only_bad = ExternalAuditDraft(
+        import_job_id=job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.ACCEPTED,
+        title="Always fails",
+        description="Imported issue that should fail",
+        severity="medium",
+        finding_type="question_answered_no",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(only_bad)
+    await test_session.commit()
+
+    async def _always_fail(_self, run_id: int, finding_data: dict, **_kwargs) -> AuditFinding:
+        raise RuntimeError("simulated downstream failure for all drafts")
+
+    monkeypatch.setattr("src.domain.services.audit_service.AuditService.create_finding", _always_fail)
+    monkeypatch.setattr(service, "_link_evidence_for_finding", AsyncMock(return_value=None))
+    monkeypatch.setattr(service, "_link_source_document_evidence", AsyncMock(return_value=None))
+
+    with pytest.raises(ValidationError) as excinfo:
+        await service.promote_job(
+            job_id=job.id,
+            tenant_id=DEFAULT_TEST_TENANT_ID,
+            user_id=DEFAULT_TEST_USER_ID,
+        )
+
+    err = excinfo.value
+    assert "accepted draft" in err.message.lower() or "materialize" in err.message.lower()
+    assert err.details.get("failed_total") == 1
+    assert isinstance(err.details.get("failed_drafts"), list)
+    assert len(err.details["failed_drafts"]) == 1

@@ -1120,8 +1120,14 @@ class ExternalAuditImportService:
                 )
 
         if failed_drafts and not promoted_findings:
-            raise RuntimeError(
-                f"All {len(failed_drafts)} drafts failed to promote. First error: {failed_drafts[0]['error']}"
+            first = failed_drafts[0]
+            raise ValidationError(
+                f"All {len(failed_drafts)} accepted draft(s) failed to materialize into live findings. "
+                f"First draft id={first.get('draft_id')}: {first.get('error', 'unknown error')}",
+                details={
+                    "failed_total": len(failed_drafts),
+                    "failed_drafts": failed_drafts[:20],
+                },
             )
         if failed_drafts:
             logger.warning(
