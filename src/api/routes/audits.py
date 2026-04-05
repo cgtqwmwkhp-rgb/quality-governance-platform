@@ -518,6 +518,9 @@ async def update_template(
     if not template:
         raise NotFoundError("Template not found")
 
+    if template.tenant_id is None and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=403, detail="Only superusers can modify shared templates")
+
     # Increment version if published template is modified
     if template.is_published:
         template.version += 1
@@ -715,6 +718,9 @@ async def create_question(
 
     if not template:
         raise NotFoundError("Template not found")
+
+    if template.tenant_id is None and not getattr(current_user, "is_superuser", False):
+        raise HTTPException(status_code=403, detail="Only superusers can modify shared templates")
 
     # Convert options to JSON if provided
     question_dict = question_data.model_dump()

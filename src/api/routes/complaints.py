@@ -186,9 +186,10 @@ async def list_complaints(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database migration pending. Please wait for migrations to complete.",
             )
+        logger.exception("Error listing complaints")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing complaints: {type(e).__name__}: {str(e)[:200]}",
+            detail="Unable to list complaints at this time.",
         )
 
 

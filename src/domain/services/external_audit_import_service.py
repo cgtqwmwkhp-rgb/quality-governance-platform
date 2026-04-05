@@ -1129,12 +1129,12 @@ class ExternalAuditImportService:
             try:
                 async with self.db.begin_nested():
                     clause_ids = self._extract_clause_ids(draft)
-                    _POSITIVE_ONLY_TYPES = {"positive_practice", "strength", "commendation"}
-                    requires_action = draft.finding_type not in _POSITIVE_ONLY_TYPES
+                    requires_action = draft.finding_type in self._ACTION_FINDING_TYPES
+                    normalized_severity = (draft.severity or "medium").strip().lower()
                     finding_data: dict = {
                         "title": draft.title,
                         "description": draft.description,
-                        "severity": draft.severity,
+                        "severity": normalized_severity,
                         "finding_type": draft.finding_type,
                         "clause_ids": clause_ids,
                         "risk_ids": [],
@@ -1179,7 +1179,8 @@ class ExternalAuditImportService:
                     exc_info=True,
                 )
                 draft.status = ExternalAuditDraftStatus.DRAFT
-                draft.review_notes = f"Promotion failed: {str(exc)[:200]}"
+                existing_notes = draft.review_notes or ""
+                draft.review_notes = f"{existing_notes}\n\nPromotion failed: {str(exc)[:200]}".strip()
                 failed_drafts.append(
                     {
                         "draft_id": draft.id,
