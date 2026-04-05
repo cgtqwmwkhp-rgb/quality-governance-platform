@@ -172,6 +172,9 @@ class _MockRole:
         self.permissions = _ADMIN_PERMS
         self.description = None
         self.is_system_role = False
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.created_at = now
+        self.updated_at = now
 
 
 class _MockUser:
@@ -190,6 +193,9 @@ class _MockUser:
         self.last_login = None
         self.azure_oid = None
         self.roles = [_MockRole()]
+        _now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.created_at = _now
+        self.updated_at = _now
 
     @property
     def full_name(self):
