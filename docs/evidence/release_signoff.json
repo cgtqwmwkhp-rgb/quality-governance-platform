@@ -1,38 +1,38 @@
 {
-  "release_sha": "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317",
+  "release_sha": "2351fa04bda0d9c5f56a1aef99531866c984d205",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
-  "uat_report_path": "docs/evidence/RUNNER_SHEET_RELEASE_ROLLOUT_2026-03-24.md",
+  "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-05T12:52:00+00:00",
+  "approved_at_utc": "2026-04-05T13:55:00+00:00",
   "deployment_evidence": {
-    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24001598038",
-    "staging_deploy_run_id": "24001683143",
-    "production_deploy_run_id": "24001788027",
-    "production_workflow_run_auto_skipped_examples": "23988382114, 23988189832 (freeze — Build and Deploy skipped); 23987714633; see docs/runbooks/cd-workflow-outcomes.md",
-    "production_promotion": "workflow_dispatch staging_verified=true release_sha=f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317 force_deploy=true (PR #436 CAPA/actions governance; deploy freeze override Sun UTC)",
-    "production_live_verified_utc": "2026-04-05T12:52:00Z",
-    "production_live_build_sha": "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317",
-    "production_live_build_time": "2026-04-05T12:51:53Z",
-    "production_baseline_build_sha": "3299d6a316e1e0e54b6e40a76707af3f1bc63bac",
-    "production_baseline_observed_utc": "2026-04-05T12:30:00Z",
+    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24002621167",
+    "staging_deploy_run_id": "24002714695",
+    "production_deploy_run_id": "24002867809",
+    "production_workflow_run_auto_skipped_examples": "24002828777 (workflow_run companion on same SHA); prior freeze skips see docs/runbooks/cd-workflow-outcomes.md",
+    "production_promotion": "workflow_dispatch staging_verified=true release_sha=2351fa04bda0d9c5f56a1aef99531866c984d205 force_deploy=true (PR #439 OpenAPI SSOT + suggestion-triage integration tests; Sun UTC freeze override)",
+    "production_live_verified_utc": "2026-04-05T13:55:00Z",
+    "production_live_build_sha": "2351fa04bda0d9c5f56a1aef99531866c984d205",
+    "production_live_build_time": "2026-04-05T13:52:07Z",
+    "production_baseline_build_sha": "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317",
+    "production_baseline_observed_utc": "2026-04-05T12:52:00Z",
     "mainline_commits_promoted_first_parent": 1,
     "mainline_promotion_steps": [
-      "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317 — Merge PR #436 (CAPA/actions bridge, import triage i18n toasts, import-review governance hand-off, cy.json parity, pillar documentation)",
-      "3299d6a316e1e0e54b6e40a76707af3f1bc63bac — prior production (PR #435 import triage reject notes)"
+      "2351fa04bda0d9c5f56a1aef99531866c984d205 — Merge PR #439 (regenerate docs/contracts/openapi.json from app; tests/integration/test_risk_register_suggestion_triage.py)",
+      "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317 — prior production (PR #436 CAPA/actions governance)"
     ],
-    "staging_deploy_head_sha": "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317",
-    "staging_last_recorded_deploy_sha_before_promotion": "f73b4b2e6257b9b90a5d87ea21dc7c6d920bb317",
-    "governance_note": "Signed release_sha aligned to f73b4b2e (PR #436). Staging deploy run 24001683143; production run 24001788027 with force_deploy (weekend UTC freeze). CI workflow 24001598038 green. Security Scan workflow 24001598031 red only on Container Security Scan (Trivy gate) — job 69998442802; not a merge gate for this path. Spot-check /healthz and /api/v1/meta/version post-deploy. Redis may show not_configured if REDIS_URL unset — see docs/ops/diagnostics-endpoint-guide.md.",
-    "pr_checks_passed": "CI success on main at f73b4b2e — run 24001598038",
-    "unit_tests": "Per CI run 24001598038",
-    "mypy": "Per CI run 24001598038",
-    "frontend_tests": "Per CI run 24001598038",
+    "staging_deploy_head_sha": "2351fa04bda0d9c5f56a1aef99531866c984d205",
+    "staging_last_recorded_deploy_sha_before_promotion": "2351fa04bda0d9c5f56a1aef99531866c984d205",
+    "governance_note": "Signed release_sha aligned to 2351fa04 (PR #439). Staging deploy run 24002714695; production run 24002867809 with force_deploy (weekend UTC freeze). CI workflow 24002621167 green. Security Scan workflow 24002621168 red only on Container Security Scan (Trivy gate) — not a merge gate for this path. Post-deploy: GET /healthz 200; GET /readyz ready; GET /api/v1/meta/version build_sha matches 2351fa04. Redis may show not_configured if REDIS_URL unset — see docs/ops/diagnostics-endpoint-guide.md.",
+    "pr_checks_passed": "CI success on main at 2351fa04 — run 24002621167",
+    "unit_tests": "Per CI run 24002621167",
+    "mypy": "Per CI run 24002621167",
+    "frontend_tests": "Per CI run 24002621167",
     "coverage_threshold": "ci.yml unit 44% / integration 42%; pyproject fail_under 70 — see docs/evidence/test-coverage-baseline.md",
     "changes_this_release": [
-      "PR #436: Actions audit playbook + deep links; audit_run_id + owner hydration; Risk Register import triage toasts (en/cy); AuditImportReview reconciliation governance hand-off; GAP remediation plan pillars + dual enhancement reviews + execution plan"
+      "PR #439: Regenerated committed OpenAPI from FastAPI app; enterprise risk-register and suggestion-triage paths in docs/contracts/openapi.json; integration tests for suggestion-triage accept/reject/double-resolve/pending filter"
     ],
     "pre_existing_failures": [
       {
@@ -42,7 +42,7 @@
       },
       {
         "job": "container-security-scan-trivy",
-        "reason": "Security Scan workflow run 24001598031 — Trivy vulnerability gate failed on main at f73b4b2e; SARIF uploaded. Track as image/debt hygiene.",
+        "reason": "Security Scan workflow run 24002621168 — Trivy vulnerability gate failed on main at 2351fa04; SARIF uploaded. Track as image/debt hygiene.",
         "risk": "low"
       }
     ]
