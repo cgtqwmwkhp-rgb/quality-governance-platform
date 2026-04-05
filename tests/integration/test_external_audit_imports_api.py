@@ -1101,6 +1101,125 @@ async def test_promote_requires_review_required_and_completes_external_audit_out
 
 
 @pytest.mark.asyncio
+async def test_external_audit_promote_skips_accepted_draft_already_linked_to_finding(
+    test_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Idempotency: accepted draft with promoted_finding_id set must not call create_finding."""
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="Idempotent promotion run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/idempotent.pdf",
+        original_filename="idempotent.pdf",
+        content_type="application/pdf",
+        file_size_bytes=1024,
+        checksum_sha256="idempotent-promotion-sha",
+        asset_type=EvidenceAssetType.PDF,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    run.source_document_asset_id = asset.id
+    await test_session.commit()
+
+    existing_finding = AuditFinding(
+        run_id=run.id,
+        title="Already materialized",
+        description="Prior promotion",
+        severity="low",
+        finding_type="positive_practice",
+        status=FindingStatus.OPEN,
+        corrective_action_required=False,
+        reference_number=generate_test_reference("FND"),
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+    )
+    test_session.add(existing_finding)
+    await test_session.commit()
+    await test_session.refresh(existing_finding)
+
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+    job.score_percentage = 90.0
+    job.overall_score = 90.0
+    job.max_score = 100
+    job.outcome_status = "pass"
+    await test_session.flush()
+
+    linked_draft = ExternalAuditDraft(
+        import_job_id=job.id,
+        audit_run_id=run.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        status=ExternalAuditDraftStatus.ACCEPTED,
+        title="Already linked",
+        description="Should skip create_finding",
+        severity="low",
+        finding_type="positive_practice",
+        promoted_finding_id=existing_finding.id,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(linked_draft)
+    await test_session.commit()
+
+    async def _must_not_create_finding(*_args, **_kwargs) -> AuditFinding:
+        raise AssertionError("create_finding must not run when promoted_finding_id is already set")
+
+    monkeypatch.setattr(
+        "src.domain.services.audit_service.AuditService.create_finding",
+        _must_not_create_finding,
+    )
+    monkeypatch.setattr(service, "_link_evidence_for_finding", AsyncMock(return_value=None))
+    monkeypatch.setattr(service, "_link_source_document_evidence", AsyncMock(return_value=None))
+    monkeypatch.setattr(service, "_sync_scheme_records", AsyncMock(return_value={"status": "not_synced"}))
+
+    promoted_job = await service.promote_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    assert promoted_job.status == ExternalAuditImportStatus.COMPLETED
+
+
+@pytest.mark.asyncio
 async def test_external_audit_partial_promotion_stays_recoverable(
     test_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
@@ -1348,3 +1467,4 @@ async def test_external_audit_all_accepted_drafts_fail_promote_raises_validation
     assert err.details.get("failed_total") == 1
     assert isinstance(err.details.get("failed_drafts"), list)
     assert len(err.details["failed_drafts"]) == 1
+    assert err.details["failed_drafts"][0].get("error_type") == "RuntimeError"
