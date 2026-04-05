@@ -20,7 +20,8 @@ async def test_create_action_supports_audit_finding_source() -> None:
     )
     run = SimpleNamespace(id=12, assurance_scheme="ISO 9001:2015", external_reference="7.5")
     execute_result = MagicMock()
-    execute_result.scalar_one_or_none.side_effect = [finding, run]
+    # validate finding, then provenance reloads finding + audit run
+    execute_result.scalar_one_or_none.side_effect = [finding, finding, run]
 
     db = SimpleNamespace(
         execute=AsyncMock(return_value=execute_result),
@@ -60,6 +61,7 @@ async def test_create_action_supports_audit_finding_source() -> None:
     assert response.source_type == "audit_finding"
     assert response.source_id == 55
     assert response.priority == "high"
+    assert response.audit_run_id == 12
 
 
 def test_capa_enums_bind_lowercase_values_for_postgres() -> None:
