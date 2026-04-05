@@ -13,6 +13,8 @@ Paths below are on the **API host** (e.g. `https://app-qgp-prod.azurewebsites.ne
 | `/api/v1/health/diagnostics` | GET | Runtime diagnostics: Python version, PID, uptime, migration head, feature-flag count, dependency snapshot | No |
 | `/api/v1/health/metrics/resources` | GET | Resource utilization (CPU, memory, connections) | No |
 
+**Redis in `/readyz`:** Implementation in `src/api/routes/health.py` — if `settings.redis_url` is empty, the JSON shows `redis: not_configured` while DB may still be `ok`. That reflects **missing App Setting `REDIS_URL`** (or equivalent), not necessarily a fault. Enable Redis when idempotency/Celery features require it (`pyproject.toml` / `.env.example` document `REDIS_URL`).
+
 ## System Information
 
 | Endpoint | Method | Purpose | Auth Required |
