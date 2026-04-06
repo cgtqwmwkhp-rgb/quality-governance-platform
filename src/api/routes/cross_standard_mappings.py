@@ -4,7 +4,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.api.utils.entity import get_or_404
@@ -163,10 +164,17 @@ async def list_mappings(
             (CrossStandardMapping.primary_clause == clause) | (CrossStandardMapping.mapped_clause == clause)
         )
 
-    result = await db.execute(query)
-    rows = result.scalars().all()
-    track_metric("cross_standard_mappings.accessed")
-    return [MappingResponse.model_validate(r) for r in rows]
+    try:
+        result = await db.execute(query)
+        rows = result.scalars().all()
+        track_metric("cross_standard_mappings.accessed")
+        return [MappingResponse.model_validate(r) for r in rows]
+    except SQLAlchemyError:
+        logger.warning(
+            "cross_standard_mappings list query failed (schema drift or missing tables); returning empty",
+            exc_info=True,
+        )
+        return []
 
 
 @router.get("/standards", response_model=StandardsListResponse)
@@ -177,16 +185,23 @@ async def list_standards(
     """List all available ISO standards in the mapping database."""
     from src.domain.models.standard import Standard
 
-    standards_result = await db.execute(
-        select(Standard.name)
-        .where(
-            Standard.is_active == True,  # noqa: E712
-            or_(Standard.tenant_id == current_user.tenant_id, Standard.tenant_id.is_(None)),
+    try:
+        standards_result = await db.execute(
+            select(Standard.name)
+            .where(
+                Standard.is_active == True,  # noqa: E712
+                or_(Standard.tenant_id == current_user.tenant_id, Standard.tenant_id.is_(None)),
+            )
+            .order_by(Standard.name.asc())
         )
-        .order_by(Standard.name.asc())
-    )
-    all_standards = [name for (name,) in standards_result.all()]
-    return {"standards": all_standards}
+        all_standards = [name for (name,) in standards_result.all()]
+        return {"standards": all_standards}
+    except SQLAlchemyError:
+        logger.warning(
+            "cross_standard_mappings standards list failed; returning empty standards",
+            exc_info=True,
+        )
+        return {"standards": []}
 
 
 @router.post("", response_model=MappingResponse, status_code=status.HTTP_201_CREATED)
