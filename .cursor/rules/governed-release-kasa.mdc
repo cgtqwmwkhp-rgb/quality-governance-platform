@@ -32,6 +32,7 @@ When the user asks to **ship**, **release**, or **complete governed delivery** t
 
 - If **CI** fails **Lockfile Freshness** (package version drift in `requirements.lock`): run **`LOCKFILE_UPGRADE=1 ./scripts/generate_lockfile.sh`**, commit, PR, merge. Use plain **`./scripts/generate_lockfile.sh`** when regenerating without refreshing upstream pins.
 - **Automation:** `.github/workflows/lockfile-update.yml` runs weekly with **`LOCKFILE_UPGRADE=1`** and opens a PR when the lockfile changes — **merge promptly** to avoid repeated CI failures.
+- **If that workflow fails** with *“GitHub Actions is not permitted to create or approve pull requests”*, the workflow YAML permissions are not enough: a **repo or org admin** must allow Actions to open PRs (GitHub **Settings → Actions → General → Workflow permissions**, or the org-level equivalent). Until then, rely on **`LOCKFILE_UPGRADE=1 ./scripts/generate_lockfile.sh`** in a normal PR when CI reports lockfile drift.
 
 ## Production sign-off artifact
 
