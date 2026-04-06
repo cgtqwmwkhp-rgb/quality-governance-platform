@@ -16,7 +16,7 @@ from typing import Any, List, Optional
 import sqlalchemy
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -237,9 +237,16 @@ async def _load_evidence_links(
 
 async def _load_canonical_standard_rows(
     db: DbSession,
+    *,
+    tenant_id: Optional[int],
 ) -> tuple[dict[ISOStandard, Standard], dict[int, int], dict[ISOStandard, int], Optional[str]]:
     try:
-        standard_result = await db.execute(select(Standard).where(Standard.is_active == True))
+        std_tenant_filter = (
+            or_(Standard.tenant_id == tenant_id, Standard.tenant_id.is_(None))
+            if tenant_id is not None
+            else Standard.tenant_id.is_(None)
+        )
+        standard_result = await db.execute(select(Standard).where(Standard.is_active == True, std_tenant_filter))
         canonical_rows: dict[ISOStandard, Standard] = {}
         for record in standard_result.scalars().all():
             matched_standard = _match_standard_record(record)
@@ -248,13 +255,26 @@ async def _load_canonical_standard_rows(
 
         clause_count_rows = await db.execute(
             select(Clause.standard_id, func.count(Clause.id))
-            .where(Clause.is_active == True)
+            .select_from(Clause)
+            .join(Standard, Clause.standard_id == Standard.id)
+            .where(
+                Clause.is_active == True,  # noqa: E712
+                Standard.is_active == True,  # noqa: E712
+                std_tenant_filter,
+            )
             .group_by(Clause.standard_id)
         )
         db_clause_counts = {standard_id: count for standard_id, count in clause_count_rows.all()}
 
+        ims_tenant_filter = (
+            or_(IMSRequirement.tenant_id == tenant_id, IMSRequirement.tenant_id.is_(None))
+            if tenant_id is not None
+            else IMSRequirement.tenant_id.is_(None)
+        )
         ims_requirement_rows = await db.execute(
-            select(IMSRequirement.standard, func.count(IMSRequirement.id)).group_by(IMSRequirement.standard)
+            select(IMSRequirement.standard, func.count(IMSRequirement.id))
+            .where(ims_tenant_filter)
+            .group_by(IMSRequirement.standard)
         )
         ims_counts: dict[ISOStandard, int] = defaultdict(int)
         for standard_name, count in ims_requirement_rows.all():
@@ -520,7 +540,10 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
         [_build_evidence_link_model(link) for link in links],
         None,
     )["by_standard"]
-    canonical_rows, db_clause_counts, ims_counts, canonical_data_message = await _load_canonical_standard_rows(db)
+    canonical_rows, db_clause_counts, ims_counts, canonical_data_message = await _load_canonical_standard_rows(
+        db,
+        tenant_id=current_user.tenant_id,
+    )
 
     response: list[ComplianceStandardResponse] = []
     for iso_standard in ISOStandard:

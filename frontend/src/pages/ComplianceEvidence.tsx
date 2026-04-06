@@ -94,6 +94,7 @@ export default function ComplianceEvidence() {
   const [loading, setLoading] = useState(true)
   const [loadingMappings, setLoadingMappings] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
 
   const canonicalDataWarning = useMemo(
     () => standards.find((standard) => standard.canonical_data_degraded)?.canonical_data_message ?? null,
@@ -126,9 +127,11 @@ export default function ComplianceEvidence() {
     const loadData = async () => {
       setLoading(true)
       setError(null)
+      setPartialLoadWarning(null)
       try {
         const standardFilter = selectedStandard === 'all' ? undefined : selectedStandard
-        const [standardsRes, clausesRes, coverageRes, reportRes, evidenceRes] = await Promise.all([
+        const labels = ['standards', 'clauses', 'coverage', 'report', 'evidence links'] as const
+        const settled = await Promise.allSettled([
           complianceApi.listStandards(),
           complianceApi.listClauses(standardFilter, searchQuery || undefined),
           complianceApi.getCoverage(standardFilter),
@@ -138,21 +141,41 @@ export default function ComplianceEvidence() {
 
         if (cancelled) return
 
-        setStandards(standardsRes.data)
-        setClauses(clausesRes.data)
-        setCoverage(coverageRes.data)
-        setReport(reportRes.data)
-        setEvidenceLinks(evidenceRes.data)
+        const failed = labels.filter((_, i) => settled[i].status === 'rejected')
+        if (failed.length === labels.length) {
+          const first = settled.find((s) => s.status === 'rejected') as PromiseRejectedResult
+          setError(getApiErrorMessage(first.reason))
+          setStandards([])
+          setClauses([])
+          setCoverage(null)
+          setReport(null)
+          setEvidenceLinks([])
+        } else {
+          if (failed.length > 0) {
+            setPartialLoadWarning(
+              `Some data could not be loaded: ${failed.join(', ')}. Showing what is available.`,
+            )
+          }
+          const [sr, cr, cov, rep, ev] = settled
+          setStandards(sr.status === 'fulfilled' ? sr.value.data : [])
+          setClauses(cr.status === 'fulfilled' ? cr.value.data : [])
+          setCoverage(cov.status === 'fulfilled' ? cov.value.data : null)
+          setReport(rep.status === 'fulfilled' ? rep.value.data : null)
+          setEvidenceLinks(ev.status === 'fulfilled' ? ev.value.data : [])
 
-        if (
-          selectedClauseId &&
-          !clausesRes.data.some((clause) => clause.id === selectedClauseId) &&
-          reportRes.data.clauses.length > 0
-        ) {
-          setSelectedClauseId(reportRes.data.clauses[0].clause_id)
-        }
-        if (!selectedClauseId && reportRes.data.clauses.length > 0) {
-          setSelectedClauseId(reportRes.data.clauses[0].clause_id)
+          const reportData = rep.status === 'fulfilled' ? rep.value.data : null
+          const clausesData = cr.status === 'fulfilled' ? cr.value.data : []
+          if (
+            reportData &&
+            selectedClauseId &&
+            !clausesData.some((clause) => clause.id === selectedClauseId) &&
+            reportData.clauses.length > 0
+          ) {
+            setSelectedClauseId(reportData.clauses[0].clause_id)
+          }
+          if (reportData && !selectedClauseId && reportData.clauses.length > 0) {
+            setSelectedClauseId(reportData.clauses[0].clause_id)
+          }
         }
       } catch (err) {
         if (!cancelled) {
@@ -210,7 +233,10 @@ export default function ComplianceEvidence() {
 
       setLoadingMappings(true)
       try {
-        const response = await crossStandardMappingsApi.list({ clause: selectedClause.clause_number })
+        const response = await crossStandardMappingsApi.list({
+          clause: selectedClause.clause_number,
+          limit: 500,
+        })
         if (!cancelled) {
           setMappings(response.data)
         }
@@ -441,6 +467,15 @@ export default function ComplianceEvidence() {
         {error && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}
+          </div>
+        )}
+
+        {partialLoadWarning && !error && (
+          <div
+            className="mb-4 rounded-lg border border-amber-600/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+            role="status"
+          >
+            {partialLoadWarning}
           </div>
         )}
 
