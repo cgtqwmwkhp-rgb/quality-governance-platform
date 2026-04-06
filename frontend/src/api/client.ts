@@ -458,7 +458,7 @@ api.interceptors.response.use(
  * Get a user-friendly error message from an API error.
  * Use this in catch blocks for consistent error messaging.
  */
-export function getApiErrorMessage(error: unknown): string {
+export function getApiErrorMessage(error: unknown, fallback?: string): string {
   if (axios.isAxiosError(error)) {
     const classified = error as ClassifiedAxiosError
     if (classified.classifiedMessage) {
@@ -489,7 +489,7 @@ export function getApiErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message
   }
-  return 'An unexpected error occurred'
+  return fallback ?? 'An unexpected error occurred'
 }
 
 // ============ Auth Types ============
