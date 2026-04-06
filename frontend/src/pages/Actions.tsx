@@ -711,7 +711,7 @@ export default function Actions() {
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
                             <Link to={`/actions/item?key=${encodeURIComponent(action.action_key)}`}>
-                              {t('actions.open_profile', { defaultValue: 'Open profile' })}
+                              {t('actions.open_profile')}
                               <ExternalLink className="w-3 h-3 ml-1" />
                             </Link>
                           </Button>

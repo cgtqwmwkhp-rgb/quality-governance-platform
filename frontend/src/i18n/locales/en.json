@@ -41,6 +41,7 @@
   "actions.audit_playbook.risk_triage": "Risk import triage",
   "actions.audit_playbook.title": "Audit-sourced corrective actions",
   "actions.open_audit_run": "Open audit run",
+  "actions.open_profile": "Open profile",
   "actions.open_import_review": "Import review",
   "actions.sort_due": "Due date",
   "actions.sort_newest": "Newest",
