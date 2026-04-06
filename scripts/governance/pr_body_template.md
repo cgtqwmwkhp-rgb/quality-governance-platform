@@ -1,16 +1,16 @@
 # Change Ledger (CL-001)
 
 ## 1) Summary
-- **Feature / Change name:** Audit Wave 8 — Tenant isolation on form config, executive dashboard, analytics, AI services
-- **User goal (1-2 lines):** Close 46 cross-tenant security vulnerabilities across 7 files; add tenant_id filters to all form config endpoints, executive dashboard queries, vehicle checklist analytics, and AI intelligence service queries.
-- **In scope:** FC-01..25, ED-01..12, VCA-01..04, AI-01..05
-- **Out of scope:** PAMS cache tables (no tenant_id column), ComplianceEvidence/ControlledDocument (no tenant_id column)
+- **Feature / Change name:** Audit Wave 9 — Tenant isolation on ISO 27001, risks, audit trail
+- **User goal (1-2 lines):** Close 20 cross-tenant security vulnerabilities across 3 files; add tenant_id filters to all ISO 27001 ISMS endpoints, risk register statistics/matrix/controls, and audit trail entry lookup.
+- **In scope:** ISO-01..14, RSK-01..05, ATL-01
+- **Out of scope:** Standards library (global shared data by design), feature flags, RCA tools, push notifications (service-layer follow-on)
 - **Feature flag / kill switch:** N/A — security hardening
 
 ## 2) Impact Map (what changed)
 - **Frontend (routes/screens/components):** None
-- **Backend (handlers/services):** `form_config.py`, `executive_dashboard.py`, `vehicle_checklist_analytics.py`, `ai_intelligence.py`, `executive_dashboard.py` (service), `ai_predictive_service.py`, `ai_audit_service.py`
-- **APIs (endpoints changed/added):** 25 form config endpoints tenant-scoped; 11 vehicle governance queries tenant-scoped; 30+ exec dashboard service queries tenant-scoped; 6 analytics endpoints tenant-scoped; 17 AI service calls tenant-scoped; auth added to list_contracts and list_lookup_options
+- **Backend (handlers/services):** `iso27001.py`, `risks.py`, `audit_trail.py`
+- **APIs (endpoints changed/added):** 14 ISO 27001 endpoints tenant-scoped (assets, controls, SoA, risks, incidents, suppliers, dashboard); 5 risk register endpoints tenant-scoped (statistics, matrix, delete_risk, update_control, delete_control); 1 audit trail endpoint tenant-scoped (get_audit_entry)
 - **Schemas/contracts (OpenAPI/Zod/DTO/types):** None
 - **Database (migrations/entities/indexes):** No schema changes
 - **Workflows/jobs/queues (if any):** None
@@ -25,14 +25,12 @@
 - **Rollback strategy (DB):** No DB change — revert commit only
 
 ## 4) Acceptance Criteria (AC)
-- [x] AC-01: All 25 form config endpoints scoped to tenant (FC-01..25)
-- [x] AC-02: Auth added to list_contracts and list_lookup_options
-- [x] AC-03: Vehicle governance 11 queries scoped to tenant (ED-01..11)
-- [x] AC-04: ExecutiveDashboardService 30+ queries scoped to tenant (ED-12)
-- [x] AC-05: Vehicle checklist analytics queries scoped to tenant (VCA-01..04)
-- [x] AC-06: AI predictive services scoped to tenant (AI-01..02)
-- [x] AC-07: AI audit services scoped to tenant (AI-03..05)
-- [x] AC-08: 1377 unit tests pass, 195 frontend tests pass, lint/format/mypy clean
+- [x] AC-01: All 14 ISO 27001 endpoints scoped to tenant (ISO-01..14)
+- [x] AC-02: Risk statistics and matrix scoped to tenant (RSK-01..02)
+- [x] AC-03: Risk delete_risk scoped to tenant (RSK-03)
+- [x] AC-04: Risk update_control and delete_control join through Risk for tenant check (RSK-04..05)
+- [x] AC-05: Audit trail get_audit_entry scoped to tenant (ATL-01)
+- [x] AC-06: 1377 unit tests pass, 195 frontend tests pass, lint/format/mypy clean
 
 ## 5) Testing Evidence (link to runs)
 - [x] Lint — flake8 clean
@@ -44,10 +42,9 @@
 - [x] E2E Smoke (critical journeys) — deferred to staging
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] CUJ-01: Form configuration management
-- [x] CUJ-02: Executive dashboard KPIs
-- [x] CUJ-03: Vehicle checklist analytics
-- [x] CUJ-04: AI intelligence services
+- [x] CUJ-01: ISO 27001 ISMS management
+- [x] CUJ-02: Risk register operations
+- [x] CUJ-03: Audit trail access
 
 ## 7) Observability & Ops
 - **Logs:** No change
