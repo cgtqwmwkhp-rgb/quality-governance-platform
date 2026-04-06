@@ -120,10 +120,14 @@ async def _normalize_evidence_upload_source(
     db: DbSession,
     current_user: CurrentUser,
     source_module_enum: EvidenceSourceModule,
-    source_id: Optional[int],
+    source_id: int,
     action_key: Optional[str],
 ) -> tuple[str, str]:
-    """Return (normalized_source_id for DB, path segment for blob keys)."""
+    """Return (normalized_source_id for DB, path segment for blob keys).
+
+    For ``source_module=action``, ``action_key`` is required; ``source_id`` is ignored
+    (send ``0`` to satisfy the multipart contract and OpenAPI stability).
+    """
     if source_module_enum == EvidenceSourceModule.ACTION:
         if not action_key or not str(action_key).strip():
             raise BadRequestError(
@@ -142,10 +146,10 @@ async def _normalize_evidence_upload_source(
 
         await load_action_response_by_key(db, current_user.tenant_id, ak)
         return ak, ak.replace(":", "_")
-    if source_id is None:
+    if source_id < 1:
         raise BadRequestError(
-            "source_id is required for this source_module",
-            code="SOURCE_ID_REQUIRED",
+            "source_id must be a positive integer for this source_module",
+            code="SOURCE_ID_INVALID",
             details={},
         )
     await validate_source_exists(source_module_enum.value, source_id, db)
@@ -159,7 +163,10 @@ async def upload_evidence_asset(
     current_user: CurrentUser,
     file: UploadFile = File(..., description="File to upload"),
     source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
-    source_id: Optional[int] = Form(None, description="Numeric source id (required unless source_module=action)"),
+    source_id: int = Form(
+        ...,
+        description="ID of the source record; use 0 with source_module=action when action_key is set.",
+    ),
     action_key: Optional[str] = Form(
         None,
         description="Unified action_key when source_module=action (e.g. capa:12)",

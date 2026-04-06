@@ -3620,10 +3620,18 @@ export const evidenceAssetsApi = {
       redaction_required?: boolean
     },
   ) => {
+    const sourceId =
+      data.source_id !== undefined && data.source_id !== null
+        ? data.source_id
+        : data.action_key
+          ? 0
+          : (() => {
+              throw new Error('Evidence upload requires source_id or action_key')
+            })()
     const formData = new FormData()
     formData.append('file', file)
     formData.append('source_module', data.source_module)
-    if (data.source_id != null) formData.append('source_id', String(data.source_id))
+    formData.append('source_id', String(sourceId))
     if (data.action_key) formData.append('action_key', data.action_key)
     if (data.title) formData.append('title', data.title)
     if (data.description) formData.append('description', data.description)

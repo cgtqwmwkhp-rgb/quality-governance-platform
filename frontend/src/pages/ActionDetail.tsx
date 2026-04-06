@@ -17,7 +17,6 @@ import {
   ActionUpdate,
   evidenceAssetsApi,
   EvidenceAsset,
-  getApiErrorMessage,
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
@@ -31,7 +30,6 @@ import {
 } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
-import { toast } from 'sonner'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
 
@@ -73,6 +71,7 @@ export default function ActionDetail() {
   const [evidenceLoading, setEvidenceLoading] = useState(false)
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [inlineMessage, setInlineMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!key.trim()) {
@@ -133,13 +132,14 @@ export default function ActionDetail() {
   const submitNote = async () => {
     if (!action || !noteDraft.trim()) return
     setPostingNote(true)
+    setInlineMessage(null)
     try {
       const res = await actionsApi.appendOwnerNote(action.action_key, noteDraft.trim())
       setNotes((prev) => [res.data, ...prev])
       setNoteDraft('')
-      toast.success('Note added')
-    } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      setInlineMessage({ tone: 'success', text: 'Note added.' })
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not add note. Check permissions and try again.' })
     } finally {
       setPostingNote(false)
     }
@@ -164,6 +164,7 @@ export default function ActionDetail() {
         }
         await evidenceAssetsApi.upload(file, {
           source_module: 'action',
+          source_id: 0,
           action_key: action.action_key,
           title: file.name,
           visibility: 'internal_customer',
@@ -171,9 +172,13 @@ export default function ActionDetail() {
       }
       const evRes = await evidenceAssetsApi.list({ action_key: action.action_key, page_size: 50 })
       setEvidence(evRes.data.items || [])
-      toast.success('File(s) uploaded')
-    } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      setInlineMessage({ tone: 'success', text: 'File(s) uploaded.' })
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Upload failed. Check file type, size (max 50MB), and permissions.'
+      setInlineMessage({ tone: 'error', text: msg })
     } finally {
       setUploadingEvidence(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -181,11 +186,12 @@ export default function ActionDetail() {
   }
 
   const downloadAsset = async (assetId: number) => {
+    setInlineMessage(null)
     try {
       const res = await evidenceAssetsApi.getSignedUrl(assetId)
       window.open(res.data.signed_url, '_blank', 'noopener,noreferrer')
-    } catch (err) {
-      toast.error(getApiErrorMessage(err))
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not open download link.' })
     }
   }
 
@@ -195,9 +201,9 @@ export default function ActionDetail() {
       await evidenceAssetsApi.delete(assetId)
       const evRes = await evidenceAssetsApi.list({ action_key: action.action_key, page_size: 50 })
       setEvidence(evRes.data.items || [])
-      toast.success('Attachment removed')
-    } catch (err) {
-      toast.error(getApiErrorMessage(err))
+      setInlineMessage({ tone: 'success', text: 'Attachment removed.' })
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not remove attachment.' })
     }
   }
 
@@ -255,6 +261,18 @@ export default function ActionDetail() {
 
       <Card>
         <CardContent className="p-5 space-y-4">
+          {inlineMessage ? (
+            <p
+              className={
+                inlineMessage.tone === 'success'
+                  ? 'text-sm text-green-700 dark:text-green-400'
+                  : 'text-sm text-destructive'
+              }
+              role="status"
+            >
+              {inlineMessage.text}
+            </p>
+          ) : null}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Description
