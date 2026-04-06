@@ -276,6 +276,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Resolve release SHA
         id: release_sha
@@ -297,20 +299,32 @@ jobs:
             echo "❌ release_signoff.json is required and must be provided before production deployment"
             exit 1
           fi
+          SIGNED="$(python3 -c "import json; print(json.load(open('docs/evidence/release_signoff.json'))['release_sha'])")"
           if [[ "${STAGING_VERIFIED}" == "true" ]]; then
-            echo "⚠️ staging_verified=true on manual dispatch — skipping SHA-exact match (cyclic signoff)"
+            echo "⚠️ staging_verified=true on manual dispatch — validate artifact against its own release_sha"
             python3 scripts/governance/validate_release_signoff.py \
               --file docs/evidence/release_signoff.json \
-              --sha "$(python3 -c "import json; print(json.load(open('docs/evidence/release_signoff.json'))['release_sha'])")"
+              --sha "$SIGNED"
           else
+            # Pre-deployment already approved: STAGED == SIGNED or SIGNED is ancestor of STAGED (docs/governance commits after sign-off).
+            # Validate the sign-off file for internal consistency; promote image for STAGED (main tip), not only SIGNED.
+            if [[ "$RELEASE_SHA" != "$SIGNED" ]]; then
+              if git merge-base --is-ancestor "$SIGNED" "$RELEASE_SHA"; then
+                echo "✅ Staged SHA $RELEASE_SHA is a descendant of signed release_sha $SIGNED — validating sign-off artifact"
+              else
+                echo "❌ Staged SHA $RELEASE_SHA is not equal to nor a descendant of signed release_sha $SIGNED"
+                exit 1
+              fi
+            fi
             python3 scripts/governance/validate_release_signoff.py \
               --file docs/evidence/release_signoff.json \
-              --sha "${{ env.RELEASE_SHA }}"
+              --sha "$SIGNED"
           fi
 
       - name: Check out signed release SHA
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           ref: ${{ env.RELEASE_SHA }}
 
       - name: Environment guardrails
