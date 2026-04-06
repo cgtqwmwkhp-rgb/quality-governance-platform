@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths: ['requirements.txt', 'scripts/generate_lockfile.sh']
   schedule:
-    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC
+    - cron: '0 6 * * 1'  # Weekly Monday 6am UTC (LOCKFILE_UPGRADE=1 below: refresh pins within constraints)
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,10 @@ jobs:
           python-version: '3.11'
 
       - name: Generate lockfile
+        env:
+          # Prefer fresh resolves within requirements.txt bounds so unpinned transitive drift
+          # (e.g. uvicorn patch bumps) does not leave main red until the next manual fix.
+          LOCKFILE_UPGRADE: '1'
         run: |
           chmod +x ./scripts/generate_lockfile.sh
           ./scripts/generate_lockfile.sh
