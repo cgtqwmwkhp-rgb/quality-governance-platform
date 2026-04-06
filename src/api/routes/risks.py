@@ -30,8 +30,6 @@ from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment,
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.reference_number import ReferenceNumberService
 
-logger = logging.getLogger(__name__)
-
 RISK_TRANSITIONS: dict[RiskStatus, set[RiskStatus]] = {
     RiskStatus.OPEN: {RiskStatus.MITIGATING, RiskStatus.ACCEPTED, RiskStatus.CLOSED},
     RiskStatus.MITIGATING: {RiskStatus.ACCEPTED, RiskStatus.CLOSED, RiskStatus.OPEN},
