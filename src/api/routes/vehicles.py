@@ -152,14 +152,20 @@ async def get_vehicle(reg: str, db: DbSession, user: CurrentUser):
 
     defect_q = (
         select(VehicleDefect)
-        .where(VehicleDefect.vehicle_reg == reg)
+        .where(
+            VehicleDefect.vehicle_reg == reg,
+            VehicleDefect.tenant_id == user.tenant_id,
+        )
         .order_by(VehicleDefect.created_at.desc())
         .limit(50)
     )
     defect_result = await db.execute(defect_q)
     defects = defect_result.scalars().all()
 
-    total_defect_q = select(func.count(VehicleDefect.id)).where(VehicleDefect.vehicle_reg == reg)
+    total_defect_q = select(func.count(VehicleDefect.id)).where(
+        VehicleDefect.vehicle_reg == reg,
+        VehicleDefect.tenant_id == user.tenant_id,
+    )
     total_defects = (await db.execute(total_defect_q)).scalar() or 0
 
     return VehicleDetailResponse(
@@ -185,11 +191,13 @@ async def compliance_gate(reg: str, db: DbSession, user: CurrentUser):
 
     p1_q = select(func.count(VehicleDefect.id)).where(
         VehicleDefect.vehicle_reg == reg,
+        VehicleDefect.tenant_id == user.tenant_id,
         VehicleDefect.priority == "P1",
         VehicleDefect.status.in_(open_statuses),
     )
     p2_q = select(func.count(VehicleDefect.id)).where(
         VehicleDefect.vehicle_reg == reg,
+        VehicleDefect.tenant_id == user.tenant_id,
         VehicleDefect.priority == "P2",
         VehicleDefect.status.in_(open_statuses),
     )
@@ -293,7 +301,10 @@ async def create_capa_from_defect(
     user: CurrentUser,
 ):
     """Manually create a CAPA action from a vehicle defect."""
-    defect_q = select(VehicleDefect).where(VehicleDefect.id == body.defect_id)
+    defect_q = select(VehicleDefect).where(
+        VehicleDefect.id == body.defect_id,
+        VehicleDefect.tenant_id == user.tenant_id,
+    )
     defect_result = await db.execute(defect_q)
     defect = defect_result.scalar_one_or_none()
 
