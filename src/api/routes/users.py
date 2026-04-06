@@ -73,6 +73,7 @@ async def search_users(
             | (User.last_name.ilike(search_filter)),
         )
         .where(User.is_active == True)  # noqa: E712
+        .where(User.tenant_id == current_user.tenant_id)
         .order_by(User.email)
         .offset(skip)
         .limit(limit)

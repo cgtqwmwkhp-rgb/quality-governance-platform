@@ -210,7 +210,7 @@ async def get_signature_request(
     service = SignatureService(db)
     request = await service.get_request(request_id)
 
-    if not request:
+    if not request or request.tenant_id != current_user.tenant_id:
         raise NotFoundError("Request not found")
 
     return _format_request(request)
@@ -226,6 +226,9 @@ async def send_signature_request(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
 
     try:
         request = await service.send_request(request_id)
@@ -245,6 +248,9 @@ async def void_signature_request(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
 
     try:
         request = await service.void_request(request_id, current_user.id, reason)
@@ -263,6 +269,10 @@ async def get_audit_log(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
+
     logs = await service.get_audit_log(request_id)
 
     return logs

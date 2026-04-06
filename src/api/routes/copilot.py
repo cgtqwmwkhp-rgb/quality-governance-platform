@@ -203,12 +203,16 @@ async def send_message(
 async def get_messages(
     session_id: int,
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
+    session = await service.get_session(session_id)
+    if not session or session.user_id != current_user.id:
+        raise NotFoundError("Session not found")
     messages = await service.get_session_messages(session_id, limit=limit)
 
     return messages
@@ -262,6 +266,7 @@ async def list_actions(category: Optional[str] = None):
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS

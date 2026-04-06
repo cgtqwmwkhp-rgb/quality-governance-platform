@@ -36,6 +36,7 @@ async def create_template(
         is_active=template_data.is_active,
         structure=template_data.structure,
         applicable_entity_types=template_data.applicable_entity_types,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -59,10 +60,9 @@ async def list_templates(
 
     Returns templates in deterministic order (by ID).
     """
-    # Build query
-    query = select(InvestigationTemplate)
+    # Build query — tenant-scoped
+    query = select(InvestigationTemplate).where(InvestigationTemplate.tenant_id == current_user.tenant_id)
 
-    # Apply filters
     if is_active is not None:
         query = query.where(InvestigationTemplate.is_active == is_active)
 
@@ -102,12 +102,14 @@ async def get_template(
     """Get a specific investigation template by ID."""
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
+    query = select(InvestigationTemplate).where(
+        InvestigationTemplate.id == template_id,
+        InvestigationTemplate.tenant_id == current_user.tenant_id,
+    )
     result = await db.execute(query)
     template = result.scalar_one_or_none()
 
     if not template:
-        pass
         raise HTTPException(
             status_code=404,
             detail={
@@ -135,13 +137,14 @@ async def update_template(
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Get existing template
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
+    query = select(InvestigationTemplate).where(
+        InvestigationTemplate.id == template_id,
+        InvestigationTemplate.tenant_id == current_user.tenant_id,
+    )
     result = await db.execute(query)
     template = result.scalar_one_or_none()
 
     if not template:
-        pass
         raise HTTPException(
             status_code=404,
             detail={
@@ -178,13 +181,14 @@ async def delete_template(
     """
     request_id = request.headers.get("X-Request-ID", "N/A")
 
-    # Get existing template
-    query = select(InvestigationTemplate).where(InvestigationTemplate.id == template_id)
+    query = select(InvestigationTemplate).where(
+        InvestigationTemplate.id == template_id,
+        InvestigationTemplate.tenant_id == current_user.tenant_id,
+    )
     result = await db.execute(query)
     template = result.scalar_one_or_none()
 
     if not template:
-        pass
         raise HTTPException(
             status_code=404,
             detail={
