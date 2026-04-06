@@ -218,6 +218,7 @@ async def list_incident_investigations(
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
+            InvestigationRun.tenant_id == current_user.tenant_id,
         )
     )
     total_result = await db.execute(count_query)
@@ -232,6 +233,7 @@ async def list_incident_investigations(
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
+            InvestigationRun.tenant_id == current_user.tenant_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
         .offset((page - 1) * page_size)

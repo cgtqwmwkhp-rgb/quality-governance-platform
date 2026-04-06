@@ -1,6 +1,7 @@
 """Unified Actions API routes for incidents, RTAs, complaints, and investigations."""
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
@@ -297,7 +298,7 @@ async def _count_for_source(
     """Compute total count across all applicable source tables using SQL COUNT."""
     total = 0
     if not source_type or source_type == "incident":
-        q = select(func.count()).select_from(IncidentAction)
+        q = select(func.count()).select_from(IncidentAction).where(IncidentAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(IncidentAction.status == status_filter)
         if source_type == "incident" and source_id:
@@ -305,7 +306,7 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "incident")
 
     if not source_type or source_type == "rta":
-        q = select(func.count()).select_from(RTAAction)
+        q = select(func.count()).select_from(RTAAction).where(RTAAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(RTAAction.status == status_filter)
         if source_type == "rta" and source_id:
@@ -313,7 +314,7 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "rta")
 
     if not source_type or source_type == "complaint":
-        q = select(func.count()).select_from(ComplaintAction)
+        q = select(func.count()).select_from(ComplaintAction).where(ComplaintAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(ComplaintAction.status == status_filter)
         if source_type == "complaint" and source_id:
@@ -321,7 +322,7 @@ async def _count_for_source(
         total += await _safe_scalar(db, q, "complaint")
 
     if not source_type or source_type == "investigation":
-        q = select(func.count()).select_from(InvestigationAction)
+        q = select(func.count()).select_from(InvestigationAction).where(InvestigationAction.tenant_id == tenant_id)
         if status_filter:
             q = q.where(InvestigationAction.status == status_filter)
         if source_type == "investigation" and source_id:
@@ -410,6 +411,7 @@ async def list_actions(
         try:
             q = (
                 select(IncidentAction)
+                .where(IncidentAction.tenant_id == current_user.tenant_id)
                 .options(selectinload(IncidentAction.incident))
                 .order_by(IncidentAction.created_at.desc())
             )
@@ -430,7 +432,12 @@ async def list_actions(
     _pending_rta: list = []
     if not source_type or source_type == "rta":
         try:
-            q = select(RTAAction).options(selectinload(RTAAction.rta)).order_by(RTAAction.created_at.desc())
+            q = (
+                select(RTAAction)
+                .where(RTAAction.tenant_id == current_user.tenant_id)
+                .options(selectinload(RTAAction.rta))
+                .order_by(RTAAction.created_at.desc())
+            )
             if status_filter:
                 q = q.where(RTAAction.status == status_filter)
             if source_type == "rta" and source_id:
@@ -449,6 +456,7 @@ async def list_actions(
         try:
             q = (
                 select(ComplaintAction)
+                .where(ComplaintAction.tenant_id == current_user.tenant_id)
                 .options(selectinload(ComplaintAction.complaint))
                 .order_by(ComplaintAction.created_at.desc())
             )
@@ -470,6 +478,7 @@ async def list_actions(
         try:
             q = (
                 select(InvestigationAction)
+                .where(InvestigationAction.tenant_id == current_user.tenant_id)
                 .options(selectinload(InvestigationAction.investigation))
                 .order_by(InvestigationAction.created_at.desc())
             )
@@ -631,58 +640,67 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
         if not result.scalar_one_or_none():
             raise NotFoundError("Induction run not found")
     elif src_type == "incident":
-        result = await db.execute(select(Incident).where(Incident.id == src_id))
+        result = await db.execute(
+            select(Incident).where(Incident.id == src_id, Incident.tenant_id == current_user.tenant_id)
+        )
         if not result.scalar_one_or_none():
             raise NotFoundError("Incident not found")
     elif src_type == "rta":
-        result = await db.execute(select(RoadTrafficCollision).where(RoadTrafficCollision.id == src_id))
+        result = await db.execute(
+            select(RoadTrafficCollision).where(
+                RoadTrafficCollision.id == src_id, RoadTrafficCollision.tenant_id == current_user.tenant_id
+            )
+        )
         if not result.scalar_one_or_none():
             raise NotFoundError("RTA not found")
     elif src_type == "complaint":
-        result = await db.execute(select(Complaint).where(Complaint.id == src_id))
+        result = await db.execute(
+            select(Complaint).where(Complaint.id == src_id, Complaint.tenant_id == current_user.tenant_id)
+        )
         if not result.scalar_one_or_none():
             raise NotFoundError("Complaint not found")
     elif src_type == "investigation":
         logger.info(f"Validating investigation exists: id={src_id}")
-        result = await db.execute(select(InvestigationRun).where(InvestigationRun.id == src_id))
+        result = await db.execute(
+            select(InvestigationRun).where(
+                InvestigationRun.id == src_id, InvestigationRun.tenant_id == current_user.tenant_id
+            )
+        )
         investigation = result.scalar_one_or_none()
         if not investigation:
             logger.warning(f"Investigation not found: id={src_id}")
             raise NotFoundError("Investigation not found")
         logger.info(f"Investigation found: id={investigation.id}, ref={investigation.reference_number}")
     elif src_type == "audit_finding":
-        result = await db.execute(select(AuditFinding).where(AuditFinding.id == src_id))
+        result = await db.execute(
+            select(AuditFinding).where(AuditFinding.id == src_id, AuditFinding.tenant_id == current_user.tenant_id)
+        )
         if not result.scalar_one_or_none():
             raise NotFoundError("Audit finding not found")
     else:
         raise BadRequestError("Invalid source_type")
 
-    # Find owner by email if provided
+    # Find owner by email if provided (scoped to tenant)
     owner_id: Optional[int] = None
     if action_data.assigned_to_email:
-        result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+        result = await db.execute(
+            select(User).where(User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id)
+        )
         user = result.scalar_one_or_none()
         if user:
             owner_id = user.id
 
     # Generate reference number based on source type
     year = datetime.now().year
+    unique_suffix = uuid.uuid4().hex[:8].upper()
     if src_type == "incident":
-        count_result = await db.execute(select(func.count()).select_from(IncidentAction))
-        count = count_result.scalar() or 0
-        ref_number = f"INA-{year}-{count + 1:04d}"
+        ref_number = f"INA-{year}-{unique_suffix}"
     elif src_type == "rta":
-        count_result = await db.execute(select(func.count()).select_from(RTAAction))
-        count = count_result.scalar() or 0
-        ref_number = f"RTAACT-{year}-{count + 1:04d}"
+        ref_number = f"RTAACT-{year}-{unique_suffix}"
     elif src_type == "complaint":
-        count_result = await db.execute(select(func.count()).select_from(ComplaintAction))
-        count = count_result.scalar() or 0
-        ref_number = f"CMA-{year}-{count + 1:04d}"
+        ref_number = f"CMA-{year}-{unique_suffix}"
     elif src_type == "investigation":
-        count_result = await db.execute(select(func.count()).select_from(InvestigationAction))
-        count = count_result.scalar() or 0
-        ref_number = f"INVACT-{year}-{count + 1:04d}"
+        ref_number = f"INVACT-{year}-{unique_suffix}"
     elif src_type in ("assessment", "induction", "audit_finding"):
         from src.domain.services.reference_number import ReferenceNumberService
 
@@ -727,6 +745,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
                     else (CAPAPriority.CRITICAL if action_data.priority == "critical" else CAPAPriority.LOW)
                 )
             ),
+            tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=parsed_due_date,
@@ -742,6 +761,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             source_id=None,
             source_reference=source_ref,
             priority=_parse_capa_priority(action_data.priority),
+            tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=parsed_due_date,
@@ -757,6 +777,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             source_id=src_id,
             source_reference=None,
             priority=_parse_capa_priority(action_data.priority),
+            tenant_id=current_user.tenant_id,
             assigned_to_id=owner_id,
             created_by_id=current_user.id,
             due_date=parsed_due_date,
@@ -772,6 +793,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             reference_number=ref_number,
+            tenant_id=current_user.tenant_id,
         )
     elif src_type == "rta":
         action = RTAAction(
@@ -784,6 +806,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             reference_number=ref_number,
+            tenant_id=current_user.tenant_id,
         )
     elif src_type == "complaint":
         action = ComplaintAction(
@@ -796,9 +819,9 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             owner_id=owner_id,
             status=ActionStatus.OPEN,
             reference_number=ref_number,
+            tenant_id=current_user.tenant_id,
         )
     elif src_type == "investigation":
-        # This branch fixes the "Cannot add action" defect
         action = InvestigationAction(
             investigation_id=src_id,
             title=action_data.title,
@@ -809,6 +832,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
             owner_id=owner_id,
             status=InvestigationActionStatus.OPEN,
             reference_number=ref_number,
+            tenant_id=current_user.tenant_id,
         )
     else:
         raise BadRequestError("Invalid source_type")
@@ -940,25 +964,39 @@ async def get_action(
         if capa_action:
             return await _capa_to_response(db, capa_action, "audit_finding")
     elif src_type == "incident":
-        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
+        result = await db.execute(
+            select(IncidentAction).where(
+                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+            )
+        )
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if incident_action:
             email = await _resolve_owner_email(db, incident_action.owner_id)
             return _action_to_response(incident_action, "incident", incident_action.incident_id, owner_email=email)
     elif src_type == "rta":
-        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
+        result = await db.execute(
+            select(RTAAction).where(RTAAction.id == action_id, RTAAction.tenant_id == current_user.tenant_id)
+        )
         rta_action = cast(Optional[RTAAction], result.scalar_one_or_none())
         if rta_action:
             email = await _resolve_owner_email(db, rta_action.owner_id)
             return _action_to_response(rta_action, "rta", rta_action.rta_id, owner_email=email)
     elif src_type == "complaint":
-        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
+        result = await db.execute(
+            select(ComplaintAction).where(
+                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+            )
+        )
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if complaint_action:
             email = await _resolve_owner_email(db, complaint_action.owner_id)
             return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id, owner_email=email)
     elif src_type == "investigation":
-        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
+        result = await db.execute(
+            select(InvestigationAction).where(
+                InvestigationAction.id == action_id, InvestigationAction.tenant_id == current_user.tenant_id
+            )
+        )
         investigation_action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
         if investigation_action:
             email = await _resolve_owner_email(db, investigation_action.owner_id)
@@ -1059,22 +1097,36 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         if action:
             source_id = action.source_id or 0
     elif src_type == "incident":
-        result = await db.execute(select(IncidentAction).where(IncidentAction.id == action_id))
+        result = await db.execute(
+            select(IncidentAction).where(
+                IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
+            )
+        )
         action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if action:
             source_id = action.incident_id
     elif src_type == "rta":
-        result = await db.execute(select(RTAAction).where(RTAAction.id == action_id))
+        result = await db.execute(
+            select(RTAAction).where(RTAAction.id == action_id, RTAAction.tenant_id == current_user.tenant_id)
+        )
         action = cast(Optional[RTAAction], result.scalar_one_or_none())
         if action:
             source_id = action.rta_id
     elif src_type == "complaint":
-        result = await db.execute(select(ComplaintAction).where(ComplaintAction.id == action_id))
+        result = await db.execute(
+            select(ComplaintAction).where(
+                ComplaintAction.id == action_id, ComplaintAction.tenant_id == current_user.tenant_id
+            )
+        )
         action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if action:
             source_id = action.complaint_id
     elif src_type == "investigation":
-        result = await db.execute(select(InvestigationAction).where(InvestigationAction.id == action_id))
+        result = await db.execute(
+            select(InvestigationAction).where(
+                InvestigationAction.id == action_id, InvestigationAction.tenant_id == current_user.tenant_id
+            )
+        )
         action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
         if action:
             source_id = action.investigation_id
@@ -1114,7 +1166,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                 elif status_value != "completed":
                     action.completed_at = None
         if action_data.assigned_to_email is not None:
-            result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+            result = await db.execute(
+                select(User).where(
+                    User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id
+                )
+            )
             user = result.scalar_one_or_none()
             if user:
                 action.assigned_to_id = user.id
@@ -1142,7 +1198,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
             elif status_value != "completed":
                 action.completed_at = None
         if action_data.assigned_to_email is not None:
-            result = await db.execute(select(User).where(User.email == action_data.assigned_to_email))
+            result = await db.execute(
+                select(User).where(
+                    User.email == action_data.assigned_to_email, User.tenant_id == current_user.tenant_id
+                )
+            )
             user = result.scalar_one_or_none()
             if user:
                 action.owner_id = user.id
