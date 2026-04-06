@@ -1,45 +1,43 @@
 {
-  "release_sha": "faefd37aeb2bbdbc6a76935df2c053c8d91a4c16",
+  "release_sha": "2abfd840c5a45ed667f49e9991e72e4a512f1eae",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-05T20:22:07+00:00",
+  "approved_at_utc": "2026-04-06T00:49:10Z",
   "deployment_evidence": {
-    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24009205146",
-    "staging_deploy_run_id": "24009292149",
-    "production_deploy_run_id": "24009596362",
-    "production_promotion": "workflow_dispatch staging_verified=true force_deploy=true (deploy freeze override for critical fix); release_sha faefd37a; PR #452 JSONB + savepoint isolation",
-    "production_live_verified_utc": "2026-04-05T21:27:00Z",
-    "production_live_build_sha": "faefd37aeb2bbdbc6a76935df2c053c8d91a4c16",
-    "production_live_build_time": "2026-04-05T20:18:20Z",
-    "production_baseline_build_sha": "fd1682af4b2bded9af90a24fe3037d8f0bb08b79",
-    "production_baseline_observed_utc": "2026-04-05T19:08:38Z",
-    "mainline_commits_promoted_first_parent": 2,
-    "mainline_promotion_steps": [
-      "faefd37aeb2bbdbc6a76935df2c053c8d91a4c16 — Merge PR #452 fix(external-audit): resolve 500 error on promote by fixing JSONB queries and savepoint isolation",
-      "fd1682af4b2bded9af90a24fe3037d8f0bb08b79 — Merge PR #451 fix(frontend): remove broken PageViewTracker and improve healthz pre-warm"
-    ],
-    "staging_deploy_head_sha": "faefd37aeb2bbdbc6a76935df2c053c8d91a4c16",
-    "governance_note": "release_sha=faefd37a is main tip after PR #452. Production deploy workflow_dispatch run 24009596362 (force_deploy=true, staging_verified=true) completed success. GET /api/v1/meta/version on app-qgp-prod returns build_sha faefd37aeb2bbdbc6a76935df2c053c8d91a4c16. Deploy Proof v2: overall_result=PASS. Migration c2d3e4f5a6b7 (JSON→JSONB on risks_v2) applied. Prod Dependencies Gate: PASS. Health: ok. Readiness: ready. DB: connected.",
-    "pr_checks_passed": "CI required checks green on PR #452 merge to main (run 24009205146)",
-    "unit_tests": "1377 passed, 0 failed (run 24009205146)",
-    "frontend_tests": "195 passed (run 24009205146)",
+    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24013830574",
+    "staging_deploy_run_id": "24014052533",
+    "production_deploy_run_id": "24014184605",
+    "production_promotion": "workflow_dispatch staging_verified=true force_deploy=true (deploy freeze override); release_sha 2abfd840; PR #457 Audit Wave 4 - tenant isolation, rate limiter, state machine, error leak fixes. Staging verified (run 24014052533, health+stability PASS).",
+    "production_live_verified_utc": "2026-04-06T00:49:10Z",
+    "production_live_build_sha": "2abfd840c5a45ed667f49e9991e72e4a512f1eae",
+    "production_live_build_time": "2026-04-06T00:45:32Z",
+    "production_baseline_build_sha": "7012cd072e431ad8d1df2cc21e3d1412f5e8b294",
+    "production_baseline_observed_utc": "2026-04-06T00:17:00Z",
+    "staging_deploy_head_sha": "2abfd840c5a45ed667f49e9991e72e4a512f1eae",
+    "staging_smoke_results": "health PASS, stability 3/3 (run 24014052533)",
+    "staging_stability_gate": "3/3 consecutive SHA matches",
+    "prod_dependencies_gate": "PASS (all 5 checks)",
+    "prod_stability_gate": "3/3 consecutive SHA matches",
+    "prod_deploy_proof_v2": "overall_result: PASS",
+    "governance_note": "release_sha=2abfd840 is main tip after PR #457. Production deploy workflow_dispatch run 24014184605 (force_deploy=true, staging_verified=true) completed success. GET /api/v1/meta/version returns build_sha 2abfd840. Deploy Proof v2: overall_result=PASS. Stability Gate: 3/3. Health: ok. Readiness: ready. DB: connected.",
+    "pr_checks_passed": "CI required checks green on PR #457 merge to main",
+    "unit_tests": "1377 passed, 0 failed",
+    "frontend_tests": "195 passed, 0 failed",
     "changes_this_release": [
-      "PR #452: fix(external-audit): JSONB type on risks_v2 linked columns, cast in _ensure_risk_for_finding, savepoint isolation in _finalize_promotion_pipeline, Alembic migration c2d3e4f5a6b7",
-      "PR #451: fix(frontend): remove broken PageViewTracker (405 error), add healthz pre-warm retry with exponential backoff"
+      "PR #457: fix(security): tenant isolation on policies, risk controls, KRIs, appetite statements, control mappings; rate limiter JWT collision; RTA state machine guard; risk status validation; error information leak fixes",
+      "PR #456: fix(security+data): state machine, promote pipeline, and access control fixes",
+      "PR #455: fix(security): close doc-control, notification, email, and CAPA bugs",
+      "PR #454: fix(security): close P0/P1 auth, tenant isolation, and data integrity gaps",
+      "PR #452: fix(external-audit): JSONB type, savepoint isolation, Alembic migration"
     ],
     "pre_existing_failures": [
       {
-        "job": "dast-zap-baseline",
-        "reason": "Advisory per docs/compliance/ci-gate-hygiene.md",
-        "risk": "none"
-      },
-      {
         "job": "container-security-scan-trivy",
-        "reason": "49 HIGH/CRITICAL CVEs in python:3.11-slim-bookworm base image; SARIF uploaded; not merge-blocking per repo gate hygiene",
+        "reason": "CVEs in python:3.11-slim-bookworm base image; not merge-blocking per repo gate hygiene",
         "risk": "low"
       }
     ]
