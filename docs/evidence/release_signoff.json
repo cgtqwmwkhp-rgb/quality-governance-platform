@@ -22,7 +22,7 @@
     "staging_stability_gate": "Build and Deploy to Staging: success",
     "prod_dependencies_gate": "PASS (Pre-Deployment Checks + Prod Dependencies Gate)",
     "prod_deploy_proof_v2": "overall_result: PASS (run 24026473676)",
-    "governance_note": "release_sha=a3eccb1a is main tip after PR #463 rebase-merge (four commits: feat actions epic, openapi baseline sync, governance PR body, i18n fix). This JSON update (docs-only) follows the Wave 9 signoff pattern. If main advances with docs-only commits on top, auto production may require release_sha alignment or manual promotion per runbook.",
+    "governance_note": "release_sha=a3eccb1a is the promoted application commit from PR #463 (rebase-merge: feat actions epic, openapi baseline sync, governance PR body, i18n fix). This signoff commit may be newer on main; image/content matches a3eccb1a unless subsequent commits change code. Auto production requires validator alignment with staged HEAD or manual promotion per runbook.",
     "pr_checks_passed": "Main CI success for a3eccb1a (run 24025952046); SWA workflow success on main (run 24025952042)",
     "changes_this_release": [
       "PR #463: feat(actions) unified epic — action_key, display_status, GET /actions/summary, GET /actions/by-key, unified CAPA feed, ActionDetail route, partial unique index capa_actions audit_finding, audit events on CAPA create/update, OpenAPI + client alignment, i18n actions.open_profile"
