@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -157,6 +157,18 @@ class ActionOwnerNoteCreate(BaseModel):
 
     key: str = Field(..., min_length=3, max_length=80, description="Unified action_key")
     body: str = Field(..., min_length=1, max_length=16000)
+
+    @model_validator(mode="after")
+    def strip_key_and_body(self) -> "ActionOwnerNoteCreate":
+        k = self.key.strip()
+        b = self.body.strip()
+        if len(k) < 3:
+            raise ValueError("key is too short after trimming whitespace")
+        if not b:
+            raise ValueError("body cannot be empty or whitespace-only")
+        self.key = k
+        self.body = b
+        return self
 
 
 class ActionOwnerNoteRead(BaseModel):
@@ -1215,6 +1227,7 @@ async def list_action_owner_notes(
     db: DbSession,
     current_user: CurrentUser,
     key: str = Query(..., min_length=3, description="Unified action_key"),
+    limit: int = Query(100, ge=1, le=200, description="Max notes to return (newest first)"),
 ) -> ActionOwnerNoteListResponse:
     """List time-stamped owner commentary for an action (newest first)."""
     resolved = await load_action_response_by_key(db, current_user.tenant_id, key)
@@ -1225,6 +1238,7 @@ async def list_action_owner_notes(
             ActionOwnerNote.action_key == resolved.action_key,
         )
         .order_by(ActionOwnerNote.created_at.desc(), ActionOwnerNote.id.desc())
+        .limit(limit)
     )
     result = await db.execute(q)
     rows = result.scalars().all()
@@ -1257,7 +1271,7 @@ async def create_action_owner_note(
         tenant_id=current_user.tenant_id,
         action_key=resolved.action_key,
         author_id=current_user.id,
-        body=data.body.strip(),
+        body=data.body,
     )
     db.add(note)
     await db.commit()

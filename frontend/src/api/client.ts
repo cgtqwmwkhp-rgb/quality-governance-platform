@@ -2104,9 +2104,9 @@ export const actionsApi = {
       data,
     ),
   /** Owner commentary for an action; newest first. */
-  listOwnerNotes: (actionKey: string) =>
+  listOwnerNotes: (actionKey: string, limit = 100) =>
     api.get<ActionOwnerNoteListResponse>(
-      `/api/v1/actions/by-key/notes?key=${encodeURIComponent(actionKey)}`,
+      `/api/v1/actions/by-key/notes?key=${encodeURIComponent(actionKey)}&limit=${limit}`,
     ),
   appendOwnerNote: (actionKey: string, body: string) =>
     api.post<ActionOwnerNote>('/api/v1/actions/by-key/notes', { key: actionKey, body }),

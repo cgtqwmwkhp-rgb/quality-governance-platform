@@ -7,6 +7,7 @@ import {
   Loader2,
   MessageSquare,
   Paperclip,
+  RefreshCw,
   Save,
   Trash2,
 } from 'lucide-react'
@@ -32,6 +33,19 @@ import { Input } from '../components/ui/Input'
 import { Textarea } from '../components/ui/Textarea'
 
 const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
+/** Matches backend allowlist in `src/api/routes/evidence_assets.py` (subset for picker UX). */
+const EVIDENCE_FILE_INPUT_ACCEPT =
+  'image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,video/mp4,video/webm,video/quicktime,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,audio/mpeg,audio/wav,audio/ogg'
+
+function formatFileSize(bytes: number | undefined): string {
+  if (bytes == null || Number.isNaN(bytes) || bytes < 0) return ''
+  if (bytes < 1024) return `${bytes} B`
+  const kb = bytes / 1024
+  if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`
+  const mb = kb / 1024
+  return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`
+}
 
 const SUPPORTED_EVIDENCE_MIME_TYPES = [
   'image/jpeg',
@@ -73,6 +87,31 @@ export default function ActionDetail() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [inlineMessage, setInlineMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
+  const fetchNotesAndEvidence = useCallback(async (actionKey: string, showLoadError: boolean) => {
+    setNotesLoading(true)
+    setEvidenceLoading(true)
+    try {
+      const [notesRes, evRes] = await Promise.all([
+        actionsApi.listOwnerNotes(actionKey, 100),
+        evidenceAssetsApi.list({ action_key: actionKey, page_size: 50 }),
+      ])
+      setNotes(notesRes.data.items || [])
+      setEvidence(evRes.data.items || [])
+    } catch {
+      setNotes([])
+      setEvidence([])
+      if (showLoadError) {
+        setInlineMessage({
+          tone: 'error',
+          text: 'Notes or attachments could not be loaded. Use Refresh to retry.',
+        })
+      }
+    } finally {
+      setNotesLoading(false)
+      setEvidenceLoading(false)
+    }
+  }, [])
+
   const load = useCallback(async () => {
     if (!key.trim()) {
       setError('Missing key')
@@ -81,33 +120,19 @@ export default function ActionDetail() {
     }
     setLoading(true)
     setError(null)
+    setInlineMessage(null)
     try {
       const res = await actionsApi.getByKey(key.trim())
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
-      setNotesLoading(true)
-      setEvidenceLoading(true)
-      try {
-        const [notesRes, evRes] = await Promise.all([
-          actionsApi.listOwnerNotes(res.data.action_key),
-          evidenceAssetsApi.list({ action_key: res.data.action_key, page_size: 50 }),
-        ])
-        setNotes(notesRes.data.items || [])
-        setEvidence(evRes.data.items || [])
-      } catch {
-        setNotes([])
-        setEvidence([])
-      } finally {
-        setNotesLoading(false)
-        setEvidenceLoading(false)
-      }
+      await fetchNotesAndEvidence(res.data.action_key, true)
     } catch {
       setError('Could not load this action.')
       setAction(null)
     } finally {
       setLoading(false)
     }
-  }, [key])
+  }, [key, fetchNotesAndEvidence])
 
   useEffect(() => {
     load()
@@ -197,6 +222,13 @@ export default function ActionDetail() {
 
   const deleteAsset = async (assetId: number) => {
     if (!action) return
+    if (
+      !window.confirm(
+        'Remove this attachment from the action? The file may remain in storage per retention policy.',
+      )
+    ) {
+      return
+    }
     try {
       await evidenceAssetsApi.delete(assetId)
       const evRes = await evidenceAssetsApi.list({ action_key: action.action_key, page_size: 50 })
@@ -261,18 +293,20 @@ export default function ActionDetail() {
 
       <Card>
         <CardContent className="p-5 space-y-4">
-          {inlineMessage ? (
-            <p
-              className={
-                inlineMessage.tone === 'success'
-                  ? 'text-sm text-green-700 dark:text-green-400'
-                  : 'text-sm text-destructive'
-              }
-              role="status"
-            >
-              {inlineMessage.text}
-            </p>
-          ) : null}
+          <div aria-live="polite" aria-atomic="true">
+            {inlineMessage ? (
+              <p
+                className={
+                  inlineMessage.tone === 'success'
+                    ? 'text-sm text-green-700 dark:text-green-400'
+                    : 'text-sm text-destructive'
+                }
+                role="status"
+              >
+                {inlineMessage.text}
+              </p>
+            ) : null}
+          </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Description
@@ -295,24 +329,47 @@ export default function ActionDetail() {
           ) : null}
 
           <div className="border-t border-border pt-4 space-y-3">
-            <p className="text-sm font-medium text-foreground flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
-              Owner commentary
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />
+                Owner commentary
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!action || notesLoading || evidenceLoading}
+                onClick={() => action && fetchNotesAndEvidence(action.action_key, false)}
+              >
+                <RefreshCw className="w-3.5 h-3.5 mr-1" />
+                Refresh
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Each entry is stored with your account and a server timestamp (newest first).
+              Each entry is stored with your account and a server timestamp (newest first). Up to 100 notes
+              are shown.
             </p>
-            <Textarea
-              value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              placeholder="Add an update for this action…"
-              rows={3}
-              className="resize-y min-h-[80px]"
-            />
-            <Button type="button" onClick={submitNote} disabled={postingNote || !noteDraft.trim()}>
-              {postingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              Add note
-            </Button>
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                submitNote()
+              }}
+            >
+              <Textarea
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                placeholder="Add an update for this action…"
+                rows={3}
+                className="resize-y min-h-[80px]"
+                disabled={postingNote}
+                aria-label="Owner commentary text"
+              />
+              <Button type="submit" disabled={postingNote || !noteDraft.trim()}>
+                {postingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Add note
+              </Button>
+            </form>
             {notesLoading ? (
               <p className="text-sm text-muted-foreground flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -351,6 +408,8 @@ export default function ActionDetail() {
               type="file"
               multiple
               className="hidden"
+              accept={EVIDENCE_FILE_INPUT_ACCEPT}
+              aria-label="Upload evidence files"
               onChange={handleEvidenceUpload}
             />
             <Button
@@ -380,14 +439,39 @@ export default function ActionDetail() {
                     key={a.id}
                     className="flex flex-wrap items-center justify-between gap-2 text-sm border border-border rounded-md px-3 py-2"
                   >
-                    <span className="text-foreground truncate max-w-[200px] sm:max-w-xs">
-                      {a.title || a.original_filename || `Asset #${a.id}`}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-foreground block truncate">
+                        {a.title || a.original_filename || `Asset #${a.id}`}
+                      </span>
+                      <span className="text-xs text-muted-foreground block truncate">
+                        {[formatFileSize(a.file_size_bytes), a.content_type, a.asset_type]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        {a.created_at
+                          ? ` · uploaded ${new Date(a.created_at).toLocaleString(undefined, {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}`
+                          : ''}
+                      </span>
+                    </div>
                     <span className="flex gap-1 shrink-0">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => downloadAsset(a.id)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Download ${a.title || a.original_filename || 'attachment'}`}
+                        onClick={() => downloadAsset(a.id)}
+                      >
                         <Download className="w-4 h-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => deleteAsset(a.id)}>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${a.title || a.original_filename || 'attachment'}`}
+                        onClick={() => deleteAsset(a.id)}
+                      >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </span>
