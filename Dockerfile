@@ -1,5 +1,6 @@
 # Build stage — base image pinned by digest for reproducibility
-FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd973bb82eb71b7512c15a4da AS builder
+# Digest from Docker Hub tag `3.11-slim-bookworm` manifest (hub.docker.com API, 2026-04-06).
+FROM python:3.11-slim-bookworm@sha256:420310dd2ff7895895f0f1f9d15cae5a95dabceb8f1d6b9a23ef33c2c1c542c3 AS builder
 
 WORKDIR /app
 
@@ -22,14 +23,15 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
     fi
 
 # Production stage
-FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd973bb82eb71b7512c15a4da AS production
+FROM python:3.11-slim-bookworm@sha256:420310dd2ff7895895f0f1f9d15cae5a95dabceb8f1d6b9a23ef33c2c1c542c3 AS production
 
 WORKDIR /app
 
-# Install runtime dependencies (no apt-get upgrade — preserves digest-pinned reproducibility)
+# Runtime packages + bounded security upgrades (Security Scan / Trivy gate on push to main).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     postgresql-client \
+    && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade system setuptools and wheel to resolve vendored CVEs
