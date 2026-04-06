@@ -1,8 +1,9 @@
 """Cross-standard ISO mapping management API."""
 
 import logging
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -18,6 +19,8 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+MappingTypeLiteral = Literal["equivalent", "partial", "related"]
 
 
 class MappingResponse(BaseModel):
@@ -42,14 +45,14 @@ class MappingCreate(BaseModel):
     primary_clause: str
     mapped_standard: str
     mapped_clause: str
-    mapping_type: str = "equivalent"
+    mapping_type: MappingTypeLiteral = "equivalent"
     mapping_strength: int = Field(5, ge=1, le=10)
     mapping_notes: str | None = None
     annex_sl_element: str | None = None
 
 
 class MappingUpdate(BaseModel):
-    mapping_type: str | None = None
+    mapping_type: MappingTypeLiteral | None = None
     mapping_strength: int | None = Field(None, ge=1, le=10)
     mapping_notes: str | None = None
     annex_sl_element: str | None = None
@@ -150,6 +153,13 @@ async def list_mappings(
     source_standard: str | None = Query(None, description="Filter by source/primary standard"),
     target_standard: str | None = Query(None, description="Filter by target/mapped standard"),
     clause: str | None = Query(None, description="Filter by clause number (matches source or target)"),
+    limit: int | None = Query(
+        None,
+        ge=1,
+        le=500,
+        description="Optional max rows (default: return all; use for large tenants)",
+    ),
+    offset: int | None = Query(None, ge=0, description="Skip N rows (use with limit)"),
 ) -> list[MappingResponse]:
     """List cross-standard mappings with optional filters."""
     from src.domain.models.ims_unification import CrossStandardMapping
@@ -164,12 +174,20 @@ async def list_mappings(
             (CrossStandardMapping.primary_clause == clause) | (CrossStandardMapping.mapped_clause == clause)
         )
 
+    query = query.order_by(CrossStandardMapping.id.asc())
+    off = offset if offset is not None else 0
+    if limit is not None:
+        query = query.offset(off).limit(limit)
+    elif off > 0:
+        query = query.offset(off)
+
     try:
         result = await db.execute(query)
         rows = result.scalars().all()
         track_metric("cross_standard_mappings.accessed")
         return [MappingResponse.model_validate(r) for r in rows]
     except SQLAlchemyError:
+        track_metric("cross_standard_mappings.list_error", 1.0)
         logger.warning(
             "cross_standard_mappings list query failed (schema drift or missing tables); returning empty",
             exc_info=True,
@@ -197,6 +215,7 @@ async def list_standards(
         all_standards = [name for (name,) in standards_result.all()]
         return {"standards": all_standards}
     except SQLAlchemyError:
+        track_metric("cross_standard_mappings.standards_list_error", 1.0)
         logger.warning(
             "cross_standard_mappings standards list failed; returning empty standards",
             exc_info=True,

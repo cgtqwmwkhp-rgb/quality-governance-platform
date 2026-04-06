@@ -178,7 +178,7 @@ describe('ComplianceEvidence', () => {
     expect(mockListStandards).toHaveBeenCalledTimes(1)
     expect(mockListClauses).toHaveBeenCalledTimes(1)
     await waitFor(() => {
-      expect(mockListMappings).toHaveBeenCalledWith({ clause: '7.5' })
+      expect(mockListMappings).toHaveBeenCalledWith({ clause: '7.5', limit: 500 })
     })
 
     await waitFor(() => {

@@ -2,6 +2,7 @@ import types
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from src.api.routes.cross_standard_mappings import MappingCreate, create_mapping
 
@@ -63,6 +64,17 @@ async def test_create_cross_standard_mapping_sets_tenant_id():
     assert added[0].tenant_id == 77
     assert mapping.primary_clause == "7.5"
     assert mapping.mapped_standard == "ISO 14001:2015"
+
+
+def test_mapping_create_rejects_unknown_mapping_type():
+    with pytest.raises(ValidationError):
+        MappingCreate(
+            primary_standard="ISO 9001:2015",
+            primary_clause="4.1",
+            mapped_standard="ISO 14001:2015",
+            mapped_clause="4.1",
+            mapping_type="not_a_valid_type",  # type: ignore[arg-type]
+        )
 
 
 def test_cross_standard_route_is_mounted_in_main_api():

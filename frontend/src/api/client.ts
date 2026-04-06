@@ -3247,11 +3247,19 @@ export const complianceApi = {
 }
 
 export const crossStandardMappingsApi = {
-  list: (params?: { source_standard?: string; target_standard?: string; clause?: string }) => {
+  list: (params?: {
+    source_standard?: string
+    target_standard?: string
+    clause?: string
+    limit?: number
+    offset?: number
+  }) => {
     const sp = new URLSearchParams()
     if (params?.source_standard) sp.set('source_standard', params.source_standard)
     if (params?.target_standard) sp.set('target_standard', params.target_standard)
     if (params?.clause) sp.set('clause', params.clause)
+    if (params?.limit != null) sp.set('limit', String(params.limit))
+    if (params?.offset != null) sp.set('offset', String(params.offset))
     return api.get<CrossStandardMappingRecord[]>(`/api/v1/cross-standard-mappings?${sp}`)
   },
   listStandards: () =>
