@@ -219,6 +219,7 @@ async def create_investigation(
         status=InvestigationStatus(investigation_data.status),
         data=investigation_data.data,
         reference_number=reference_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -654,6 +655,7 @@ async def create_investigation_from_record(
         mapping_log=mapping_log,
         version=1,
         reference_number=reference_number,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )

@@ -38,6 +38,7 @@ from src.domain.services.mistral_ocr_service import MistralOCRService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.scheme_profiles import validate_against_scheme
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
+from src.infrastructure.monitoring.azure_monitor import record_external_audit_promote_outcome
 from src.infrastructure.storage import StorageError, storage_service
 
 logger = logging.getLogger(__name__)
@@ -866,7 +867,104 @@ class ExternalAuditImportService:
             await self.db.refresh(draft)
         return drafts
 
+    async def _finalize_promotion_pipeline(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        drafts: list[ExternalAuditDraft],
+        accepted: list[ExternalAuditDraft],
+        user_id: int,
+        resolved_tenant_id: int,
+    ) -> ExternalAuditImportJob:
+        """Materialize drafts, link evidence, scheme sync, reconciliation, and persist job summary."""
+        promotion_result: PromotionResult = await self._promote_accepted_drafts(
+            accepted=accepted,
+            user_id=user_id,
+            resolved_tenant_id=resolved_tenant_id,
+        )
+        promoted_findings = promotion_result["promoted_findings"]
+        document_clause_ids = promotion_result["document_clause_ids"]
+        failed_drafts = promotion_result["failed_drafts"]
+        reconciled_drafts = [draft for draft in drafts if draft.promoted_finding_id]
+
+        if document_clause_ids:
+            try:
+                async with self.db.begin_nested():
+                    await self._link_source_document_evidence(
+                        asset_id=job.source_document_asset_id,
+                        clause_ids=sorted(document_clause_ids),
+                        tenant_id=resolved_tenant_id,
+                        user_id=user_id,
+                        title=job.source_filename,
+                    )
+            except Exception as link_exc:
+                logger.warning("Source document evidence linking failed (non-fatal): %s", link_exc)
+
+        scheme_alignment: dict[str, object] | None = None
+        try:
+            async with self.db.begin_nested():
+                scheme_alignment = await self._sync_scheme_records(
+                    job=job,
+                    run=run,
+                    tenant_id=resolved_tenant_id,
+                    drafts=reconciled_drafts,
+                )
+        except Exception as sync_exc:
+            logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc)
+            scheme_alignment = {"status": "sync_failed", "error": str(sync_exc)[:200]}
+
+        reconciliation: dict[str, object] = {}
+        try:
+            async with self.db.begin_nested():
+                reconciliation = await self._build_promotion_reconciliation(
+                    job=job,
+                    run=run,
+                    drafts=drafts,
+                    tenant_id=resolved_tenant_id,
+                    failed_drafts=failed_drafts,
+                    scheme_alignment=scheme_alignment,
+                )
+        except Exception as recon_exc:
+            logger.warning("Promotion reconciliation build failed (non-fatal): %s", recon_exc)
+            reconciliation = {"status": "reconciliation_failed", "error": str(recon_exc)[:200]}
+        if failed_drafts:
+            job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+            existing_warnings = list(job.processing_warnings_json or [])
+            existing_warnings.append(
+                f"Promotion partially completed: {len(failed_drafts)} accepted draft(s) still need attention."
+            )
+            job.processing_warnings_json = existing_warnings
+        else:
+            self._apply_run_completion(run, job)
+            job.status = ExternalAuditImportStatus.COMPLETED
+            job.promoted_at = datetime.now(timezone.utc)
+        job.updated_by_id = user_id
+        job.promotion_summary_json = {
+            **(job.promotion_summary_json or {}),
+            "materialization_contract_version": 1,
+            "canonical_read_model": "specialist_sync_verification",
+            "promoted_findings": promoted_findings,
+            "evidence_link_candidates": len(document_clause_ids),
+            "failed_drafts": failed_drafts,
+            "scheme_alignment": scheme_alignment,
+            "reconciliation": reconciliation,
+        }
+        await self.db.flush()
+        await self.db.refresh(job)
+        try:
+            record_external_audit_promote_outcome("partial" if failed_drafts else "completed")
+        except Exception:
+            logger.debug("Promote outcome metric skipped", exc_info=True)
+        return job
+
     async def promote_job(self, *, job_id: int, tenant_id: int | None, user_id: int) -> ExternalAuditImportJob:
+        """Materialize accepted drafts into live findings, then scheme sync and reconciliation.
+
+        **Idempotency / retries:** Drafts that already have ``promoted_finding_id`` are skipped.
+        If promotion fails, the job returns to ``review_required``; fixing drafts and calling
+        promote again is safe and does not duplicate findings for already-promoted rows.
+        """
         job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
         effective_tenant_id = job.tenant_id
         transitioned = await self.db.execute(
@@ -911,92 +1009,38 @@ class ExternalAuditImportService:
         )
 
         try:
-            promotion_result: PromotionResult = await self._promote_accepted_drafts(
+            job = await self._finalize_promotion_pipeline(
+                job=job,
+                run=run,
+                drafts=drafts,
                 accepted=accepted,
                 user_id=user_id,
                 resolved_tenant_id=resolved_tenant_id,
             )
-            promoted_findings = promotion_result["promoted_findings"]
-            document_clause_ids = promotion_result["document_clause_ids"]
-            failed_drafts = promotion_result["failed_drafts"]
-            reconciled_drafts = [draft for draft in drafts if draft.promoted_finding_id]
-
-            if document_clause_ids:
-                try:
-                    await self._link_source_document_evidence(
-                        asset_id=job.source_document_asset_id,
-                        clause_ids=sorted(document_clause_ids),
-                        tenant_id=resolved_tenant_id,
-                        user_id=user_id,
-                        title=job.source_filename,
-                    )
-                except Exception as link_exc:
-                    logger.warning("Source document evidence linking failed (non-fatal): %s", link_exc)
-
-            scheme_alignment: dict[str, object] | None = None
+        except ValidationError as exc:
+            logger.warning(
+                "Promotion validation failure for job %s: %s",
+                job_id,
+                exc.message,
+                extra={"draft_count": len(exc.details.get("failed_drafts", [])) if exc.details else 0},
+            )
             try:
-                scheme_alignment = await self._sync_scheme_records(
-                    job=job,
-                    run=run,
-                    tenant_id=resolved_tenant_id,
-                    drafts=reconciled_drafts,
-                )
-            except Exception as sync_exc:
-                logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc)
-                scheme_alignment = {"status": "sync_failed", "error": str(sync_exc)[:200]}
-
-            reconciliation: dict[str, object] = {}
+                record_external_audit_promote_outcome("all_failed")
+            except Exception:
+                logger.debug("Promote outcome metric skipped", exc_info=True)
             try:
-                reconciliation = await self._build_promotion_reconciliation(
-                    job=job,
-                    run=run,
-                    drafts=drafts,
-                    tenant_id=resolved_tenant_id,
-                    failed_drafts=failed_drafts,
-                    scheme_alignment=scheme_alignment,
-                )
-            except Exception as recon_exc:
-                logger.warning("Promotion reconciliation build failed (non-fatal): %s", recon_exc)
-                reconciliation = {"status": "reconciliation_failed", "error": str(recon_exc)[:200]}
-            if failed_drafts:
-                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
-                existing_warnings = list(job.processing_warnings_json or [])
-                existing_warnings.append(
-                    f"Promotion partially completed: {len(failed_drafts)} accepted draft(s) still need attention."
-                )
-                job.processing_warnings_json = existing_warnings
-            else:
-                self._apply_run_completion(run, job)
-                job.status = ExternalAuditImportStatus.COMPLETED
-                job.promoted_at = datetime.now(timezone.utc)
-            job.updated_by_id = user_id
-            job.promotion_summary_json = {
-                **(job.promotion_summary_json or {}),
-                "materialization_contract_version": 1,
-                "canonical_read_model": "specialist_sync_verification",
-                "promoted_findings": promoted_findings,
-                "evidence_link_candidates": len(document_clause_ids),
-                "failed_drafts": failed_drafts,
-                "scheme_alignment": scheme_alignment,
-                "reconciliation": reconciliation,
-            }
-            await self.db.flush()
-            await self.db.refresh(job)
+                await self._recover_job_after_promotion_failure(job_id=job_id, user_id=user_id, exc=exc)
+            except Exception as cleanup_exc:
+                logger.warning("Could not persist promotion error for job %s: %s", job_id, cleanup_exc)
+            raise
         except Exception as exc:
             logger.error("Promotion failed for job %s: %s", job_id, exc, exc_info=True)
             try:
-                await self.db.rollback()
-                job_reload = await self.db.execute(
-                    select(ExternalAuditImportJob).where(ExternalAuditImportJob.id == job_id)
-                )
-                job = job_reload.scalar_one_or_none() or job
-                job.status = ExternalAuditImportStatus.REVIEW_REQUIRED
-                job.updated_by_id = user_id
-                existing_warnings = list(job.processing_warnings_json or [])
-                existing_warnings.append(f"Promotion failed: {str(exc)[:300]}")
-                job.processing_warnings_json = existing_warnings
-                await self.db.flush()
-                await self.db.commit()
+                record_external_audit_promote_outcome("error")
+            except Exception:
+                logger.debug("Promote outcome metric skipped", exc_info=True)
+            try:
+                await self._recover_job_after_promotion_failure(job_id=job_id, user_id=user_id, exc=exc)
             except Exception as cleanup_exc:
                 logger.warning("Could not persist promotion error for job %s: %s", job_id, cleanup_exc)
             raise
@@ -1043,6 +1087,27 @@ class ExternalAuditImportService:
                 len(drafts),
             )
 
+    async def _recover_job_after_promotion_failure(
+        self,
+        *,
+        job_id: int,
+        user_id: int,
+        exc: BaseException,
+    ) -> None:
+        """Rollback, return job to review_required, and persist a short warning for operators."""
+        await self.db.rollback()
+        job_reload = await self.db.execute(select(ExternalAuditImportJob).where(ExternalAuditImportJob.id == job_id))
+        job_row = job_reload.scalar_one_or_none()
+        if job_row is None:
+            return
+        job_row.status = ExternalAuditImportStatus.REVIEW_REQUIRED
+        job_row.updated_by_id = user_id
+        existing_warnings = list(job_row.processing_warnings_json or [])
+        existing_warnings.append(f"Promotion failed: {str(exc)[:300]}")
+        job_row.processing_warnings_json = existing_warnings
+        await self.db.flush()
+        await self.db.commit()
+
     async def _promote_accepted_drafts(
         self,
         *,
@@ -1064,12 +1129,12 @@ class ExternalAuditImportService:
             try:
                 async with self.db.begin_nested():
                     clause_ids = self._extract_clause_ids(draft)
-                    _POSITIVE_ONLY_TYPES = {"positive_practice", "strength", "commendation"}
-                    requires_action = draft.finding_type not in _POSITIVE_ONLY_TYPES
+                    requires_action = draft.finding_type in self._ACTION_FINDING_TYPES
+                    normalized_severity = (draft.severity or "medium").strip().lower()
                     finding_data: dict = {
                         "title": draft.title,
                         "description": draft.description,
-                        "severity": draft.severity,
+                        "severity": normalized_severity,
                         "finding_type": draft.finding_type,
                         "clause_ids": clause_ids,
                         "risk_ids": [],
@@ -1106,9 +1171,16 @@ class ExternalAuditImportService:
                     promoted_findings.append(finding_id)
                     document_clause_ids.update(clause_ids)
             except Exception as exc:
-                logger.error("Failed to promote draft %s: %s", draft.id, exc, exc_info=True)
+                logger.error(
+                    "Failed to promote draft id=%s error_type=%s: %s",
+                    draft.id,
+                    type(exc).__name__,
+                    exc,
+                    exc_info=True,
+                )
                 draft.status = ExternalAuditDraftStatus.DRAFT
-                draft.review_notes = f"Promotion failed: {str(exc)[:200]}"
+                existing_notes = draft.review_notes or ""
+                draft.review_notes = f"{existing_notes}\n\nPromotion failed: {str(exc)[:200]}".strip()
                 failed_drafts.append(
                     {
                         "draft_id": draft.id,
@@ -1116,12 +1188,19 @@ class ExternalAuditImportService:
                         "finding_type": draft.finding_type,
                         "severity": draft.severity,
                         "error": str(exc)[:300],
+                        "error_type": type(exc).__name__,
                     }
                 )
 
         if failed_drafts and not promoted_findings:
-            raise RuntimeError(
-                f"All {len(failed_drafts)} drafts failed to promote. First error: {failed_drafts[0]['error']}"
+            first = failed_drafts[0]
+            raise ValidationError(
+                f"All {len(failed_drafts)} accepted draft(s) failed to materialize into live findings. "
+                f"First draft id={first.get('draft_id')}: {first.get('error', 'unknown error')}",
+                details={
+                    "failed_total": len(failed_drafts),
+                    "failed_drafts": failed_drafts[:20],
+                },
             )
         if failed_drafts:
             logger.warning(

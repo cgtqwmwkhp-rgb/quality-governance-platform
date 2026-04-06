@@ -14,8 +14,10 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
+from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
+from src.domain.services.near_miss_service import NearMissService
 from src.domain.services.reference_number import ReferenceNumberService
 
 router = APIRouter(tags=["Near Misses"])
@@ -104,8 +106,13 @@ async def list_near_misses(
     if not current_user.is_superuser:
         query = query.where(NearMiss.tenant_id == current_user.tenant_id)
 
-    # Apply filters
+    # Apply filters — non-admin users can only filter by their own email
     if reporter_email:
+        if not current_user.is_superuser and reporter_email != current_user.email:
+            raise HTTPException(
+                status_code=403,
+                detail=api_error(ErrorCode.PERMISSION_DENIED, "You can only filter near misses by your own email"),
+            )
         query = query.where(NearMiss.reporter_email == reporter_email)
     if status_filter:
         query = query.where(NearMiss.status == status_filter)
@@ -155,41 +162,19 @@ async def update_near_miss(
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
-    near_miss = await _get_near_miss_or_404(db, near_miss_id, current_user)
-
-    update_data = data.model_dump(exclude_unset=True)
-    old_status = near_miss.status
-
-    for field, value in update_data.items():
-        setattr(near_miss, field, value)
-
-    # Handle status changes
-    if "status" in update_data:
-        if update_data["status"] == "CLOSED" and near_miss.closed_at is None:
-            near_miss.closed_at = datetime.now(timezone.utc)
-            near_miss.closed_by_id = current_user.id
-
-    # Handle assignment
-    if "assigned_to_id" in update_data and near_miss.assigned_at is None:
-        near_miss.assigned_at = datetime.now(timezone.utc)
-
-    near_miss.updated_by_id = current_user.id
-
-    await record_audit_event(
-        db=db,
-        event_type="near_miss.updated",
-        entity_type="near_miss",
-        entity_id=str(near_miss.id),
-        action="update",
-        description=f"Near Miss {near_miss.reference_number} updated",
-        payload={
-            "updates": update_data,
-            "old_status": old_status,
-            "new_status": near_miss.status,
-        },
-        user_id=current_user.id,
-        request_id=request_id,
-    )
+    service = NearMissService(db)
+    try:
+        near_miss = await service.update_near_miss(
+            near_miss_id=near_miss_id,
+            data=data,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            request_id=request_id,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Near miss not found"))
+    except StateTransitionError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
     await db.commit()
     await db.refresh(near_miss)

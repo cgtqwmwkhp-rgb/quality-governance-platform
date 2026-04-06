@@ -62,9 +62,7 @@ async def test_suggestion_triage_accept(admin_client: AsyncClient) -> None:
     assert body["status"] == "identified"
 
     async with async_session_maker() as session:
-        row = (
-            await session.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
-        ).scalar_one()
+        row = (await session.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one()
         assert row.suggestion_triage_status == "accepted"
         assert row.is_escalated is True
         assert row.escalation_reason and "Accepted from import triage" in row.escalation_reason
@@ -85,9 +83,7 @@ async def test_suggestion_triage_reject_with_notes(admin_client: AsyncClient) ->
     assert body["status"] == "closed"
 
     async with async_session_maker() as session:
-        row = (
-            await session.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))
-        ).scalar_one()
+        row = (await session.execute(select(EnterpriseRisk).where(EnterpriseRisk.id == risk_id))).scalar_one()
         assert row.suggestion_triage_status == "rejected"
         assert row.status == "closed"
         assert row.review_notes and "Import triage rejected" in row.review_notes

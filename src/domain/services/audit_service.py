@@ -15,7 +15,8 @@ import dataclasses
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1296,10 +1297,10 @@ class AuditService:
         source_result = await self.db.execute(
             select(EnterpriseRisk).where(
                 EnterpriseRisk.tenant_id == run.tenant_id,
-                EnterpriseRisk.linked_audits.contains([finding.reference_number]),
+                cast(EnterpriseRisk.linked_audits, JSONB).contains(cast([finding.reference_number], JSONB)),
             )
         )
-        existing = source_result.scalar_one_or_none()
+        existing = source_result.scalars().first()
         if existing is None:
             title_result = await self.db.execute(
                 select(EnterpriseRisk).where(
@@ -1307,7 +1308,7 @@ class AuditService:
                     EnterpriseRisk.title == title,
                 )
             )
-            existing = title_result.scalar_one_or_none()
+            existing = title_result.scalars().first()
         if existing is not None:
             linked_audits = set(existing.linked_audits or [])
             linked_audits.update([run.reference_number, finding.reference_number])
@@ -1316,7 +1317,7 @@ class AuditService:
                 linked_actions = set(existing.linked_actions or [])
                 linked_actions.add(action.reference_number)
                 existing.linked_actions = sorted(linked_actions)
-            if finding.id not in (finding.risk_ids_json or []):
+            if existing.id not in (finding.risk_ids_json or []):
                 finding.risk_ids_json = sorted({*(finding.risk_ids_json or []), existing.id})
             return existing
 

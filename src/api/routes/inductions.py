@@ -285,7 +285,7 @@ async def update_induction_run(
     updates = data.model_dump(exclude_unset=True)
     if "stage" in updates and updates["stage"] is not None:
         updates["stage"] = InductionStage(updates["stage"])
-    if "status" in updates and updates["status"] is not None:
+    if "status" in updates:
         raise HTTPException(
             status_code=400,
             detail=api_error(

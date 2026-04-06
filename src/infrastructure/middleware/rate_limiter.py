@@ -166,8 +166,8 @@ def get_client_identifier(request: Request) -> str:
 
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer ") and len(auth_header) > 27:
-        token_prefix = auth_header[7:27]
-        token_hash = hashlib.sha256(token_prefix.encode()).hexdigest()[:16]
+        token = auth_header[7:]
+        token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
         return f"token:{token_hash}"
 
     # Fall back to IP address

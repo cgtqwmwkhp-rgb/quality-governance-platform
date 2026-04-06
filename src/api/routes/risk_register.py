@@ -79,7 +79,7 @@ class RiskUpdate(BaseModel):
     treatment_strategy: Optional[str] = None
     treatment_plan: Optional[str] = None
     treatment_status: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "active", "monitoring", "mitigated", "closed", "archived"]] = None
     risk_owner_id: Optional[int] = None
     risk_owner_name: Optional[str] = None
 
@@ -406,7 +406,10 @@ async def create_kri(
     if not risk:
         raise NotFoundError("EnterpriseRisk not found")
 
-    kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
+    kri = EnterpriseKeyRiskIndicator(
+        **kri_data.model_dump(),
+        tenant_id=current_user.tenant_id,
+    )
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
@@ -482,9 +485,12 @@ async def list_controls(
     current_user: CurrentUser,
     db: DbSession,
 ) -> list[dict[str, Any]]:
-    """List all risk controls (EnterpriseRiskControl has no tenant_id; auth required)"""
+    """List all risk controls scoped to tenant."""
     result = await db.execute(
-        select(EnterpriseRiskControl).where(EnterpriseRiskControl.is_active == True)  # noqa: E712
+        select(EnterpriseRiskControl).where(
+            EnterpriseRiskControl.is_active == True,  # noqa: E712
+            EnterpriseRiskControl.tenant_id == current_user.tenant_id,
+        )
     )
     controls = result.scalars().all()
 
@@ -517,6 +523,7 @@ async def create_control(
 
     control = EnterpriseRiskControl(
         reference=reference,
+        tenant_id=current_user.tenant_id,
         **control_data.model_dump(),
     )
     db.add(control)
@@ -568,6 +575,7 @@ async def link_control_to_risk(
         control_id=control_id,
         reduces_likelihood=reduces_likelihood,
         reduces_impact=reduces_impact,
+        tenant_id=current_user.tenant_id,
     )
     db.add(mapping)
     await db.commit()
@@ -583,9 +591,12 @@ async def list_appetite_statements(
     current_user: CurrentUser,
     db: DbSession,
 ) -> list[dict[str, Any]]:
-    """List risk appetite statements by category"""
+    """List risk appetite statements by category, scoped to tenant."""
     result = await db.execute(
-        select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
+        select(RiskAppetiteStatement).where(
+            RiskAppetiteStatement.is_active == True,  # noqa: E712
+            RiskAppetiteStatement.tenant_id == current_user.tenant_id,
+        )
     )
     statements = result.scalars().all()
 
@@ -754,7 +765,7 @@ async def resolve_suggestion_triage(
         risk.review_notes = f"{prev}\n{reject_note}".strip()[:4000]
 
     risk.updated_at = _naive_utc_now()
-    await db.flush()
+    await db.commit()
     if current_user.tenant_id is not None:
         await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
         await invalidate_tenant_cache(current_user.tenant_id, "risks")

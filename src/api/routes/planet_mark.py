@@ -276,7 +276,7 @@ async def list_reporting_years(
         )
         return setup_required_response(
             module="planet-mark",
-            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
+            message="Planet Mark query failed. Check server logs.",
             next_action="Review application logs for request_id and contact support.",
             request_id=get_request_id(request),
         )
@@ -1129,7 +1129,7 @@ async def get_carbon_dashboard(
         )
         return setup_required_response(
             module="planet-mark",
-            message=f"Planet Mark query failed: {type(e).__name__}. Check server logs.",
+            message="Planet Mark query failed. Check server logs.",
             next_action="Review application logs for request_id and contact support.",
             request_id=get_request_id(request),
         )

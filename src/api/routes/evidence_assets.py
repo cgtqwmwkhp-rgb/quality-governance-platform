@@ -279,6 +279,7 @@ async def upload_evidence_asset(
         contains_pii=contains_pii,
         redaction_required=redaction_required,
         retention_policy=EvidenceRetentionPolicy.STANDARD,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -337,8 +338,8 @@ async def list_evidence_assets(
     Returns assets in deterministic order (created_at DESC, id ASC).
     Excludes soft-deleted assets by default.
     """
-    # Build query
-    query = select(EvidenceAsset)
+    # Build query — always scope to the current user's tenant
+    query = select(EvidenceAsset).where(EvidenceAsset.tenant_id == current_user.tenant_id)
 
     # Exclude deleted by default
     if not include_deleted:
@@ -408,6 +409,7 @@ async def get_evidence_asset(
     """Get a specific evidence asset by ID."""
     query = select(EvidenceAsset).where(
         EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -431,6 +433,7 @@ async def update_evidence_asset(
     """Update evidence asset metadata."""
     query = select(EvidenceAsset).where(
         EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -472,6 +475,7 @@ async def delete_evidence_asset(
     """
     query = select(EvidenceAsset).where(
         EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     result = await db.execute(query)
@@ -504,9 +508,10 @@ async def link_asset_to_investigation(
     Used when creating an investigation from a source record to
     carry forward existing evidence assets.
     """
-    # Get asset
+    # Get asset — scoped to tenant
     asset_query = select(EvidenceAsset).where(
         EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     result = await db.execute(asset_query)
@@ -546,9 +551,10 @@ async def get_signed_download_url(
 
     Returns a time-limited signed URL for secure download.
     """
-    # Get asset
+    # Get asset — scoped to tenant
     query = select(EvidenceAsset).where(
         EvidenceAsset.id == asset_id,
+        EvidenceAsset.tenant_id == current_user.tenant_id,
         EvidenceAsset.deleted_at.is_(None),
     )
     result = await db.execute(query)

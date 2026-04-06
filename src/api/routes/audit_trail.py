@@ -168,7 +168,12 @@ async def get_audit_entry(
     """Get a single audit log entry with full details."""
     from src.domain.models.audit_log import AuditLogEntry
 
-    result = await db.execute(select(AuditLogEntry).where(AuditLogEntry.id == entry_id))
+    result = await db.execute(
+        select(AuditLogEntry).where(
+            AuditLogEntry.id == entry_id,
+            AuditLogEntry.tenant_id == _tid(current_user),
+        )
+    )
     entry = result.scalar_one_or_none()
 
     if not entry:

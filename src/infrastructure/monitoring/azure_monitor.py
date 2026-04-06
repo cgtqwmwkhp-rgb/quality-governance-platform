@@ -82,6 +82,7 @@ _db_pool_usage: UpDownCounter | None = None
 _celery_task_failures: Counter | None = None
 _celery_queue_depth: UpDownCounter | None = None
 _auth_failures: Counter | None = None
+_external_audit_promote: Counter | None = None
 
 
 def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
@@ -160,7 +161,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     global _auth_login, _auth_logout, _documents_uploaded, _workflows_completed
     global _workflow_completion_time
     global _error_rate_5xx, _cache_miss_rate, _db_pool_usage
-    global _celery_task_failures, _celery_queue_depth, _auth_failures
+    global _celery_task_failures, _celery_queue_depth, _auth_failures, _external_audit_promote
 
     _capa_created = _meter.create_counter("capa.created", description="Number of CAPA actions created")
     _capa_closed = _meter.create_counter("capa.closed", description="Number of CAPA actions closed")
@@ -186,6 +187,10 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
         "celery.queue_depth", description="Current depth of Celery task queue"
     )
     _auth_failures = _meter.create_counter("auth.failures", description="Count of authentication failures")
+    _external_audit_promote = _meter.create_counter(
+        "external_audit_import.promote",
+        description="External audit import promotion attempts by outcome",
+    )
 
     if app:
         FastAPIInstrumentor.instrument_app(app)
@@ -312,6 +317,12 @@ def record_workflow_completed(duration_hours: float | None = None) -> None:
 def record_5xx_error() -> None:
     if _error_rate_5xx:
         _error_rate_5xx.add(1)
+
+
+def record_external_audit_promote_outcome(outcome: str) -> None:
+    """Record promotion result: completed | partial | all_failed | error."""
+    if _external_audit_promote:
+        _external_audit_promote.add(1, {"outcome": outcome})
 
 
 def record_cache_miss() -> None:

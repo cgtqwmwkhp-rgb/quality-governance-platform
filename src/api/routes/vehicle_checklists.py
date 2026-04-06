@@ -292,6 +292,7 @@ async def create_defect(
         priority=payload.priority,
         notes=payload.notes,
         vehicle_reg=payload.vehicle_reg,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         assigned_to_email=payload.assigned_to_email,
     )
@@ -316,8 +317,10 @@ async def list_defects(
     status_filter: Optional[str] = Query(None, alias="status"),
 ) -> DefectListResponse:
     """List all flagged vehicle defects."""
-    base = select(VehicleDefect)
-    count_base = select(func.count()).select_from(VehicleDefect)
+    base = select(VehicleDefect).where(VehicleDefect.tenant_id == current_user.tenant_id)
+    count_base = (
+        select(func.count()).select_from(VehicleDefect).where(VehicleDefect.tenant_id == current_user.tenant_id)
+    )
 
     if priority:
         base = base.where(VehicleDefect.priority == priority)
@@ -347,7 +350,14 @@ async def get_defect(
     db: DbSession,
 ) -> DefectResponse:
     """Get a single defect by ID."""
-    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
+    defect = (
+        await db.execute(
+            select(VehicleDefect).where(
+                VehicleDefect.id == defect_id,
+                VehicleDefect.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
     if not defect:
         raise NotFoundError("Defect not found")
     return _defect_to_response(defect)
@@ -361,7 +371,14 @@ async def update_defect(
     db: DbSession,
 ) -> DefectResponse:
     """Update a vehicle defect (priority, status, notes)."""
-    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
+    defect = (
+        await db.execute(
+            select(VehicleDefect).where(
+                VehicleDefect.id == defect_id,
+                VehicleDefect.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
     if not defect:
         raise NotFoundError("Defect not found")
 
@@ -384,7 +401,14 @@ async def create_defect_action(
     """Create an action against a vehicle defect (stored as CAPAAction)."""
     from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
 
-    defect = (await db.execute(select(VehicleDefect).where(VehicleDefect.id == defect_id))).scalar_one_or_none()
+    defect = (
+        await db.execute(
+            select(VehicleDefect).where(
+                VehicleDefect.id == defect_id,
+                VehicleDefect.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
     if not defect:
         raise NotFoundError("Defect not found")
 
@@ -477,7 +501,18 @@ async def _create_p1_notification(
         from src.domain.models.notification import Notification, NotificationPriority, NotificationType
         from src.domain.models.user import User
 
-        admin_users = (await db.execute(select(User).where(User.is_superuser == True))).scalars().all()  # noqa: E712
+        admin_users = (
+            (  # noqa: E712
+                await db.execute(
+                    select(User).where(
+                        User.is_superuser == True,
+                        User.tenant_id == current_user.tenant_id,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         for user in admin_users:
             if user.id == current_user.id:

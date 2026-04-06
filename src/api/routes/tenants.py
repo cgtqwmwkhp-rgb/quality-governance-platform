@@ -146,6 +146,9 @@ async def get_tenant(
     current_user: CurrentActiveUser,
 ) -> Any:
     """Get tenant by ID."""
+    if current_user.tenant_id != tenant_id and not getattr(current_user, "is_superuser", False):
+        raise NotFoundError("Tenant not found")
+
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 
@@ -207,6 +210,9 @@ async def list_tenant_users(
     current_user: CurrentActiveUser,
 ) -> Any:
     """List all users in a tenant."""
+    if current_user.tenant_id != tenant_id and not getattr(current_user, "is_superuser", False):
+        raise NotFoundError("Tenant not found")
+
     service = TenantService(db)
     users = await service.get_tenant_users(tenant_id)
 
@@ -323,6 +329,9 @@ async def get_features(
     current_user: CurrentActiveUser,
 ) -> Any:
     """Get enabled features for a tenant."""
+    if current_user.tenant_id != tenant_id and not getattr(current_user, "is_superuser", False):
+        raise NotFoundError("Tenant not found")
+
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 
@@ -363,6 +372,9 @@ async def get_limits(
     current_user: CurrentActiveUser,
 ) -> Any:
     """Get usage limits for a tenant."""
+    if current_user.tenant_id != tenant_id and not getattr(current_user, "is_superuser", False):
+        raise NotFoundError("Tenant not found")
+
     service = TenantService(db)
     tenant = await service.get_tenant(tenant_id)
 

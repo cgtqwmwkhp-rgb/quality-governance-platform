@@ -15,6 +15,10 @@ class NearMiss(Base):
     __tablename__ = "near_misses"
     __table_args__ = (
         CheckConstraint(
+            "potential_severity IN ('low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
+            name="ck_nm_severity_values",
+        ),
+        CheckConstraint(
             "status IN ('REPORTED', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'IN_PROGRESS', 'CLOSED')",
             name="ck_near_misses_status",
         ),

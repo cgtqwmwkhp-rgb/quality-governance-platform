@@ -166,8 +166,9 @@ class TextAnalyzer:
 class AnomalyDetector:
     """Detect anomalies in incident patterns"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
 
     async def detect_frequency_anomalies(
         self, entity: str, entity_type: str = "department", lookback_days: int = 90
@@ -178,15 +179,17 @@ class AnomalyDetector:
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
         # Get incidents for this entity
+        tf = Incident.tenant_id == self.tenant_id if self.tenant_id else True
         if entity_type == "department":
             result = await self.db.execute(
-                select(Incident).where(and_(Incident.department == entity, Incident.reported_date >= cutoff))
+                select(Incident).where(and_(tf, Incident.department == entity, Incident.reported_date >= cutoff))
             )
             recent_incidents = result.scalars().all()
         elif entity_type == "location":
             result = await self.db.execute(
                 select(Incident).where(
                     and_(
+                        tf,
                         Incident.location.ilike(f"%{entity}%"),
                         Incident.reported_date >= cutoff,
                     )
@@ -240,12 +243,12 @@ class AnomalyDetector:
         from src.domain.models.incident import Incident
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
+        tf = Incident.tenant_id == self.tenant_id if self.tenant_id else True
+        result = await self.db.execute(select(Incident).where(and_(tf, Incident.reported_date >= cutoff)))
         recent = result.scalars().all()
 
         anomalies = []
 
-        # Check for clustering by category
         category_counts: Counter = Counter()
         for inc in recent:
             if inc.category:
@@ -295,15 +298,17 @@ class AnomalyDetector:
 class IncidentPredictor:
     """ML-based incident prediction"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
 
     async def predict_risk_factors(self, lookback_days: int = 365) -> list[dict[str, Any]]:
         """Identify conditions that predict higher incident likelihood"""
         from src.domain.models.incident import Incident
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-        result = await self.db.execute(select(Incident).where(Incident.reported_date >= cutoff))
+        tf = Incident.tenant_id == self.tenant_id if self.tenant_id else True
+        result = await self.db.execute(select(Incident).where(and_(tf, Incident.reported_date >= cutoff)))
         incidents = result.scalars().all()
 
         if not incidents:
@@ -388,9 +393,12 @@ class IncidentPredictor:
         if not keywords:
             return []
 
-        # Simple keyword-based similarity
+        tf = Incident.tenant_id == self.tenant_id if self.tenant_id else True
         result = await self.db.execute(
-            select(Incident).where(Incident.description.isnot(None)).order_by(desc(Incident.reported_date)).limit(1000)
+            select(Incident)
+            .where(and_(tf, Incident.description.isnot(None)))
+            .order_by(desc(Incident.reported_date))
+            .limit(1000)
         )
         all_incidents = result.scalars().all()
 
@@ -424,8 +432,9 @@ class IncidentPredictor:
 class RecommendationEngine:
     """AI-powered recommendation engine"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
@@ -589,16 +598,18 @@ Format as JSON array with objects containing: title, description, priority, time
 class RootCauseAnalyzer:
     """AI-powered root cause analysis"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
 
     async def cluster_incidents(self, lookback_days: int = 180) -> list[dict[str, Any]]:
         """Cluster similar incidents to identify systemic issues"""
         from src.domain.models.incident import Incident
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+        tf = Incident.tenant_id == self.tenant_id if self.tenant_id else True
         result = await self.db.execute(
-            select(Incident).where(and_(Incident.reported_date >= cutoff, Incident.description.isnot(None)))
+            select(Incident).where(and_(tf, Incident.reported_date >= cutoff, Incident.description.isnot(None)))
         )
         incidents = result.scalars().all()
 
