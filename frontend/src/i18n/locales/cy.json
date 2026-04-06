@@ -41,6 +41,7 @@
   "actions.audit_playbook.risk_triage": "Triage mewnforio risg",
   "actions.audit_playbook.title": "Camau cywiro o archwiliad",
   "actions.open_audit_run": "Agor rhedeg archwiliad",
+  "actions.open_profile": "Agor proffil",
   "actions.open_import_review": "Adolygiad mewnforio",
   "actions.sort_due": "Dyddiad dyledus",
   "actions.sort_newest": "Diweddaraf",
