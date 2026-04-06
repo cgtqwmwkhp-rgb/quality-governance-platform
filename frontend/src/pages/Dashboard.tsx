@@ -388,14 +388,14 @@ export default function Dashboard() {
       const actionTotal = actionData?.total ?? 0
       const openStatuses = ['open', 'in_progress', 'pending_verification']
       const actionOverdue = actionItems.filter(
-        (a) => a.due_date && a.due_date < today() && openStatuses.includes(a.status),
+        (a) => a.due_date && a.due_date < today() && openStatuses.includes(a.display_status),
       ).length
       const actionDueSoon = actionItems.filter(
         (a) =>
           a.due_date &&
           a.due_date >= today() &&
           a.due_date <= daysFromNow(7) &&
-          openStatuses.includes(a.status),
+          openStatuses.includes(a.display_status),
       ).length
 
       const auditData = getData(

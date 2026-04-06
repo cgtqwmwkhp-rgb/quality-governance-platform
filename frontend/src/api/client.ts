@@ -1462,6 +1462,11 @@ export interface Action {
     | 'closed'
     | 'verified'
     | 'overdue'
+    | 'verification'
+  /** Normalized for KPIs (e.g. CAPA closed → completed) */
+  display_status: string
+  /** Stable id: capa:12, incident_action:3 */
+  action_key: string
   due_date?: string
   completed_at?: string
   completion_notes?: string
@@ -1477,6 +1482,11 @@ export interface Action {
   owner_email?: string
   assigned_to_email?: string
   created_at: string
+}
+
+export interface ActionsSummary {
+  total: number
+  by_display_status: Record<string, number>
 }
 
 export interface ActionCreate {
@@ -2056,6 +2066,8 @@ export const actionsApi = {
     api.get<PaginatedResponse<Action>>(
       `/api/v1/actions/?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}${source_id ? `&source_id=${source_id}` : ''}`,
     ),
+  /** Tenant-wide totals by display_status (not limited to first page). */
+  summary: () => api.get<ActionsSummary>('/api/v1/actions/summary'),
   /**
    * Create a new action linked to a source entity.
    */
@@ -2064,13 +2076,19 @@ export const actionsApi = {
    * Get a single action by ID. Requires source_type.
    */
   get: (id: number, source_type: string) =>
-    api.get<Action>(`/api/v1/actions/${id}?source_type=${source_type}`),
+    api.get<Action>(`/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`),
+  /** Resolve by stable action_key from list responses. */
+  getByKey: (key: string) =>
+    api.get<Action>(`/api/v1/actions/by-key?key=${encodeURIComponent(key)}`),
   /**
    * Update an action with partial data. Requires source_type.
    * Returns 404 if not found, 400 for validation errors.
    */
   update: (id: number, source_type: string, data: ActionUpdate) =>
-    api.patch<Action>(`/api/v1/actions/${id}?source_type=${source_type}`, data),
+    api.patch<Action>(
+      `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`,
+      data,
+    ),
 }
 
 // ============ Planet Mark Types ============

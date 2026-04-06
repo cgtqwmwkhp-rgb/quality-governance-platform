@@ -545,7 +545,9 @@ export default function RTADetail() {
   const investigationSummary = latestInvestigation
     ? `${latestInvestigation.reference_number || latestInvestigation.title || 'Linked investigation'}`
     : 'Not started'
-  const openActions = actions.filter((action) => action.status !== 'completed' && action.status !== 'cancelled')
+  const openActions = actions.filter(
+    (action) => action.display_status !== 'completed' && action.display_status !== 'cancelled',
+  )
 
   // ──────────────────────── RENDER ────────────────────────
 

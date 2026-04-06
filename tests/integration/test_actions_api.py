@@ -147,6 +147,22 @@ class TestActionsAPICORS:
         assert response.status_code < 500, "Actions endpoint should not crash"
 
 
+class TestActionsAPIExtendedRoutes:
+    """Summary and by-key routes must be registered (auth required)."""
+
+    @pytest.mark.asyncio
+    async def test_actions_summary_requires_auth(self, client: AsyncClient):
+        response = await client.get("/api/v1/actions/summary")
+        assert response.status_code == 401
+        assert response.status_code != 404
+
+    @pytest.mark.asyncio
+    async def test_actions_by_key_requires_auth(self, client: AsyncClient):
+        response = await client.get("/api/v1/actions/by-key?key=capa:1")
+        assert response.status_code == 401
+        assert response.status_code != 404
+
+
 class TestActionsAPIEndpoints:
     """Test Actions API endpoint contracts."""
 
