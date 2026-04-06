@@ -98,7 +98,7 @@ async def predict_risk_factors(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify conditions that predict higher incident likelihood"""
-    predictor = IncidentPredictor(db)
+    predictor = IncidentPredictor(db, tenant_id=current_user.tenant_id)
     return await predictor.predict_risk_factors(lookback_days)
 
 
@@ -110,7 +110,7 @@ async def find_similar_incidents(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Find similar past incidents based on description"""
-    predictor = IncidentPredictor(db)
+    predictor = IncidentPredictor(db, tenant_id=current_user.tenant_id)
     return await predictor.get_similar_incidents(request.text, limit)
 
 
@@ -126,7 +126,7 @@ async def detect_frequency_anomalies(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Detect if incident frequency is abnormal for an entity"""
-    detector = AnomalyDetector(db)
+    detector = AnomalyDetector(db, tenant_id=current_user.tenant_id)
     return await detector.detect_frequency_anomalies(entity, entity_type, lookback_days)
 
 
@@ -137,7 +137,7 @@ async def detect_pattern_anomalies(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Detect unusual patterns across all incidents"""
-    detector = AnomalyDetector(db)
+    detector = AnomalyDetector(db, tenant_id=current_user.tenant_id)
     return await detector.detect_pattern_anomalies(lookback_days)
 
 
@@ -151,7 +151,7 @@ async def get_corrective_action_recommendations(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Get recommended corrective actions for an incident"""
-    engine = RecommendationEngine(db)
+    engine = RecommendationEngine(db, tenant_id=current_user.tenant_id)
     return engine.get_corrective_action_recommendations(
         request.incident_description,
         request.category,
@@ -168,7 +168,7 @@ async def get_incident_clusters(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Cluster similar incidents to identify systemic issues"""
-    analyzer = RootCauseAnalyzer(db)
+    analyzer = RootCauseAnalyzer(db, tenant_id=current_user.tenant_id)
     return await analyzer.cluster_incidents(lookback_days)
 
 
@@ -179,7 +179,7 @@ async def analyze_5_whys(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Analyze 5 Whys and suggest root cause"""
-    analyzer = RootCauseAnalyzer(db)
+    analyzer = RootCauseAnalyzer(db, tenant_id=current_user.tenant_id)
     return analyzer.analyze_5_whys(request.incident_id, request.answers)
 
 
@@ -193,7 +193,7 @@ async def generate_audit_questions(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate audit questions for a specific clause"""
-    generator = AuditQuestionGenerator(db)
+    generator = AuditQuestionGenerator(db, tenant_id=current_user.tenant_id)
     return generator.generate_questions_for_clause(
         request.standard,
         request.clause,
@@ -208,7 +208,7 @@ async def generate_audit_checklist(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate complete audit checklist for a standard"""
-    generator = AuditQuestionGenerator(db)
+    generator = AuditQuestionGenerator(db, tenant_id=current_user.tenant_id)
     return generator.generate_full_audit_checklist(
         request.standard,
         request.scope_clauses,
@@ -223,7 +223,7 @@ async def find_evidence(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Find evidence matching a clause requirement"""
-    matcher = EvidenceMatcher(db)
+    matcher = EvidenceMatcher(db, tenant_id=current_user.tenant_id)
     return await matcher.find_evidence_for_clause(standard, clause)
 
 
@@ -234,7 +234,7 @@ async def get_evidence_gaps(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify clauses lacking sufficient evidence"""
-    matcher = EvidenceMatcher(db)
+    matcher = EvidenceMatcher(db, tenant_id=current_user.tenant_id)
     return await matcher.suggest_evidence_gaps(audit_id)
 
 
@@ -245,7 +245,7 @@ async def classify_finding(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Classify a finding by severity and root cause"""
-    classifier = FindingClassifier(db)
+    classifier = FindingClassifier(db, tenant_id=current_user.tenant_id)
     return classifier.classify_finding(request.finding_text)
 
 
@@ -256,7 +256,7 @@ async def classify_findings_batch(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Classify multiple findings"""
-    classifier = FindingClassifier(db)
+    classifier = FindingClassifier(db, tenant_id=current_user.tenant_id)
     return classifier.batch_classify(request.findings)
 
 
@@ -267,7 +267,7 @@ async def generate_executive_summary(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Generate executive summary for an audit"""
-    generator = AuditReportGenerator(db)
+    generator = AuditReportGenerator(db, tenant_id=current_user.tenant_id)
     summary = await generator.generate_executive_summary(audit_id)
     return {"summary": summary}
 
@@ -279,7 +279,7 @@ async def generate_findings_report(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate detailed findings report"""
-    generator = AuditReportGenerator(db)
+    generator = AuditReportGenerator(db, tenant_id=current_user.tenant_id)
     return await generator.generate_findings_report(audit_id)
 
 
@@ -293,7 +293,7 @@ async def get_audit_trends(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get audit finding trends over time"""
-    analyzer = AuditTrendAnalyzer(db)
+    analyzer = AuditTrendAnalyzer(db, tenant_id=current_user.tenant_id)
     return await analyzer.get_finding_trends(months)
 
 
@@ -304,7 +304,7 @@ async def get_recurring_findings(
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Identify recurring findings across audits"""
-    analyzer = AuditTrendAnalyzer(db)
+    analyzer = AuditTrendAnalyzer(db, tenant_id=current_user.tenant_id)
     return await analyzer.get_recurring_findings(min_occurrences)
 
 
