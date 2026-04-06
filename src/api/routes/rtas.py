@@ -188,9 +188,10 @@ async def list_rtas(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database migration pending. Please wait for migrations to complete.",
             )
+        logger.exception("Error listing RTAs")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error listing RTAs: {type(e).__name__}: {str(e)[:200]}",
+            detail="Unable to list RTAs at this time.",
         )
 
 
@@ -217,6 +218,11 @@ async def update_rta(
     rta = await _get_rta_or_404(db, rta_id, current_user)
 
     update_data = rta_in.model_dump(exclude_unset=True)
+    if "status" in update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="RTA status can only be changed via workflow actions, not direct PATCH.",
+        )
     for field, value in update_data.items():
         setattr(rta, field, value)
 
