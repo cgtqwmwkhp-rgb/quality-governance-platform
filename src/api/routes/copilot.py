@@ -96,10 +96,13 @@ async def create_session(
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     session = await service.create_session(
-        tenant_id=current_user.tenant_id or 1,
+        tenant_id=current_user.tenant_id,
         user_id=current_user.id,
         context_type=data.context_type,
         context_id=data.context_id,
@@ -132,7 +135,7 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     service = CopilotService(db)
     session = await service.get_session(session_id)
 
-    if not session:
+    if not session or session.user_id != current_user.id:
         raise NotFoundError("Session not found")
 
     return session
@@ -144,6 +147,9 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
+    session = await service.get_session(session_id)
+    if not session or session.user_id != current_user.id:
+        raise NotFoundError("Session not found")
     await service.close_session(session_id)
 
     return {"status": "closed"}
@@ -228,13 +234,16 @@ async def submit_feedback(
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     try:
         feedback = await service.submit_feedback(
             message_id=message_id,
             user_id=current_user.id,
-            tenant_id=current_user.tenant_id or 1,
+            tenant_id=current_user.tenant_id,
             rating=data.rating,
             feedback_type=data.feedback_type,
             feedback_text=data.feedback_text,

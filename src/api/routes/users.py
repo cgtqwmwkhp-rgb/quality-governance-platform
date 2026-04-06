@@ -323,7 +323,18 @@ async def list_roles(
 ) -> list[RoleResponse]:
     """List all roles."""
     await _ensure_user_management_enabled(db)
-    result = await db.execute(select(Role).order_by(Role.name))
+    from sqlalchemy import or_
+
+    result = await db.execute(
+        select(Role)
+        .where(
+            or_(
+                Role.tenant_id == current_user.tenant_id,
+                Role.tenant_id.is_(None),
+            )
+        )
+        .order_by(Role.name)
+    )
     roles = result.scalars().all()
     return [RoleResponse.model_validate(r) for r in roles]
 
