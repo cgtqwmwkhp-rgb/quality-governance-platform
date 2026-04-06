@@ -15,6 +15,7 @@ from src.api.schemas.executive_dashboard import (
     ExecutiveDashboardResponse,
     VehicleGovernanceSummary,
 )
+from src.domain.models.user import User
 from src.services.executive_dashboard import ExecutiveDashboardService
 
 router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/executive-dashboard", tags=["Executive Dashboard"])
 async def get_executive_dashboard(
     period_days: int = Query(30, ge=7, le=365, description="Period in days for metrics"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get complete executive dashboard with all KPIs.
 
@@ -37,7 +38,7 @@ async def get_executive_dashboard(
     - Trend data for charts
     - Active alerts requiring attention
     """
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     dashboard = await service.get_full_dashboard(period_days)
     return dashboard
 
@@ -45,13 +46,13 @@ async def get_executive_dashboard(
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get simplified dashboard summary for quick overview.
 
     Suitable for widgets or mobile views.
     """
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     dashboard = await service.get_full_dashboard(30)
 
     # Calculate pending actions
@@ -74,10 +75,10 @@ async def get_dashboard_summary(
 async def get_incident_dashboard(
     period_days: int = Query(30, ge=7, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get incident-specific dashboard data."""
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     from datetime import datetime, timedelta, timezone
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
@@ -95,10 +96,10 @@ async def get_incident_dashboard(
 @router.get("/risks")
 async def get_risk_dashboard(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get risk-specific dashboard data."""
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
 
     summary = await service._get_risk_summary()
     kri_summary = await service._get_kri_summary()
@@ -112,10 +113,10 @@ async def get_risk_dashboard(
 @router.get("/compliance")
 async def get_compliance_dashboard(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get compliance-specific dashboard data."""
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
 
     compliance_summary = await service._get_compliance_summary()
     sla_summary = await service._get_sla_summary()
@@ -129,10 +130,10 @@ async def get_compliance_dashboard(
 @router.get("/alerts")
 async def get_active_alerts(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get all active alerts requiring attention."""
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     alerts = await service._get_active_alerts()
 
     return {
@@ -144,10 +145,10 @@ async def get_active_alerts(
 @router.get("/health-score")
 async def get_health_score(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Get current organizational health score."""
-    service = ExecutiveDashboardService(db)
+    service = ExecutiveDashboardService(db, tenant_id=current_user.tenant_id)
     dashboard = await service.get_full_dashboard(30)
 
     return dashboard["health_score"]
@@ -156,7 +157,7 @@ async def get_health_score(
 @router.get("/vehicle-governance", response_model=VehicleGovernanceSummary)
 async def get_vehicle_governance(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Vehicle governance KPIs for the executive dashboard.
 
@@ -170,54 +171,72 @@ async def get_vehicle_governance(
     from src.domain.models.vehicle_defect import VehicleDefect
     from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
 
-    total_q = select(func.count(VehicleRegistry.id))
+    tid = current_user.tenant_id
+
+    total_q = select(func.count(VehicleRegistry.id)).where(VehicleRegistry.tenant_id == tid)
     total = (await db.execute(total_q)).scalar() or 0
 
-    active_q = select(func.count(VehicleRegistry.id)).where(VehicleRegistry.fleet_status == FleetStatus.ACTIVE)
+    active_q = select(func.count(VehicleRegistry.id)).where(
+        VehicleRegistry.tenant_id == tid,
+        VehicleRegistry.fleet_status == FleetStatus.ACTIVE,
+    )
     active = (await db.execute(active_q)).scalar() or 0
 
     compliant_q = select(func.count(VehicleRegistry.id)).where(
-        VehicleRegistry.compliance_status == ComplianceStatus.COMPLIANT
+        VehicleRegistry.tenant_id == tid,
+        VehicleRegistry.compliance_status == ComplianceStatus.COMPLIANT,
     )
     compliant = (await db.execute(compliant_q)).scalar() or 0
 
     non_compliant_q = select(func.count(VehicleRegistry.id)).where(
-        VehicleRegistry.compliance_status != ComplianceStatus.COMPLIANT
+        VehicleRegistry.tenant_id == tid,
+        VehicleRegistry.compliance_status != ComplianceStatus.COMPLIANT,
     )
     non_compliant = (await db.execute(non_compliant_q)).scalar() or 0
 
     compliance_rate = (compliant / total * 100) if total > 0 else 100.0
 
     open_statuses = ["open", "auto_detected", "acknowledged", "action_assigned"]
-    open_defects_q = select(func.count(VehicleDefect.id)).where(VehicleDefect.status.in_(open_statuses))
+    open_defects_q = select(func.count(VehicleDefect.id)).where(
+        VehicleDefect.tenant_id == tid,
+        VehicleDefect.status.in_(open_statuses),
+    )
     open_defects = (await db.execute(open_defects_q)).scalar() or 0
 
     p1_q = select(func.count(VehicleDefect.id)).where(
+        VehicleDefect.tenant_id == tid,
         VehicleDefect.priority == "P1",
         VehicleDefect.status.in_(open_statuses),
     )
     open_p1 = (await db.execute(p1_q)).scalar() or 0
 
     p2_q = select(func.count(VehicleDefect.id)).where(
+        VehicleDefect.tenant_id == tid,
         VehicleDefect.priority == "P2",
         VehicleDefect.status.in_(open_statuses),
     )
     open_p2 = (await db.execute(p2_q)).scalar() or 0
 
     overdue_q = select(func.count(VehicleRegistry.id)).where(
-        VehicleRegistry.compliance_status == ComplianceStatus.OVERDUE_CHECK
+        VehicleRegistry.tenant_id == tid,
+        VehicleRegistry.compliance_status == ComplianceStatus.OVERDUE_CHECK,
     )
     overdue_checks = (await db.execute(overdue_q)).scalar() or 0
 
-    active_drivers_q = select(func.count(DriverProfile.id)).where(DriverProfile.is_active_driver == True)  # noqa: E712
+    active_drivers_q = select(func.count(DriverProfile.id)).where(
+        DriverProfile.tenant_id == tid,
+        DriverProfile.is_active_driver == True,  # noqa: E712
+    )
     active_drivers = (await db.execute(active_drivers_q)).scalar() or 0
 
     pending_ack_q = select(func.count(DriverAcknowledgement.id)).where(
-        DriverAcknowledgement.status == AcknowledgementStatus.PENDING
+        DriverAcknowledgement.tenant_id == tid,
+        DriverAcknowledgement.status == AcknowledgementStatus.PENDING,
     )
     pending_acks = (await db.execute(pending_ack_q)).scalar() or 0
 
     vehicle_capas_q = select(func.count(CAPAAction.id)).where(
+        CAPAAction.tenant_id == tid,
         CAPAAction.source_type == CAPASource.VEHICLE_DEFECT.value,
         CAPAAction.status.in_([CAPAStatus.OPEN.value, CAPAStatus.IN_PROGRESS.value]),
     )

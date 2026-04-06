@@ -52,10 +52,14 @@ async def analytics_summary(
         logger.warning("analytics_summary: failed to count monthly cache", exc_info=True)
 
     try:
+        tid = current_user.tenant_id
         open_q = (
             select(func.count())
             .select_from(VehicleDefect)
-            .where(VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]))
+            .where(
+                VehicleDefect.tenant_id == tid,
+                VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
+            )
         )
         open_defects = (await db.execute(open_q)).scalar() or 0
 
@@ -65,6 +69,7 @@ async def analytics_summary(
                     select(func.count())
                     .select_from(VehicleDefect)
                     .where(
+                        VehicleDefect.tenant_id == tid,
                         VehicleDefect.priority == priority_val,
                         VehicleDefect.status.in_(["open", "auto_detected", "acknowledged", "action_assigned"]),
                     )
@@ -85,6 +90,7 @@ async def analytics_summary(
             select(func.count())
             .select_from(CAPAAction)
             .where(
+                CAPAAction.tenant_id == tid,
                 CAPAAction.source_reference.like("vehicle_defect:%"),
                 CAPAAction.status.in_([CAPAStatus.OPEN, CAPAStatus.IN_PROGRESS]),
                 CAPAAction.due_date < now,
@@ -137,12 +143,12 @@ async def analytics_trends(
             COUNT(*) FILTER (WHERE priority = 'P3') as p3,
             COUNT(*) as total
         FROM vehicle_defects
-        WHERE created_at >= :cutoff
+        WHERE created_at >= :cutoff AND tenant_id = :tenant_id
         GROUP BY DATE(created_at)
         ORDER BY dt
     """)
 
-    result = await db.execute(q, {"cutoff": cutoff})
+    result = await db.execute(q, {"cutoff": cutoff, "tenant_id": current_user.tenant_id})
     rows = result.mappings().all()
 
     return [
@@ -170,6 +176,7 @@ async def analytics_heatmap(
             VehicleDefect.pams_table,
             func.count().label("failure_count"),
         )
+        .where(VehicleDefect.tenant_id == current_user.tenant_id)
         .group_by(VehicleDefect.check_field, VehicleDefect.pams_table)
         .order_by(func.count().desc())
         .limit(limit)
@@ -223,7 +230,17 @@ async def export_defects_csv(
     db: DbSession,
 ) -> StreamingResponse:
     """Export defect register as CSV."""
-    rows = (await db.execute(select(VehicleDefect).order_by(VehicleDefect.created_at.desc()))).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(VehicleDefect)
+                .where(VehicleDefect.tenant_id == current_user.tenant_id)
+                .order_by(VehicleDefect.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     import csv
 
