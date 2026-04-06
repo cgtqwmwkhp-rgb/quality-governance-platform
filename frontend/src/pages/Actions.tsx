@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { cn } from '../helpers/utils'
-import { actionsApi, Action as ApiAction, ActionCreate } from '../api/client'
+import { actionsApi, Action as ApiAction, ActionCreate, ActionsSummary } from '../api/client'
 import { decodeTokenPayload, getPlatformToken } from '../utils/auth'
 
 function startOfDay(d: Date): number {
@@ -107,7 +107,16 @@ interface Action extends Omit<ApiAction, 'source_id' | 'owner_email'> {
 
 type ViewMode = 'all' | 'my' | 'overdue'
 type FilterStatus = 'all' | 'open' | 'in_progress' | 'pending_verification' | 'completed'
-type SourceTypeFilter = 'all' | 'audit_finding' | 'incident' | 'complaint' | 'investigation' | 'rta'
+type SourceTypeFilter =
+  | 'all'
+  | 'audit_finding'
+  | 'incident'
+  | 'complaint'
+  | 'investigation'
+  | 'rta'
+  | 'ncr'
+  | 'capa_incident'
+  | 'capa_complaint'
 type SortMode = 'newest' | 'due_first'
 
 // Form state type for creating actions
@@ -146,7 +155,8 @@ export default function Actions() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [sortMode, setSortMode] = useState<SortMode>('newest')
-  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  const [summary, setSummary] = useState<ActionsSummary | null>(null)
 
   const currentUserId = useMemo(() => {
     const token = getPlatformToken()
@@ -179,17 +189,15 @@ export default function Actions() {
     setLoading(true)
     setError(null)
     try {
-      const statusFilter = filterStatus !== 'all' ? filterStatus : undefined
       const response = await actionsApi.list(
         1,
         100,
-        statusFilter,
+        undefined,
         sourceTypeFilter !== 'all' ? sourceTypeFilter : undefined,
         sourceTypeFilter !== 'all' && Number.isFinite(sourceIdFilter) && sourceIdFilter > 0
           ? sourceIdFilter
           : undefined,
       )
-      // Server returns sorted by created_at desc - maintain stable order
       const transformedActions = (response.data.items ?? []).map(transformAction)
       setActions(transformedActions)
     } catch (err) {
@@ -199,7 +207,16 @@ export default function Actions() {
     } finally {
       setLoading(false)
     }
-  }, [filterStatus, sourceIdFilter, sourceTypeFilter])
+  }, [sourceIdFilter, sourceTypeFilter])
+
+  const loadSummary = useCallback(async () => {
+    try {
+      const res = await actionsApi.summary()
+      setSummary(res.data)
+    } catch {
+      setSummary(null)
+    }
+  }, [])
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
@@ -214,7 +231,8 @@ export default function Actions() {
 
   useEffect(() => {
     loadActions()
-  }, [loadActions])
+    loadSummary()
+  }, [loadActions, loadSummary])
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -304,8 +322,8 @@ export default function Actions() {
     }
   }
 
-  const isOverdue = (dueDate?: string, status?: string) => {
-    if (!dueDate || status === 'completed' || status === 'cancelled') return false
+  const isOverdue = (dueDate?: string, displayStatus?: string) => {
+    if (!dueDate || displayStatus === 'completed' || displayStatus === 'cancelled') return false
     return new Date(dueDate) < new Date()
   }
 
@@ -320,10 +338,10 @@ export default function Actions() {
     ) {
       return false
     }
-    if (filterStatus !== 'all' && action.status !== filterStatus) {
+    if (filterStatus !== 'all' && action.display_status !== filterStatus) {
       return false
     }
-    if (viewMode === 'overdue' && !isOverdue(action.due_date, action.status)) {
+    if (viewMode === 'overdue' && !isOverdue(action.due_date, action.display_status)) {
       return false
     }
     if (viewMode === 'my' && currentUserId != null) {
@@ -338,7 +356,7 @@ export default function Actions() {
     const arr = [...filteredActions]
     if (sortMode === 'due_first') {
       const rank = (a: Action) => {
-        if (!a.due_date || a.status === 'completed' || a.status === 'cancelled') {
+        if (!a.due_date || a.display_status === 'completed' || a.display_status === 'cancelled') {
           return Number.POSITIVE_INFINITY
         }
         const t = new Date(a.due_date).getTime()
@@ -353,12 +371,13 @@ export default function Actions() {
     return arr
   }, [filteredActions, sortMode])
 
+  const byD = summary?.by_display_status ?? {}
   const stats = {
-    total: actions.length,
-    open: actions.filter((a) => a.status === 'open').length,
-    inProgress: actions.filter((a) => a.status === 'in_progress').length,
-    overdue: actions.filter((a) => isOverdue(a.due_date, a.status)).length,
-    completed: actions.filter((a) => a.status === 'completed').length,
+    total: summary?.total ?? actions.length,
+    open: byD.open ?? actions.filter((a) => a.display_status === 'open').length,
+    inProgress: byD.in_progress ?? actions.filter((a) => a.display_status === 'in_progress').length,
+    overdue: byD.overdue ?? actions.filter((a) => isOverdue(a.due_date, a.display_status)).length,
+    completed: byD.completed ?? actions.filter((a) => a.display_status === 'completed').length,
   }
 
   if (loading) {
@@ -526,6 +545,9 @@ export default function Actions() {
             <SelectItem value="complaint">Complaints</SelectItem>
             <SelectItem value="investigation">Investigations</SelectItem>
             <SelectItem value="rta">RTAs</SelectItem>
+            <SelectItem value="ncr">NCR / defects (CAPA)</SelectItem>
+            <SelectItem value="capa_incident">CAPA (incident-linked)</SelectItem>
+            <SelectItem value="capa_complaint">CAPA (complaint-linked)</SelectItem>
           </SelectContent>
         </Select>
 
@@ -576,12 +598,12 @@ export default function Actions() {
           />
         ) : (
           sortedActions.map((action) => {
-            const overdue = isOverdue(action.due_date, action.status)
-            const isOpen = expandedId === action.id
+            const overdue = isOverdue(action.due_date, action.display_status)
+            const isOpen = expandedKey === action.action_key
 
             return (
               <Card
-                key={action.id}
+                key={action.action_key}
                 hoverable
                 className={cn('overflow-hidden', overdue && 'border-destructive/30')}
               >
@@ -606,8 +628,8 @@ export default function Actions() {
                           <Badge variant={getPriorityVariant(action.priority) as any}>
                             {action.priority}
                           </Badge>
-                          <Badge variant={getStatusVariant(action.status) as any}>
-                            {action.status.replace('_', ' ')}
+                          <Badge variant={getStatusVariant(action.display_status) as any}>
+                            {action.display_status.replace('_', ' ')}
                           </Badge>
                           {overdue && (
                             <Badge variant="destructive" className="animate-pulse">
@@ -686,13 +708,19 @@ export default function Actions() {
                           </div>
                         ) : null}
 
-                        <div className="mt-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" className="h-8 text-xs" asChild>
+                            <Link to={`/actions/item?key=${encodeURIComponent(action.action_key)}`}>
+                              {t('actions.open_profile', { defaultValue: 'Open profile' })}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </Link>
+                          </Button>
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             className="h-8 text-xs -ml-2"
-                            onClick={() => setExpandedId(isOpen ? null : action.id)}
+                            onClick={() => setExpandedKey(isOpen ? null : action.action_key)}
                           >
                             {isOpen ? (
                               <>

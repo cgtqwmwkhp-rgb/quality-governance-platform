@@ -5,13 +5,27 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional, Union, cast
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies.request_context import get_request_id
+from src.api.routes._action_unified import (
+    CAPA_ONLY_API_SOURCE_TYPES,
+    STORAGE_CAPA,
+    STORAGE_COMPLAINT_ACTION,
+    STORAGE_INCIDENT_ACTION,
+    STORAGE_INVESTIGATION_ACTION,
+    STORAGE_RTA_ACTION,
+    action_key_for,
+    capa_api_source_type,
+    capa_enum_from_api_filter,
+    display_status_for,
+    parse_action_key,
+)
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
@@ -24,6 +38,7 @@ from src.domain.models.induction import InductionRun
 from src.domain.models.investigation import InvestigationAction, InvestigationActionStatus, InvestigationRun
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.user import User
+from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -88,6 +103,15 @@ class ActionResponse(BaseModel):
     action_type: str
     priority: str
     status: str
+    """Raw persisted status (CAPA vs operational enums)."""
+    display_status: str = Field(
+        ...,
+        description="Normalized for UI and metrics (e.g. CAPA closed -> completed)",
+    )
+    action_key: str = Field(
+        ...,
+        description="Stable id: incident_action:1, capa:2, …",
+    )
     due_date: Optional[str] = None
     completed_at: Optional[str] = None
     completion_notes: Optional[str] = None
@@ -120,13 +144,22 @@ class ActionListResponse(BaseModel):
     pages: int
 
 
+class ActionsSummaryResponse(BaseModel):
+    """Tenant-wide action counts by normalized display status."""
+
+    total: int
+    by_display_status: dict[str, int]
+
+
 def _action_to_response(
     action: Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction],
     source_type: str,
     source_id: int,
+    storage_kind: str,
     owner_email: Optional[str] = None,
 ) -> ActionResponse:
     """Convert an action model to a response."""
+    raw_status = action.status.value if hasattr(action.status, "value") else str(action.status)
     return ActionResponse(
         id=action.id,
         reference_number=action.reference_number,
@@ -134,7 +167,9 @@ def _action_to_response(
         description=action.description,
         action_type=action.action_type or "corrective",
         priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
+        status=raw_status,
+        display_status=display_status_for(raw_status, from_capa=False),
+        action_key=action_key_for(storage_kind, action.id),
         due_date=action.due_date.isoformat() if action.due_date else None,
         completed_at=action.completed_at.isoformat() if action.completed_at else None,
         completion_notes=getattr(action, "completion_notes", None),
@@ -190,7 +225,6 @@ def _parse_capa_priority(priority: Optional[str]) -> CAPAPriority:
 async def _build_capa_provenance(
     db: "DbSession",
     capa: CAPAAction,
-    source_type: str,
 ) -> dict[str, Any]:
     source_reference = capa.source_reference
     source_title: Optional[str] = None
@@ -198,7 +232,7 @@ async def _build_capa_provenance(
     clause_reference: Optional[str] = capa.clause_reference
     audit_run_id: Optional[int] = None
 
-    if source_type == "audit_finding" and capa.source_id:
+    if capa.source_type == CAPASource.AUDIT_FINDING and capa.source_id:
         result = await db.execute(select(AuditFinding).where(AuditFinding.id == capa.source_id))
         finding = cast(Optional[AuditFinding], result.scalar_one_or_none())
         if finding is not None:
@@ -228,10 +262,11 @@ async def _build_capa_provenance(
     }
 
 
-async def _capa_to_response(db: "DbSession", capa: CAPAAction, source_type: str) -> ActionResponse:
+async def _capa_to_response(db: "DbSession", capa: CAPAAction) -> ActionResponse:
     """Convert a CAPA action to unified action response."""
     capa_status = capa.status.value if hasattr(capa.status, "value") else str(capa.status)
-    provenance = await _build_capa_provenance(db, capa, source_type)
+    api_source_type = capa_api_source_type(cast(Optional[CAPASource], capa.source_type))
+    provenance = await _build_capa_provenance(db, capa)
     arid = provenance.get("audit_run_id")
     audit_run_id = int(arid) if isinstance(arid, int) else None
     return ActionResponse(
@@ -242,10 +277,12 @@ async def _capa_to_response(db: "DbSession", capa: CAPAAction, source_type: str)
         action_type=(capa.capa_type.value if hasattr(capa.capa_type, "value") else "corrective"),
         priority=(capa.priority.value if hasattr(capa.priority, "value") else str(capa.priority)),
         status=capa_status,
+        display_status=display_status_for(capa_status, from_capa=True),
+        action_key=action_key_for(STORAGE_CAPA, capa.id),
         due_date=capa.due_date.isoformat() if capa.due_date else None,
         completed_at=capa.completed_at.isoformat() if capa.completed_at else None,
         completion_notes=capa.verification_result,
-        source_type=source_type,
+        source_type=api_source_type,
         source_id=capa.source_id or 0,
         source_reference=cast(Optional[str], provenance["source_reference"]),
         source_title=cast(Optional[str], provenance["source_title"]),
@@ -285,6 +322,66 @@ async def _safe_scalar(db: "DbSession", query, source_label: str) -> int:
     except Exception:
         logger.warning("actions._count_for_source: %s query failed", source_label, exc_info=True)
         return 0
+
+
+async def _count_capa_slice(
+    db: "DbSession",
+    *,
+    tenant_id: Optional[int],
+    status_filter: Optional[str],
+    capa_source: Optional[CAPASource],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+) -> int:
+    """Count CAPA rows for tenant with optional source slice."""
+    q = select(func.count()).select_from(CAPAAction).where(CAPAAction.tenant_id == tenant_id)
+    if status_filter:
+        q = _apply_capa_status_filter(q, status_filter)
+    if capa_source is not None:
+        q = q.where(CAPAAction.source_type == capa_source)
+        if capa_source == CAPASource.JOB_ASSESSMENT and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        elif capa_source == CAPASource.INDUCTION and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        elif capa_source == CAPASource.AUDIT_FINDING and source_id:
+            q = q.where(CAPAAction.source_id == source_id)
+        elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
+            q = q.where(CAPAAction.source_id == source_id)
+    return await _safe_scalar(db, q, "capa")
+
+
+async def _fetch_capa_rows_for_list(
+    db: "DbSession",
+    *,
+    tenant_id: Optional[int],
+    status_filter: Optional[str],
+    capa_source: Optional[CAPASource],
+    source_id: Optional[int],
+    source_reference: Optional[str],
+    source_type_param: Optional[str],
+    offset: int,
+    page_size: int,
+    cross_source_cap: int,
+) -> list[CAPAAction]:
+    q = select(CAPAAction).where(CAPAAction.tenant_id == tenant_id).order_by(CAPAAction.created_at.desc())
+    if status_filter:
+        q = _apply_capa_status_filter(q, status_filter)
+    if capa_source is not None:
+        q = q.where(CAPAAction.source_type == capa_source)
+        if capa_source == CAPASource.JOB_ASSESSMENT and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        elif capa_source == CAPASource.INDUCTION and source_reference:
+            q = q.where(CAPAAction.source_reference == source_reference)
+        elif capa_source == CAPASource.AUDIT_FINDING and source_id:
+            q = q.where(CAPAAction.source_id == source_id)
+        elif capa_source not in (CAPASource.JOB_ASSESSMENT, CAPASource.INDUCTION) and source_id:
+            q = q.where(CAPAAction.source_id == source_id)
+    if source_type_param:
+        q = q.offset(offset).limit(page_size)
+    else:
+        q = q.limit(cross_source_cap)
+    result = await db.execute(q)
+    return list(result.scalars().all())
 
 
 async def _count_for_source(
@@ -329,50 +426,27 @@ async def _count_for_source(
             q = q.where(InvestigationAction.investigation_id == source_id)
         total += await _safe_scalar(db, q, "investigation")
 
-    if not source_type or source_type == "assessment":
-        q = (
-            select(func.count())
-            .select_from(CAPAAction)
-            .where(
-                CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
-                CAPAAction.tenant_id == tenant_id,
-            )
+    st = source_type.lower() if source_type else None
+    if not st:
+        total += await _count_capa_slice(
+            db,
+            tenant_id=tenant_id,
+            status_filter=status_filter,
+            capa_source=None,
+            source_id=None,
+            source_reference=None,
         )
-        if status_filter:
-            q = _apply_capa_status_filter(q, status_filter)
-        if source_type == "assessment" and source_reference:
-            q = q.where(CAPAAction.source_reference == source_reference)
-        total += await _safe_scalar(db, q, "assessment")
-
-    if not source_type or source_type == "induction":
-        q = (
-            select(func.count())
-            .select_from(CAPAAction)
-            .where(
-                CAPAAction.source_type == CAPASource.INDUCTION,
-                CAPAAction.tenant_id == tenant_id,
+    elif st in CAPA_ONLY_API_SOURCE_TYPES:
+        ce = capa_enum_from_api_filter(st)
+        if ce is not None:
+            total += await _count_capa_slice(
+                db,
+                tenant_id=tenant_id,
+                status_filter=status_filter,
+                capa_source=ce,
+                source_id=source_id,
+                source_reference=source_reference,
             )
-        )
-        if status_filter:
-            q = _apply_capa_status_filter(q, status_filter)
-        if source_type == "induction" and source_reference:
-            q = q.where(CAPAAction.source_reference == source_reference)
-        total += await _safe_scalar(db, q, "induction")
-
-    if not source_type or source_type == "audit_finding":
-        q = (
-            select(func.count())
-            .select_from(CAPAAction)
-            .where(
-                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
-                CAPAAction.tenant_id == tenant_id,
-            )
-        )
-        if status_filter:
-            q = _apply_capa_status_filter(q, status_filter)
-        if source_type == "audit_finding" and source_id:
-            q = q.where(CAPAAction.source_id == source_id)
-        total += await _safe_scalar(db, q, "audit_finding")
 
     return total
 
@@ -503,87 +577,81 @@ async def list_actions(
     _email_map = await _batch_resolve_owner_emails(db, _all_owner_ids)
 
     for a in _pending_incident:
-        actions_list.append(_action_to_response(a, "incident", a.incident_id, owner_email=_email_map.get(a.owner_id)))
+        actions_list.append(
+            _action_to_response(
+                a,
+                "incident",
+                a.incident_id,
+                STORAGE_INCIDENT_ACTION,
+                owner_email=_email_map.get(a.owner_id),
+            )
+        )
     for a in _pending_rta:
-        actions_list.append(_action_to_response(a, "rta", a.rta_id, owner_email=_email_map.get(a.owner_id)))
+        actions_list.append(
+            _action_to_response(
+                a,
+                "rta",
+                a.rta_id,
+                STORAGE_RTA_ACTION,
+                owner_email=_email_map.get(a.owner_id),
+            )
+        )
     for a in _pending_complaint:
-        actions_list.append(_action_to_response(a, "complaint", a.complaint_id, owner_email=_email_map.get(a.owner_id)))
+        actions_list.append(
+            _action_to_response(
+                a,
+                "complaint",
+                a.complaint_id,
+                STORAGE_COMPLAINT_ACTION,
+                owner_email=_email_map.get(a.owner_id),
+            )
+        )
     for a in _pending_investigation:
         actions_list.append(
-            _action_to_response(a, "investigation", a.investigation_id, owner_email=_email_map.get(a.owner_id))
+            _action_to_response(
+                a,
+                "investigation",
+                a.investigation_id,
+                STORAGE_INVESTIGATION_ACTION,
+                owner_email=_email_map.get(a.owner_id),
+            )
         )
 
-    if not source_type or source_type == "assessment":
-        try:
-            q = (
-                select(CAPAAction)
-                .where(
-                    CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
-                    CAPAAction.tenant_id == current_user.tenant_id,
-                )
-                .order_by(CAPAAction.created_at.desc())
+    _pending_capa: list[CAPAAction] = []
+    try:
+        stl = source_type.lower() if source_type else None
+        if not stl:
+            _pending_capa = await _fetch_capa_rows_for_list(
+                db,
+                tenant_id=current_user.tenant_id,
+                status_filter=status_filter,
+                capa_source=None,
+                source_id=None,
+                source_reference=None,
+                source_type_param=source_type,
+                offset=offset,
+                page_size=page_size,
+                cross_source_cap=_cross_source_cap,
             )
-            if status_filter:
-                q = _apply_capa_status_filter(q, status_filter)
-            if source_type == "assessment" and source_reference:
-                q = q.where(CAPAAction.source_reference == source_reference)
-            if source_type:
-                q = q.offset(offset).limit(page_size)
-            else:
-                q = q.limit(_cross_source_cap)
-            result = await db.execute(q)
-            for a in result.scalars().all():
-                actions_list.append(await _capa_to_response(db, a, "assessment"))
-        except Exception:
-            logger.warning("list_actions: assessment query failed", exc_info=True)
-
-    if not source_type or source_type == "induction":
-        try:
-            q = (
-                select(CAPAAction)
-                .where(
-                    CAPAAction.source_type == CAPASource.INDUCTION,
-                    CAPAAction.tenant_id == current_user.tenant_id,
+        elif stl in CAPA_ONLY_API_SOURCE_TYPES:
+            ce = capa_enum_from_api_filter(stl)
+            if ce is not None:
+                _pending_capa = await _fetch_capa_rows_for_list(
+                    db,
+                    tenant_id=current_user.tenant_id,
+                    status_filter=status_filter,
+                    capa_source=ce,
+                    source_id=source_id,
+                    source_reference=source_reference,
+                    source_type_param=source_type,
+                    offset=offset,
+                    page_size=page_size,
+                    cross_source_cap=_cross_source_cap,
                 )
-                .order_by(CAPAAction.created_at.desc())
-            )
-            if status_filter:
-                q = _apply_capa_status_filter(q, status_filter)
-            if source_type == "induction" and source_reference:
-                q = q.where(CAPAAction.source_reference == source_reference)
-            if source_type:
-                q = q.offset(offset).limit(page_size)
-            else:
-                q = q.limit(_cross_source_cap)
-            result = await db.execute(q)
-            for a in result.scalars().all():
-                actions_list.append(await _capa_to_response(db, a, "induction"))
-        except Exception:
-            logger.warning("list_actions: induction query failed", exc_info=True)
-
-    if not source_type or source_type == "audit_finding":
-        try:
-            q = (
-                select(CAPAAction)
-                .where(
-                    CAPAAction.source_type == CAPASource.AUDIT_FINDING,
-                    CAPAAction.tenant_id == current_user.tenant_id,
-                )
-                .order_by(CAPAAction.created_at.desc())
-            )
-            if status_filter:
-                q = _apply_capa_status_filter(q, status_filter)
-            if source_type == "audit_finding" and source_id:
-                q = q.where(CAPAAction.source_id == source_id)
-            if source_type:
-                q = q.offset(offset).limit(page_size)
-            else:
-                q = q.limit(_cross_source_cap)
-            result = await db.execute(q)
-            for a in result.scalars().all():
-                actions_list.append(await _capa_to_response(db, a, "audit_finding"))
-        except Exception:
-            logger.warning("list_actions: audit_finding query failed", exc_info=True)
+        for a in _pending_capa:
+            actions_list.append(await _capa_to_response(db, a))
+    except Exception:
+        logger.warning("list_actions: capa query failed", exc_info=True)
 
     # When listing across ALL source types, merge-sort and slice in Python
     # (cross-table UNION ALL with heterogeneous schemas is impractical here).
@@ -607,6 +675,7 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     action_data: ActionCreate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
 ) -> ActionResponse:
     """Create a new action for an incident, RTA, complaint, investigation, assessment, induction, or audit finding."""
     src_type = action_data.source_type.lower()
@@ -870,32 +939,131 @@ async def create_action(  # noqa: C901 - complexity justified by multi-entity su
     track_metric("actions.created")
 
     if isinstance(action, CAPAAction):
-        return await _capa_to_response(db, action, src_type)
+        out = await _capa_to_response(db, action)
+    else:
+        resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
+        if src_type == "incident":
+            sk = STORAGE_INCIDENT_ACTION
+        elif src_type == "rta":
+            sk = STORAGE_RTA_ACTION
+        elif src_type == "complaint":
+            sk = STORAGE_COMPLAINT_ACTION
+        elif src_type == "investigation":
+            sk = STORAGE_INVESTIGATION_ACTION
+        else:
+            sk = STORAGE_INCIDENT_ACTION
+        out = _action_to_response(
+            cast(Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction], action),
+            src_type,
+            src_id,
+            sk,
+            owner_email=resolved_email,
+        )
 
-    resolved_email = action_data.assigned_to_email or await _resolve_owner_email(db, action.owner_id)
-    return ActionResponse(
-        id=action.id,
-        reference_number=action.reference_number,
-        title=action.title,
-        description=action.description,
-        action_type=action.action_type or "corrective",
-        priority=action.priority or "medium",
-        status=(action.status.value if hasattr(action.status, "value") else str(action.status)),
-        due_date=action.due_date.isoformat() if action.due_date else None,
-        completed_at=action.completed_at.isoformat() if action.completed_at else None,
-        completion_notes=getattr(action, "completion_notes", None),
-        source_type=src_type,
-        source_id=src_id,
-        source_reference=None,
-        source_title=None,
-        source_scheme=None,
-        clause_reference=None,
-        audit_run_id=None,
-        owner_id=action.owner_id,
-        owner_email=resolved_email,
-        assigned_to_email=resolved_email,
-        created_at=action.created_at.isoformat() if action.created_at else "",
+    await record_audit_event(
+        db=db,
+        event_type="unified_action.created",
+        entity_type="unified_action",
+        entity_id=out.action_key,
+        action="create",
+        description=f"Created unified action {out.reference_number or out.action_key}",
+        payload={"source_type": out.source_type, "numeric_id": out.id},
+        user_id=current_user.id,
+        request_id=request_id,
     )
+    return out
+
+
+async def _load_capa_by_api_source_type(
+    db: "DbSession",
+    action_id: int,
+    tenant_id: Optional[int],
+    src_type: str,
+) -> Optional[CAPAAction]:
+    ce = capa_enum_from_api_filter(src_type.lower())
+    if ce is None:
+        return None
+    result = await db.execute(
+        select(CAPAAction).where(
+            CAPAAction.id == action_id,
+            CAPAAction.tenant_id == tenant_id,
+            CAPAAction.source_type == ce,
+        )
+    )
+    return cast(Optional[CAPAAction], result.scalar_one_or_none())
+
+
+def _valid_unified_source_type(src_type: str) -> bool:
+    sl = src_type.lower().strip()
+    if sl in ("incident", "rta", "complaint", "investigation"):
+        return True
+    return capa_enum_from_api_filter(sl) is not None
+
+
+async def _compute_actions_summary(db: "DbSession", tenant_id: Optional[int]) -> ActionsSummaryResponse:
+    """Aggregate counts by display_status across all action stores."""
+    by_display: dict[str, int] = {}
+
+    def _merge(raw: str, n: int, *, capa: bool) -> None:
+        if n <= 0:
+            return
+        d = display_status_for(raw, from_capa=capa)
+        by_display[d] = by_display.get(d, 0) + n
+
+    try:
+        q = (
+            select(IncidentAction.status, func.count())
+            .where(IncidentAction.tenant_id == tenant_id)
+            .group_by(IncidentAction.status)
+        )
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=False)
+    except Exception:
+        logger.warning("actions.summary: incident aggregate failed", exc_info=True)
+
+    try:
+        q = select(RTAAction.status, func.count()).where(RTAAction.tenant_id == tenant_id).group_by(RTAAction.status)
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=False)
+    except Exception:
+        logger.warning("actions.summary: rta aggregate failed", exc_info=True)
+
+    try:
+        q = (
+            select(ComplaintAction.status, func.count())
+            .where(ComplaintAction.tenant_id == tenant_id)
+            .group_by(ComplaintAction.status)
+        )
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=False)
+    except Exception:
+        logger.warning("actions.summary: complaint aggregate failed", exc_info=True)
+
+    try:
+        q = (
+            select(InvestigationAction.status, func.count())
+            .where(InvestigationAction.tenant_id == tenant_id)
+            .group_by(InvestigationAction.status)
+        )
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=False)
+    except Exception:
+        logger.warning("actions.summary: investigation aggregate failed", exc_info=True)
+
+    try:
+        q = select(CAPAAction.status, func.count()).where(CAPAAction.tenant_id == tenant_id).group_by(CAPAAction.status)
+        for st, cnt in (await db.execute(q)).all():
+            raw = st.value if hasattr(st, "value") else str(st)
+            _merge(raw, int(cnt), capa=True)
+    except Exception:
+        logger.warning("actions.summary: capa aggregate failed", exc_info=True)
+
+    total = sum(by_display.values())
+    return ActionsSummaryResponse(total=total, by_display_status=by_display)
 
 
 async def _hydrate_action_owner_emails(db: "DbSession", items: list[ActionResponse]) -> list[ActionResponse]:
@@ -917,6 +1085,97 @@ async def _hydrate_action_owner_emails(db: "DbSession", items: list[ActionRespon
     return out
 
 
+@router.get("/summary", response_model=ActionsSummaryResponse)
+async def get_actions_summary(db: DbSession, current_user: CurrentUser) -> ActionsSummaryResponse:
+    """Tenant-wide action totals by normalized display_status."""
+    return await _compute_actions_summary(db, current_user.tenant_id)
+
+
+@router.get("/by-key", response_model=ActionResponse)
+async def get_action_by_key(
+    db: DbSession,
+    current_user: CurrentUser,
+    key: str = Query(..., min_length=3, description="Stable key e.g. capa:12, incident_action:4"),
+) -> ActionResponse:
+    """Resolve an action by its action_key (no source_type guesswork)."""
+    try:
+        kind, row_id = parse_action_key(key)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
+    if kind == STORAGE_CAPA:
+        result = await db.execute(
+            select(CAPAAction).where(
+                CAPAAction.id == row_id,
+                CAPAAction.tenant_id == current_user.tenant_id,
+            )
+        )
+        capa_row = cast(Optional[CAPAAction], result.scalar_one_or_none())
+        if capa_row is None:
+            raise NotFoundError("Action not found")
+        return await _capa_to_response(db, capa_row)
+
+    if kind == STORAGE_INCIDENT_ACTION:
+        result = await db.execute(
+            select(IncidentAction).where(
+                IncidentAction.id == row_id,
+                IncidentAction.tenant_id == current_user.tenant_id,
+            )
+        )
+        row = cast(Optional[IncidentAction], result.scalar_one_or_none())
+        if row is None:
+            raise NotFoundError("Action not found")
+        email = await _resolve_owner_email(db, row.owner_id)
+        return _action_to_response(row, "incident", row.incident_id, STORAGE_INCIDENT_ACTION, owner_email=email)
+
+    if kind == STORAGE_RTA_ACTION:
+        result = await db.execute(
+            select(RTAAction).where(
+                RTAAction.id == row_id,
+                RTAAction.tenant_id == current_user.tenant_id,
+            )
+        )
+        row = cast(Optional[RTAAction], result.scalar_one_or_none())
+        if row is None:
+            raise NotFoundError("Action not found")
+        email = await _resolve_owner_email(db, row.owner_id)
+        return _action_to_response(row, "rta", row.rta_id, STORAGE_RTA_ACTION, owner_email=email)
+
+    if kind == STORAGE_COMPLAINT_ACTION:
+        result = await db.execute(
+            select(ComplaintAction).where(
+                ComplaintAction.id == row_id,
+                ComplaintAction.tenant_id == current_user.tenant_id,
+            )
+        )
+        row = cast(Optional[ComplaintAction], result.scalar_one_or_none())
+        if row is None:
+            raise NotFoundError("Action not found")
+        email = await _resolve_owner_email(db, row.owner_id)
+        return _action_to_response(row, "complaint", row.complaint_id, STORAGE_COMPLAINT_ACTION, owner_email=email)
+
+    if kind == STORAGE_INVESTIGATION_ACTION:
+        result = await db.execute(
+            select(InvestigationAction).where(
+                InvestigationAction.id == row_id,
+                InvestigationAction.tenant_id == current_user.tenant_id,
+            )
+        )
+        row = cast(Optional[InvestigationAction], result.scalar_one_or_none())
+        if row is None:
+            raise NotFoundError("Action not found")
+        email = await _resolve_owner_email(db, row.owner_id)
+        return _action_to_response(
+            row,
+            "investigation",
+            row.investigation_id,
+            STORAGE_INVESTIGATION_ACTION,
+            owner_email=email,
+        )
+
+    raise BadRequestError(f"Unknown action_key kind: {kind}")
+
+
 @router.get("/{action_id}")
 async def get_action(
     action_id: int,
@@ -924,46 +1183,16 @@ async def get_action(
     current_user: CurrentUser,
     source_type: str = Query(
         ...,
-        description="Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+        description="Source discriminator: incident, rta, complaint, investigation, or CAPA API type "
+        "(assessment, audit_finding, ncr, capa_incident, …)",
     ),
 ) -> ActionResponse:
     """Get a specific action by ID."""
     src_type = source_type.lower()
+    if not _valid_unified_source_type(src_type):
+        raise BadRequestError("Invalid source_type")
 
-    if src_type == "assessment":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if capa_action:
-            return await _capa_to_response(db, capa_action, "assessment")
-    elif src_type == "induction":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.INDUCTION,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if capa_action:
-            return await _capa_to_response(db, capa_action, "induction")
-    elif src_type == "audit_finding":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        capa_action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if capa_action:
-            return await _capa_to_response(db, capa_action, "audit_finding")
-    elif src_type == "incident":
+    if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
                 IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
@@ -972,7 +1201,13 @@ async def get_action(
         incident_action = cast(Optional[IncidentAction], result.scalar_one_or_none())
         if incident_action:
             email = await _resolve_owner_email(db, incident_action.owner_id)
-            return _action_to_response(incident_action, "incident", incident_action.incident_id, owner_email=email)
+            return _action_to_response(
+                incident_action,
+                "incident",
+                incident_action.incident_id,
+                STORAGE_INCIDENT_ACTION,
+                owner_email=email,
+            )
     elif src_type == "rta":
         result = await db.execute(
             select(RTAAction).where(RTAAction.id == action_id, RTAAction.tenant_id == current_user.tenant_id)
@@ -980,7 +1215,7 @@ async def get_action(
         rta_action = cast(Optional[RTAAction], result.scalar_one_or_none())
         if rta_action:
             email = await _resolve_owner_email(db, rta_action.owner_id)
-            return _action_to_response(rta_action, "rta", rta_action.rta_id, owner_email=email)
+            return _action_to_response(rta_action, "rta", rta_action.rta_id, STORAGE_RTA_ACTION, owner_email=email)
     elif src_type == "complaint":
         result = await db.execute(
             select(ComplaintAction).where(
@@ -990,7 +1225,13 @@ async def get_action(
         complaint_action = cast(Optional[ComplaintAction], result.scalar_one_or_none())
         if complaint_action:
             email = await _resolve_owner_email(db, complaint_action.owner_id)
-            return _action_to_response(complaint_action, "complaint", complaint_action.complaint_id, owner_email=email)
+            return _action_to_response(
+                complaint_action,
+                "complaint",
+                complaint_action.complaint_id,
+                STORAGE_COMPLAINT_ACTION,
+                owner_email=email,
+            )
     elif src_type == "investigation":
         result = await db.execute(
             select(InvestigationAction).where(
@@ -1004,8 +1245,13 @@ async def get_action(
                 investigation_action,
                 "investigation",
                 investigation_action.investigation_id,
+                STORAGE_INVESTIGATION_ACTION,
                 owner_email=email,
             )
+    else:
+        capa_action = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
+        if capa_action is not None:
+            return await _capa_to_response(db, capa_action)
 
     raise NotFoundError("Action not found")
 
@@ -1016,9 +1262,10 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action_data: ActionUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
     source_type: str = Query(
         ...,
-        description="Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+        description="Source discriminator (incident, rta, … or CAPA API type such as audit_finding, ncr, capa_incident)",
     ),
 ) -> ActionResponse:
     """Update an existing action by ID.
@@ -1028,16 +1275,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     """
     src_type = source_type.lower()
 
-    # Bounded error class: validate source_type
-    if src_type not in (
-        "incident",
-        "rta",
-        "complaint",
-        "investigation",
-        "assessment",
-        "induction",
-        "audit_finding",
-    ):
+    if not _valid_unified_source_type(src_type):
         raise BadRequestError("Invalid source_type")
 
     # Bounded error class: validate status if provided
@@ -1050,6 +1288,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         "verification",
         "closed",
         "overdue",  # CAPA statuses
+        "verified",
     }
     if action_data.status and action_data.status.lower() not in valid_statuses:
         raise BadRequestError("Invalid status value")
@@ -1063,40 +1302,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action: Optional[Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction, CAPAAction]] = None
     source_id: int = 0
 
-    if src_type == "assessment":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.JOB_ASSESSMENT,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.source_id or 0
-    elif src_type == "induction":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.INDUCTION,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.source_id or 0
-    elif src_type == "audit_finding":
-        result = await db.execute(
-            select(CAPAAction).where(
-                CAPAAction.id == action_id,
-                CAPAAction.source_type == CAPASource.AUDIT_FINDING,
-                CAPAAction.tenant_id == current_user.tenant_id,
-            )
-        )
-        action = cast(Optional[CAPAAction], result.scalar_one_or_none())
-        if action:
-            source_id = action.source_id or 0
-    elif src_type == "incident":
+    if src_type == "incident":
         result = await db.execute(
             select(IncidentAction).where(
                 IncidentAction.id == action_id, IncidentAction.tenant_id == current_user.tenant_id
@@ -1130,6 +1336,11 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
         action = cast(Optional[InvestigationAction], result.scalar_one_or_none())
         if action:
             source_id = action.investigation_id
+    else:
+        capa_row = await _load_capa_by_api_source_type(db, action_id, current_user.tenant_id, src_type)
+        if capa_row is not None:
+            action = capa_row
+            source_id = capa_row.source_id or 0
 
     if not action:
         raise NotFoundError("Action not found")
@@ -1161,9 +1372,9 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
                     pass
             if capa_status is not None:
                 action.status = capa_status
-                if status_value == "completed" and not action.completed_at:
+                if status_value in ("completed", "closed") and not action.completed_at:
                     action.completed_at = datetime.now(timezone.utc)
-                elif status_value != "completed":
+                elif status_value not in ("completed", "closed"):
                     action.completed_at = None
         if action_data.assigned_to_email is not None:
             result = await db.execute(
@@ -1224,7 +1435,29 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     await db.refresh(action)
 
     if isinstance(action, CAPAAction):
-        return await _capa_to_response(db, action, src_type)
-    owner_id = getattr(action, "owner_id", None) or getattr(action, "assigned_to_id", None)
-    email = await _resolve_owner_email(db, owner_id)
-    return _action_to_response(action, src_type, source_id, owner_email=email)
+        out = await _capa_to_response(db, action)
+    else:
+        owner_id = getattr(action, "owner_id", None) or getattr(action, "assigned_to_id", None)
+        email = await _resolve_owner_email(db, owner_id)
+        if src_type == "incident":
+            sk = STORAGE_INCIDENT_ACTION
+        elif src_type == "rta":
+            sk = STORAGE_RTA_ACTION
+        elif src_type == "complaint":
+            sk = STORAGE_COMPLAINT_ACTION
+        else:
+            sk = STORAGE_INVESTIGATION_ACTION
+        out = _action_to_response(action, src_type, source_id, sk, owner_email=email)
+
+    await record_audit_event(
+        db=db,
+        event_type="unified_action.updated",
+        entity_type="unified_action",
+        entity_id=out.action_key,
+        action="update",
+        description=f"Updated unified action {out.reference_number or out.action_key}",
+        payload=action_data.model_dump(exclude_none=True),
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+    return out

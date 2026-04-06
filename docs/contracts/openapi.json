@@ -473,6 +473,11 @@
       "ActionResponse": {
         "description": "Response schema for actions.",
         "properties": {
+          "action_key": {
+            "description": "Stable id: incident_action:1, capa:2, \u2026",
+            "title": "Action Key",
+            "type": "string"
+          },
           "action_type": {
             "title": "Action Type",
             "type": "string"
@@ -539,6 +544,11 @@
           },
           "description": {
             "title": "Description",
+            "type": "string"
+          },
+          "display_status": {
+            "description": "Normalized for UI and metrics (e.g. CAPA closed -> completed)",
+            "title": "Display Status",
             "type": "string"
           },
           "due_date": {
@@ -650,6 +660,8 @@
           "action_type",
           "priority",
           "status",
+          "display_status",
+          "action_key",
           "source_type",
           "source_id",
           "created_at"
@@ -809,6 +821,28 @@
           }
         },
         "title": "ActionUpdate",
+        "type": "object"
+      },
+      "ActionsSummaryResponse": {
+        "description": "Tenant-wide action counts by normalized display status.",
+        "properties": {
+          "by_display_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Display Status",
+            "type": "object"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "by_display_status"
+        ],
+        "title": "ActionsSummaryResponse",
         "type": "object"
       },
       "ActiveAlert": {
@@ -33205,6 +33239,14 @@
           "status": {
             "anyOf": [
               {
+                "enum": [
+                  "draft",
+                  "active",
+                  "monitoring",
+                  "mitigated",
+                  "closed",
+                  "archived"
+                ],
                 "type": "string"
               },
               {
@@ -34758,6 +34800,84 @@
         ]
       }
     },
+    "/api/v1/actions/by-key": {
+      "get": {
+        "description": "Resolve an action by its action_key (no source_type guesswork).",
+        "operationId": "get_action_by_key_api_v1_actions_by_key_get",
+        "parameters": [
+          {
+            "description": "Stable key e.g. capa:12, incident_action:4",
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "description": "Stable key e.g. capa:12, incident_action:4",
+              "minLength": 3,
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Action By Key",
+        "tags": [
+          "Actions"
+        ]
+      }
+    },
+    "/api/v1/actions/summary": {
+      "get": {
+        "description": "Tenant-wide action totals by normalized display_status.",
+        "operationId": "get_actions_summary_api_v1_actions_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionsSummaryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Actions Summary",
+        "tags": [
+          "Actions"
+        ]
+      }
+    },
     "/api/v1/actions/{action_id}": {
       "get": {
         "description": "Get a specific action by ID.",
@@ -34773,12 +34893,12 @@
             }
           },
           {
-            "description": "Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+            "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, \u2026)",
             "in": "query",
             "name": "source_type",
             "required": true,
             "schema": {
-              "description": "Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+              "description": "Source discriminator: incident, rta, complaint, investigation, or CAPA API type (assessment, audit_finding, ncr, capa_incident, \u2026)",
               "title": "Source Type",
               "type": "string"
             }
@@ -34830,12 +34950,12 @@
             }
           },
           {
-            "description": "Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+            "description": "Source discriminator (incident, rta, \u2026 or CAPA API type such as audit_finding, ncr, capa_incident)",
             "in": "query",
             "name": "source_type",
             "required": true,
             "schema": {
-              "description": "Type of source: incident, rta, complaint, investigation, assessment, induction, or audit_finding",
+              "description": "Source discriminator (incident, rta, \u2026 or CAPA API type such as audit_finding, ncr, capa_incident)",
               "title": "Source Type",
               "type": "string"
             }
@@ -34928,6 +35048,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Contracts",
         "tags": [
           "Admin Configuration"
@@ -35273,6 +35398,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "List Lookup Options",
         "tags": [
           "Admin Configuration"
@@ -35904,7 +36034,7 @@
     },
     "/api/v1/admin/config/templates/by-slug/{slug}": {
       "get": {
-        "description": "Get a form template by slug (public endpoint for portal).",
+        "description": "Get a form template by slug.",
         "operationId": "get_form_template_by_slug_api_v1_admin_config_templates_by_slug__slug__get",
         "parameters": [
           {
@@ -35939,6 +36069,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Form Template By Slug",
         "tags": [
           "Admin Configuration"
@@ -46112,6 +46247,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Execute Action",
         "tags": [
           "AI Copilot"
@@ -46710,6 +46850,11 @@
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Get Messages",
         "tags": [
           "AI Copilot"
@@ -50547,7 +50692,7 @@
     },
     "/api/v1/external-audit-imports/jobs/{job_id}/promote": {
       "post": {
-        "description": "Promote approved drafts into live audit findings and downstream remediation.",
+        "description": "Promote approved drafts into live audit findings, scheme alignment, and reconciliation.\n\n**422 responses:** When every accepted draft fails materialization, the API returns\n``VALIDATION_ERROR`` with ``error.details.failed_drafts`` (up to 20 rows) so operators\ncan fix data and retry without inferring from a generic 500.",
         "operationId": "promote_import_job_api_v1_external_audit_imports_jobs__job_id__promote_post",
         "parameters": [
           {
@@ -50574,12 +50719,29 @@
           "422": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                "example": {
+                  "error": {
+                    "code": "VALIDATION_ERROR",
+                    "details": {
+                      "failed_drafts": [
+                        {
+                          "draft_id": 101,
+                          "error": "IntegrityError: ...",
+                          "error_type": "IntegrityError",
+                          "finding_type": "nonconformity",
+                          "severity": "high",
+                          "title": "Example nonconformity"
+                        }
+                      ],
+                      "failed_total": 3
+                    },
+                    "message": "All 3 accepted draft(s) failed to materialize into live findings. First draft id=101: (constraint detail)",
+                    "request_id": "00000000-0000-0000-0000-000000000000"
+                  }
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Promotion cannot complete: e.g. job not in review_required, no accepted drafts, or every accepted draft failed to materialize into live findings."
           }
         },
         "security": [
@@ -59759,7 +59921,7 @@
     },
     "/api/v1/risk-register/appetite/statements": {
       "get": {
-        "description": "List risk appetite statements by category",
+        "description": "List risk appetite statements by category, scoped to tenant.",
         "operationId": "list_appetite_statements_api_v1_risk_register_appetite_statements_get",
         "responses": {
           "200": {
@@ -59788,7 +59950,7 @@
     },
     "/api/v1/risk-register/controls": {
       "get": {
-        "description": "List all risk controls (EnterpriseRiskControl has no tenant_id; auth required)",
+        "description": "List all risk controls scoped to tenant.",
         "operationId": "list_controls_api_v1_risk_register_controls_get",
         "responses": {
           "200": {

@@ -27,6 +27,7 @@ const Investigations = lazy(() => import('./pages/Investigations'))
 const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
 const Standards = lazy(() => import('./pages/Standards'))
 const Actions = lazy(() => import('./pages/Actions'))
+const ActionDetail = lazy(() => import('./pages/ActionDetail'))
 const Documents = lazy(() => import('./pages/Documents'))
 const AuditTemplateLibrary = lazy(() => import('./pages/AuditTemplateLibrary'))
 const AuditTemplateBuilder = lazy(() => import('./pages/AuditTemplateBuilder'))
@@ -288,6 +289,7 @@ function App() {
                 <Route path="investigations/:id" element={<InvestigationDetail />} />
                 <Route path="standards" element={<Standards />} />
                 <Route path="actions" element={<Actions />} />
+                <Route path="actions/item" element={<ActionDetail />} />
                 <Route path="compliance" element={<ComplianceEvidence />} />
                 <Route path="uvdb" element={<UVDBAudits />} />
                 <Route path="planet-mark" element={<PlanetMark />} />
