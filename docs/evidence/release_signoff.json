@@ -1,38 +1,33 @@
 {
-  "release_sha": "a3eccb1a037f2d5f67206d9c42091b47d74a3292",
+  "release_sha": "ffd8e17ad686bcdc9bb34f54c90186c7c99b86f7",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-06T09:35:00Z",
+  "approved_at_utc": "2026-04-06T13:59:39Z",
   "deployment_evidence": {
-    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24025952046",
-    "staging_deploy_run_id": "24026177821",
-    "production_deploy_run_id": "24026473676",
-    "production_auto_attempt_run_id": "24026391644",
-    "production_promotion": "Auto production run 24026391644 failed validate_release_signoff (release_signoff.json still referenced prior wave). Manual workflow_dispatch run 24026473676 with staging_verified=true and release_sha=a3eccb1a completed success. PR #463 (Actions unified epic) merged to main via rebase.",
-    "production_live_verified_utc": "2026-04-06T09:31:00Z",
-    "production_live_build_sha": "a3eccb1a037f2d5f67206d9c42091b47d74a3292",
-    "production_baseline_build_sha": "f2c588795b4dcd8f482ea37c2d09fda48997dfb7",
-    "production_baseline_observed_utc": "2026-04-06T07:15:00Z",
-    "staging_deploy_head_sha": "a3eccb1a037f2d5f67206d9c42091b47d74a3292",
-    "staging_smoke_results": "Staging Smoke Tests PASS (run 24026177821)",
+    "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24032526982",
+    "staging_deploy_run_id": "24032686396",
+    "production_deploy_run_id": "24032910306",
+    "production_auto_attempt_run_id": "",
+    "production_promotion": "Auto chain after CI success on main: CI run 24032526982 (head ffd8e17a) → Deploy to Azure Staging 24032686396 → Deploy to Azure Production 24032910306. Application change: PR #469 fix(security) refresh python slim-bookworm digest and apt upgrade for Trivy gate.",
+    "production_live_verified_utc": "2026-04-06T13:59:39Z",
+    "production_live_build_sha": "ffd8e17ad686bcdc9bb34f54c90186c7c99b86f7",
+    "production_baseline_build_sha": "a3eccb1a037f2d5f67206d9c42091b47d74a3292",
+    "production_baseline_observed_utc": "2026-04-06T09:31:00Z",
+    "staging_deploy_head_sha": "ffd8e17ad686bcdc9bb34f54c90186c7c99b86f7",
+    "staging_smoke_results": "Deploy workflow success (run 24032686396); GET /api/v1/meta/version on staging matches ffd8e17a",
     "staging_stability_gate": "Build and Deploy to Staging: success",
     "prod_dependencies_gate": "PASS (Pre-Deployment Checks + Prod Dependencies Gate)",
-    "prod_deploy_proof_v2": "overall_result: PASS (run 24026473676)",
-    "governance_note": "release_sha=a3eccb1a is the promoted application commit from PR #463 (rebase-merge: feat actions epic, openapi baseline sync, governance PR body, i18n fix). This signoff commit may be newer on main; image/content matches a3eccb1a unless subsequent commits change code. Auto production requires validator alignment with staged HEAD or manual promotion per runbook.",
-    "pr_checks_passed": "Main CI success for a3eccb1a (run 24025952046); SWA workflow success on main (run 24025952042)",
+    "prod_deploy_proof_v2": "overall_result: PASS (run 24032910306)",
+    "governance_note": "Prior signoff referenced a3eccb1a (PR #463). Production and staging now run ffd8e17a (PR #469). Azure App Service BUILD_SHA and GET /api/v1/meta/version build_sha verified to match ffd8e17ad686bcdc9bb34f54c90186c7c99b86f7 before this JSON refresh.",
+    "pr_checks_passed": "Main CI success for ffd8e17a (run 24032526982); Security Scan success (run 24032526996); UX Functional Coverage Gate success (run 24032910286)",
     "changes_this_release": [
-      "PR #463: feat(actions) unified epic — action_key, display_status, GET /actions/summary, GET /actions/by-key, unified CAPA feed, ActionDetail route, partial unique index capa_actions audit_finding, audit events on CAPA create/update, OpenAPI + client alignment, i18n actions.open_profile"
+      "PR #469: fix(security) — refresh python slim-bookworm digest and apt upgrade for Trivy gate (Dockerfile hardening)",
+      "Governance: align release_signoff.json with live staging/prod build_sha and current workflow run IDs"
     ],
-    "pre_existing_failures": [
-      {
-        "job": "container-security-scan-trivy",
-        "reason": "CVEs in python:3.11-slim-bookworm base image; not merge-blocking per repo gate hygiene",
-        "risk": "low"
-      }
-    ]
+    "pre_existing_failures": []
   }
 }
