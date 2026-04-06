@@ -44,6 +44,7 @@ class TestPoliciesAuditEventRuntimeContract:
             document_type="policy",
             status="draft",
             reference_number=f"POL-2026-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
             created_by_id=1,
             updated_by_id=1,
         )
@@ -65,6 +66,7 @@ class TestPoliciesAuditEventRuntimeContract:
             document_type="policy",
             status="draft",
             reference_number=f"POL-2026-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
             created_by_id=1,
             updated_by_id=1,
         )
