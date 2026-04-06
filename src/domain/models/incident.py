@@ -72,6 +72,10 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_incidents_tenant_status", "tenant_id", "status"),
         Index("ix_incidents_tenant_created", "tenant_id", "created_at"),
         CheckConstraint(
+            "source_type IN ('manual', 'email', 'api')",
+            name="ck_incident_source_type",
+        ),
+        CheckConstraint(
             "severity IN ('critical', 'high', 'medium', 'low', 'negligible')",
             name="ck_incidents_severity",
         ),

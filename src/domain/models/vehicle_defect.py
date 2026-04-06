@@ -42,9 +42,15 @@ class VehicleDefect(Base):
     check_field: Mapped[str] = mapped_column(String(255), nullable=False)
     check_value: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
-    priority: Mapped[DefectPriority] = mapped_column(Enum(DefectPriority), nullable=False, index=True)
+    # native_enum=False: DB columns are VARCHAR (see 20260307_add_vehicle_defects_and_pams_cache)
+    priority: Mapped[DefectPriority] = mapped_column(
+        Enum(DefectPriority, native_enum=False, length=5), nullable=False, index=True
+    )
     status: Mapped[DefectStatus] = mapped_column(
-        Enum(DefectStatus), default=DefectStatus.OPEN, nullable=False, index=True
+        Enum(DefectStatus, native_enum=False, length=32),
+        default=DefectStatus.OPEN,
+        nullable=False,
+        index=True,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     vehicle_reg: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)

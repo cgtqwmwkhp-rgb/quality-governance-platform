@@ -33,6 +33,7 @@ from src.domain.models.document import (
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
+from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.infrastructure.storage import StorageError, storage_service
 
 router = APIRouter()
@@ -401,6 +402,8 @@ async def upload_document(
         await db.commit()
 
     await db.refresh(doc)
+
+    track_metric("documents.uploaded")
 
     return DocumentUploadResponse(
         id=doc.id,

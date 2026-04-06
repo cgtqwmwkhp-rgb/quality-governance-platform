@@ -63,6 +63,10 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),
         CheckConstraint(
+            "source_type IN ('manual', 'email', 'api', 'phone')",
+            name="ck_complaint_source_type",
+        ),
+        CheckConstraint(
             "priority IN ('critical', 'high', 'medium', 'low')",
             name="ck_complaints_priority",
         ),
