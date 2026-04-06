@@ -12,7 +12,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
 from src.domain.exceptions import BadRequestError, NotFoundError
 
 router = APIRouter()
@@ -458,7 +458,19 @@ async def use_template(
     db: DbSession = None,
 ):
     """Create a signature request from a template."""
+    from src.domain.models.digital_signature import SignatureTemplate
     from src.domain.services.signature_service import SignatureService
+
+    tmpl = (
+        await db.execute(
+            select(SignatureTemplate).where(
+                SignatureTemplate.id == template_id,
+                SignatureTemplate.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not tmpl:
+        raise NotFoundError("Template not found")
 
     service = SignatureService(db)
 
@@ -524,7 +536,7 @@ async def get_signature_stats(
 
 @router.post("/admin/send-reminders")
 async def send_reminders(
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     db: DbSession = None,
 ):
     """Send reminders for pending signatures (admin/cron job)."""
@@ -539,7 +551,7 @@ async def send_reminders(
 
 @router.post("/admin/expire-old")
 async def expire_old_requests(
-    current_user: CurrentUser,
+    current_user: CurrentSuperuser,
     db: DbSession = None,
 ):
     """Expire old signature requests (admin/cron job)."""

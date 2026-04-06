@@ -74,7 +74,10 @@ async def get_acknowledgment_requirement(
 ):
     """Get an acknowledgment requirement."""
     result = await db.execute(
-        select(PolicyAcknowledgmentRequirement).where(PolicyAcknowledgmentRequirement.id == requirement_id)
+        select(PolicyAcknowledgmentRequirement).where(
+            PolicyAcknowledgmentRequirement.id == requirement_id,
+            PolicyAcknowledgmentRequirement.tenant_id == current_user.tenant_id,
+        )
     )
     requirement = result.scalar_one_or_none()
 
@@ -139,7 +142,12 @@ async def get_acknowledgment(
     current_user: CurrentUser,
 ):
     """Get a specific acknowledgment."""
-    result = await db.execute(select(PolicyAcknowledgment).where(PolicyAcknowledgment.id == acknowledgment_id))
+    result = await db.execute(
+        select(PolicyAcknowledgment).where(
+            PolicyAcknowledgment.id == acknowledgment_id,
+            PolicyAcknowledgment.tenant_id == current_user.tenant_id,
+        )
+    )
     ack = result.scalar_one_or_none()
 
     if not ack:

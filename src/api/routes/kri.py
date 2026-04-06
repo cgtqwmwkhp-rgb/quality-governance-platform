@@ -48,7 +48,7 @@ async def list_kris(
     status: Optional[str] = Query(None, description="Filter by current status"),
 ):
     """List all KRIs with optional filtering."""
-    query = select(KeyRiskIndicator)
+    query = select(KeyRiskIndicator).where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
 
     filters = []
     if category:
@@ -80,7 +80,12 @@ async def create_kri(
 ):
     """Create a new KRI."""
     # Check for duplicate code
-    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
+    existing = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.code == kri_data.code,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     if existing.scalar_one_or_none():
         raise BadRequestError("KRI code already exists")
 
@@ -129,7 +134,12 @@ async def get_kri(
     current_user: CurrentUser,
 ):
     """Get a specific KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -146,7 +156,12 @@ async def update_kri(
     current_user: CurrentUser,
 ):
     """Update a KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -171,7 +186,12 @@ async def delete_kri(
     current_user: CurrentUser,
 ):
     """Delete a KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
@@ -212,7 +232,10 @@ async def get_kri_measurements(
     """Get measurement history for a KRI."""
     result = await db.execute(
         select(KRIMeasurement)
-        .where(KRIMeasurement.kri_id == kri_id)
+        .where(
+            KRIMeasurement.kri_id == kri_id,
+            KRIMeasurement.tenant_id == current_user.tenant_id,
+        )
         .order_by(KRIMeasurement.measurement_date.desc())
         .limit(limit)
     )
@@ -239,8 +262,9 @@ async def get_pending_alerts(
         select(KRIAlert)
         .where(
             and_(
-                KRIAlert.is_acknowledged == False,
-                KRIAlert.is_resolved == False,
+                KRIAlert.tenant_id == current_user.tenant_id,
+                KRIAlert.is_acknowledged == False,  # noqa: E712
+                KRIAlert.is_resolved == False,  # noqa: E712
             ),
         )
         .order_by(KRIAlert.triggered_at.desc())
@@ -261,7 +285,12 @@ async def acknowledge_alert(
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
-    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    result = await db.execute(
+        select(KRIAlert).where(
+            KRIAlert.id == alert_id,
+            KRIAlert.tenant_id == current_user.tenant_id,
+        )
+    )
     alert = result.scalar_one_or_none()
 
     if not alert:
@@ -285,7 +314,12 @@ async def resolve_alert(
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
-    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    result = await db.execute(
+        select(KRIAlert).where(
+            KRIAlert.id == alert_id,
+            KRIAlert.tenant_id == current_user.tenant_id,
+        )
+    )
     alert = result.scalar_one_or_none()
 
     if not alert:
@@ -336,7 +370,12 @@ async def assess_incident_sif(
     current_user: CurrentUser,
 ):
     """Assess an incident for SIF/pSIF classification."""
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    result = await db.execute(
+        select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == current_user.tenant_id,
+        )
+    )
     incident = result.scalar_one_or_none()
 
     if not incident:
@@ -382,7 +421,12 @@ async def get_incident_sif_assessment(
     current_user: CurrentUser,
 ):
     """Get SIF assessment for an incident."""
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    result = await db.execute(
+        select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == current_user.tenant_id,
+        )
+    )
     incident = result.scalar_one_or_none()
 
     if not incident:
