@@ -35,7 +35,7 @@ async def test_create_action_supports_audit_finding_source() -> None:
         action.created_at = datetime(2026, 3, 21, 21, 0, tzinfo=timezone.utc)
 
     db.refresh.side_effect = refresh_side_effect
-    current_user = SimpleNamespace(id=7)
+    current_user = SimpleNamespace(id=7, tenant_id=1)
 
     with patch(
         "src.domain.services.reference_number.ReferenceNumberService.generate",
