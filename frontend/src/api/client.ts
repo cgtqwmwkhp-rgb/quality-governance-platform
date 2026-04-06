@@ -2057,6 +2057,20 @@ export interface ActionUpdate {
   completion_notes?: string
 }
 
+/** Time-stamped owner commentary on a unified action (from GET/POST .../by-key/notes). */
+export interface ActionOwnerNote {
+  id: number
+  action_key: string
+  body: string
+  author_id: number
+  author_email?: string
+  created_at: string
+}
+
+export interface ActionOwnerNoteListResponse {
+  items: ActionOwnerNote[]
+}
+
 export const actionsApi = {
   /**
    * List all actions with pagination and optional filters.
@@ -2089,6 +2103,13 @@ export const actionsApi = {
       `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`,
       data,
     ),
+  /** Owner commentary for an action; newest first. */
+  listOwnerNotes: (actionKey: string) =>
+    api.get<ActionOwnerNoteListResponse>(
+      `/api/v1/actions/by-key/notes?key=${encodeURIComponent(actionKey)}`,
+    ),
+  appendOwnerNote: (actionKey: string, body: string) =>
+    api.post<ActionOwnerNote>('/api/v1/actions/by-key/notes', { key: actionKey, body }),
 }
 
 // ============ Planet Mark Types ============
@@ -3561,6 +3582,7 @@ export const evidenceAssetsApi = {
     page_size?: number
     source_module?: string
     source_id?: number
+    action_key?: string
     asset_type?: string
     linked_investigation_id?: number
   }) => {
@@ -3568,7 +3590,8 @@ export const evidenceAssetsApi = {
     if (options?.page) params.set('page', String(options.page))
     if (options?.page_size) params.set('page_size', String(options.page_size))
     if (options?.source_module) params.set('source_module', options.source_module)
-    if (options?.source_id) params.set('source_id', String(options.source_id))
+    if (options?.source_id != null) params.set('source_id', String(options.source_id))
+    if (options?.action_key) params.set('action_key', options.action_key)
     if (options?.asset_type) params.set('asset_type', options.asset_type)
     if (options?.linked_investigation_id)
       params.set('linked_investigation_id', String(options.linked_investigation_id))
@@ -3588,7 +3611,8 @@ export const evidenceAssetsApi = {
     file: File,
     data: {
       source_module: string
-      source_id: number
+      source_id?: number
+      action_key?: string
       title?: string
       description?: string
       visibility?: string
@@ -3596,10 +3620,19 @@ export const evidenceAssetsApi = {
       redaction_required?: boolean
     },
   ) => {
+    const sourceId =
+      data.source_id !== undefined && data.source_id !== null
+        ? data.source_id
+        : data.action_key
+          ? 0
+          : (() => {
+              throw new Error('Evidence upload requires source_id or action_key')
+            })()
     const formData = new FormData()
     formData.append('file', file)
     formData.append('source_module', data.source_module)
-    formData.append('source_id', String(data.source_id))
+    formData.append('source_id', String(sourceId))
+    if (data.action_key) formData.append('action_key', data.action_key)
     if (data.title) formData.append('title', data.title)
     if (data.description) formData.append('description', data.description)
     if (data.visibility) formData.append('visibility', data.visibility)

@@ -1,7 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ExternalLink, Loader2, Save } from 'lucide-react'
-import { actionsApi, Action as ApiAction, ActionUpdate } from '../api/client'
+import {
+  ArrowLeft,
+  Download,
+  ExternalLink,
+  Loader2,
+  MessageSquare,
+  Paperclip,
+  Save,
+  Trash2,
+} from 'lucide-react'
+import {
+  actionsApi,
+  Action as ApiAction,
+  ActionOwnerNote,
+  ActionUpdate,
+  evidenceAssetsApi,
+  EvidenceAsset,
+} from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
@@ -13,6 +29,29 @@ import {
   SelectValue,
 } from '../components/ui/Select'
 import { Input } from '../components/ui/Input'
+import { Textarea } from '../components/ui/Textarea'
+
+const MAX_EVIDENCE_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
+const SUPPORTED_EVIDENCE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'audio/mpeg',
+  'audio/wav',
+  'audio/ogg',
+]
 
 export default function ActionDetail() {
   const [searchParams] = useSearchParams()
@@ -22,6 +61,17 @@ export default function ActionDetail() {
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [statusDraft, setStatusDraft] = useState<string>('')
+
+  const [notes, setNotes] = useState<ActionOwnerNote[]>([])
+  const [notesLoading, setNotesLoading] = useState(false)
+  const [noteDraft, setNoteDraft] = useState('')
+  const [postingNote, setPostingNote] = useState(false)
+
+  const [evidence, setEvidence] = useState<EvidenceAsset[]>([])
+  const [evidenceLoading, setEvidenceLoading] = useState(false)
+  const [uploadingEvidence, setUploadingEvidence] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [inlineMessage, setInlineMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
 
   const load = useCallback(async () => {
     if (!key.trim()) {
@@ -35,6 +85,22 @@ export default function ActionDetail() {
       const res = await actionsApi.getByKey(key.trim())
       setAction(res.data)
       setStatusDraft(res.data.display_status || res.data.status)
+      setNotesLoading(true)
+      setEvidenceLoading(true)
+      try {
+        const [notesRes, evRes] = await Promise.all([
+          actionsApi.listOwnerNotes(res.data.action_key),
+          evidenceAssetsApi.list({ action_key: res.data.action_key, page_size: 50 }),
+        ])
+        setNotes(notesRes.data.items || [])
+        setEvidence(evRes.data.items || [])
+      } catch {
+        setNotes([])
+        setEvidence([])
+      } finally {
+        setNotesLoading(false)
+        setEvidenceLoading(false)
+      }
     } catch {
       setError('Could not load this action.')
       setAction(null)
@@ -60,6 +126,84 @@ export default function ActionDetail() {
       setError('Update failed. Check permissions and status value.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const submitNote = async () => {
+    if (!action || !noteDraft.trim()) return
+    setPostingNote(true)
+    setInlineMessage(null)
+    try {
+      const res = await actionsApi.appendOwnerNote(action.action_key, noteDraft.trim())
+      setNotes((prev) => [res.data, ...prev])
+      setNoteDraft('')
+      setInlineMessage({ tone: 'success', text: 'Note added.' })
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not add note. Check permissions and try again.' })
+    } finally {
+      setPostingNote(false)
+    }
+  }
+
+  const handleEvidenceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!action || !e.target.files?.length) return
+    setUploadingEvidence(true)
+    try {
+      for (const file of Array.from(e.target.files)) {
+        const okMime =
+          SUPPORTED_EVIDENCE_MIME_TYPES.includes(file.type) ||
+          file.type.startsWith('image/') ||
+          file.type.startsWith('video/')
+        if (!okMime) {
+          throw new Error(
+            `${file.name} is not a supported type. Use images, PDF, Office documents, video, or audio listed in the evidence module.`,
+          )
+        }
+        if (file.size > MAX_EVIDENCE_FILE_SIZE_BYTES) {
+          throw new Error(`${file.name} exceeds the 50MB upload limit.`)
+        }
+        await evidenceAssetsApi.upload(file, {
+          source_module: 'action',
+          source_id: 0,
+          action_key: action.action_key,
+          title: file.name,
+          visibility: 'internal_customer',
+        })
+      }
+      const evRes = await evidenceAssetsApi.list({ action_key: action.action_key, page_size: 50 })
+      setEvidence(evRes.data.items || [])
+      setInlineMessage({ tone: 'success', text: 'File(s) uploaded.' })
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Upload failed. Check file type, size (max 50MB), and permissions.'
+      setInlineMessage({ tone: 'error', text: msg })
+    } finally {
+      setUploadingEvidence(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const downloadAsset = async (assetId: number) => {
+    setInlineMessage(null)
+    try {
+      const res = await evidenceAssetsApi.getSignedUrl(assetId)
+      window.open(res.data.signed_url, '_blank', 'noopener,noreferrer')
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not open download link.' })
+    }
+  }
+
+  const deleteAsset = async (assetId: number) => {
+    if (!action) return
+    try {
+      await evidenceAssetsApi.delete(assetId)
+      const evRes = await evidenceAssetsApi.list({ action_key: action.action_key, page_size: 50 })
+      setEvidence(evRes.data.items || [])
+      setInlineMessage({ tone: 'success', text: 'Attachment removed.' })
+    } catch {
+      setInlineMessage({ tone: 'error', text: 'Could not remove attachment.' })
     }
   }
 
@@ -117,6 +261,18 @@ export default function ActionDetail() {
 
       <Card>
         <CardContent className="p-5 space-y-4">
+          {inlineMessage ? (
+            <p
+              className={
+                inlineMessage.tone === 'success'
+                  ? 'text-sm text-green-700 dark:text-green-400'
+                  : 'text-sm text-destructive'
+              }
+              role="status"
+            >
+              {inlineMessage.text}
+            </p>
+          ) : null}
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Description
@@ -137,6 +293,109 @@ export default function ActionDetail() {
               </Button>
             </div>
           ) : null}
+
+          <div className="border-t border-border pt-4 space-y-3">
+            <p className="text-sm font-medium text-foreground flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Owner commentary
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Each entry is stored with your account and a server timestamp (newest first).
+            </p>
+            <Textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="Add an update for this action…"
+              rows={3}
+              className="resize-y min-h-[80px]"
+            />
+            <Button type="button" onClick={submitNote} disabled={postingNote || !noteDraft.trim()}>
+              {postingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Add note
+            </Button>
+            {notesLoading ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading notes…
+              </p>
+            ) : notes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No notes yet.</p>
+            ) : (
+              <ul className="space-y-3 border border-border rounded-md p-3 bg-muted/30">
+                {notes.map((n) => (
+                  <li key={n.id} className="text-sm border-b border-border/60 last:border-0 pb-3 last:pb-0">
+                    <p className="text-xs text-muted-foreground">
+                      {n.author_email || `User #${n.author_id}`}
+                      {' · '}
+                      {n.created_at
+                        ? new Date(n.created_at).toLocaleString(undefined, {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })
+                        : '—'}
+                    </p>
+                    <p className="text-foreground whitespace-pre-wrap mt-1">{n.body}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="border-t border-border pt-4 space-y-3">
+            <p className="text-sm font-medium text-foreground flex items-center gap-2">
+              <Paperclip className="w-4 h-4" />
+              Documents & evidence
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleEvidenceUpload}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={uploadingEvidence}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploadingEvidence ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1" />
+              ) : (
+                <Paperclip className="w-4 h-4 mr-1" />
+              )}
+              Upload files
+            </Button>
+            {evidenceLoading ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading attachments…
+              </p>
+            ) : evidence.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No attachments yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {evidence.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex flex-wrap items-center justify-between gap-2 text-sm border border-border rounded-md px-3 py-2"
+                  >
+                    <span className="text-foreground truncate max-w-[200px] sm:max-w-xs">
+                      {a.title || a.original_filename || `Asset #${a.id}`}
+                    </span>
+                    <span className="flex gap-1 shrink-0">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => downloadAsset(a.id)}>
+                        <Download className="w-4 h-4" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => deleteAsset(a.id)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="border-t border-border pt-4 space-y-3">
             <p className="text-sm font-medium text-foreground">Update status</p>

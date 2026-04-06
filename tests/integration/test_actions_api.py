@@ -162,6 +162,21 @@ class TestActionsAPIExtendedRoutes:
         assert response.status_code == 401
         assert response.status_code != 404
 
+    @pytest.mark.asyncio
+    async def test_actions_by_key_notes_get_requires_auth(self, client: AsyncClient):
+        response = await client.get("/api/v1/actions/by-key/notes?key=capa:1")
+        assert response.status_code == 401
+        assert response.status_code != 404
+
+    @pytest.mark.asyncio
+    async def test_actions_by_key_notes_post_requires_auth(self, client: AsyncClient):
+        response = await client.post(
+            "/api/v1/actions/by-key/notes",
+            json={"key": "capa:1", "body": "Owner update"},
+        )
+        assert response.status_code == 401
+        assert response.status_code != 404
+
 
 class TestActionsAPIEndpoints:
     """Test Actions API endpoint contracts."""
