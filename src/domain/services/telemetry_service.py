@@ -15,7 +15,8 @@ from src.infrastructure.monitoring.azure_monitor import track_metric
 logger = logging.getLogger(__name__)
 
 _DEFAULT_METRICS_DIR = Path(__file__).parent.parent.parent / "artifacts"
-METRICS_DIR = Path(settings.metrics_dir) if settings.metrics_dir else _DEFAULT_METRICS_DIR
+_metrics_dir_setting: str | None = getattr(settings, "metrics_dir", None)
+METRICS_DIR = Path(_metrics_dir_setting) if _metrics_dir_setting else _DEFAULT_METRICS_DIR
 
 
 class TelemetryService:

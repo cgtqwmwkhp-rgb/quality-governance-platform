@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.api.routes.auditor_competence import CreateProfileRequest, _assert_auditor_access, create_auditor_profile
+from src.domain.exceptions import AuthorizationError, BadRequestError
 from src.services.auditor_competence import AuditorCompetenceService
 
 
@@ -33,10 +34,10 @@ async def test_auditor_access_allows_self_read():
 async def test_auditor_access_denies_unrelated_non_manager():
     user = types.SimpleNamespace(id=42, tenant_id=3, is_superuser=False, roles=[])
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AuthorizationError) as exc_info:
         _assert_auditor_access(user, 77)
 
-    assert exc.value.status_code == 403
+    assert exc_info.value.http_status == 403
 
 
 @pytest.mark.asyncio
@@ -86,8 +87,8 @@ async def test_create_profile_rejects_cross_tenant_user(monkeypatch):
         lambda _db, _current_user: types.SimpleNamespace(create_profile=create_profile),
     )
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(BadRequestError) as exc_info:
         await create_auditor_profile(CreateProfileRequest(user_id=11), current_user=current_user, db=db)
 
-    assert exc.value.status_code == 400
+    assert exc_info.value.http_status == 400
     create_profile.assert_not_awaited()

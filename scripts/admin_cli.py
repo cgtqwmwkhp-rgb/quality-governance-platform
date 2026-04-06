@@ -7,8 +7,6 @@ Usage:
     python scripts/admin_cli.py feature-flags
     python scripts/admin_cli.py migration-status
     python scripts/admin_cli.py config-check
-    python scripts/admin_cli.py tenant-info
-    python scripts/admin_cli.py user-lookup --email user@example.com
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ import argparse
 import json
 import subprocess
 import sys
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -104,66 +101,6 @@ def cmd_migration_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_tenant_info(args: argparse.Namespace) -> int:
-    """List all tenants via API."""
-    base = args.url.rstrip("/")
-    url = f"{base}/api/v1/tenants"
-    try:
-        req = urllib.request.Request(url, method="GET")
-        if args.token:
-            req.add_header("Authorization", f"Bearer {args.token}")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            tenants = data if isinstance(data, list) else data.get("items", [])
-            if not tenants:
-                print("  No tenants found.")
-                return 0
-            print(f"  {'ID':<38} {'Name':<30} {'Active'}")
-            print(f"  {'—'*38} {'—'*30} {'—'*6}")
-            for t in tenants:
-                tid = str(t.get("id", "—"))
-                name = t.get("name", "—")
-                active = "Yes" if t.get("active", t.get("is_active", False)) else "No"
-                print(f"  {tid:<38} {name:<30} {active}")
-            print(f"\n  Total: {len(tenants)} tenant(s)")
-        return 0
-    except Exception as exc:
-        print(f"  Failed to fetch tenants: {exc}")
-        return 1
-
-
-def cmd_user_lookup(args: argparse.Namespace) -> int:
-    """Look up a user by email via API."""
-    if not args.email:
-        print("  --email is required for user-lookup")
-        return 1
-    base = args.url.rstrip("/")
-    encoded_email = urllib.parse.quote(args.email, safe="")
-    url = f"{base}/api/v1/users?search={encoded_email}"
-    try:
-        req = urllib.request.Request(url, method="GET")
-        if args.token:
-            req.add_header("Authorization", f"Bearer {args.token}")
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read().decode())
-            users = data if isinstance(data, list) else data.get("items", [])
-            if not users:
-                print(f"  No user found for: {args.email}")
-                return 0
-            for u in users:
-                print(f"  ID:         {u.get('id', '—')}")
-                print(f"  Email:      {u.get('email', '—')}")
-                print(f"  Role:       {u.get('role', '—')}")
-                print(f"  Last Login: {u.get('last_login', 'Never')}")
-                if args.verbose:
-                    print(f"  Full:       {json.dumps(u, indent=2)}")
-                print()
-        return 0
-    except Exception as exc:
-        print(f"  Failed to look up user: {exc}")
-        return 1
-
-
 def cmd_config_check(args: argparse.Namespace) -> int:
     """Verify .env.example vs required config."""
     env_example = Path(".env.example")
@@ -190,6 +127,65 @@ def cmd_config_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_logs(args: argparse.Namespace) -> int:
+    """Print recent structured log entries from local or Docker."""
+    tail_count = getattr(args, "tail", 100)
+
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "--tail", str(tail_count), "qgp-app"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0:
+            print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+            return 0
+        print(f"  Docker container 'qgp-app' not running: {result.stderr.strip()}")
+    except FileNotFoundError:
+        print("  Docker not found on PATH")
+    except subprocess.TimeoutExpired:
+        print("  Docker logs timed out")
+
+    log_file = Path("logs/app.log")
+    if log_file.exists():
+        lines = log_file.read_text().splitlines()
+        for line in lines[-tail_count:]:
+            print(line)
+        return 0
+
+    print("  No local log source available.")
+    print("  Azure Monitor KQL queries: docs/ops/kql-queries.md")
+    print("  Local Docker: docker logs -f qgp-app --tail 100")
+    return 1
+
+
+def cmd_cache_stats(args: argparse.Namespace) -> int:
+    """Print Redis cache statistics."""
+    import os
+
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    print(f"  Redis URL: {redis_url}")
+    try:
+        import redis
+
+        r = redis.from_url(redis_url, socket_connect_timeout=3)
+        dbsize = r.dbsize()
+        info = r.info(section="memory")
+        print(f"  Connection: OK")
+        print(f"  DBSIZE (keys): {dbsize}")
+        print(f"  Used memory: {info.get('used_memory_human', 'unknown')}")
+        print(f"  Peak memory: {info.get('used_memory_peak_human', 'unknown')}")
+        r.close()
+    except ImportError:
+        print("  redis package not installed — pip install redis")
+    except Exception as exc:
+        print(f"  Connection failed: {exc}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Quality Governance Platform Admin CLI",
@@ -205,9 +201,9 @@ def main() -> int:
     sub.add_parser("feature-flags", help="List feature flags")
     sub.add_parser("migration-status", help="Count and list migrations")
     sub.add_parser("config-check", help="Verify environment config")
-    sub.add_parser("tenant-info", help="List all tenants")
-    user_lookup_parser = sub.add_parser("user-lookup", help="Look up a user by email")
-    user_lookup_parser.add_argument("--email", required=True, help="Email address to search for")
+    logs_parser = sub.add_parser("logs", help="Show recent log entries")
+    logs_parser.add_argument("--tail", type=int, default=100, help="Number of lines to show")
+    sub.add_parser("cache-stats", help="Show Redis cache statistics")
 
     args = parser.parse_args()
     commands = {
@@ -216,8 +212,8 @@ def main() -> int:
         "feature-flags": cmd_feature_flags,
         "migration-status": cmd_migration_status,
         "config-check": cmd_config_check,
-        "tenant-info": cmd_tenant_info,
-        "user-lookup": cmd_user_lookup,
+        "logs": cmd_logs,
+        "cache-stats": cmd_cache_stats,
     }
     return commands[args.command](args)
 

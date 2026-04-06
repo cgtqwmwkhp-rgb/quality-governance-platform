@@ -6,10 +6,17 @@ import {
   isTokenExpired,
   clearTokens,
   setPortalToken,
+  setAdminToken,
+  isAdminSession,
 } from '../utils/auth'
 import { API_BASE_URL } from '../config/apiBase'
 import { toast } from '../contexts/ToastContext'
 import { useAppStore } from '../stores/useAppStore'
+import {
+  riskRegisterBowtieElementPath,
+  riskRegisterBowtieElementsPath,
+  riskRegisterKriValuePath,
+} from './riskRegisterPaths'
 
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL
@@ -239,7 +246,11 @@ async function doRefreshToken(): Promise<string | null> {
     )
     const data = res.data
     if (data.access_token) {
-      setPortalToken(data.access_token, data.refresh_token)
+      if (isAdminSession()) {
+        setAdminToken(data.access_token, data.refresh_token)
+      } else {
+        setPortalToken(data.access_token, data.refresh_token)
+      }
       return data.access_token
     }
     return null
@@ -1460,6 +1471,8 @@ export interface Action {
   source_title?: string
   source_scheme?: string
   clause_reference?: string
+  /** Present when source_type is audit_finding — parent run for navigation */
+  audit_run_id?: number | null
   owner_id?: number
   owner_email?: string
   assigned_to_email?: string
@@ -2737,6 +2750,8 @@ export interface RiskEntry {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  /** pending | accepted | rejected — import-sourced suggestions only */
+  suggestion_triage_status?: string | null
 }
 
 export interface RiskHeatmapData {
@@ -2764,6 +2779,8 @@ export const riskRegisterApi = {
     status?: string
     category?: string
     search?: string
+    /** pending = import triage queue; all = no triage filter; omit = hide pending */
+    suggestion_triage?: 'pending' | 'all'
   }) => {
     const sp = new URLSearchParams()
     if (params?.skip != null) sp.set('skip', String(params.skip))
@@ -2771,6 +2788,7 @@ export const riskRegisterApi = {
     if (params?.status) sp.set('status', params.status)
     if (params?.category) sp.set('category', params.category)
     if (params?.search) sp.set('search', params.search)
+    if (params?.suggestion_triage) sp.set('suggestion_triage', params.suggestion_triage)
     return api.get<PaginatedResponse<RiskEntry>>(`/api/v1/risk-register/?${sp}`)
   },
   create: (data: Partial<RiskEntry>) => api.post<RiskEntry>('/api/v1/risk-register/', data),
@@ -2780,14 +2798,21 @@ export const riskRegisterApi = {
   delete: (id: number) => api.delete<void>(`/api/v1/risk-register/${id}`),
   assess: (id: number, scores: { likelihood: number; impact: number }) =>
     api.post<RiskEntry>(`/api/v1/risk-register/${id}/assess`, scores),
+  resolveSuggestionTriage: (id: number, body: { decision: 'accept' | 'reject'; notes?: string }) =>
+    api.post<{
+      id: number
+      reference: string
+      suggestion_triage_status: string | null
+      status: string
+    }>(`/api/v1/risk-register/${id}/suggestion-triage`, body),
   getHeatmap: () => api.get<RiskHeatmapData>('/api/v1/risk-register/heatmap'),
   getSummary: () => api.get<RiskSummary>('/api/v1/risk-register/summary'),
   getTrends: (days = 90) => api.get<unknown>(`/api/v1/risk-register/trends?days=${days}`),
   getBowtie: (id: number) => api.get<unknown>(`/api/v1/risk-register/${id}/bowtie`),
   addBowtieElement: (id: number, data: Record<string, unknown>) =>
-    api.post<unknown>(`/api/v1/risk-register/${id}/bowtie`, data),
+    api.post<unknown>(riskRegisterBowtieElementsPath(id), data),
   deleteBowtieElement: (id: number, elementId: number) =>
-    api.delete<void>(`/api/v1/risk-register/${id}/bowtie/${elementId}`),
+    api.delete<void>(riskRegisterBowtieElementPath(id, elementId)),
   listControls: () => api.get<unknown[]>('/api/v1/risk-register/controls'),
   createControl: (data: Record<string, unknown>) =>
     api.post<unknown>('/api/v1/risk-register/controls', data),
@@ -2797,7 +2822,7 @@ export const riskRegisterApi = {
   createKRI: (data: Record<string, unknown>) =>
     api.post<unknown>('/api/v1/risk-register/kris', data),
   updateKRIValue: (id: number, value: number) =>
-    api.post<unknown>(`/api/v1/risk-register/kris/${id}/value`, { value }),
+    api.put<unknown>(riskRegisterKriValuePath(id), { value }),
   getKRIHistory: (id: number) => api.get<unknown>(`/api/v1/risk-register/kris/${id}/history`),
   getAppetiteStatements: () => api.get<unknown[]>('/api/v1/risk-register/appetite/statements'),
 }

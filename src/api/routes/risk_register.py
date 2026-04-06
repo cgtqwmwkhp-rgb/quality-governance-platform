@@ -10,13 +10,14 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
     EnterpriseKeyRiskIndicator,
@@ -27,6 +28,7 @@ from src.domain.models.risk_register import (
     RiskControlMapping,
 )
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
+from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
 router = APIRouter()
 
@@ -34,6 +36,14 @@ router = APIRouter()
 def _naive_utc_now() -> datetime:
     """Match the risk_register model's naive-UTC DateTime columns."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _register_visibility_clause():
+    """Omit import-sourced risks that are still awaiting triage from headline views."""
+    return or_(
+        EnterpriseRisk.suggestion_triage_status.is_(None),
+        EnterpriseRisk.suggestion_triage_status == "accepted",
+    )
 
 
 # ============ Pydantic Schemas ============
@@ -69,7 +79,7 @@ class RiskUpdate(BaseModel):
     treatment_strategy: Optional[str] = None
     treatment_plan: Optional[str] = None
     treatment_status: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "active", "monitoring", "mitigated", "closed", "archived"]] = None
     risk_owner_id: Optional[int] = None
     risk_owner_name: Optional[str] = None
 
@@ -122,6 +132,11 @@ class BowTieElementCreate(BaseModel):
     is_escalation_factor: bool = False
 
 
+class SuggestionTriageResolve(BaseModel):
+    decision: Literal["accept", "reject"]
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
 # ============ EnterpriseRisk CRUD Endpoints ============
 
 
@@ -134,11 +149,22 @@ async def list_risks(
     status: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
     outside_appetite: Optional[bool] = Query(None),
+    suggestion_triage: Optional[str] = Query(
+        None,
+        description="pending=triage queue only; all=no triage filter; default=hide pending suggestions",
+    ),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
 ) -> dict[str, Any]:
     """List risks with filtering options"""
     base_stmt = select(EnterpriseRisk).where(EnterpriseRisk.tenant_id == current_user.tenant_id)
+
+    if suggestion_triage == "pending":
+        base_stmt = base_stmt.where(EnterpriseRisk.suggestion_triage_status == "pending")
+    elif suggestion_triage == "all":
+        pass
+    else:
+        base_stmt = base_stmt.where(_register_visibility_clause())
 
     if category:
         base_stmt = base_stmt.where(EnterpriseRisk.category == category)
@@ -181,6 +207,7 @@ async def list_risks(
                 "next_review_date": (r.next_review_date.isoformat() if r.next_review_date else None),
                 "linked_audits": r.linked_audits or [],
                 "linked_actions": r.linked_actions or [],
+                "suggestion_triage_status": r.suggestion_triage_status,
             }
             for r in risks
         ],
@@ -280,12 +307,12 @@ async def get_bow_tie(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     service = BowTieService(db)
     try:
         return await service.get_bow_tie(risk_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=201)
@@ -304,7 +331,7 @@ async def add_bow_tie_element(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     service = BowTieService(db)
     bow_tie_element = await service.add_bow_tie_element(
@@ -343,7 +370,7 @@ async def delete_bow_tie_element(
     element = result.scalar_one_or_none()
 
     if not element:
-        raise HTTPException(status_code=404, detail="Element not found")
+        raise NotFoundError("Element not found")
 
     await db.delete(element)
     await db.commit()
@@ -377,9 +404,12 @@ async def create_kri(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
-    kri = EnterpriseKeyRiskIndicator(**kri_data.model_dump())
+    kri = EnterpriseKeyRiskIndicator(
+        **kri_data.model_dump(),
+        tenant_id=current_user.tenant_id,
+    )
     db.add(kri)
     await db.commit()
     await db.refresh(kri)
@@ -398,7 +428,7 @@ async def update_kri_value(
     result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     result = await db.execute(
         select(EnterpriseRisk).where(
@@ -408,7 +438,7 @@ async def update_kri_value(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     service = KRIService(db)
     try:
@@ -419,7 +449,7 @@ async def update_kri_value(
             "current_status": kri.current_status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.get("/kris/{kri_id}/history", response_model=list)
@@ -432,7 +462,7 @@ async def get_kri_history(
     result = await db.execute(select(EnterpriseKeyRiskIndicator).where(EnterpriseKeyRiskIndicator.id == kri_id))
     kri = result.scalar_one_or_none()
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     result = await db.execute(
         select(EnterpriseRisk).where(
@@ -442,7 +472,7 @@ async def get_kri_history(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     return kri.historical_values or []
 
@@ -455,9 +485,12 @@ async def list_controls(
     current_user: CurrentUser,
     db: DbSession,
 ) -> list[dict[str, Any]]:
-    """List all risk controls (EnterpriseRiskControl has no tenant_id; auth required)"""
+    """List all risk controls scoped to tenant."""
     result = await db.execute(
-        select(EnterpriseRiskControl).where(EnterpriseRiskControl.is_active == True)  # noqa: E712
+        select(EnterpriseRiskControl).where(
+            EnterpriseRiskControl.is_active == True,  # noqa: E712
+            EnterpriseRiskControl.tenant_id == current_user.tenant_id,
+        )
     )
     controls = result.scalars().all()
 
@@ -490,6 +523,7 @@ async def create_control(
 
     control = EnterpriseRiskControl(
         reference=reference,
+        tenant_id=current_user.tenant_id,
         **control_data.model_dump(),
     )
     db.add(control)
@@ -521,9 +555,9 @@ async def link_control_to_risk(
     control = result.scalar_one_or_none()
 
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+        raise NotFoundError("Control not found")
 
     result = await db.execute(
         select(RiskControlMapping).where(
@@ -534,13 +568,14 @@ async def link_control_to_risk(
     existing = result.scalar_one_or_none()
 
     if existing:
-        raise HTTPException(status_code=400, detail="Control already linked to this risk")
+        raise BadRequestError("Control already linked to this risk")
 
     mapping = RiskControlMapping(
         risk_id=risk_id,
         control_id=control_id,
         reduces_likelihood=reduces_likelihood,
         reduces_impact=reduces_impact,
+        tenant_id=current_user.tenant_id,
     )
     db.add(mapping)
     await db.commit()
@@ -556,9 +591,12 @@ async def list_appetite_statements(
     current_user: CurrentUser,
     db: DbSession,
 ) -> list[dict[str, Any]]:
-    """List risk appetite statements by category"""
+    """List risk appetite statements by category, scoped to tenant."""
     result = await db.execute(
-        select(RiskAppetiteStatement).where(RiskAppetiteStatement.is_active == True)  # noqa: E712
+        select(RiskAppetiteStatement).where(
+            RiskAppetiteStatement.is_active == True,  # noqa: E712
+            RiskAppetiteStatement.tenant_id == current_user.tenant_id,
+        )
     )
     statements = result.scalars().all()
 
@@ -588,9 +626,14 @@ async def get_risk_summary(
 ) -> dict[str, Any]:
     """Get overall risk register summary"""
     tenant_filter = EnterpriseRisk.tenant_id == current_user.tenant_id
+    vis = _register_visibility_clause()
 
     total_result = await db.execute(
-        select(func.count(EnterpriseRisk.id)).where(EnterpriseRisk.status != "closed", tenant_filter)
+        select(func.count(EnterpriseRisk.id)).where(
+            EnterpriseRisk.status != "closed",
+            tenant_filter,
+            vis,
+        )
     )
     total_risks = total_result.scalar_one()
 
@@ -599,6 +642,7 @@ async def get_risk_summary(
             EnterpriseRisk.residual_score > 16,
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     critical_risks = critical_result.scalar_one()
@@ -608,6 +652,7 @@ async def get_risk_summary(
             EnterpriseRisk.residual_score.between(12, 16),
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     high_risks = high_result.scalar_one()
@@ -617,6 +662,7 @@ async def get_risk_summary(
             EnterpriseRisk.residual_score.between(5, 11),
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     medium_risks = medium_result.scalar_one()
@@ -626,6 +672,7 @@ async def get_risk_summary(
             EnterpriseRisk.residual_score <= 4,
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     low_risks = low_result.scalar_one()
@@ -635,6 +682,7 @@ async def get_risk_summary(
             EnterpriseRisk.is_within_appetite == False,  # noqa: E712
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     outside_appetite = appetite_result.scalar_one()
@@ -644,6 +692,7 @@ async def get_risk_summary(
             EnterpriseRisk.next_review_date < _naive_utc_now(),
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     overdue_review = overdue_result.scalar_one()
@@ -653,13 +702,14 @@ async def get_risk_summary(
             EnterpriseRisk.is_escalated == True,  # noqa: E712
             EnterpriseRisk.status != "closed",
             tenant_filter,
+            vis,
         )
     )
     escalated = escalated_result.scalar_one()
 
     cat_result = await db.execute(
         select(EnterpriseRisk.category, func.count(EnterpriseRisk.id))
-        .where(EnterpriseRisk.status != "closed", tenant_filter)
+        .where(EnterpriseRisk.status != "closed", tenant_filter, vis)
         .group_by(EnterpriseRisk.category)
     )
     categories = cat_result.all()
@@ -679,6 +729,54 @@ async def get_risk_summary(
     }
 
 
+@router.post("/{risk_id}/suggestion-triage", response_model=dict)
+async def resolve_suggestion_triage(
+    risk_id: int,
+    body: SuggestionTriageResolve,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict[str, Any]:
+    """Accept or reject an enterprise risk raised from external audit import triage."""
+    result = await db.execute(
+        select(EnterpriseRisk).where(
+            EnterpriseRisk.id == risk_id,
+            EnterpriseRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise NotFoundError("EnterpriseRisk not found")
+    if risk.suggestion_triage_status != "pending":
+        raise BadRequestError("Risk is not awaiting import triage")
+
+    if body.decision == "accept":
+        risk.suggestion_triage_status = "accepted"
+        risk.is_escalated = True
+        base_reason = "Accepted from import triage."
+        risk.escalation_reason = (f"{base_reason} {body.notes}".strip() if body.notes else base_reason)[:500]
+    else:
+        risk.suggestion_triage_status = "rejected"
+        risk.status = "closed"
+        risk.is_escalated = False
+        reject_note = "Import triage rejected."
+        if body.notes:
+            reject_note = f"{reject_note} {body.notes}"
+        prev = (risk.review_notes or "").strip()
+        risk.review_notes = f"{prev}\n{reject_note}".strip()[:4000]
+
+    risk.updated_at = _naive_utc_now()
+    await db.commit()
+    if current_user.tenant_id is not None:
+        await invalidate_tenant_cache(current_user.tenant_id, "risk-register")
+        await invalidate_tenant_cache(current_user.tenant_id, "risks")
+    return {
+        "id": risk.id,
+        "reference": risk.reference,
+        "suggestion_triage_status": risk.suggestion_triage_status,
+        "status": risk.status,
+    }
+
+
 @router.get("/{risk_id}", response_model=dict)
 async def get_risk(
     current_user: CurrentUser,
@@ -694,7 +792,7 @@ async def get_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     result = await db.execute(select(RiskControlMapping).where(RiskControlMapping.risk_id == risk_id))
     control_mappings = result.scalars().all()
@@ -754,6 +852,7 @@ async def get_risk(
         "linked_audits": risk.linked_audits or [],
         "linked_incidents": risk.linked_incidents or [],
         "linked_actions": risk.linked_actions or [],
+        "suggestion_triage_status": risk.suggestion_triage_status,
         "identified_date": (risk.identified_date.isoformat() if risk.identified_date else None),
         "controls": [
             {
@@ -803,7 +902,7 @@ async def update_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     update_data = risk_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -832,7 +931,7 @@ async def assess_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
     service = RiskService(db)
     try:
         risk = await service.update_risk_assessment(risk_id, assessment.model_dump(exclude_unset=True))
@@ -844,7 +943,7 @@ async def assess_risk(
             "is_within_appetite": risk.is_within_appetite,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.delete("/{risk_id}", status_code=204)
@@ -862,7 +961,7 @@ async def delete_risk(
     )
     risk = result.scalar_one_or_none()
     if not risk:
-        raise HTTPException(status_code=404, detail="EnterpriseRisk not found")
+        raise NotFoundError("EnterpriseRisk not found")
 
     risk.status = "closed"
     risk.updated_at = _naive_utc_now()

@@ -9,12 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
     AuditTrailMixin,
+    Base,
     CaseInsensitiveEnum,
     DataClassification,
     ReferenceNumberMixin,
     TimestampMixin,
 )
-from src.infrastructure.database import Base
 
 
 class IncidentType(str, enum.Enum):
@@ -74,6 +74,20 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         CheckConstraint(
             "source_type IN ('manual', 'email', 'api')",
             name="ck_incident_source_type",
+        ),
+        CheckConstraint(
+            "severity IN ('critical', 'high', 'medium', 'low', 'negligible')",
+            name="ck_incidents_severity",
+        ),
+        CheckConstraint(
+            "status IN ('reported', 'under_investigation', 'pending_actions', "
+            "'actions_in_progress', 'pending_review', 'closed')",
+            name="ck_incidents_status",
+        ),
+        CheckConstraint(
+            "incident_type IN ('injury', 'near_miss', 'hazard', 'property_damage', "
+            "'environmental', 'security', 'quality', 'other')",
+            name="ck_incidents_type",
         ),
     )
 
@@ -140,6 +154,9 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     reporter_submission: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
     )  # Immutable snapshot of reporter-entered intake data
+
+    # GDPR Art. 18 — restriction of processing
+    processing_restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

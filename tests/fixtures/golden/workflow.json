@@ -1,16 +1,82 @@
 {
   "id": 1,
-  "name": "Incident Escalation",
-  "description": "Auto-escalation workflow for unacknowledged incidents",
-  "trigger_type": "time_based",
-  "trigger_config": {
-    "delay_hours": 24,
-    "condition": "status == 'reported'"
+  "tenant_id": 1,
+  "template_id": 1,
+  "entity_type": "incident",
+  "entity_id": "1",
+  "status": "in_progress",
+  "current_step": 2,
+  "current_step_name": "SHEQ Manager Review",
+  "priority": "high",
+  "initiated_by": 1,
+  "sla_due_at": "2026-01-22T10:00:00Z",
+  "sla_warning_at": "2026-01-20T10:00:00Z",
+  "sla_breached": false,
+  "context": {
+    "incident_reference": "INC-2026-00001",
+    "severity": "HIGH",
+    "requires_riddor": false
   },
-  "actions": [
-    {"type": "notify", "target": "manager"},
-    {"type": "update_field", "field": "priority", "value": "high"}
-  ],
-  "is_active": true,
-  "created_at": "2026-03-15T10:00:00Z"
+  "started_at": "2026-01-15T10:00:00Z",
+  "completed_at": null,
+  "updated_at": "2026-01-16T09:15:00Z",
+  "steps": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "instance_id": 1,
+      "step_number": 1,
+      "step_name": "Line Manager Investigation",
+      "step_type": "approval",
+      "approval_type": "sequential",
+      "required_approvers": [2],
+      "actual_approvers": [2],
+      "status": "completed",
+      "due_at": "2026-01-17T10:00:00Z",
+      "outcome": "approved",
+      "outcome_reason": "Investigation complete. Root cause identified as missing reversing alarm on FL-007.",
+      "outcome_by": 2,
+      "outcome_at": "2026-01-16T09:15:00Z",
+      "started_at": "2026-01-15T10:00:00Z",
+      "completed_at": "2026-01-16T09:15:00Z"
+    },
+    {
+      "id": 2,
+      "tenant_id": 1,
+      "instance_id": 1,
+      "step_number": 2,
+      "step_name": "SHEQ Manager Review",
+      "step_type": "approval",
+      "approval_type": "sequential",
+      "required_approvers": [3],
+      "actual_approvers": [],
+      "status": "pending",
+      "due_at": "2026-01-19T10:00:00Z",
+      "outcome": null,
+      "outcome_reason": null,
+      "outcome_by": null,
+      "outcome_at": null,
+      "started_at": "2026-01-16T09:15:00Z",
+      "completed_at": null
+    },
+    {
+      "id": 3,
+      "tenant_id": 1,
+      "instance_id": 1,
+      "step_number": 3,
+      "step_name": "Operations Director Sign-off",
+      "step_type": "approval",
+      "approval_type": "sequential",
+      "required_approvers": [4],
+      "actual_approvers": [],
+      "status": "pending",
+      "due_at": "2026-01-21T10:00:00Z",
+      "outcome": null,
+      "outcome_reason": null,
+      "outcome_by": null,
+      "outcome_at": null,
+      "started_at": null,
+      "completed_at": null
+    }
+  ]
 }

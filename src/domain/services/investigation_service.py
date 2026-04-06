@@ -178,12 +178,13 @@ def _level_to_str(level: object) -> Optional[str]:
 class InvestigationStatusManager:
     @staticmethod
     def apply_status_timestamps(investigation: InvestigationRun, new_status: str) -> None:
+        now = datetime.now(timezone.utc)
         if new_status == "in_progress" and not investigation.started_at:
-            investigation.started_at = datetime.now(timezone.utc)
+            investigation.started_at = now  # type: ignore[assignment]  # SQLAlchemy Column
         elif new_status == "completed" and not investigation.completed_at:
-            investigation.completed_at = datetime.now(timezone.utc)
+            investigation.completed_at = now  # type: ignore[assignment]  # SQLAlchemy Column
         elif new_status == "closed" and not investigation.closed_at:
-            investigation.closed_at = datetime.now(timezone.utc)
+            investigation.closed_at = now  # type: ignore[assignment]  # SQLAlchemy Column
 
 
 # ---------------------------------------------------------------------------

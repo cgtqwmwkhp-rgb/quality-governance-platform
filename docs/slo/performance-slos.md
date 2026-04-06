@@ -110,6 +110,26 @@ A non-zero exit code from the locustfile threshold hook indicates **fail**. Save
 
 ---
 
+## CI vs Production Threshold Reconciliation
+
+The platform uses **tiered latency thresholds** by environment:
+
+| Context | p95 Target | Rationale | Reference |
+|---------|-----------|-----------|-----------|
+| **Production SLO** | < 200 ms | Real-world target for user experience | This document (API latency SLOs) |
+| **CI (Locust gate)** | < 500 ms | Relaxed for GitHub Actions runner hardware variability | [`tests/performance/locustfile.py`](../../tests/performance/locustfile.py) `PERF_THRESHOLDS` |
+| **Alerting** | p95 > 200 ms for 15 min | Triggers page for on-call | [`docs/observability/alerting-rules.md`](../observability/alerting-rules.md) |
+| **Canary rollback** | p95 > 500 ms | Automatic rollback trigger during canary | [`docs/infra/canary-rollout-plan.md`](../infra/canary-rollout-plan.md) |
+
+This is **not an inconsistency** — it is a deliberate tiered approach:
+1. CI gates catch gross regressions (> 500 ms) despite noisy runner hardware
+2. Production monitoring enforces the tighter 200 ms SLO in real conditions
+3. Canary rollback uses the CI-aligned threshold as an absolute safety net
+
+See also [`docs/performance/api-slos.md`](../performance/api-slos.md) § CI vs Production Thresholds.
+
+---
+
 ## Performance review cadence
 
 | Cadence | Activity |

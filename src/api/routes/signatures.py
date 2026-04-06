@@ -7,12 +7,13 @@ DocuSign-level e-signature capabilities.
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 
 router = APIRouter()
 
@@ -132,7 +133,7 @@ class AuditLogResponse(BaseModel):
 async def create_signature_request(
     data: SignatureRequestCreate,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Create a new signature request."""
     from src.domain.services.signature_service import SignatureService
@@ -181,7 +182,7 @@ async def list_signature_requests(
 @router.get("/requests/pending")
 async def get_pending_requests(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signature requests pending user's signature."""
     from src.domain.services.signature_service import SignatureService
@@ -201,7 +202,7 @@ async def get_pending_requests(
 async def get_signature_request(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get a signature request by ID."""
     from src.domain.services.signature_service import SignatureService
@@ -209,8 +210,8 @@ async def get_signature_request(
     service = SignatureService(db)
     request = await service.get_request(request_id)
 
-    if not request:
-        raise HTTPException(status_code=404, detail="Request not found")
+    if not request or request.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
 
     return _format_request(request)
 
@@ -219,18 +220,21 @@ async def get_signature_request(
 async def send_signature_request(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Send a signature request to signers."""
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
 
     try:
         request = await service.send_request(request_id)
         return {"status": "sent", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post("/requests/{request_id}/void")
@@ -244,24 +248,31 @@ async def void_signature_request(
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
 
     try:
         request = await service.void_request(request_id, current_user.id, reason)
         return {"status": "voided", "reference": request.reference_number}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.get("/requests/{request_id}/audit-log", response_model=list[AuditLogResponse])
 async def get_audit_log(
     request_id: int,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get audit log for a signature request."""
     from src.domain.services.signature_service import SignatureService
 
     service = SignatureService(db)
+    req = await service.get_request(request_id)
+    if not req or req.tenant_id != current_user.tenant_id:
+        raise NotFoundError("Request not found")
+
     logs = await service.get_audit_log(request_id)
 
     return logs
@@ -276,7 +287,7 @@ async def get_audit_log(
 async def get_signing_page(
     token: str,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signing page data for external signer."""
     from src.domain.services.signature_service import SignatureService
@@ -285,7 +296,7 @@ async def get_signing_page(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise NotFoundError("Invalid or expired signing link")
 
     sig_request = signer.request
 
@@ -322,7 +333,7 @@ async def sign_document(
     token: str,
     data: SignInput,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Apply signature to document."""
     from src.domain.services.signature_service import SignatureService
@@ -331,7 +342,7 @@ async def sign_document(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise NotFoundError("Invalid or expired signing link")
 
     try:
         signature = await service.sign(
@@ -351,7 +362,7 @@ async def sign_document(
             "request_status": signer.request.status,
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post("/sign/{token}/decline")
@@ -359,7 +370,7 @@ async def decline_signing(
     token: str,
     data: DeclineInput,
     request: Request,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Decline to sign."""
     from src.domain.services.signature_service import SignatureService
@@ -368,7 +379,7 @@ async def decline_signing(
     signer = await service.get_signer_by_token(token)
 
     if not signer:
-        raise HTTPException(status_code=404, detail="Invalid or expired signing link")
+        raise NotFoundError("Invalid or expired signing link")
 
     try:
         signer = await service.decline(
@@ -383,7 +394,7 @@ async def decline_signing(
             "declined_at": signer.declined_at.isoformat(),
         }
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -395,7 +406,7 @@ async def decline_signing(
 async def create_template(
     data: TemplateCreate,
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Create a signature template."""
     from src.domain.services.signature_service import SignatureService
@@ -420,7 +431,7 @@ async def create_template(
 @router.get("/templates", response_model=list[TemplateResponse])
 async def list_templates(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """List signature templates."""
     from src.domain.models.digital_signature import SignatureTemplate
@@ -447,7 +458,19 @@ async def use_template(
     db: DbSession = None,
 ):
     """Create a signature request from a template."""
+    from src.domain.models.digital_signature import SignatureTemplate
     from src.domain.services.signature_service import SignatureService
+
+    tmpl = (
+        await db.execute(
+            select(SignatureTemplate).where(
+                SignatureTemplate.id == template_id,
+                SignatureTemplate.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not tmpl:
+        raise NotFoundError("Template not found")
 
     service = SignatureService(db)
 
@@ -461,7 +484,7 @@ async def use_template(
 
         return _format_request(request)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 # ============================================================================
@@ -472,7 +495,7 @@ async def use_template(
 @router.get("/stats")
 async def get_signature_stats(
     current_user: CurrentUser,
-    db: DbSession,
+    db: DbSession = None,
 ):
     """Get signature statistics."""
     from src.domain.models.digital_signature import Signature, SignatureRequest
@@ -513,8 +536,8 @@ async def get_signature_stats(
 
 @router.post("/admin/send-reminders")
 async def send_reminders(
-    current_user: CurrentUser,
-    db: DbSession,
+    current_user: CurrentSuperuser,
+    db: DbSession = None,
 ):
     """Send reminders for pending signatures (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService
@@ -528,8 +551,8 @@ async def send_reminders(
 
 @router.post("/admin/expire-old")
 async def expire_old_requests(
-    current_user: CurrentUser,
-    db: DbSession,
+    current_user: CurrentSuperuser,
+    db: DbSession = None,
 ):
     """Expire old signature requests (admin/cron job)."""
     from src.domain.services.signature_service import SignatureService

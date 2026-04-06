@@ -6,9 +6,8 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
+from src.domain.models.base import AuditTrailMixin, Base, CaseInsensitiveEnum, ReferenceNumberMixin, TimestampMixin
 from src.domain.models.enums import DocumentStatus, DocumentType
-from src.infrastructure.database import Base
 
 
 class Policy(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):

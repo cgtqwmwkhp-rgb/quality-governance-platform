@@ -7,8 +7,7 @@ from typing import List, Optional
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import AuditTrailMixin, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import AuditTrailMixin, Base, TimestampMixin
 
 
 class FormType(str, enum.Enum):

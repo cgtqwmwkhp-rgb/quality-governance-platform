@@ -44,7 +44,7 @@ class FeatureFlagService:
             )
             % 100
         )
-        return bucket < flag.rollout_percentage
+        return bool(bucket < flag.rollout_percentage)
 
     async def _get_flag(self, key: str) -> Optional[FeatureFlag]:
         if key in _flag_cache:

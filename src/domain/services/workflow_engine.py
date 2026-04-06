@@ -362,6 +362,39 @@ class WorkflowEngine:
             "timestamp": now.isoformat(),
         }
 
+    def get_workflow_instance(self, workflow_id: str) -> Optional[Dict[str, Any]]:
+        """Return a demo workflow instance for API and E2E contracts (in-memory engine)."""
+        now = datetime.now(timezone.utc)
+        template_code = "RIDDOR"
+        template = self.templates.get(template_code)
+        if not template:
+            return None
+        steps = self._initialize_steps(template["steps"], now)
+        first_step_name = steps[0]["name"] if steps else None
+        return {
+            "id": workflow_id,
+            "template_code": template_code,
+            "template_name": template["name"],
+            "entity_type": template.get("trigger_entity_type", "incident"),
+            "entity_id": "demo-entity",
+            "status": "in_progress",
+            "priority": "normal",
+            "current_step": 0,
+            "current_step_name": first_step_name,
+            "total_steps": len(steps),
+            "initiated_by": 1,
+            "started_at": now.isoformat(),
+            "steps": steps,
+            "history": [
+                {
+                    "event": "workflow_started",
+                    "at": now.isoformat(),
+                    "actor_id": 1,
+                    "detail": "Synthetic instance for workflow automation API",
+                },
+            ],
+        }
+
     # ==================== Approval Management ====================
 
     def get_pending_approvals(self, user_id: int) -> List[Dict[str, Any]]:

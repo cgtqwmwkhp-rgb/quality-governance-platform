@@ -1,18 +1,19 @@
 """Auditor Competence API Routes.
 
-Provides endpoints for managing auditor profiles, certifications,
+Provides endpoints for managing auditor profiles, certifications
 training, and competency assessments.
 """
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import CurrentUser, get_current_user, get_db
+from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.user import User
 from src.services.auditor_competence import AuditorCompetenceService
 
@@ -87,7 +88,7 @@ def _assert_auditor_access(user: CurrentUser, target_user_id: int, *, manager_on
         return
     if not manager_only and user.id == target_user_id:
         return
-    raise HTTPException(status_code=403, detail="You do not have permission to access this auditor record")
+    raise AuthorizationError("You do not have permission to access this auditor record")
 
 
 async def _validate_auditor_user_assignment(
@@ -98,10 +99,10 @@ async def _validate_auditor_user_assignment(
     result = await db.execute(select(User).where(User.id == target_user_id, User.is_active.is_(True)))
     target_user = result.scalar_one_or_none()
     if target_user is None:
-        raise HTTPException(status_code=400, detail="Assigned auditor user was not found or is inactive")
+        raise BadRequestError("Assigned auditor user was not found or is inactive")
 
     if current_user.tenant_id is not None and target_user.tenant_id != current_user.tenant_id:
-        raise HTTPException(status_code=400, detail="Assigned auditor user is not in tenant scope")
+        raise BadRequestError("Assigned auditor user is not in tenant scope")
 
 
 # =============================================================================
@@ -145,7 +146,7 @@ async def get_auditor_profile(
     profile = await service.get_profile(user_id)
 
     if not profile:
-        raise HTTPException(status_code=404, detail="Auditor profile not found")
+        raise NotFoundError("Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -178,7 +179,7 @@ async def update_auditor_profile(
     profile = await service.update_profile(user_id, **updates)
 
     if not profile:
-        raise HTTPException(status_code=404, detail="Auditor profile not found")
+        raise NotFoundError("Auditor profile not found")
 
     return {
         "id": profile.id,
@@ -232,7 +233,7 @@ async def add_certification(
             certification_level=request.certification_level,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return {
         "id": cert.id,
@@ -332,7 +333,7 @@ async def add_training(
             duration_hours=request.duration_hours,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return {
         "id": training.id,
@@ -361,7 +362,7 @@ async def complete_training(
             cpd_hours_earned=request.cpd_hours_earned,
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
     return {
         "id": training.id,
@@ -397,7 +398,7 @@ async def assess_competency(
             evidence_summary=request.evidence_summary,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise BadRequestError(str(e))
 
     return {
         "id": competency.id,

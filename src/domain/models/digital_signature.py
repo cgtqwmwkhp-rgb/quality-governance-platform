@@ -12,10 +12,23 @@ Provides DocuSign-level e-signature capabilities with:
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, LargeBinary, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class SignatureRequest(Base):
@@ -25,7 +38,13 @@ class SignatureRequest(Base):
 
     __tablename__ = "signature_requests"
 
-    __table_args__ = (Index("ix_sig_request_status", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_sig_request_status", "status", "created_at"),
+        CheckConstraint(
+            "status IN ('draft','pending','in_progress','completed','declined','expired')",
+            name="ck_signature_requests_status_valid",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
@@ -105,7 +124,13 @@ class SignatureRequestSigner(Base):
 
     __tablename__ = "signature_request_signers"
 
-    __table_args__ = (Index("ix_signer_request", "request_id", "order"),)
+    __table_args__ = (
+        Index("ix_signer_request", "request_id", "order"),
+        CheckConstraint(
+            "status IN ('pending','viewed','signed','declined')",
+            name="ck_signature_request_signers_status_valid",
+        ),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

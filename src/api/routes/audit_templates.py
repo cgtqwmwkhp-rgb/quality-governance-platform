@@ -35,6 +35,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _tid(user: CurrentUser) -> int:
+    tid = user.tenant_id
+    assert tid is not None, "Tenant context required"
+    return tid
+
+
 @router.get("/categories")
 async def list_categories(
     db: DbSession,
@@ -62,6 +68,7 @@ async def list_categories(
     return [{"category": row[0], "count": row[1]} for row in rows]
 
 
+@router.get("", response_model=AuditTemplateListResponse, include_in_schema=False)
 @router.get("/", response_model=AuditTemplateListResponse)
 async def list_templates(
     db: DbSession,
@@ -76,7 +83,7 @@ async def list_templates(
     """List audit templates with filtering and pagination."""
     service = AuditService(db)
     result = await service.list_templates(
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         page=page,
         page_size=page_size,
         search=search,
@@ -99,6 +106,12 @@ async def list_templates(
     )
 
 
+@router.post(
+    "",
+    response_model=AuditTemplateResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post("/", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: AuditTemplateCreate,
@@ -111,7 +124,7 @@ async def create_template(
         data=template_data.model_dump(exclude_unset=True),
         standard_ids=None,
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditTemplateResponse.model_validate(template)
 
@@ -126,7 +139,7 @@ async def get_template(
     service = AuditService(db)
     template = await service.get_template_detail(
         template_id=template_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     resp = AuditTemplateDetailResponse.model_validate(template)
     resp.question_count = len(template.questions)
@@ -163,7 +176,7 @@ async def update_template(
     template = await service.update_template(
         template_id=template_id,
         update_data=update_data,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return AuditTemplateResponse.model_validate(template)
@@ -179,7 +192,7 @@ async def archive_template(
     service = AuditService(db)
     template = await service.archive_template(
         template_id=template_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return ArchiveTemplateResponse.model_validate(template)
@@ -195,7 +208,7 @@ async def restore_template(
     service = AuditService(db)
     template = await service.restore_template(
         template_id=template_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return AuditTemplateResponse.model_validate(template)
@@ -216,7 +229,7 @@ async def duplicate_template(
     template = await service.clone_template(
         template_id=template_id,
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditTemplateResponse.model_validate(template)
 
@@ -231,7 +244,7 @@ async def publish_template(
     service = AuditService(db)
     template = await service.publish_template(
         template_id=template_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
         actor_user_id=user.id,
     )
     return AuditTemplateResponse.model_validate(template)
@@ -256,7 +269,7 @@ async def create_section(
     section = await service.create_section(
         template_id=template_id,
         data=section_data.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditSectionResponse.model_validate(section)
 
@@ -273,7 +286,7 @@ async def update_section(
     section = await service.update_section(
         section_id=section_id,
         update_data=section_data.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditSectionResponse.model_validate(section)
 
@@ -288,7 +301,7 @@ async def delete_section(
     service = AuditService(db)
     await service.delete_section(
         section_id=section_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
 
 
@@ -311,7 +324,7 @@ async def create_question(
     question = await service.create_question(
         template_id=template_id,
         data=question_data.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditQuestionResponse.model_validate(question)
 
@@ -328,7 +341,7 @@ async def update_question(
     question = await service.update_question(
         question_id=question_id,
         update_data=question_data.model_dump(exclude_unset=True),
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )
     return AuditQuestionResponse.model_validate(question)
 
@@ -343,5 +356,5 @@ async def delete_question(
     service = AuditService(db)
     await service.delete_question(
         question_id=question_id,
-        tenant_id=user.tenant_id,
+        tenant_id=_tid(user),
     )

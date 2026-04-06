@@ -34,21 +34,21 @@
 | D12 | Schema versioning & migrations | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/data/migration-review-checklist.md`, CI migration naming lint |
 | D13 | Observability | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/observability/correlation-guide.md`, `docs/observability/alerting-rules.md`, structured logging |
 | D14 | Error handling | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/api/error-migration-tracker.md`, graceful degradation pattern |
-| D15 | Testing strategy | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | CI coverage 50%/50%/55%, `docs/evidence/test-coverage-baseline.md`, mutation testing documented |
+| D15 | Testing strategy | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `ci.yml` unit/integration `--cov-fail-under` + `pyproject.toml` `fail_under` — see `docs/evidence/test-coverage-baseline.md` (line-cited); mutation testing documented |
 | D16 | Test data & fixtures | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `tests/fixtures/golden/` (5 fixtures), 17 factories, `docs/testing/test-data-strategy.md` |
 | D17 | CI quality gates | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/ci/pr-approval-policy.md`, 25+ CI gates, branch protection |
 | D18 | CD/release pipeline | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/infra/canary-rollout-plan.md`, slot swap, signoff gate |
 | D19 | Configuration management | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/runbooks/feature-flag-governance.md`, ADR-0006, config-failfast |
 | D20 | Dependency management | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | Both lockfiles verified in CI, SBOM, pip-audit, npm audit |
-| D21 | Code quality | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `docs/code-quality/mypy-reduction-plan.md`, MAX_TYPE_IGNORES=180, 5 modules removed from ignore_errors |
-| D22 | Documentation quality | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/documentation-standards.md`, 10 ADRs, comprehensive runbooks |
+| D21 | Code quality | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `docs/code-quality/mypy-reduction-plan.md`, MAX_TYPE_IGNORES=180; `pyproject.toml` GOVPLAT-005 `ignore_errors` block (10 modules) |
+| D22 | Documentation quality | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/documentation-standards.md`, 13 ADRs (`docs/adr/ADR-*.md`), comprehensive runbooks |
 | D23 | Operational runbooks | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/runbooks/alerting-integration.md`, on-call guide, rollback drills |
 | D24 | Data integrity | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/data/idempotency-and-locking.md`, Redis fallback, optimistic locking |
 | D25 | Scalability & capacity | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `docs/infra/capacity-plan.md`, autoscale config aligned, load test baseline filled |
 | D26 | Cost efficiency | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `docs/infra/cost-dashboard-guide.md`, cost-controls contradiction fixed, per-tenant plan |
 | D27 | I18n/L10n readiness | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | `docs/adr/ADR-0010-backend-i18n-strategy.md`, `docs/i18n/locale-coverage.md`, cy.json parity check |
 | D28 | Analytics/telemetry | 5.0 | 0.95 | 9.5 | 0.0 | +2.3 | Strong | ADR-0008 updated with enablement criteria, `docs/observability/telemetry-enablement-plan.md`, `docs/observability/alerting-rules.md` |
-| D29 | Governance & decision records | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | 10 sequential ADRs (no gaps), release signoff, change control |
+| D29 | Governance & decision records | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | 13 ADRs (`ADR-0001`–`ADR-0013`), release signoff, change control |
 | D30 | Build determinism | 5.0 | 0.95 | 9.5 | 0.0 | +0.5 | Strong | `docs/evidence/build-reproducibility-proof.md`, both lockfiles CI-verified |
 | D31 | Environment parity | 5.0 | 0.95 | 9.5 | 0.0 | +0.5 | Strong | `docs/evidence/env-parity-verification.md`, config-drift-guard CI job |
 | D32 | Supportability & operability | 4.5 | 0.95 | 8.6 | 0.9 | +0.5 | Strong | `docs/ops/diagnostics-endpoint-guide.md`, health/readyz endpoints |
@@ -139,3 +139,18 @@ The 0.9 gap represents the difference between "documented plans and evidence" (C
 
 ### Code Changes (2 files)
 - `tests/factories/core.py` — added 6 new factories (AuditRun, AuditFinding, Investigation, EnterpriseRisk, EvidenceAsset, ExternalAuditImportJob)
+
+---
+
+### Repository reconciliation note (evidence refresh, not a rescore)
+
+The **Configuration Changes** bullets above record the **2026-04-03** session narrative. **Authoritative current values** must be read from the repo:
+
+| Claim in section above | Verify in |
+|-------------------------|-----------|
+| `ci.yml` unit/integration `cov-fail-under` | `.github/workflows/ci.yml` jobs `unit-tests` / `integration-tests` (`pytest` `--cov-fail-under=`) |
+| Human-readable coverage summary (must match CI) | `docs/evidence/test-coverage-baseline.md` |
+| `pyproject.toml` coverage `fail_under` | `[tool.coverage.report]` `fail_under` in `pyproject.toml` |
+| `ignore_errors` module count | `pyproject.toml` GOVPLAT-005 block |
+
+This avoids treating stale narrative as live CI truth when reconciling later scorecards.

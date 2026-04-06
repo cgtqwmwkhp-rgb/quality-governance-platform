@@ -277,7 +277,7 @@ class SignatureService:
                     SignatureRequestSigner.signer_role != "cc",
                 )
             )
-            pending_before = count_result.scalar()
+            pending_before = count_result.scalar() or 0
             if pending_before > 0:
                 raise ValueError("Waiting for previous signers")
 
@@ -518,7 +518,7 @@ class SignatureService:
             )
 
         result = await self.db.execute(stmt.order_by(SignatureRequest.created_at.desc()))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_completed_requests(
         self,
@@ -535,7 +535,7 @@ class SignatureService:
             .order_by(SignatureRequest.completed_at.desc())
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_audit_log(self, request_id: int) -> list[SignatureAuditLog]:
         """Get audit log for a signature request."""
@@ -544,7 +544,7 @@ class SignatureService:
             .where(SignatureAuditLog.request_id == request_id)
             .order_by(SignatureAuditLog.created_at)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Reminders
@@ -570,7 +570,7 @@ class SignatureService:
             # Check if reminder is due
             if request.last_reminder_at:
                 days_since = (now - request.last_reminder_at).days
-                if days_since < request.reminder_frequency:
+                if request.reminder_frequency is not None and days_since < request.reminder_frequency:
                     continue
             else:
                 # First reminder after 1 day

@@ -360,6 +360,7 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                     if edit_hint and edit_hint.lower() != "comment":
                         guidance = f"Hint: {edit_hint}"
 
+                assert current_section is not None
                 current_section["questions"].append(
                     {
                         "text": question_text,
@@ -394,13 +395,14 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                     for sub in child:
                         st = _local_tag(sub.tag)
                         if st == "TextView" and _attr(sub, "text"):
-                            label = _attr(sub, "text", "").strip()
+                            label = (_attr(sub, "text") or "").strip()
                             if label and label.endswith((":", ")")):
                                 # Look for sibling EditText
                                 for sib in child:
                                     if _local_tag(sib.tag) == "EditText":
                                         if current_section is None or current_section.get("name") != section_title:
                                             maybe_start_section(section_title)
+                                        assert current_section is not None
                                         current_section["questions"].append(
                                             {
                                                 "text": label,
@@ -432,6 +434,7 @@ def _extract_sections_and_questions(root: ET.Element) -> list[dict[str, Any]]:
                 if _local_tag(tbl.tag) == "TableLayout":
                     if current_section is None or current_section.get("name") != section_title:
                         maybe_start_section(section_title)
+                    assert current_section is not None
                     question_order = _parse_table_questions(tbl, current_section, question_order)
                     break
 

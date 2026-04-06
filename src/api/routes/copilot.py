@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.core.security import decode_token
+from src.domain.exceptions import NotFoundError
 from src.infrastructure.database import async_session_maker
 
 router = APIRouter()
@@ -95,10 +96,13 @@ async def create_session(
     """Create a new copilot conversation session."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     session = await service.create_session(
-        tenant_id=current_user.tenant_id or 1,
+        tenant_id=current_user.tenant_id,
         user_id=current_user.id,
         context_type=data.context_type,
         context_id=data.context_id,
@@ -131,8 +135,8 @@ async def get_session(session_id: int, db: DbSession, current_user: CurrentUser)
     service = CopilotService(db)
     session = await service.get_session(session_id)
 
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    if not session or session.user_id != current_user.id:
+        raise NotFoundError("Session not found")
 
     return session
 
@@ -143,6 +147,9 @@ async def close_session(session_id: int, db: DbSession, current_user: CurrentUse
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
+    session = await service.get_session(session_id)
+    if not session or session.user_id != current_user.id:
+        raise NotFoundError("Session not found")
     await service.close_session(session_id)
 
     return {"status": "closed"}
@@ -195,19 +202,23 @@ async def send_message(
         )
         return message
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 @router.get("/sessions/{session_id}/messages", response_model=list[MessageResponse])
 async def get_messages(
     session_id: int,
     db: DbSession,
+    current_user: CurrentUser,
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get messages for a session."""
     from src.domain.services.copilot_service import CopilotService
 
     service = CopilotService(db)
+    session = await service.get_session(session_id)
+    if not session or session.user_id != current_user.id:
+        raise NotFoundError("Session not found")
     messages = await service.get_session_messages(session_id, limit=limit)
 
     return messages
@@ -223,20 +234,23 @@ async def submit_feedback(
     """Submit feedback on a copilot response."""
     from src.domain.services.copilot_service import CopilotService
 
+    if not current_user.tenant_id:
+        raise NotFoundError("No tenant context")
+
     service = CopilotService(db)
 
     try:
         feedback = await service.submit_feedback(
             message_id=message_id,
             user_id=current_user.id,
-            tenant_id=current_user.tenant_id or 1,
+            tenant_id=current_user.tenant_id,
             rating=data.rating,
             feedback_type=data.feedback_type,
             feedback_text=data.feedback_text,
         )
         return {"status": "submitted", "feedback_id": feedback.id}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise NotFoundError(str(e))
 
 
 # ============================================================================
@@ -261,12 +275,13 @@ async def list_actions(category: Optional[str] = None):
 async def execute_action(
     data: ActionExecute,
     db: DbSession,
+    current_user: CurrentUser,
 ):
     """Execute a copilot action directly."""
     from src.domain.services.copilot_service import COPILOT_ACTIONS
 
     if data.action_name not in COPILOT_ACTIONS:
-        raise HTTPException(status_code=404, detail=f"Action {data.action_name} not found")
+        raise NotFoundError(f"Action {data.action_name} not found")
 
     # Execute the action
     # This would actually perform the action

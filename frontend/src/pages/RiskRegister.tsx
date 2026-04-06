@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -21,7 +22,16 @@ import {
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/Dialog'
 import { riskRegisterApi } from '../api/client'
+import { toast } from '../contexts/ToastContext'
 
 interface Risk {
   id: number
@@ -42,6 +52,7 @@ interface Risk {
   escalation_reason?: string
   linked_audits?: string[]
   linked_actions?: string[]
+  suggestion_triage_status?: string | null
 }
 
 interface MatrixCell {
@@ -87,6 +98,7 @@ const TREATMENT_STRATEGIES = [
 ]
 
 export default function RiskRegister() {
+  const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
@@ -103,10 +115,19 @@ export default function RiskRegister() {
     overdue_review: 0,
     escalated: 0,
   })
+  const [registerMode, setRegisterMode] = useState<'active' | 'import_triage'>('active')
+  const [pendingTriageCount, setPendingTriageCount] = useState(0)
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null)
+  const [rejectNotes, setRejectNotes] = useState('')
+  const [triageSubmitting, setTriageSubmitting] = useState(false)
 
   useEffect(() => {
-    loadRisks()
-  }, [])
+    if (searchParams.get('triage') === 'import') {
+      setRegisterMode('import_triage')
+      setView('register')
+    }
+  }, [searchParams])
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
@@ -120,14 +141,22 @@ export default function RiskRegister() {
     }
   }, [auditOnly, auditRefFilter, searchParams, setSearchParams])
 
-  const loadRisks = async () => {
+  const loadRisks = useCallback(async () => {
     setLoading(true)
     try {
-      const [risksResponse, summaryResponse, heatmapResponse] = await Promise.all([
-        riskRegisterApi.list({ limit: 100 }),
+      const listParams =
+        registerMode === 'import_triage'
+          ? ({ limit: 100, suggestion_triage: 'pending' } as const)
+          : ({ limit: 100 } as const)
+      const [risksResponse, summaryResponse, heatmapResponse, pendingRes] = await Promise.all([
+        riskRegisterApi.list(listParams),
         riskRegisterApi.getSummary(),
         riskRegisterApi.getHeatmap(),
+        riskRegisterApi.list({ limit: 1, suggestion_triage: 'pending' }),
       ])
+      setPendingTriageCount(
+        typeof pendingRes.data?.total === 'number' ? pendingRes.data.total : 0,
+      )
 
       const apiRisks = risksResponse.data?.items ?? []
       const mappedRisks: Risk[] = apiRisks.map((r) => {
@@ -165,6 +194,7 @@ export default function RiskRegister() {
           escalation_reason: r.escalation_reason,
           linked_audits: r.linked_audits ?? [],
           linked_actions: r.linked_actions ?? [],
+          suggestion_triage_status: r.suggestion_triage_status ?? null,
         }
       })
       setRisks(mappedRisks)
@@ -257,6 +287,54 @@ export default function RiskRegister() {
     } finally {
       setLoading(false)
     }
+  }, [registerMode])
+
+  useEffect(() => {
+    void loadRisks()
+  }, [loadRisks])
+
+  const resolveImportTriage = async (
+    riskId: number,
+    decision: 'accept' | 'reject',
+    notes?: string,
+  ) => {
+    try {
+      setTriageSubmitting(true)
+      const trimmed = notes?.trim()
+      await riskRegisterApi.resolveSuggestionTriage(riskId, {
+        decision,
+        ...(trimmed ? { notes: trimmed } : {}),
+      })
+      await loadRisks()
+      toast.success(
+        decision === 'accept'
+          ? t('risk_register.import_triage_toast_accept')
+          : t('risk_register.import_triage_toast_reject'),
+      )
+    } catch (err) {
+      console.error('Import triage resolution failed:', err)
+      toast.error(t('risk_register.import_triage_toast_error'))
+    } finally {
+      setTriageSubmitting(false)
+    }
+  }
+
+  const openRejectDialog = (riskId: number) => {
+    setRejectTargetId(riskId)
+    setRejectNotes('')
+    setRejectDialogOpen(true)
+  }
+
+  const closeRejectDialog = () => {
+    setRejectDialogOpen(false)
+    setRejectTargetId(null)
+    setRejectNotes('')
+  }
+
+  const confirmRejectWithNotes = async () => {
+    if (rejectTargetId == null) return
+    await resolveImportTriage(rejectTargetId, 'reject', rejectNotes)
+    closeRejectDialog()
   }
 
   const visibleRisks = risks.filter((risk) => {
@@ -312,6 +390,43 @@ export default function RiskRegister() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Enterprise Risk Register</h1>
           <p className="text-muted-foreground">ISO 31000 Compliant Risk Management</p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <Button
+              size="sm"
+              variant={registerMode === 'active' ? 'default' : 'secondary'}
+              onClick={() => {
+                setRegisterMode('active')
+                const next = new URLSearchParams(searchParams)
+                next.delete('triage')
+                if (next.toString() !== searchParams.toString()) {
+                  setSearchParams(next, { replace: true })
+                }
+              }}
+            >
+              Active register
+            </Button>
+            <Button
+              size="sm"
+              variant={registerMode === 'import_triage' ? 'default' : 'secondary'}
+              onClick={() => {
+                setRegisterMode('import_triage')
+                setView('register')
+                const next = new URLSearchParams(searchParams)
+                next.set('triage', 'import')
+                setSearchParams(next, { replace: true })
+              }}
+            >
+              Import triage
+              {pendingTriageCount > 0 ? ` (${pendingTriageCount})` : ''}
+            </Button>
+          </div>
+          {registerMode === 'import_triage' ? (
+            <p className="text-xs text-muted-foreground mt-2 max-w-2xl">
+              Risks raised from external audit import appear here until you accept them into the live register
+              or reject them (closed, auditable). Corrective actions (CAPA) linked from the same findings stay in
+              CAPA as usual—only register suggestions are triaged here.
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
@@ -502,7 +617,9 @@ export default function RiskRegister() {
                 {visibleRisks.length === 0 && (
                   <tr>
                     <td colSpan={9} className="text-center py-12 text-muted-foreground">
-                      No risks found in the register
+                      {registerMode === 'import_triage'
+                        ? 'No import-sourced risks awaiting triage.'
+                        : 'No risks found in the register'}
                     </td>
                   </tr>
                 )}
@@ -510,6 +627,14 @@ export default function RiskRegister() {
                   <tr
                     key={risk.id}
                     className="hover:bg-muted/30 transition-colors cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setSelectedRisk(risk)
+                      }
+                    }}
                     onClick={() => setSelectedRisk(risk)}
                   >
                     <td className="px-4 py-4">
@@ -567,14 +692,42 @@ export default function RiskRegister() {
                       </div>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      {registerMode === 'import_triage' ? (
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2">
+                          <Button
+                            size="sm"
+                            className="text-xs"
+                            disabled={triageSubmitting}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void resolveImportTriage(risk.id, 'accept')
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="text-xs"
+                            disabled={triageSubmitting}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openRejectDialog(risk.id)
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -867,6 +1020,53 @@ export default function RiskRegister() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={rejectDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !triageSubmitting) closeRejectDialog()
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-md"
+          onEscapeKeyDown={(e) => triageSubmitting && e.preventDefault()}
+          onPointerDownOutside={(e) => triageSubmitting && e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Reject import suggestion</DialogTitle>
+            <DialogDescription>
+              This closes the risk as rejected (auditable). Add an optional note for the escalation record—recommended
+              for audit trail.
+            </DialogDescription>
+          </DialogHeader>
+          <label htmlFor="import-triage-reject-notes" className="text-sm font-medium text-foreground">
+            Notes
+          </label>
+          <textarea
+            id="import-triage-reject-notes"
+            value={rejectNotes}
+            onChange={(e) => setRejectNotes(e.target.value)}
+            maxLength={2000}
+            rows={4}
+            placeholder="Reason or context (optional, max 2000 characters)"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            disabled={triageSubmitting}
+          />
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="secondary" onClick={closeRejectDialog} disabled={triageSubmitting}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmRejectWithNotes()}
+              disabled={triageSubmitting}
+            >
+              {triageSubmitting ? 'Rejecting…' : 'Confirm reject'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,0 +1,1 @@
+{"id": 1, "tenant_id": 1, "name": "Lost Time Injury Rate", "category": "Safety", "frequency": "monthly", "green_threshold": 0.5, "amber_threshold": 1.0, "red_threshold": 2.0, "current_value": 0.3, "status": "green", "created_at": "2026-01-15T10:00:00Z"}

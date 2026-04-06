@@ -43,8 +43,13 @@ async def create_policy(
             )
 
         reference_number = policy_data.reference_number
-        # Check for duplicate reference number
-        existing = await db.execute(select(Policy).where(Policy.reference_number == reference_number))
+        # Check for duplicate reference number within tenant
+        existing = await db.execute(
+            select(Policy).where(
+                Policy.reference_number == reference_number,
+                Policy.tenant_id == current_user.tenant_id,
+            )
+        )
         if existing.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -170,8 +175,11 @@ async def update_policy(
 
     Requires authentication.
     """
-    # Get existing policy
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    # Get existing policy with tenant isolation
+    query = select(Policy).where(Policy.id == policy_id)
+    if not getattr(current_user, "is_superuser", False):
+        query = query.where(Policy.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     policy = result.scalar_one_or_none()
 
     if not policy:
@@ -221,8 +229,11 @@ async def delete_policy(
 
     Requires authentication.
     """
-    # Get existing policy
-    result = await db.execute(select(Policy).where(Policy.id == policy_id))
+    # Get existing policy with tenant isolation
+    query = select(Policy).where(Policy.id == policy_id)
+    if not getattr(current_user, "is_superuser", False):
+        query = query.where(Policy.tenant_id == current_user.tenant_id)
+    result = await db.execute(query)
     policy = result.scalar_one_or_none()
 
     if not policy:

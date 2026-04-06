@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.models.iso27001 import (
     AccessControlRecord,
     BusinessContinuityPlan,
@@ -144,7 +145,11 @@ async def list_assets(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List information assets"""
-    stmt = select(InformationAsset).where(InformationAsset.is_active == True)
+    tid = current_user.tenant_id
+    stmt = select(InformationAsset).where(
+        InformationAsset.is_active == True,
+        InformationAsset.tenant_id == tid,
+    )
 
     if asset_type:
         stmt = stmt.where(InformationAsset.asset_type == asset_type)
@@ -187,12 +192,16 @@ async def create_asset(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create information asset"""
-    count_result = await db.execute(select(func.count()).select_from(InformationAsset))
+    tid = current_user.tenant_id
+    count_result = await db.execute(
+        select(func.count()).select_from(InformationAsset).where(InformationAsset.tenant_id == tid)
+    )
     count = count_result.scalar()
     asset_id = f"ASSET-{(count + 1):05d}"
 
     asset = InformationAsset(
         asset_id=asset_id,
+        tenant_id=tid,
         next_review_date=datetime.now(timezone.utc) + timedelta(days=365),
         **asset_data.model_dump(),
     )
@@ -210,10 +219,15 @@ async def get_asset(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get asset details"""
-    result = await db.execute(select(InformationAsset).where(InformationAsset.id == asset_id))
+    result = await db.execute(
+        select(InformationAsset).where(
+            InformationAsset.id == asset_id,
+            InformationAsset.tenant_id == current_user.tenant_id,
+        )
+    )
     asset = result.scalar_one_or_none()
     if not asset:
-        raise HTTPException(status_code=404, detail="Asset not found")
+        raise NotFoundError("Asset not found")
 
     return {
         "id": asset.id,
@@ -258,7 +272,8 @@ async def list_controls(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List ISO 27001 Annex A controls"""
-    stmt = select(ISO27001Control)
+    tid = current_user.tenant_id
+    stmt = select(ISO27001Control).where(ISO27001Control.tenant_id == tid)
 
     if domain:
         stmt = stmt.where(ISO27001Control.domain == domain)
@@ -275,21 +290,35 @@ async def list_controls(
 
     # Summary
     result = await db.execute(
-        select(func.count(ISO27001Control.id)).where(ISO27001Control.implementation_status == "implemented")
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.implementation_status == "implemented",
+        )
     )
     implemented = result.scalar()
 
     result = await db.execute(
-        select(func.count(ISO27001Control.id)).where(ISO27001Control.implementation_status == "partial")
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.implementation_status == "partial",
+        )
     )
     partial = result.scalar()
 
     result = await db.execute(
-        select(func.count(ISO27001Control.id)).where(ISO27001Control.implementation_status == "not_implemented")
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.implementation_status == "not_implemented",
+        )
     )
     not_impl = result.scalar()
 
-    result = await db.execute(select(func.count(ISO27001Control.id)).where(ISO27001Control.is_applicable == False))
+    result = await db.execute(
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.is_applicable == False,
+        )
+    )
     excluded = result.scalar()
 
     return {
@@ -326,10 +355,15 @@ async def update_control(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update control implementation status"""
-    result = await db.execute(select(ISO27001Control).where(ISO27001Control.id == control_id))
+    result = await db.execute(
+        select(ISO27001Control).where(
+            ISO27001Control.id == control_id,
+            ISO27001Control.tenant_id == current_user.tenant_id,
+        )
+    )
     control = result.scalar_one_or_none()
     if not control:
-        raise HTTPException(status_code=404, detail="Control not found")
+        raise NotFoundError("Control not found")
 
     update_data = control_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -355,18 +389,32 @@ async def get_current_soa(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get current Statement of Applicability"""
-    result = await db.execute(select(StatementOfApplicability).where(StatementOfApplicability.is_current == True))
+    tid = current_user.tenant_id
+    result = await db.execute(
+        select(StatementOfApplicability).where(
+            StatementOfApplicability.is_current == True,
+            StatementOfApplicability.tenant_id == tid,
+        )
+    )
     soa = result.scalar_one_or_none()
 
     if not soa:
-        result = await db.execute(select(func.count()).select_from(ISO27001Control))
+        result = await db.execute(
+            select(func.count()).select_from(ISO27001Control).where(ISO27001Control.tenant_id == tid)
+        )
         total = result.scalar()
 
-        result = await db.execute(select(func.count(ISO27001Control.id)).where(ISO27001Control.is_applicable == True))
+        result = await db.execute(
+            select(func.count(ISO27001Control.id)).where(
+                ISO27001Control.tenant_id == tid,
+                ISO27001Control.is_applicable == True,
+            )
+        )
         applicable = result.scalar()
 
         result = await db.execute(
             select(func.count(ISO27001Control.id)).where(
+                ISO27001Control.tenant_id == tid,
                 ISO27001Control.is_applicable == True,
                 ISO27001Control.implementation_status == "implemented",
             )
@@ -416,7 +464,11 @@ async def list_security_risks(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List information security risks"""
-    stmt = select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+    tid = current_user.tenant_id
+    stmt = select(InformationSecurityRisk).where(
+        InformationSecurityRisk.status != "closed",
+        InformationSecurityRisk.tenant_id == tid,
+    )
 
     if status:
         stmt = stmt.where(InformationSecurityRisk.status == status)
@@ -460,7 +512,10 @@ async def create_security_risk(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create information security risk"""
-    count_result = await db.execute(select(func.count()).select_from(InformationSecurityRisk))
+    tid = current_user.tenant_id
+    count_result = await db.execute(
+        select(func.count()).select_from(InformationSecurityRisk).where(InformationSecurityRisk.tenant_id == tid)
+    )
     count = count_result.scalar()
     risk_id = f"ISR-{(count + 1):04d}"
 
@@ -469,6 +524,7 @@ async def create_security_risk(
 
     risk = InformationSecurityRisk(
         risk_id=risk_id,
+        tenant_id=tid,
         inherent_risk_score=inherent_score,
         residual_risk_score=max(residual_score, 1),
         next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
@@ -495,7 +551,8 @@ async def list_security_incidents(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List security incidents"""
-    stmt = select(SecurityIncident)
+    tid = current_user.tenant_id
+    stmt = select(SecurityIncident).where(SecurityIncident.tenant_id == tid)
 
     if status:
         stmt = stmt.where(SecurityIncident.status == status)
@@ -511,10 +568,20 @@ async def list_security_incidents(
     incidents = result.scalars().all()
 
     # Summary
-    result = await db.execute(select(func.count(SecurityIncident.id)).where(SecurityIncident.status == "open"))
+    result = await db.execute(
+        select(func.count(SecurityIncident.id)).where(
+            SecurityIncident.tenant_id == tid,
+            SecurityIncident.status == "open",
+        )
+    )
     open_count = result.scalar()
 
-    result = await db.execute(select(func.count(SecurityIncident.id)).where(SecurityIncident.severity == "critical"))
+    result = await db.execute(
+        select(func.count(SecurityIncident.id)).where(
+            SecurityIncident.tenant_id == tid,
+            SecurityIncident.severity == "critical",
+        )
+    )
     critical_count = result.scalar()
 
     return {
@@ -545,12 +612,16 @@ async def create_security_incident(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create security incident"""
-    count_result = await db.execute(select(func.count()).select_from(SecurityIncident))
+    tid = current_user.tenant_id
+    count_result = await db.execute(
+        select(func.count()).select_from(SecurityIncident).where(SecurityIncident.tenant_id == tid)
+    )
     count = count_result.scalar()
     incident_id = f"SEC-{(count + 1):05d}"
 
     incident = SecurityIncident(
         incident_id=incident_id,
+        tenant_id=tid,
         status="open",
         **incident_data.model_dump(),
     )
@@ -573,10 +644,15 @@ async def update_security_incident(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update security incident"""
-    result = await db.execute(select(SecurityIncident).where(SecurityIncident.id == incident_id))
+    result = await db.execute(
+        select(SecurityIncident).where(
+            SecurityIncident.id == incident_id,
+            SecurityIncident.tenant_id == current_user.tenant_id,
+        )
+    )
     incident = result.scalar_one_or_none()
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     update_data = incident_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -606,7 +682,11 @@ async def list_supplier_assessments(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List supplier security assessments"""
-    stmt = select(SupplierSecurityAssessment).where(SupplierSecurityAssessment.status == "active")
+    tid = current_user.tenant_id
+    stmt = select(SupplierSecurityAssessment).where(
+        SupplierSecurityAssessment.status == "active",
+        SupplierSecurityAssessment.tenant_id == tid,
+    )
 
     if rating:
         stmt = stmt.where(SupplierSecurityAssessment.overall_rating == rating)
@@ -647,6 +727,7 @@ async def create_supplier_assessment(
 ) -> dict[str, Any]:
     """Create supplier security assessment"""
     assessment = SupplierSecurityAssessment(
+        tenant_id=current_user.tenant_id,
         assessment_date=datetime.now(timezone.utc),
         next_assessment_date=datetime.now(timezone.utc)
         + timedelta(
@@ -674,12 +755,20 @@ async def get_isms_dashboard(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get ISMS dashboard summary"""
+    tid = current_user.tenant_id
+
     # Assets
-    result = await db.execute(select(func.count(InformationAsset.id)).where(InformationAsset.is_active == True))
+    result = await db.execute(
+        select(func.count(InformationAsset.id)).where(
+            InformationAsset.tenant_id == tid,
+            InformationAsset.is_active == True,
+        )
+    )
     total_assets = result.scalar()
 
     result = await db.execute(
         select(func.count(InformationAsset.id)).where(
+            InformationAsset.tenant_id == tid,
             InformationAsset.is_active == True,
             InformationAsset.criticality == "critical",
         )
@@ -687,25 +776,37 @@ async def get_isms_dashboard(
     critical_assets = result.scalar()
 
     # Controls
-    result = await db.execute(select(func.count()).select_from(ISO27001Control))
+    result = await db.execute(select(func.count()).select_from(ISO27001Control).where(ISO27001Control.tenant_id == tid))
     total_controls = result.scalar()
 
     result = await db.execute(
-        select(func.count(ISO27001Control.id)).where(ISO27001Control.implementation_status == "implemented")
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.implementation_status == "implemented",
+        )
     )
     implemented_controls = result.scalar()
 
-    result = await db.execute(select(func.count(ISO27001Control.id)).where(ISO27001Control.is_applicable == True))
+    result = await db.execute(
+        select(func.count(ISO27001Control.id)).where(
+            ISO27001Control.tenant_id == tid,
+            ISO27001Control.is_applicable == True,
+        )
+    )
     applicable_controls = result.scalar()
 
     # Risks
     result = await db.execute(
-        select(func.count(InformationSecurityRisk.id)).where(InformationSecurityRisk.status != "closed")
+        select(func.count(InformationSecurityRisk.id)).where(
+            InformationSecurityRisk.tenant_id == tid,
+            InformationSecurityRisk.status != "closed",
+        )
     )
     open_risks = result.scalar()
 
     result = await db.execute(
         select(func.count(InformationSecurityRisk.id)).where(
+            InformationSecurityRisk.tenant_id == tid,
             InformationSecurityRisk.residual_risk_score > 16,
             InformationSecurityRisk.status != "closed",
         )
@@ -713,12 +814,18 @@ async def get_isms_dashboard(
     high_risks = result.scalar()
 
     # Incidents
-    result = await db.execute(select(func.count(SecurityIncident.id)).where(SecurityIncident.status == "open"))
+    result = await db.execute(
+        select(func.count(SecurityIncident.id)).where(
+            SecurityIncident.tenant_id == tid,
+            SecurityIncident.status == "open",
+        )
+    )
     open_incidents = result.scalar()
 
     result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
-            SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30)
+            SecurityIncident.tenant_id == tid,
+            SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
         )
     )
     incidents_30d = result.scalar()
@@ -726,6 +833,7 @@ async def get_isms_dashboard(
     # Suppliers
     result = await db.execute(
         select(func.count(SupplierSecurityAssessment.id)).where(
+            SupplierSecurityAssessment.tenant_id == tid,
             SupplierSecurityAssessment.risk_level == "high",
             SupplierSecurityAssessment.status == "active",
         )

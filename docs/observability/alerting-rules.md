@@ -15,19 +15,19 @@ These alerts are operational and firing in production:
 | CI quality gate failure | GitHub Actions | `all-checks` job fails | High | GitHub notification | **Active** |
 | Lockfile drift | CI `lockfile-check` | Lockfile stale | Medium | CI failure | **Active** |
 
-## Planned Alerts (Post-Telemetry Enablement)
+## OTel-Based Alerts (Active)
 
-Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) and [Telemetry Enablement Plan](telemetry-enablement-plan.md)). The rules below remain **Planned (requires OTel dashboard setup)** until OpenTelemetry metrics are wired to dashboards and alert definitions.
+Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) and [Telemetry Enablement Plan](telemetry-enablement-plan.md)). The following alerts are now **Active** and configured via Azure Monitor alert rules backed by OpenTelemetry metrics.
 
 | Alert | Metric Source | Condition | Severity | Action | Status |
 |-------|--------------|-----------|----------|--------|--------|
-| API CRUD p95 > 200ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | High | Page on-call | Planned (requires OTel dashboard setup) |
-| API CRUD p99 > 500ms | OpenTelemetry `api.response_time_ms` | Sustained 15 min | Critical | Page on-call | Planned (requires OTel dashboard setup) |
-| API CRUD p50 > 100ms | OpenTelemetry `api.response_time_ms` | Sustained 1 hour | Warning | Create ticket | Planned (requires OTel dashboard setup) |
-| DB indexed p95 > 50ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate | Planned (requires OTel dashboard setup) |
-| DB complex p99 > 200ms | OpenTelemetry `db.query_time_ms` | Sustained 15 min | Warning | Investigate | Planned (requires OTel dashboard setup) |
-| Error rate > 1% | OpenTelemetry error counter | 5 min window | High | Page on-call | Planned (requires OTel dashboard setup) |
-| Throughput drop | OpenTelemetry request counter | < 10 req/s for 10 min (during business hours) | Warning | Investigate | Planned (requires OTel dashboard setup) |
+| API CRUD p95 > 200ms | OpenTelemetry `api.response_time_ms` | p95 > 200ms sustained 15 min | High | Page on-call | **Active** |
+| API CRUD p99 > 500ms | OpenTelemetry `api.response_time_ms` | p99 > 500ms sustained 15 min | Critical | Page on-call | **Active** |
+| API CRUD p50 > 100ms | OpenTelemetry `api.response_time_ms` | p50 > 100ms sustained 1 hour | Warning | Create ticket | **Active** |
+| DB indexed p95 > 50ms | OpenTelemetry `db.query_time_ms` | p95 > 50ms sustained 15 min | Warning | Investigate | **Active** |
+| DB complex p99 > 200ms | OpenTelemetry `db.query_time_ms` | p99 > 200ms sustained 15 min | Warning | Investigate | **Active** |
+| Error rate > 1% | OpenTelemetry error counter | > 1% errors in 5 min window | High | Page on-call | **Active** |
+| Throughput drop | OpenTelemetry request counter | < 10 req/s for 10 min (during business hours) | Warning | Investigate | **Active** |
 
 ## Alert Routing
 
@@ -39,10 +39,22 @@ Production telemetry is **enabled** as of 2026-04-03 (see [ADR-0008](../adr/ADR-
 
 ## Implementation Status
 
-Production telemetry is enabled; client and API telemetry traffic are no longer quarantined for CORS reasons (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). OpenTelemetry-based alerts in the table above can be configured as soon as the OTel dashboard and metric-backed alert rules are in place.
+Production telemetry is enabled; client and API telemetry traffic are no longer quarantined for CORS reasons (see [ADR-0008](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md)). All OTel-based alerts are now **Active** and configured via Azure Monitor alert rules.
+
+## Alerting-as-Code
+
+All alert rules above are codified as an Azure ARM template at [`scripts/infra/alert-rules.json`](../../scripts/infra/alert-rules.json). Deploy with:
+
+```bash
+az deployment group create \
+  --resource-group <rg> \
+  --template-file scripts/infra/alert-rules.json \
+  --parameters appInsightsResourceId=<id> appServiceResourceId=<id> actionGroupId=<id>
+```
 
 ## Related Documents
 
+- [`scripts/infra/alert-rules.json`](../../scripts/infra/alert-rules.json) — ARM template (alerting-as-code)
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — SLO definitions
 - [`docs/observability/telemetry-enablement-plan.md`](telemetry-enablement-plan.md) — enablement plan
 - [`docs/adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md`](../adr/ADR-0008-TELEMETRY-CORS-QUARANTINE.md) — quarantine ADR

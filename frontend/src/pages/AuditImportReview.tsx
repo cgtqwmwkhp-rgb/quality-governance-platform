@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import axios from 'axios'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
@@ -48,6 +49,25 @@ const ACTION_FINDING_TYPES = [
   'flagged_item',
   'question_answered_no',
 ]
+
+/** Deep-link to Compliance & evidence with optional standard filter (matches listClauses API slugs). */
+function buildComplianceClauseUrl(mapping: Record<string, unknown>): string {
+  const clauseRaw =
+    (typeof mapping.clause_number === 'string' && mapping.clause_number) ||
+    (typeof mapping.clause === 'string' && mapping.clause) ||
+    ''
+  const clause = clauseRaw.trim()
+  const stdRaw = (typeof mapping.standard === 'string' ? mapping.standard : '').toLowerCase()
+  const sp = new URLSearchParams()
+  if (clause) sp.set('clause', clause)
+  const compact = stdRaw.replace(/\s+/g, '').replace(/\//g, '')
+  if (compact.includes('9001')) sp.set('standard', 'iso9001')
+  else if (compact.includes('14001')) sp.set('standard', 'iso14001')
+  else if (compact.includes('45001')) sp.set('standard', 'iso45001')
+  else if (compact.includes('27001')) sp.set('standard', 'iso27001')
+  const q = sp.toString()
+  return q ? `/compliance?${q}` : '/compliance'
+}
 
 function getFindingTypeStyle(findingType: string): {
   label: string
@@ -236,6 +256,27 @@ function describePromotionFailure(error: unknown): string {
   return 'Promotion failed. Review the accepted drafts and try again.'
 }
 
+type PromotionFailedDraftRow = {
+  draft_id?: number
+  title?: string
+  error?: string
+  error_type?: string
+}
+
+/** Server returns failed_drafts inside error.details on 422 when materialization fails. */
+function extractPromotionFailedDrafts(err: unknown): PromotionFailedDraftRow[] | null {
+  if (!axios.isAxiosError(err) || err.response?.status !== 422) return null
+  const data = err.response?.data as { error?: { details?: { failed_drafts?: unknown } } } | undefined
+  const raw = data?.error?.details?.failed_drafts
+  if (!Array.isArray(raw) || raw.length === 0) return null
+  return raw.slice(0, 20).map((row: Record<string, unknown>) => ({
+    draft_id: typeof row.draft_id === 'number' ? row.draft_id : undefined,
+    title: typeof row.title === 'string' ? row.title : undefined,
+    error: typeof row.error === 'string' ? row.error : undefined,
+    error_type: typeof row.error_type === 'string' ? row.error_type : undefined,
+  }))
+}
+
 function readProvenanceString(job: ExternalAuditImportJob | null, key: string) {
   const value = job?.provenance_json?.[key]
   return typeof value === 'string' && value.trim() ? value : null
@@ -341,6 +382,7 @@ export default function AuditImportReview() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [promotionFailedDrafts, setPromotionFailedDrafts] = useState<PromotionFailedDraftRow[] | null>(null)
   const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
   const processingTriggered = useRef(false)
 
@@ -359,6 +401,7 @@ export default function AuditImportReview() {
       setLoading(true)
     }
     setError(null)
+    setPromotionFailedDrafts(null)
     setReconciliationNotice(null)
     try {
       let resolvedJobRes = null
@@ -408,6 +451,7 @@ export default function AuditImportReview() {
       setDrafts(draftsRes.data)
       setReconciliation(reconciliationResult.data)
       setReconciliationNotice(reconciliationResult.notice)
+      setPromotionFailedDrafts(null)
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
@@ -579,6 +623,7 @@ export default function AuditImportReview() {
     setShowPromoteConfirm(false)
     setIsPromoting(true)
     setError(null)
+    setPromotionFailedDrafts(null)
     setSuccessMessage(null)
     try {
       const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
@@ -609,6 +654,7 @@ export default function AuditImportReview() {
       }
     } catch (err) {
       console.error('Failed to promote imported audit findings', err)
+      setPromotionFailedDrafts(extractPromotionFailedDrafts(err))
       setError(describePromotionFailure(err))
     } finally {
       setIsPromoting(false)
@@ -768,7 +814,9 @@ export default function AuditImportReview() {
               Canonical read model: {reconciliation.canonical_read_model.replace(/_/g, ' ')}.
               {reconciliation.failed_total > 0
                 ? ` ${reconciliation.failed_total} accepted draft(s) still need recovery before the workflow is complete.`
-                : ' All downstream workflow steps are traceable from this import.'}
+                : ' All downstream workflow steps are traceable from this import.'}{' '}
+              UVDB and unified registry rows appear here only after findings materialize; if promotion did not finish,
+              sync or registry proof may show as missing—that usually reflects sequencing, not a separate outage.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -855,20 +903,68 @@ export default function AuditImportReview() {
                 </Button>
               ) : null}
             </div>
+
+            {reconciliation.materialized.capa_actions > 0 || reconciliation.materialized.enterprise_risks > 0 ? (
+              <div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Governance hand-off after promotion</p>
+                <p className="mt-2">
+                  CAPA actions from this import are live in <span className="text-foreground">Actions</span> as usual.
+                  Enterprise risk suggestions from the same import may appear under{' '}
+                  <span className="text-foreground">Risk Register → Import triage</span> until accepted or rejected.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      navigate(
+                        reconciliation.view_links.actions || '/actions?sourceType=audit_finding',
+                      )
+                    }
+                  >
+                    Open audit-sourced actions
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => navigate('/risk-register?triage=import')}>
+                    Open import risk triage
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
 
       {error ? (
         <Card className="border-destructive/30 bg-destructive/5" role="alert">
-          <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              <p className="text-sm text-destructive">{error}</p>
+          <CardContent className="space-y-3 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                Retry
+              </Button>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void load()}>
-              Retry
-            </Button>
+            {promotionFailedDrafts && promotionFailedDrafts.length > 0 ? (
+              <details className="rounded-md border border-destructive/20 bg-background/80 p-3 text-sm">
+                <summary className="cursor-pointer font-medium text-foreground">
+                  First {promotionFailedDrafts.length} draft failure(s) from server
+                </summary>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
+                  {promotionFailedDrafts.map((row, idx) => (
+                    <li key={`promo-fail-${row.draft_id ?? idx}`}>
+                      {row.draft_id != null ? <>Draft #{row.draft_id}: </> : null}
+                      {row.error_type ? (
+                        <span className="text-foreground">[{row.error_type}] </span>
+                      ) : null}
+                      {row.title ? <span className="text-foreground">{row.title} — </span> : null}
+                      {row.error ?? 'Unknown error'}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -1625,17 +1721,86 @@ function DraftFindingsList({
                 )
               })()}
 
-              <div className="flex flex-wrap gap-2">
-                {draft.mapped_frameworks_json?.map((mapping, index) => (
-                  <Badge key={`framework-${draft.id}-${index}`} variant="info">
-                    {String(mapping.framework || 'Framework')}
-                  </Badge>
-                ))}
-                {draft.mapped_standards_json?.map((mapping, index) => (
-                  <Badge key={`standard-${draft.id}-${index}`} variant="secondary">
-                    {String(mapping.clause_number || mapping.standard || 'ISO')}
-                  </Badge>
-                ))}
+              <div className="space-y-3">
+                {draft.mapped_frameworks_json && draft.mapped_frameworks_json.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                      Frameworks &amp; schemes
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {draft.mapped_frameworks_json.map((mapping, index) => (
+                        <Badge key={`framework-${draft.id}-${index}`} variant="info">
+                          {String(mapping.framework || 'Framework')}
+                          {mapping.confidence != null
+                            ? ` · ${Math.round(Number(mapping.confidence) * 100)}%`
+                            : ''}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {draft.mapped_standards_json && draft.mapped_standards_json.length > 0 ? (
+                  <div className="rounded-lg border border-border bg-surface/40 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-surface/60">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Cross-standard evidence (ISO &amp; clauses)
+                      </p>
+                      <Link
+                        to="/compliance"
+                        className="text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        Open compliance <ExternalLink size={10} />
+                      </Link>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-muted-foreground border-b border-border">
+                            <th className="px-3 py-2 font-medium">Standard / reference</th>
+                            <th className="px-3 py-2 font-medium">Clause</th>
+                            <th className="px-3 py-2 font-medium">Confidence</th>
+                            <th className="px-3 py-2 font-medium">Basis</th>
+                            <th className="px-3 py-2 font-medium w-28"> </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draft.mapped_standards_json.map((mapping, index) => {
+                            const row = mapping as Record<string, unknown>
+                            const label =
+                              String(row.standard || row.clause_number || row.clause || 'Mapping')
+                            const clause =
+                              String(row.clause_number || row.clause || '—')
+                            const conf =
+                              row.confidence != null
+                                ? `${Math.round(Number(row.confidence) * 100)}%`
+                                : '—'
+                            const basis = String(row.basis || '—')
+                            const href = buildComplianceClauseUrl(row)
+                            return (
+                              <tr key={`std-map-${draft.id}-${index}`} className="border-b border-border/80">
+                                <td className="px-3 py-2 text-foreground">{label}</td>
+                                <td className="px-3 py-2 font-mono text-foreground">{clause}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{conf}</td>
+                                <td className="px-3 py-2 text-muted-foreground max-w-[200px] truncate" title={basis}>
+                                  {basis}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <Link
+                                    to={href}
+                                    className="text-primary hover:underline inline-flex items-center gap-0.5"
+                                  >
+                                    View <ExternalLink size={10} />
+                                  </Link>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {(draft.suggested_action_title || draft.suggested_risk_title) && (
@@ -1683,7 +1848,9 @@ function DraftFindingsList({
                             View in Risk Register <ExternalLink size={10} />
                           </Link>
                         ) : (
-                          <span className="text-xs text-rose-500">Created on promotion</span>
+                          <span className="text-xs text-rose-500">
+                            Queued for risk register triage on promotion
+                          </span>
                         )}
                       </div>
                       <p className="mt-1.5 text-sm font-medium text-foreground">

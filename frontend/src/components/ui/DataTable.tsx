@@ -1,6 +1,8 @@
 import * as React from 'react'
 import { cn } from '../../helpers/utils'
 
+export type SortDirection = 'asc' | 'desc'
+
 export interface Column<T> {
   key: string
   header: string
@@ -19,6 +21,8 @@ export interface DataTableProps<T> {
   onRowClick?: (row: T) => void
   loading?: boolean
   stickyHeader?: boolean
+  defaultSortKey?: string
+  defaultSortDirection?: SortDirection
 }
 
 function DataTableInner<T>(
@@ -32,9 +36,40 @@ function DataTableInner<T>(
     onRowClick,
     loading,
     stickyHeader,
+    defaultSortKey,
+    defaultSortDirection = 'asc',
   }: DataTableProps<T>,
   ref: React.ForwardedRef<HTMLTableElement>,
 ) {
+  const [sortKey, setSortKey] = React.useState<string | null>(defaultSortKey ?? null)
+  const [sortDir, setSortDir] = React.useState<SortDirection>(defaultSortDirection)
+
+  const handleSort = React.useCallback((key: string) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        return key
+      }
+      setSortDir('asc')
+      return key
+    })
+  }, [])
+
+  const sortedData = React.useMemo(() => {
+    if (!sortKey) return data
+    const col = columns.find((c) => c.key === sortKey)
+    if (!col?.sortable) return data
+    return [...data].sort((a, b) => {
+      const aVal = (a as Record<string, unknown>)[sortKey]
+      const bVal = (b as Record<string, unknown>)[sortKey]
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return 1
+      if (bVal == null) return -1
+      const cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [data, sortKey, sortDir, columns])
+
   return (
     <div className={cn('relative w-full overflow-auto', className)}>
       <table
@@ -52,11 +87,23 @@ function DataTableInner<T>(
                 key={col.key}
                 className={cn(
                   'h-10 px-3 text-left align-middle font-medium text-muted-foreground',
+                  col.sortable && 'cursor-pointer select-none hover:text-foreground',
                   col.className,
                 )}
                 scope="col"
+                onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                aria-sort={
+                  sortKey === col.key
+                    ? sortDir === 'asc' ? 'ascending' : 'descending'
+                    : col.sortable ? 'none' : undefined
+                }
               >
-                {col.header}
+                <span className="inline-flex items-center gap-1">
+                  {col.header}
+                  {col.sortable && sortKey === col.key && (
+                    <span aria-hidden="true">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                  )}
+                </span>
               </th>
             ))}
           </tr>
@@ -71,7 +118,7 @@ function DataTableInner<T>(
                 Loading…
               </td>
             </tr>
-          ) : data.length === 0 ? (
+          ) : sortedData.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
@@ -81,7 +128,7 @@ function DataTableInner<T>(
               </td>
             </tr>
           ) : (
-            data.map((row) => (
+            sortedData.map((row) => (
               <tr
                 key={keyExtractor(row)}
                 className={cn(
@@ -106,7 +153,7 @@ function DataTableInner<T>(
                   <td key={col.key} className={cn('p-3 align-middle', col.className)}>
                     {col.render
                       ? col.render(row)
-                      : String((row as Record<string, unknown>)[col.key] ?? '')}
+                      : String((row as Record<string, unknown>)[sortKey === col.key ? col.key : col.key] ?? '')}
                   </td>
                 ))}
               </tr>

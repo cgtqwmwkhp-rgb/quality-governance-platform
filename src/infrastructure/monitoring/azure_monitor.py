@@ -82,6 +82,7 @@ _db_pool_usage: UpDownCounter | None = None
 _celery_task_failures: Counter | None = None
 _celery_queue_depth: UpDownCounter | None = None
 _auth_failures: Counter | None = None
+_external_audit_promote: Counter | None = None
 
 
 def setup_telemetry(app: Any = None, service_name: str = "quality-governance-platform") -> None:
@@ -160,7 +161,7 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
     global _auth_login, _auth_logout, _documents_uploaded, _workflows_completed
     global _workflow_completion_time
     global _error_rate_5xx, _cache_miss_rate, _db_pool_usage
-    global _celery_task_failures, _celery_queue_depth, _auth_failures
+    global _celery_task_failures, _celery_queue_depth, _auth_failures, _external_audit_promote
 
     _capa_created = _meter.create_counter("capa.created", description="Number of CAPA actions created")
     _capa_closed = _meter.create_counter("capa.closed", description="Number of CAPA actions closed")
@@ -186,6 +187,10 @@ def setup_telemetry(app: Any = None, service_name: str = "quality-governance-pla
         "celery.queue_depth", description="Current depth of Celery task queue"
     )
     _auth_failures = _meter.create_counter("auth.failures", description="Count of authentication failures")
+    _external_audit_promote = _meter.create_counter(
+        "external_audit_import.promote",
+        description="External audit import promotion attempts by outcome",
+    )
 
     if app:
         FastAPIInstrumentor.instrument_app(app)
@@ -260,6 +265,74 @@ def track_business_event(event_name: str, properties: dict[str, str] | None = No
     track_metric(f"business.{event_name}", 1)
     if properties:
         logger.info("Business event: %s", event_name, extra={"event": event_name, **properties})
+
+
+def record_incident_created() -> None:
+    if _incidents_created:
+        _incidents_created.add(1)
+
+
+def record_incident_resolved() -> None:
+    if _incidents_resolved:
+        _incidents_resolved.add(1)
+
+
+def record_audit_completed() -> None:
+    if _audits_completed:
+        _audits_completed.add(1)
+
+
+def record_risk_created() -> None:
+    if _risks_created:
+        _risks_created.add(1)
+
+
+def record_auth_login() -> None:
+    if _auth_login:
+        _auth_login.add(1)
+
+
+def record_auth_logout() -> None:
+    if _auth_logout:
+        _auth_logout.add(1)
+
+
+def record_auth_failure() -> None:
+    if _auth_failures:
+        _auth_failures.add(1)
+
+
+def record_document_uploaded() -> None:
+    if _documents_uploaded:
+        _documents_uploaded.add(1)
+
+
+def record_workflow_completed(duration_hours: float | None = None) -> None:
+    if _workflows_completed:
+        _workflows_completed.add(1)
+    if duration_hours is not None and _workflow_completion_time:
+        _workflow_completion_time.record(duration_hours)
+
+
+def record_5xx_error() -> None:
+    if _error_rate_5xx:
+        _error_rate_5xx.add(1)
+
+
+def record_external_audit_promote_outcome(outcome: str) -> None:
+    """Record promotion result: completed | partial | all_failed | error."""
+    if _external_audit_promote:
+        _external_audit_promote.add(1, {"outcome": outcome})
+
+
+def record_cache_miss() -> None:
+    if _cache_miss_rate:
+        _cache_miss_rate.add(1)
+
+
+def record_celery_task_failure() -> None:
+    if _celery_task_failures:
+        _celery_task_failures.add(1)
 
 
 def get_tracer() -> "trace.Tracer | None":

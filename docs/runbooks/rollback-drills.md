@@ -23,7 +23,28 @@ This document records the results of production rollback drills, verifying that 
 
 | # | Date | Type | Duration | Result | Notes |
 |---|------|------|----------|--------|-------|
-| — | TBD | PostgreSQL PITR | — | Not yet conducted | Scheduled for Q2 2026; requires coordination with Azure support for production environment |
+| — | Planned: 2026-06-06 | PostgreSQL PITR | — | Not yet conducted | Staging environment, Azure PostgreSQL Flexible Server |
+
+### PITR Drill Plan (2026-06-06)
+
+**Objective**: Verify that Azure PostgreSQL Flexible Server point-in-time restore completes within the 30-minute RTO defined in SLOs.
+
+**Pre-conditions**:
+1. Staging database has at least 48 hours of continuous WAL history
+2. Test data seeded with known row counts per table
+
+**Steps**:
+1. Record current row counts for `incidents`, `audit_runs`, `actions` tables
+2. Insert 5 marker rows (`drill_marker_*`) into staging
+3. Note the timestamp *before* marker insertion (T<sub>restore</sub>)
+4. Trigger PITR via: `az postgres flexible-server restore --resource-group qgp-rg-staging --name psql-qgp-staging --source-server psql-qgp-staging --restore-point-in-time T_restore --target-name psql-qgp-staging-pitr`
+5. Wait for restore to complete; record elapsed time
+6. Connect to restored instance; verify marker rows are absent
+7. Verify original row counts match
+8. Run `/readyz` health check against staging pointed at restored DB
+9. Record results in this file; clean up restored instance
+
+**Success criteria**: Restore completes within 30 minutes; data integrity confirmed; no marker rows present
 
 ---
 

@@ -166,6 +166,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             str(exc),
             traceback.format_exc(),
         )
+        from src.infrastructure.monitoring.azure_monitor import record_5xx_error
+
+        record_5xx_error()
         resp = JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_build_envelope(ErrorCode.INTERNAL_ERROR, "Internal server error", request_id),

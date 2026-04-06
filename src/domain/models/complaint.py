@@ -9,13 +9,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
     AuditTrailMixin,
+    Base,
     CaseInsensitiveEnum,
     DataClassification,
     ReferenceNumberMixin,
     TimestampMixin,
 )
 from src.domain.models.incident import ActionStatus
-from src.infrastructure.database import Base
 
 
 class ComplaintType(str, enum.Enum):
@@ -65,6 +65,15 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         CheckConstraint(
             "source_type IN ('manual', 'email', 'api', 'phone')",
             name="ck_complaint_source_type",
+        ),
+        CheckConstraint(
+            "priority IN ('critical', 'high', 'medium', 'low')",
+            name="ck_complaints_priority",
+        ),
+        CheckConstraint(
+            "status IN ('received', 'acknowledged', 'under_investigation', "
+            "'pending_response', 'awaiting_customer', 'resolved', 'closed', 'escalated')",
+            name="ck_complaints_status",
         ),
     )
 
@@ -137,6 +146,9 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     reporter_submission: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
     )  # Immutable snapshot of reporter-entered intake data
+
+    # GDPR Art. 18 — restriction of processing
+    processing_restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Closure
     closed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

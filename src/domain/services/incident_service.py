@@ -13,8 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.incident import Incident, IncidentStatus
 from src.domain.services.audit_service import record_audit_event
@@ -129,9 +129,13 @@ class IncidentService:
 
         await self.db.flush()
         await self.db.refresh(incident)
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
         track_business_event("incident_created", {"severity": data.get("severity", "unknown")})
+        from src.infrastructure.monitoring.azure_monitor import record_incident_created
+
+        record_incident_created()
 
         return incident
 
@@ -161,7 +165,7 @@ class IncidentService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         reporter_email: Optional[str] = None,
         skip_tenant_check: bool = False,
     ):
@@ -220,9 +224,15 @@ class IncidentService:
             request_id=request_id,
         )
 
+        if "status" in raw_update and raw_update["status"] == IncidentStatus.CLOSED.value:
+            from src.infrastructure.monitoring.azure_monitor import record_incident_resolved
+
+            record_incident_resolved()
+
         await self.db.flush()
         await self.db.refresh(incident)
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
         return incident
 
@@ -259,7 +269,8 @@ class IncidentService:
 
         await self.db.delete(incident)
         await self.db.flush()
-        await invalidate_tenant_cache(tenant_id, "incidents")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "incidents")
 
     async def check_reporter_email_access(
         self,

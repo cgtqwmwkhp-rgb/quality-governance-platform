@@ -644,7 +644,7 @@ class KRIService:
         result = await self.db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.is_active == True))
         kris = result.scalars().all()
 
-        summary = {
+        summary: Dict[str, Any] = {
             "total": len(kris),
             "by_status": {
                 "green": 0,

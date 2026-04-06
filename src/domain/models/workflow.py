@@ -13,10 +13,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 
 class WorkflowStatus(str, Enum):
@@ -56,6 +56,7 @@ class WorkflowTemplate(Base):
     """Reusable workflow definition template"""
 
     __tablename__ = "workflow_templates"
+    __table_args__ = (CheckConstraint("version >= 1", name="ck_workflow_templates_version_positive"),)
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

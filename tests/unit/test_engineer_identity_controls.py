@@ -2,10 +2,10 @@ import types
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from fastapi import HTTPException
 
 from src.api.routes.engineers import create_engineer, update_engineer
 from src.api.schemas.engineer import EngineerCreate, EngineerUpdate
+from src.domain.exceptions import BadRequestError, ConflictError
 
 
 class _FakeResult:
@@ -28,11 +28,12 @@ async def test_create_engineer_rejects_user_from_other_tenant():
     manager = types.SimpleNamespace(id=7, tenant_id=1, is_superuser=False, roles=[types.SimpleNamespace(name="admin")])
     payload = EngineerCreate(user_id=55)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(BadRequestError) as exc_info:
         await create_engineer(payload, db, manager)
 
-    assert exc.value.status_code == 400
-    assert exc.value.detail["code"] == "TENANT_ACCESS_DENIED"
+    assert exc_info.value.http_status == 400
+    assert exc_info.value.code == "BAD_REQUEST"
+    assert exc_info.value.message == "Assigned user is not in tenant scope"
     db.add.assert_not_called()
     db.commit.assert_not_awaited()
 
@@ -49,12 +50,12 @@ async def test_create_engineer_rejects_duplicate_profile_for_user():
     manager = types.SimpleNamespace(id=7, tenant_id=1, is_superuser=False, roles=[types.SimpleNamespace(name="admin")])
     payload = EngineerCreate(user_id=55)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ConflictError) as exc_info:
         await create_engineer(payload, db, manager)
 
-    assert exc.value.status_code == 409
-    assert exc.value.detail["code"] == "DUPLICATE_ENTITY"
-    assert exc.value.detail["details"]["engineer_id"] == 101
+    assert exc_info.value.http_status == 409
+    assert exc_info.value.code == "DUPLICATE_ENTITY"
+    assert exc_info.value.details["engineer_id"] == 101
     db.add.assert_not_called()
 
 
@@ -70,11 +71,12 @@ async def test_create_engineer_rejects_null_tenant_user_for_tenant_scoped_manage
     manager = types.SimpleNamespace(id=7, tenant_id=1, is_superuser=False, roles=[types.SimpleNamespace(name="admin")])
     payload = EngineerCreate(user_id=55)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(BadRequestError) as exc_info:
         await create_engineer(payload, db, manager)
 
-    assert exc.value.status_code == 400
-    assert exc.value.detail["code"] == "TENANT_ACCESS_DENIED"
+    assert exc_info.value.http_status == 400
+    assert exc_info.value.code == "BAD_REQUEST"
+    assert exc_info.value.message == "Assigned user is not in tenant scope"
     db.add.assert_not_called()
 
 
@@ -88,9 +90,10 @@ async def test_update_engineer_rejects_user_reassignment():
     )
     manager = types.SimpleNamespace(id=7, tenant_id=1, is_superuser=False, roles=[types.SimpleNamespace(name="admin")])
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(BadRequestError) as exc_info:
         await update_engineer(10, EngineerUpdate(user_id=99), db, manager)
 
-    assert exc.value.status_code == 400
-    assert exc.value.detail["code"] == "VALIDATION_ERROR"
+    assert exc_info.value.http_status == 400
+    assert exc_info.value.code == "BAD_REQUEST"
+    assert exc_info.value.message == "Engineer user assignment cannot be changed via update"
     db.commit.assert_not_awaited()

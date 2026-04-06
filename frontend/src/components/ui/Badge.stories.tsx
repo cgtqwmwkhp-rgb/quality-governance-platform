@@ -1,27 +1,25 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { Badge } from './Badge'
+import type { Meta, StoryObj } from "@storybook/react";
+import { Badge } from "./Badge";
 
 const meta: Meta<typeof Badge> = {
-  title: 'UI/Badge',
+  title: "UI/Badge",
   component: Badge,
-  tags: ['autodocs'],
-}
-
-export default meta
-type Story = StoryObj<typeof Badge>
+};
+export default meta;
+type Story = StoryObj<typeof Badge>;
 
 export const Default: Story = {
-  args: { children: 'Default' },
-}
+  args: { children: "Default" },
+};
 
-export const Success: Story = {
-  args: { variant: 'success', children: 'Success' },
-}
+export const Secondary: Story = {
+  args: { variant: "secondary", children: "Secondary" },
+};
 
-export const Warning: Story = {
-  args: { variant: 'warning', children: 'Warning' },
-}
+export const Destructive: Story = {
+  args: { variant: "destructive", children: "Destructive" },
+};
 
-export const Error: Story = {
-  args: { variant: 'destructive', children: 'Error' },
-}
+export const Outline: Story = {
+  args: { variant: "outline", children: "Outline" },
+};

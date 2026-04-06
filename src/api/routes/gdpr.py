@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.domain.exceptions import NotFoundError
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.services.gdpr_service import GDPRService
 
 router = APIRouter(prefix="/gdpr", tags=["GDPR"])
@@ -22,17 +22,14 @@ async def export_user_data(
     exported without side-effects.
     """
     service = GDPRService(db, dry_run=dry_run)
-    try:
-        data = await service.export_user_data(current_user.id, current_user.tenant_id or 0)
-        if dry_run:
-            return {
-                "dry_run": True,
-                "message": "Preview of data that would be exported",
-                "data": data,
-            }
-        return data
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    data = await service.export_user_data(current_user.id, current_user.tenant_id or 0)
+    if dry_run:
+        return {
+            "dry_run": True,
+            "message": "Preview of data that would be exported",
+            "data": data,
+        }
+    return data
 
 
 @router.post("/me/data-erasure")
@@ -51,17 +48,11 @@ async def request_data_erasure(
     To actually erase data, set both dry_run=false AND confirm=true.
     """
     if not dry_run and not confirm:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirmation required. Set 'confirm=true' to proceed with data erasure.",
-        )
+        raise BadRequestError("Confirmation required. Set 'confirm=true' to proceed with data erasure.")
 
     service = GDPRService(db, dry_run=dry_run)
-    try:
-        result = await service.request_erasure(current_user.id, current_user.tenant_id or 0, reason)
-        return result
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    result = await service.request_erasure(current_user.id, current_user.tenant_id or 0, reason)
+    return result
 
 
 @router.get("/me/data-erasure/status")
@@ -81,7 +72,7 @@ async def get_erasure_status(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise NotFoundError("User not found")
 
     import re
 

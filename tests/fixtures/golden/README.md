@@ -23,6 +23,9 @@ ensure deterministic, reproducible test results across all environments.
 | `audit.json` | Audit Run + Findings | Audit run with findings, corrective actions, risk links |
 | `capa.json` | CAPA Action | Corrective action with source linkage |
 | `complaint.json` | Complaint | Complaint with categorization and SLA timestamps |
+| `action.json` | CAPA Action (full) | Fully-populated corrective action with root cause, verification, ISO clause |
+| `workflow.json` | Workflow Instance | Approval workflow with three sequential steps and SLA tracking |
+| `tenant.json` | Tenant | Multi-tenant org with branding, feature flags, settings, and limits |
 
 ## Usage
 

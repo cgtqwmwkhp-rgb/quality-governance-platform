@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
     Document,
     DocumentAnnotation,
@@ -188,7 +189,7 @@ async def _get_document_or_404(
     result = await db.execute(query)
     document = result.scalar_one_or_none()
     if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise NotFoundError("Document not found")
     return document
 
 
@@ -328,10 +329,7 @@ async def upload_document(
     try:
         file_type = FileType(file_ext)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}",
-        )
+        raise BadRequestError(f"Unsupported file type: {file_ext}. Supported: {[f.value for f in FileType]}")
 
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
@@ -421,6 +419,7 @@ async def upload_document(
 # =============================================================================
 
 
+@router.get("", response_model=DocumentListResponse, include_in_schema=False)
 @router.get("/", response_model=DocumentListResponse)
 async def list_documents(
     db: DbSession,

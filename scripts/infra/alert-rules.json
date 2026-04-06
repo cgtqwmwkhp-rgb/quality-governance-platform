@@ -1,0 +1,207 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0",
+  "parameters": {
+    "appInsightsResourceId": {
+      "type": "string",
+      "metadata": { "description": "Resource ID of the Application Insights instance" }
+    },
+    "appServiceResourceId": {
+      "type": "string",
+      "metadata": { "description": "Resource ID of the Azure App Service" }
+    },
+    "actionGroupId": {
+      "type": "string",
+      "metadata": { "description": "Resource ID of the action group for notifications" }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/metricAlerts",
+      "apiVersion": "2018-03-01",
+      "name": "alert-healthcheck-failure",
+      "location": "global",
+      "properties": {
+        "description": "Fires when /healthz returns non-200 for 5 minutes",
+        "severity": 0,
+        "enabled": true,
+        "scopes": ["[parameters('appServiceResourceId')]"],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "odata.type": "Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria",
+          "allOf": [
+            {
+              "name": "HealthCheckFailure",
+              "metricName": "HealthCheckStatus",
+              "operator": "LessThan",
+              "threshold": 1,
+              "timeAggregation": "Average"
+            }
+          ]
+        },
+        "actions": [{ "actionGroupId": "[parameters('actionGroupId')]" }]
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-api-p95-latency",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "API CRUD p95 > 200ms sustained 15 min",
+        "severity": 2,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "customMetrics | where name == 'api.response_time_ms' | summarize p95=percentile(value, 95) by bin(timestamp, 5m) | where p95 > 200",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 2,
+              "failingPeriods": { "numberOfEvaluationPeriods": 3, "minFailingPeriodsToAlert": 3 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-api-p99-latency",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "API CRUD p99 > 500ms sustained 15 min — critical",
+        "severity": 1,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "customMetrics | where name == 'api.response_time_ms' | summarize p99=percentile(value, 99) by bin(timestamp, 5m) | where p99 > 500",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 2,
+              "failingPeriods": { "numberOfEvaluationPeriods": 3, "minFailingPeriodsToAlert": 3 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-error-rate",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "Error rate > 1% in 5 min window",
+        "severity": 2,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT1M",
+        "windowSize": "PT5M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "requests | summarize total=count(), errors=countif(success == false) | extend errorRate=todouble(errors)/todouble(total)*100 | where errorRate > 1",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "failingPeriods": { "numberOfEvaluationPeriods": 1, "minFailingPeriodsToAlert": 1 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-db-pool-exhaustion",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "Database connection pool > 80%",
+        "severity": 2,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "customMetrics | where name == 'db.pool_usage_percent' | summarize avg_pool=avg(value) by bin(timestamp, 5m) | where avg_pool > 80",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 2,
+              "failingPeriods": { "numberOfEvaluationPeriods": 3, "minFailingPeriodsToAlert": 2 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-db-query-latency",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "DB indexed query p95 > 50ms sustained 15 min",
+        "severity": 3,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT15M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "customMetrics | where name == 'db.query_time_ms' | summarize p95=percentile(value, 95) by bin(timestamp, 5m) | where p95 > 50",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 2,
+              "failingPeriods": { "numberOfEvaluationPeriods": 3, "minFailingPeriodsToAlert": 3 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2023-03-15-preview",
+      "name": "alert-throughput-drop",
+      "location": "[parameters('location')]",
+      "properties": {
+        "description": "Request throughput < 10 req/s for 10 min during business hours",
+        "severity": 3,
+        "enabled": true,
+        "scopes": ["[parameters('appInsightsResourceId')]"],
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT10M",
+        "criteria": {
+          "allOf": [
+            {
+              "query": "requests | where timestamp > ago(10m) | summarize throughput=count()/600.0 | where throughput < 10",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0,
+              "failingPeriods": { "numberOfEvaluationPeriods": 1, "minFailingPeriodsToAlert": 1 }
+            }
+          ]
+        },
+        "actions": { "actionGroups": ["[parameters('actionGroupId')]"] }
+      }
+    }
+  ]
+}

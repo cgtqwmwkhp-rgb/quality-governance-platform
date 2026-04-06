@@ -14,8 +14,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.models.evidence_asset import (
     EvidenceAsset,
     EvidenceAssetType,
@@ -211,7 +211,12 @@ class EvidenceService:
         self.db.add(evidence_asset)
         await self.db.commit()
         await self.db.refresh(evidence_asset)
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+
+        from src.infrastructure.monitoring.azure_monitor import record_document_uploaded
+
+        record_document_uploaded()
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
         track_metric("evidence.uploaded", 1)
 
@@ -225,7 +230,7 @@ class EvidenceService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         source_module: str | None = None,
         source_id: int | None = None,
         asset_type: str | None = None,
@@ -312,7 +317,8 @@ class EvidenceService:
 
         await self.db.commit()
         await self.db.refresh(asset)
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
 
         return asset
@@ -339,7 +345,8 @@ class EvidenceService:
         asset.updated_by_id = user_id
 
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "evidence_assets")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "evidence_assets")
         track_metric("evidence.mutation", 1)
 
     # ------------------------------------------------------------------

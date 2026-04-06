@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
@@ -34,6 +34,7 @@ from src.api.schemas.form_config import (
     SystemSettingResponse,
     SystemSettingUpdate,
 )
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
 from src.domain.services.audit_service import record_audit_event
 
@@ -53,7 +54,7 @@ async def list_form_templates(
     page_size: int = Query(20, ge=1, le=100),
 ) -> FormTemplateListResponse:
     """List all form templates with pagination."""
-    query = select(FormTemplate)
+    query = select(FormTemplate).where(FormTemplate.tenant_id == current_user.tenant_id)
 
     if form_type:
         query = query.where(FormTemplate.form_type == form_type)
@@ -89,13 +90,15 @@ async def create_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Create a new form template."""
-    # Check for duplicate slug
-    existing = await db.execute(select(FormTemplate).where(FormTemplate.slug == data.slug))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Form template with slug '{data.slug}' already exists",
+    # Check for duplicate slug within tenant
+    existing = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.slug == data.slug,
+            FormTemplate.tenant_id == current_user.tenant_id,
         )
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictError(f"Form template with slug '{data.slug}' already exists")
 
     template = FormTemplate(
         name=data.name,
@@ -112,6 +115,7 @@ async def create_form_template(
         notify_on_submit=data.notify_on_submit,
         notification_emails=data.notification_emails,
         workflow_id=data.workflow_id,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -129,11 +133,11 @@ async def create_form_template(
                 order=step_order,
                 icon=step_data.icon,
                 show_condition=step_data.show_condition,
+                tenant_id=current_user.tenant_id,
             )
             db.add(step)
             await db.flush()
 
-            # Create fields if provided
             if step_data.fields:
                 for field_order, field_data in enumerate(step_data.fields):
                     field = FormField(
@@ -154,6 +158,7 @@ async def create_form_template(
                         options=field_data.options,
                         show_condition=field_data.show_condition,
                         width=field_data.width,
+                        tenant_id=current_user.tenant_id,
                     )
                     db.add(field)
 
@@ -180,14 +185,16 @@ async def get_form_template(
     current_user: CurrentUser,
 ) -> FormTemplate:
     """Get a form template by ID."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.id == template_id,
+            FormTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     return template
 
@@ -196,21 +203,20 @@ async def get_form_template(
 async def get_form_template_by_slug(
     slug: str,
     db: DbSession,
+    current_user: CurrentUser,
 ) -> FormTemplate:
-    """Get a form template by slug (public endpoint for portal)."""
+    """Get a form template by slug."""
     result = await db.execute(
         select(FormTemplate)
         .where(FormTemplate.slug == slug)
+        .where(FormTemplate.tenant_id == current_user.tenant_id)
         .where(FormTemplate.is_active == True)
         .where(FormTemplate.is_published == True)
     )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template '{slug}' not found or not published",
-        )
+        raise NotFoundError(f"Form template '{slug}' not found or not published")
 
     return template
 
@@ -224,14 +230,16 @@ async def update_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Update a form template."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.id == template_id,
+            FormTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     # Update fields
     update_data = data.model_dump(exclude_unset=True)
@@ -265,14 +273,16 @@ async def publish_form_template(
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.id == template_id,
+            FormTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     template.is_published = True
     template.published_at = datetime.now(timezone.utc)
@@ -302,14 +312,16 @@ async def delete_form_template(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.id == template_id,
+            FormTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     await record_audit_event(
         db=db,
@@ -340,15 +352,16 @@ async def create_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Create a new step in a form template."""
-    # Verify template exists
-    result = await db.execute(select(FormTemplate).where(FormTemplate.id == template_id))
+    result = await db.execute(
+        select(FormTemplate).where(
+            FormTemplate.id == template_id,
+            FormTemplate.tenant_id == current_user.tenant_id,
+        )
+    )
     template = result.scalar_one_or_none()
 
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form template {template_id} not found",
-        )
+        raise NotFoundError(f"Form template {template_id} not found")
 
     step = FormStep(
         template_id=template_id,
@@ -357,6 +370,7 @@ async def create_form_step(
         order=data.order,
         icon=data.icon,
         show_condition=data.show_condition,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(step)
@@ -376,6 +390,7 @@ async def create_form_step(
                 is_required=field_data.is_required,
                 options=field_data.options,
                 width=field_data.width,
+                tenant_id=current_user.tenant_id,
             )
             db.add(field)
 
@@ -393,14 +408,16 @@ async def update_form_step(
     current_user: CurrentUser,
 ) -> FormStep:
     """Update a form step."""
-    result = await db.execute(select(FormStep).where(FormStep.id == step_id))
+    result = await db.execute(
+        select(FormStep).where(
+            FormStep.id == step_id,
+            FormStep.tenant_id == current_user.tenant_id,
+        )
+    )
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -419,14 +436,16 @@ async def delete_form_step(
     current_user: CurrentUser,
 ) -> None:
     """Delete a form step."""
-    result = await db.execute(select(FormStep).where(FormStep.id == step_id))
+    result = await db.execute(
+        select(FormStep).where(
+            FormStep.id == step_id,
+            FormStep.tenant_id == current_user.tenant_id,
+        )
+    )
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     await db.delete(step)
     await db.commit()
@@ -447,15 +466,16 @@ async def create_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Create a new field in a form step."""
-    # Verify step exists
-    result = await db.execute(select(FormStep).where(FormStep.id == step_id))
+    result = await db.execute(
+        select(FormStep).where(
+            FormStep.id == step_id,
+            FormStep.tenant_id == current_user.tenant_id,
+        )
+    )
     step = result.scalar_one_or_none()
 
     if not step:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form step {step_id} not found",
-        )
+        raise NotFoundError(f"Form step {step_id} not found")
 
     field = FormField(
         step_id=step_id,
@@ -475,6 +495,7 @@ async def create_form_field(
         options=data.options,
         show_condition=data.show_condition,
         width=data.width,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(field)
@@ -492,14 +513,16 @@ async def update_form_field(
     current_user: CurrentUser,
 ) -> FormField:
     """Update a form field."""
-    result = await db.execute(select(FormField).where(FormField.id == field_id))
+    result = await db.execute(
+        select(FormField).where(
+            FormField.id == field_id,
+            FormField.tenant_id == current_user.tenant_id,
+        )
+    )
     field = result.scalar_one_or_none()
 
     if not field:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form field {field_id} not found",
-        )
+        raise NotFoundError(f"Form field {field_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for attr, value in update_data.items():
@@ -518,14 +541,16 @@ async def delete_form_field(
     current_user: CurrentUser,
 ) -> None:
     """Delete a form field."""
-    result = await db.execute(select(FormField).where(FormField.id == field_id))
+    result = await db.execute(
+        select(FormField).where(
+            FormField.id == field_id,
+            FormField.tenant_id == current_user.tenant_id,
+        )
+    )
     field = result.scalar_one_or_none()
 
     if not field:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Form field {field_id} not found",
-        )
+        raise NotFoundError(f"Form field {field_id} not found")
 
     await db.delete(field)
     await db.commit()
@@ -537,10 +562,11 @@ async def delete_form_field(
 @router.get("/contracts", response_model=ContractListResponse)
 async def list_contracts(
     db: DbSession,
+    current_user: CurrentUser,
     is_active: Optional[bool] = Query(None),
 ) -> ContractListResponse:
     """List all contracts."""
-    query = select(Contract)
+    query = select(Contract).where(Contract.tenant_id == current_user.tenant_id)
 
     if is_active is not None:
         query = query.where(Contract.is_active == is_active)
@@ -563,13 +589,14 @@ async def create_contract(
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Create a new contract."""
-    # Check for duplicate code
-    existing = await db.execute(select(Contract).where(Contract.code == data.code))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Contract with code '{data.code}' already exists",
+    existing = await db.execute(
+        select(Contract).where(
+            Contract.code == data.code,
+            Contract.tenant_id == current_user.tenant_id,
         )
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictError(f"Contract with code '{data.code}' already exists")
 
     contract = Contract(
         name=data.name,
@@ -582,6 +609,7 @@ async def create_contract(
         start_date=data.start_date,
         end_date=data.end_date,
         display_order=data.display_order,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -610,14 +638,16 @@ async def get_contract(
     current_user: CurrentUser,
 ) -> Contract:
     """Get a contract by ID."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    result = await db.execute(
+        select(Contract).where(
+            Contract.id == contract_id,
+            Contract.tenant_id == current_user.tenant_id,
+        )
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     return contract
 
@@ -631,14 +661,16 @@ async def update_contract(
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Update a contract."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    result = await db.execute(
+        select(Contract).where(
+            Contract.id == contract_id,
+            Contract.tenant_id == current_user.tenant_id,
+        )
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -670,14 +702,16 @@ async def delete_contract(
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a contract."""
-    result = await db.execute(select(Contract).where(Contract.id == contract_id))
+    result = await db.execute(
+        select(Contract).where(
+            Contract.id == contract_id,
+            Contract.tenant_id == current_user.tenant_id,
+        )
+    )
     contract = result.scalar_one_or_none()
 
     if not contract:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Contract {contract_id} not found",
-        )
+        raise NotFoundError(f"Contract {contract_id} not found")
 
     await record_audit_event(
         db=db,
@@ -703,7 +737,7 @@ async def list_system_settings(
     category: Optional[str] = Query(None),
 ) -> SystemSettingListResponse:
     """List all system settings."""
-    query = select(SystemSetting)
+    query = select(SystemSetting).where(SystemSetting.tenant_id == current_user.tenant_id)
 
     if category:
         query = query.where(SystemSetting.category == category)
@@ -729,13 +763,14 @@ async def create_system_setting(
     current_user: CurrentUser,
 ) -> SystemSetting:
     """Create a new system setting."""
-    # Check for duplicate key
-    existing = await db.execute(select(SystemSetting).where(SystemSetting.key == data.key))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Setting with key '{data.key}' already exists",
+    existing = await db.execute(
+        select(SystemSetting).where(
+            SystemSetting.key == data.key,
+            SystemSetting.tenant_id == current_user.tenant_id,
         )
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictError(f"Setting with key '{data.key}' already exists")
 
     setting = SystemSetting(
         key=data.key,
@@ -745,6 +780,7 @@ async def create_system_setting(
         value_type=data.value_type,
         is_public=data.is_public,
         is_editable=data.is_editable,
+        tenant_id=current_user.tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
@@ -764,20 +800,19 @@ async def update_system_setting(
     current_user: CurrentUser,
 ) -> SystemSetting:
     """Update a system setting by key."""
-    result = await db.execute(select(SystemSetting).where(SystemSetting.key == key))
+    result = await db.execute(
+        select(SystemSetting).where(
+            SystemSetting.key == key,
+            SystemSetting.tenant_id == current_user.tenant_id,
+        )
+    )
     setting = result.scalar_one_or_none()
 
     if not setting:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Setting '{key}' not found",
-        )
+        raise NotFoundError(f"Setting '{key}' not found")
 
     if not setting.is_editable:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Setting '{key}' is not editable",
-        )
+        raise AuthorizationError(f"Setting '{key}' is not editable")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -798,10 +833,14 @@ async def update_system_setting(
 async def list_lookup_options(
     category: str,
     db: DbSession,
+    current_user: CurrentUser,
     is_active: Optional[bool] = Query(True),
 ) -> LookupOptionListResponse:
     """List lookup options by category."""
-    query = select(LookupOption).where(LookupOption.category == category)
+    query = select(LookupOption).where(
+        LookupOption.category == category,
+        LookupOption.tenant_id == current_user.tenant_id,
+    )
 
     if is_active is not None:
         query = query.where(LookupOption.is_active == is_active)
@@ -840,6 +879,7 @@ async def create_lookup_option(
         is_active=data.is_active,
         display_order=data.display_order,
         parent_id=data.parent_id,
+        tenant_id=current_user.tenant_id,
     )
 
     db.add(option)
@@ -859,15 +899,16 @@ async def update_lookup_option(
 ) -> LookupOption:
     """Update a lookup option."""
     result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+        select(LookupOption).where(
+            LookupOption.id == option_id,
+            LookupOption.category == category,
+            LookupOption.tenant_id == current_user.tenant_id,
+        )
     )
     option = result.scalar_one_or_none()
 
     if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
-        )
+        raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -888,15 +929,16 @@ async def delete_lookup_option(
 ) -> None:
     """Delete a lookup option."""
     result = await db.execute(
-        select(LookupOption).where(LookupOption.id == option_id).where(LookupOption.category == category)
+        select(LookupOption).where(
+            LookupOption.id == option_id,
+            LookupOption.category == category,
+            LookupOption.tenant_id == current_user.tenant_id,
+        )
     )
     option = result.scalar_one_or_none()
 
     if not option:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Lookup option {option_id} not found in category '{category}'",
-        )
+        raise NotFoundError(f"Lookup option {option_id} not found in category '{category}'")
 
     await db.delete(option)
     await db.commit()

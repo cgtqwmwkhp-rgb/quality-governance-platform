@@ -15,14 +15,22 @@ from src.api.schemas.incident import IncidentCreate, IncidentListResponse, Incid
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
+from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.incident_service import IncidentService
+from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.post(
+    "",
+    response_model=IncidentResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
 @router.post(
     "/",
     response_model=IncidentResponse,
@@ -50,17 +58,12 @@ async def create_incident(
             has_set_ref_permission=has_set_ref,
             request_id=request_id,
         )
+        track_metric("incidents.created")
         return incident
     except PermissionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=api_error(ErrorCode.PERMISSION_DENIED, str(e)),
-        )
+        raise AuthorizationError(str(e))
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=api_error(ErrorCode.DUPLICATE_ENTITY, str(e)),
-        )
+        raise ConflictError(str(e))
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)
@@ -82,12 +85,10 @@ async def get_incident(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
 
+@router.get("", response_model=IncidentListResponse, include_in_schema=False)
 @router.get("/", response_model=IncidentListResponse)
 async def list_incidents(
     db: DbSession,
@@ -114,13 +115,7 @@ async def list_incidents(
         is_superuser = getattr(current_user, "is_superuser", False)
 
         if not await svc.check_reporter_email_access(reporter_email, user_email, has_view_all, is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=api_error(
-                    ErrorCode.PERMISSION_DENIED,
-                    "You can only view your own incidents",
-                ),
-            )
+            raise AuthorizationError("You can only view your own incidents")
 
         await record_audit_event(
             db=db,
@@ -215,10 +210,7 @@ async def list_incident_investigations(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
     count_query = (
         select(sa_func.count())
@@ -226,6 +218,7 @@ async def list_incident_investigations(
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
+            InvestigationRun.tenant_id == current_user.tenant_id,
         )
     )
     total_result = await db.execute(count_query)
@@ -240,6 +233,7 @@ async def list_incident_investigations(
         .where(
             InvestigationRun.assigned_entity_type == AssignedEntityType.REPORTING_INCIDENT,
             InvestigationRun.assigned_entity_id == incident_id,
+            InvestigationRun.tenant_id == current_user.tenant_id,
         )
         .order_by(InvestigationRun.created_at.desc(), InvestigationRun.id.asc())
         .offset((page - 1) * page_size)
@@ -272,10 +266,7 @@ async def list_incident_running_sheet_entries(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
     query = select(IncidentRunningSheetEntry).where(IncidentRunningSheetEntry.incident_id == incident_id)
     if incident.tenant_id is None:
@@ -310,10 +301,7 @@ async def add_incident_running_sheet_entry(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
     entry = IncidentRunningSheetEntry(
         tenant_id=incident.tenant_id,
@@ -360,10 +348,7 @@ async def delete_incident_running_sheet_entry(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
     result = await db.execute(
         select(IncidentRunningSheetEntry).where(
@@ -374,10 +359,7 @@ async def delete_incident_running_sheet_entry(
     )
     entry = result.scalar_one_or_none()
     if entry is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Runner-sheet entry not found"),
-        )
+        raise NotFoundError("Runner-sheet entry not found")
 
     assert_can_delete_runner_sheet_entry(current_user, entry.author_id, "incident")
 
@@ -422,10 +404,7 @@ async def update_incident(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")
 
 
 @router.delete("/{incident_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -450,7 +429,4 @@ async def delete_incident(
             skip_tenant_check=current_user.is_superuser,
         )
     except LookupError:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, f"Incident {incident_id} not found"),
-        )
+        raise NotFoundError(f"Incident {incident_id} not found")

@@ -7,7 +7,7 @@ and risk score tracking.
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import and_, func, select
 
 from src.api.deps import CurrentUser, DbSession
@@ -26,6 +26,7 @@ from src.api.schemas.kri import (
     SIFAssessmentCreate,
     SIFAssessmentResponse,
 )
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.services.risk_scoring import KRIService, RiskScoringService
@@ -47,7 +48,7 @@ async def list_kris(
     status: Optional[str] = Query(None, description="Filter by current status"),
 ):
     """List all KRIs with optional filtering."""
-    query = select(KeyRiskIndicator)
+    query = select(KeyRiskIndicator).where(KeyRiskIndicator.tenant_id == current_user.tenant_id)
 
     filters = []
     if category:
@@ -79,9 +80,14 @@ async def create_kri(
 ):
     """Create a new KRI."""
     # Check for duplicate code
-    existing = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.code == kri_data.code))
+    existing = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.code == kri_data.code,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="KRI code already exists")
+        raise BadRequestError("KRI code already exists")
 
     kri = KeyRiskIndicator(
         **kri_data.dict(),
@@ -128,11 +134,16 @@ async def get_kri(
     current_user: CurrentUser,
 ):
     """Get a specific KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     return KRIResponse.from_orm(kri)
 
@@ -145,11 +156,16 @@ async def update_kri(
     current_user: CurrentUser,
 ):
     """Update a KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     update_data = kri_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -170,11 +186,16 @@ async def delete_kri(
     current_user: CurrentUser,
 ):
     """Delete a KRI."""
-    result = await db.execute(select(KeyRiskIndicator).where(KeyRiskIndicator.id == kri_id))
+    result = await db.execute(
+        select(KeyRiskIndicator).where(
+            KeyRiskIndicator.id == kri_id,
+            KeyRiskIndicator.tenant_id == current_user.tenant_id,
+        )
+    )
     kri = result.scalar_one_or_none()
 
     if not kri:
-        raise HTTPException(status_code=404, detail="KRI not found")
+        raise NotFoundError("KRI not found")
 
     await db.delete(kri)
     await db.commit()
@@ -191,7 +212,7 @@ async def calculate_kri(
     result = await kri_service.calculate_kri(kri_id)
 
     if not result:
-        raise HTTPException(status_code=400, detail="Could not calculate KRI")
+        raise BadRequestError("Could not calculate KRI")
 
     return result
 
@@ -211,7 +232,10 @@ async def get_kri_measurements(
     """Get measurement history for a KRI."""
     result = await db.execute(
         select(KRIMeasurement)
-        .where(KRIMeasurement.kri_id == kri_id)
+        .where(
+            KRIMeasurement.kri_id == kri_id,
+            KRIMeasurement.tenant_id == current_user.tenant_id,
+        )
         .order_by(KRIMeasurement.measurement_date.desc())
         .limit(limit)
     )
@@ -238,9 +262,10 @@ async def get_pending_alerts(
         select(KRIAlert)
         .where(
             and_(
-                KRIAlert.is_acknowledged == False,
-                KRIAlert.is_resolved == False,
-            )
+                KRIAlert.tenant_id == current_user.tenant_id,
+                KRIAlert.is_acknowledged == False,  # noqa: E712
+                KRIAlert.is_resolved == False,  # noqa: E712
+            ),
         )
         .order_by(KRIAlert.triggered_at.desc())
     )
@@ -260,11 +285,16 @@ async def acknowledge_alert(
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
-    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    result = await db.execute(
+        select(KRIAlert).where(
+            KRIAlert.id == alert_id,
+            KRIAlert.tenant_id == current_user.tenant_id,
+        )
+    )
     alert = result.scalar_one_or_none()
 
     if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise NotFoundError("Alert not found")
 
     alert.is_acknowledged = True
     alert.acknowledged_at = datetime.now(timezone.utc)
@@ -284,11 +314,16 @@ async def resolve_alert(
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
-    result = await db.execute(select(KRIAlert).where(KRIAlert.id == alert_id))
+    result = await db.execute(
+        select(KRIAlert).where(
+            KRIAlert.id == alert_id,
+            KRIAlert.tenant_id == current_user.tenant_id,
+        )
+    )
     alert = result.scalar_one_or_none()
 
     if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+        raise NotFoundError("Alert not found")
 
     alert.is_resolved = True
     alert.resolved_at = datetime.now(timezone.utc)
@@ -335,11 +370,16 @@ async def assess_incident_sif(
     current_user: CurrentUser,
 ):
     """Assess an incident for SIF/pSIF classification."""
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    result = await db.execute(
+        select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == current_user.tenant_id,
+        )
+    )
     incident = result.scalar_one_or_none()
 
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     # Update SIF fields
     incident.is_sif = assessment.is_sif
@@ -381,14 +421,19 @@ async def get_incident_sif_assessment(
     current_user: CurrentUser,
 ):
     """Get SIF assessment for an incident."""
-    result = await db.execute(select(Incident).where(Incident.id == incident_id))
+    result = await db.execute(
+        select(Incident).where(
+            Incident.id == incident_id,
+            Incident.tenant_id == current_user.tenant_id,
+        )
+    )
     incident = result.scalar_one_or_none()
 
     if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+        raise NotFoundError("Incident not found")
 
     if not incident.sif_classification:
-        raise HTTPException(status_code=404, detail="No SIF assessment found for this incident")
+        raise NotFoundError("No SIF assessment found for this incident")
 
     return SIFAssessmentResponse(
         incident_id=incident.id,

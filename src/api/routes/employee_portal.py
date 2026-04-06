@@ -21,6 +21,7 @@ from src.api.dependencies import CurrentUser, DbSession, OptionalCurrentUser
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.core.config import settings
+from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintPriority, ComplaintStatus, ComplaintType
 from src.domain.models.incident import Incident, IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.near_miss import NearMiss
@@ -517,13 +518,7 @@ async def submit_quick_report(
         )
 
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(
-                ErrorCode.VALIDATION_ERROR,
-                "Invalid report_type. Must be 'incident', 'complaint', 'rta', or 'near_miss'.",
-            ),
-        )
+        raise BadRequestError("Invalid report_type. Must be 'incident', 'complaint', 'rta', or 'near_miss'.")
 
 
 @router.get(
@@ -543,10 +538,7 @@ async def track_report(
     Portal tracking requires the reference-specific tracking code.
     """
     if not validate_tracking_code(reference_number, tracking_code):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference details."),
-        )
+        raise NotFoundError("Report not found. Please check your reference details.")
 
     # Determine report type from reference number prefix
     if reference_number.startswith("INC-"):
@@ -555,10 +547,7 @@ async def track_report(
         incident = inc_result.scalar_one_or_none()
 
         if not incident:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference number."),
-            )
+            raise NotFoundError("Report not found. Please check your reference number.")
 
         # Build timeline
         timeline = [
@@ -597,10 +586,7 @@ async def track_report(
         complaint = comp_result.scalar_one_or_none()
 
         if not complaint:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference number."),
-            )
+            raise NotFoundError("Report not found. Please check your reference number.")
 
         timeline = [
             {
@@ -639,10 +625,7 @@ async def track_report(
         rta = rta_result.scalar_one_or_none()
 
         if not rta:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference number."),
-            )
+            raise NotFoundError("Report not found. Please check your reference number.")
 
         timeline = [
             {
@@ -680,10 +663,7 @@ async def track_report(
         near_miss = nm_result.scalar_one_or_none()
 
         if not near_miss:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=api_error(ErrorCode.ENTITY_NOT_FOUND, "Report not found. Please check your reference number."),
-            )
+            raise NotFoundError("Report not found. Please check your reference number.")
 
         timeline = [
             {
@@ -716,12 +696,14 @@ async def track_report(
         )
 
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=api_error(ErrorCode.VALIDATION_ERROR, "Invalid reference number format."),
-        )
+        raise BadRequestError("Invalid reference number format.")
 
 
+@router.get(
+    "/stats",
+    response_model=PortalStatsResponse,
+    include_in_schema=False,
+)
 @router.get(
     "/stats/",
     response_model=PortalStatsResponse,

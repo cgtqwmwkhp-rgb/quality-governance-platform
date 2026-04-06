@@ -3,7 +3,7 @@ FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd9
 
 WORKDIR /app
 
-# Install build dependencies and apply security patches
+# Install build dependencies (no apt-get upgrade — preserves digest-pinned reproducibility)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -26,7 +26,7 @@ FROM python:3.11-slim-bookworm@sha256:55a4707a91d43b6397215a57b818d2822e66c27fd9
 
 WORKDIR /app
 
-# Install runtime dependencies and apply all security patches
+# Install runtime dependencies (no apt-get upgrade — preserves digest-pinned reproducibility)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     postgresql-client \

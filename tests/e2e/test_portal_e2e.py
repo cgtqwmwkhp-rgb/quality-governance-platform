@@ -7,15 +7,6 @@ Comprehensive E2E coverage for all portal user journeys.
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def client():
-    """Get test client."""
-    from src.main import app
-
-    return TestClient(app)
 
 
 class TestPortalAuthentication:
@@ -249,16 +240,17 @@ class TestReportTracking:
                 assert track_response.status_code in [200, 403, 404]
 
 
-@pytest.mark.phase34
 class TestPortalStats:
-    """Test portal statistics (endpoint not yet implemented)."""
+    """Portal statistics require an authenticated operator (tenant-scoped aggregates)."""
 
-    def test_get_portal_stats(self, client):
+    def test_get_portal_stats(self, client, auth_headers):
         """Get portal statistics."""
-        response = client.get("/api/v1/portal/stats")
+        if not auth_headers:
+            pytest.skip("Login unavailable — seed CI default users for portal stats coverage")
+        response = client.get("/api/v1/portal/stats", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert "total_reports" in data or isinstance(data, dict)
+        assert "total_reports_today" in data
 
 
 class TestSOSFunctionality:

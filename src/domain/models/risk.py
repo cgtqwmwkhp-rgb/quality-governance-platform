@@ -3,18 +3,18 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.domain.models.base import (
     AuditTrailMixin,
+    Base,
     CaseInsensitiveEnum,
     DataClassification,
     ReferenceNumberMixin,
     TimestampMixin,
 )
 from src.domain.models.enums import RiskStatus
-from src.infrastructure.database import Base
 
 
 class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
@@ -22,6 +22,11 @@ class Risk(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     __tablename__ = "risks"
     __data_classification__ = DataClassification.C3_CONFIDENTIAL
+    __table_args__ = (
+        CheckConstraint("likelihood BETWEEN 1 AND 5", name="ck_risks_likelihood_range"),
+        CheckConstraint("impact BETWEEN 1 AND 5", name="ck_risks_impact_range"),
+        CheckConstraint("risk_score BETWEEN 1 AND 25", name="ck_risks_risk_score_range"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -138,6 +143,10 @@ class RiskAssessment(Base, TimestampMixin):
     """Risk assessment history model for tracking changes over time."""
 
     __tablename__ = "risk_assessments"
+    __table_args__ = (
+        CheckConstraint("inherent_likelihood BETWEEN 1 AND 5", name="ck_risk_assessments_inherent_likelihood_range"),
+        CheckConstraint("inherent_impact BETWEEN 1 AND 5", name="ck_risk_assessments_inherent_impact_range"),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

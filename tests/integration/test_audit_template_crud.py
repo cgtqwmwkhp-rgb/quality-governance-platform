@@ -22,7 +22,7 @@ class TestAuditTemplateCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating an existing audit template."""
         template = AuditTemplate(
@@ -46,7 +46,7 @@ class TestAuditTemplateCRUD:
                 "description": "Updated description",
                 "passing_score": 90.0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200
@@ -61,7 +61,7 @@ class TestAuditTemplateCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test that mass assignment of protected fields is blocked."""
         template = AuditTemplate(
@@ -83,7 +83,7 @@ class TestAuditTemplateCRUD:
                 "is_active": False,
                 "version": 99,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200
@@ -136,7 +136,7 @@ class TestAuditTemplateCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test publishing a template that has questions."""
         template = AuditTemplate(
@@ -171,7 +171,7 @@ class TestAuditTemplateCRUD:
 
         response = await client.post(
             f"/api/v1/audits/templates/{template.id}/publish",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200
@@ -184,7 +184,7 @@ class TestAuditTemplateCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test that publishing an empty template fails."""
         template = AuditTemplate(
@@ -200,7 +200,7 @@ class TestAuditTemplateCRUD:
 
         response = await client.post(
             f"/api/v1/audits/templates/{template.id}/publish",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 422
@@ -212,13 +212,13 @@ class TestAuditTemplateCRUD:
     async def test_update_nonexistent_template_returns_404(
         self,
         client: AsyncClient,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating a template that doesn't exist."""
         response = await client.patch(
             "/api/v1/audits/templates/99999",
             json={"name": "Ghost"},
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 404
@@ -233,7 +233,7 @@ class TestAuditSectionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test creating a section in a template."""
         template = AuditTemplate(
@@ -255,7 +255,7 @@ class TestAuditSectionCRUD:
                 "sort_order": 0,
                 "weight": 2.0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 201
@@ -269,7 +269,7 @@ class TestAuditSectionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating a section."""
         template = AuditTemplate(
@@ -295,7 +295,7 @@ class TestAuditSectionCRUD:
         response = await client.patch(
             f"/api/v1/audits/sections/{section.id}",
             json={"title": "New Title", "weight": 3.0},
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200
@@ -347,7 +347,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test creating a question in a template."""
         template = AuditTemplate(
@@ -380,7 +380,7 @@ class TestAuditQuestionCRUD:
                 "weight": 2.0,
                 "sort_order": 0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 201
@@ -395,7 +395,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating a question."""
         template = AuditTemplate(
@@ -426,7 +426,7 @@ class TestAuditQuestionCRUD:
                 "question_type": "pass_fail",
                 "weight": 5.0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200
@@ -478,7 +478,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test creating a multiple-choice question with options."""
         template = AuditTemplate(
@@ -507,7 +507,7 @@ class TestAuditQuestionCRUD:
                     {"value": "poor", "label": "Poor", "score": 1.0},
                 ],
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 201
@@ -524,7 +524,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test creating yes/no question with explicit positive_answer polarity."""
         template = AuditTemplate(
@@ -546,7 +546,7 @@ class TestAuditQuestionCRUD:
                 "positive_answer": "no",
                 "sort_order": 0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 201
@@ -559,7 +559,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating question rejects invalid positive_answer values."""
         template = AuditTemplate(
@@ -586,7 +586,7 @@ class TestAuditQuestionCRUD:
         response = await client.patch(
             f"/api/v1/audits/questions/{question.id}",
             json={"positive_answer": "maybe"},
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 422
@@ -597,7 +597,7 @@ class TestAuditQuestionCRUD:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test updating question rejects null positive_answer values."""
         template = AuditTemplate(
@@ -624,7 +624,7 @@ class TestAuditQuestionCRUD:
         response = await client.patch(
             f"/api/v1/audits/questions/{question.id}",
             json={"positive_answer": None},
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 422
@@ -639,7 +639,7 @@ class TestAuditTemplateLifecycle:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test creating a template, adding sections/questions, and publishing."""
         # 1. Create template
@@ -653,7 +653,7 @@ class TestAuditTemplateLifecycle:
                 "scoring_method": "percentage",
                 "passing_score": 80.0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert create_response.status_code == 201
         template_id = create_response.json()["id"]
@@ -662,7 +662,7 @@ class TestAuditTemplateLifecycle:
         section_response = await client.post(
             f"/api/v1/audits/templates/{template_id}/sections",
             json={"title": "General Safety", "sort_order": 0},
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert section_response.status_code == 201
         section_id = section_response.json()["id"]
@@ -676,14 +676,14 @@ class TestAuditTemplateLifecycle:
                 "question_type": "yes_no",
                 "sort_order": 0,
             },
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert question_response.status_code == 201
 
         # 4. Get full template detail
         detail_response = await client.get(
             f"/api/v1/audits/templates/{template_id}",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert detail_response.status_code == 200
         detail = detail_response.json()
@@ -693,7 +693,7 @@ class TestAuditTemplateLifecycle:
         # 5. Publish
         publish_response = await client.post(
             f"/api/v1/audits/templates/{template_id}/publish",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert publish_response.status_code == 200
         assert publish_response.json()["is_published"] is True
@@ -701,7 +701,7 @@ class TestAuditTemplateLifecycle:
         # 6. Clone
         clone_response = await client.post(
             f"/api/v1/audits/templates/{template_id}/clone",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
         assert clone_response.status_code == 201
         assert "Copy of" in clone_response.json()["name"]
@@ -713,7 +713,7 @@ class TestAuditTemplateLifecycle:
         client: AsyncClient,
         test_session: AsyncSession,
         test_user: User,
-        auth_headers: dict,
+        superuser_auth_headers: dict,
     ):
         """Test searching templates by name."""
         for name in ["Fire Safety Check", "Vehicle Inspection", "IT Security Audit"]:
@@ -729,7 +729,7 @@ class TestAuditTemplateLifecycle:
 
         response = await client.get(
             "/api/v1/audits/templates?search=Fire",
-            headers=auth_headers,
+            headers=superuser_auth_headers,
         )
 
         assert response.status_code == 200

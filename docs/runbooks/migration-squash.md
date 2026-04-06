@@ -1,15 +1,16 @@
 # Alembic Migration Squash Runbook
 
 **Owner**: Platform Engineering  
-**Target**: Q3 2026  
-**Last updated**: 2026-04-03  
-**Review cycle**: After each major schema release
+**Target**: Q3 2026 (sprint 2026-07-14)  
+**Last updated**: 2026-04-04  
+**Review cycle**: After each major schema release  
+**Risk**: Low — squash is a single atomic change; rollback = restore from backup
 
 ---
 
 ## Current state
 
-- The repository carries **79** revision files under `alembic/versions/` (see `alembic history` for the live chain).
+- The repository carries **80** revision files under `alembic/versions/` (see `alembic history` for the live chain; count verified `ls alembic/versions/*.py | wc -l`).
 - Each environment applies revisions sequentially; long chains increase deploy time, review fatigue, and merge conflict risk.
 - This runbook describes squashing that chain into a **single baseline** revision that matches the current ORM/metadata, then archiving historical files.
 

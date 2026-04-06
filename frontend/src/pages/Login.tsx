@@ -208,8 +208,22 @@ export default function Login({ onLogin }: LoginProps) {
 
   // Pre-warm the backend on mount so cold-start latency is absorbed before
   // the user actually submits credentials or returns from SSO redirect.
+  // Retries silently to handle Azure App Service cold-start (503 until ready).
   useEffect(() => {
-    fetch(`${API_BASE}/healthz`, { method: 'GET', mode: 'no-cors' }).catch(() => {})
+    let cancelled = false
+    const warmUp = async () => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (cancelled) return
+        try {
+          await fetch(`${API_BASE}/healthz`, { method: 'GET', mode: 'no-cors' })
+          return
+        } catch {
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
+        }
+      }
+    }
+    warmUp()
+    return () => { cancelled = true }
   }, [])
 
   // Check for OAuth callback on mount
@@ -354,7 +368,7 @@ export default function Login({ onLogin }: LoginProps) {
   const errorMessage = errorCode ? LOGIN_ERROR_MESSAGES[errorCode] : null
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background relative">
+    <div data-testid="login-page" className="min-h-screen flex items-center justify-center p-4 bg-background relative">
       {/* Theme Toggle */}
       <div className="absolute top-4 right-4">
         <ThemeToggle />

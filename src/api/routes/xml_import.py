@@ -9,13 +9,13 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.api.schemas.audit import AuditTemplateResponse
-from src.domain.exceptions import ValidationError
+from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.models.audit import AuditTemplate
 from src.domain.services.audit_service import AuditService
 from src.domain.services.xml_importer_service import (
@@ -63,42 +63,39 @@ class BatchImportResponse(BaseModel):
 @router.post("/parse")
 async def parse_xml_file(
     file: UploadFile = File(...),
-    user: CurrentUser = None,
 ) -> dict[str, Any]:
     """Upload a single XML file and return parsed template structure (preview).
 
     Does not create anything in the database. Use /import to create the template.
     """
     if not file.filename or not file.filename.lower().endswith(".xml"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an XML file (.xml extension)",
-        )
+        raise BadRequestError("File must be an XML file (.xml extension)")
     try:
         content = await file.read()
         template = parse_xml_to_template(content, source_filename=file.filename)
         return template
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def import_xml_file(
+    db: DbSession,
+    user: CurrentUser,
     file: UploadFile = File(...),
-    db: DbSession = None,
-    user: CurrentUser = None,
 ) -> Any:
     """Upload XML file and create the audit template in the database."""
     if not file.filename or not file.filename.lower().endswith(".xml"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be an XML file (.xml extension)",
-        )
+        raise BadRequestError("File must be an XML file (.xml extension)")
     try:
         content = await file.read()
         template_data = parse_xml_to_template(content, source_filename=file.filename)
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
+
+    tenant_id = user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("User must belong to a tenant to import templates")
 
     audit_service = AuditService(db)
     template_payload = template_structure_to_audit_payload(template_data)
@@ -107,7 +104,7 @@ async def import_xml_file(
         data=template_payload,
         standard_ids=None,
         user_id=user.id,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
     )
 
     sections = sections_from_template(template_data)
@@ -116,7 +113,7 @@ async def import_xml_file(
         section = await audit_service.create_section(
             template_id=template.id,
             data=sec_payload,
-            tenant_id=user.tenant_id,
+            tenant_id=tenant_id,
         )
         for q in sec.get("questions", []):
             q_payload = {
@@ -130,7 +127,7 @@ async def import_xml_file(
             await audit_service.create_question(
                 template_id=template.id,
                 data=q_payload,
-                tenant_id=user.tenant_id,
+                tenant_id=tenant_id,
             )
 
     return AuditTemplateResponse.model_validate(template)
@@ -139,7 +136,6 @@ async def import_xml_file(
 @router.post("/batch")
 async def batch_parse(
     request: BatchImportRequest,
-    user: CurrentUser = None,
 ) -> list[dict[str, Any]]:
     """Parse all XML layout files from a directory on the server.
 
@@ -150,20 +146,14 @@ async def batch_parse(
     resolved = os.path.realpath(request.directory_path)
     allowed_base = os.path.realpath(ALLOWED_IMPORT_DIR)
     if not resolved.startswith(allowed_base):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Directory not in allowed import path",
-        )
+        raise BadRequestError("Directory not in allowed import path")
     if not os.path.isdir(resolved):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path is not a valid directory",
-        )
+        raise BadRequestError("Path is not a valid directory")
     try:
         templates = batch_parse_directory(resolved)
         return templates
     except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise BadRequestError(str(e))
 
 
 @router.post(
@@ -172,9 +162,9 @@ async def batch_parse(
     status_code=status.HTTP_201_CREATED,
 )
 async def batch_import(
+    db: DbSession,
+    user: CurrentUser,
     request: BatchImportRequest,
-    db: DbSession = None,
-    user: CurrentUser = None,
 ) -> Any:
     """Parse all XML files in a directory and persist them as audit templates.
 
@@ -183,21 +173,19 @@ async def batch_import(
     resolved = os.path.realpath(request.directory_path)
     allowed_base = os.path.realpath(ALLOWED_IMPORT_DIR)
     if not resolved.startswith(allowed_base):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Directory not in allowed import path",
-        )
+        raise BadRequestError("Directory not in allowed import path")
     if not os.path.isdir(resolved):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Path is not a valid directory",
-        )
+        raise BadRequestError("Path is not a valid directory")
+
+    tenant_id = user.tenant_id
+    if tenant_id is None:
+        raise BadRequestError("User must belong to a tenant to import templates")
 
     audit_service = AuditService(db)
 
     existing_q = await db.execute(
         select(AuditTemplate.name).where(
-            AuditTemplate.tenant_id == user.tenant_id,
+            AuditTemplate.tenant_id == tenant_id,
             AuditTemplate.is_active == True,  # noqa: E712
         )
     )
@@ -226,7 +214,7 @@ async def batch_import(
                 data=payload,
                 standard_ids=None,
                 user_id=user.id,
-                tenant_id=user.tenant_id,
+                tenant_id=tenant_id,
             )
 
             for sec in sections_from_template(template_data):
@@ -237,7 +225,7 @@ async def batch_import(
                 section = await audit_service.create_section(
                     template_id=template.id,
                     data=sec_payload,
-                    tenant_id=user.tenant_id,
+                    tenant_id=tenant_id,
                 )
                 for q in sec.get("questions", []):
                     q_payload = {
@@ -251,7 +239,7 @@ async def batch_import(
                     await audit_service.create_question(
                         template_id=template.id,
                         data=q_payload,
-                        tenant_id=user.tenant_id,
+                        tenant_id=tenant_id,
                     )
 
             existing_names.add(template_data["name"])

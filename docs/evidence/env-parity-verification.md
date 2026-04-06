@@ -19,6 +19,7 @@ Evidence of staging-to-production configuration alignment.
 
 - **App Service SKU**: Staging uses **B1** (cost optimization); production uses **B2** (capacity).
 - **Rationale**: Staging workload is approximately **10%** of production; B1 provides adequate capacity for testing while production retains headroom for peak load.
+- **Performance impact**: B1 (1.75 GB RAM, 1 vCPU) vs B2 (3.5 GB RAM, 2 vCPU). Load testing thresholds in CI use a relaxed p95 < 500ms to account for runner and B1 hardware variability; production SLO targets p95 < 200ms. See [`docs/performance/api-slos.md`](../performance/api-slos.md) for the full tiered threshold rationale.
 - **Runtime stack alignment**: Both environments use the **same Docker images** (identical base and application images), **Python 3.11**, **Node 20**, **PostgreSQL 16**, and **Redis Basic C0** — only the App Service compute SKU differs intentionally.
 
 **Deploy workflow**: [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) implements a **cyclic SHA bypass** for manual runs with `staging_verified=true`: sign-off validation uses the `release_sha` recorded in `release_signoff.json` instead of requiring an exact match to the workflow’s resolved `RELEASE_SHA`, avoiding a chicken-and-egg when updating the signoff for the promoted commit. Introduced in **[PR #401](https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/pull/401)** (see the “skipping SHA-exact match (cyclic signoff)” branch in the governance UAT + CAB sign-off step).
@@ -32,6 +33,25 @@ Evidence of staging-to-production configuration alignment.
 | CORS origins | `src/main.py` (regex) | Code review |
 | Database connection | Environment variable | Validated in `readyz` |
 | Blob storage | Environment variable | Validated in service layer |
+
+## Required Environment Variables (Parity Checklist)
+
+All variables below must be set in **both** staging and production (values differ per environment).
+Source: `src/core/config.py` settings class + `config-failfast` startup validation.
+
+| Variable | Staging | Production | Parity |
+|----------|---------|------------|--------|
+| `DATABASE_URL` | `postgresql+asyncpg://...staging...` | `postgresql+asyncpg://...prod...` | Set in both (values differ) |
+| `SECRET_KEY` | Set (unique per env) | Set (unique per env) | Aligned |
+| `AZURE_AD_CLIENT_ID` | Set | Set | Aligned |
+| `AZURE_AD_TENANT_ID` | Set | Set | Aligned (same tenant) |
+| `REDIS_URL` | Set | Set | Aligned |
+| `BLOB_STORAGE_CONNECTION_STRING` | Set | Set | Aligned (same account) |
+| `ENVIRONMENT` | `staging` | `production` | Intentionally different |
+| `ALLOWED_ORIGINS` | Staging URLs | Production URLs | Intentionally different |
+| `APP_SERVICE_PLAN` | B1 | B2 | Intentionally different |
+
+Missing any required variable triggers immediate startup failure via `config-failfast` (ADR-0002).
 
 ## Drift Controls
 

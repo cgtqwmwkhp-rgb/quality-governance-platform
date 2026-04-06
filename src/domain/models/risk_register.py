@@ -15,11 +15,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB as _PG_JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from src.domain.models.base import Base
 from src.domain.models.enums import EnterpriseRiskStatus
-from src.infrastructure.database import Base
 
 
 class RiskCategory(str, Enum):
@@ -80,6 +81,10 @@ class EnterpriseRisk(Base):
     """Main risk entity (Enterprise Risk Register)"""
 
     __tablename__ = "risks_v2"
+    __table_args__ = (
+        CheckConstraint("inherent_likelihood BETWEEN 1 AND 5", name="ck_risks_v2_inherent_likelihood_range"),
+        CheckConstraint("inherent_impact BETWEEN 1 AND 5", name="ck_risks_v2_inherent_impact_range"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -150,10 +155,13 @@ class EnterpriseRisk(Base):
     escalation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     escalation_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Linked entities
-    linked_incidents: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_audits: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
-    linked_actions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # Linked entities (JSONB for PostgreSQL containment queries)
+    linked_incidents: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    linked_audits: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
+    linked_actions: Mapped[Optional[list]] = mapped_column(_PG_JSONB().with_variant(JSON, "sqlite"), nullable=True)
+
+    # External audit import: pending until accepted/rejected in risk register triage
+    suggestion_triage_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     # Timestamps
     identified_date: Mapped[datetime] = mapped_column(
@@ -177,6 +185,9 @@ class EnterpriseRiskControl(Base):
     """Controls linked to risks (Enterprise Risk Register)"""
 
     __tablename__ = "enterprise_risk_controls"
+    __table_args__ = (
+        CheckConstraint("effectiveness_score BETWEEN 1 AND 5", name="ck_enterprise_risk_controls_effectiveness_range"),
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

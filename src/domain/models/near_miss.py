@@ -6,8 +6,7 @@ from typing import Optional
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.domain.models.base import DataClassification, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base, DataClassification, TimestampMixin
 
 
 class NearMiss(Base):
@@ -18,6 +17,14 @@ class NearMiss(Base):
         CheckConstraint(
             "potential_severity IN ('low', 'medium', 'high', 'critical') OR potential_severity IS NULL",
             name="ck_nm_severity_values",
+        ),
+        CheckConstraint(
+            "status IN ('REPORTED', 'UNDER_REVIEW', 'ACTION_REQUIRED', 'IN_PROGRESS', 'CLOSED')",
+            name="ck_near_misses_status",
+        ),
+        CheckConstraint(
+            "priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')",
+            name="ck_near_misses_priority",
         ),
     )
 
@@ -63,6 +70,9 @@ class NearMiss(Base):
         String(50), nullable=True
     )  # environmental, safety, equipment, etc.
     potential_severity: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # low, medium, high, critical
+    linked_risk_ids: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # Comma-separated risk IDs (see alembic)
 
     # Attachments (JSON array of file URLs)
     attachments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -79,6 +89,9 @@ class NearMiss(Base):
     # Assignment
     assigned_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # GDPR Art. 18 — restriction of processing
+    processing_restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     # Resolution
     resolution_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

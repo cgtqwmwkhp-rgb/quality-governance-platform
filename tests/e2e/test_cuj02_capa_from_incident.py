@@ -66,6 +66,20 @@ class TestCUJ02CAPAFromIncident:
         capa_resp = client.post("/api/v1/capa", json=capa_body, headers=auth_headers)
         assert capa_resp.status_code in (200, 201), f"CAPA creation failed ({capa_resp.status_code}): {capa_resp.text}"
 
+        capa_data = capa_resp.json()
+        capa_id = capa_data.get("id")
+        if "source_id" in capa_data:
+            assert (
+                capa_data["source_id"] == incident_id
+            ), f"CAPA source_id {capa_data['source_id']} does not match incident {incident_id}"
+        else:
+            get_resp = client.get(f"/api/v1/capa/{capa_id}", headers=auth_headers)
+            if get_resp.status_code == 200:
+                fetched = get_resp.json()
+                assert fetched.get("source_id") == incident_id, (
+                    f"CAPA GET source_id {fetched.get('source_id')} " f"does not match incident {incident_id}"
+                )
+
     def test_capa_action_linked_to_incident(self, client, auth_headers):
         """CAPA action created from incident should reference the source incident."""
         resp = client.get("/api/v1/incidents/", headers=auth_headers)

@@ -274,7 +274,7 @@ class AuditLogService:
             stmt = stmt.where(AuditLogEntry.timestamp <= date_to)
 
         result = await self.db.execute(stmt.order_by(desc(AuditLogEntry.timestamp)).offset(offset).limit(limit))
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_entity_history(
         self,
@@ -292,7 +292,7 @@ class AuditLogService:
             )
             .order_by(AuditLogEntry.timestamp)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_user_activity(
         self,
@@ -414,7 +414,7 @@ class AuditLogService:
             .order_by(desc(AuditLogVerification.verified_at))
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     # =========================================================================
     # Export
@@ -519,7 +519,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.action)
         )
-        by_action = dict(result.all())
+        by_action: dict[str, int] = dict(result.all())  # type: ignore[arg-type]
 
         # By entity type
         result = await self.db.execute(
@@ -530,7 +530,7 @@ class AuditLogService:
             )
             .group_by(AuditLogEntry.entity_type)
         )
-        by_entity = dict(result.all())
+        by_entity: dict[str, int] = dict(result.all())  # type: ignore[arg-type]
 
         # Most active users
         result = await self.db.execute(

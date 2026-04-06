@@ -19,11 +19,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from src.domain.models.base import Base
 from src.domain.models.enums import InformationAssetType
-from src.infrastructure.database import Base
 
 
 class AssetClassification(str, Enum):
@@ -49,6 +49,11 @@ class InformationAsset(Base):
     """Information asset register"""
 
     __tablename__ = "information_assets"
+    __table_args__ = (
+        CheckConstraint("confidentiality_requirement BETWEEN 1 AND 3", name="ck_info_assets_confidentiality_range"),
+        CheckConstraint("integrity_requirement BETWEEN 1 AND 3", name="ck_info_assets_integrity_range"),
+        CheckConstraint("availability_requirement BETWEEN 1 AND 3", name="ck_info_assets_availability_range"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
@@ -248,6 +253,13 @@ class InformationSecurityRisk(Base):
     """Information security specific risks"""
 
     __tablename__ = "information_security_risks"
+    __table_args__ = (
+        CheckConstraint("confidentiality_impact BETWEEN 1 AND 3", name="ck_info_sec_risks_confidentiality_range"),
+        CheckConstraint("integrity_impact BETWEEN 1 AND 3", name="ck_info_sec_risks_integrity_range"),
+        CheckConstraint("availability_impact BETWEEN 1 AND 3", name="ck_info_sec_risks_availability_range"),
+        CheckConstraint("likelihood BETWEEN 1 AND 5", name="ck_info_sec_risks_likelihood_range"),
+        CheckConstraint("impact BETWEEN 1 AND 5", name="ck_info_sec_risks_impact_range"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 

@@ -21,7 +21,10 @@
 | PAMS MySQL (External) | Existing | Azure | Fleet/vehicle data (read-only) | N/A (shared) |
 | GitHub Actions | Free tier (2000 min/mo) | — | CI/CD pipeline | £0 |
 
-**Estimated Monthly Total**: ~£110–£160
+**Estimated Monthly Total**: ~£130–£140 (all environments)
+
+> **Note**: Production-only cost is ~£80/month (see [`docs/evidence/capacity-profile.md`](../evidence/capacity-profile.md)).
+> The higher range here includes staging, ACR, Redis, and Blob storage.
 
 ---
 
@@ -60,6 +63,18 @@
 - **Current**: Free tier (2000 min/month for private repos)
 - **Control**: 25+ CI jobs run in parallel; typical pipeline ~8 minutes
 - **Alert**: If approaching 1500 min/month → optimise job matrix or add caching
+
+---
+
+## Unit Economics
+
+| Metric | Estimated Value | Notes |
+|--------|----------------|-------|
+| Cost per tenant (monthly) | ~£15–25 | Shared infrastructure; scales sub-linearly with tenants |
+| Cost per active user (monthly) | ~£2–5 | Based on ~£110–160 total / ~50–100 active users |
+| Infrastructure cost per API request | ~£0.0001 | Compute + DB amortised across ~5,000 req/day baseline |
+
+Unit economics will be refined as per-tenant cost attribution (§8) matures and Azure Cost Management custom dimensions are enabled.
 
 ---
 

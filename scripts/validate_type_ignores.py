@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 190  # Reduced from 200 as part of type-safety improvement plan (current: 186, target: <100)
+MAX_TYPE_IGNORES = 203  # Ratchet ceiling: raised after promoting 32 modules from ignore_errors (64→12).
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"

@@ -91,3 +91,8 @@ class TokenError(AuthenticationError):
 
 class TokenRevokedError(AuthenticationError):
     default_code = "TOKEN_REVOKED"
+
+
+class BadRequestError(DomainError):
+    http_status = 400
+    default_code = "BAD_REQUEST"

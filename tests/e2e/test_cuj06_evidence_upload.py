@@ -79,3 +79,9 @@ class TestCUJ06EvidenceUpload:
             headers=auth_headers,
         )
         assert up.status_code in (200, 201), f"Evidence upload failed ({up.status_code}): {up.text}"
+
+        listed = client.get("/api/v1/evidence-assets", headers=auth_headers)
+        assert listed.status_code == 200, f"Evidence list failed ({listed.status_code})"
+        assets = listed.json() if isinstance(listed.json(), list) else listed.json().get("items", [])
+        uploaded_names = [a.get("original_filename") for a in assets]
+        assert "cuj06.png" in uploaded_names, f"Uploaded asset 'cuj06.png' not found in evidence list: {uploaded_names}"

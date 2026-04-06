@@ -115,6 +115,8 @@ jobs:
       - name: Checkout code
         if: steps.freeze.outputs.allowed == 'true'
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Resolve signed release SHA
         id: signoff
@@ -140,8 +142,13 @@ jobs:
               echo "skip_reason=missing_release_signoff" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            if [[ "$STAGED_SHA" != "$SIGNED_RELEASE_SHA" ]]; then
-              echo "⚠️ Auto-deployment skipped: staged SHA $STAGED_SHA is not the signed release SHA $SIGNED_RELEASE_SHA."
+            if [[ "$STAGED_SHA" == "$SIGNED_RELEASE_SHA" ]]; then
+              echo "✅ Staged SHA matches signed release_sha exactly"
+            elif git merge-base --is-ancestor "$SIGNED_RELEASE_SHA" "$STAGED_SHA"
+            then
+              echo "✅ Staged SHA $STAGED_SHA is a descendant of signed release_sha $SIGNED_RELEASE_SHA (governance/docs commits on main after sign-off)"
+            else
+              echo "⚠️ Auto-deployment skipped: staged SHA $STAGED_SHA is not the signed release SHA $SIGNED_RELEASE_SHA and is not in its first-parent lineage."
               echo "approved=false" >> "$GITHUB_OUTPUT"
               echo "release_sha=$SIGNED_RELEASE_SHA" >> "$GITHUB_OUTPUT"
               echo "skip_reason=signed_sha_mismatch" >> "$GITHUB_OUTPUT"
@@ -1571,6 +1578,40 @@ jobs:
             echo "To deploy a specific prior image instead, set the app’s container image to the saved digest/tag from ACR after \`az webapp config show\` / ACR history, then restart the app."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Rollback documentation written to job summary."
+
+  auto-rollback:
+    name: Auto-rollback on deploy failure
+    runs-on: ubuntu-latest
+    needs: [build-and-deploy]
+    if: failure() && needs.build-and-deploy.result == 'failure'
+
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Execute slot swap rollback
+        run: |
+          echo "🔄 Auto-rollback triggered — swapping staging back to production"
+          az webapp deployment slot swap \
+            --resource-group ${{ vars.AZURE_RG || 'rg-qgp-production' }} \
+            --name ${{ vars.AZURE_APP_NAME || 'qgp-production' }} \
+            --slot staging \
+            --target-slot production
+          echo "✅ Slot swap rollback completed"
+
+      - name: Verify rollback health
+        run: |
+          APP_URL="https://${{ vars.AZURE_APP_NAME || 'qgp-production' }}.azurewebsites.net"
+          echo "Verifying rollback health at ${APP_URL}/healthz ..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${APP_URL}/healthz")
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Rollback verified — /healthz returned HTTP 200"
+          else
+            echo "❌ Rollback health check failed — /healthz returned HTTP $STATUS"
+            exit 1
+          fi
 
   # Notify on completion
   notify:

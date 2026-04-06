@@ -1,34 +1,54 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { Input } from './Input'
+import type { Meta, StoryObj } from "@storybook/react";
+import { Input } from "./Input";
 
 const meta: Meta<typeof Input> = {
-  title: 'UI/Input',
+  title: "UI/Input",
   component: Input,
-  tags: ['autodocs'],
-}
+};
+export default meta;
+type Story = StoryObj<typeof Input>;
 
-export default meta
-type Story = StoryObj<typeof Input>
+export const Default: Story = {};
 
-export const Default: Story = {
-  args: { placeholder: 'Enter text…' },
-}
+export const WithPlaceholder: Story = {
+  args: { placeholder: "Enter your name" },
+};
+
+export const Disabled: Story = {
+  args: { placeholder: "Cannot edit", disabled: true },
+};
 
 export const WithLabel: Story = {
   render: () => (
-    <div className="grid gap-1.5">
+    <div className="space-y-2">
       <label htmlFor="email-input" className="text-sm font-medium">
         Email
       </label>
       <Input id="email-input" type="email" placeholder="you@example.com" />
     </div>
   ),
-}
+};
 
-export const Disabled: Story = {
-  args: { placeholder: 'Disabled input', disabled: true },
-}
+export const WithError: Story = {
+  render: () => (
+    <div className="space-y-2">
+      <label htmlFor="error-input" className="text-sm font-medium">
+        Username
+      </label>
+      <Input id="error-input" error placeholder="Invalid value" />
+      <p className="text-sm text-destructive">This field is required.</p>
+    </div>
+  ),
+};
 
-export const ErrorState: Story = {
-  args: { placeholder: 'Invalid value', error: true },
-}
+export const TypeEmail: Story = {
+  args: { type: "email", placeholder: "you@example.com" },
+};
+
+export const TypePassword: Story = {
+  args: { type: "password", placeholder: "••••••••" },
+};
+
+export const TypeNumber: Story = {
+  args: { type: "number", placeholder: "0" },
+};

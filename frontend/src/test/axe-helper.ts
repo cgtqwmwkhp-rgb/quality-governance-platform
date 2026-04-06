@@ -17,8 +17,8 @@ expect.extend(toHaveNoViolations)
 
 const axe = configureAxe({
   rules: {
-    // Disable color-contrast in JSDOM since it can't compute styles
-    'color-contrast': { enabled: false },
+    // color-contrast: enabled — JSDOM reports as "incomplete" (not violation)
+    // so this won't cause false failures; Lighthouse CI covers real browser checks.
     region: { enabled: false },
   },
 })

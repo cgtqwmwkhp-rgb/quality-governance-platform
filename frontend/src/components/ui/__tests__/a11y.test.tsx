@@ -29,6 +29,13 @@ import {
 } from '../DropdownMenu'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../Tabs'
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '../Select'
+import { Textarea } from '../Textarea'
+import { Avatar } from '../Avatar'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../Tooltip'
+import { LoadingSkeleton } from '../LoadingSkeleton'
+import { Skeleton, TableSkeleton, CardSkeleton } from '../SkeletonLoader'
+import { SetupRequiredPanel, type SetupRequiredResponse } from '../SetupRequiredPanel'
+import { LiveAnnouncerProvider } from '../LiveAnnouncer'
 
 describe('Accessibility — axe-core audit', () => {
   it('Button renders without a11y violations', async () => {
@@ -246,5 +253,102 @@ describe('Accessibility — axe-core audit', () => {
       </Select>,
     )
     await expectNoA11yViolations(baseElement)
+  })
+
+  it('Textarea with Label renders without a11y violations', async () => {
+    const { container } = render(
+      <div>
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea id="notes" placeholder="Enter notes..." />
+      </div>,
+    )
+    await expectNoA11yViolations(container)
+  })
+
+  it('Textarea with error state renders without a11y violations', async () => {
+    const { container } = render(
+      <div>
+        <Label htmlFor="desc">Description</Label>
+        <Textarea id="desc" error aria-invalid="true" aria-describedby="desc-err" />
+        <p id="desc-err">This field is required</p>
+      </div>,
+    )
+    await expectNoA11yViolations(container)
+  })
+
+  it('Avatar renders without a11y violations', async () => {
+    const { container } = render(
+      <div>
+        <Avatar alt="Jane Smith" size="md" />
+        <Avatar alt="John Doe" fallback="JD" size="lg" />
+      </div>,
+    )
+    await expectNoA11yViolations(container)
+  })
+
+  it('Tooltip renders without a11y violations', async () => {
+    const { baseElement } = render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger asChild>
+            <Button>Hover me</Button>
+          </TooltipTrigger>
+          <TooltipContent>Helpful information</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>,
+    )
+    await expectNoA11yViolations(baseElement)
+  })
+
+  it('LoadingSkeleton text variant renders without a11y violations', async () => {
+    const { container } = render(<LoadingSkeleton variant="text" lines={3} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('LoadingSkeleton card variant renders without a11y violations', async () => {
+    const { container } = render(<LoadingSkeleton variant="card" count={2} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('LoadingSkeleton table variant renders without a11y violations', async () => {
+    const { container } = render(<LoadingSkeleton variant="table" rows={3} columns={4} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('Skeleton text variant renders without a11y violations', async () => {
+    const { container } = render(<Skeleton variant="text" lines={2} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('TableSkeleton renders without a11y violations', async () => {
+    const { container } = render(<TableSkeleton rows={3} columns={3} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('CardSkeleton renders without a11y violations', async () => {
+    const { container } = render(<CardSkeleton count={2} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('SetupRequiredPanel renders without a11y violations', async () => {
+    const mockResponse: SetupRequiredResponse = {
+      error_class: 'SETUP_REQUIRED',
+      setup_required: true,
+      module: 'audit-management',
+      message: 'Audit module needs initial configuration.',
+      next_action: 'Configure audit types in admin settings.',
+      request_id: 'req-12345',
+    }
+    const { container } = render(<SetupRequiredPanel response={mockResponse} />)
+    await expectNoA11yViolations(container)
+  })
+
+  it('LiveAnnouncerProvider renders without a11y violations', async () => {
+    const { container } = render(
+      <LiveAnnouncerProvider>
+        <p>App content</p>
+      </LiveAnnouncerProvider>,
+    )
+    await expectNoA11yViolations(container)
   })
 })

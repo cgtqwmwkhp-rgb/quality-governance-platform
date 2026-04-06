@@ -14,6 +14,7 @@ from pythonjsonlogger import jsonlogger
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api import router as api_router
+from src.api.middleware.audit_middleware import AuditLoggingMiddleware
 from src.api.middleware.error_handler import register_exception_handlers
 from src.api.middleware.idempotency import IdempotencyMiddleware
 from src.core.config import settings
@@ -295,6 +296,9 @@ def create_application() -> FastAPI:
 
     # Add Idempotency Middleware (caches POST responses by Idempotency-Key header)
     app.add_middleware(IdempotencyMiddleware)
+
+    # Add Audit Logging Middleware (logs POST/PUT/PATCH/DELETE with PII masking)
+    app.add_middleware(AuditLoggingMiddleware)
 
     # Configure CORS - explicit allowlist + regex for staging/preview
     # Production origins are explicit in cors_origins for security

@@ -3,10 +3,10 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
 
 from src.api.routes.engineers import get_engineer, list_engineers, update_engineer
 from src.api.schemas.engineer import EngineerUpdate
+from src.domain.exceptions import AuthorizationError
 
 
 class _FakeResult:
@@ -61,11 +61,11 @@ async def test_update_engineer_denies_non_manager_user():
     )
     user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AuthorizationError) as exc_info:
         await update_engineer(10, EngineerUpdate(notes="test"), db, user)
 
-    assert exc.value.status_code == 403
-    assert exc.value.detail["code"] == "PERMISSION_DENIED"
+    assert exc_info.value.http_status == 403
+    assert exc_info.value.code == "PERMISSION_DENIED"
     db.commit.assert_not_awaited()
 
 

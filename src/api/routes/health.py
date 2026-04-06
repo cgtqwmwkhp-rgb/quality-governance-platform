@@ -3,6 +3,9 @@
 import asyncio
 import logging
 import os
+import platform
+import subprocess
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -12,6 +15,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from src.infrastructure.database import engine
+
+_start_time = time.monotonic()
 
 logger = logging.getLogger(__name__)
 
@@ -84,22 +89,69 @@ async def readiness_check():
     except Exception:
         pass
 
+    checks: dict[str, Any] = {
+        "database": db_status,
+        "database_latency_ms": db_latency_ms,
+        "redis": redis_status,
+        "pams": pams_status,
+        "pams_tables_reflected": pams_tables_reflected,
+        "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "circuit_breakers": circuit_breakers,
+    }
+    if redis_status == "not_configured":
+        checks["redis_note"] = (
+            "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
+        )
+
     payload = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {
-            "database": db_status,
-            "database_latency_ms": db_latency_ms,
-            "redis": redis_status,
-            "pams": pams_status,
-            "pams_tables_reflected": pams_tables_reflected,
-            "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
-            "cpu_percent": psutil.cpu_percent(interval=0.1),
-            "circuit_breakers": circuit_breakers,
-        },
+        "checks": checks,
     }
 
     return JSONResponse(content=payload, status_code=status_code)
+
+
+@router.get("/diagnostics", response_model=Dict[str, Any])
+async def diagnostics():
+    """Runtime diagnostics for operational visibility. No DB queries."""
+    migration_head = "unknown"
+    try:
+        result = subprocess.run(
+            ["alembic", "current"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            migration_head = result.stdout.strip().split("\n")[-1]
+    except Exception:
+        migration_head = "unavailable"
+
+    feature_flag_count = 0
+    try:
+        from src.core.config import settings
+
+        feature_flag_count = len([k for k in dir(settings) if k.startswith("feature_") or k.startswith("ff_")])
+    except Exception:
+        pass
+
+    return {
+        "app_version": os.getenv("APP_VERSION", "dev"),
+        "python_version": platform.python_version(),
+        "migration_head": migration_head,
+        "telemetry_enabled": os.getenv("TELEMETRY_ENABLED", "true"),
+        "feature_flag_count": feature_flag_count,
+        "uptime_seconds": round(time.monotonic() - _start_time, 1),
+        "runbooks": {
+            "deployment": "docs/DEPLOYMENT_RUNBOOK.md",
+            "disaster_recovery": "docs/ops/DISASTER_RECOVERY_RUNBOOK.md",
+            "rollback": "docs/runbooks/rollback-drills.md",
+            "support_escalation": "docs/runbooks/support-escalation.md",
+            "kql_queries": "docs/ops/kql-queries.md",
+        },
+    }
 
 
 @router.get("/metrics/resources", response_model=Dict[str, Any])

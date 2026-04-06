@@ -26,6 +26,13 @@ import {
   TooltipContent,
   TooltipProvider,
 } from '../ui/Tooltip'
+import { Textarea } from '../ui/Textarea'
+import { ThemeToggle } from '../ui/ThemeToggle'
+import { SetupRequiredPanel, type SetupRequiredResponse } from '../ui/SetupRequiredPanel'
+import { LoadingSkeleton } from '../ui/LoadingSkeleton'
+import { Skeleton } from '../ui/SkeletonLoader'
+import { LiveAnnouncerProvider } from '../ui/LiveAnnouncer'
+import { ThemeProvider } from '../../contexts/ThemeContext'
 
 describe('DataTable accessibility', () => {
   it('has no a11y violations', async () => {
@@ -140,6 +147,64 @@ describe('Tooltip accessibility', () => {
           <TooltipContent>Helpful tip</TooltipContent>
         </Tooltip>
       </TooltipProvider>,
+    )
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('Textarea accessibility', () => {
+  it('has no a11y violations', async () => {
+    const { container } = render(<Textarea aria-label="Comments" placeholder="Enter comments" />)
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('ThemeToggle accessibility', () => {
+  it('has no a11y violations', async () => {
+    const { container } = render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>,
+    )
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('SetupRequiredPanel accessibility', () => {
+  it('has no a11y violations', async () => {
+    const response: SetupRequiredResponse = {
+      error_class: 'SETUP_REQUIRED',
+      setup_required: true,
+      module: 'capa-module',
+      message: 'The CAPA module requires initial configuration before use.',
+      next_action: 'Contact your administrator to complete setup.',
+      request_id: 'req-abc-123',
+    }
+    const { container } = render(<SetupRequiredPanel response={response} onRetry={() => {}} />)
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('LoadingSkeleton accessibility', () => {
+  it('has no a11y violations', async () => {
+    const { container } = render(<LoadingSkeleton variant="card" count={2} />)
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('SkeletonLoader accessibility', () => {
+  it('has no a11y violations', async () => {
+    const { container } = render(<Skeleton variant="text" lines={3} />)
+    await expectNoA11yViolations(container)
+  })
+})
+
+describe('LiveAnnouncer accessibility', () => {
+  it('has no a11y violations', async () => {
+    const { container } = render(
+      <LiveAnnouncerProvider>
+        <p>App content</p>
+      </LiveAnnouncerProvider>,
     )
     await expectNoA11yViolations(container)
   })

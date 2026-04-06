@@ -486,8 +486,9 @@ class AuditQuestionGenerator:
         ],
     }
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
@@ -686,8 +687,9 @@ Format as JSON array with objects containing: question, type (compliance/effecti
 class EvidenceMatcher:
     """Match evidence to audit requirements"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
 
     async def find_evidence_for_clause(self, standard: str, clause: str) -> list[dict[str, Any]]:
         """Find existing evidence that may satisfy a clause"""
@@ -755,9 +757,11 @@ class EvidenceMatcher:
         # Get audit findings
         from src.domain.models.audit import AuditFinding
 
+        tf = AuditFinding.tenant_id == self.tenant_id if self.tenant_id else True
         result = await self.db.execute(
             select(AuditFinding).where(
                 and_(
+                    tf,
                     AuditFinding.audit_id == audit_id,
                     AuditFinding.conformance.in_(["minor_nc", "major_nc", "observation"]),
                 )
@@ -826,8 +830,9 @@ class FindingClassifier:
         "monitoring": ["monitoring", "measurement", "verification", "check", "review"],
     }
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
@@ -872,8 +877,9 @@ class FindingClassifier:
 class AuditReportGenerator:
     """Generate professional audit reports"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.claude_client = None
         if CLAUDE_AVAILABLE and os.getenv("ANTHROPIC_API_KEY"):
             self.claude_client = anthropic.Anthropic()
@@ -882,15 +888,16 @@ class AuditReportGenerator:
         """Generate executive summary for audit"""
         from src.domain.models.audit import Audit, AuditFinding
 
-        result = await self.db.execute(select(Audit).where(Audit.id == audit_id))
+        tf_a = Audit.tenant_id == self.tenant_id if self.tenant_id else True
+        result = await self.db.execute(select(Audit).where(and_(tf_a, Audit.id == audit_id)))
         audit = result.scalar_one_or_none()
         if not audit:
             return "Audit not found"
 
-        result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit_id))
+        tf_f = AuditFinding.tenant_id == self.tenant_id if self.tenant_id else True
+        result = await self.db.execute(select(AuditFinding).where(and_(tf_f, AuditFinding.audit_id == audit_id)))
         findings = result.scalars().all()
 
-        # Count findings by type
         finding_counts = Counter(f.conformance for f in findings if f.conformance)
 
         major_nc = finding_counts.get("major_nc", 0)
@@ -941,9 +948,10 @@ RECOMMENDATION:
         """Generate detailed findings report"""
         from src.domain.models.audit import AuditFinding
 
+        tf = AuditFinding.tenant_id == self.tenant_id if self.tenant_id else True
         result = await self.db.execute(
             select(AuditFinding)
-            .where(AuditFinding.audit_id == audit_id)
+            .where(and_(tf, AuditFinding.audit_id == audit_id))
             .order_by(
                 desc(AuditFinding.conformance == "major_nc"),
                 desc(AuditFinding.conformance == "minor_nc"),
@@ -953,7 +961,9 @@ RECOMMENDATION:
 
         report = []
         for i, finding in enumerate(findings, 1):
-            classification = FindingClassifier(self.db).classify_finding(finding.description or "")
+            classification = FindingClassifier(self.db, tenant_id=self.tenant_id).classify_finding(
+                finding.description or ""
+            )
 
             report.append(
                 {
@@ -976,8 +986,9 @@ RECOMMENDATION:
 class AuditTrendAnalyzer:
     """Analyze trends across audits"""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: int | None = None):
         self.db = db
+        self.tenant_id = tenant_id
 
     async def get_finding_trends(self, months: int = 24) -> dict[str, Any]:
         """Analyze finding trends over time"""
@@ -985,19 +996,25 @@ class AuditTrendAnalyzer:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=months * 30)
 
-        result = await self.db.execute(select(Audit).where(Audit.audit_date >= cutoff).order_by(Audit.audit_date))
+        tf_a = Audit.tenant_id == self.tenant_id if self.tenant_id else True
+        result = await self.db.execute(
+            select(Audit).where(and_(tf_a, Audit.audit_date >= cutoff)).order_by(Audit.audit_date)
+        )
         audits = result.scalars().all()
 
         monthly_data: dict[str, dict] = defaultdict(
             lambda: {"major_nc": 0, "minor_nc": 0, "observation": 0, "opportunity": 0}
         )
 
+        tf_f = AuditFinding.tenant_id == self.tenant_id if self.tenant_id else True
         for audit in audits:
             if not audit.audit_date:
                 continue
             month_key = audit.audit_date.strftime("%Y-%m")
 
-            findings_result = await self.db.execute(select(AuditFinding).where(AuditFinding.audit_id == audit.id))
+            findings_result = await self.db.execute(
+                select(AuditFinding).where(and_(tf_f, AuditFinding.audit_id == audit.id))
+            )
             findings = findings_result.scalars().all()
 
             for finding in findings:
@@ -1053,8 +1070,9 @@ class AuditTrendAnalyzer:
         # Group findings by clause
         clause_findings: dict[str, list] = defaultdict(list)
 
+        tf = AuditFinding.tenant_id == self.tenant_id if self.tenant_id else True
         result = await self.db.execute(
-            select(AuditFinding).where(AuditFinding.conformance.in_(["major_nc", "minor_nc"]))
+            select(AuditFinding).where(and_(tf, AuditFinding.conformance.in_(["major_nc", "minor_nc"])))
         )
         findings = result.scalars().all()
 

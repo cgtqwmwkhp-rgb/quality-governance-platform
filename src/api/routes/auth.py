@@ -20,7 +20,7 @@ from src.api.utils.errors import api_error
 from src.core.security import decode_token
 from src.domain.services.auth_service import AuthService
 from src.domain.services.email_service import email_service
-from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +169,14 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
         token_type="platform_jwt",
         roles=role_names,
     )
+
+
+@router.post("/logout")
+async def logout(current_user: CurrentUser) -> dict:
+    """Log out the current user. Records a telemetry event for audit trail."""
+    record_auth_logout()
+    logger.info("User %s (id=%s) logged out", current_user.email, current_user.id)
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/change-password")

@@ -28,6 +28,7 @@ from src.api.schemas.workflow import (
     WorkflowRuleResponse,
     WorkflowRuleUpdate,
 )
+from src.domain.exceptions import NotFoundError
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -36,6 +37,7 @@ from src.domain.models.workflow_rules import (
     SLATracking,
     WorkflowRule,
 )
+from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.workflow_engine import SLAService, WorkflowEngine
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
@@ -57,10 +59,9 @@ async def list_workflow_rules(
     page_size: int = Query(20, ge=1, le=100),
 ):
     """List workflow rules with optional filtering."""
-    query = select(WorkflowRule)
-    count_query = select(func.count(WorkflowRule.id))
+    query = select(WorkflowRule).where(WorkflowRule.tenant_id == current_user.tenant_id)
+    count_query = select(func.count(WorkflowRule.id)).where(WorkflowRule.tenant_id == current_user.tenant_id)
 
-    # Apply filters
     filters = []
     if entity_type:
         filters.append(WorkflowRule.entity_type == entity_type)
@@ -117,11 +118,16 @@ async def get_workflow_rule(
     current_user: CurrentUser,
 ):
     """Get a specific workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
+    result = await db.execute(
+        select(WorkflowRule).where(
+            WorkflowRule.id == rule_id,
+            WorkflowRule.tenant_id == current_user.tenant_id,
+        )
+    )
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     return WorkflowRuleResponse.from_orm(rule)
 
@@ -134,11 +140,16 @@ async def update_workflow_rule(
     current_user: CurrentUser,
 ):
     """Update a workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
+    result = await db.execute(
+        select(WorkflowRule).where(
+            WorkflowRule.id == rule_id,
+            WorkflowRule.tenant_id == current_user.tenant_id,
+        )
+    )
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     update_data = rule_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -158,11 +169,16 @@ async def delete_workflow_rule(
     current_user: CurrentUser,
 ):
     """Delete a workflow rule."""
-    result = await db.execute(select(WorkflowRule).where(WorkflowRule.id == rule_id))
+    result = await db.execute(
+        select(WorkflowRule).where(
+            WorkflowRule.id == rule_id,
+            WorkflowRule.tenant_id == current_user.tenant_id,
+        )
+    )
     rule = result.scalar_one_or_none()
 
     if not rule:
-        raise HTTPException(status_code=404, detail="Workflow rule not found")
+        raise NotFoundError("Workflow rule not found")
 
     await db.delete(rule)
     await db.commit()
@@ -178,13 +194,21 @@ async def get_rule_executions(
     """Get execution history for a workflow rule."""
     result = await db.execute(
         select(RuleExecution)
-        .where(RuleExecution.rule_id == rule_id)
+        .where(
+            RuleExecution.rule_id == rule_id,
+            RuleExecution.tenant_id == current_user.tenant_id,
+        )
         .order_by(RuleExecution.executed_at.desc())
         .limit(limit)
     )
     executions = result.scalars().all()
 
-    count_result = await db.execute(select(func.count(RuleExecution.id)).where(RuleExecution.rule_id == rule_id))
+    count_result = await db.execute(
+        select(func.count(RuleExecution.id)).where(
+            RuleExecution.rule_id == rule_id,
+            RuleExecution.tenant_id == current_user.tenant_id,
+        )
+    )
     total = count_result.scalar()
 
     return RuleExecutionListResponse(
@@ -206,7 +230,7 @@ async def list_sla_configurations(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List SLA configurations."""
-    query = select(SLAConfiguration)
+    query = select(SLAConfiguration).where(SLAConfiguration.tenant_id == current_user.tenant_id)
 
     filters = []
     if entity_type:
@@ -257,11 +281,16 @@ async def get_sla_configuration(
     current_user: CurrentUser,
 ):
     """Get a specific SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(
+            SLAConfiguration.id == config_id,
+            SLAConfiguration.tenant_id == current_user.tenant_id,
+        )
+    )
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     return SLAConfigurationResponse.from_orm(config)
 
@@ -274,11 +303,16 @@ async def update_sla_configuration(
     current_user: CurrentUser,
 ):
     """Update an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(
+            SLAConfiguration.id == config_id,
+            SLAConfiguration.tenant_id == current_user.tenant_id,
+        )
+    )
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     update_data = config_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -298,11 +332,16 @@ async def delete_sla_configuration(
     current_user: CurrentUser,
 ):
     """Delete an SLA configuration."""
-    result = await db.execute(select(SLAConfiguration).where(SLAConfiguration.id == config_id))
+    result = await db.execute(
+        select(SLAConfiguration).where(
+            SLAConfiguration.id == config_id,
+            SLAConfiguration.tenant_id == current_user.tenant_id,
+        )
+    )
     config = result.scalar_one_or_none()
 
     if not config:
-        raise HTTPException(status_code=404, detail="SLA configuration not found")
+        raise NotFoundError("SLA configuration not found")
 
     await db.delete(config)
     await db.commit()
@@ -329,6 +368,7 @@ async def get_sla_status(
             and_(
                 SLATracking.entity_type == entity_type,
                 SLATracking.entity_id == entity_id,
+                SLATracking.tenant_id == current_user.tenant_id,
             )
         )
         .order_by(SLATracking.created_at.desc())
@@ -337,7 +377,7 @@ async def get_sla_status(
     tracking = result.scalar_one_or_none()
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found for this entity")
+        raise NotFoundError("SLA tracking not found for this entity")
 
     now = datetime.now(timezone.utc)
 
@@ -384,7 +424,7 @@ async def pause_sla_tracking(
     tracking = await sla_service.pause_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise NotFoundError("SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -401,7 +441,7 @@ async def resume_sla_tracking(
     tracking = await sla_service.resume_tracking(EntityType(entity_type), entity_id)
 
     if not tracking:
-        raise HTTPException(status_code=404, detail="SLA tracking not found")
+        raise NotFoundError("SLA tracking not found")
 
     return SLATrackingResponse.from_orm(tracking)
 
@@ -419,7 +459,7 @@ async def list_escalation_levels(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List escalation levels."""
-    query = select(EscalationLevel)
+    query = select(EscalationLevel).where(EscalationLevel.tenant_id == current_user.tenant_id)
 
     filters = []
     if entity_type:
@@ -452,7 +492,7 @@ async def create_escalation_level(
     current_user: CurrentUser,
 ):
     """Create a new escalation level."""
-    level = EscalationLevel(**level_data.dict())
+    level = EscalationLevel(**level_data.dict(), tenant_id=current_user.tenant_id)
     db.add(level)
     await db.commit()
     await db.refresh(level)
@@ -466,11 +506,16 @@ async def get_escalation_level(
     current_user: CurrentUser,
 ):
     """Get a specific escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(
+            EscalationLevel.id == level_id,
+            EscalationLevel.tenant_id == current_user.tenant_id,
+        )
+    )
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     return EscalationLevelResponse.from_orm(level)
 
@@ -483,11 +528,16 @@ async def update_escalation_level(
     current_user: CurrentUser,
 ):
     """Update an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(
+            EscalationLevel.id == level_id,
+            EscalationLevel.tenant_id == current_user.tenant_id,
+        )
+    )
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     update_data = level_data.dict(exclude_unset=True)
     for field, value in update_data.items():
@@ -505,11 +555,16 @@ async def delete_escalation_level(
     current_user: CurrentUser,
 ):
     """Delete an escalation level."""
-    result = await db.execute(select(EscalationLevel).where(EscalationLevel.id == level_id))
+    result = await db.execute(
+        select(EscalationLevel).where(
+            EscalationLevel.id == level_id,
+            EscalationLevel.tenant_id == current_user.tenant_id,
+        )
+    )
     level = result.scalar_one_or_none()
 
     if not level:
-        raise HTTPException(status_code=404, detail="Escalation level not found")
+        raise NotFoundError("Escalation level not found")
 
     await db.delete(level)
     await db.commit()
@@ -530,6 +585,8 @@ async def trigger_sla_check(
 
     escalation_results = await engine.check_escalations()
     sla_results = await engine.check_sla_breaches()
+
+    track_metric("workflows.completed")
 
     return {
         "message": "SLA and escalation check completed",

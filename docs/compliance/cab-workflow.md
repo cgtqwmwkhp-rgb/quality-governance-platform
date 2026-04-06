@@ -49,7 +49,7 @@ Production deployment is blocked unless the merge commit SHA matches the signed-
 | Phase 1 | PR template with required change ledger sections | Done |
 | Phase 2 | Automated signoff validation in CI | Done |
 | Phase 3 | Slack/Teams notification on deployment approval | Planned |
-| Phase 4 | Automated rollback on post-deploy health check failure | Planned |
+| Phase 4 | Automated rollback on post-deploy health check failure | Done (`deploy-production.yml` auto-rollback step) |
 
 ## Related Documents
 

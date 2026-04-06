@@ -65,9 +65,9 @@ async def create_feature_flag(
     )
 
     if data.tenant_overrides is not None:
-        flag.tenant_overrides = data.tenant_overrides
+        flag.tenant_overrides = data.tenant_overrides  # type: ignore[assignment]  # SQLAlchemy JSON Column
     if data.metadata_ is not None:
-        flag.metadata_ = data.metadata_
+        flag.metadata_ = data.metadata_  # type: ignore[assignment]  # SQLAlchemy JSON Column
 
     await db.flush()
     return FeatureFlagResponse.model_validate(flag)

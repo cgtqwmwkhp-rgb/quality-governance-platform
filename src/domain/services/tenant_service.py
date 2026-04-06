@@ -137,14 +137,14 @@ class TenantService:
         result = await self.db.execute(
             select(TenantUser).where(TenantUser.user_id == user_id, TenantUser.is_active == True)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def get_tenant_users(self, tenant_id: int) -> list[TenantUser]:
         """Get all users in a tenant."""
         result = await self.db.execute(
             select(TenantUser).where(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
     async def add_user_to_tenant(
         self,
@@ -201,7 +201,7 @@ class TenantService:
                     TenantUser.is_active == True,
                 )
             )
-            owner_count = count_result.scalar()
+            owner_count = count_result.scalar() or 0
             if owner_count <= 1:
                 raise ValueError("Cannot remove the last owner")
 
@@ -357,7 +357,7 @@ class TenantService:
             .select_from(TenantUser)
             .where(TenantUser.tenant_id == tenant_id, TenantUser.is_active == True)
         )
-        current_users = count_result.scalar()
+        current_users = count_result.scalar() or 0
 
         return current_users, tenant.max_users
 

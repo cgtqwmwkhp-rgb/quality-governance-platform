@@ -3,14 +3,10 @@
 # This file defines quarantined tests with strict governance.
 # CI enforces: expiry dates, issue IDs, and prevents quarantine growth.
 #
-# Rules:
-# 1. All entries MUST have: issue_id, expiry_date, owner, reason
-# 2. Expiry date max 30 days from quarantine date
-# 3. CI fails if today > expiry_date
-# 4. Quarantine count must not increase without explicit policy update
+# Zero active quarantines — all former GOVPLAT-001/002 suites are exercised in CI.
 
 version: "1.0"
-last_updated: "2026-04-01"
+last_updated: "2026-04-05"
 
 # Global settings
 settings:
@@ -18,42 +14,19 @@ settings:
   enforce_expiry: true
   block_on_expiry: true
 
-# Quarantine entries
-quarantines:
-  # Phase 3/4 incomplete features
-  - id: GOVPLAT-001
-    description: "Phase 3/4 endpoint tests - features incomplete"
-    expiry_date: "2026-04-30"
-    owner: "platform-team"
-    reason: "Phase 3 (Workflow Center) and Phase 4 (Compliance Automation) not implemented"
-    marker: "phase34"
-    files:
-      - tests/smoke/test_phase3_phase4_smoke.py
-      - tests/e2e/test_workflows.py
-      - tests/e2e/test_compliance_automation.py
-    resolution_plan: "Complete Phase 3/4 implementation or remove tests"
-
-  # E2E API contract mismatch
-  - id: GOVPLAT-002
-    description: "E2E tests with API contract mismatch"
-    expiry_date: "2026-04-30"
-    owner: "platform-team"
-    reason: "Tests expect endpoints that return 404 or have different contracts"
-    marker: "api_contract_mismatch"
-    files:
-      - tests/e2e/test_portal_e2e.py
-      - tests/e2e/test_enterprise_e2e.py
-      - tests/e2e/test_full_workflow.py
-    resolution_plan: "Audit API contracts and align tests with implementations"
+# Quarantine entries (empty — add only with issue ID, owner, and expiry ≤30 days)
+quarantines: []
 
 # Metrics tracking
 metrics:
-  baseline_quarantine_count: 6
-  max_allowed_quarantine_count: 6
-  last_audit_date: "2026-04-01"
+  baseline_quarantine_count: 0
+  max_allowed_quarantine_count: 0
+  last_audit_date: "2026-04-05"
 
 # Active test suites (must pass)
 active_suites:
   - tests/unit/
   - tests/integration/
   - tests/smoke/test_enterprise_smoke.py
+  - tests/smoke/test_phase3_phase4_smoke.py
+  - tests/e2e/

@@ -36,7 +36,7 @@ async def test_evidence_upload_returns_safe_error_when_storage_dependency_is_una
     with pytest.raises(HTTPException) as exc_info:
         await upload_evidence_asset(
             db=types.SimpleNamespace(),
-            current_user=types.SimpleNamespace(id=42),
+            current_user=types.SimpleNamespace(id=42, tenant_id=1),
             file=file,
             source_module="road_traffic_collision",
             source_id=7,
@@ -98,7 +98,7 @@ async def test_evidence_upload_returns_safe_error_when_metadata_persistence_fail
     with pytest.raises(HTTPException) as exc_info:
         await upload_evidence_asset(
             db=_FailingDb(),
-            current_user=types.SimpleNamespace(id=42),
+            current_user=types.SimpleNamespace(id=42, tenant_id=1),
             file=file,
             source_module="road_traffic_collision",
             source_id=7,
@@ -158,7 +158,7 @@ async def test_evidence_upload_persists_source_id_as_string(monkeypatch):
 
     response = await upload_evidence_asset(
         db=db,
-        current_user=types.SimpleNamespace(id=42),
+        current_user=types.SimpleNamespace(id=42, tenant_id=1),
         file=file,
         source_module="road_traffic_collision",
         source_id=7,
@@ -203,7 +203,7 @@ async def test_evidence_list_filters_source_id_as_string():
 
     response = await list_evidence_assets(
         db=db,
-        current_user=types.SimpleNamespace(id=42),
+        current_user=types.SimpleNamespace(id=42, tenant_id=1),
         source_module=None,
         source_id=42,
         asset_type=None,

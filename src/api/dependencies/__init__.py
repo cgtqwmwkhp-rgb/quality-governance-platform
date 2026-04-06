@@ -38,6 +38,9 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
 
+    if payload.get("type") != "access":
+        raise credentials_exception
+
     user_id_raw = payload.get("sub")
     if user_id_raw is None:
         raise credentials_exception

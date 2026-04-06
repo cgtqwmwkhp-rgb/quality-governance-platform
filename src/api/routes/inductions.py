@@ -157,7 +157,7 @@ async def list_induction_runs(
         )
         engineer_ids = engineer_id_result.scalars().all()
         query = query.where(
-            (InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1]))
+            (InductionRun.supervisor_id == user.id) | (InductionRun.engineer_id.in_(engineer_ids or [-1])),
         )
     if engineer_id is not None:
         query = query.where(InductionRun.engineer_id == engineer_id)
@@ -190,7 +190,10 @@ async def create_induction_run(
 ):
     """Create an induction run. Reference number is auto-generated as IND-YYYY-NNNN."""
     supervisor_check = await GovernanceService.validate_supervisor(
-        db, user.id, data.engineer_id, tenant_id=user.tenant_id
+        db,
+        user.id,
+        data.engineer_id,
+        tenant_id=user.tenant_id,
     )
     if not supervisor_check["valid"]:
         raise HTTPException(
@@ -282,7 +285,7 @@ async def update_induction_run(
     updates = data.model_dump(exclude_unset=True)
     if "stage" in updates and updates["stage"] is not None:
         updates["stage"] = InductionStage(updates["stage"])
-    if "status" in updates and updates["status"] is not None:
+    if "status" in updates:
         raise HTTPException(
             status_code=400,
             detail=api_error(
@@ -448,7 +451,7 @@ async def complete_induction(
                     "question_id": q_id,
                     "question_text": "Skill item",
                     "supervisor_notes": resp.supervisor_notes if resp else "",
-                }
+                },
             )
         await CAPAAutoService.create_from_induction(
             db=db,

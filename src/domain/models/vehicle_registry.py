@@ -12,8 +12,7 @@ from typing import Optional
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.domain.models.base import CaseInsensitiveEnum, TimestampMixin
-from src.infrastructure.database import Base
+from src.domain.models.base import Base, CaseInsensitiveEnum, TimestampMixin
 
 
 class FleetStatus(str, enum.Enum):

@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
 from src.domain.models.user import User
 
@@ -134,7 +135,7 @@ async def list_notifications(
     items = result.scalars().all()
 
     return NotificationListResponse(
-        items=items,
+        items=list(items),  # type: ignore[arg-type]  # ORM→Pydantic coercion
         total=total,
         unread_count=unread,
         page=page,
@@ -174,7 +175,7 @@ async def mark_notification_read(notification_id: int, current_user: CurrentUser
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotFoundError("Notification not found")
     notification.is_read = True
     await db.commit()
     return {"success": True, "notification_id": notification_id}
@@ -211,7 +212,7 @@ async def delete_notification(notification_id: int, current_user: CurrentUser, d
     )
     notification = result.scalar_one_or_none()
     if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise NotFoundError("Notification not found")
     await db.delete(notification)
     await db.commit()
     return {"success": True, "notification_id": notification_id}
@@ -295,8 +296,9 @@ async def search_users_for_mention(
         select(User)
         .where(
             User.is_active == True,
+            User.tenant_id == current_user.tenant_id,
             or_(
-                User.full_name.ilike(f"%{q}%"),
+                User.full_name.ilike(f"%{q}%"),  # type: ignore[attr-defined]
                 User.email.ilike(f"%{q}%"),
             ),
         )

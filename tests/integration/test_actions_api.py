@@ -496,6 +496,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_id=self._unique_entity_id(),
             title="Lifecycle Test Investigation",
             reference_number=f"INV-LIFECYCLE-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -545,6 +546,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_id=self._unique_entity_id(),
             title="Status Update Test Investigation",
             reference_number=f"INV-STATUS-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -596,6 +598,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_id=self._unique_entity_id(),
             title="Complete Action Test Investigation",
             reference_number=f"INV-COMPLETE-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -661,6 +664,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_id=self._unique_entity_id(),
             title="Status Clear Test Investigation",
             reference_number=f"INV-CLEAR-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
         )
         test_session.add(investigation)
         await test_session.commit()
@@ -715,6 +719,7 @@ class TestActionLifecycleWorkflow:
             assigned_entity_id=self._unique_entity_id(),
             title="List Status Test Investigation",
             reference_number=f"INV-LIST-{uuid.uuid4().hex[:8]}",
+            tenant_id=1,
         )
         test_session.add(investigation)
         await test_session.commit()

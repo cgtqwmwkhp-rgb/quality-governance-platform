@@ -10,29 +10,31 @@ Provide an interactive component catalog for all shared UI components, enabling:
 - Design system enforcement
 - Developer onboarding
 
-## Component Coverage Target
+## Component Coverage (Current)
 
-| Category | Total Components | Storybook Stories | Coverage Target |
-|----------|-----------------|-------------------|-----------------|
-| Layout (Shell, Nav, Sidebar) | ~5 | 0 | 100% |
-| Form Controls (Input, Select, Checkbox) | ~15 | 0 | 100% |
-| Data Display (Table, Card, Badge) | ~10 | 0 | 100% |
-| Feedback (Toast, Alert, Modal) | ~8 | 0 | 100% |
-| Domain-Specific (AuditCard, RiskMatrix) | ~20 | 0 | 50% (P2) |
+**26 stories** currently exist under `frontend/src/components/ui/`:
 
-**Phase 1 Target**: All shared/reusable components (Layout + Form + Data + Feedback = ~38 components).
+| Category | Total Components | Storybook Stories | Coverage |
+|----------|-----------------|-------------------|----------|
+| Layout (Tabs, Breadcrumbs, ThemeToggle) | ~5 | 3 | 60% |
+| Form Controls (Input, Select, Checkbox, RadioGroup, Switch, Textarea, Label) | ~15 | 7 | 47% |
+| Data Display (DataTable, Card, Badge, Avatar, Tooltip) | ~10 | 5 | 50% |
+| Feedback (Toast, AlertDialog, Dialog, EmptyState, ProgressBar, LoadingSkeleton, SkeletonLoader, LiveAnnouncer) | ~8 | 8 | 100% |
+| Domain-Specific (SetupRequiredPanel, DropdownMenu, Button) | ~20 | 3 | 15% |
+
+**Phase 1**: 26 of ~38 shared/reusable components covered (68%).
 
 ## Implementation Steps
 
 | Step | Action | Status |
 |------|--------|--------|
-| 1 | Install `@storybook/react-vite` and dependencies | Planned |
-| 2 | Create `.storybook/main.ts` with Vite config | Planned |
-| 3 | Create `.storybook/preview.ts` with theme providers | Planned |
-| 4 | Write stories for Layout components | Planned |
-| 5 | Write stories for Form components | Planned |
-| 6 | Write stories for Data Display components | Planned |
-| 7 | Write stories for Feedback components | Planned |
+| 1 | Install `@storybook/react-vite` and dependencies | Done |
+| 2 | Create `.storybook/main.ts` with Vite config | Done |
+| 3 | Create `.storybook/preview.ts` with theme providers | Done |
+| 4 | Write stories for Layout components | Done (3/5) |
+| 5 | Write stories for Form components | Done (7/15) |
+| 6 | Write stories for Data Display components | Done (5/10) |
+| 7 | Write stories for Feedback components | Done (8/8) |
 | 8 | Add Storybook build to CI (optional gate) | Planned |
 
 ## Configuration

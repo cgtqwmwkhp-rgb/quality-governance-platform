@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.utils.pagination import PaginationParams, paginate
-from src.api.utils.update import apply_updates
+from src.core.pagination import PaginationInput, paginate
+from src.core.update import apply_updates
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
@@ -64,7 +64,8 @@ class RTAService:
 
         await self.db.commit()
         await self.db.refresh(rta)
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
         track_metric("rta.created", 1)
         return rta
@@ -90,7 +91,7 @@ class RTAService:
         self,
         *,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
         severity: Optional[str] = None,
         status_filter: Optional[str] = None,
         reporter_email: Optional[str] = None,
@@ -147,7 +148,8 @@ class RTAService:
 
         await self.db.commit()
         await self.db.refresh(rta)
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
         return rta
 
@@ -179,7 +181,8 @@ class RTAService:
 
         await self.db.delete(rta)
         await self.db.commit()
-        await invalidate_tenant_cache(tenant_id, "rtas")
+        if tenant_id is not None:
+            await invalidate_tenant_cache(tenant_id, "rtas")
         track_metric("rta.mutation", 1)
 
     # ---- Email access check ----
@@ -247,7 +250,7 @@ class RTAService:
         self,
         rta_id: int,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List actions for an RTA with pagination.
 
@@ -339,7 +342,7 @@ class RTAService:
         self,
         rta_id: int,
         tenant_id: int | None,
-        params: PaginationParams,
+        params: PaginationInput,
     ):
         """List investigations for a specific RTA (paginated).
 

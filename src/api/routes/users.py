@@ -70,9 +70,10 @@ async def search_users(
         .where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
-            | (User.last_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter)),
         )
         .where(User.is_active == True)  # noqa: E712
+        .where(User.tenant_id == current_user.tenant_id)
         .order_by(User.email)
         .offset(skip)
         .limit(limit)
@@ -84,6 +85,13 @@ async def search_users(
     return [UserResponse.model_validate(u) for u in users]
 
 
+@router.get("/me", response_model=UserResponse)
+async def read_users_me(current_user: CurrentUser) -> UserResponse:
+    """Current user profile (alias for clients that use /users/me instead of /auth/me)."""
+    return UserResponse.model_validate(current_user)
+
+
+@router.get("", response_model=UserListResponse, include_in_schema=False)
 @router.get("/", response_model=UserListResponse)
 async def list_users(
     db: DbSession,
@@ -105,7 +113,7 @@ async def list_users(
         query = query.where(
             (User.email.ilike(search_filter))
             | (User.first_name.ilike(search_filter))
-            | (User.last_name.ilike(search_filter))
+            | (User.last_name.ilike(search_filter)),
         )
     if department:
         query = query.where(User.department == department)
@@ -315,7 +323,18 @@ async def list_roles(
 ) -> list[RoleResponse]:
     """List all roles."""
     await _ensure_user_management_enabled(db)
-    result = await db.execute(select(Role).order_by(Role.name))
+    from sqlalchemy import or_
+
+    result = await db.execute(
+        select(Role)
+        .where(
+            or_(
+                Role.tenant_id == current_user.tenant_id,
+                Role.tenant_id.is_(None),
+            )
+        )
+        .order_by(Role.name)
+    )
     roles = result.scalars().all()
     return [RoleResponse.model_validate(r) for r in roles]
 

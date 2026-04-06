@@ -14,7 +14,42 @@ Catalog of business metrics, frontend telemetry, backend observability signals, 
 | `track_business_event` | `src/domain/services/incident_service.py` | `"incident_created"` after incident create |
 | `track_business_event` | `src/domain/services/audit_service.py` (`record_audit_event`) | `"audit_completed"` for each persisted audit trail event |
 
-Other metric names in `track_metric`’s static map are **defined** in [`azure_monitor.py`](../../src/infrastructure/monitoring/azure_monitor.py) and should be incremented from auth, document, workflow, risk, and middleware code paths as those integrations land.
+| `record_incident_created` | `src/domain/services/incident_service.py` | Direct counter increment on incident creation |
+| `record_incident_resolved` | `src/domain/services/incident_service.py` | Counter increment when status transitions to CLOSED |
+| `record_risk_created` | `src/domain/services/risk_service.py` | Counter increment after risk creation and DB commit |
+| `record_document_uploaded` | `src/domain/services/evidence_service.py` | Counter increment after evidence asset upload and DB commit |
+| `record_workflow_completed` | `src/domain/services/workflow_service.py` | Counter + duration histogram in `_complete_workflow()` |
+| `record_auth_login` | `src/domain/services/auth_service.py` | Counter on successful authentication |
+| `record_auth_failure` | `src/domain/services/auth_service.py` | Counter on failed authentication |
+| `record_5xx_error` | `src/api/middleware/error_handler.py` | Counter in global error handler |
+| `emit_db_pool_usage_metric` | `src/infrastructure/database.py` | Pool usage gauge via periodic task |
+
+All core business metrics are now wired with direct call-sites.
+
+### Instrument Wiring Status
+
+| Instrument | Status | Call-site | Notes |
+|-----------|--------|-----------|-------|
+| `record_incident_created` | **Live** | `src/domain/services/incident_service.py` | Counter on incident create |
+| `record_incident_resolved` | **Live** | `src/domain/services/incident_service.py` | Counter on status → CLOSED |
+| `record_risk_created` | **Live** | `src/domain/services/risk_service.py` | Counter after DB commit |
+| `record_document_uploaded` | **Live** | `src/domain/services/evidence_service.py` | Counter after upload + commit |
+| `record_workflow_completed` | **Live** | `src/domain/services/workflow_service.py` | Counter + duration histogram |
+| `record_auth_login` | **Live** | `src/domain/services/auth_service.py` | Counter on success |
+| `record_auth_failure` | **Live** | `src/domain/services/auth_service.py` | Counter on failure |
+| `record_5xx_error` | **Live** | `src/api/middleware/error_handler.py` | Counter in global handler |
+| `emit_db_pool_usage_metric` | **Live** | `src/infrastructure/database.py` | Gauge via periodic task |
+| `record_cache_miss` | **Live** | `src/infrastructure/monitoring/azure_monitor.py` | Counter |
+| `track_metric("capa.created")` | **Live** | `src/domain/services/capa_service.py` | Counter on create |
+| `track_metric("capa.closed")` | **Live** | `src/domain/services/capa_service.py` | Counter on status → closed |
+| `track_metric("complaints.created")` | **Live** | `src/domain/services/complaint_service.py` | Counter on create |
+| `track_metric("audits.completed")` | **Live** | `src/domain/services/audit_service.py` | Counter on run complete |
+| `track_metric("audits.findings")` | **Live** | `src/domain/services/audit_service.py` | Counter on finding create |
+| `auth.logout` | **Live** | `src/api/routes/auth.py` → `POST /logout` | Wired via `record_auth_logout()` |
+| `celery.task_failures` | **Deferred** | — | Wire when Celery failure hook is enabled (Celery worker not yet deployed) |
+| `celery.queue_depth` | **Deferred** | — | Wire when Celery monitoring is enabled (Celery worker not yet deployed) |
+
+**16 of 18 instruments live** (89%). Remaining 2 are explicitly **deferred** pending Celery worker deployment — the instruments are defined in `azure_monitor.py` and will be wired when the Celery infrastructure is enabled. Core business, security, and platform health metrics are fully covered.
 
 ### `track_metric(name, value=1.0, tags=None)`
 
@@ -29,15 +64,15 @@ Registers a point on a **named counter** when the string matches a predefined in
 | `capa.created` | On CAPA create (`CAPAService`) | — | **Business Metrics** |
 | `capa.closed` | When CAPA transitions to closed (`CAPAService`) | — | **Business Metrics** |
 | `complaints.created` | On complaint create (`ComplaintService`) | — | **Business Metrics** |
-| `risks.created` | Instrument defined; wire at risk-create path when enabled | — | **Business Metrics** |
-| `auth.login` | Instrument defined; wire at successful login when enabled | — | **Security** / **Business Metrics** |
-| `auth.logout` | Instrument defined; wire at logout when enabled | — | **Security** |
-| `auth.failures` | Instrument defined; wire on auth failure when enabled | — | **Security** |
-| `documents.uploaded` | Instrument defined; wire on successful upload when enabled | — | **Business Metrics** |
-| `workflows.completed` | Instrument defined; wire when workflow instances complete | — | **Business Metrics** |
-| `api.error_rate_5xx` | Instrument defined; increment from global error path when wired | — | **Platform Health** / **API Performance** |
-| `cache.miss_rate` | Instrument defined; optional explicit miss counter | — | **Platform Health** |
-| `db.pool_usage_percent` | Instrument defined; pool saturation gauge when wired | — | **Platform Health** |
+| `risks.created` | Wired via `record_risk_created()` in `RiskService.create_risk()` | — | **Business Metrics** |
+| `auth.login` | Wired via `record_auth_login()` on successful `AuthService.authenticate()` | — | **Security** / **Business Metrics** |
+| `auth.logout` | Wired via `record_auth_logout()` on `POST /auth/logout` | — | **Security** |
+| `auth.failures` | Wired via `record_auth_failure()` on failed `AuthService.authenticate()` | — | **Security** |
+| `documents.uploaded` | Wired via `record_document_uploaded()` in `EvidenceService.upload()` | — | **Business Metrics** |
+| `workflows.completed` | Wired via `record_workflow_completed()` in `WorkflowService._complete_workflow()` | duration_hours | **Business Metrics** |
+| `api.error_rate_5xx` | Wired via `record_5xx_error()` in global error handler | — | **Platform Health** / **API Performance** |
+| `cache.miss_rate` | Wired via `record_cache_miss()` (azure_monitor) | — | **Platform Health** |
+| `db.pool_usage_percent` | Wired via `emit_db_pool_usage_metric()` (database.py) | — | **Platform Health** |
 | `celery.task_failures` | On task failure when instrumented | — | **Platform Health** |
 | `celery.queue_depth` | Queue depth gauge when instrumented | — | **Platform Health** |
 
@@ -86,7 +121,7 @@ Route changes are not centrally named as “page_view” events in a single help
 - **HTTP**: OpenTelemetry FastAPI instrumentation (when OTel packages are installed) plus `api.response_time_ms` when `track_response_time` is used.
 - **Database**: SQLAlchemy instrumentation (optional) and `db.query_time_ms` histogram.
 - **Cache**: `cache.operations` up-down counter via `track_cache_operation`.
-- **Celery**: `celery.task_failures`, `celery.queue_depth` when wired from workers.
+- **Celery**: `celery.task_failures`, `celery.queue_depth` — instruments defined, wiring deferred until Celery worker deployment.
 - **Business counters**: See tables above.
 
 ## Custom dashboards

@@ -51,8 +51,8 @@ for (const file of files) {
   }
 }
 
-// --- Locale parity check (cy.json vs en.json) – advisory, non-blocking ---
-const CY_MIN_COVERAGE = 70; // minimum Welsh coverage percentage
+// --- Locale parity check (cy.json vs en.json) – blocking if below threshold ---
+const CY_MIN_COVERAGE = 95;
 let cyParityMessage = '';
 let cyBelowThreshold = false;
 try {
@@ -60,13 +60,13 @@ try {
   const cyKeys = new Set(Object.keys(cyLocale));
   const missingInCy = [...knownKeys].filter(k => !cyKeys.has(k));
   const coverage = ((cyKeys.size / knownKeys.size) * 100).toFixed(1);
+  cyBelowThreshold = parseFloat(coverage) < CY_MIN_COVERAGE;
   cyParityMessage = `ℹ️  cy.json locale coverage: ${cyKeys.size}/${knownKeys.size} keys (${coverage}%)`;
   if (missingInCy.length > 0) {
-    cyParityMessage += ` — ${missingInCy.length} key(s) missing (advisory)`;
+    cyParityMessage += ` — ${missingInCy.length} key(s) missing`;
   }
-  if (parseFloat(coverage) < CY_MIN_COVERAGE) {
-    cyBelowThreshold = true;
-    cyParityMessage += `\n⚠️  Welsh coverage ${coverage}% is below minimum threshold of ${CY_MIN_COVERAGE}%`;
+  if (cyBelowThreshold) {
+    cyParityMessage += `\n❌ Welsh coverage ${coverage}% is below minimum threshold of ${CY_MIN_COVERAGE}%`;
   }
 } catch {
   cyParityMessage = '⚠️  Could not read cy.json for parity check (file missing or invalid)';
@@ -83,5 +83,8 @@ if (missing.length > 0) {
 } else {
   console.log(`✅ All i18n keys validated (${knownKeys.size} keys, ${files.length} files scanned)`);
   console.log(cyParityMessage);
+  if (cyBelowThreshold) {
+    process.exit(1);
+  }
   process.exit(0);
 }

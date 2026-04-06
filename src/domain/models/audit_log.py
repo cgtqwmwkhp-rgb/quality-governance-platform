@@ -17,7 +17,7 @@ from typing import Any, Optional
 from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.infrastructure.database import Base
+from src.domain.models.base import Base
 
 logger = logging.getLogger(__name__)
 
