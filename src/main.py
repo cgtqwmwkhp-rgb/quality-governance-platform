@@ -41,7 +41,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        # Default: lock resources to same-origin. Public liveness/readiness paths
+        # use cross-origin so SWA (different site) can warm up without ORB/CORP blocks.
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        path = request.url.path
+        if path in ("/healthz", "/readyz", "/health") or path.startswith("/api/v1/health/"):
+            response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "

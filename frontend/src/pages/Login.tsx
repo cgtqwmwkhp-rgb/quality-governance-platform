@@ -215,7 +215,12 @@ export default function Login({ onLogin }: LoginProps) {
       for (let attempt = 0; attempt < 3; attempt++) {
         if (cancelled) return
         try {
-          await fetch(`${API_BASE}/healthz`, { method: 'GET', mode: 'no-cors' })
+          // CORS mode (default): no-cors + CORP same-origin on the API causes
+          // Chrome ERR_BLOCKED_BY_RESPONSE.NotSameOrigin on cross-origin warmup.
+          await fetch(`${API_BASE}/healthz`, {
+            method: 'GET',
+            credentials: 'omit',
+          })
           return
         } catch {
           if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt))
