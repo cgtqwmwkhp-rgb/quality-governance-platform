@@ -1,6 +1,7 @@
 """Domain models package."""
 
 # AI Copilot (Tier 2)
+from src.domain.models.action_owner_note import ActionOwnerNote
 from src.domain.models.ai_copilot import (
     CopilotAction,
     CopilotFeedback,
@@ -246,6 +247,7 @@ __all__ = [
     "ComplaintAction",
     # CAPA models
     "CAPAAction",
+    "ActionOwnerNote",
     # Policy models
     "Policy",
     "PolicyVersion",

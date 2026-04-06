@@ -29,6 +29,7 @@ from src.api.routes._action_unified import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
+from src.domain.models.action_owner_note import ActionOwnerNote
 from src.domain.models.assessment import AssessmentRun
 from src.domain.models.audit import AuditFinding, AuditRun
 from src.domain.models.capa import CAPAAction, CAPAPriority, CAPASource, CAPAStatus, CAPAType
@@ -149,6 +150,30 @@ class ActionsSummaryResponse(BaseModel):
 
     total: int
     by_display_status: dict[str, int]
+
+
+class ActionOwnerNoteCreate(BaseModel):
+    """Request body for appending owner commentary."""
+
+    key: str = Field(..., min_length=3, max_length=80, description="Unified action_key")
+    body: str = Field(..., min_length=1, max_length=16000)
+
+
+class ActionOwnerNoteRead(BaseModel):
+    """Single commentary row with author and server timestamp."""
+
+    id: int
+    action_key: str
+    body: str
+    author_id: int
+    author_email: Optional[str] = None
+    created_at: str
+
+
+class ActionOwnerNoteListResponse(BaseModel):
+    """Notes for one action, newest first."""
+
+    items: list[ActionOwnerNoteRead]
 
 
 def _action_to_response(
@@ -1091,13 +1116,12 @@ async def get_actions_summary(db: DbSession, current_user: CurrentUser) -> Actio
     return await _compute_actions_summary(db, current_user.tenant_id)
 
 
-@router.get("/by-key", response_model=ActionResponse)
-async def get_action_by_key(
+async def load_action_response_by_key(
     db: DbSession,
-    current_user: CurrentUser,
-    key: str = Query(..., min_length=3, description="Stable key e.g. capa:12, incident_action:4"),
+    tenant_id: Optional[int],
+    key: str,
 ) -> ActionResponse:
-    """Resolve an action by its action_key (no source_type guesswork)."""
+    """Resolve a unified action by action_key for the given tenant (shared by detail, notes, evidence)."""
     try:
         kind, row_id = parse_action_key(key)
     except ValueError as exc:
@@ -1107,7 +1131,7 @@ async def get_action_by_key(
         result = await db.execute(
             select(CAPAAction).where(
                 CAPAAction.id == row_id,
-                CAPAAction.tenant_id == current_user.tenant_id,
+                CAPAAction.tenant_id == tenant_id,
             )
         )
         capa_row = cast(Optional[CAPAAction], result.scalar_one_or_none())
@@ -1119,7 +1143,7 @@ async def get_action_by_key(
         result = await db.execute(
             select(IncidentAction).where(
                 IncidentAction.id == row_id,
-                IncidentAction.tenant_id == current_user.tenant_id,
+                IncidentAction.tenant_id == tenant_id,
             )
         )
         row = cast(Optional[IncidentAction], result.scalar_one_or_none())
@@ -1132,7 +1156,7 @@ async def get_action_by_key(
         result = await db.execute(
             select(RTAAction).where(
                 RTAAction.id == row_id,
-                RTAAction.tenant_id == current_user.tenant_id,
+                RTAAction.tenant_id == tenant_id,
             )
         )
         row = cast(Optional[RTAAction], result.scalar_one_or_none())
@@ -1145,7 +1169,7 @@ async def get_action_by_key(
         result = await db.execute(
             select(ComplaintAction).where(
                 ComplaintAction.id == row_id,
-                ComplaintAction.tenant_id == current_user.tenant_id,
+                ComplaintAction.tenant_id == tenant_id,
             )
         )
         row = cast(Optional[ComplaintAction], result.scalar_one_or_none())
@@ -1158,7 +1182,7 @@ async def get_action_by_key(
         result = await db.execute(
             select(InvestigationAction).where(
                 InvestigationAction.id == row_id,
-                InvestigationAction.tenant_id == current_user.tenant_id,
+                InvestigationAction.tenant_id == tenant_id,
             )
         )
         row = cast(Optional[InvestigationAction], result.scalar_one_or_none())
@@ -1174,6 +1198,90 @@ async def get_action_by_key(
         )
 
     raise BadRequestError(f"Unknown action_key kind: {kind}")
+
+
+@router.get("/by-key", response_model=ActionResponse)
+async def get_action_by_key(
+    db: DbSession,
+    current_user: CurrentUser,
+    key: str = Query(..., min_length=3, description="Stable key e.g. capa:12, incident_action:4"),
+) -> ActionResponse:
+    """Resolve an action by its action_key (no source_type guesswork)."""
+    return await load_action_response_by_key(db, current_user.tenant_id, key)
+
+
+@router.get("/by-key/notes", response_model=ActionOwnerNoteListResponse)
+async def list_action_owner_notes(
+    db: DbSession,
+    current_user: CurrentUser,
+    key: str = Query(..., min_length=3, description="Unified action_key"),
+) -> ActionOwnerNoteListResponse:
+    """List time-stamped owner commentary for an action (newest first)."""
+    resolved = await load_action_response_by_key(db, current_user.tenant_id, key)
+    q = (
+        select(ActionOwnerNote)
+        .where(
+            ActionOwnerNote.tenant_id == current_user.tenant_id,
+            ActionOwnerNote.action_key == resolved.action_key,
+        )
+        .order_by(ActionOwnerNote.created_at.desc(), ActionOwnerNote.id.desc())
+    )
+    result = await db.execute(q)
+    rows = result.scalars().all()
+    author_ids = {n.author_id for n in rows}
+    emap = await _batch_resolve_owner_emails(db, author_ids) if author_ids else {}
+    items = [
+        ActionOwnerNoteRead(
+            id=n.id,
+            action_key=n.action_key,
+            body=n.body,
+            author_id=n.author_id,
+            author_email=emap.get(n.author_id),
+            created_at=n.created_at.isoformat() if n.created_at else "",
+        )
+        for n in rows
+    ]
+    return ActionOwnerNoteListResponse(items=items)
+
+
+@router.post("/by-key/notes", response_model=ActionOwnerNoteRead, status_code=status.HTTP_201_CREATED)
+async def create_action_owner_note(
+    data: ActionOwnerNoteCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+    request_id: str = Depends(get_request_id),
+) -> ActionOwnerNoteRead:
+    """Append an owner commentary note; timestamp is set by the server."""
+    resolved = await load_action_response_by_key(db, current_user.tenant_id, data.key)
+    note = ActionOwnerNote(
+        tenant_id=current_user.tenant_id,
+        action_key=resolved.action_key,
+        author_id=current_user.id,
+        body=data.body.strip(),
+    )
+    db.add(note)
+    await db.commit()
+    await db.refresh(note)
+    author_email = await _resolve_owner_email(db, current_user.id)
+    await record_audit_event(
+        db=db,
+        event_type="unified_action.owner_note.created",
+        entity_type="unified_action",
+        entity_id=resolved.action_key,
+        action="comment",
+        description=f"Owner note on action {resolved.action_key}",
+        payload={"note_id": note.id},
+        user_id=current_user.id,
+        request_id=request_id,
+    )
+    return ActionOwnerNoteRead(
+        id=note.id,
+        action_key=note.action_key,
+        body=note.body,
+        author_id=note.author_id,
+        author_email=author_email,
+        created_at=note.created_at.isoformat() if note.created_at else "",
+    )
 
 
 @router.get("/{action_id}")

@@ -12,7 +12,7 @@ import logging
 import math
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, select
@@ -116,13 +116,54 @@ async def validate_source_exists(
     return True
 
 
+async def _normalize_evidence_upload_source(
+    db: DbSession,
+    current_user: CurrentUser,
+    source_module_enum: EvidenceSourceModule,
+    source_id: Optional[int],
+    action_key: Optional[str],
+) -> tuple[str, str]:
+    """Return (normalized_source_id for DB, path segment for blob keys)."""
+    if source_module_enum == EvidenceSourceModule.ACTION:
+        if not action_key or not str(action_key).strip():
+            raise BadRequestError(
+                "action_key is required when source_module=action",
+                code="ACTION_KEY_REQUIRED",
+                details={},
+            )
+        ak = str(action_key).strip()
+        if len(ak) > 36:
+            raise BadRequestError(
+                "action_key exceeds maximum length",
+                code="ACTION_KEY_TOO_LONG",
+                details={"max_length": 36},
+            )
+        from src.api.routes.actions import load_action_response_by_key
+
+        await load_action_response_by_key(db, current_user.tenant_id, ak)
+        return ak, ak.replace(":", "_")
+    if source_id is None:
+        raise BadRequestError(
+            "source_id is required for this source_module",
+            code="SOURCE_ID_REQUIRED",
+            details={},
+        )
+    await validate_source_exists(source_module_enum.value, source_id, db)
+    sid = str(source_id)
+    return sid, sid
+
+
 @router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=201)
 async def upload_evidence_asset(
     db: DbSession,
     current_user: CurrentUser,
     file: UploadFile = File(..., description="File to upload"),
     source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
-    source_id: int = Form(..., description="ID of the source record"),
+    source_id: Optional[int] = Form(None, description="Numeric source id (required unless source_module=action)"),
+    action_key: Optional[str] = Form(
+        None,
+        description="Unified action_key when source_module=action (e.g. capa:12)",
+    ),
     asset_type: Optional[str] = Form(None, description="Asset type (auto-detected if not provided)"),
     title: Optional[str] = Form(None, description="Asset title"),
     description: Optional[str] = Form(None, description="Asset description"),
@@ -155,10 +196,14 @@ async def upload_evidence_asset(
             details={"valid_modules": [e.value for e in EvidenceSourceModule]},
         )
 
-    # Validate source exists
-    await validate_source_exists(source_module, source_id, db)
-
-    normalized_source_id = str(source_id)
+    normalized_source_id, effective_source_id_for_paths = await _normalize_evidence_upload_source(
+        db,
+        current_user,
+        source_module_enum,
+        source_id,
+        action_key,
+    )
+    upload_log_source_ref = normalized_source_id
 
     # Validate content type
     content_type = file.content_type or "application/octet-stream"
@@ -202,7 +247,7 @@ async def upload_evidence_asset(
     # Format: {source_module}/{source_id}/{uuid}_{original_filename}
     file_uuid = str(uuid.uuid4())
     safe_filename = (file.filename or "unnamed").replace("/", "_").replace("\\", "_")
-    storage_key = f"evidence/{source_module}/{source_id}/{file_uuid}_{safe_filename}"
+    storage_key = f"evidence/{source_module}/{effective_source_id_for_paths}/{file_uuid}_{safe_filename}"
 
     # Upload to blob storage
     from src.infrastructure.storage import StorageDependencyError, StorageError, storage_service
@@ -221,7 +266,7 @@ async def upload_evidence_asset(
     except StorageDependencyError:
         logger.exception(
             "Evidence upload blocked by storage dependency failure",
-            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+            extra={"source_module": source_module, "source_id": upload_log_source_ref, "content_type": content_type},
         )
         raise HTTPException(
             status_code=503,
@@ -233,7 +278,7 @@ async def upload_evidence_asset(
     except StorageError as e:
         logger.exception(
             "Evidence upload failed",
-            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+            extra={"source_module": source_module, "source_id": upload_log_source_ref, "content_type": content_type},
         )
         raise HTTPException(
             status_code=500,
@@ -295,11 +340,15 @@ async def upload_evidence_asset(
         except StorageError:
             logger.exception(
                 "Evidence upload cleanup failed after metadata persistence error",
-                extra={"source_module": source_module, "source_id": source_id, "storage_key": storage_key},
+                extra={
+                    "source_module": source_module,
+                    "source_id": upload_log_source_ref,
+                    "storage_key": storage_key,
+                },
             )
         logger.exception(
             "Evidence metadata persistence failed after blob upload",
-            extra={"source_module": source_module, "source_id": source_id, "content_type": content_type},
+            extra={"source_module": source_module, "source_id": upload_log_source_ref, "content_type": content_type},
         )
         raise HTTPException(
             status_code=500,
@@ -328,7 +377,13 @@ async def list_evidence_assets(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     source_module: Optional[str] = Query(None, description="Filter by source module"),
-    source_id: Optional[int] = Query(None, description="Filter by source ID"),
+    source_id: Optional[int] = Query(None, description="Filter by source ID (numeric modules)"),
+    action_key: Annotated[
+        Optional[str],
+        Query(
+            description="When set, filters evidence for unified action_key (source_module=action)",
+        ),
+    ] = None,
     asset_type: Optional[str] = Query(None, description="Filter by asset type"),
     linked_investigation_id: Optional[int] = Query(None, description="Filter by linked investigation"),
     include_deleted: bool = Query(False, description="Include soft-deleted assets"),
@@ -357,7 +412,10 @@ async def list_evidence_assets(
                 details={"valid_modules": [e.value for e in EvidenceSourceModule]},
             )
 
-    if source_id is not None:
+    if action_key is not None and str(action_key).strip():
+        query = query.where(EvidenceAsset.source_module == EvidenceSourceModule.ACTION)
+        query = query.where(EvidenceAsset.source_id == str(action_key).strip())
+    elif source_id is not None:
         query = query.where(EvidenceAsset.source_id == str(source_id))
 
     if asset_type:
