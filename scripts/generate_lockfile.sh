@@ -24,6 +24,16 @@ fi
 }
 
 "$PYTHON_BIN" -m pip install --quiet pip-tools 2>/dev/null || true
+
+# Default: resolve from existing pins where possible (reproducible).
+# Set LOCKFILE_UPGRADE=1 when CI "Lockfile Freshness" fails on upstream version drift
+# (e.g. patch bumps like uvicorn 0.43→0.44 while requirements.txt is unpinned upper-bound).
+UPGRADE_ARGS=()
+if [[ "${LOCKFILE_UPGRADE:-}" == "1" ]]; then
+  UPGRADE_ARGS=(--upgrade)
+  echo "[INFO] LOCKFILE_UPGRADE=1 — compiling with --upgrade (refreshes versions within constraints)"
+fi
+
 "$PYTHON_BIN" -m piptools compile \
     "requirements.txt" \
     -o "$REPO_ROOT/requirements.lock" \
@@ -31,6 +41,7 @@ fi
     --strip-extras \
     --allow-unsafe \
     --generate-hashes \
-    --quiet
+    --quiet \
+    "${UPGRADE_ARGS[@]}"
 
 echo "[OK] requirements.lock generated successfully (with hashes)"

@@ -1,0 +1,44 @@
+---
+description: Governed GitHub→staging→production delivery, automation boundaries, CI/lockfile hygiene
+alwaysApply: true
+---
+
+# Governed Release And Automation (Kasa)
+
+This rule defines how the agent **drives work through GitHub branches, PRs, CI, and deployment workflows** to completion. It describes **behaviour**, not GitHub ACLs.
+
+## What “authority” means here
+
+- The agent uses **`gh`**, **`git`**, and **`az`** already configured in the environment (user/org identity, tokens).
+- **Branch protection**, **required checks**, **required reviewers**, and **GitHub Environment** approval rules are **enforced by GitHub**, not overridden by this file.
+- **Do not** ask the user to paste PATs or secrets in chat. To improve automation, configure **GitHub Actions**, **fine-grained tokens**, or **Environment** rules in the org/repo settings.
+
+## Governed delivery mandate (do not stop at assessment)
+
+When the user asks to **ship**, **release**, or **complete governed delivery** to **staging/production**:
+
+1. **Branch** from `origin/main` via `make start-branch BRANCH=…` (or equivalent). **Never** commit feature work on local `main`.
+2. Run **`make pr-ready`** before opening or materially updating a PR.
+3. Open PRs with **`gh pr create --body-file scripts/governance/pr_body_template.md`** (or a filled file that **keeps all Change Ledger sections** from that template).
+4. Merge when **required checks are green** (`gh pr merge` with **merge/rebase** per repo linear-history rules). Use **`gh pr merge … --admin`** only when branch protection blocks a **known-safe** merge **and** org policy allows bypass — **never** to skip failing **security, migration, or smoke** gates.
+5. **After `main` moves**, verify the pipeline with evidence:
+   - Call **`gh api rate_limit`** before burst `gh run` usage; on **HTTP 403** rate limit, **wait 60–120s** and retry (avoid hammering the API).
+   - Confirm workflow **`CI`** **success** for the target **`headSha`** on **`main`**.
+   - Confirm **`Deploy to Azure Staging`** **success** for that SHA. Staging deploy already runs **`scripts/verify_deploy_deterministic.sh`** against **`${{ github.sha }}`** (see `.github/workflows/deploy-staging.yml`). If **Azure `BUILD_SHA` app setting** and **HTTP `build_sha`** disagree with the workflow target, reconcile **`AZURE_WEBAPP_NAME`** (secret) vs **`az webapp list`** for **`rg-qgp-staging`**.
+   - Confirm **`Deploy to Azure Production`** and that prod **`GET /api/v1/meta/version`** **`build_sha`** matches the promoted commit for that release.
+6. Record **HTTP proof**: **`curl`** staging/prod **`/health`**, **`/readyz`**, **`/api/v1/meta/version`** (timestamps + JSON).
+
+## Lockfile drift (prevent `main` going red on unpinned bumps)
+
+- If **CI** fails **Lockfile Freshness** (package version drift in `requirements.lock`): run **`LOCKFILE_UPGRADE=1 ./scripts/generate_lockfile.sh`**, commit, PR, merge. Use plain **`./scripts/generate_lockfile.sh`** when regenerating without refreshing upstream pins.
+- **Automation:** `.github/workflows/lockfile-update.yml` runs weekly with **`LOCKFILE_UPGRADE=1`** and opens a PR when the lockfile changes — **merge promptly** to avoid repeated CI failures.
+
+## Production sign-off artifact
+
+- Auto/manual production promotion is governed by **`.github/workflows/deploy-production.yml`** and **`docs/evidence/release_signoff.json`**. Update the sign-off when the **documented production baseline SHA** changes per your CAB/runbook process.
+
+## Explicit non-goals
+
+- Disabling **branch protection** or **security** workflows.
+- **Silent** promotion without staging success (unless an approved **emergency runbook** says otherwise — not defined here).
+- Claiming **legal sign-off** or **CAB approval** on behalf of humans.

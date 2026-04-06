@@ -11,3 +11,4 @@ alwaysApply: true
 - Before opening or updating a PR, run `make pr-ready`.
 - When using GitHub CLI, create PRs with `gh pr create --body-file scripts/governance/pr_body_template.md`.
 - Do not replace the PR body with ad hoc text that drops the required Change Ledger sections.
+- For **end-to-end governed delivery** (GitHub `main` → staging → production), follow `.cursor/rules/governed-release-kasa.mdc` (CI proof, HTTP/version checks, lockfile remediation, `gh` rate-limit hygiene).
