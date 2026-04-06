@@ -41,8 +41,9 @@
 - [x] E2E Smoke — N/A for this change
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] CUJ-OPS-01: Production version endpoint returns expected `build_sha` (curl evidence captured in audit run)
-- [x] CUJ-OPS-02: Staging version endpoint matches same promoted SHA pre-governance-commit
+- [x] CUJ-01: Production `GET /api/v1/meta/version` returns expected `build_sha` (verified via curl in audit run)
+- [x] CUJ-02: Staging `GET /api/v1/meta/version` matches promoted application SHA pre-governance-commit
+- [x] CUJ-03: Production `/healthz` and `/readyz` return HTTP 200
 
 ## 7) Observability & Ops
 - **Logs:** No change
