@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import ColumnElement, and_, func, select, true
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
@@ -242,22 +242,25 @@ async def get_risk_statistics(
     current_user: CurrentUser,
 ) -> RiskStatistics:
     """Get risk register statistics."""
+    tid = current_user.tenant_id
+    tf: ColumnElement[bool] = Risk.tenant_id == tid if not current_user.is_superuser else true()
+
     # Total and active risks
-    total_result = await db.execute(select(func.count()).select_from(Risk))
+    total_result = await db.execute(select(func.count()).select_from(Risk).where(tf))
     total_risks = total_result.scalar() or 0
 
-    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True))
+    active_result = await db.execute(select(func.count()).select_from(Risk).where(Risk.is_active == True, tf))
     active_risks = active_result.scalar() or 0
 
     # Risks by category
     category_result = await db.execute(
-        select(Risk.category, func.count()).where(Risk.is_active == True).group_by(Risk.category)
+        select(Risk.category, func.count()).where(Risk.is_active == True, tf).group_by(Risk.category)
     )
     risks_by_category = {row[0] or "uncategorized": row[1] for row in category_result.all()}
 
     # Risks by level
     level_result = await db.execute(
-        select(Risk.risk_level, func.count()).where(Risk.is_active == True).group_by(Risk.risk_level)
+        select(Risk.risk_level, func.count()).where(Risk.is_active == True, tf).group_by(Risk.risk_level)
     )
     risks_by_level = {row[0] or "unknown": row[1] for row in level_result.all()}
 
@@ -267,6 +270,7 @@ async def get_risk_statistics(
         .select_from(Risk)
         .where(
             and_(
+                tf,
                 Risk.is_active == True,
                 Risk.next_review_date <= datetime.now(timezone.utc),
             )
@@ -280,6 +284,7 @@ async def get_risk_statistics(
         .select_from(Risk)
         .where(
             and_(
+                tf,
                 Risk.is_active == True,
                 Risk.treatment_due_date <= datetime.now(timezone.utc),
                 Risk.status != RiskStatus.CLOSED,
@@ -289,7 +294,7 @@ async def get_risk_statistics(
     overdue_treatments = overdue_result.scalar() or 0
 
     # Average risk score
-    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True))
+    avg_result = await db.execute(select(func.avg(Risk.risk_score)).where(Risk.is_active == True, tf))
     average_risk_score = float(avg_result.scalar() or 0)
 
     return RiskStatistics(
@@ -309,10 +314,11 @@ async def get_risk_matrix(
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
     """Get the risk matrix with risk counts per cell."""
+    tf: ColumnElement[bool] = Risk.tenant_id == current_user.tenant_id if not current_user.is_superuser else true()
     # Get risk counts by likelihood and impact
     result = await db.execute(
         select(Risk.likelihood, Risk.impact, func.count())
-        .where(Risk.is_active == True)
+        .where(Risk.is_active == True, tf)
         .group_by(Risk.likelihood, Risk.impact)
     )
     risk_counts = {(row[0], row[1]): row[2] for row in result.all()}
@@ -446,7 +452,7 @@ async def delete_risk(
     current_user: CurrentSuperuser,
 ) -> None:
     """Soft delete a risk (superuser only)."""
-    result = await db.execute(select(Risk).where(Risk.id == risk_id))
+    result = await db.execute(select(Risk).where(Risk.id == risk_id, Risk.tenant_id == current_user.tenant_id))
     risk = result.scalar_one_or_none()
 
     if not risk:
@@ -538,7 +544,14 @@ async def update_control(
     current_user: CurrentUser,
 ) -> RiskControlResponse:
     """Update a risk control."""
-    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
+    result = await db.execute(
+        select(OperationalRiskControl)
+        .join(Risk, OperationalRiskControl.risk_id == Risk.id)
+        .where(
+            OperationalRiskControl.id == control_id,
+            Risk.tenant_id == current_user.tenant_id,
+        )
+    )
     control = result.scalar_one_or_none()
 
     if not control:
@@ -571,7 +584,14 @@ async def delete_control(
     current_user: CurrentUser,
 ) -> None:
     """Soft delete a risk control."""
-    result = await db.execute(select(OperationalRiskControl).where(OperationalRiskControl.id == control_id))
+    result = await db.execute(
+        select(OperationalRiskControl)
+        .join(Risk, OperationalRiskControl.risk_id == Risk.id)
+        .where(
+            OperationalRiskControl.id == control_id,
+            Risk.tenant_id == current_user.tenant_id,
+        )
+    )
     control = result.scalar_one_or_none()
 
     if not control:
