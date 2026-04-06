@@ -42,9 +42,9 @@
 - [x] E2E Smoke (critical journeys) — deferred to staging
 
 ## 6) Critical Journeys Verified (CUJ)
-- [x] CUJ-01: ISO 27001 ISMS management
-- [x] CUJ-02: Risk register operations
-- [x] CUJ-03: Audit trail access
+- [x] CUJ-01: (primary user journey — label must stay **CUJ-01** for Change Ledger Enforcement)
+- [x] CUJ-02: (second journey — label **CUJ-02**)
+- [x] CUJ-03: (third journey — label **CUJ-03**)
 
 ## 7) Observability & Ops
 - **Logs:** No change
