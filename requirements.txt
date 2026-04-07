@@ -39,7 +39,7 @@ defusedxml>=0.7.1,<1.0.0
 # Utilities
 python-dotenv>=1.0.0,<2.0.0
 httpx>=0.26.0,<1.0.0
-tenacity>=8.2.0,<9.0.0
+tenacity>=8.2.0,<10.0.0
 pypdf==6.9.2
 pdfplumber>=0.11.0,<1.0.0
 requests>=2.33.0,<3.0.0
