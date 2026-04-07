@@ -97,10 +97,22 @@ _SECURITY_INCIDENTS_COLS = [
     ("regulatory_body", sa.Column("regulatory_body", sa.String(255), nullable=True)),
 ]
 
-# 2. access_control_records — 7 new ORM columns
+# 2. access_control_records — tenant_id + 7 new ORM columns
 #    system_name is NOT NULL in ORM but already has existing rows → add as nullable first
 #    (application layer ensures system_name is always provided on new inserts)
+#    tenant_id was never added by 20260308 because the table was still named
+#    access_control_record (singular) at that time.
 _ACCESS_CONTROL_COLS = [
+    (
+        "tenant_id",
+        sa.Column(
+            "tenant_id",
+            sa.Integer(),
+            sa.ForeignKey("tenants.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    ),
     ("system_name", sa.Column("system_name", sa.String(255), nullable=True)),
     ("user_role", sa.Column("user_role", sa.String(100), nullable=True)),
     ("access_method", sa.Column("access_method", sa.String(100), nullable=True)),
@@ -118,10 +130,22 @@ _ACCESS_CONTROL_COLS = [
     ),
 ]
 
-# 3. business_continuity_plans — 17 new ORM columns
+# 3. business_continuity_plans — tenant_id + 17 new ORM columns
 #    name (was plan_name), rto_hours, rpo_hours are effectively required by ORM
 #    but we add as nullable here; application ensures values on new rows
+#    tenant_id was never added by 20260308 because the table was still named
+#    business_continuity_plan (singular) at that time.
 _BCP_COLS = [
+    (
+        "tenant_id",
+        sa.Column(
+            "tenant_id",
+            sa.Integer(),
+            sa.ForeignKey("tenants.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    ),
     ("name", sa.Column("name", sa.String(255), nullable=True)),
     ("rto_hours", sa.Column("rto_hours", sa.Integer(), nullable=True)),
     ("rpo_hours", sa.Column("rpo_hours", sa.Integer(), nullable=True)),

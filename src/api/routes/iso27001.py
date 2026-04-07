@@ -13,7 +13,7 @@ Provides endpoints for:
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Query
@@ -35,6 +35,14 @@ from src.domain.models.iso27001 import (
 )
 
 router = APIRouter()
+
+
+def _naive(data: dict) -> dict:
+    """Strip tzinfo from all datetime values before writing to TIMESTAMP WITHOUT TIME ZONE columns."""
+    return {
+        k: (v.replace(tzinfo=None) if isinstance(v, datetime) else v)
+        for k, v in data.items()
+    }
 
 # Criticality ordering for SQL CASE expression (critical first)
 _CRITICALITY_ORDER = case(
@@ -288,7 +296,7 @@ async def create_asset(
         asset_id=asset_id,
         tenant_id=tid,
         next_review_date=datetime.utcnow() + timedelta(days=365),
-        **asset_data.model_dump(),
+        **_naive(asset_data.model_dump()),
     )
     db.add(asset)
     await db.commit()
@@ -365,7 +373,7 @@ async def update_asset(
     for key, value in update_data.items():
         setattr(asset, key, value)
 
-    asset.updated_at = datetime.now(timezone.utc)
+    asset.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Asset updated", "id": asset.id}
@@ -486,11 +494,11 @@ async def update_control(
         setattr(control, key, value)
 
     if control_data.implementation_status == "implemented":
-        control.implementation_date = datetime.now(timezone.utc)
+        control.implementation_date = datetime.utcnow()
     if control_data.effectiveness_rating:
-        control.last_effectiveness_review = datetime.now(timezone.utc)
+        control.last_effectiveness_review = datetime.utcnow()
 
-    control.updated_at = datetime.now(timezone.utc)
+    control.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Control updated", "id": control.id}
@@ -743,8 +751,8 @@ async def update_security_risk(
     if any(k in update_data for k in ("residual_likelihood", "residual_impact")):
         risk.residual_risk_score = risk.residual_likelihood * risk.residual_impact
 
-    risk.last_review_date = datetime.now(timezone.utc)
-    risk.updated_at = datetime.now(timezone.utc)
+    risk.last_review_date = datetime.utcnow()
+    risk.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Risk updated", "id": risk.id}
@@ -837,7 +845,7 @@ async def create_security_incident(
         incident_id=incident_id,
         tenant_id=tid,
         status="open",
-        **incident_data.model_dump(),
+        **_naive(incident_data.model_dump()),
     )
     db.add(incident)
     await db.commit()
@@ -926,11 +934,11 @@ async def update_security_incident(
         setattr(incident, key, value)
 
     if incident_data.status == "contained" and not incident.contained_date:
-        incident.contained_date = datetime.now(timezone.utc)
+        incident.contained_date = datetime.utcnow()
     if incident_data.status == "closed" and not incident.resolved_date:
-        incident.resolved_date = datetime.now(timezone.utc)
+        incident.resolved_date = datetime.utcnow()
 
-    incident.updated_at = datetime.now(timezone.utc)
+    incident.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Incident updated", "id": incident.id}
@@ -1042,10 +1050,10 @@ async def create_supplier_assessment(
     """Create supplier security assessment."""
     assessment = SupplierSecurityAssessment(
         tenant_id=current_user.tenant_id,
-        assessment_date=datetime.now(timezone.utc),
-        next_assessment_date=datetime.now(timezone.utc)
+        assessment_date=datetime.utcnow(),
+        next_assessment_date=datetime.utcnow()
         + timedelta(days=assessment_data.assessment_frequency_months * 30),
-        **assessment_data.model_dump(),
+        **_naive(assessment_data.model_dump()),
     )
     db.add(assessment)
     await db.commit()
@@ -1124,7 +1132,7 @@ async def create_access_control(
     record = AccessControlRecord(
         tenant_id=current_user.tenant_id,
         next_review_date=datetime.utcnow() + timedelta(days=90),
-        **ac_data.model_dump(),
+        **_naive(ac_data.model_dump()),
     )
     db.add(record)
     await db.commit()
@@ -1290,7 +1298,7 @@ async def create_bcp(
         plan_id=plan_id,
         tenant_id=tid,
         next_review_date=datetime.utcnow() + timedelta(days=365),
-        **bcp_data.model_dump(),
+        **_naive(bcp_data.model_dump()),
     )
     db.add(plan)
     await db.commit()
@@ -1321,7 +1329,7 @@ async def update_bcp(
     for key, value in update_data.items():
         setattr(plan, key, value)
 
-    plan.updated_at = datetime.now(timezone.utc)
+    plan.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Business continuity plan updated", "id": plan.id}
