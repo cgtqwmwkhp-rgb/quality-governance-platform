@@ -13,7 +13,7 @@ Provides endpoints for:
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Query
@@ -35,6 +35,12 @@ from src.domain.models.iso27001 import (
 )
 
 router = APIRouter()
+
+
+def _naive(data: dict) -> dict:
+    """Strip tzinfo from all datetime values before writing to TIMESTAMP WITHOUT TIME ZONE columns."""
+    return {k: (v.replace(tzinfo=None) if isinstance(v, datetime) else v) for k, v in data.items()}
+
 
 # Criticality ordering for SQL CASE expression (critical first)
 _CRITICALITY_ORDER = case(
@@ -66,6 +72,10 @@ _VALID_RISK_LEVELS = Literal["low", "medium", "high", "critical"]
 _VALID_DATA_ACCESS = Literal["none", "limited", "full"]
 _VALID_ASSESSMENT_TYPES = Literal["initial", "periodic", "ad-hoc"]
 _VALID_ACCESS_LEVEL = Literal["read", "write", "admin", "owner"]
+_VALID_INCIDENT_STATUS = Literal["open", "investigating", "contained", "eradicating", "recovering", "closed"]
+_VALID_CONTROL_IMPL_STATUS = Literal["not_implemented", "partial", "implemented", "excluded"]
+_VALID_RISK_STATUS = Literal["open", "in_treatment", "accepted", "closed"]
+_VALID_RISK_TREATMENT_STATUS = Literal["planned", "in_progress", "completed"]
 
 
 def _tenant_scoped_id(prefix: str, tenant_id: int, suffix: int) -> str:
@@ -105,7 +115,7 @@ class AssetUpdate(BaseModel):
 
 
 class ControlUpdate(BaseModel):
-    implementation_status: Optional[str] = None
+    implementation_status: Optional[_VALID_CONTROL_IMPL_STATUS] = None
     implementation_notes: Optional[str] = None
     is_applicable: Optional[bool] = None
     exclusion_justification: Optional[str] = None
@@ -143,9 +153,9 @@ class RiskUpdate(BaseModel):
     residual_impact: Optional[int] = Field(None, ge=1, le=5)
     treatment_option: Optional[_VALID_TREATMENT] = None
     treatment_plan: Optional[str] = None
-    treatment_status: Optional[str] = None
+    treatment_status: Optional[_VALID_RISK_TREATMENT_STATUS] = None
     risk_owner_name: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[_VALID_RISK_STATUS] = None
 
 
 class SecurityIncidentCreate(BaseModel):
@@ -153,24 +163,32 @@ class SecurityIncidentCreate(BaseModel):
     description: str = Field(..., min_length=10)
     incident_type: _VALID_INCIDENT_TYPES
     severity: _VALID_SEVERITY = "medium"
+    priority: _VALID_SEVERITY = "medium"
     detected_date: datetime
     occurred_date: Optional[datetime] = None
     cia_impact: Optional[list[str]] = None
     affected_assets: Optional[list[int]] = None
+    affected_users: Optional[int] = Field(None, ge=0)
     data_compromised: bool = False
+    regulatory_notification_required: bool = False
     reported_by_name: Optional[str] = None
 
 
 class IncidentUpdate(BaseModel):
-    status: Optional[str] = None
+    status: Optional[_VALID_INCIDENT_STATUS] = None
     severity: Optional[_VALID_SEVERITY] = None
+    priority: Optional[_VALID_SEVERITY] = None
     assigned_to_name: Optional[str] = None
     root_cause: Optional[str] = None
+    attack_vector: Optional[str] = None
     containment_actions: Optional[str] = None
     eradication_actions: Optional[str] = None
     recovery_actions: Optional[str] = None
     lessons_learned: Optional[str] = None
     resolved_date: Optional[datetime] = None
+    regulatory_notification_required: Optional[bool] = None
+    regulatory_body: Optional[str] = None
+    regulatory_notification_date: Optional[datetime] = None
 
 
 class SupplierAssessmentCreate(BaseModel):
@@ -275,8 +293,8 @@ async def create_asset(
     asset = InformationAsset(
         asset_id=asset_id,
         tenant_id=tid,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=365),
-        **asset_data.model_dump(),
+        next_review_date=datetime.utcnow() + timedelta(days=365),
+        **_naive(asset_data.model_dump()),
     )
     db.add(asset)
     await db.commit()
@@ -353,7 +371,7 @@ async def update_asset(
     for key, value in update_data.items():
         setattr(asset, key, value)
 
-    asset.updated_at = datetime.now(timezone.utc)
+    asset.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Asset updated", "id": asset.id}
@@ -474,11 +492,11 @@ async def update_control(
         setattr(control, key, value)
 
     if control_data.implementation_status == "implemented":
-        control.implementation_date = datetime.now(timezone.utc)
+        control.implementation_date = datetime.utcnow()
     if control_data.effectiveness_rating:
-        control.last_effectiveness_review = datetime.now(timezone.utc)
+        control.last_effectiveness_review = datetime.utcnow()
 
-    control.updated_at = datetime.now(timezone.utc)
+    control.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Control updated", "id": control.id}
@@ -567,6 +585,7 @@ async def list_security_risks(
     status: Optional[str] = Query(None),
     treatment_option: Optional[str] = Query(None),
     min_score: Optional[int] = Query(None, ge=1, le=25),
+    include_closed: bool = Query(False, description="Include closed risks in results"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: DbSession = None,
@@ -574,12 +593,14 @@ async def list_security_risks(
     """List information security risks."""
     tid = current_user.tenant_id
     stmt = select(InformationSecurityRisk).where(
-        InformationSecurityRisk.status != "closed",
         InformationSecurityRisk.tenant_id == tid,
     )
 
+    # Apply status filter — when a specific status is requested, honour it directly
     if status:
         stmt = stmt.where(InformationSecurityRisk.status == status)
+    elif not include_closed:
+        stmt = stmt.where(InformationSecurityRisk.status != "closed")
     if treatment_option:
         stmt = stmt.where(InformationSecurityRisk.treatment_option == treatment_option)
     if min_score:
@@ -690,7 +711,7 @@ async def create_security_risk(
         tenant_id=tid,
         inherent_risk_score=inherent_score,
         residual_risk_score=residual_score,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
+        next_review_date=datetime.utcnow() + timedelta(days=90),
         **data,
     )
     db.add(risk)
@@ -728,8 +749,8 @@ async def update_security_risk(
     if any(k in update_data for k in ("residual_likelihood", "residual_impact")):
         risk.residual_risk_score = risk.residual_likelihood * risk.residual_impact
 
-    risk.last_review_date = datetime.now(timezone.utc)
-    risk.updated_at = datetime.now(timezone.utc)
+    risk.last_review_date = datetime.utcnow()
+    risk.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Risk updated", "id": risk.id}
@@ -822,7 +843,7 @@ async def create_security_incident(
         incident_id=incident_id,
         tenant_id=tid,
         status="open",
-        **incident_data.model_dump(),
+        **_naive(incident_data.model_dump()),
     )
     db.add(incident)
     await db.commit()
@@ -832,6 +853,59 @@ async def create_security_incident(
         "id": incident.id,
         "incident_id": incident_id,
         "message": "Security incident created",
+    }
+
+
+@router.get("/incidents/{incident_id}", response_model=dict)
+async def get_security_incident(
+    incident_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Get a specific security incident by ID."""
+    result = await db.execute(
+        select(SecurityIncident).where(
+            SecurityIncident.id == incident_id,
+            SecurityIncident.tenant_id == current_user.tenant_id,
+        )
+    )
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise NotFoundError("Incident not found")
+
+    return {
+        "id": incident.id,
+        "incident_id": incident.incident_id,
+        "title": incident.title,
+        "description": incident.description,
+        "incident_type": incident.incident_type,
+        "severity": incident.severity,
+        "priority": incident.priority,
+        "status": incident.status,
+        "cia_impact": incident.cia_impact,
+        "affected_assets": incident.affected_assets,
+        "affected_users": incident.affected_users,
+        "data_compromised": incident.data_compromised,
+        "data_types_affected": incident.data_types_affected,
+        "detected_date": incident.detected_date.isoformat() if incident.detected_date else None,
+        "occurred_date": incident.occurred_date.isoformat() if incident.occurred_date else None,
+        "reported_date": incident.reported_date.isoformat() if incident.reported_date else None,
+        "contained_date": incident.contained_date.isoformat() if incident.contained_date else None,
+        "resolved_date": incident.resolved_date.isoformat() if incident.resolved_date else None,
+        "reported_by_name": incident.reported_by_name,
+        "assigned_to_name": incident.assigned_to_name,
+        "root_cause": incident.root_cause,
+        "attack_vector": incident.attack_vector,
+        "indicators_of_compromise": incident.indicators_of_compromise,
+        "containment_actions": incident.containment_actions,
+        "eradication_actions": incident.eradication_actions,
+        "recovery_actions": incident.recovery_actions,
+        "lessons_learned": incident.lessons_learned,
+        "regulatory_notification_required": incident.regulatory_notification_required,
+        "regulatory_notification_date": (
+            incident.regulatory_notification_date.isoformat() if incident.regulatory_notification_date else None
+        ),
+        "regulatory_body": incident.regulatory_body,
     }
 
 
@@ -858,11 +932,11 @@ async def update_security_incident(
         setattr(incident, key, value)
 
     if incident_data.status == "contained" and not incident.contained_date:
-        incident.contained_date = datetime.now(timezone.utc)
+        incident.contained_date = datetime.utcnow()
     if incident_data.status == "closed" and not incident.resolved_date:
-        incident.resolved_date = datetime.now(timezone.utc)
+        incident.resolved_date = datetime.utcnow()
 
-    incident.updated_at = datetime.now(timezone.utc)
+    incident.updated_at = datetime.utcnow()
     await db.commit()
 
     return {"message": "Incident updated", "id": incident.id}
@@ -895,7 +969,9 @@ async def list_supplier_assessments(
     count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = count_result.scalar()
 
-    result = await db.execute(stmt.order_by(SupplierSecurityAssessment.next_assessment_date).offset(skip).limit(limit))
+    result = await db.execute(
+        stmt.order_by(SupplierSecurityAssessment.next_assessment_date.asc().nullslast()).offset(skip).limit(limit)
+    )
     suppliers = result.scalars().all()
 
     return {
@@ -920,6 +996,49 @@ async def list_supplier_assessments(
     }
 
 
+@router.get("/suppliers/{supplier_id}", response_model=dict)
+async def get_supplier_assessment(
+    supplier_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Get a specific supplier security assessment."""
+    result = await db.execute(
+        select(SupplierSecurityAssessment).where(
+            SupplierSecurityAssessment.id == supplier_id,
+            SupplierSecurityAssessment.tenant_id == current_user.tenant_id,
+        )
+    )
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise NotFoundError("Supplier assessment not found")
+
+    return {
+        "id": supplier.id,
+        "supplier_name": supplier.supplier_name,
+        "supplier_type": supplier.supplier_type,
+        "services_provided": supplier.services_provided,
+        "data_access_level": supplier.data_access_level,
+        "assessment_date": supplier.assessment_date.isoformat() if supplier.assessment_date else None,
+        "assessment_type": supplier.assessment_type,
+        "assessor_name": supplier.assessor_name,
+        "overall_rating": supplier.overall_rating,
+        "security_score": supplier.security_score,
+        "iso27001_certified": supplier.iso27001_certified,
+        "soc2_certified": supplier.soc2_certified,
+        "other_certifications": supplier.other_certifications,
+        "findings_count": supplier.findings_count,
+        "critical_findings": supplier.critical_findings,
+        "findings_details": supplier.findings_details,
+        "risk_level": supplier.risk_level,
+        "risk_accepted": supplier.risk_accepted,
+        "risk_accepted_by": supplier.risk_accepted_by,
+        "next_assessment_date": (supplier.next_assessment_date.isoformat() if supplier.next_assessment_date else None),
+        "assessment_frequency_months": supplier.assessment_frequency_months,
+        "status": supplier.status,
+    }
+
+
 @router.post("/suppliers", response_model=dict, status_code=201)
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
@@ -929,10 +1048,9 @@ async def create_supplier_assessment(
     """Create supplier security assessment."""
     assessment = SupplierSecurityAssessment(
         tenant_id=current_user.tenant_id,
-        assessment_date=datetime.now(timezone.utc),
-        next_assessment_date=datetime.now(timezone.utc)
-        + timedelta(days=assessment_data.assessment_frequency_months * 30),
-        **assessment_data.model_dump(),
+        assessment_date=datetime.utcnow(),
+        next_assessment_date=datetime.utcnow() + timedelta(days=assessment_data.assessment_frequency_months * 30),
+        **_naive(assessment_data.model_dump()),
     )
     db.add(assessment)
     await db.commit()
@@ -971,7 +1089,7 @@ async def list_access_control(
         select(func.count(AccessControlRecord.id)).where(
             AccessControlRecord.tenant_id == tid,
             AccessControlRecord.is_active == True,  # noqa: E712
-            AccessControlRecord.next_review_date < datetime.now(timezone.utc),
+            AccessControlRecord.next_review_date < datetime.utcnow(),
         )
     )
     overdue = overdue_result.scalar()
@@ -1010,14 +1128,208 @@ async def create_access_control(
     """Record an access control grant."""
     record = AccessControlRecord(
         tenant_id=current_user.tenant_id,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
-        **ac_data.model_dump(),
+        next_review_date=datetime.utcnow() + timedelta(days=90),
+        **_naive(ac_data.model_dump()),
     )
     db.add(record)
     await db.commit()
     await db.refresh(record)
 
     return {"id": record.id, "message": "Access control record created"}
+
+
+# ============ Business Continuity Plans ============
+
+
+class BCPCreate(BaseModel):
+    name: str = Field(..., min_length=3, max_length=255)
+    description: str = Field(..., min_length=10)
+    scope: str = Field(..., min_length=5)
+    rto_hours: int = Field(..., ge=0, le=8760)
+    rpo_hours: int = Field(..., ge=0, le=8760)
+    mtpd_hours: Optional[int] = Field(None, ge=0, le=8760)
+    covered_systems: Optional[list[str]] = None
+    covered_processes: Optional[list[str]] = None
+    activation_criteria: Optional[str] = None
+    notification_procedures: Optional[str] = None
+    recovery_procedures: Optional[str] = None
+    resumption_procedures: Optional[str] = None
+    plan_owner_name: Optional[str] = None
+    team_members: Optional[list] = None
+    escalation_contacts: Optional[list] = None
+    test_frequency_months: int = Field(default=12, ge=1, le=60)
+    version: str = Field(default="1.0", max_length=20)
+    effective_date: datetime
+    approved_by: Optional[str] = None
+
+
+class BCPUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
+    description: Optional[str] = None
+    scope: Optional[str] = None
+    rto_hours: Optional[int] = Field(None, ge=0, le=8760)
+    rpo_hours: Optional[int] = Field(None, ge=0, le=8760)
+    mtpd_hours: Optional[int] = Field(None, ge=0, le=8760)
+    activation_criteria: Optional[str] = None
+    notification_procedures: Optional[str] = None
+    recovery_procedures: Optional[str] = None
+    resumption_procedures: Optional[str] = None
+    plan_owner_name: Optional[str] = None
+    last_test_date: Optional[datetime] = None
+    last_test_type: Optional[str] = None
+    last_test_result: Optional[str] = None
+    next_test_date: Optional[datetime] = None
+    version: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/business-continuity", response_model=dict)
+async def list_bcps(
+    current_user: CurrentUser,
+    active_only: bool = Query(True),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """List business continuity plans."""
+    tid = current_user.tenant_id
+    stmt = select(BusinessContinuityPlan).where(BusinessContinuityPlan.tenant_id == tid)
+    if active_only:
+        stmt = stmt.where(BusinessContinuityPlan.is_active == True)  # noqa: E712
+
+    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = count_result.scalar()
+
+    result = await db.execute(
+        stmt.order_by(BusinessContinuityPlan.next_review_date.asc().nullslast()).offset(skip).limit(limit)
+    )
+    plans = result.scalars().all()
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "plans": [
+            {
+                "id": p.id,
+                "plan_id": p.plan_id,
+                "name": p.name,
+                "scope": p.scope,
+                "rto_hours": p.rto_hours,
+                "rpo_hours": p.rpo_hours,
+                "last_test_date": p.last_test_date.isoformat() if p.last_test_date else None,
+                "next_test_date": p.next_test_date.isoformat() if p.next_test_date else None,
+                "last_test_result": p.last_test_result,
+                "plan_owner_name": p.plan_owner_name,
+                "version": p.version,
+                "is_active": p.is_active,
+            }
+            for p in plans
+        ],
+    }
+
+
+@router.get("/business-continuity/{plan_id}", response_model=dict)
+async def get_bcp(
+    plan_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Get a business continuity plan by ID."""
+    result = await db.execute(
+        select(BusinessContinuityPlan).where(
+            BusinessContinuityPlan.id == plan_id,
+            BusinessContinuityPlan.tenant_id == current_user.tenant_id,
+        )
+    )
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise NotFoundError("Business continuity plan not found")
+
+    return {
+        "id": plan.id,
+        "plan_id": plan.plan_id,
+        "name": plan.name,
+        "description": plan.description,
+        "scope": plan.scope,
+        "rto_hours": plan.rto_hours,
+        "rpo_hours": plan.rpo_hours,
+        "mtpd_hours": plan.mtpd_hours,
+        "covered_systems": plan.covered_systems,
+        "covered_processes": plan.covered_processes,
+        "activation_criteria": plan.activation_criteria,
+        "notification_procedures": plan.notification_procedures,
+        "recovery_procedures": plan.recovery_procedures,
+        "resumption_procedures": plan.resumption_procedures,
+        "plan_owner_name": plan.plan_owner_name,
+        "team_members": plan.team_members,
+        "escalation_contacts": plan.escalation_contacts,
+        "last_test_date": plan.last_test_date.isoformat() if plan.last_test_date else None,
+        "last_test_type": plan.last_test_type,
+        "last_test_result": plan.last_test_result,
+        "next_test_date": plan.next_test_date.isoformat() if plan.next_test_date else None,
+        "test_frequency_months": plan.test_frequency_months,
+        "version": plan.version,
+        "effective_date": plan.effective_date.isoformat() if plan.effective_date else None,
+        "approved_by": plan.approved_by,
+        "next_review_date": plan.next_review_date.isoformat() if plan.next_review_date else None,
+        "is_active": plan.is_active,
+    }
+
+
+@router.post("/business-continuity", response_model=dict, status_code=201)
+async def create_bcp(
+    bcp_data: BCPCreate,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Create a business continuity plan."""
+    tid = current_user.tenant_id
+    count_result = await db.execute(
+        select(func.count()).select_from(BusinessContinuityPlan).where(BusinessContinuityPlan.tenant_id == tid)
+    )
+    count = count_result.scalar()
+    plan_id = _tenant_scoped_id("BCP", tid, count + 1)
+
+    plan = BusinessContinuityPlan(
+        plan_id=plan_id,
+        tenant_id=tid,
+        next_review_date=datetime.utcnow() + timedelta(days=365),
+        **_naive(bcp_data.model_dump()),
+    )
+    db.add(plan)
+    await db.commit()
+    await db.refresh(plan)
+
+    return {"id": plan.id, "plan_id": plan_id, "message": "Business continuity plan created"}
+
+
+@router.put("/business-continuity/{plan_id}", response_model=dict)
+async def update_bcp(
+    plan_id: int,
+    bcp_data: BCPUpdate,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Update a business continuity plan."""
+    result = await db.execute(
+        select(BusinessContinuityPlan).where(
+            BusinessContinuityPlan.id == plan_id,
+            BusinessContinuityPlan.tenant_id == current_user.tenant_id,
+        )
+    )
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise NotFoundError("Business continuity plan not found")
+
+    update_data = bcp_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(plan, key, value)
+
+    plan.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return {"message": "Business continuity plan updated", "id": plan.id}
 
 
 # ============ ISMS Dashboard Summary ============
@@ -1102,7 +1414,7 @@ async def get_isms_dashboard(
     incidents_30d_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
-            SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30),
         )
     )
     incidents_30d = incidents_30d_result.scalar()

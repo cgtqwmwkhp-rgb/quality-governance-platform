@@ -39,4 +39,4 @@ async def get_ims_dashboard(
     """
     track_metric("ims_dashboard.loaded")
     service = IMSDashboardService(db)
-    return await service.get_dashboard()
+    return await service.get_dashboard(tenant_id=current_user.tenant_id)
