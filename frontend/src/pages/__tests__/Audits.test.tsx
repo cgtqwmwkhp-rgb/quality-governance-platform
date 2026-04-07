@@ -14,7 +14,12 @@ const mockQueueImportJob = vi.fn()
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
-  return { ...actual, useNavigate: () => mockNavigate }
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    // Provide a stable URLSearchParams with no params so deep-link logic is inert in tests
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  }
 })
 
 vi.mock('react-i18next', () => ({
