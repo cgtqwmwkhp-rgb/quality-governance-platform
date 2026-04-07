@@ -998,7 +998,7 @@ class ExternalAuditAnalysisService:
         re.IGNORECASE,
     )
 
-    def _outcome_is_negated(self, text_lower: str, match: re.Match) -> bool:  # type: ignore[type-arg]
+    def _outcome_is_negated(self, text_lower: str, match: re.Match[str]) -> bool:
         """Check whether an outcome-pattern match is preceded by a negation."""
         start = match.start()
         window = text_lower[max(0, start - 50) : start]

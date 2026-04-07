@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     test: {
       exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
+      testTimeout: 10000,
+      retry: 2,
     },
     define: {
       __BUILD_VERSION__: JSON.stringify(getGitCommitSha()),

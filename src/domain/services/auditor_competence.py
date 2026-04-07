@@ -96,8 +96,8 @@ class AuditorCompetenceService:
         area_result = await self.db.execute(select(CompetencyArea))
         areas = {a.id: a for a in area_result.scalars().all()}
 
-        total_weighted_score = 0
-        total_weight = 0
+        total_weighted_score: float = 0.0
+        total_weight: float = 0.0
 
         for comp in competencies:
             area = areas.get(comp.competency_area_id)
@@ -108,8 +108,8 @@ class AuditorCompetenceService:
             score = (comp.current_level / 5) * 100
             weight = area.weight
 
-            total_weighted_score += score * weight  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
-            total_weight += weight  # type: ignore[assignment]  # TYPE-IGNORE: MYPY-OVERRIDE
+            total_weighted_score += score * weight
+            total_weight += weight
 
         if total_weight == 0:
             return 0.0

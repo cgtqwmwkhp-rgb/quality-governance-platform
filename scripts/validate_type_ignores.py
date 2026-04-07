@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 203  # Ratchet ceiling: raised after promoting 32 modules from ignore_errors (64→12).
+MAX_TYPE_IGNORES = 198  # Ratchet ceiling: lowered from 203 (EG-04). Phase B target: 175 (requires refactoring form_config_service + risk_scoring).
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
