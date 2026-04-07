@@ -183,7 +183,7 @@ jobs:
             "overall_result": "${{ (needs.api-resilience.result == 'success' && needs.degradation-check.result == 'success' && needs.error-budget-check.result == 'success') && 'PASS' || 'FAIL' }}"
           }
           EOF
-          cat docs/evidence/chaos-runs/chaos-run-$(date +%Y-%m-%d).json
+          cat "docs/evidence/chaos-runs/chaos-run-${RUN_DATE}.json"
           echo "[OK] Chaos run evidence recorded"
 
       - name: Upload chaos evidence artifact
