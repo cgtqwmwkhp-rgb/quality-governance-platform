@@ -1,23 +1,23 @@
 {
-  "release_sha": "5999749d9f58eb5e75aafeb353e4ab3baf0d43e1",
+  "release_sha": "825fa2c9c433e9fed4116752049e61c00d0e4063",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "approved_at_utc": "2026-04-07T15:47:00+00:00",
+  "approved_at_utc": "2026-04-07T16:34:00+00:00",
   "deployment_evidence": {
     "ci_run": "https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/24058414151",
     "staging_deploy_run_id": "24058562840",
-    "production_deploy_run_id": "24090259199",
+    "production_deploy_run_id": "24092417319",
     "production_auto_attempt_run_id": "",
-    "production_promotion": "PR #495 (iso-compliance-ui-modernise) + PR #496 (ims-dashboard-live-data) + PR #497 (dashboard-compliance-gauges): ISO Compliance UI modernisation to Plantexpand Design System, IMS Dashboard live data wiring, Dashboard live compliance gauges. CI run success \u2192 Deploy to Azure Staging 24089929035 success \u2192 Deploy to Azure Production 24090259199 success. curl GET /api/v1/meta/version confirmed build_sha 5999749d9f58 at 2026-04-07T15:47:00Z.",
-    "production_live_verified_utc": "2026-04-07T15:47:00Z",
-    "production_live_build_sha": "5999749d9f58eb5e75aafeb353e4ab3baf0d43e1",
+    "production_promotion": "PR #499 (fix/compliance-evidence-broken-links-wcs): fix broken evidence navigation links (ENTITY_TYPE_ROUTE map), add unlink/delete evidence button, wire Gap Analysis Review Mappings, fix DB unique constraint tenant scope (cel_tenant_unique_01 migration). CI success \u2192 staging 24092123789 success \u2192 production 24092417319 success. curl /api/v1/meta/version confirmed build_sha 825fa2c9 at 2026-04-07T16:34:00Z.",
+    "production_live_verified_utc": "2026-04-07T16:34:00Z",
+    "production_live_build_sha": "825fa2c9c433e9fed4116752049e61c00d0e4063",
     "production_baseline_build_sha": "b580c57d31da426e9c22f73a623b8c9f4e56cb76",
     "production_baseline_observed_utc": "2026-04-06T21:47:02Z",
-    "staging_deploy_head_sha": "5999749d9f58eb5e75aafeb353e4ab3baf0d43e1",
+    "staging_deploy_head_sha": "825fa2c9c433e9fed4116752049e61c00d0e4063",
     "staging_smoke_results": "Deploy workflow success (run 24058562840); staging HTTP not verified from this agent (DNS resolution failure for app-qgp-staging.azurewebsites.net)",
     "staging_stability_gate": "Build and Deploy to Staging: success",
     "prod_dependencies_gate": "PASS (Pre-Deployment Checks + Prod Dependencies Gate)",
@@ -25,9 +25,10 @@
     "governance_note": "FIND-SIGNOFF-002\u2013007: PRs #481\u2013486 signoff/evidence chain. FIND-SIGNOFF-008: deployment_evidence + production_live_build_sha synced to PR #486 chain and curl GET https://app-qgp-prod.azurewebsites.net/api/v1/meta/version at 2026-04-07T01:00:34Z (0a256cc7). Signed release_sha 95785198; further governance merges may advance main; deploy permits ancestor relationship (deploy-production.yml ~309\u2013317).",
     "pr_checks_passed": "PR #486: CI 24058414151 success; Security Scan 24058414155 success; UX Functional Coverage 24058757505 success",
     "changes_this_release": [
-      "PR #495: Modernise ComplianceEvidence.tsx to Plantexpand Design System (Button, Card, Input, Badge, EmptyState, TableSkeleton, Dialog)",
-      "PR #496: Wire IMSDashboard.tsx to live imsDashboardApi + crossStandardMappingsApi data, modernise to Plantexpand Design System",
-      "PR #497: Wire Dashboard.tsx live compliance gauges from complianceApi.getCoverage(), fix Tailwind safelist for dynamic classes, fix vitest.config.ts retry/timeout"
+      "PR #499: Fix broken evidence link navigation (ENTITY_TYPE_ROUTE map replaces naive /s template)",
+      "PR #499: Add Trash2 unlink button on evidence items in right panel and Evidence List tab",
+      "PR #499: Wire Gap Analysis Review Mappings button to setSelectedClauseId + setViewMode",
+      "PR #499: DB migration cel_tenant_unique_01 \u2014 add tenant_id to unique constraint on compliance_evidence_links"
     ],
     "pre_existing_failures": []
   }
