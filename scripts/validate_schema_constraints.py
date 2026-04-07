@@ -39,7 +39,7 @@ def _fk_column_indexed(column: Any, table: Any) -> bool:
     if column.index or column.unique:
         return True
     for idx in table.indexes:
-        if column in idx.columns:
+        if column.key in idx.columns:
             return True
     return False
 

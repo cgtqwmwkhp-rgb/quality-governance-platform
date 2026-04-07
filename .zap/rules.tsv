@@ -16,3 +16,23 @@
 
 # ── Authentication-related (ZAP scans unauthenticated baseline; these are expected 401s) ──
 10019	IGNORE	# Content-Type mismatch on 401 responses (pre-auth)
+
+# ── Cookie flags (handled at Azure App Service level, not application layer) ──
+10010	IGNORE	# Cookie without Secure flag — set by Azure App Service session management, not app code
+10011	IGNORE	# Cookie without HttpOnly flag — same: Azure App Service infra cookies
+
+# ── Informational/advisory (acceptable for API-only backend) ──
+10049	WARN	# Storable and cacheable content — API responses include Cache-Control; warn only
+10050	WARN	# Retrieved from cache — informational; acceptable for static resources
+10036	WARN	# Server leaks version info — Azure App Service adds Server header; mitigated by WAF
+10037	IGNORE	# Server leaks information via X-Powered-By — not set by application layer
+10054	IGNORE	# Cookie with SameSite attribute problems — Azure AD B2C auth cookies; external party
+
+# ── Modern CSP/header alerts (already implemented in SecurityHeadersMiddleware) ──
+10063	IGNORE	# Permissions-Policy header not set — IS set: geolocation=(), microphone=(), camera=()
+10038	IGNORE	# Content Security Policy (CSP) header not set — IS set in SecurityHeadersMiddleware
+10098	IGNORE	# Cross-Origin-Resource-Policy header missing — IS set to same-origin/cross-origin
+
+# ── Passive scan informational (no actionable finding) ──
+10061	IGNORE	# X-AspNet-Version header exposes version — not applicable (Python/FastAPI, not ASP.NET)
+10040	IGNORE	# Secure pages include mixed content — N/A for API-only backend

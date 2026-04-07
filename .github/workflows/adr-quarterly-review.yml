@@ -1,0 +1,90 @@
+name: ADR Quarterly Review Reminder
+
+on:
+  schedule:
+    # First Monday of each quarter at 08:00 UTC
+    # Jan, Apr, Jul, Oct — first Monday approximated with day-of-month 1–7
+    - cron: '0 8 1-7 1,4,7,10 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — create issue draft but do not post'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['true', 'false']
+
+jobs:
+  open-review-issue:
+    name: Open ADR Quarterly Review Issue
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run ADR lifecycle check
+        id: lifecycle
+        run: |
+          python3 scripts/check_adr_lifecycle.py > /tmp/adr-lifecycle.txt 2>&1 || true
+          echo "lifecycle_output<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/adr-lifecycle.txt >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Count ADRs
+        id: counts
+        run: |
+          total=$(find docs/adr -name 'ADR-*.md' 2>/dev/null | wc -l | tr -d ' ')
+          accepted=$(find docs/adr -name 'ADR-*.md' -exec grep -l "Status.*Accepted\|Accepted" {} \; 2>/dev/null | wc -l | tr -d ' ')
+          proposed=$(find docs/adr -name 'ADR-*.md' -exec grep -l "Status.*Proposed\|Proposed" {} \; 2>/dev/null | wc -l | tr -d ' ')
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          echo "accepted=$accepted" >> "$GITHUB_OUTPUT"
+          echo "proposed=$proposed" >> "$GITHUB_OUTPUT"
+
+      - name: Create quarterly review issue
+        if: inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ADR_TOTAL: ${{ steps.counts.outputs.total }}
+          ADR_ACCEPTED: ${{ steps.counts.outputs.accepted }}
+          ADR_PROPOSED: ${{ steps.counts.outputs.proposed }}
+          LIFECYCLE_OUTPUT: ${{ steps.lifecycle.outputs.lifecycle_output }}
+        run: |
+          YEAR=$(date +%Y)
+          MONTH=$(date +%-m)
+          if   [ "$MONTH" -le 3 ];  then QUARTER="Q1"
+          elif [ "$MONTH" -le 6 ];  then QUARTER="Q2"
+          elif [ "$MONTH" -le 9 ];  then QUARTER="Q3"
+          else                           QUARTER="Q4"
+          fi
+
+          TITLE="ADR Quarterly Review -- ${QUARTER} ${YEAR}"
+
+          BODY_OUTPUT_PATH=/tmp/adr-review-body.md \
+          QUARTER="$QUARTER" \
+          YEAR="$YEAR" \
+            python3 scripts/governance/generate_adr_review_body.py
+
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TITLE" \
+            --body-file /tmp/adr-review-body.md \
+            || echo "Note: Could not create issue -- check permissions"
+
+      - name: Dry run output
+        if: inputs.dry_run == 'true'
+        run: |
+          echo "=== DRY RUN — Would create issue ==="
+          echo "ADR count: ${{ steps.counts.outputs.total }}"
+          echo "Accepted: ${{ steps.counts.outputs.accepted }}"
+          echo "Proposed: ${{ steps.counts.outputs.proposed }}"
+          echo "Lifecycle check output:"
+          cat /tmp/adr-lifecycle.txt

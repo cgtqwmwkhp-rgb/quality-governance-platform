@@ -703,6 +703,54 @@ jobs:
             --password "$E2E_PASSWORD" \
             --json
 
+      - name: Post-deploy SLO assertion (D18 — error rate + latency)
+        id: slo-check
+        run: |
+          BASE_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+          echo "=== Post-deploy SLO Assertion ==="
+          echo "Target: $BASE_URL"
+
+          SLO_FAIL=0
+
+          # ── Health endpoint: must return 200 ──────────────────────────────
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/healthz" || echo "000")
+          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/healthz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
+          echo "  /healthz → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "  ❌ FAIL: /healthz returned $HTTP_CODE (expected 200)"
+            SLO_FAIL=1
+          fi
+          if [ "$LATENCY_MS" -gt 2000 ]; then
+            echo "  ❌ FAIL: /healthz p95 latency ${LATENCY_MS}ms > 2000ms SLO"
+            SLO_FAIL=1
+          fi
+
+          # ── Readiness endpoint: must return 200 ──────────────────────────
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$BASE_URL/readyz" || echo "000")
+          LATENCY_MS=$(curl -s -o /dev/null -w "%{time_total}" --max-time 10 "$BASE_URL/readyz" 2>/dev/null | awk '{printf "%d", $1 * 1000}' || echo "9999")
+          echo "  /readyz  → HTTP $HTTP_CODE  (${LATENCY_MS}ms)"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "  ❌ FAIL: /readyz returned $HTTP_CODE (expected 200)"
+            SLO_FAIL=1
+          fi
+
+          # ── Version endpoint: must return 200 and non-empty build_sha ────
+          VERSION_BODY=$(curl -s --max-time 10 "$BASE_URL/api/v1/meta/version" || echo "{}")
+          BUILD_SHA=$(echo "$VERSION_BODY" | python3 -c "import sys, json; print(json.load(sys.stdin).get('build_sha',''))" 2>/dev/null || echo "")
+          echo "  /api/v1/meta/version → build_sha=${BUILD_SHA:-MISSING}"
+          if [ -z "$BUILD_SHA" ]; then
+            echo "  ❌ FAIL: build_sha missing from version endpoint"
+            SLO_FAIL=1
+          fi
+
+          # ── Summary ───────────────────────────────────────────────────────
+          if [ "$SLO_FAIL" -eq 0 ]; then
+            echo "  ✅ All post-deploy SLOs passed"
+          else
+            echo "  ❌ SLO assertion FAILED — see above"
+            exit 1
+          fi
+
       - name: Smoke test summary
         if: always()
         run: |
@@ -712,6 +760,7 @@ jobs:
             echo "| Test | Status |"
             echo "|------|--------|"
             echo "| End-to-end smoke suite | ${{ steps.smoke.outcome }} |"
+            echo "| Post-deploy SLO assertion | ${{ steps.slo-check.outcome }} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # Final notification
