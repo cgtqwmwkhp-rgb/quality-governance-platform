@@ -42,9 +42,9 @@ jobs:
       - name: Count ADRs
         id: counts
         run: |
-          total=$(ls docs/adr/ADR-*.md 2>/dev/null | wc -l | tr -d ' ')
-          accepted=$(grep -rl "Status.*Accepted\|Accepted" docs/adr/ADR-*.md 2>/dev/null | wc -l | tr -d ' ')
-          proposed=$(grep -rl "Status.*Proposed\|Proposed" docs/adr/ADR-*.md 2>/dev/null | wc -l | tr -d ' ')
+          total=$(find docs/adr -name 'ADR-*.md' 2>/dev/null | wc -l | tr -d ' ')
+          accepted=$(find docs/adr -name 'ADR-*.md' -exec grep -l "Status.*Accepted\|Accepted" {} \; 2>/dev/null | wc -l | tr -d ' ')
+          proposed=$(find docs/adr -name 'ADR-*.md' -exec grep -l "Status.*Proposed\|Proposed" {} \; 2>/dev/null | wc -l | tr -d ' ')
           echo "total=$total" >> "$GITHUB_OUTPUT"
           echo "accepted=$accepted" >> "$GITHUB_OUTPUT"
           echo "proposed=$proposed" >> "$GITHUB_OUTPUT"
