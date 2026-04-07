@@ -210,15 +210,33 @@ _ISR_COLS = [
 # ---------------------------------------------------------------------------
 
 
+def _set_server_default_if_missing(table: str, column: str, server_default: str) -> None:
+    """Add a server_default to an existing NOT NULL column that has none."""
+    if not _table_exists(table) or not _column_exists(table, column):
+        return
+    op.execute(f"ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT {server_default}")
+
+
 def upgrade() -> None:
     for col_name, col_def in _SECURITY_INCIDENTS_COLS:
         _add_if_missing("security_incidents", col_name, col_def)
 
+    # security_incidents.notification_required was created NOT NULL without a
+    # server_default — add one so new ORM inserts that don't supply this legacy
+    # field don't fail with NotNullViolationError.
+    _set_server_default_if_missing("security_incidents", "notification_required", "false")
+
     for col_name, col_def in _ACCESS_CONTROL_COLS:
         _add_if_missing("access_control_records", col_name, col_def)
 
+    # access_control_records.resource_type was created NOT NULL without a default
+    _set_server_default_if_missing("access_control_records", "resource_type", "'system'")
+
     for col_name, col_def in _BCP_COLS:
         _add_if_missing("business_continuity_plans", col_name, col_def)
+
+    # business_continuity_plans.plan_name was created NOT NULL without a default
+    _set_server_default_if_missing("business_continuity_plans", "plan_name", "''")
 
     for col_name, col_def in _SUPPLIER_COLS:
         _add_if_missing("supplier_security_assessments", col_name, col_def)

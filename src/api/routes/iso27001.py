@@ -39,10 +39,8 @@ router = APIRouter()
 
 def _naive(data: dict) -> dict:
     """Strip tzinfo from all datetime values before writing to TIMESTAMP WITHOUT TIME ZONE columns."""
-    return {
-        k: (v.replace(tzinfo=None) if isinstance(v, datetime) else v)
-        for k, v in data.items()
-    }
+    return {k: (v.replace(tzinfo=None) if isinstance(v, datetime) else v) for k, v in data.items()}
+
 
 # Criticality ordering for SQL CASE expression (critical first)
 _CRITICALITY_ORDER = case(
@@ -1051,8 +1049,7 @@ async def create_supplier_assessment(
     assessment = SupplierSecurityAssessment(
         tenant_id=current_user.tenant_id,
         assessment_date=datetime.utcnow(),
-        next_assessment_date=datetime.utcnow()
-        + timedelta(days=assessment_data.assessment_frequency_months * 30),
+        next_assessment_date=datetime.utcnow() + timedelta(days=assessment_data.assessment_frequency_months * 30),
         **_naive(assessment_data.model_dump()),
     )
     db.add(assessment)
