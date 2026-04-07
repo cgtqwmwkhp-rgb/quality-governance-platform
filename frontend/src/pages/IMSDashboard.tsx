@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { iso27001Api, IsmsApiDashboard } from '../api/client'
 import {
   Shield,
   Leaf,
@@ -53,19 +54,7 @@ interface CrossMapping {
   evidence: number
 }
 
-interface ISMSDashboardData {
-  assets: { total: number; critical: number }
-  controls: {
-    total: number
-    applicable: number
-    implemented: number
-    implementation_percentage: number
-  }
-  risks: { open: number; high_critical: number }
-  incidents: { open: number; last_30_days: number }
-  suppliers: { high_risk: number }
-  compliance_score: number
-}
+type ISMSDashboardData = IsmsApiDashboard
 
 export default function IMSDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'mapping' | 'audit' | 'review' | 'isms'>(
@@ -74,23 +63,27 @@ export default function IMSDashboard() {
   const [selectedStandard, setSelectedStandard] = useState<string | null>(null)
   const [ismsData, setIsmsData] = useState<ISMSDashboardData | null>(null)
   const [ismsLoading, setIsmsLoading] = useState(false)
+  const [ismsError, setIsmsError] = useState<string | null>(null)
+
+  const fetchIsmsData = useCallback(async () => {
+    setIsmsLoading(true)
+    setIsmsError(null)
+    try {
+      const response = await iso27001Api.getDashboard()
+      setIsmsData(response.data)
+    } catch (err) {
+      setIsmsError('Unable to load ISMS data. Please try again.')
+      if (import.meta.env.DEV) console.error('ISMS dashboard fetch error:', err)
+    } finally {
+      setIsmsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (activeTab === 'isms') {
-      setIsmsLoading(true)
-      setTimeout(() => {
-        setIsmsData({
-          assets: { total: 0, critical: 0 },
-          controls: { total: 93, applicable: 0, implemented: 0, implementation_percentage: 0 },
-          risks: { open: 0, high_critical: 0 },
-          incidents: { open: 0, last_30_days: 0 },
-          suppliers: { high_risk: 0 },
-          compliance_score: 0,
-        })
-        setIsmsLoading(false)
-      }, 500)
+      fetchIsmsData()
     }
-  }, [activeTab])
+  }, [activeTab, fetchIsmsData])
 
   const standards: Standard[] = [
     {
@@ -295,11 +288,6 @@ export default function IMSDashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
-      <div className="bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
-        <span className="text-lg">🚧</span>
-        <span className="font-medium">Preview</span> — IMS Dashboard data is illustrative. Full
-        integration is under development.
-      </div>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
@@ -310,7 +298,10 @@ export default function IMSDashboard() {
           <p className="text-muted-foreground">Unified ISO 9001, 14001, 45001 & 27001 Dashboard</p>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={() => { if (activeTab === 'isms') fetchIsmsData() }}
+          >
             <RefreshCw className="w-4 h-4 mr-2" />
             Sync
           </Button>
@@ -777,6 +768,17 @@ export default function IMSDashboard() {
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin" />
             </div>
+          ) : ismsError ? (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-6 rounded-lg flex flex-col items-center gap-3">
+              <AlertTriangle className="w-8 h-8" />
+              <p className="font-medium">{ismsError}</p>
+              <button
+                onClick={fetchIsmsData}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
+              >
+                Retry
+              </button>
+            </div>
           ) : ismsData ? (
             <>
               {/* ISMS Compliance Score */}
@@ -877,38 +879,22 @@ export default function IMSDashboard() {
                   <p className="text-sm text-gray-400">93 controls across 4 themes</p>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    {
-                      domain: 'Organizational',
-                      count: 37,
-                      implemented: 31,
-                      icon: Building2,
-                      color: 'bg-blue-500',
-                    },
-                    {
-                      domain: 'People',
-                      count: 8,
-                      implemented: 7,
-                      icon: UserCheck,
-                      color: 'bg-green-500',
-                    },
-                    {
-                      domain: 'Physical',
-                      count: 14,
-                      implemented: 11,
-                      icon: Key,
-                      color: 'bg-orange-500',
-                    },
-                    {
-                      domain: 'Technological',
-                      count: 34,
-                      implemented: 23,
-                      icon: Laptop,
-                      color: 'bg-purple-500',
-                    },
-                  ].map((domain, i) => {
+                  {(ismsData.domains.length > 0 ? ismsData.domains : [
+                    { domain: 'organizational', total: 37, implemented: 0, percentage: 0 },
+                    { domain: 'people', total: 8, implemented: 0, percentage: 0 },
+                    { domain: 'physical', total: 14, implemented: 0, percentage: 0 },
+                    { domain: 'technological', total: 34, implemented: 0, percentage: 0 },
+                  ]).map((d, i) => {
+                    const domainMeta: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+                      organizational: { label: 'Organizational', icon: Building2, color: 'bg-blue-500' },
+                      people: { label: 'People', icon: UserCheck, color: 'bg-green-500' },
+                      physical: { label: 'Physical', icon: Key, color: 'bg-orange-500' },
+                      technological: { label: 'Technological', icon: Laptop, color: 'bg-purple-500' },
+                    }
+                    const meta = domainMeta[d.domain] ?? { label: d.domain, icon: Building2, color: 'bg-gray-500' }
+                    const domain = { domain: meta.label, count: d.total, implemented: d.implemented, icon: meta.icon, color: meta.color }
                     const Icon = domain.icon
-                    const percentage = Math.round((domain.implemented / domain.count) * 100)
+                    const percentage = d.percentage
                     return (
                       <div key={i} className="bg-slate-700/50 rounded-lg p-4">
                         <div className="flex items-center gap-3 mb-3">
@@ -994,40 +980,9 @@ export default function IMSDashboard() {
                     </button>
                   </div>
                   <div className="p-4 space-y-3">
-                    {[
-                      {
-                        id: 'SEC-00042',
-                        title: 'Phishing Attempt Detected',
-                        type: 'phishing',
-                        severity: 'medium',
-                        status: 'investigating',
-                        date: '2026-01-18',
-                      },
-                      {
-                        id: 'SEC-00041',
-                        title: 'Unauthorized Access Attempt',
-                        type: 'unauthorized_access',
-                        severity: 'high',
-                        status: 'contained',
-                        date: '2026-01-15',
-                      },
-                      {
-                        id: 'SEC-00040',
-                        title: 'Data Loss Prevention Alert',
-                        type: 'data_leak',
-                        severity: 'low',
-                        status: 'closed',
-                        date: '2026-01-12',
-                      },
-                      {
-                        id: 'SEC-00039',
-                        title: 'Malware Detection on Endpoint',
-                        type: 'malware',
-                        severity: 'medium',
-                        status: 'closed',
-                        date: '2026-01-10',
-                      },
-                    ].map((incident, i) => (
+                    {ismsData.recent_incidents.length === 0 ? (
+                      <p className="text-gray-400 text-sm text-center py-4">No incidents recorded in the last 30 days.</p>
+                    ) : ismsData.recent_incidents.map((incident, i) => (
                       <div
                         key={i}
                         className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg"

@@ -16,6 +16,7 @@ import {
   Award,
   Leaf,
   HardHat,
+  Lock,
   Search,
   X,
   ChevronDown,
@@ -45,13 +46,22 @@ const standardIcons: Record<string, React.ElementType> = {
   iso9001: Award,
   iso14001: Leaf,
   iso45001: HardHat,
+  iso27001: Lock,
+  planetmark: Leaf,
+  uvdb: Award,
 }
 
 const standardColors: Record<string, { bg: string; text: string; border: string }> = {
   iso9001: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
   iso14001: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500' },
   iso45001: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500' },
+  iso27001: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500' },
+  planetmark: { bg: 'bg-teal-500/20', text: 'text-teal-400', border: 'border-teal-500' },
+  uvdb: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
 }
+
+const _fallbackIcon = Award
+const _fallbackColors = { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500' }
 
 export default function ISOTagSelector({
   selectedClauses,
@@ -114,8 +124,8 @@ export default function ISOTagSelector({
 
   // Render a clause badge
   const renderClauseBadge = (clause: ISOClause, removable = true) => {
-    const Icon = standardIcons[clause.standard]
-    const colors = standardColors[clause.standard]
+    const Icon = standardIcons[clause.standard] ?? _fallbackIcon
+    const colors = standardColors[clause.standard] ?? _fallbackColors
 
     return (
       <span
@@ -192,8 +202,8 @@ export default function ISOTagSelector({
             <div className="max-h-40 overflow-y-auto space-y-1">
               {filteredClauses.map((clause) => {
                 const isSelected = selectedClauses.includes(clause.id)
-                const Icon = standardIcons[clause.standard]
-                const colors = standardColors[clause.standard]
+                const Icon = standardIcons[clause.standard] ?? _fallbackIcon
+                const colors = standardColors[clause.standard] ?? _fallbackColors
 
                 return (
                   <div
@@ -289,8 +299,8 @@ export default function ISOTagSelector({
               const isAlreadySelected = selectedClauses.includes(clause.id)
               if (isAlreadySelected) return null
 
-              const Icon = standardIcons[clause.standard]
-              const colors = standardColors[clause.standard]
+              const Icon = standardIcons[clause.standard] ?? _fallbackIcon
+              const colors = standardColors[clause.standard] ?? _fallbackColors
 
               return (
                 <button
@@ -345,8 +355,8 @@ export default function ISOTagSelector({
             {filteredClauses.length > 0 ? (
               filteredClauses.map((clause) => {
                 const isSelected = selectedClauses.includes(clause.id)
-                const Icon = standardIcons[clause.standard]
-                const colors = standardColors[clause.standard]
+                const Icon = standardIcons[clause.standard] ?? _fallbackIcon
+                const colors = standardColors[clause.standard] ?? _fallbackColors
 
                 return (
                   <div

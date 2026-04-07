@@ -12,12 +12,13 @@ Provides endpoints for:
 - Supplier Security Assessments
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, text
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.exceptions import NotFoundError
@@ -35,6 +36,42 @@ from src.domain.models.iso27001 import (
 
 router = APIRouter()
 
+# Criticality ordering for SQL CASE expression (critical first)
+_CRITICALITY_ORDER = case(
+    (InformationAsset.criticality == "critical", 0),
+    (InformationAsset.criticality == "high", 1),
+    (InformationAsset.criticality == "medium", 2),
+    (InformationAsset.criticality == "low", 3),
+    else_=4,
+)
+
+_VALID_ASSET_TYPES = Literal["hardware", "software", "data", "service", "people", "physical"]
+_VALID_CLASSIFICATIONS = Literal["public", "internal", "confidential", "restricted", "secret"]
+_VALID_CRITICALITY = Literal["low", "medium", "high", "critical"]
+_VALID_SEVERITY = Literal["low", "medium", "high", "critical"]
+_VALID_INCIDENT_TYPES = Literal[
+    "malware",
+    "phishing",
+    "unauthorized_access",
+    "data_breach",
+    "dos",
+    "insider_threat",
+    "physical",
+    "data_leak",
+    "other",
+]
+_VALID_TREATMENT = Literal["accept", "avoid", "mitigate", "transfer"]
+_VALID_SUPPLIER_RATINGS = Literal["compliant", "partially_compliant", "non_compliant"]
+_VALID_RISK_LEVELS = Literal["low", "medium", "high", "critical"]
+_VALID_DATA_ACCESS = Literal["none", "limited", "full"]
+_VALID_ASSESSMENT_TYPES = Literal["initial", "periodic", "ad-hoc"]
+_VALID_ACCESS_LEVEL = Literal["read", "write", "admin", "owner"]
+
+
+def _tenant_scoped_id(prefix: str, tenant_id: int, suffix: int) -> str:
+    """Generate a tenant-scoped human-readable ID that avoids cross-tenant collisions."""
+    return f"{prefix}-{tenant_id}-{suffix:05d}"
+
 
 # ============ Pydantic Schemas ============
 
@@ -42,24 +79,29 @@ router = APIRouter()
 class AssetCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     description: Optional[str] = None
-    asset_type: str = Field(..., description="hardware, software, data, service, people, physical")
-    classification: str = Field(default="internal")
+    asset_type: _VALID_ASSET_TYPES
+    classification: _VALID_CLASSIFICATIONS = "internal"
     owner_name: Optional[str] = None
     department: Optional[str] = None
     location: Optional[str] = None
-    criticality: str = Field(default="medium")
+    criticality: _VALID_CRITICALITY = "medium"
     confidentiality_requirement: int = Field(default=2, ge=1, le=3)
     integrity_requirement: int = Field(default=2, ge=1, le=3)
     availability_requirement: int = Field(default=2, ge=1, le=3)
 
 
 class AssetUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
     description: Optional[str] = None
-    classification: Optional[str] = None
+    classification: Optional[_VALID_CLASSIFICATIONS] = None
     owner_name: Optional[str] = None
-    criticality: Optional[str] = None
+    department: Optional[str] = None
+    location: Optional[str] = None
+    criticality: Optional[_VALID_CRITICALITY] = None
     status: Optional[str] = None
+    confidentiality_requirement: Optional[int] = Field(None, ge=1, le=3)
+    integrity_requirement: Optional[int] = Field(None, ge=1, le=3)
+    availability_requirement: Optional[int] = Field(None, ge=1, le=3)
 
 
 class ControlUpdate(BaseModel):
@@ -78,23 +120,39 @@ class SecurityRiskCreate(BaseModel):
     threat_description: Optional[str] = None
     vulnerability: Optional[str] = None
     affected_assets: Optional[list[int]] = None
-    asset_classification: Optional[str] = None
+    asset_classification: Optional[_VALID_CLASSIFICATIONS] = None
     confidentiality_impact: int = Field(default=2, ge=1, le=3)
     integrity_impact: int = Field(default=2, ge=1, le=3)
     availability_impact: int = Field(default=2, ge=1, le=3)
     likelihood: int = Field(default=3, ge=1, le=5)
     impact: int = Field(default=3, ge=1, le=5)
-    treatment_option: str = Field(default="mitigate")
+    residual_likelihood: int = Field(default=2, ge=1, le=5)
+    residual_impact: int = Field(default=2, ge=1, le=5)
+    treatment_option: _VALID_TREATMENT = "mitigate"
     treatment_plan: Optional[str] = None
     applicable_controls: Optional[list[str]] = None
     risk_owner_name: Optional[str] = None
 
 
+class RiskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    likelihood: Optional[int] = Field(None, ge=1, le=5)
+    impact: Optional[int] = Field(None, ge=1, le=5)
+    residual_likelihood: Optional[int] = Field(None, ge=1, le=5)
+    residual_impact: Optional[int] = Field(None, ge=1, le=5)
+    treatment_option: Optional[_VALID_TREATMENT] = None
+    treatment_plan: Optional[str] = None
+    treatment_status: Optional[str] = None
+    risk_owner_name: Optional[str] = None
+    status: Optional[str] = None
+
+
 class SecurityIncidentCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=255)
     description: str = Field(..., min_length=10)
-    incident_type: str = Field(...)
-    severity: str = Field(default="medium")
+    incident_type: _VALID_INCIDENT_TYPES
+    severity: _VALID_SEVERITY = "medium"
     detected_date: datetime
     occurred_date: Optional[datetime] = None
     cia_impact: Optional[list[str]] = None
@@ -105,7 +163,7 @@ class SecurityIncidentCreate(BaseModel):
 
 class IncidentUpdate(BaseModel):
     status: Optional[str] = None
-    severity: Optional[str] = None
+    severity: Optional[_VALID_SEVERITY] = None
     assigned_to_name: Optional[str] = None
     root_cause: Optional[str] = None
     containment_actions: Optional[str] = None
@@ -119,15 +177,28 @@ class SupplierAssessmentCreate(BaseModel):
     supplier_name: str = Field(..., min_length=3, max_length=255)
     supplier_type: str = Field(...)
     services_provided: Optional[str] = None
-    data_access_level: str = Field(default="none")
-    assessment_type: str = Field(default="initial")
-    overall_rating: str = Field(...)
+    data_access_level: _VALID_DATA_ACCESS = "none"
+    assessment_type: _VALID_ASSESSMENT_TYPES = "initial"
+    overall_rating: _VALID_SUPPLIER_RATINGS
     security_score: Optional[int] = Field(None, ge=0, le=100)
     iso27001_certified: bool = False
     soc2_certified: bool = False
-    findings_count: int = Field(default=0)
-    critical_findings: int = Field(default=0)
-    risk_level: str = Field(default="medium")
+    findings_count: int = Field(default=0, ge=0)
+    critical_findings: int = Field(default=0, ge=0)
+    risk_level: _VALID_RISK_LEVELS = "medium"
+    assessment_frequency_months: int = Field(default=12, ge=1, le=60)
+
+
+class AccessControlCreate(BaseModel):
+    user_id: int
+    user_name: str = Field(..., min_length=1, max_length=255)
+    user_email: Optional[str] = None
+    user_department: Optional[str] = None
+    system_name: str = Field(..., min_length=1, max_length=255)
+    access_level: _VALID_ACCESS_LEVEL
+    granted_date: datetime
+    granted_by: Optional[str] = None
+    expiry_date: Optional[datetime] = None
 
 
 # ============ Information Assets ============
@@ -144,10 +215,10 @@ async def list_assets(
     limit: int = Query(50, ge=1, le=100),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """List information assets"""
+    """List information assets sorted by criticality (critical first)."""
     tid = current_user.tenant_id
     stmt = select(InformationAsset).where(
-        InformationAsset.is_active == True,
+        InformationAsset.is_active == True,  # noqa: E712
         InformationAsset.tenant_id == tid,
     )
 
@@ -163,11 +234,13 @@ async def list_assets(
     count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = count_result.scalar()
 
-    result = await db.execute(stmt.order_by(InformationAsset.criticality.desc()).offset(skip).limit(limit))
+    result = await db.execute(stmt.order_by(_CRITICALITY_ORDER).offset(skip).limit(limit))
     assets = result.scalars().all()
 
     return {
         "total": total,
+        "skip": skip,
+        "limit": limit,
         "assets": [
             {
                 "id": a.id,
@@ -191,13 +264,13 @@ async def create_asset(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create information asset"""
+    """Create information asset with tenant-scoped unique ID."""
     tid = current_user.tenant_id
     count_result = await db.execute(
         select(func.count()).select_from(InformationAsset).where(InformationAsset.tenant_id == tid)
     )
     count = count_result.scalar()
-    asset_id = f"ASSET-{(count + 1):05d}"
+    asset_id = _tenant_scoped_id("ASSET", tid, count + 1)
 
     asset = InformationAsset(
         asset_id=asset_id,
@@ -218,7 +291,7 @@ async def get_asset(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Get asset details"""
+    """Get asset details."""
     result = await db.execute(
         select(InformationAsset).where(
             InformationAsset.id == asset_id,
@@ -258,6 +331,34 @@ async def get_asset(
     }
 
 
+@router.put("/assets/{asset_id}", response_model=dict)
+async def update_asset(
+    asset_id: int,
+    asset_data: AssetUpdate,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Update an information asset."""
+    result = await db.execute(
+        select(InformationAsset).where(
+            InformationAsset.id == asset_id,
+            InformationAsset.tenant_id == current_user.tenant_id,
+        )
+    )
+    asset = result.scalar_one_or_none()
+    if not asset:
+        raise NotFoundError("Asset not found")
+
+    update_data = asset_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(asset, key, value)
+
+    asset.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"message": "Asset updated", "id": asset.id}
+
+
 # ============ ISO 27001 Controls (Annex A) ============
 
 
@@ -271,7 +372,7 @@ async def list_controls(
     limit: int = Query(100, ge=1, le=200),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """List ISO 27001 Annex A controls"""
+    """List ISO 27001 Annex A controls."""
     tid = current_user.tenant_id
     stmt = select(ISO27001Control).where(ISO27001Control.tenant_id == tid)
 
@@ -288,47 +389,50 @@ async def list_controls(
     result = await db.execute(stmt.order_by(ISO27001Control.control_id).offset(skip).limit(limit))
     controls = result.scalars().all()
 
-    # Summary
-    result = await db.execute(
+    impl_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
             ISO27001Control.implementation_status == "implemented",
         )
     )
-    implemented = result.scalar()
+    implemented = impl_result.scalar()
 
-    result = await db.execute(
+    partial_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
             ISO27001Control.implementation_status == "partial",
         )
     )
-    partial = result.scalar()
+    partial = partial_result.scalar()
 
-    result = await db.execute(
+    not_impl_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
             ISO27001Control.implementation_status == "not_implemented",
         )
     )
-    not_impl = result.scalar()
+    not_impl = not_impl_result.scalar()
 
-    result = await db.execute(
+    excl_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
-            ISO27001Control.is_applicable == False,
+            ISO27001Control.is_applicable == False,  # noqa: E712
         )
     )
-    excluded = result.scalar()
+    excluded = excl_result.scalar()
 
+    applicable = total - excluded
     return {
         "total": total,
+        "skip": skip,
+        "limit": limit,
         "summary": {
             "implemented": implemented,
             "partially_implemented": partial,
             "not_implemented": not_impl,
             "excluded": excluded,
-            "implementation_percentage": round((implemented / max(total - excluded, 1)) * 100, 1),
+            "applicable": applicable,
+            "implementation_percentage": round((implemented / max(applicable, 1)) * 100, 1),
         },
         "controls": [
             {
@@ -354,7 +458,7 @@ async def update_control(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Update control implementation status"""
+    """Update control implementation status."""
     result = await db.execute(
         select(ISO27001Control).where(
             ISO27001Control.id == control_id,
@@ -388,38 +492,42 @@ async def get_current_soa(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Get current Statement of Applicability"""
+    """Get current Statement of Applicability."""
     tid = current_user.tenant_id
+
+    # Use LIMIT 1 to prevent MultipleResultsFound if data integrity is violated
     result = await db.execute(
-        select(StatementOfApplicability).where(
-            StatementOfApplicability.is_current == True,
+        select(StatementOfApplicability)
+        .where(
+            StatementOfApplicability.is_current == True,  # noqa: E712
             StatementOfApplicability.tenant_id == tid,
         )
+        .limit(1)
     )
-    soa = result.scalar_one_or_none()
+    soa = result.scalars().first()
 
     if not soa:
-        result = await db.execute(
+        total_result = await db.execute(
             select(func.count()).select_from(ISO27001Control).where(ISO27001Control.tenant_id == tid)
         )
-        total = result.scalar()
+        total = total_result.scalar()
 
-        result = await db.execute(
+        applicable_result = await db.execute(
             select(func.count(ISO27001Control.id)).where(
                 ISO27001Control.tenant_id == tid,
-                ISO27001Control.is_applicable == True,
+                ISO27001Control.is_applicable == True,  # noqa: E712
             )
         )
-        applicable = result.scalar()
+        applicable = applicable_result.scalar()
 
-        result = await db.execute(
+        implemented_result = await db.execute(
             select(func.count(ISO27001Control.id)).where(
                 ISO27001Control.tenant_id == tid,
-                ISO27001Control.is_applicable == True,
+                ISO27001Control.is_applicable == True,  # noqa: E712
                 ISO27001Control.implementation_status == "implemented",
             )
         )
-        implemented = result.scalar()
+        implemented = implemented_result.scalar()
 
         return {
             "version": "N/A",
@@ -463,7 +571,7 @@ async def list_security_risks(
     limit: int = Query(50, ge=1, le=100),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """List information security risks"""
+    """List information security risks."""
     tid = current_user.tenant_id
     stmt = select(InformationSecurityRisk).where(
         InformationSecurityRisk.status != "closed",
@@ -475,25 +583,31 @@ async def list_security_risks(
     if treatment_option:
         stmt = stmt.where(InformationSecurityRisk.treatment_option == treatment_option)
     if min_score:
-        stmt = stmt.where(InformationSecurityRisk.residual_risk_score >= min_score)
+        stmt = stmt.where(InformationSecurityRisk.inherent_risk_score >= min_score)
 
     count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
     total = count_result.scalar()
 
     result = await db.execute(
-        stmt.order_by(InformationSecurityRisk.residual_risk_score.desc()).offset(skip).limit(limit)
+        stmt.order_by(InformationSecurityRisk.inherent_risk_score.desc()).offset(skip).limit(limit)
     )
     risks = result.scalars().all()
 
     return {
         "total": total,
+        "skip": skip,
+        "limit": limit,
         "risks": [
             {
                 "id": r.id,
                 "risk_id": r.risk_id,
                 "title": r.title,
                 "threat_source": r.threat_source,
+                "likelihood": r.likelihood,
+                "impact": r.impact,
                 "inherent_risk_score": r.inherent_risk_score,
+                "residual_likelihood": r.residual_likelihood,
+                "residual_impact": r.residual_impact,
                 "residual_risk_score": r.residual_risk_score,
                 "treatment_option": r.treatment_option,
                 "treatment_status": r.treatment_status,
@@ -505,36 +619,120 @@ async def list_security_risks(
     }
 
 
+@router.get("/risks/{risk_id}", response_model=dict)
+async def get_security_risk(
+    risk_id: int,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Get a specific information security risk."""
+    result = await db.execute(
+        select(InformationSecurityRisk).where(
+            InformationSecurityRisk.id == risk_id,
+            InformationSecurityRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise NotFoundError("Risk not found")
+
+    return {
+        "id": risk.id,
+        "risk_id": risk.risk_id,
+        "title": risk.title,
+        "description": risk.description,
+        "threat_source": risk.threat_source,
+        "threat_description": risk.threat_description,
+        "vulnerability": risk.vulnerability,
+        "affected_assets": risk.affected_assets,
+        "asset_classification": risk.asset_classification,
+        "confidentiality_impact": risk.confidentiality_impact,
+        "integrity_impact": risk.integrity_impact,
+        "availability_impact": risk.availability_impact,
+        "likelihood": risk.likelihood,
+        "impact": risk.impact,
+        "inherent_risk_score": risk.inherent_risk_score,
+        "residual_likelihood": risk.residual_likelihood,
+        "residual_impact": risk.residual_impact,
+        "residual_risk_score": risk.residual_risk_score,
+        "treatment_option": risk.treatment_option,
+        "treatment_plan": risk.treatment_plan,
+        "treatment_status": risk.treatment_status,
+        "applicable_controls": risk.applicable_controls,
+        "risk_owner_name": risk.risk_owner_name,
+        "last_review_date": risk.last_review_date.isoformat() if risk.last_review_date else None,
+        "next_review_date": risk.next_review_date.isoformat() if risk.next_review_date else None,
+        "status": risk.status,
+    }
+
+
 @router.post("/risks", response_model=dict, status_code=201)
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create information security risk"""
+    """Create information security risk with correct residual score calculation."""
     tid = current_user.tenant_id
     count_result = await db.execute(
         select(func.count()).select_from(InformationSecurityRisk).where(InformationSecurityRisk.tenant_id == tid)
     )
     count = count_result.scalar()
-    risk_id = f"ISR-{(count + 1):04d}"
+    risk_id = _tenant_scoped_id("ISR", tid, count + 1)
 
     inherent_score = risk_data.likelihood * risk_data.impact
-    residual_score = (risk_data.likelihood - 1) * (risk_data.impact - 1)  # Simplified
+    # Residual score uses the actual post-treatment likelihood/impact fields
+    residual_score = risk_data.residual_likelihood * risk_data.residual_impact
 
+    data = risk_data.model_dump()
     risk = InformationSecurityRisk(
         risk_id=risk_id,
         tenant_id=tid,
         inherent_risk_score=inherent_score,
-        residual_risk_score=max(residual_score, 1),
+        residual_risk_score=residual_score,
         next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
-        **risk_data.model_dump(),
+        **data,
     )
     db.add(risk)
     await db.commit()
     await db.refresh(risk)
 
     return {"id": risk.id, "risk_id": risk_id, "message": "Security risk created"}
+
+
+@router.put("/risks/{risk_id}", response_model=dict)
+async def update_security_risk(
+    risk_id: int,
+    risk_data: RiskUpdate,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Update a security risk (for periodic review updates)."""
+    result = await db.execute(
+        select(InformationSecurityRisk).where(
+            InformationSecurityRisk.id == risk_id,
+            InformationSecurityRisk.tenant_id == current_user.tenant_id,
+        )
+    )
+    risk = result.scalar_one_or_none()
+    if not risk:
+        raise NotFoundError("Risk not found")
+
+    update_data = risk_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(risk, key, value)
+
+    # Recalculate scores if rating fields changed
+    if any(k in update_data for k in ("likelihood", "impact")):
+        risk.inherent_risk_score = risk.likelihood * risk.impact
+    if any(k in update_data for k in ("residual_likelihood", "residual_impact")):
+        risk.residual_risk_score = risk.residual_likelihood * risk.residual_impact
+
+    risk.last_review_date = datetime.now(timezone.utc)
+    risk.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"message": "Risk updated", "id": risk.id}
 
 
 # ============ Security Incidents ============
@@ -550,7 +748,7 @@ async def list_security_incidents(
     limit: int = Query(50, ge=1, le=100),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """List security incidents"""
+    """List security incidents."""
     tid = current_user.tenant_id
     stmt = select(SecurityIncident).where(SecurityIncident.tenant_id == tid)
 
@@ -567,25 +765,26 @@ async def list_security_incidents(
     result = await db.execute(stmt.order_by(SecurityIncident.detected_date.desc()).offset(skip).limit(limit))
     incidents = result.scalars().all()
 
-    # Summary
-    result = await db.execute(
+    open_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
             SecurityIncident.status == "open",
         )
     )
-    open_count = result.scalar()
+    open_count = open_result.scalar()
 
-    result = await db.execute(
+    critical_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
             SecurityIncident.severity == "critical",
         )
     )
-    critical_count = result.scalar()
+    critical_count = critical_result.scalar()
 
     return {
         "total": total,
+        "skip": skip,
+        "limit": limit,
         "open_incidents": open_count,
         "critical_incidents": critical_count,
         "incidents": [
@@ -611,13 +810,13 @@ async def create_security_incident(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create security incident"""
+    """Create security incident with tenant-scoped ID."""
     tid = current_user.tenant_id
     count_result = await db.execute(
         select(func.count()).select_from(SecurityIncident).where(SecurityIncident.tenant_id == tid)
     )
     count = count_result.scalar()
-    incident_id = f"SEC-{(count + 1):05d}"
+    incident_id = _tenant_scoped_id("SEC", tid, count + 1)
 
     incident = SecurityIncident(
         incident_id=incident_id,
@@ -643,7 +842,7 @@ async def update_security_incident(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Update security incident"""
+    """Update security incident."""
     result = await db.execute(
         select(SecurityIncident).where(
             SecurityIncident.id == incident_id,
@@ -681,7 +880,7 @@ async def list_supplier_assessments(
     limit: int = Query(50, ge=1, le=100),
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """List supplier security assessments"""
+    """List supplier security assessments."""
     tid = current_user.tenant_id
     stmt = select(SupplierSecurityAssessment).where(
         SupplierSecurityAssessment.status == "active",
@@ -701,6 +900,8 @@ async def list_supplier_assessments(
 
     return {
         "total": total,
+        "skip": skip,
+        "limit": limit,
         "suppliers": [
             {
                 "id": s.id,
@@ -725,18 +926,12 @@ async def create_supplier_assessment(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Create supplier security assessment"""
+    """Create supplier security assessment."""
     assessment = SupplierSecurityAssessment(
         tenant_id=current_user.tenant_id,
         assessment_date=datetime.now(timezone.utc),
         next_assessment_date=datetime.now(timezone.utc)
-        + timedelta(
-            days=(
-                assessment_data.assessment_frequency_months
-                if hasattr(assessment_data, "assessment_frequency_months")
-                else 365
-            )
-        ),
+        + timedelta(days=assessment_data.assessment_frequency_months * 30),
         **assessment_data.model_dump(),
     )
     db.add(assessment)
@@ -744,6 +939,85 @@ async def create_supplier_assessment(
     await db.refresh(assessment)
 
     return {"id": assessment.id, "message": "Supplier assessment created"}
+
+
+# ============ Access Control Records ============
+
+
+@router.get("/access-control", response_model=dict)
+async def list_access_control(
+    current_user: CurrentUser,
+    active_only: bool = Query(True),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """List access control records for access review."""
+    tid = current_user.tenant_id
+    stmt = select(AccessControlRecord).where(AccessControlRecord.tenant_id == tid)
+
+    if active_only:
+        stmt = stmt.where(AccessControlRecord.is_active == True)  # noqa: E712
+
+    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = count_result.scalar()
+
+    result = await db.execute(
+        stmt.order_by(AccessControlRecord.next_review_date.asc().nullslast()).offset(skip).limit(limit)
+    )
+    records = result.scalars().all()
+
+    overdue_result = await db.execute(
+        select(func.count(AccessControlRecord.id)).where(
+            AccessControlRecord.tenant_id == tid,
+            AccessControlRecord.is_active == True,  # noqa: E712
+            AccessControlRecord.next_review_date < datetime.now(timezone.utc),
+        )
+    )
+    overdue = overdue_result.scalar()
+
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "overdue_reviews": overdue,
+        "records": [
+            {
+                "id": r.id,
+                "user_name": r.user_name,
+                "user_email": r.user_email,
+                "user_department": r.user_department,
+                "system_name": r.system_name,
+                "access_level": r.access_level,
+                "access_type": r.access_type,
+                "granted_date": r.granted_date.isoformat() if r.granted_date else None,
+                "expiry_date": r.expiry_date.isoformat() if r.expiry_date else None,
+                "next_review_date": r.next_review_date.isoformat() if r.next_review_date else None,
+                "is_active": r.is_active,
+                "status": r.status,
+            }
+            for r in records
+        ],
+    }
+
+
+@router.post("/access-control", response_model=dict, status_code=201)
+async def create_access_control(
+    ac_data: AccessControlCreate,
+    current_user: CurrentUser,
+    db: DbSession = None,
+) -> dict[str, Any]:
+    """Record an access control grant."""
+    record = AccessControlRecord(
+        tenant_id=current_user.tenant_id,
+        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
+        **ac_data.model_dump(),
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+
+    return {"id": record.id, "message": "Access control record created"}
 
 
 # ============ ISMS Dashboard Summary ============
@@ -754,91 +1028,131 @@ async def get_isms_dashboard(
     current_user: CurrentUser,
     db: DbSession = None,
 ) -> dict[str, Any]:
-    """Get ISMS dashboard summary"""
+    """Get ISMS dashboard summary with all live metrics."""
     tid = current_user.tenant_id
 
     # Assets
-    result = await db.execute(
+    assets_result = await db.execute(
         select(func.count(InformationAsset.id)).where(
             InformationAsset.tenant_id == tid,
-            InformationAsset.is_active == True,
+            InformationAsset.is_active == True,  # noqa: E712
         )
     )
-    total_assets = result.scalar()
+    total_assets = assets_result.scalar()
 
-    result = await db.execute(
+    critical_assets_result = await db.execute(
         select(func.count(InformationAsset.id)).where(
             InformationAsset.tenant_id == tid,
-            InformationAsset.is_active == True,
+            InformationAsset.is_active == True,  # noqa: E712
             InformationAsset.criticality == "critical",
         )
     )
-    critical_assets = result.scalar()
+    critical_assets = critical_assets_result.scalar()
 
     # Controls
-    result = await db.execute(select(func.count()).select_from(ISO27001Control).where(ISO27001Control.tenant_id == tid))
-    total_controls = result.scalar()
+    total_controls_result = await db.execute(
+        select(func.count()).select_from(ISO27001Control).where(ISO27001Control.tenant_id == tid)
+    )
+    total_controls = total_controls_result.scalar()
 
-    result = await db.execute(
+    impl_controls_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
             ISO27001Control.implementation_status == "implemented",
         )
     )
-    implemented_controls = result.scalar()
+    implemented_controls = impl_controls_result.scalar()
 
-    result = await db.execute(
+    applicable_controls_result = await db.execute(
         select(func.count(ISO27001Control.id)).where(
             ISO27001Control.tenant_id == tid,
-            ISO27001Control.is_applicable == True,
+            ISO27001Control.is_applicable == True,  # noqa: E712
         )
     )
-    applicable_controls = result.scalar()
+    applicable_controls = applicable_controls_result.scalar()
 
     # Risks
-    result = await db.execute(
+    open_risks_result = await db.execute(
         select(func.count(InformationSecurityRisk.id)).where(
             InformationSecurityRisk.tenant_id == tid,
             InformationSecurityRisk.status != "closed",
         )
     )
-    open_risks = result.scalar()
+    open_risks = open_risks_result.scalar()
 
-    result = await db.execute(
+    # High risks: inherent_risk_score >= 15 (L>=3 * I>=5 or L>=5 * I>=3)
+    high_risks_result = await db.execute(
         select(func.count(InformationSecurityRisk.id)).where(
             InformationSecurityRisk.tenant_id == tid,
-            InformationSecurityRisk.residual_risk_score > 16,
+            InformationSecurityRisk.inherent_risk_score >= 15,
             InformationSecurityRisk.status != "closed",
         )
     )
-    high_risks = result.scalar()
+    high_risks = high_risks_result.scalar()
 
     # Incidents
-    result = await db.execute(
+    open_incidents_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
             SecurityIncident.status == "open",
         )
     )
-    open_incidents = result.scalar()
+    open_incidents = open_incidents_result.scalar()
 
-    result = await db.execute(
+    incidents_30d_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
             SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
         )
     )
-    incidents_30d = result.scalar()
+    incidents_30d = incidents_30d_result.scalar()
 
     # Suppliers
-    result = await db.execute(
+    high_risk_suppliers_result = await db.execute(
         select(func.count(SupplierSecurityAssessment.id)).where(
             SupplierSecurityAssessment.tenant_id == tid,
             SupplierSecurityAssessment.risk_level == "high",
             SupplierSecurityAssessment.status == "active",
         )
     )
-    high_risk_suppliers = result.scalar()
+    high_risk_suppliers = high_risk_suppliers_result.scalar()
+
+    # Recent incidents for dashboard feed
+    recent_result = await db.execute(
+        select(SecurityIncident)
+        .where(SecurityIncident.tenant_id == tid)
+        .order_by(SecurityIncident.detected_date.desc())
+        .limit(5)
+    )
+    recent_incidents = recent_result.scalars().all()
+
+    # Per-domain control breakdown
+    domains = ["organizational", "people", "physical", "technological"]
+    domain_counts: dict[str, dict] = {}
+    for domain in domains:
+        d_total_r = await db.execute(
+            select(func.count(ISO27001Control.id)).where(
+                ISO27001Control.tenant_id == tid,
+                ISO27001Control.domain == domain,
+            )
+        )
+        d_impl_r = await db.execute(
+            select(func.count(ISO27001Control.id)).where(
+                ISO27001Control.tenant_id == tid,
+                ISO27001Control.domain == domain,
+                ISO27001Control.implementation_status == "implemented",
+            )
+        )
+        d_total = d_total_r.scalar()
+        d_impl = d_impl_r.scalar()
+        domain_counts[domain] = {
+            "domain": domain,
+            "total": d_total,
+            "implemented": d_impl,
+            "percentage": round((d_impl / max(d_total, 1)) * 100, 1),
+        }
+
+    compliance_score = round((implemented_controls / max(applicable_controls, 1)) * 100, 1)
 
     return {
         "assets": {
@@ -849,7 +1163,7 @@ async def get_isms_dashboard(
             "total": total_controls,
             "applicable": applicable_controls,
             "implemented": implemented_controls,
-            "implementation_percentage": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+            "implementation_percentage": compliance_score,
         },
         "risks": {
             "open": open_risks,
@@ -862,5 +1176,17 @@ async def get_isms_dashboard(
         "suppliers": {
             "high_risk": high_risk_suppliers,
         },
-        "compliance_score": round((implemented_controls / max(applicable_controls, 1)) * 100, 1),
+        "compliance_score": compliance_score,
+        "domains": list(domain_counts.values()),
+        "recent_incidents": [
+            {
+                "id": i.incident_id,
+                "title": i.title,
+                "incident_type": i.incident_type,
+                "severity": i.severity,
+                "status": i.status,
+                "date": i.detected_date.isoformat() if i.detected_date else None,
+            }
+            for i in recent_incidents
+        ],
     }
