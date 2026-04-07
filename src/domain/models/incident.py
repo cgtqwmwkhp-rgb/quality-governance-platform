@@ -72,7 +72,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_incidents_tenant_status", "tenant_id", "status"),
         Index("ix_incidents_tenant_created", "tenant_id", "created_at"),
         CheckConstraint(
-            "source_type IN ('manual', 'email', 'api')",
+            "source_type IN ('manual', 'email', 'api', 'portal')",
             name="ck_incident_source_type",
         ),
         CheckConstraint(
@@ -146,7 +146,7 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Comma-separated risk IDs
 
     # Email ingestion source
-    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api
+    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api, portal
     source_email_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
 
     # Portal form source tracking (for audit traceability)

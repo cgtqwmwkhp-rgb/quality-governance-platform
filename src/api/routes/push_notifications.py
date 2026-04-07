@@ -16,15 +16,24 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
 from src.domain.exceptions import AuthorizationError, NotFoundError
+from src.domain.models.notification import NotificationPreference
 from src.infrastructure.database import Base
 
 router = APIRouter(tags=["Push Notifications"])
+
+# Default per-event-type settings stored inside NotificationPreference.category_preferences
+_DEFAULT_CATEGORY_PREFS: dict[str, bool] = {
+    "incident_alerts": True,
+    "action_reminders": True,
+    "audit_notifications": True,
+    "compliance_updates": True,
+    "mentions": True,
+}
 
 
 # ============================================================================
@@ -36,6 +45,7 @@ class PushSubscription(Base):
     """Web Push subscription storage."""
 
     __tablename__ = "push_subscriptions"
+    __table_args__ = {"extend_existing": True}
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=True)  # Null for anonymous
@@ -46,39 +56,6 @@ class PushSubscription(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     last_used_at = Column(DateTime, nullable=True)
-
-
-class NotificationPreference(Base):
-    """User notification preferences."""
-
-    __tablename__ = "notification_preferences"
-
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False, unique=True)
-
-    # Channels
-    push_enabled = Column(Boolean, default=True)
-    email_enabled = Column(Boolean, default=True)
-    sms_enabled = Column(Boolean, default=False)
-
-    # Event types
-    incident_alerts = Column(Boolean, default=True)
-    action_reminders = Column(Boolean, default=True)
-    audit_notifications = Column(Boolean, default=True)
-    compliance_updates = Column(Boolean, default=True)
-    mentions = Column(Boolean, default=True)
-
-    # Frequency
-    digest_frequency = Column(String(20), default="immediate")  # immediate, daily, weekly
-    quiet_hours_start = Column(String(5), nullable=True)  # "22:00"
-    quiet_hours_end = Column(String(5), nullable=True)  # "07:00"
-
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at = Column(
-        DateTime,
-        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
-    )
 
 
 class NotificationLog(Base):
@@ -93,7 +70,7 @@ class NotificationLog(Base):
     notification_type = Column(String(50), nullable=False)
     title = Column(String(255), nullable=False)
     body = Column(Text, nullable=True)
-    data = Column(JSONB, nullable=True)
+    data = Column(JSON, nullable=True)
 
     channel = Column(String(20), nullable=False)  # push, email, sms
     status = Column(String(20), default="pending")  # pending, sent, failed, delivered
@@ -409,31 +386,26 @@ async def get_notification_preferences(
     prefs = result.scalar_one_or_none()
 
     if not prefs:
-        # Return defaults
+        # Return defaults — event-type flags live in category_preferences JSON
         return {
             "push_enabled": True,
             "email_enabled": True,
             "sms_enabled": False,
-            "incident_alerts": True,
-            "action_reminders": True,
-            "audit_notifications": True,
-            "compliance_updates": True,
-            "mentions": True,
+            "quiet_hours_start": None,
+            "quiet_hours_end": None,
+            **_DEFAULT_CATEGORY_PREFS,
             "digest_frequency": "immediate",
         }
 
+    cat = prefs.category_preferences or {}
     return {
         "push_enabled": prefs.push_enabled,
         "email_enabled": prefs.email_enabled,
         "sms_enabled": prefs.sms_enabled,
-        "incident_alerts": prefs.incident_alerts,
-        "action_reminders": prefs.action_reminders,
-        "audit_notifications": prefs.audit_notifications,
-        "compliance_updates": prefs.compliance_updates,
-        "mentions": prefs.mentions,
-        "digest_frequency": prefs.digest_frequency,
         "quiet_hours_start": prefs.quiet_hours_start,
         "quiet_hours_end": prefs.quiet_hours_end,
+        "digest_frequency": prefs.email_digest_frequency,
+        **{k: cat.get(k, default) for k, default in _DEFAULT_CATEGORY_PREFS.items()},
     }
 
 
@@ -451,8 +423,24 @@ async def update_notification_preferences(
         prefs = NotificationPreference(user_id=current_user.id)
         db.add(prefs)
 
-    for key, value in updates.model_dump(exclude_unset=True).items():
-        setattr(prefs, key, value)
+    update_data = updates.model_dump(exclude_unset=True)
+
+    # Channel-level fields map directly to canonical model columns
+    channel_fields = {"push_enabled", "email_enabled", "sms_enabled", "quiet_hours_start", "quiet_hours_end"}
+    cat_updates = {}
+    for key, value in update_data.items():
+        if key in channel_fields:
+            setattr(prefs, key, value)
+        elif key == "digest_frequency":
+            prefs.email_digest_frequency = value
+        else:
+            # Store event-type flags in category_preferences JSON
+            cat_updates[key] = value
+
+    if cat_updates:
+        existing_cat = dict(prefs.category_preferences or {})
+        existing_cat.update(cat_updates)
+        prefs.category_preferences = existing_cat
 
     await db.commit()
 
