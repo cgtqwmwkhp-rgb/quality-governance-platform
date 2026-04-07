@@ -1,0 +1,56 @@
+{
+  "run_type": "baseline_documentation",
+  "run_date": "2026-04-07T00:00:00Z",
+  "note": "First chaos baseline evidence document. The .github/workflows/chaos-testing.yml workflow is scheduled weekly (Wednesdays 01:00 UTC). First live run will execute on 2026-04-08 or next scheduled date. This document records the chaos probe methodology and expected outcomes.",
+  "chaos_workflow": ".github/workflows/chaos-testing.yml",
+  "probe_script": "scripts/chaos/run_resilience_probes.py",
+  "scheduled_cron": "0 1 * * 3",
+  "probes_defined": [
+    {
+      "id": "PROBE-001",
+      "name": "Health endpoint availability",
+      "endpoint": "/healthz",
+      "expected_http": 200,
+      "slo_latency_ms": 500,
+      "description": "Verifies the primary health endpoint is reachable and responds within SLO"
+    },
+    {
+      "id": "PROBE-002",
+      "name": "Readiness check with dependency verification",
+      "endpoint": "/readyz",
+      "expected_http": 200,
+      "slo_latency_ms": 2000,
+      "description": "Verifies DB and Redis connectivity via the readiness probe"
+    },
+    {
+      "id": "PROBE-003",
+      "name": "Version/provenance endpoint",
+      "endpoint": "/api/v1/meta/version",
+      "expected_http": 200,
+      "slo_latency_ms": 500,
+      "description": "Confirms build_sha is present and non-empty"
+    },
+    {
+      "id": "PROBE-004",
+      "name": "Unauthenticated boundary enforcement",
+      "endpoint": "/api/v1/incidents/",
+      "expected_http": [401, 403],
+      "description": "Confirms that protected routes reject unauthenticated requests"
+    },
+    {
+      "id": "PROBE-005",
+      "name": "Invalid input rejection",
+      "endpoint": "/api/v1/incidents/not-a-number",
+      "expected_http": [400, 404, 422],
+      "description": "Confirms that invalid input returns a 4xx client error, not 500"
+    }
+  ],
+  "resilience_targets": {
+    "p95_latency_ms": 500,
+    "error_rate_threshold_pct": 1.0,
+    "availability_target_pct": 99.9
+  },
+  "first_live_run_expected": "2026-04-08T01:00:00Z",
+  "evidence_status": "scheduled",
+  "governance_ref": "docs/evidence/chaos-testing-plan.md"
+}

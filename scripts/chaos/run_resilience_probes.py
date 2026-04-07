@@ -35,29 +35,33 @@ def probe(name: str, method: str, path: str, expected_status: set[int], **kwargs
         response = httpx.request(method, url, timeout=10.0, **kwargs)
         elapsed_ms = int((time.monotonic() - start) * 1000)
         passed = response.status_code in expected_status
-        RESULTS.append({
-            "probe": name,
-            "url": url,
-            "method": method,
-            "status": response.status_code,
-            "elapsed_ms": elapsed_ms,
-            "passed": passed,
-            "expected": sorted(expected_status),
-        })
+        RESULTS.append(
+            {
+                "probe": name,
+                "url": url,
+                "method": method,
+                "status": response.status_code,
+                "elapsed_ms": elapsed_ms,
+                "passed": passed,
+                "expected": sorted(expected_status),
+            }
+        )
         marker = "[OK]  " if passed else "[FAIL]"
         print(f"  {marker} {name}: HTTP {response.status_code} ({elapsed_ms}ms)")
         return passed
     except Exception as exc:
         elapsed_ms = int((time.monotonic() - start) * 1000)
-        RESULTS.append({
-            "probe": name,
-            "url": url,
-            "method": method,
-            "status": None,
-            "elapsed_ms": elapsed_ms,
-            "passed": False,
-            "error": str(exc),
-        })
+        RESULTS.append(
+            {
+                "probe": name,
+                "url": url,
+                "method": method,
+                "status": None,
+                "elapsed_ms": elapsed_ms,
+                "passed": False,
+                "error": str(exc),
+            }
+        )
         print(f"  [FAIL] {name}: Exception — {exc}")
         return False
 
@@ -110,13 +114,17 @@ def run_all_probes() -> int:
     output_path = "docs/evidence/chaos-runs"
     os.makedirs(output_path, exist_ok=True)
     with open(f"{output_path}/probe-results-latest.json", "w") as f:
-        json.dump({
-            "target": TARGET_URL,
-            "total": total,
-            "passed": passed,
-            "failures": failures,
-            "probes": RESULTS,
-        }, f, indent=2)
+        json.dump(
+            {
+                "target": TARGET_URL,
+                "total": total,
+                "passed": passed,
+                "failures": failures,
+                "probes": RESULTS,
+            },
+            f,
+            indent=2,
+        )
 
     return failures
 

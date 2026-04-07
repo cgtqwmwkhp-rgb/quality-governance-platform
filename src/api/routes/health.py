@@ -137,6 +137,27 @@ async def diagnostics():
     except Exception:
         pass
 
+    # Registry freshness check (D32 supportability — AP-12)
+    registry_status: dict[str, Any] = {}
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+
+        report_path = _Path("docs/evidence/registry-validation-report.json")
+        if report_path.exists():
+            report = _json.loads(report_path.read_text())
+            registry_status = {
+                "last_validated": report.get("generated_at", "unknown"),
+                "registries_checked": report.get("registries_checked", 0),
+                "passed": report.get("passed", False),
+                "warnings": report.get("warnings", []),
+                "errors": report.get("errors", []),
+            }
+        else:
+            registry_status = {"status": "report_not_found", "path": str(report_path)}
+    except Exception as _exc:
+        registry_status = {"status": "error", "detail": str(_exc)}
+
     return {
         "app_version": os.getenv("APP_VERSION", "dev"),
         "python_version": platform.python_version(),
@@ -144,6 +165,7 @@ async def diagnostics():
         "telemetry_enabled": os.getenv("TELEMETRY_ENABLED", "true"),
         "feature_flag_count": feature_flag_count,
         "uptime_seconds": round(time.monotonic() - _start_time, 1),
+        "registry_freshness": registry_status,
         "runbooks": {
             "deployment": "docs/DEPLOYMENT_RUNBOOK.md",
             "disaster_recovery": "docs/ops/DISASTER_RECOVERY_RUNBOOK.md",
