@@ -25,6 +25,7 @@ from src.domain.models.compliance_evidence import ComplianceEvidenceLink, Eviden
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
+from src.infrastructure.monitoring.azure_monitor import get_tracer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -558,7 +559,15 @@ async def analyze_evidence(
     Returns a structured evidence analysis package with conformance statements
     suitable for ISO certification audit packs.
     """
-    result = await iso_compliance_service.multi_stage_analyze(request.content)
+    tracer = get_tracer()
+    if tracer is not None:
+        with tracer.start_as_current_span("compliance.analyze_evidence") as span:
+            span.set_attribute("content.length", len(request.content))
+            result = await iso_compliance_service.multi_stage_analyze(request.content)
+            span.set_attribute("result.stage_count", len(result.get("stages", {})))
+            span.set_attribute("result.clause_count", len(result.get("clause_matches", [])))
+    else:
+        result = await iso_compliance_service.multi_stage_analyze(request.content)
     return result
 
 

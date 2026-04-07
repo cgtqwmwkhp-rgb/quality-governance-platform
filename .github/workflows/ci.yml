@@ -319,8 +319,8 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=48 --junit-xml=junit-unit.xml
-          # EG-02: raised from 44 → 48 (per-suite unit coverage; full-suite 70% target is in pyproject.toml)
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=52 --junit-xml=junit-unit.xml
+          # EG-05: raised from 48 → 52 (2026-04-07 WCS uplift; full-suite 70% target in pyproject.toml)
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -544,8 +544,8 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           TESTING: "1"
         run: |
-          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-integration.xml
-          # EG-02: raised from 42 → 43 (per-suite integration coverage; full-suite 70% target is in pyproject.toml)
+          pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=47 --junit-xml=junit-integration.xml
+          # EG-05: raised from 43 → 47 (2026-04-07 WCS uplift; full-suite 70% target in pyproject.toml)
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -1528,9 +1528,13 @@ jobs:
         run: python3 scripts/validate_migration_naming.py
 
   mutation-testing:
-    name: Mutation Testing (mutmut, weekly)
+    name: Mutation Testing (mutmut)
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
+    # Run on schedule (weekly), push to main, and PRs targeting main
+    if: >
+      github.event_name == 'schedule' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
 
     steps:
       - uses: actions/checkout@v4
@@ -1550,17 +1554,37 @@ jobs:
 
       - name: Run mutmut on critical modules
         run: |
-          echo "=== Mutation Testing (weekly) ==="
+          echo "=== Mutation Testing ==="
           mutmut run \
             --paths-to-mutate=src/domain/services/ \
             --tests-dir=tests/unit/ \
             --runner="python -m pytest tests/unit/ -x -q" \
             --no-progress
 
-      - name: Generate mutmut report
+      - name: Generate mutmut report and enforce survival threshold
         run: |
-          mutmut results > mutmut-results.txt 2>&1
-          mutmut html 2>/dev/null
+          mutmut results > mutmut-results.txt 2>&1 || true
+          mutmut html 2>/dev/null || true
+          echo "=== Mutation Score Summary ==="
+          python3 - <<'EOF'
+          import subprocess, sys, re
+          result = subprocess.run(["mutmut", "results"], capture_output=True, text=True)
+          output = result.stdout + result.stderr
+          # Count survived mutants — fail if survival rate exceeds threshold
+          survived = len(re.findall(r"🙁|survived", output, re.IGNORECASE))
+          killed = len(re.findall(r"🎉|killed", output, re.IGNORECASE))
+          total = survived + killed
+          if total > 0:
+              survival_rate = survived / total * 100
+              print(f"Survived: {survived}/{total} = {survival_rate:.1f}%")
+              if survival_rate > 30:
+                  print(f"[FAIL] Mutation survival rate {survival_rate:.1f}% exceeds 30% threshold")
+                  sys.exit(1)
+              else:
+                  print(f"[OK] Mutation survival rate {survival_rate:.1f}% is within acceptable bounds (≤30%)")
+          else:
+              print("[INFO] No mutation results to evaluate")
+          EOF
 
       - name: Upload mutation report
         uses: actions/upload-artifact@v4
@@ -1744,11 +1768,11 @@ jobs:
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
-        continue-on-error: true
         with:
           target: 'http://localhost:8000'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          fail_action: true
 
   license-compliance:
     name: License Compliance Check
@@ -1794,6 +1818,57 @@ jobs:
             frontend/npm-licenses.json
           retention-days: 90
 
+  adr-lifecycle-check:
+    name: ADR Lifecycle Enforcement
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run ADR lifecycle gate
+        run: python3 scripts/check_adr_lifecycle.py
+
+      - name: Upload ADR lifecycle evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: adr-lifecycle-report
+          path: docs/evidence/adr-lifecycle-report.json
+          retention-days: 90
+
+  registry-validation:
+    name: Registry Freshness Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Run registry validation gate
+        run: python3 scripts/validate_registries.py
+
+      - name: Upload registry validation evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: registry-validation-report
+          path: docs/evidence/registry-validation-report.json
+          retention-days: 90
+
   storybook-build:
     name: Storybook Build
     runs-on: ubuntu-latest
@@ -1818,7 +1893,7 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, dast-zap-baseline, adr-lifecycle-check, registry-validation, mutation-testing]
     
     steps:
       - name: Checkout code

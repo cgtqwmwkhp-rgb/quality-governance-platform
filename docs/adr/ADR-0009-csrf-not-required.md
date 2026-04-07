@@ -1,5 +1,9 @@
 # ADR-0009: CSRF Protection Not Required
 
+**Status**: Accepted
+
+**Date**: 2026-01-25
+
 ## Status
 Accepted
 

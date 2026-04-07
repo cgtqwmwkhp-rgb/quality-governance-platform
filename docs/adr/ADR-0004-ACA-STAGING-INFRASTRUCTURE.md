@@ -1,8 +1,12 @@
 # ADR-0004: Azure Container Apps Staging Infrastructure
 
+**Status**: Accepted
+
+**Date**: 2026-01-30
+
 ## Status
 
-**ACCEPTED** - ACA staging fully provisioned and verified (2026-01-30)
+Accepted — ACA staging fully provisioned and verified (2026-01-30)
 
 ## Context
 

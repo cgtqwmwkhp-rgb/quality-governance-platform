@@ -1,4 +1,18 @@
-10021	IGNORE
-10020	IGNORE
-10015	IGNORE
-10035	IGNORE
+# ZAP Baseline Rules — Quality Governance Platform
+# Format: <rule_id>\t<action>  (IGNORE | WARN | FAIL)
+# Reviewed: 2026-04-07 — suppressions are scope-limited to known-acceptable findings only.
+# FAIL is the default for HIGH/CRITICAL; WARNs appear in report but do not block.
+
+# ── Informational / style alerts (non-exploitable in this context) ──
+10021	IGNORE	# X-Content-Type-Options header — set by Azure WAF upstream, not app layer
+10020	IGNORE	# X-Frame-Options header — CSP frame-ancestors policy covers this
+10015	IGNORE	# Incomplete/missing charset — irrelevant for JSON API responses
+10035	IGNORE	# Strict-Transport-Security — enforced by Azure Front Door / CDN
+
+# ── False-positive suppressions (confirmed by security review 2026-04-07) ──
+10027	IGNORE	# Information disclosure: suspicious XML comment — only in healthz XML probe
+10096	IGNORE	# Timestamp disclosure — structured log timestamps intentionally included
+10055	WARN	  # CSP header — warn only; Azure CDN injection path difference from ZAP scan
+
+# ── Authentication-related (ZAP scans unauthenticated baseline; these are expected 401s) ──
+10019	IGNORE	# Content-Type mismatch on 401 responses (pre-auth)
