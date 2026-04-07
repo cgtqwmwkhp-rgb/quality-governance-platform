@@ -441,16 +441,14 @@ jobs:
           if gh release view sbom-latest --repo "$GITHUB_REPOSITORY" &>/dev/null; then
             gh release upload sbom-latest sbom.json \
               --repo "$GITHUB_REPOSITORY" \
-              --clobber \
-              --label "SBOM CycloneDX JSON (${GITHUB_SHA::8})"
+              --clobber
           else
             gh release create sbom-latest sbom.json \
               --repo "$GITHUB_REPOSITORY" \
               --title "SBOM Latest" \
-              --notes "Auto-updated CycloneDX SBOM. Published by CI on every main push." \
-              --label "SBOM CycloneDX JSON (${GITHUB_SHA::8})"
+              --notes "Auto-updated CycloneDX SBOM (${GITHUB_SHA::8}). Published by CI on every main push."
           fi
-          echo "[OK] SBOM published to GitHub Release: sbom-latest"
+          echo "[OK] SBOM published to GitHub Release: sbom-latest (sha=${GITHUB_SHA::8})"
 
   lockfile-check:
     name: Lockfile Freshness Check
