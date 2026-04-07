@@ -126,6 +126,57 @@ const standardColors: Record<string, string> = {
   uvdb: 'yellow',
 }
 
+// Explicit Tailwind class maps — dynamic interpolation (`text-${color}-400`) is not
+// safe with Tailwind JIT because the compiler cannot statically detect those classes.
+const standardIconClass: Record<string, string> = {
+  iso9001: 'w-5 h-5 text-blue-400',
+  iso14001: 'w-5 h-5 text-green-400',
+  iso45001: 'w-5 h-5 text-orange-400',
+  iso27001: 'w-5 h-5 text-purple-400',
+  planetmark: 'w-5 h-5 text-teal-400',
+  uvdb: 'w-5 h-5 text-yellow-400',
+}
+const standardBgClass: Record<string, string> = {
+  iso9001: 'p-2 rounded-lg bg-blue-500/20',
+  iso14001: 'p-2 rounded-lg bg-green-500/20',
+  iso45001: 'p-2 rounded-lg bg-orange-500/20',
+  iso27001: 'p-2 rounded-lg bg-purple-500/20',
+  planetmark: 'p-2 rounded-lg bg-teal-500/20',
+  uvdb: 'p-2 rounded-lg bg-yellow-500/20',
+}
+const standardTreeIconClass: Record<string, string> = {
+  iso9001: 'w-4 h-4 text-blue-400 flex-shrink-0',
+  iso14001: 'w-4 h-4 text-green-400 flex-shrink-0',
+  iso45001: 'w-4 h-4 text-orange-400 flex-shrink-0',
+  iso27001: 'w-4 h-4 text-purple-400 flex-shrink-0',
+  planetmark: 'w-4 h-4 text-teal-400 flex-shrink-0',
+  uvdb: 'w-4 h-4 text-yellow-400 flex-shrink-0',
+}
+const standardResultIconClass: Record<string, string> = {
+  iso9001: 'w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5',
+  iso14001: 'w-5 h-5 text-green-400 flex-shrink-0 mt-0.5',
+  iso45001: 'w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5',
+  iso27001: 'w-5 h-5 text-purple-400 flex-shrink-0 mt-0.5',
+  planetmark: 'w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5',
+  uvdb: 'w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5',
+}
+const standardPercentageClass: Record<string, string> = {
+  iso9001: 'text-2xl font-bold text-blue-400',
+  iso14001: 'text-2xl font-bold text-green-400',
+  iso45001: 'text-2xl font-bold text-orange-400',
+  iso27001: 'text-2xl font-bold text-purple-400',
+  planetmark: 'text-2xl font-bold text-teal-400',
+  uvdb: 'text-2xl font-bold text-yellow-400',
+}
+const standardProgressClass: Record<string, string> = {
+  iso9001: 'h-2 rounded-full bg-gradient-to-r from-blue-600 to-blue-400',
+  iso14001: 'h-2 rounded-full bg-gradient-to-r from-green-600 to-green-400',
+  iso45001: 'h-2 rounded-full bg-gradient-to-r from-orange-600 to-orange-400',
+  iso27001: 'h-2 rounded-full bg-gradient-to-r from-purple-600 to-purple-400',
+  planetmark: 'h-2 rounded-full bg-gradient-to-r from-teal-600 to-teal-400',
+  uvdb: 'h-2 rounded-full bg-gradient-to-r from-yellow-600 to-yellow-400',
+}
+
 export default function ComplianceEvidence() {
   const [searchParams] = useSearchParams()
   const clauseFromUrl = (searchParams.get('clause') || '').trim()
@@ -149,6 +200,12 @@ export default function ComplianceEvidence() {
   const [soaData, setSoaData] = useState<StatementOfApplicability | null>(null)
   const [loadingSoA, setLoadingSoA] = useState(false)
   const [showSoA, setShowSoA] = useState(false)
+  // Link Evidence flow — persist an evidence link from auto-tagger results
+  const [linkingClause, setLinkingClause] = useState<ComplianceClauseRecord | null>(null)
+  const [linkEntityType, setLinkEntityType] = useState('audit_finding')
+  const [linkEntityId, setLinkEntityId] = useState('')
+  const [linkTitle, setLinkTitle] = useState('')
+  const [persistingLink, setPersistingLink] = useState(false)
   const [standards, setStandards] = useState<ComplianceStandardRecord[]>([])
   const [clauses, setClauses] = useState<ComplianceClauseRecord[]>([])
   const [coverage, setCoverage] = useState<ComplianceCoverageResponse | null>(null)
@@ -325,6 +382,7 @@ export default function ComplianceEvidence() {
       try {
         const response = await crossStandardMappingsApi.list({
           clause: selectedClause.clause_number,
+          source_standard: selectedClause.standard,
           limit: 500,
         })
         if (!cancelled) {
@@ -352,23 +410,23 @@ export default function ComplianceEvidence() {
     return standards.reduce<Record<string, { total: number; covered: number; partial: number; gaps: number }>>(
       (acc, standard) => {
         const byStandard = coverage?.by_standard?.[standard.id]
-        const coveredCount = byStandard?.covered ?? standard.covered_clauses
-        const fullCoverage = Math.max(standard.covered_clauses - 1, 0)
+        const total = standard.clause_count
+        // Source truth from backend by_standard when available; fall back to standard fields.
+        // by_standard uses the same full/partial semantics as the main coverage formula.
+        const covered = byStandard?.covered ?? standard.covered_clauses
+        const partial = byStandard?.partial_coverage ?? 0
+        const gaps = total - covered - partial
         acc[standard.id] = {
-          total: standard.clause_count,
-          covered: Math.max(coveredCount - (coverage?.partial_coverage ?? 0), 0),
-          partial: selectedStandard === standard.id ? coverage?.partial_coverage ?? 0 : 0,
-          gaps: standard.clause_count - coveredCount,
-        }
-        if (selectedStandard === 'all') {
-          acc[standard.id].covered = fullCoverage
-          acc[standard.id].partial = 0
+          total,
+          covered,
+          partial,
+          gaps: Math.max(gaps, 0),
         }
         return acc
       },
       {},
     )
-  }, [coverage, selectedStandard, standards])
+  }, [coverage, standards])
 
   const clauseDetailsById = useMemo(() => {
     return new Map(report?.clauses.map((clause) => [clause.clause_id, clause]) ?? [])
@@ -415,11 +473,13 @@ export default function ComplianceEvidence() {
     if (!autoTagText.trim()) return
     setAutoTagging(true)
     setDeepAnalysisResult(null)
+    setShowDeepAnalysis(false)
     try {
       const response = await complianceApi.autoTag(autoTagText, useAiTagging)
       const taggedClauseIds = response.data.map((result) => result.clause_id)
       setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
     } catch (err) {
+      setAutoTagResults([])
       setError(getApiErrorMessage(err))
     } finally {
       setAutoTagging(false)
@@ -429,14 +489,17 @@ export default function ComplianceEvidence() {
   const handleDeepAnalysis = async () => {
     if (!autoTagText.trim()) return
     setDeepAnalyzing(true)
+    setDeepAnalysisResult(null)
+    setShowDeepAnalysis(false)
     try {
       const response = await complianceApi.analyzeEvidence(autoTagText)
       setDeepAnalysisResult(response.data)
       setShowDeepAnalysis(true)
-      // Also populate auto-tag results from primary_results
       const taggedClauseIds = response.data.primary_results.map((r) => r.clause_id)
       setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
     } catch (err) {
+      setAutoTagResults([])
+      setDeepAnalysisResult(null)
       setError(getApiErrorMessage(err))
     } finally {
       setDeepAnalyzing(false)
@@ -493,6 +556,30 @@ export default function ComplianceEvidence() {
     }
   }
 
+  const handlePersistLink = async () => {
+    if (!linkingClause || !linkEntityId.trim()) return
+    setPersistingLink(true)
+    try {
+      await complianceApi.linkEvidence({
+        clause_ids: [linkingClause.id],
+        entity_type: linkEntityType,
+        entity_id: linkEntityId.trim(),
+        linked_by: 'ai',
+        title: linkTitle.trim() || undefined,
+      })
+      // Refresh evidence links to pick up the newly persisted link
+      const refreshed = await complianceApi.listEvidenceLinks()
+      setEvidenceLinks(refreshed.data)
+      setLinkingClause(null)
+      setLinkEntityId('')
+      setLinkTitle('')
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setPersistingLink(false)
+    }
+  }
+
   const getCoverageStatus = (clauseId: string): 'full' | 'partial' | 'none' => {
     const clauseDetail = clauseDetailsById.get(clauseId)
     if (clauseDetail?.status === 'full') return 'full'
@@ -517,7 +604,6 @@ export default function ComplianceEvidence() {
           const isExpanded = expandedClauses.has(clause.id)
           const hasChildren = filteredClauses.some((c) => c.parent_clause === clause.id)
           const StandardIcon = standardIcons[clause.standard] || Award
-          const color = standardColors[clause.standard] || 'blue'
 
           return (
             <div key={clause.id} className="mb-2">
@@ -571,7 +657,7 @@ export default function ComplianceEvidence() {
                   )}
                 />
 
-                <StandardIcon className={`w-4 h-4 text-${color}-400 flex-shrink-0`} aria-hidden="true" />
+                <StandardIcon className={standardTreeIconClass[clause.standard] ?? 'w-4 h-4 text-primary flex-shrink-0'} aria-hidden="true" />
 
                 <span className="text-sm font-medium text-muted-foreground flex-shrink-0">
                   {clause.clause_number}
@@ -616,14 +702,14 @@ export default function ComplianceEvidence() {
             variant="outline"
             onClick={handleGenerateSoA}
             disabled={loadingSoA}
-            title="Generate ISO 27001:2022 Statement of Applicability"
+            title="Generate ISO 27001:2022 Annex A Evidence SoA (evidence-derived from live links)"
           >
             {loadingSoA ? (
               <span className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true" />
             ) : (
               <CheckSquare className="w-4 h-4 mr-2" aria-hidden="true" />
             )}
-            Generate SoA
+            Annex A SoA
           </Button>
           <Button variant="outline" onClick={handleDownloadAuditPack} title="Download full ISO audit evidence pack">
             <Download className="w-4 h-4 mr-2" aria-hidden="true" />
@@ -674,8 +760,8 @@ export default function ComplianceEvidence() {
             const percentage = Math.round(
               stats.total > 0 ? ((stats.covered + stats.partial * 0.5) / stats.total) * 100 : 0,
             )
+            // Use coverage_percentage from backend when this standard is selected for accuracy
             const Icon = standardIcons[standard.id]
-            const color = standardColors[standard.id]
 
             return (
               <div
@@ -699,8 +785,8 @@ export default function ComplianceEvidence() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-${color}-500/20`}>
-                      <Icon className={`w-5 h-5 text-${color}-400`} aria-hidden="true" />
+                    <div className={standardBgClass[standard.id] ?? 'p-2 rounded-lg bg-primary/20'}>
+                      <Icon className={standardIconClass[standard.id] ?? 'w-5 h-5 text-primary'} aria-hidden="true" />
                     </div>
                     <div>
                       <h3 className="font-bold text-foreground">{standard.code}</h3>
@@ -714,14 +800,14 @@ export default function ComplianceEvidence() {
                       </p>
                     </div>
                   </div>
-                  <div className={`text-2xl font-bold text-${color}-400`} aria-label={`${percentage}% compliance`}>
+                  <div className={standardPercentageClass[standard.id] ?? 'text-2xl font-bold text-primary'} aria-label={`${percentage}% compliance`}>
                     {percentage}%
                   </div>
                 </div>
 
                 <div className="w-full bg-surface rounded-full h-2 mb-3" role="progressbar" aria-valuenow={percentage} aria-valuemin={0} aria-valuemax={100}>
                   <div
-                    className={`h-2 rounded-full bg-gradient-to-r from-${color}-600 to-${color}-400`}
+                    className={standardProgressClass[standard.id] ?? 'h-2 rounded-full bg-primary'}
                     style={{ width: `${percentage}%` }}
                   />
                 </div>
@@ -876,10 +962,17 @@ export default function ComplianceEvidence() {
                                 {(() => {
                                   const clause = clauses.find((item) => item.id === evidence.clause_id)
                                   if (!clause) return null
-                                  const color = standardColors[clause.standard] ?? 'blue'
+                                  const clauseBadgeClass: Record<string, string> = {
+                                    iso9001: 'text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full',
+                                    iso14001: 'text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full',
+                                    iso45001: 'text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full',
+                                    iso27001: 'text-xs bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full',
+                                    planetmark: 'text-xs bg-teal-500/20 text-teal-400 px-2 py-1 rounded-full',
+                                    uvdb: 'text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full',
+                                  }
                                   return (
                                     <span
-                                      className={`text-xs bg-${color}-500/20 text-${color}-400 px-2 py-1 rounded-full`}
+                                      className={clauseBadgeClass[clause.standard] ?? 'text-xs bg-primary/20 text-primary px-2 py-1 rounded-full'}
                                     >
                                       {clause.clause_number}
                                     </span>
@@ -1017,7 +1110,6 @@ export default function ComplianceEvidence() {
                       .filter((c) => selectedStandard === 'all' || c.standard === selectedStandard)
                       .map((clause) => {
                         const Icon = standardIcons[clause.standard]
-                        const color = standardColors[clause.standard]
 
                         return (
                           <div
@@ -1035,7 +1127,7 @@ export default function ComplianceEvidence() {
                           >
                             <div className="flex items-center gap-3">
                               <XCircle className="w-5 h-5 text-destructive flex-shrink-0" aria-hidden="true" />
-                              <Icon className={`w-4 h-4 text-${color}-400 flex-shrink-0`} aria-hidden="true" />
+                              <Icon className={standardTreeIconClass[clause.standard] ?? 'w-4 h-4 text-primary flex-shrink-0'} aria-hidden="true" />
                               <span className="font-medium text-foreground">{clause.clause_number}</span>
                               <span className="text-muted-foreground truncate">{clause.title}</span>
                             </div>
@@ -1307,6 +1399,9 @@ export default function ComplianceEvidence() {
             setAutoTagText('')
             setAutoTagResults([])
             setAutoTagging(false)
+            setDeepAnalysisResult(null)
+            setShowDeepAnalysis(false)
+            setDeepAnalyzing(false)
           }
         }}
       >
@@ -1416,13 +1511,12 @@ export default function ComplianceEvidence() {
                 {autoTagResults.map((clause) => {
                   const deepResult = deepAnalysisResult?.primary_results.find(r => r.clause_id === clause.id)
                   const Icon = standardIcons[clause.standard]
-                  const color = standardColors[clause.standard]
                   return (
                     <div
                       key={clause.id}
                       className="p-3 bg-surface rounded-lg flex items-start gap-3 border border-border"
                     >
-                      <Icon className={`w-5 h-5 text-${color}-400 flex-shrink-0 mt-0.5`} aria-hidden="true" />
+                      <Icon className={standardResultIconClass[clause.standard] ?? 'w-5 h-5 text-primary flex-shrink-0 mt-0.5'} aria-hidden="true" />
                       <div className="flex-grow min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-foreground">{clause.clause_number}</span>
@@ -1447,20 +1541,80 @@ export default function ComplianceEvidence() {
                           </p>
                         )}
                       </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-shrink-0"
-                        onClick={() => {
-                          setSelectedClauseId(clause.id)
-                          setShowAutoTagger(false)
-                        }}
-                      >
-                        Apply
-                      </Button>
+                      <div className="flex gap-1 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedClauseId(clause.id)
+                            setShowAutoTagger(false)
+                          }}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Link this clause to an entity"
+                          onClick={() => {
+                            setLinkingClause(linkingClause?.id === clause.id ? null : clause)
+                            setLinkEntityId('')
+                            setLinkTitle('')
+                          }}
+                        >
+                          <Link2 className="w-3 h-3" aria-hidden="true" />
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Link Evidence sub-form — persists a link from auto-tagger results to a real entity */}
+          {linkingClause && (
+            <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
+              <p className="text-sm font-medium text-foreground">
+                Link <span className="text-primary">{linkingClause.clause_number} {linkingClause.title}</span> to an entity
+              </p>
+              <div className="flex gap-2">
+                <Select value={linkEntityType} onValueChange={setLinkEntityType}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Entity type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(evidenceTypeConfig).map((t) => (
+                      <SelectItem key={t} value={t}>{evidenceTypeConfig[t].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Entity ID"
+                  value={linkEntityId}
+                  onChange={(e) => setLinkEntityId(e.target.value)}
+                  className="flex-1"
+                  aria-label="Entity ID"
+                />
+              </div>
+              <Input
+                placeholder="Title / description (optional)"
+                value={linkTitle}
+                onChange={(e) => setLinkTitle(e.target.value)}
+                aria-label="Link title"
+              />
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="ghost" onClick={() => setLinkingClause(null)}>Cancel</Button>
+                <Button
+                  size="sm"
+                  disabled={!linkEntityId.trim() || persistingLink}
+                  onClick={handlePersistLink}
+                >
+                  {persistingLink ? (
+                    <span className="w-3 h-3 mr-1 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                  ) : null}
+                  Save Link
+                </Button>
               </div>
             </div>
           )}
@@ -1505,16 +1659,16 @@ export default function ComplianceEvidence() {
 
       {/* Statement of Applicability Dialog */}
       <Dialog open={showSoA} onOpenChange={setShowSoA}>
-        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-primary" aria-hidden="true" />
-              Statement of Applicability — ISO 27001:2022
+              Annex A Evidence SoA — ISO 27001:2022
             </DialogTitle>
           </DialogHeader>
           {soaData && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 overflow-hidden min-h-0 flex-1">
+              <div className="flex items-center justify-between flex-shrink-0">
                 <p className="text-sm text-muted-foreground">{soaData.summary}</p>
                 <Button size="sm" variant="outline" onClick={() => {
                   const blob = new Blob([JSON.stringify(soaData, null, 2)], { type: 'application/json' })
@@ -1543,7 +1697,7 @@ export default function ComplianceEvidence() {
                   </div>
                 ))}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 overflow-y-auto max-h-[50vh] pr-1">
                 {soaData.controls.map((control) => (
                   <div
                     key={control.clause_id}

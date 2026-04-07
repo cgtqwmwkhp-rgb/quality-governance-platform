@@ -151,8 +151,31 @@ python scripts/import_users.py --file users.csv --send-invites
 | `REDIS_URL` | Redis connection string | Optional |
 | `SECRET_KEY` | JWT signing key | Required |
 | `AZURE_AD_*` | Azure AD configuration | For SSO |
-| `OPENAI_API_KEY` | OpenAI API key | For AI features |
 | `APPINSIGHTS_*` | Application Insights | For monitoring |
+
+### AI Provider Configuration
+
+The platform supports multiple AI providers for ISO Compliance auto-tagging and deep analysis. Configure exactly one provider using `AI_PROVIDER` and its corresponding API key.
+
+| Variable | Description | KV Secret Name | Required |
+|----------|-------------|----------------|---------|
+| `AI_PROVIDER` | Active provider: `genspark` \| `anthropic` \| `openai` \| `mistral` \| `gemini` | — | Recommended |
+| `GENSPARK_API_KEY` | Genspark.ai API key (recommended — world-class ISO analysis) | `GENSPARK-API-KEY` | For Genspark |
+| `GENSPARK_MODEL` | Primary Genspark model | — | `claude-opus-4-6-1m` |
+| `GENSPARK_FAST_MODEL` | Fast Genspark model for light tasks | — | `claude-sonnet-4-6` |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key (fallback) | `ANTHROPIC-API-KEY` | For Anthropic |
+| `OPENAI_API_KEY` | OpenAI API key (secondary fallback) | `OPENAI-API-KEY` | For OpenAI |
+| `MISTRAL_API_KEY` | Mistral API key (OCR + AI tasks) | `MISTRAL-API-KEY` | For Mistral OCR |
+| `GOOGLE_GEMINI_API_KEY` | Google Gemini API key | `GOOGLE-GEMINI-API-KEY` | For Gemini |
+
+**Provider selection priority (automatic):** Genspark → Anthropic → OpenAI. Set `AI_PROVIDER` to override.
+
+**Registering Genspark key in Azure Key Vault:**
+```bash
+az keyvault secret set --vault-name kv-qgp-staging --name GENSPARK-API-KEY --value "$GENSPARK_API_KEY"
+az keyvault secret set --vault-name kv-qgp-prod   --name GENSPARK-API-KEY --value "$GENSPARK_API_KEY"
+```
+After setting, trigger a new deployment so the workflow fetches the updated secret.
 
 ### Feature Flags
 
