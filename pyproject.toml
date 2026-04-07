@@ -128,6 +128,9 @@ source = ["src"]
 omit = ["*/tests/*", "*/__init__.py"]
 
 [tool.coverage.report]
+# Target for local full-suite runs (all tests combined). Per-suite CI gates are lower:
+# unit: 48%, integration: 43% (measured coverage as at 2026-04-07, EG-02 remediation).
+# Raise CI gates incrementally as test coverage improves.
 fail_under = 70
 exclude_lines = [
     "pragma: no cover",
