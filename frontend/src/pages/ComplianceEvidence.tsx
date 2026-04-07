@@ -1565,7 +1565,7 @@ export default function ComplianceEvidence() {
                             variant={
                               control.implementation_status === 'Implemented' ? 'resolved' :
                               control.implementation_status === 'Partially Implemented' ? 'in-progress' :
-                              'overdue'
+                              'destructive'
                             }
                             className="text-xs"
                           >
