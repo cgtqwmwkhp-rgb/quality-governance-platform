@@ -23,6 +23,8 @@ import {
   Download,
   Tag,
   Trash2,
+  Brain,
+  CheckSquare,
 } from 'lucide-react'
 import {
   complianceApi,
@@ -36,6 +38,8 @@ import {
   type CrossStandardMappingRecord,
   type EvidenceLinkRecord,
   type ExternalAuditRecordSummary,
+  type MultiStageAnalysisResult,
+  type StatementOfApplicability,
 } from '../api/client'
 import {
   Button,
@@ -137,6 +141,14 @@ export default function ComplianceEvidence() {
   const [autoTagResults, setAutoTagResults] = useState<ComplianceClauseRecord[]>([])
   const [useAiTagging, setUseAiTagging] = useState(true)
   const [autoTagging, setAutoTagging] = useState(false)
+  // Deep analysis (5-stage Genspark pipeline)
+  const [deepAnalysisResult, setDeepAnalysisResult] = useState<MultiStageAnalysisResult | null>(null)
+  const [deepAnalyzing, setDeepAnalyzing] = useState(false)
+  const [showDeepAnalysis, setShowDeepAnalysis] = useState(false)
+  // Statement of Applicability
+  const [soaData, setSoaData] = useState<StatementOfApplicability | null>(null)
+  const [loadingSoA, setLoadingSoA] = useState(false)
+  const [showSoA, setShowSoA] = useState(false)
   const [standards, setStandards] = useState<ComplianceStandardRecord[]>([])
   const [clauses, setClauses] = useState<ComplianceClauseRecord[]>([])
   const [coverage, setCoverage] = useState<ComplianceCoverageResponse | null>(null)
@@ -402,6 +414,7 @@ export default function ComplianceEvidence() {
   const handleAutoTag = async () => {
     if (!autoTagText.trim()) return
     setAutoTagging(true)
+    setDeepAnalysisResult(null)
     try {
       const response = await complianceApi.autoTag(autoTagText, useAiTagging)
       const taggedClauseIds = response.data.map((result) => result.clause_id)
@@ -410,6 +423,61 @@ export default function ComplianceEvidence() {
       setError(getApiErrorMessage(err))
     } finally {
       setAutoTagging(false)
+    }
+  }
+
+  const handleDeepAnalysis = async () => {
+    if (!autoTagText.trim()) return
+    setDeepAnalyzing(true)
+    try {
+      const response = await complianceApi.analyzeEvidence(autoTagText)
+      setDeepAnalysisResult(response.data)
+      setShowDeepAnalysis(true)
+      // Also populate auto-tag results from primary_results
+      const taggedClauseIds = response.data.primary_results.map((r) => r.clause_id)
+      setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setDeepAnalyzing(false)
+    }
+  }
+
+  const handleGenerateSoA = async () => {
+    setLoadingSoA(true)
+    try {
+      const response = await complianceApi.getSoA()
+      setSoaData(response.data)
+      setShowSoA(true)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setLoadingSoA(false)
+    }
+  }
+
+  const handleDownloadAuditPack = async () => {
+    try {
+      const [reportRes, soaRes] = await Promise.all([
+        complianceApi.getReport(),
+        complianceApi.getSoA(),
+      ])
+      const pack = {
+        generated_at: new Date().toISOString(),
+        report: reportRes.data,
+        statement_of_applicability: soaRes.data,
+      }
+      const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `iso-audit-pack-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
     }
   }
 
@@ -539,14 +607,27 @@ export default function ComplianceEvidence() {
             Live repository for compliance evidence, clause coverage, and cross-standard mappings
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button onClick={() => setShowAutoTagger(true)}>
             <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
             AI Auto-Tagger
           </Button>
-          <Button variant="outline">
+          <Button
+            variant="outline"
+            onClick={handleGenerateSoA}
+            disabled={loadingSoA}
+            title="Generate ISO 27001:2022 Statement of Applicability"
+          >
+            {loadingSoA ? (
+              <span className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true" />
+            ) : (
+              <CheckSquare className="w-4 h-4 mr-2" aria-hidden="true" />
+            )}
+            Generate SoA
+          </Button>
+          <Button variant="outline" onClick={handleDownloadAuditPack} title="Download full ISO audit evidence pack">
             <Download className="w-4 h-4 mr-2" aria-hidden="true" />
-            {report ? `${report.persisted_evidence_links} persisted links` : 'Evidence report'}
+            Audit Pack
           </Button>
         </div>
       </div>
@@ -1285,55 +1366,222 @@ export default function ComplianceEvidence() {
             )}
           </div>
 
-          <Button
-            onClick={handleAutoTag}
-            disabled={!autoTagText.trim() || autoTagging}
-            className="w-full"
-          >
-            {autoTagging ? (
-              <>
-                <span className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
-                {useAiTagging ? 'AI is reasoning...' : 'Scanning keywords...'}
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 mr-2" aria-hidden="true" />
-                Analyze &amp; Auto-Tag
-              </>
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleAutoTag}
+              disabled={!autoTagText.trim() || autoTagging || deepAnalyzing}
+              className="flex-1"
+            >
+              {autoTagging ? (
+                <>
+                  <span className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                  {useAiTagging ? 'AI reasoning...' : 'Scanning...'}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
+                  Auto-Tag
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDeepAnalysis}
+              disabled={!autoTagText.trim() || deepAnalyzing || autoTagging}
+              title="Run 5-stage Genspark analysis: keyword + LLM + cross-standard + quality scoring + conformance statement"
+            >
+              {deepAnalyzing ? (
+                <>
+                  <span className="w-4 h-4 mr-2 border-2 border-primary/30 border-t-primary rounded-full animate-spin" aria-hidden="true" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-4 h-4 mr-2" aria-hidden="true" />
+                  Deep Analysis
+                </>
+              )}
+            </Button>
+          </div>
 
           {autoTagResults.length > 0 && (
             <div>
-              <h3 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
-                <Tag className="w-5 h-5 text-primary" aria-hidden="true" />
-                {`Detected ISO Clauses (${autoTagResults.length})`}
-              </h3>
-              <div className="space-y-2">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-primary" aria-hidden="true" />
+                  {`Detected ISO Clauses (${autoTagResults.length})`}
+                </h3>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
                 {autoTagResults.map((clause) => {
+                  const deepResult = deepAnalysisResult?.primary_results.find(r => r.clause_id === clause.id)
                   const Icon = standardIcons[clause.standard]
                   const color = standardColors[clause.standard]
                   return (
                     <div
                       key={clause.id}
-                      className="p-3 bg-surface rounded-lg flex items-center gap-3 border border-border"
+                      className="p-3 bg-surface rounded-lg flex items-start gap-3 border border-border"
                     >
-                      <Icon className={`w-5 h-5 text-${color}-400 flex-shrink-0`} aria-hidden="true" />
-                      <span className="font-medium text-foreground">{clause.clause_number}</span>
-                      <span className="text-muted-foreground flex-grow text-sm">{clause.title}</span>
+                      <Icon className={`w-5 h-5 text-${color}-400 flex-shrink-0 mt-0.5`} aria-hidden="true" />
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-foreground">{clause.clause_number}</span>
+                          <span className="text-muted-foreground text-sm truncate">{clause.title}</span>
+                          {deepResult?.evidence_quality && (
+                            <span className={cn(
+                              'text-xs px-1.5 py-0.5 rounded font-medium',
+                              deepResult.evidence_quality_code === 'TYPE_1' ? 'bg-success/10 text-success' :
+                              deepResult.evidence_quality_code === 'TYPE_2' ? 'bg-info/10 text-info' :
+                              'bg-muted text-muted-foreground'
+                            )}>
+                              {deepResult.evidence_quality}
+                            </span>
+                          )}
+                          {deepResult?.confidence && (
+                            <span className="text-xs text-muted-foreground">{deepResult.confidence}%</span>
+                          )}
+                        </div>
+                        {deepResult?.evidence_snippet && (
+                          <p className="text-xs text-muted-foreground mt-1 italic line-clamp-1">
+                            &ldquo;{deepResult.evidence_snippet}&rdquo;
+                          </p>
+                        )}
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"
+                        className="flex-shrink-0"
                         onClick={() => {
                           setSelectedClauseId(clause.id)
                           setShowAutoTagger(false)
                         }}
                       >
-                        Apply Tag
+                        Apply
                       </Button>
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Deep Analysis Results — Stage 5 conformance statement */}
+          {showDeepAnalysis && deepAnalysisResult && (
+            <div className="border border-primary/30 rounded-lg p-4 bg-primary/5">
+              <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2">
+                <Brain className="w-4 h-4 text-primary" aria-hidden="true" />
+                5-Stage Genspark Analysis
+              </h3>
+              <div className="grid grid-cols-3 gap-3 mb-3 text-center">
+                <div className="bg-surface rounded p-2">
+                  <div className="text-lg font-bold text-foreground">{deepAnalysisResult.total_clauses_matched}</div>
+                  <div className="text-xs text-muted-foreground">Clauses matched</div>
+                </div>
+                <div className="bg-surface rounded p-2">
+                  <div className="text-lg font-bold text-foreground">{deepAnalysisResult.standards_covered.length}</div>
+                  <div className="text-xs text-muted-foreground">Standards covered</div>
+                </div>
+                <div className="bg-surface rounded p-2">
+                  <div className="text-lg font-bold text-foreground">
+                    {deepAnalysisResult.stages.stage_3_cross_standard?.cross_standard_matches.length ?? 0}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Cross-standard links</div>
+                </div>
+              </div>
+              {deepAnalysisResult.stages.stage_5_conformance?.conformance_statement && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Auditor Conformance Statement
+                  </p>
+                  <p className="text-sm text-foreground leading-relaxed italic border-l-2 border-primary pl-3">
+                    {deepAnalysisResult.stages.stage_5_conformance.conformance_statement}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Statement of Applicability Dialog */}
+      <Dialog open={showSoA} onOpenChange={setShowSoA}>
+        <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckSquare className="w-5 h-5 text-primary" aria-hidden="true" />
+              Statement of Applicability — ISO 27001:2022
+            </DialogTitle>
+          </DialogHeader>
+          {soaData && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">{soaData.summary}</p>
+                <Button size="sm" variant="outline" onClick={() => {
+                  const blob = new Blob([JSON.stringify(soaData, null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `soa-iso27001-${new Date().toISOString().slice(0, 10)}.json`
+                  document.body.appendChild(a)
+                  a.click()
+                  document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                }}>
+                  <Download className="w-4 h-4 mr-1" aria-hidden="true" />
+                  Export
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                {[
+                  { label: 'Implemented', value: soaData.statistics.implemented, color: 'text-success' },
+                  { label: 'Partial', value: soaData.statistics.partial, color: 'text-warning' },
+                  { label: 'Gap', value: soaData.statistics.not_implemented, color: 'text-destructive' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="bg-surface rounded p-3 border border-border">
+                    <div className={cn('text-2xl font-bold', color)}>{value}</div>
+                    <div className="text-muted-foreground">{label}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {soaData.controls.map((control) => (
+                  <div
+                    key={control.clause_id}
+                    className={cn(
+                      'p-3 rounded-lg border text-sm',
+                      control.implementation_status === 'Implemented' ? 'border-success/30 bg-success/5' :
+                      control.implementation_status === 'Partially Implemented' ? 'border-warning/30 bg-warning/5' :
+                      'border-destructive/20 bg-destructive/5',
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 w-16 font-mono text-xs font-bold text-foreground pt-0.5">
+                        {control.control_id}
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="font-medium text-foreground">{control.title}</span>
+                          <Badge
+                            variant={
+                              control.implementation_status === 'Implemented' ? 'resolved' :
+                              control.implementation_status === 'Partially Implemented' ? 'in-progress' :
+                              'overdue'
+                            }
+                            className="text-xs"
+                          >
+                            {control.implementation_status}
+                          </Badge>
+                          {control.evidence_count > 0 && (
+                            <span className="text-xs text-muted-foreground">{control.evidence_count} evidence item{control.evidence_count !== 1 ? 's' : ''}</span>
+                          )}
+                        </div>
+                        {control.justification && (
+                          <p className="text-xs text-muted-foreground">{control.justification}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

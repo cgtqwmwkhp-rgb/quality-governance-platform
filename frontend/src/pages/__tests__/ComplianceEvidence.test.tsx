@@ -210,7 +210,7 @@ describe('ComplianceEvidence', () => {
     fireEvent.change(screen.getByPlaceholderText(/Paste your content here/i), {
       target: { value: 'Our document control procedure covers retention and record management.' },
     })
-    fireEvent.click(screen.getByText('Analyze & Auto-Tag'))
+    fireEvent.click(screen.getByText('Auto-Tag'))
 
     await waitFor(() => {
       expect(mockAutoTag).toHaveBeenCalledTimes(1)
