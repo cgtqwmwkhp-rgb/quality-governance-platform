@@ -135,7 +135,7 @@ class IMSDashboardService:
         )
         incidents_30d = await self._count(
             select(SecurityIncident).where(
-                SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+                SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30),
                 *_tenant(SecurityIncident.tenant_id),
             )
         )
@@ -198,7 +198,7 @@ class IMSDashboardService:
         result = await self._db.execute(
             select(incident_model)
             .where(
-                incident_model.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+                incident_model.detected_date >= datetime.utcnow() - timedelta(days=30),
                 *tenant_filter,
             )
             .order_by(incident_model.detected_date.desc())

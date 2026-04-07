@@ -287,7 +287,7 @@ async def create_asset(
     asset = InformationAsset(
         asset_id=asset_id,
         tenant_id=tid,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=365),
+        next_review_date=datetime.utcnow() + timedelta(days=365),
         **asset_data.model_dump(),
     )
     db.add(asset)
@@ -705,7 +705,7 @@ async def create_security_risk(
         tenant_id=tid,
         inherent_risk_score=inherent_score,
         residual_risk_score=residual_score,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
+        next_review_date=datetime.utcnow() + timedelta(days=90),
         **data,
     )
     db.add(risk)
@@ -1084,7 +1084,7 @@ async def list_access_control(
         select(func.count(AccessControlRecord.id)).where(
             AccessControlRecord.tenant_id == tid,
             AccessControlRecord.is_active == True,  # noqa: E712
-            AccessControlRecord.next_review_date < datetime.now(timezone.utc),
+            AccessControlRecord.next_review_date < datetime.utcnow(),
         )
     )
     overdue = overdue_result.scalar()
@@ -1123,7 +1123,7 @@ async def create_access_control(
     """Record an access control grant."""
     record = AccessControlRecord(
         tenant_id=current_user.tenant_id,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=90),
+        next_review_date=datetime.utcnow() + timedelta(days=90),
         **ac_data.model_dump(),
     )
     db.add(record)
@@ -1289,7 +1289,7 @@ async def create_bcp(
     plan = BusinessContinuityPlan(
         plan_id=plan_id,
         tenant_id=tid,
-        next_review_date=datetime.now(timezone.utc) + timedelta(days=365),
+        next_review_date=datetime.utcnow() + timedelta(days=365),
         **bcp_data.model_dump(),
     )
     db.add(plan)
@@ -1409,7 +1409,7 @@ async def get_isms_dashboard(
     incidents_30d_result = await db.execute(
         select(func.count(SecurityIncident.id)).where(
             SecurityIncident.tenant_id == tid,
-            SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+            SecurityIncident.detected_date >= datetime.utcnow() - timedelta(days=30),
         )
     )
     incidents_30d = incidents_30d_result.scalar()

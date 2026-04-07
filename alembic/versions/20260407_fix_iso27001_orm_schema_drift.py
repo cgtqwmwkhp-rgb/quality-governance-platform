@@ -1,4 +1,4 @@
-"""Fix ISO 27001 ORM schema drift across four tables.
+"""Fix ISO 27001 ORM schema drift across four tables + add missing tenant_id.
 
 Revision ID: iso27001_schema_drift_02
 Revises: iso27001_controls_cols_01
@@ -8,11 +8,18 @@ Four ISO 27001 tables were created by the original 2026-01-20 migration with a
 different column structure than the current SQLAlchemy ORM models.  Any attempt
 to INSERT into these tables via the ORM raises UndefinedColumnError in production.
 
+Additionally, three tables were never given tenant_id by the 20260308 migration
+(which only covered the plural-named tables that existed at that point):
+  - information_security_risks
+  - security_incidents
+  - supplier_security_assessments
+
 Tables fixed here:
-  1. security_incidents           – 7 missing ORM columns
-  2. access_control_records       – 7 missing ORM columns (incl. non-nullable system_name)
-  3. business_continuity_plans    – 17 missing ORM columns (incl. non-nullable name/rto_hours/rpo_hours)
-  4. supplier_security_assessments – 3 missing ORM columns
+  1. security_incidents             – tenant_id + 7 missing ORM columns
+  2. access_control_records         – 7 missing ORM columns (incl. non-nullable system_name)
+  3. business_continuity_plans      – 17 missing ORM columns (incl. non-nullable name/rto_hours/rpo_hours)
+  4. supplier_security_assessments  – tenant_id + 3 missing ORM columns
+  5. information_security_risks     – tenant_id
 
 All add_column calls are guarded by _column_exists() for full idempotency.
 All new columns are nullable (or have a server_default) so the migration is
@@ -58,8 +65,18 @@ def _add_if_missing(table: str, column_name: str, column_def: sa.Column) -> None
 # Column definitions per table
 # ---------------------------------------------------------------------------
 
-# 1. security_incidents — 7 new ORM columns
+# 1. security_incidents — tenant_id + 7 new ORM columns
 _SECURITY_INCIDENTS_COLS = [
+    (
+        "tenant_id",
+        sa.Column(
+            "tenant_id",
+            sa.Integer(),
+            sa.ForeignKey("tenants.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    ),
     ("priority", sa.Column("priority", sa.String(50), nullable=True, server_default="medium")),
     ("affected_users", sa.Column("affected_users", sa.Integer(), nullable=True)),
     ("attack_vector", sa.Column("attack_vector", sa.String(255), nullable=True)),
@@ -132,11 +149,35 @@ _BCP_COLS = [
     ("effective_date", sa.Column("effective_date", sa.DateTime(), nullable=True)),
 ]
 
-# 4. supplier_security_assessments — 3 new ORM columns
+# 4. supplier_security_assessments — tenant_id + 3 new ORM columns
 _SUPPLIER_COLS = [
+    (
+        "tenant_id",
+        sa.Column(
+            "tenant_id",
+            sa.Integer(),
+            sa.ForeignKey("tenants.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    ),
     ("findings_details", sa.Column("findings_details", sa.JSON(), nullable=True)),
     ("risk_accepted", sa.Column("risk_accepted", sa.Boolean(), nullable=True, server_default="false")),
     ("risk_accepted_by", sa.Column("risk_accepted_by", sa.String(255), nullable=True)),
+]
+
+# 5. information_security_risks — missing tenant_id only
+_ISR_COLS = [
+    (
+        "tenant_id",
+        sa.Column(
+            "tenant_id",
+            sa.Integer(),
+            sa.ForeignKey("tenants.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    ),
 ]
 
 
@@ -158,9 +199,16 @@ def upgrade() -> None:
     for col_name, col_def in _SUPPLIER_COLS:
         _add_if_missing("supplier_security_assessments", col_name, col_def)
 
+    for col_name, col_def in _ISR_COLS:
+        _add_if_missing("information_security_risks", col_name, col_def)
+
 
 def downgrade() -> None:
     # Drop in reverse — all columns are nullable so no data loss
+    for col_name, _ in reversed(_ISR_COLS):
+        if _table_exists("information_security_risks") and _column_exists("information_security_risks", col_name):
+            op.drop_column("information_security_risks", col_name)
+
     for col_name, _ in reversed(_SUPPLIER_COLS):
         if _table_exists("supplier_security_assessments") and _column_exists("supplier_security_assessments", col_name):
             op.drop_column("supplier_security_assessments", col_name)
