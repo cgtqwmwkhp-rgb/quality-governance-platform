@@ -122,6 +122,8 @@ class Settings(BaseSettings):
         azure_storage_configured = "yes" if (self.azure_storage_connection_string or "").strip() else "no"
         mistral_configured = "yes" if (self.mistral_api_key or "").strip() else "no"
         gemini_configured = "yes" if (self.google_gemini_api_key or "").strip() else "no"
+        genspark_configured = "yes" if (self.genspark_api_key or "").strip() else "no"
+        ai_provider_effective = (self.ai_provider or "auto").strip()
 
         logger.info("Configuration summary: app_env=%s", self.app_env)
         logger.info(
@@ -134,6 +136,8 @@ class Settings(BaseSettings):
         logger.info("Configuration summary: application_insights_configured=%s", appinsights_configured)
         logger.info("Configuration summary: mistral_configured=%s", mistral_configured)
         logger.info("Configuration summary: gemini_configured=%s", gemini_configured)
+        logger.info("Configuration summary: genspark_configured=%s", genspark_configured)
+        logger.info("Configuration summary: ai_provider=%s", ai_provider_effective)
         logger.info("Configuration summary: external_audit_import_enabled=%s", self.external_audit_import_enabled)
         logger.info("Configuration summary: cors_origin_count=%s", len(self.cors_origins))
 
@@ -226,6 +230,19 @@ class Settings(BaseSettings):
     mistral_api_base_url: str = "https://api.mistral.ai/v1"
     mistral_ocr_timeout_seconds: int = 120
     google_gemini_api_key: str = ""
+
+    # AI provider selection and Genspark.ai configuration
+    # Priority: genspark > anthropic > openai (override with AI_PROVIDER env var)
+    ai_provider: str = ""
+    genspark_api_key: str = ""
+    genspark_model: str = "claude-opus-4-6-1m"
+    genspark_fast_model: str = "claude-sonnet-4-6"
+
+    # Anthropic (secondary AI provider)
+    anthropic_api_key: str = ""
+
+    # OpenAI (tertiary AI provider)
+    openai_api_key: str = ""
 
     # OpenTelemetry / Azure Monitor
     otel_trace_sample_rate: Optional[float] = None

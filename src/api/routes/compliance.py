@@ -570,14 +570,22 @@ async def get_statement_of_applicability(
     include_justification: bool = Query(default=True, description="Include implementation justification per control"),
 ):
     """
-    Generate a Statement of Applicability (SoA) for ISO 27001:2022.
+    Generate an evidence-derived Annex A SoA for ISO 27001:2022.
 
-    The SoA is a mandatory artefact for ISO 27001 certification.  It documents
-    all 93 Annex A controls, their applicability status, implementation level,
-    and evidence of conformance from the evidence link database.
+    **Distinct from** ``GET /api/v1/iso27001/soa`` which returns the persisted
+    ISMS Statement of Applicability entity (a DB-backed record managed by the
+    ISMS module with full lifecycle, versioning, and approval workflow).
 
-    The output is structured JSON suitable for rendering as a formal SoA document
-    or exporting to PDF.
+    This endpoint dynamically derives control applicability from the live
+    evidence link database.  All 93 ISO 27001:2022 Annex A controls are assessed
+    against persisted evidence items and returned with:
+
+    - Implementation status (Implemented / Partially Implemented / Not Implemented)
+    - Evidence count and evidence item list (including ``notes`` field)
+    - Auditor justification statement
+
+    Suitable for exporting a point-in-time evidence SoA for external auditors or
+    feeding into the ISO certification pack via the Audit Pack download.
     """
     links = await _load_evidence_links(
         db,
@@ -623,7 +631,7 @@ async def list_standards(db: DbSession, current_user: CurrentUser):
                 db_standard_name=canonical_row.name if canonical_row else None,
                 db_clause_count=db_clause_counts.get(canonical_row.id, 0) if canonical_row else 0,
                 ims_requirement_count=ims_counts.get(iso_standard, 0),
-                covered_clauses=canonical_coverage.get("covered", 0),
+                covered_clauses=canonical_coverage.get("covered", 0) + canonical_coverage.get("partial_coverage", 0),
                 coverage_percentage=canonical_coverage.get("percentage", 0),
                 has_canonical_standard=canonical_row is not None,
                 canonical_data_degraded=canonical_data_message is not None,

@@ -2495,36 +2495,49 @@ class ISOComplianceService:
         return self.clauses.get(clause_id)
 
     def search_clauses(self, query: str) -> List[ISOClause]:
-        """Search clauses by keyword, title, or clause number."""
+        """Search clauses by keyword, title, or clause number.
+
+        Always includes parent (and ancestor) rows of matched clauses so that
+        the clause tree in the UI remains coherent — matched children are never
+        rendered as orphaned invisible rows.
+        """
         query_lower = query.lower()
-        results = []
+        scored: List[tuple[int, ISOClause]] = []
 
         for clause in ALL_CLAUSES:
             score = 0
-
-            # Clause number match (highest priority)
             if query in clause.clause_number:
                 score += 20
-
-            # Title match
             if query_lower in clause.title.lower():
                 score += 15
-
-            # Description match
             if query_lower in clause.description.lower():
                 score += 10
-
-            # Keyword match
             for keyword in clause.keywords:
                 if query_lower in keyword.lower():
                     score += 5
-
             if score > 0:
-                results.append((score, clause))
+                scored.append((score, clause))
 
-        # Sort by score descending
-        results.sort(key=lambda x: x[0], reverse=True)
-        return [clause for _, clause in results[:20]]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_matches = [clause for _, clause in scored[:20]]
+
+        # Build a lookup for O(1) parent resolution
+        clause_by_id: Dict[str, ISOClause] = {c.id: c for c in ALL_CLAUSES}
+
+        # Collect all ancestor rows needed to keep the tree coherent
+        result_ids: set[str] = {c.id for c in top_matches}
+        ancestors: List[ISOClause] = []
+        for clause in top_matches:
+            parent_id = clause.parent_clause
+            while parent_id and parent_id not in result_ids:
+                parent = clause_by_id.get(parent_id)
+                if parent is None:
+                    break
+                ancestors.append(parent)
+                result_ids.add(parent_id)
+                parent_id = parent.parent_clause
+
+        return top_matches + ancestors
 
     def auto_tag_content(self, content: str, min_confidence: float = 0.3) -> List[Dict[str, Any]]:
         """
@@ -2868,6 +2881,7 @@ Write only the conformance statement. Use formal auditor language (past tense, s
                             "title": e.title or f"{e.entity_type}/{e.entity_id}",
                             "linked_by": e.linked_by,
                             "confidence": e.confidence,
+                            "notes": e.notes,
                         }
                         for e in evidence
                     ],
@@ -2951,20 +2965,29 @@ Write only the conformance statement. Use formal auditor language (past tense, s
         }
 
     def _standard_coverage(self, evidence_links: List[EvidenceLink], standard: ISOStandard) -> Dict[str, Any]:
-        """Calculate coverage for a specific standard."""
+        """Calculate coverage for a specific standard.
+
+        Uses the same full (≥2 items) / partial (1 item) semantics as
+        ``calculate_compliance_coverage`` so that by_standard figures are
+        directly comparable to the top-level coverage_percentage.
+        """
         clauses = [c for c in ALL_CLAUSES if c.standard == standard and c.level == 2]
-        clause_ids = {c.id for c in clauses}
 
-        covered = set()
+        clause_evidence_count: Dict[str, int] = {}
         for link in evidence_links:
-            if link.clause_id in clause_ids:
-                covered.add(link.clause_id)
+            if link.clause_id in {c.id for c in clauses}:
+                clause_evidence_count[link.clause_id] = clause_evidence_count.get(link.clause_id, 0) + 1
 
+        full = sum(1 for c in clauses if clause_evidence_count.get(c.id, 0) >= 2)
+        partial = sum(1 for c in clauses if clause_evidence_count.get(c.id, 0) == 1)
         total = len(clauses)
+
         return {
             "total": total,
-            "covered": len(covered),
-            "percentage": round(len(covered) / total * 100, 1) if total > 0 else 0,
+            "covered": full,
+            "partial_coverage": partial,
+            "gaps": total - full - partial,
+            "percentage": round((full + partial * 0.5) / total * 100, 1) if total > 0 else 0,
         }
 
     def generate_audit_report(

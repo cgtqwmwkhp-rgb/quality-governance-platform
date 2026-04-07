@@ -219,6 +219,7 @@ jobs:
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
+          GENSPARK_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name GENSPARK-API-KEY --query value -o tsv 2>/dev/null || true)
           REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv 2>/dev/null || true)
           
           if [ -z "$DB_URL" ]; then
@@ -261,6 +262,10 @@ jobs:
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
               MISTRAL_API_KEY="${MISTRAL_API_KEY_VAL}" \
               GOOGLE_GEMINI_API_KEY="${GEMINI_API_KEY_VAL}" \
+              GENSPARK_API_KEY="${GENSPARK_API_KEY_VAL}" \
+              GENSPARK_MODEL="claude-opus-4-6-1m" \
+              GENSPARK_FAST_MODEL="claude-sonnet-4-6" \
+              AI_PROVIDER="genspark" \
               UAT_MODE="READ_WRITE" \
               CELERY_BROKER_URL="${REDIS_URL_VAL}" \
               CELERY_RESULT_BACKEND="${REDIS_URL_VAL}" \
