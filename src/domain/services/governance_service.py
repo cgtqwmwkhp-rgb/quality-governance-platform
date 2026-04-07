@@ -28,7 +28,7 @@ class GovernanceService:
         )
 
     @staticmethod
-    def _latest_records_by_asset_type(records: list | Sequence) -> list:  # type: ignore[type-arg]
+    def _latest_records_by_asset_type(records: list[Any] | Sequence[Any]) -> list[Any]:
         latest_records: dict[Any, Any] = {}
         for record in records:
             current = latest_records.get(record.asset_type_id)
