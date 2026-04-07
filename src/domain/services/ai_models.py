@@ -7,24 +7,29 @@ Provides real AI/ML model integration for:
 - Document classification
 - Anomaly detection
 - NLP analysis
+- ISO clause mapping and evidence analysis (Genspark.ai + OpenAI + Anthropic)
 
-Supports multiple backends:
+Supported backends:
+- Genspark.ai  (OpenAI-compatible proxy; model: claude-opus-4-6-1m / claude-sonnet-4-6)
 - OpenAI GPT-4
 - Azure OpenAI
-- Claude API
+- Anthropic Claude
 - Local models (Sentence Transformers)
 """
 
 import asyncio
 import json
+import logging
 import os
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Configuration
@@ -37,6 +42,7 @@ class AIProvider(Enum):
     OPENAI = "openai"
     AZURE_OPENAI = "azure_openai"
     ANTHROPIC = "anthropic"
+    GENSPARK = "genspark"
     LOCAL = "local"
 
 
@@ -52,6 +58,12 @@ class AIConfig:
     azure_openai_deployment: str = ""
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-3-opus-20240229"
+    # Genspark.ai — OpenAI-compatible proxy at https://api.genspark.ai
+    # Primary model: claude-opus-4-6-1m (deep reasoning for ISO analysis)
+    # Fast model:    claude-sonnet-4-6   (quick classification tasks)
+    genspark_api_key: str = ""
+    genspark_model: str = "claude-opus-4-6-1m"
+    genspark_fast_model: str = "claude-sonnet-4-6"
     local_model_path: str = ""
     embedding_model: str = "text-embedding-3-small"
 
@@ -59,7 +71,15 @@ class AIConfig:
     def from_env(cls) -> "AIConfig":
         """Load configuration from environment variables."""
         provider_str = os.getenv("AI_PROVIDER", "openai")
-        provider = AIProvider(provider_str) if provider_str in [p.value for p in AIProvider] else AIProvider.OPENAI
+        # Auto-upgrade to Genspark if a key is present and provider not explicitly set
+        genspark_key = os.getenv("GENSPARK_API_KEY", "")
+        if genspark_key and provider_str == "openai" and not os.getenv("OPENAI_API_KEY"):
+            provider_str = "genspark"
+
+        try:
+            provider = AIProvider(provider_str)
+        except ValueError:
+            provider = AIProvider.GENSPARK if genspark_key else AIProvider.OPENAI
 
         return cls(
             provider=provider,
@@ -70,6 +90,9 @@ class AIConfig:
             azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-3-opus-20240229"),
+            genspark_api_key=genspark_key,
+            genspark_model=os.getenv("GENSPARK_MODEL", "claude-opus-4-6-1m"),
+            genspark_fast_model=os.getenv("GENSPARK_FAST_MODEL", "claude-sonnet-4-6"),
             local_model_path=os.getenv("LOCAL_MODEL_PATH", ""),
             embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
         )
@@ -276,21 +299,152 @@ class AnthropicClient(AIClient):
 
 
 # ============================================================================
+# Genspark.ai Client
+# ============================================================================
+
+
+class GenspaarkClient(AIClient):
+    """
+    Genspark.ai AI client.
+
+    Genspark exposes an OpenAI-compatible completions API at https://api.genspark.ai
+    with authentication via 'Authorization: Bearer gsk_...' header.
+
+    Default model: claude-opus-4-6-1m  (deep reasoning, ideal for ISO analysis)
+    Fast model:    claude-sonnet-4-6    (rapid classification, auto-tagging)
+
+    The '-search' suffix can be appended to any model name to enable real-time
+    web-search augmentation (e.g. 'claude-sonnet-4-6-search' for ISO standard
+    lookups).  We do NOT use it for evidence mapping to ensure deterministic,
+    evidence-only outputs.
+    """
+
+    BASE_URL = "https://api.genspark.ai"
+    COMPLETIONS_PATH = "/v1/chat/completions"
+
+    def __init__(self, config: AIConfig) -> None:
+        self.config = config
+        self.api_key = config.genspark_api_key
+        self.model = config.genspark_model
+        self.fast_model = config.genspark_fast_model
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    async def complete(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+    ) -> str:
+        """Generate a completion via the Genspark OpenAI-compatible endpoint."""
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload: dict[str, Any] = {
+            "model": model or self.model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{self.BASE_URL}{self.COMPLETIONS_PATH}",
+                headers=self._headers(),
+                json=payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data["choices"][0]["message"]["content"]
+
+    async def complete_fast(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        """Complete using the fast (sonnet) model for time-sensitive tasks."""
+        return await self.complete(
+            prompt,
+            system_prompt=system_prompt,
+            temperature=0.2,
+            max_tokens=2048,
+            model=self.fast_model,
+        )
+
+    async def embed(self, text: str) -> list[float]:
+        """Genspark does not expose an embeddings endpoint; return empty."""
+        logger.debug("GenspaarkClient: embeddings not available, returning empty vector")
+        return []
+
+    async def analyze(
+        self,
+        text: str,
+        analysis_type: str,
+    ) -> dict[str, Any]:
+        """Structured JSON analysis via Genspark."""
+        result = await self.complete(
+            prompt=f"Analyze the following text for {analysis_type}. Return a valid JSON object ONLY.\n\nText:\n{text}",
+            system_prompt="You are an expert analyst. Always respond with valid JSON only.",
+            temperature=0.2,
+        )
+        try:
+            cleaned = result.strip()
+            if cleaned.startswith("```"):
+                import re
+
+                cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned)
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            return {"raw_response": result, "parse_error": True}
+
+
+# ============================================================================
 # AI Service Factory
 # ============================================================================
 
 
 def get_ai_client(config: Optional[AIConfig] = None) -> AIClient:
-    """Factory function to get appropriate AI client."""
+    """
+    Factory: return the best available AI client given the environment config.
+
+    Priority:
+      1. Genspark  — if GENSPARK_API_KEY is set  (richest ISO analysis capability)
+      2. Anthropic  — if ANTHROPIC_API_KEY is set
+      3. OpenAI     — if OPENAI_API_KEY is set
+      4. OpenAI stub (will fail at HTTP time, but allows startup without a key)
+    """
     config = config or AIConfig.from_env()
 
+    if config.provider == AIProvider.GENSPARK and config.genspark_api_key:
+        logger.info("AI client: Genspark.ai (model=%s)", config.genspark_model)
+        return GenspaarkClient(config)
+
     if config.provider == AIProvider.ANTHROPIC and config.anthropic_api_key:
+        logger.info("AI client: Anthropic (model=%s)", config.anthropic_model)
         return AnthropicClient(config)
-    elif config.provider == AIProvider.OPENAI and config.openai_api_key:
+
+    if config.provider == AIProvider.OPENAI and config.openai_api_key:
+        logger.info("AI client: OpenAI (model=%s)", config.openai_model)
         return OpenAIClient(config)
-    else:
-        # Return OpenAI as default
+
+    # Fallback: try any key that is available regardless of declared provider
+    if config.genspark_api_key:
+        logger.info("AI client: Genspark.ai (fallback, key present)")
+        return GenspaarkClient(config)
+    if config.anthropic_api_key:
+        logger.info("AI client: Anthropic (fallback, key present)")
+        return AnthropicClient(config)
+    if config.openai_api_key:
+        logger.info("AI client: OpenAI (fallback, key present)")
         return OpenAIClient(config)
+
+    logger.warning("AI client: no API key found; returning OpenAI stub (calls will fail)")
+    return OpenAIClient(config)
 
 
 # ============================================================================

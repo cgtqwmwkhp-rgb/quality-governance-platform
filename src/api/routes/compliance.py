@@ -191,6 +191,8 @@ def _build_evidence_link_model(link: ComplianceEvidenceLink) -> EvidenceLink:
         confidence=link.confidence,
         created_at=link.created_at,
         created_by=link.created_by_email,
+        title=link.title,
+        notes=link.notes,
     )
 
 
@@ -536,6 +538,59 @@ async def generate_compliance_report(
     )
     report["persisted_evidence_links"] = len(links)
     return report
+
+
+@router.post("/analyze")
+async def analyze_evidence(
+    request: AutoTagRequest,
+    current_user: CurrentUser,
+):
+    """
+    World-class 5-stage ISO evidence analysis powered by Genspark.ai.
+
+    Runs a multi-stage pipeline:
+      Stage 1 — Keyword pre-filter (fast, always runs)
+      Stage 2 — Genspark LLM semantic mapping (requires GENSPARK_API_KEY)
+      Stage 3 — Cross-standard mapping identification
+      Stage 4 — Evidence quality scoring (Direct/Procedural/Documentary)
+      Stage 5 — Auditor conformance statement generation
+
+    Returns a structured evidence analysis package with conformance statements
+    suitable for ISO certification audit packs.
+    """
+    result = await iso_compliance_service.multi_stage_analyze(request.content)
+    return result
+
+
+@router.get("/soa")
+async def get_statement_of_applicability(
+    db: DbSession,
+    current_user: CurrentUser,
+    organization_name: str = Query(default="Organisation", description="Organisation name for SoA header"),
+    include_justification: bool = Query(default=True, description="Include implementation justification per control"),
+):
+    """
+    Generate a Statement of Applicability (SoA) for ISO 27001:2022.
+
+    The SoA is a mandatory artefact for ISO 27001 certification.  It documents
+    all 93 Annex A controls, their applicability status, implementation level,
+    and evidence of conformance from the evidence link database.
+
+    The output is structured JSON suitable for rendering as a formal SoA document
+    or exporting to PDF.
+    """
+    links = await _load_evidence_links(
+        db,
+        tenant_id=current_user.tenant_id,
+        standard=_parse_standard_filter("iso27001"),
+    )
+    soa = iso_compliance_service.generate_soa(
+        [_build_evidence_link_model(link) for link in links],
+        organization_name=organization_name,
+        include_justification=include_justification,
+    )
+    soa["persisted_evidence_links"] = len(links)
+    return soa
 
 
 @router.get("/standards", response_model=list[ComplianceStandardResponse])

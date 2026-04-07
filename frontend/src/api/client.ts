@@ -3090,6 +3090,49 @@ export interface AutoTagResult {
   standard: string
   confidence: number
   linked_by: string
+  evidence_snippet?: string
+  evidence_quality?: string
+  evidence_quality_code?: string
+}
+
+export interface MultiStageAnalysisResult {
+  analyzed_at: string
+  content_length: number
+  total_clauses_matched: number
+  standards_covered: string[]
+  primary_results: AutoTagResult[]
+  stages: {
+    stage_1_keyword?: { method: string; candidates: number; results: AutoTagResult[] }
+    stage_2_ai?: { method: string; model?: string; results?: AutoTagResult[]; error?: string }
+    stage_3_cross_standard?: { cross_standard_matches: unknown[]; standards_covered: string[] }
+    stage_4_quality?: { results: AutoTagResult[] }
+    stage_5_conformance?: { conformance_statement?: string; clauses_addressed?: string[]; error?: string; skipped?: string }
+  }
+}
+
+export interface SoAControl {
+  control_id: string
+  clause_id: string
+  title: string
+  description: string
+  applicable: boolean
+  implementation_status: 'Implemented' | 'Partially Implemented' | 'Not Implemented'
+  evidence_count: number
+  evidence: { entity_type: string; entity_id: string; title: string; linked_by: string; confidence?: number }[]
+  justification: string
+}
+
+export interface StatementOfApplicability {
+  document_type: string
+  standard: string
+  organization: string
+  generated_at: string
+  version: string
+  total_controls: number
+  statistics: { applicable: number; implemented: number; partial: number; not_implemented: number; excluded: number }
+  controls: SoAControl[]
+  summary: string
+  persisted_evidence_links: number
 }
 
 export interface EvidenceLinkRecord {
@@ -3244,6 +3287,23 @@ export const complianceApi = {
       `/api/v1/compliance/report${standard ? `?standard=${standard}` : ''}`,
     ),
   listStandards: () => api.get<ComplianceStandardRecord[]>('/api/v1/compliance/standards'),
+  /**
+   * 5-stage Genspark-powered evidence analysis.
+   * Returns keyword + LLM mapping, cross-standard links, quality scores,
+   * and an auditor conformance statement.
+   */
+  analyzeEvidence: (content: string) =>
+    api.post<MultiStageAnalysisResult>('/api/v1/compliance/analyze', {
+      content,
+      use_ai: true,
+      min_confidence: 50,
+    }),
+  /** Generate ISO 27001:2022 Statement of Applicability from persisted evidence */
+  getSoA: (organizationName?: string) => {
+    const sp = new URLSearchParams()
+    if (organizationName) sp.set('organization_name', organizationName)
+    return api.get<StatementOfApplicability>(`/api/v1/compliance/soa?${sp}`)
+  },
 }
 
 export const crossStandardMappingsApi = {
