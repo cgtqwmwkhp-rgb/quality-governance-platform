@@ -1,7 +1,11 @@
 # ADR-0008: Telemetry CORS Quarantine Policy
 
+**Status**: Accepted
+
+**Date**: 2026-01-26
+
 ## Status
-**ACCEPTED** - 2026-01-26
+Accepted — 2026-01-26
 
 ## Context
 The frontend telemetry service sends events to `/api/v1/telemetry/events` and `/api/v1/telemetry/events/batch`. In some production scenarios, CORS preflight requests may fail due to:

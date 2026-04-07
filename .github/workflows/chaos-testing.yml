@@ -1,0 +1,194 @@
+name: Chaos & Resilience Testing
+
+on:
+  schedule:
+    # Weekly on Wednesdays at 01:00 UTC — runs against staging slot
+    - cron: '0 1 * * 3'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (staging only — never prod)'
+        required: true
+        default: 'staging'
+        type: choice
+        options: ['staging']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # ── Job 1: API resilience probes ──────────────────────────────────────────
+  api-resilience:
+    name: API Resilience Probes
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install test dependencies
+        run: pip install httpx pytest pytest-asyncio
+
+      - name: Run API resilience test suite
+        env:
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+        run: |
+          echo "=== API Resilience Probes: $CHAOS_TARGET_URL ==="
+          python scripts/chaos/run_resilience_probes.py
+          echo "[OK] API resilience probes completed"
+
+  # ── Job 2: Graceful degradation verification ─────────────────────────────
+  degradation-check:
+    name: Graceful Degradation Check
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: [api-resilience]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install httpx
+
+      - name: Verify /healthz and /readyz under simulated load
+        env:
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+        run: |
+          echo "=== Health endpoint resilience under concurrent load ==="
+          python - <<'EOF'
+          import httpx, concurrent.futures, sys, os
+
+          url = os.environ["CHAOS_TARGET_URL"]
+          results = []
+
+          def probe(i):
+              try:
+                  r = httpx.get(f"{url}/healthz", timeout=5.0)
+                  return r.status_code
+              except Exception as e:
+                  return str(e)
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=20) as ex:
+              results = list(ex.map(probe, range(50)))
+
+          failures = [r for r in results if r != 200]
+          if len(failures) > 5:
+              print(f"[FAIL] {len(failures)}/50 health checks failed under concurrent load")
+              sys.exit(1)
+          print(f"[OK] {50 - len(failures)}/50 health checks passed under 20-concurrent probe")
+          EOF
+
+      - name: Verify /readyz returns structured response
+        env:
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+        run: |
+          python - <<'EOF'
+          import httpx, sys, os, json
+
+          url = os.environ["CHAOS_TARGET_URL"]
+          r = httpx.get(f"{url}/readyz", timeout=10.0)
+          assert r.status_code in (200, 503), f"Unexpected status: {r.status_code}"
+          body = r.json()
+          assert "status" in body, f"Missing 'status' field: {body}"
+          print(f"[OK] /readyz responded with status={body['status']}")
+          EOF
+
+  # ── Job 3: Circuit-breaker & error budget check ──────────────────────────
+  error-budget-check:
+    name: Error Budget Verification
+    runs-on: ubuntu-latest
+    environment: staging
+    needs: [degradation-check]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install httpx
+
+      - name: Verify 4xx/5xx budget against core endpoints
+        env:
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+        run: |
+          echo "=== Error budget check against public endpoints ==="
+          python - <<'EOF'
+          import httpx, sys, os
+
+          url = os.environ["CHAOS_TARGET_URL"]
+          endpoints = ["/healthz", "/readyz", "/api/v1/meta/version"]
+          failures = []
+
+          for ep in endpoints:
+              try:
+                  r = httpx.get(f"{url}{ep}", timeout=10.0)
+                  if r.status_code >= 500:
+                      failures.append(f"{ep} → {r.status_code}")
+              except Exception as e:
+                  failures.append(f"{ep} → Exception: {e}")
+
+          if failures:
+              print("[FAIL] Server errors on core endpoints:")
+              for f in failures:
+                  print(f"  {f}")
+              sys.exit(1)
+          print(f"[OK] All {len(endpoints)} core endpoints returned non-5xx responses")
+          EOF
+
+  # ── Job 4: Record chaos run evidence ────────────────────────────────────
+  record-evidence:
+    name: Record Chaos Run Evidence
+    runs-on: ubuntu-latest
+    needs: [api-resilience, degradation-check, error-budget-check]
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Write chaos run evidence
+        run: |
+          mkdir -p docs/evidence/chaos-runs
+          RUN_DATE="$(date +%Y-%m-%d)"
+          RUN_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > "docs/evidence/chaos-runs/chaos-run-${RUN_DATE}.json" <<EOF
+          {
+            "run_date": "${RUN_TIMESTAMP}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "trigger": "${{ github.event_name }}",
+            "target_environment": "staging",
+            "jobs": {
+              "api_resilience": "${{ needs.api-resilience.result }}",
+              "degradation_check": "${{ needs.degradation-check.result }}",
+              "error_budget_check": "${{ needs.error-budget-check.result }}"
+            },
+            "overall_result": "${{ (needs.api-resilience.result == 'success' && needs.degradation-check.result == 'success' && needs.error-budget-check.result == 'success') && 'PASS' || 'FAIL' }}"
+          }
+          EOF
+          cat "docs/evidence/chaos-runs/chaos-run-${RUN_DATE}.json"
+          echo "[OK] Chaos run evidence recorded"
+
+      - name: Upload chaos evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-run-evidence-${{ github.run_id }}
+          path: docs/evidence/chaos-runs/
+          retention-days: 90

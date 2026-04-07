@@ -100,6 +100,7 @@ disable_error_code = ["call-overload"]
 # ── GOVPLAT-005: Pre-existing cross-module type errors — reduced from 64 → 20 → 9 modules (planet_mark promoted) ──
 # 55 modules promoted to full type checking total (incl. xml_import, planet_mark). Remaining 9 have cross-module type
 # conflicts (assignment, operator, attr-defined) that require coordinated model+route fixes.
+# Note: signatures + pams_sync_tasks assessed 2026-04-07 — still require coordinated fixes before promotion.
 [[tool.mypy.overrides]]
 module = [
     "src.api.routes.actions",

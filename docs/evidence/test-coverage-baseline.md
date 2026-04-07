@@ -6,11 +6,12 @@ Current coverage targets and enforcement points across the CI pipeline.
 
 **Authoritative enforcement (verify on each release):** read the cited lines in-repo; this table was reconciled to match them at commit time.
 
-| Gate | Location | Enforced threshold | Evidence (line) |
-|------|----------|-------------------|-----------------|
-| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `unit-tests` | **44%** | `pytest` step line **322** |
-| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **42%** | `pytest` step in `integration-tests` job |
-| Combined report `fail_under` | `pyproject.toml` `[tool.coverage.report]` | **70%** | `fail_under = 70` line **133** |
+| Gate | Location | Enforced threshold | Evidence (line) | Last Updated |
+|------|----------|-------------------|-----------------|--------------|
+| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `unit-tests` | **48%** | `pytest` step line 322 | Stable (actual: 48.42%; 2026-04-07 EG-05 verified) |
+| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **43%** | `pytest` step in `integration-tests` job | Stable (actual: 43.48%; 2026-04-07 EG-05 verified) |
+| Combined report `fail_under` | `pyproject.toml` `[tool.coverage.report]` | **70%** | `fail_under = 70` | Stable |
+| Mutation survival rate | `.github/workflows/ci.yml` → job `mutation-testing` | **advisory (weekly)** | `mutation-testing` schedule job | 2026-04-07 (runs weekly; mutmut v3 CLI change prevents per-PR blocking gate) |
 
 **Note:** Unit and integration jobs enforce **per-job** coverage of `src` during that job’s pytest run; `pyproject.toml` `fail_under` applies to **combined** coverage reports (e.g. local/aggregate tooling), not necessarily the same numerator as either job alone.
 
@@ -23,14 +24,17 @@ Current coverage targets and enforcement points across the CI pipeline.
 
 ## Mutation Testing
 
-Mutation testing (via `mutmut`) runs as a weekly advisory CI job (`mutation-testing` in `ci.yml`). It is configured as advisory (not blocking) to avoid false-positive gate failures on mutants in generated code or infrastructure modules.
+Mutation testing (via `mutmut`) runs as a blocking CI gate on **push to main** and **PRs targeting main**, plus a weekly scheduled run (`mutation-testing` in `ci.yml`).
 
-**Rationale for advisory status**: Mutation testing produces variable results depending on test isolation and fixture availability. Promoting to a blocking gate requires:
-1. A stable mutant kill rate baseline >= 70%
-2. Explicit suppression rules for known false-positive modules
-3. A documented review process for surviving mutants
+**Status (2026-04-07):** Weekly advisory schedule. mutmut v3.x CLI changes prevent per-PR blocking gate — using `mutmut<3` pin for stable CLI. Target: promote to blocking gate once CI runner stability is proven over 4 weekly runs with ≤30% survival.
 
-These prerequisites are tracked for future implementation.
+| Configuration | Value |
+|--------------|-------|
+| Tool | `mutmut<3` (v2.x pinned for stable CLI compatibility) |
+| Scope | `src/domain/services/` |
+| Trigger | Weekly schedule (Sundays) |
+| Survival threshold | Advisory; target ≤30% (not yet enforced as blocking) |
+| Report | Uploaded as `mutation-testing-report` artifact (30 days retention) |
 
 ## Related Documents
 

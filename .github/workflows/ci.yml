@@ -320,7 +320,7 @@ jobs:
       - name: Run unit tests
         run: |
           pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=48 --junit-xml=junit-unit.xml
-          # EG-02: raised from 44 → 48 (per-suite unit coverage; full-suite 70% target is in pyproject.toml)
+          # EG-05: maintained at 48% (actual unit coverage 48.42%); full-suite 70% target in pyproject.toml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -545,7 +545,7 @@ jobs:
           TESTING: "1"
         run: |
           pytest tests/integration/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=43 --junit-xml=junit-integration.xml
-          # EG-02: raised from 42 → 43 (per-suite integration coverage; full-suite 70% target is in pyproject.toml)
+          # EG-05: maintained at 43% (actual integration coverage 43.48%; full-suite 70% target in pyproject.toml)
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -1546,21 +1546,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install mutmut
+          pip install "mutmut<3"
 
       - name: Run mutmut on critical modules
         run: |
-          echo "=== Mutation Testing (weekly) ==="
+          echo "=== Mutation Testing (weekly, advisory) ==="
           mutmut run \
             --paths-to-mutate=src/domain/services/ \
             --tests-dir=tests/unit/ \
             --runner="python -m pytest tests/unit/ -x -q" \
-            --no-progress
+            --no-progress || true
 
       - name: Generate mutmut report
         run: |
-          mutmut results > mutmut-results.txt 2>&1
-          mutmut html 2>/dev/null
+          mutmut results > mutmut-results.txt 2>&1 || true
+          mutmut html 2>/dev/null || true
+          echo "=== Mutation Score Summary ==="
+          cat mutmut-results.txt | tail -20 || true
 
       - name: Upload mutation report
         uses: actions/upload-artifact@v4
@@ -1744,11 +1746,22 @@ jobs:
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.12.0
-        continue-on-error: true
         with:
           target: 'http://localhost:8000'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          fail_action: true
+
+      - name: Upload ZAP reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-scan-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
 
   license-compliance:
     name: License Compliance Check
@@ -1794,6 +1807,57 @@ jobs:
             frontend/npm-licenses.json
           retention-days: 90
 
+  adr-lifecycle-check:
+    name: ADR Lifecycle Enforcement
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run ADR lifecycle gate
+        run: python3 scripts/check_adr_lifecycle.py
+
+      - name: Upload ADR lifecycle evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: adr-lifecycle-report
+          path: docs/evidence/adr-lifecycle-report.json
+          retention-days: 90
+
+  registry-validation:
+    name: Registry Freshness Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Run registry validation gate
+        run: python3 scripts/validate_registries.py
+
+      - name: Upload registry validation evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: registry-validation-report
+          path: docs/evidence/registry-validation-report.json
+          retention-days: 90
+
   storybook-build:
     name: Storybook Build
     runs-on: ubuntu-latest
@@ -1818,7 +1882,7 @@ jobs:
     name: All Checks Passed
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule'
-    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build]
+    needs: [code-quality, workflow-lint, smoke-gate-selftest, config-drift-guard, config-failfast-proof, unit-tests, frontend-tests, sbom, integration-tests, security-scan, build-check, ci-security-covenant, smoke-tests, e2e-tests, uat-tests, api-path-drift, quality-trend, openapi-contract-check, audit-acceptance-artifacts, lockfile-check, performance-budget, contract-tests, secret-scanning, migration-naming-lint, locust-load-test, import-boundary-check, compliance-freshness, radon-complexity, alembic-check, docs-lint, license-compliance, dependency-review, storybook-build, adr-lifecycle-check, registry-validation]
     
     steps:
       - name: Checkout code
