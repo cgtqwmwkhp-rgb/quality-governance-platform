@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Plus,
@@ -16,7 +16,7 @@ import {
   FileText,
   Play,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   auditsApi,
   evidenceAssetsApi,
@@ -193,11 +193,18 @@ const INITIAL_FORM_STATE: CreateAuditForm = {
 export default function Audits() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [audits, setAudits] = useState<AuditRun[]>([])
   const [findings, setFindings] = useState<AuditFinding[]>([])
   const [templates, setTemplates] = useState<AuditTemplate[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban')
+  // Deep-link: ?view=findings&findingId=N navigates to findings tab and highlights the card
+  const urlView = searchParams.get('view') as ViewMode | null
+  const urlFindingId = searchParams.get('findingId')
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    urlView === 'findings' || urlView === 'list' || urlView === 'kanban' ? urlView : 'kanban',
+  )
+  const highlightedFindingRef = useRef<HTMLDivElement | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [modalMode, setModalMode] = useState<AuditModalMode>('schedule')
   const [showModal, setShowModal] = useState(false)
@@ -243,6 +250,21 @@ export default function Audits() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // After findings load, if a findingId deep-link is present, switch to findings
+  // view and scroll the target card into view with a highlight ring.
+  useEffect(() => {
+    if (!urlFindingId || loading || findings.length === 0) return
+    setViewMode('findings')
+    // requestAnimationFrame defers scroll until the findings list has painted
+    const handle = requestAnimationFrame(() => {
+      if (highlightedFindingRef.current) {
+        highlightedFindingRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        highlightedFindingRef.current.focus()
+      }
+    })
+    return () => cancelAnimationFrame(handle)
+  }, [urlFindingId, loading, findings.length])
 
   useEffect(() => {
     if (formData.external_audit_type !== 'iso') {
@@ -1049,8 +1071,18 @@ export default function Audits() {
               <p className="text-muted-foreground">{t('audits.no_findings')}</p>
             </Card>
           ) : (
-            findings.map((finding) => (
-              <Card key={finding.id} hoverable className="p-5">
+            findings.map((finding) => {
+              const isHighlighted = urlFindingId && String(finding.id) === String(urlFindingId)
+              return (
+              <Card
+                key={finding.id}
+                hoverable
+                className={cn('p-5 transition-all', isHighlighted && 'ring-2 ring-primary ring-offset-2')}
+                ref={(el) => {
+                  if (isHighlighted) highlightedFindingRef.current = el
+                }}
+                tabIndex={isHighlighted ? -1 : undefined}
+              >
                 <div className="flex items-start gap-4">
                   <div
                     className={cn(
@@ -1092,7 +1124,8 @@ export default function Audits() {
                   </div>
                 </div>
               </Card>
-            ))
+              )
+            })
           )}
         </div>
       )}

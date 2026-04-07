@@ -60,13 +60,17 @@ import { cn } from '../helpers/utils'
 
 /**
  * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
+ *
+ * For `audit_finding` we deep-link to the Audits Findings tab pre-filtered by
+ * the specific finding ID (?view=findings&findingId=N) so the user lands on the
+ * exact finding rather than the general audit board.
+ *
  * Using a naive `/${entity_type}s` template produces broken routes such as:
  *   audit_finding → /audit_findings (no route)
  *   policy        → /policys        (no route)
  *   training      → /trainings      (no route — correct is /workforce/training)
  */
 const ENTITY_TYPE_ROUTE: Record<string, string> = {
-  audit_finding: '/audits',
   audit: '/audits',
   incident: '/incidents',
   complaint: '/complaints',
@@ -78,8 +82,13 @@ const ENTITY_TYPE_ROUTE: Record<string, string> = {
   training: '/workforce/training',
 }
 
-const getEntityRoute = (entityType: string): string =>
-  ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
+const getEntityRoute = (entityType: string, entityId?: string): string => {
+  if (entityType === 'audit_finding' && entityId) {
+    return `/audits?view=findings&findingId=${encodeURIComponent(entityId)}`
+  }
+  if (entityType === 'audit_finding') return '/audits?view=findings'
+  return ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
+}
 
 const evidenceTypeConfig: Record<
   string,
@@ -126,6 +135,8 @@ export default function ComplianceEvidence() {
   const [showAutoTagger, setShowAutoTagger] = useState(false)
   const [autoTagText, setAutoTagText] = useState('')
   const [autoTagResults, setAutoTagResults] = useState<ComplianceClauseRecord[]>([])
+  const [useAiTagging, setUseAiTagging] = useState(true)
+  const [autoTagging, setAutoTagging] = useState(false)
   const [standards, setStandards] = useState<ComplianceStandardRecord[]>([])
   const [clauses, setClauses] = useState<ComplianceClauseRecord[]>([])
   const [coverage, setCoverage] = useState<ComplianceCoverageResponse | null>(null)
@@ -389,14 +400,16 @@ export default function ComplianceEvidence() {
   }
 
   const handleAutoTag = async () => {
-    if (autoTagText.trim()) {
-      try {
-        const response = await complianceApi.autoTag(autoTagText)
-        const taggedClauseIds = response.data.map((result) => result.clause_id)
-        setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
-      } catch (err) {
-        setError(getApiErrorMessage(err))
-      }
+    if (!autoTagText.trim()) return
+    setAutoTagging(true)
+    try {
+      const response = await complianceApi.autoTag(autoTagText, useAiTagging)
+      const taggedClauseIds = response.data.map((result) => result.clause_id)
+      setAutoTagResults(clauses.filter((clause) => taggedClauseIds.includes(clause.id)))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setAutoTagging(false)
     }
   }
 
@@ -798,7 +811,7 @@ export default function ComplianceEvidence() {
                                 {new Date(evidence.created_at).toLocaleDateString()}
                               </span>
                               <Link
-                                to={getEntityRoute(evidence.entity_type)}
+                                to={getEntityRoute(evidence.entity_type, evidence.entity_id)}
                                 className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ml-1"
                                 aria-label={`View ${config.label}`}
                               >
@@ -1102,7 +1115,7 @@ export default function ComplianceEvidence() {
                           const config =
                             evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                           const Icon = config.icon
-                          const route = getEntityRoute(evidence.entity_type)
+                          const route = getEntityRoute(evidence.entity_type, evidence.entity_id)
                           const isDeleting = deletingLinkId === evidence.id
                           return (
                             <div
@@ -1212,6 +1225,7 @@ export default function ComplianceEvidence() {
           if (!open) {
             setAutoTagText('')
             setAutoTagResults([])
+            setAutoTagging(false)
           }
         }}
       >
@@ -1224,8 +1238,9 @@ export default function ComplianceEvidence() {
           </DialogHeader>
 
           <p className="text-muted-foreground text-sm">
-            Paste any text content (policy, procedure, audit finding, etc.) and AI will
-            automatically identify relevant ISO clauses.
+            Paste any text (policy, procedure, audit finding, etc.) and the system will
+            identify relevant ISO clauses. AI mode uses LLM reasoning for higher accuracy;
+            keyword mode is instant.
           </p>
 
           <Textarea
@@ -1236,13 +1251,56 @@ export default function ComplianceEvidence() {
             aria-label="Content to auto-tag"
           />
 
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div
+                role="switch"
+                aria-checked={useAiTagging}
+                tabIndex={0}
+                onClick={() => setUseAiTagging((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setUseAiTagging((v) => !v)
+                  }
+                }}
+                className={cn(
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  useAiTagging ? 'bg-primary' : 'bg-muted',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform',
+                    useAiTagging ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </div>
+              <span className="text-sm text-foreground font-medium">
+                {useAiTagging ? 'AI-enhanced (LLM reasoning)' : 'Keyword matching (instant)'}
+              </span>
+            </label>
+            {useAiTagging && (
+              <span className="text-xs text-muted-foreground">May take 3–8 seconds</span>
+            )}
+          </div>
+
           <Button
             onClick={handleAutoTag}
-            disabled={!autoTagText.trim()}
+            disabled={!autoTagText.trim() || autoTagging}
             className="w-full"
           >
-            <Sparkles className="w-5 h-5 mr-2" aria-hidden="true" />
-            Analyze &amp; Auto-Tag
+            {autoTagging ? (
+              <>
+                <span className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                {useAiTagging ? 'AI is reasoning...' : 'Scanning keywords...'}
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2" aria-hidden="true" />
+                Analyze &amp; Auto-Tag
+              </>
+            )}
           </Button>
 
           {autoTagResults.length > 0 && (

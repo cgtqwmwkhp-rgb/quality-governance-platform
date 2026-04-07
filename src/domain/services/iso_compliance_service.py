@@ -6,11 +6,14 @@ for ISO 9001, 14001, 45001 and other standards.
 """
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class ISOStandard(str, Enum):
@@ -1136,54 +1139,78 @@ class ISOComplianceService:
         """
         Use AI to analyze content and suggest relevant ISO clauses.
         Falls back to keyword-based tagging if AI is unavailable.
+
+        The AI receives the full clause catalog (all standards, all levels)
+        and is instructed to return only high-confidence, specific matches
+        with evidence snippets explaining each mapping.
         """
         if not self.ai_client:
+            logger.debug("AI client not available; falling back to keyword tagging")
             return self.auto_tag_content(content)
 
         try:
-            # Create clause context for AI
+            # Include ALL clauses at all levels and all standards including ISO 27001 Annex A.
+            # Previously only level-2 clauses were sent, creating blind spots.
             clause_context = "\n".join(
-                [f"- {c.id}: {c.clause_number} - {c.title} ({c.standard.value})" for c in ALL_CLAUSES if c.level == 2]
+                f"- {c.id}: [{c.standard.value}] {c.clause_number} — {c.title}" for c in ALL_CLAUSES
             )
 
-            prompt = f"""Analyze the following content and identify which ISO clauses (9001, 14001, 45001) it relates to.
+            prompt = f"""You are an ISO compliance expert. Analyze the text below and identify which ISO management system clauses it provides evidence for.
 
-Available clauses:
+ISO CLAUSE CATALOG (id: [standard] number — title):
 {clause_context}
 
-Content to analyze:
+TEXT TO ANALYZE:
 {content}
 
-Return a JSON array of matching clause IDs with confidence scores (0-100).
-Format: [{{"clause_id": "9001-7.2", "confidence": 85}}, ...]
+INSTRUCTIONS:
+1. Only return clauses where the text directly demonstrates conformance or provides evidence.
+2. Be precise — prefer specific sub-clauses (e.g. 9001-7.2) over parent clauses (e.g. 9001-7).
+3. Confidence 90-100: text explicitly mentions clause requirements or uses standard terminology.
+4. Confidence 70-89: text clearly implies the clause even without exact terminology.
+5. Confidence 50-69: text is plausibly related but not definitive.
+6. Do NOT return clauses just because they share common words like "monitoring" or "risk".
+7. Return a valid JSON array ONLY — no other text.
 
-Only return clauses with confidence > 50. Be specific - don't over-match."""
+FORMAT: [{{"clause_id": "9001-7.2", "confidence": 85, "evidence_snippet": "brief quote from text"}}]
 
-            response = await self.ai_client.analyze(prompt)
+Return only clauses with confidence >= 60. Maximum 15 results."""
 
-            # Parse AI response
-            try:
-                matches = json.loads(response)
-                results = []
-                for match in matches:
-                    clause = self.clauses.get(match["clause_id"])
-                    if clause:
-                        results.append(
-                            {
-                                "clause_id": clause.id,
-                                "clause_number": clause.clause_number,
-                                "title": clause.title,
-                                "standard": clause.standard.value,
-                                "confidence": match["confidence"],
-                                "linked_by": "ai",
-                            }
-                        )
-                return results
-            except json.JSONDecodeError:
-                return self.auto_tag_content(content)
+            # Fix: AIClient.complete() takes a prompt string directly; .analyze() takes (text, analysis_type)
+            # Use .complete() for free-form prompt-based reasoning.
+            response = await self.ai_client.complete(prompt)
 
-        except Exception:
-            # Fallback to keyword matching
+            # Strip markdown code fences if model wraps the JSON
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```[a-z]*\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned)
+
+            matches = json.loads(cleaned)
+            results = []
+            for match in matches:
+                clause = self.clauses.get(match.get("clause_id", ""))
+                if clause:
+                    results.append(
+                        {
+                            "clause_id": clause.id,
+                            "clause_number": clause.clause_number,
+                            "title": clause.title,
+                            "standard": clause.standard.value,
+                            "confidence": int(match.get("confidence", 70)),
+                            "linked_by": "ai",
+                            "evidence_snippet": match.get("evidence_snippet", ""),
+                        }
+                    )
+            # Sort by confidence descending and cap at 15
+            results.sort(key=lambda x: x["confidence"], reverse=True)
+            return results[:15]
+
+        except json.JSONDecodeError as exc:
+            logger.warning("AI tagging: JSON parse failed (%s); falling back to keyword", exc)
+            return self.auto_tag_content(content)
+        except Exception as exc:
+            logger.warning("AI tagging: error (%s); falling back to keyword tagging", exc)
             return self.auto_tag_content(content)
 
     def calculate_compliance_coverage(
@@ -1322,4 +1349,21 @@ Only return clauses with confidence > 50. Be specific - don't over-match."""
 
 
 # Singleton instance
-iso_compliance_service = ISOComplianceService()
+def _make_iso_compliance_service() -> "ISOComplianceService":
+    """
+    Instantiate ISOComplianceService with a live AI client where possible.
+    Falls back to no AI client if the environment is not configured (tests,
+    local dev without API keys).  The service's ai_enhanced_tagging() method
+    already handles the None-client case gracefully.
+    """
+    try:
+        from src.domain.services.ai_models import get_ai_client
+
+        client = get_ai_client()
+        return ISOComplianceService(ai_client=client)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("ISO compliance service: AI client unavailable (%s), using keyword fallback", exc)
+        return ISOComplianceService()
+
+
+iso_compliance_service = _make_iso_compliance_service()
