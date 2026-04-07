@@ -484,11 +484,12 @@ class TestISO27001Models:
         assert InformationAsset is not None
 
     @skip_on_import_error
-    def test_annex_a_control_import(self):
-        """AnnexAControl model can be imported."""
-        from src.domain.models.iso27001 import AnnexAControl
+    def test_iso27001_control_import(self):
+        """ISO27001Control model can be imported (formerly AnnexAControl)."""
+        from src.domain.models.iso27001 import ISO27001Control
 
-        assert AnnexAControl is not None
+        assert ISO27001Control is not None
+        assert ISO27001Control.__tablename__ == "iso27001_controls"
 
 
 # ============================================================================

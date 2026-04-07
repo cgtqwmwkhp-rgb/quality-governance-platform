@@ -3481,6 +3481,41 @@ export const imsDashboardApi = {
   getDashboard: () => api.get<IMSDashboardResponse>('/api/v1/ims/dashboard'),
 }
 
+// ============ ISO 27001 ISMS API ============
+
+export interface IsmsApiDashboard {
+  assets: { total: number; critical: number }
+  controls: { total: number; applicable: number; implemented: number; implementation_percentage: number }
+  risks: { open: number; high_critical: number }
+  incidents: { open: number; last_30_days: number }
+  suppliers: { high_risk: number }
+  compliance_score: number
+  domains: { domain: string; total: number; implemented: number; percentage: number }[]
+  recent_incidents: {
+    id: string
+    title: string
+    incident_type: string
+    severity: string
+    status: string
+    date: string | null
+  }[]
+}
+
+export const iso27001Api = {
+  getDashboard: () => api.get<IsmsApiDashboard>('/api/v1/iso27001/dashboard'),
+  getAssets: (params?: { skip?: number; limit?: number; criticality?: string; asset_type?: string }) =>
+    api.get<{ total: number; assets: unknown[] }>('/api/v1/iso27001/assets', { params }),
+  getControls: (params?: { domain?: string; implementation_status?: string; is_applicable?: boolean }) =>
+    api.get<{ total: number; summary: unknown; controls: unknown[] }>('/api/v1/iso27001/controls', { params }),
+  getSoa: () => api.get<{ version: string; status: string; implementation_percentage: number }>('/api/v1/iso27001/soa'),
+  getRisks: (params?: { skip?: number; limit?: number; min_score?: number }) =>
+    api.get<{ total: number; risks: unknown[] }>('/api/v1/iso27001/risks', { params }),
+  getIncidents: (params?: { skip?: number; limit?: number; severity?: string; status?: string }) =>
+    api.get<{ total: number; open_incidents: number; incidents: unknown[] }>('/api/v1/iso27001/incidents', { params }),
+  getSuppliers: (params?: { skip?: number; limit?: number; risk_level?: string }) =>
+    api.get<{ total: number; suppliers: unknown[] }>('/api/v1/iso27001/suppliers', { params }),
+}
+
 // ============ Global Search API ============
 
 export const searchApi = {
