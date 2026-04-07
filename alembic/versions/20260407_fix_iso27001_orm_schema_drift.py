@@ -237,10 +237,12 @@ def upgrade() -> None:
     for col_name, col_def in _BCP_COLS:
         _add_if_missing("business_continuity_plans", col_name, col_def)
 
-    # business_continuity_plans.plan_name / plan_type were created NOT NULL without
-    # a default. ORM model uses 'name' for plan_name and omits plan_type.
+    # business_continuity_plans: several original NOT NULL columns are absent from
+    # the ORM model (plan_name, plan_type, status). Add server defaults so the ORM
+    # INSERT succeeds without explicitly supplying these legacy fields.
     _set_server_default_if_missing("business_continuity_plans", "plan_name", "''")
     _set_server_default_if_missing("business_continuity_plans", "plan_type", "'continuity'")
+    _set_server_default_if_missing("business_continuity_plans", "status", "'draft'")
 
     for col_name, col_def in _SUPPLIER_COLS:
         _add_if_missing("supplier_security_assessments", col_name, col_def)
