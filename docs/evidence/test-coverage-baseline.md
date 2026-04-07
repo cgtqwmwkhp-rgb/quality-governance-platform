@@ -8,8 +8,8 @@ Current coverage targets and enforcement points across the CI pipeline.
 
 | Gate | Location | Enforced threshold | Evidence (line) | Last Updated |
 |------|----------|-------------------|-----------------|--------------|
-| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `unit-tests` | **52%** | `pytest` step line 322 | 2026-04-07 (EG-05: raised 44→48→52) |
-| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **47%** | `pytest` step in `integration-tests` job | 2026-04-07 (EG-05: raised 42→43→47) |
+| Unit tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `unit-tests` | **48%** | `pytest` step line 322 | Stable (actual: 48.42%; 2026-04-07 EG-05 verified) |
+| Integration tests `--cov-fail-under` | `.github/workflows/ci.yml` → job `integration-tests` | **43%** | `pytest` step in `integration-tests` job | Stable (actual: 43.48%; 2026-04-07 EG-05 verified) |
 | Combined report `fail_under` | `pyproject.toml` `[tool.coverage.report]` | **70%** | `fail_under = 70` | Stable |
 | Mutation survival rate | `.github/workflows/ci.yml` → job `mutation-testing` | **advisory (weekly)** | `mutation-testing` schedule job | 2026-04-07 (runs weekly; mutmut v3 CLI change prevents per-PR blocking gate) |
 
