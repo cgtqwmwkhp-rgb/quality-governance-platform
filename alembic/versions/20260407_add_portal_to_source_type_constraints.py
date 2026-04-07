@@ -34,6 +34,7 @@ def upgrade() -> None:
         return
 
     # Incidents: add 'portal' to ck_incident_source_type
+    # Note: single quotes are valid as-is inside dollar-quoted $$ blocks (no EXECUTE path).
     conn.execute(
         sa.text(
             "DO $$ BEGIN "
@@ -49,7 +50,7 @@ def upgrade() -> None:
             "DO $$ BEGIN "
             "  ALTER TABLE incidents "
             "    ADD CONSTRAINT ck_incident_source_type "
-            "    CHECK (source_type IN (''manual'', ''email'', ''api'', ''portal'')); "
+            "    CHECK (source_type IN ('manual', 'email', 'api', 'portal')); "
             "EXCEPTION WHEN OTHERS THEN "
             "  RAISE NOTICE 'add ck_incident_source_type: %', SQLERRM; "
             "END $$"
@@ -72,7 +73,7 @@ def upgrade() -> None:
             "DO $$ BEGIN "
             "  ALTER TABLE complaints "
             "    ADD CONSTRAINT ck_complaint_source_type "
-            "    CHECK (source_type IN (''manual'', ''email'', ''api'', ''phone'', ''portal'')); "
+            "    CHECK (source_type IN ('manual', 'email', 'api', 'phone', 'portal')); "
             "EXCEPTION WHEN OTHERS THEN "
             "  RAISE NOTICE 'add ck_complaint_source_type: %', SQLERRM; "
             "END $$"
@@ -101,7 +102,7 @@ def downgrade() -> None:
             "DO $$ BEGIN "
             "  ALTER TABLE incidents "
             "    ADD CONSTRAINT ck_incident_source_type "
-            "    CHECK (source_type IN (''manual'', ''email'', ''api'')); "
+            "    CHECK (source_type IN ('manual', 'email', 'api')); "
             "EXCEPTION WHEN OTHERS THEN "
             "  RAISE NOTICE 'add ck_incident_source_type: %', SQLERRM; "
             "END $$"
@@ -124,7 +125,7 @@ def downgrade() -> None:
             "DO $$ BEGIN "
             "  ALTER TABLE complaints "
             "    ADD CONSTRAINT ck_complaint_source_type "
-            "    CHECK (source_type IN (''manual'', ''email'', ''api'', ''phone'')); "
+            "    CHECK (source_type IN ('manual', 'email', 'api', 'phone')); "
             "EXCEPTION WHEN OTHERS THEN "
             "  RAISE NOTICE 'add ck_complaint_source_type: %', SQLERRM; "
             "END $$"
