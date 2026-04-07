@@ -229,14 +229,18 @@ def upgrade() -> None:
     for col_name, col_def in _ACCESS_CONTROL_COLS:
         _add_if_missing("access_control_records", col_name, col_def)
 
-    # access_control_records.resource_type was created NOT NULL without a default
+    # access_control_records.resource_type / resource_name were created NOT NULL
+    # without defaults. ORM model uses different column names (system_name, access_level).
     _set_server_default_if_missing("access_control_records", "resource_type", "'system'")
+    _set_server_default_if_missing("access_control_records", "resource_name", "''")
 
     for col_name, col_def in _BCP_COLS:
         _add_if_missing("business_continuity_plans", col_name, col_def)
 
-    # business_continuity_plans.plan_name was created NOT NULL without a default
+    # business_continuity_plans.plan_name / plan_type were created NOT NULL without
+    # a default. ORM model uses 'name' for plan_name and omits plan_type.
     _set_server_default_if_missing("business_continuity_plans", "plan_name", "''")
+    _set_server_default_if_missing("business_continuity_plans", "plan_type", "'continuity'")
 
     for col_name, col_def in _SUPPLIER_COLS:
         _add_if_missing("supplier_security_assessments", col_name, col_def)
