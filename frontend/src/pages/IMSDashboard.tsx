@@ -36,7 +36,6 @@ import {
   UserCheck,
   Key,
   AlertOctagon,
-  Award,
 } from 'lucide-react'
 import { cn } from '../helpers/utils'
 import {
@@ -775,7 +774,10 @@ export default function IMSDashboard() {
                           <div
                             key={cat.key}
                             className="flex items-center justify-between p-3 bg-surface rounded-lg border border-border hover:border-border-strong transition-colors cursor-pointer"
+                            role="button"
+                            tabIndex={0}
                             onClick={() => navigate('/ims')}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/ims') }}
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-muted rounded-lg">
