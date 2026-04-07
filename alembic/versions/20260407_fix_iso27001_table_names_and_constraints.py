@@ -96,24 +96,44 @@ def upgrade() -> None:
                     index=True,
                 ),
             )
-            op.execute(
-                "CREATE INDEX IF NOT EXISTS ix_iso27001_controls_tenant_id "
-                "ON iso27001_controls (tenant_id)"
-            )
+            op.execute("CREATE INDEX IF NOT EXISTS ix_iso27001_controls_tenant_id " "ON iso27001_controls (tenant_id)")
 
-        # Drop the global unique constraint on control_id (various possible names)
-        for constraint_name in ("uq_iso27001_controls_control_id", "iso27001_control_control_id_key"):
-            try:
-                op.drop_constraint(constraint_name, "iso27001_controls", type_="unique")
-            except Exception:
-                pass  # Constraint may not exist under this name
-
-        # Drop via index name fallback (PostgreSQL may name it differently)
-        try:
-            op.execute("DROP INDEX IF EXISTS iso27001_control_control_id_key")
-            op.execute("DROP INDEX IF EXISTS uq_iso27001_controls_control_id")
-        except Exception:
-            pass
+        # Drop the global unique constraint on control_id.
+        # Use ALTER TABLE … DROP CONSTRAINT IF EXISTS (never aborts the transaction,
+        # unlike op.drop_constraint() which raises a SQL error when the constraint
+        # is missing and puts asyncpg into InFailedSQLTransactionError state).
+        op.execute("ALTER TABLE iso27001_controls " "DROP CONSTRAINT IF EXISTS uq_iso27001_controls_control_id")
+        op.execute("ALTER TABLE iso27001_controls " "DROP CONSTRAINT IF EXISTS iso27001_control_control_id_key")
+        # Also drop as plain index in case PostgreSQL stored it as an index object.
+        op.execute("DROP INDEX IF EXISTS iso27001_control_control_id_key")
+        op.execute("DROP INDEX IF EXISTS uq_iso27001_controls_control_id")
+        # Catch any auto-generated name: drop every single-column unique on control_id.
+        op.execute("""
+            DO $$
+            DECLARE r RECORD;
+            BEGIN
+                FOR r IN
+                    SELECT tc.constraint_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                        ON tc.constraint_name = kcu.constraint_name
+                        AND tc.table_schema = kcu.table_schema
+                    WHERE tc.table_name = 'iso27001_controls'
+                      AND tc.constraint_type = 'UNIQUE'
+                      AND kcu.column_name = 'control_id'
+                      AND tc.table_schema = current_schema()
+                      AND NOT EXISTS (
+                        SELECT 1 FROM information_schema.key_column_usage kcu2
+                        WHERE kcu2.constraint_name = tc.constraint_name
+                          AND kcu2.table_schema = tc.table_schema
+                          AND kcu2.column_name = 'tenant_id'
+                      )
+                LOOP
+                    EXECUTE 'ALTER TABLE iso27001_controls DROP CONSTRAINT '
+                        || quote_ident(r.constraint_name);
+                END LOOP;
+            END$$;
+            """)
 
         # Create composite unique: one control_id per tenant
         if not _has_unique_constraint("iso27001_controls", "uq_iso27001_controls_control_id_tenant"):
@@ -129,19 +149,11 @@ def downgrade() -> None:
     is_pg = bind.dialect.name == "postgresql"
 
     if is_pg and _table_exists("iso27001_controls"):
-        # Revert to global unique (best-effort; may fail if duplicate data exists)
-        try:
-            op.drop_constraint(
-                "uq_iso27001_controls_control_id_tenant", "iso27001_controls", type_="unique"
-            )
-        except Exception:
-            pass
-        try:
-            op.create_unique_constraint(
-                "uq_iso27001_controls_control_id", "iso27001_controls", ["control_id"]
-            )
-        except Exception:
-            pass
+        # Revert to global unique (best-effort; duplicate data may prevent this).
+        # Use IF EXISTS to avoid transaction-aborting errors.
+        op.execute("ALTER TABLE iso27001_controls " "DROP CONSTRAINT IF EXISTS uq_iso27001_controls_control_id_tenant")
+        if not _has_unique_constraint("iso27001_controls", "uq_iso27001_controls_control_id"):
+            op.create_unique_constraint("uq_iso27001_controls_control_id", "iso27001_controls", ["control_id"])
 
     # Rename tables back (reverse order)
     for old, new in reversed(RENAMES):
