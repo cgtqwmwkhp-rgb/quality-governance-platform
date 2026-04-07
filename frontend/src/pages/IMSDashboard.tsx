@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { iso27001Api, IsmsApiDashboard } from '../api/client'
+
+interface SoaSummary {
+  version: string
+  status: string
+  implementation_percentage: number
+  id?: number
+  approved_by?: string
+  effective_date?: string
+}
 import {
   Shield,
   Leaf,
@@ -64,16 +73,37 @@ export default function IMSDashboard() {
   const [ismsData, setIsmsData] = useState<ISMSDashboardData | null>(null)
   const [ismsLoading, setIsmsLoading] = useState(false)
   const [ismsError, setIsmsError] = useState<string | null>(null)
+  const [soaData, setSoaData] = useState<SoaSummary | null>(null)
+  const [assetTypeCounts, setAssetTypeCounts] = useState<Record<string, { count: number; critical: number }>>({})
 
   const fetchIsmsData = useCallback(async () => {
     setIsmsLoading(true)
     setIsmsError(null)
     try {
-      const response = await iso27001Api.getDashboard()
-      setIsmsData(response.data)
-    } catch (err) {
-      setIsmsError('Unable to load ISMS data. Please try again.')
-      if (import.meta.env.DEV) console.error('ISMS dashboard fetch error:', err)
+      const [dashRes, soaRes, assetsRes] = await Promise.allSettled([
+        iso27001Api.getDashboard(),
+        iso27001Api.getSoa(),
+        iso27001Api.getAssets({ limit: 100 }),
+      ])
+
+      if (dashRes.status === 'fulfilled') setIsmsData(dashRes.value.data)
+      else {
+        setIsmsError('Unable to load ISMS data. Please try again.')
+        if (import.meta.env.DEV) console.error('ISMS dashboard fetch error:', dashRes.reason)
+      }
+
+      if (soaRes.status === 'fulfilled') setSoaData(soaRes.value.data)
+
+      if (assetsRes.status === 'fulfilled') {
+        const assets = (assetsRes.value.data as { assets: { asset_type: string; criticality: string }[] }).assets ?? []
+        const counts: Record<string, { count: number; critical: number }> = {}
+        for (const a of assets) {
+          if (!counts[a.asset_type]) counts[a.asset_type] = { count: 0, critical: 0 }
+          counts[a.asset_type].count++
+          if (a.criticality === 'critical') counts[a.asset_type].critical++
+        }
+        setAssetTypeCounts(counts)
+      }
     } finally {
       setIsmsLoading(false)
     }
@@ -300,7 +330,10 @@ export default function IMSDashboard() {
         <div className="flex gap-3 mt-4 md:mt-0">
           <Button
             variant="outline"
-            onClick={() => { if (activeTab === 'isms') fetchIsmsData() }}
+            onClick={() => {
+              if (activeTab === 'isms') fetchIsmsData()
+            }}
+            disabled={ismsLoading}
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Sync
@@ -927,37 +960,38 @@ export default function IMSDashboard() {
 
               {/* Information Asset Categories & Security Incidents */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Asset Categories */}
+                {/* Asset Categories — live from API */}
                 <div className="bg-slate-800 rounded-xl border border-slate-700">
                   <div className="p-4 bg-slate-700 border-b border-slate-600">
                     <h3 className="font-bold text-white">Information Asset Categories</h3>
                   </div>
                   <div className="p-4 space-y-3">
                     {[
-                      { category: 'Hardware', count: 45, icon: Server, critical: 8 },
-                      { category: 'Software', count: 32, icon: Laptop, critical: 5 },
-                      { category: 'Data', count: 38, icon: Database, critical: 7 },
-                      { category: 'Services', count: 21, icon: Globe, critical: 2 },
-                      { category: 'People', count: 15, icon: Users, critical: 1 },
-                      { category: 'Physical', count: 5, icon: Key, critical: 0 },
-                    ].map((cat, i) => {
+                      { key: 'hardware', label: 'Hardware', icon: Server },
+                      { key: 'software', label: 'Software', icon: Laptop },
+                      { key: 'data', label: 'Data', icon: Database },
+                      { key: 'service', label: 'Services', icon: Globe },
+                      { key: 'people', label: 'People', icon: Users },
+                      { key: 'physical', label: 'Physical', icon: Key },
+                    ].map((cat) => {
                       const Icon = cat.icon
+                      const info = assetTypeCounts[cat.key] ?? { count: 0, critical: 0 }
                       return (
                         <div
-                          key={i}
+                          key={cat.key}
                           className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg hover:bg-slate-700 transition-colors cursor-pointer"
                         >
                           <div className="flex items-center gap-3">
                             <div className="p-2 bg-slate-600 rounded-lg">
                               <Icon className="w-4 h-4 text-gray-300" />
                             </div>
-                            <span className="text-white font-medium">{cat.category}</span>
+                            <span className="text-white font-medium">{cat.label}</span>
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-gray-400">{cat.count} assets</span>
-                            {cat.critical > 0 && (
+                            <span className="text-gray-400">{info.count} assets</span>
+                            {info.critical > 0 && (
                               <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
-                                {cat.critical} critical
+                                {info.critical} critical
                               </span>
                             )}
                             <ChevronRight className="w-4 h-4 text-gray-500" />
@@ -975,7 +1009,10 @@ export default function IMSDashboard() {
                       <h3 className="font-bold text-white">Recent Security Incidents</h3>
                       <p className="text-sm text-gray-400">Last 30 days</p>
                     </div>
-                    <button className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors">
+                    <button
+                      className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors"
+                      onClick={() => window.location.assign('/incidents/new?source=isms')}
+                    >
                       Report Incident
                     </button>
                   </div>
@@ -990,11 +1027,13 @@ export default function IMSDashboard() {
                         <div className="flex items-center gap-3">
                           <Bug
                             className={`w-5 h-5 ${
-                              incident.severity === 'high'
-                                ? 'text-red-400'
-                                : incident.severity === 'medium'
-                                  ? 'text-yellow-400'
-                                  : 'text-blue-400'
+                              incident.severity === 'critical'
+                                ? 'text-red-600'
+                                : incident.severity === 'high'
+                                  ? 'text-red-400'
+                                  : incident.severity === 'medium'
+                                    ? 'text-yellow-400'
+                                    : 'text-blue-400'
                             }`}
                           />
                           <div>
@@ -1027,10 +1066,16 @@ export default function IMSDashboard() {
                   <div>
                     <h3 className="font-bold text-white">Statement of Applicability (SoA)</h3>
                     <p className="text-sm text-gray-400">
-                      Version 2.1 - Last Updated: January 2026
+                      {soaData && soaData.status !== 'not_created'
+                        ? `Version ${soaData.version}${soaData.effective_date ? ` — Effective: ${new Date(soaData.effective_date).toLocaleDateString()}` : ''}`
+                        : 'Not yet created — controls data shown below'}
                     </p>
                   </div>
-                  <button className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  <button
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
+                    disabled={!soaData || soaData.status === 'not_created'}
+                    onClick={() => soaData?.id && window.open(`/api/v1/iso27001/soa?format=pdf`, '_blank')}
+                  >
                     <FileText className="w-4 h-4" />
                     Export SoA
                   </button>

@@ -73,8 +73,13 @@ class IMSDashboardService:
     # ISO 27001 ISMS
     # ------------------------------------------------------------------
 
-    async def get_isms_data(self) -> dict[str, Any]:
-        """Return ISO 27001 ISMS dashboard data."""
+    async def get_isms_data(self, tenant_id: int | None = None) -> dict[str, Any]:
+        """Return ISO 27001 ISMS dashboard data scoped to a single tenant.
+
+        ``tenant_id`` is required for multi-tenant deployments.  When None the
+        method falls back to a global query (only safe for single-tenant or
+        internal admin use).
+        """
         from src.domain.models.iso27001 import (
             InformationAsset,
             InformationSecurityRisk,
@@ -83,34 +88,55 @@ class IMSDashboardService:
             SupplierSecurityAssessment,
         )
 
-        total_assets = await self._count(select(InformationAsset).where(InformationAsset.is_active == True))
+        def _tenant(col: Any) -> list:
+            return [col == tenant_id] if tenant_id is not None else []
+
+        total_assets = await self._count(
+            select(InformationAsset).where(InformationAsset.is_active == True, *_tenant(InformationAsset.tenant_id))
+        )
         critical_assets = await self._count(
             select(InformationAsset).where(
                 InformationAsset.is_active == True,
                 InformationAsset.criticality == "critical",
+                *_tenant(InformationAsset.tenant_id),
             )
         )
 
-        total_controls = await self._count(select(ISO27001Control))
-        applicable_controls = await self._count(select(ISO27001Control).where(ISO27001Control.is_applicable == True))
+        total_controls = await self._count(select(ISO27001Control).where(*_tenant(ISO27001Control.tenant_id)))
+        applicable_controls = await self._count(
+            select(ISO27001Control).where(ISO27001Control.is_applicable == True, *_tenant(ISO27001Control.tenant_id))
+        )
         implemented_controls = await self._count(
-            select(ISO27001Control).where(ISO27001Control.implementation_status == "implemented")
+            select(ISO27001Control).where(
+                ISO27001Control.implementation_status == "implemented",
+                *_tenant(ISO27001Control.tenant_id),
+            )
         )
 
         open_risks = await self._count(
-            select(InformationSecurityRisk).where(InformationSecurityRisk.status != "closed")
+            select(InformationSecurityRisk).where(
+                InformationSecurityRisk.status != "closed",
+                *_tenant(InformationSecurityRisk.tenant_id),
+            )
         )
         high_risks = await self._count(
             select(InformationSecurityRisk).where(
                 InformationSecurityRisk.residual_risk_score > 16,
                 InformationSecurityRisk.status != "closed",
+                *_tenant(InformationSecurityRisk.tenant_id),
             )
         )
 
-        open_incidents = await self._count(select(SecurityIncident).where(SecurityIncident.status == "open"))
+        open_incidents = await self._count(
+            select(SecurityIncident).where(
+                SecurityIncident.status == "open",
+                *_tenant(SecurityIncident.tenant_id),
+            )
+        )
         incidents_30d = await self._count(
             select(SecurityIncident).where(
-                SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30)
+                SecurityIncident.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+                *_tenant(SecurityIncident.tenant_id),
             )
         )
 
@@ -118,11 +144,12 @@ class IMSDashboardService:
             select(SupplierSecurityAssessment).where(
                 SupplierSecurityAssessment.risk_level == "high",
                 SupplierSecurityAssessment.status == "active",
+                *_tenant(SupplierSecurityAssessment.tenant_id),
             )
         )
 
-        domains = await self._get_annex_a_domains(ISO27001Control)
-        recent_incidents = await self._get_recent_incidents(SecurityIncident)
+        domains = await self._get_annex_a_domains(ISO27001Control, tenant_id=tenant_id)
+        recent_incidents = await self._get_recent_incidents(SecurityIncident, tenant_id=tenant_id)
 
         return {
             "assets": {"total": total_assets, "critical": critical_assets},
@@ -140,16 +167,20 @@ class IMSDashboardService:
             "recent_incidents": recent_incidents,
         }
 
-    async def _get_annex_a_domains(self, control_model: Any) -> list[dict[str, Any]]:
-        domain_names_result = await self._db.execute(select(control_model.domain).distinct())
+    async def _get_annex_a_domains(self, control_model: Any, tenant_id: int | None = None) -> list[dict[str, Any]]:
+        tenant_filter = [control_model.tenant_id == tenant_id] if tenant_id is not None else []
+        domain_names_result = await self._db.execute(select(control_model.domain).where(*tenant_filter).distinct())
         domains: list[dict[str, Any]] = []
         for (domain_name,) in domain_names_result:
             d_name = domain_name or "Unknown"
-            d_total = await self._count(select(control_model).where(control_model.domain == domain_name))
+            d_total = await self._count(
+                select(control_model).where(control_model.domain == domain_name, *tenant_filter)
+            )
             d_impl = await self._count(
                 select(control_model).where(
                     control_model.domain == domain_name,
                     control_model.implementation_status == "implemented",
+                    *tenant_filter,
                 )
             )
             domains.append(
@@ -162,10 +193,14 @@ class IMSDashboardService:
             )
         return domains
 
-    async def _get_recent_incidents(self, incident_model: Any) -> list[dict[str, Any]]:
+    async def _get_recent_incidents(self, incident_model: Any, tenant_id: int | None = None) -> list[dict[str, Any]]:
+        tenant_filter = [incident_model.tenant_id == tenant_id] if tenant_id is not None else []
         result = await self._db.execute(
             select(incident_model)
-            .where(incident_model.detected_date >= datetime.now(timezone.utc) - timedelta(days=30))
+            .where(
+                incident_model.detected_date >= datetime.now(timezone.utc) - timedelta(days=30),
+                *tenant_filter,
+            )
             .order_by(incident_model.detected_date.desc())
             .limit(10)
         )
@@ -330,7 +365,7 @@ class IMSDashboardService:
     # Full dashboard aggregate
     # ------------------------------------------------------------------
 
-    async def get_dashboard(self) -> dict[str, Any]:
+    async def get_dashboard(self, tenant_id: int | None = None) -> dict[str, Any]:
         """Build the complete IMS dashboard response.
 
         Each sub-query is wrapped in try/except so one failing module
@@ -361,7 +396,7 @@ class IMSDashboardService:
 
         # ISO 27001 ISMS
         try:
-            response["isms"] = await self.get_isms_data()
+            response["isms"] = await self.get_isms_data(tenant_id=tenant_id)
         except (ProgrammingError, OperationalError):
             logger.warning("IMS dashboard: ISMS tables not available", exc_info=True)
             response["isms"] = None

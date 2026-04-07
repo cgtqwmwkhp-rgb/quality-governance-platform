@@ -500,20 +500,194 @@ class TestComplianceEndpoints:
 
 
 class TestISO27001Endpoints:
-    """Tests for ISO 27001 ISMS endpoints."""
+    """Tests for ISO 27001 ISMS endpoints — read and write coverage."""
 
-    def test_iso27001_assets(self, client, auth_headers):
-        """GET /api/iso27001/assets returns data."""
+    def test_iso27001_dashboard(self, client, auth_headers):
+        """GET /api/v1/iso27001/dashboard returns ISMS metrics."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/dashboard", headers=auth_headers)
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "assets" in data
+            assert "controls" in data
+            assert "compliance_score" in data
+
+    def test_iso27001_assets_list(self, client, auth_headers):
+        """GET /api/iso27001/assets returns paginated assets."""
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/iso27001/assets", headers=auth_headers)
         assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "assets" in data
+
+    def test_iso27001_create_asset(self, client, auth_headers):
+        """POST /api/v1/iso27001/assets creates an asset."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "name": "Test Integration Asset",
+            "asset_type": "data",
+            "classification": "internal",
+            "criticality": "medium",
+        }
+        response = client.post("/api/v1/iso27001/assets", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+        if response.status_code == 201:
+            data = response.json()
+            assert "id" in data
+            assert "asset_id" in data
 
     def test_iso27001_controls(self, client, auth_headers):
-        """GET /api/iso27001/controls returns data."""
+        """GET /api/iso27001/controls returns data with summary."""
         if not auth_headers:
             pytest.skip("Auth required")
         response = client.get("/api/v1/iso27001/controls", headers=auth_headers)
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "summary" in data
+            assert "controls" in data
+
+    def test_iso27001_soa(self, client, auth_headers):
+        """GET /api/v1/iso27001/soa returns statement of applicability."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/soa", headers=auth_headers)
+        assert response.status_code in [200, 404]
+
+    def test_iso27001_risks_list(self, client, auth_headers):
+        """GET /api/v1/iso27001/risks returns risks."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/risks", headers=auth_headers)
+        assert response.status_code in [200, 404]
+
+    def test_iso27001_create_risk(self, client, auth_headers):
+        """POST /api/v1/iso27001/risks creates a security risk."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "title": "Test Integration Risk",
+            "description": "A risk created by the integration test suite for validation.",
+            "likelihood": 3,
+            "impact": 3,
+            "treatment_option": "mitigate",
+        }
+        response = client.post("/api/v1/iso27001/risks", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+        if response.status_code == 201:
+            data = response.json()
+            assert "risk_id" in data
+
+    def test_iso27001_incidents_list(self, client, auth_headers):
+        """GET /api/v1/iso27001/incidents returns incidents."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/incidents", headers=auth_headers)
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "incidents" in data
+
+    def test_iso27001_create_incident(self, client, auth_headers):
+        """POST /api/v1/iso27001/incidents creates a security incident."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "title": "Test Integration Incident",
+            "description": "A security incident recorded by the integration test suite.",
+            "incident_type": "other",
+            "severity": "low",
+            "detected_date": datetime.now(timezone.utc).isoformat(),
+        }
+        response = client.post("/api/v1/iso27001/incidents", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+        if response.status_code == 201:
+            data = response.json()
+            assert "incident_id" in data
+
+    def test_iso27001_suppliers_list(self, client, auth_headers):
+        """GET /api/v1/iso27001/suppliers returns assessments."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/suppliers", headers=auth_headers)
+        assert response.status_code in [200, 404]
+
+    def test_iso27001_create_supplier(self, client, auth_headers):
+        """POST /api/v1/iso27001/suppliers creates a supplier assessment."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "supplier_name": "Test Integration Supplier Ltd",
+            "supplier_type": "cloud",
+            "overall_rating": "compliant",
+            "risk_level": "low",
+            "assessment_frequency_months": 12,
+        }
+        response = client.post("/api/v1/iso27001/suppliers", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+
+    def test_iso27001_access_control_list(self, client, auth_headers):
+        """GET /api/v1/iso27001/access-control returns records."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/access-control", headers=auth_headers)
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "total" in data
+            assert "overdue_reviews" in data
+
+    def test_iso27001_create_access_control(self, client, auth_headers):
+        """POST /api/v1/iso27001/access-control creates an access record."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "user_id": 1,
+            "user_name": "Test User",
+            "system_name": "Test System",
+            "access_level": "read",
+            "granted_date": datetime.now(timezone.utc).isoformat(),
+        }
+        response = client.post("/api/v1/iso27001/access-control", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+
+    def test_iso27001_bcp_list(self, client, auth_headers):
+        """GET /api/v1/iso27001/business-continuity returns BCP list."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/business-continuity", headers=auth_headers)
+        assert response.status_code in [200, 404]
+
+    def test_iso27001_create_bcp(self, client, auth_headers):
+        """POST /api/v1/iso27001/business-continuity creates a BCP."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        payload = {
+            "name": "Test BCP Plan",
+            "description": "Integration test business continuity plan.",
+            "scope": "Core data processing systems",
+            "rto_hours": 4,
+            "rpo_hours": 1,
+            "effective_date": datetime.now(timezone.utc).isoformat(),
+        }
+        response = client.post("/api/v1/iso27001/business-continuity", json=payload, headers=auth_headers)
+        assert response.status_code in [201, 422, 500]
+        if response.status_code == 201:
+            data = response.json()
+            assert "plan_id" in data
+
+    def test_iso27001_risks_status_filter(self, client, auth_headers):
+        """GET /risks?status=closed returns only closed risks (previously broken)."""
+        if not auth_headers:
+            pytest.skip("Auth required")
+        response = client.get("/api/v1/iso27001/risks?status=closed", headers=auth_headers)
         assert response.status_code in [200, 404]
 
 

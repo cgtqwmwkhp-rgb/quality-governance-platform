@@ -3501,19 +3501,176 @@ export interface IsmsApiDashboard {
   }[]
 }
 
+export interface AssetCreatePayload {
+  name: string
+  asset_type: 'hardware' | 'software' | 'data' | 'service' | 'people' | 'physical'
+  classification?: 'public' | 'internal' | 'confidential' | 'restricted' | 'secret'
+  criticality?: 'low' | 'medium' | 'high' | 'critical'
+  description?: string
+  owner_name?: string
+  department?: string
+  location?: string
+  confidentiality_requirement?: number
+  integrity_requirement?: number
+  availability_requirement?: number
+}
+
+export interface RiskCreatePayload {
+  title: string
+  description: string
+  threat_source?: string
+  likelihood?: number
+  impact?: number
+  residual_likelihood?: number
+  residual_impact?: number
+  treatment_option?: 'accept' | 'avoid' | 'mitigate' | 'transfer'
+  treatment_plan?: string
+  risk_owner_name?: string
+}
+
+export interface IncidentCreatePayload {
+  title: string
+  description: string
+  incident_type: string
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  priority?: 'low' | 'medium' | 'high' | 'critical'
+  detected_date: string
+  occurred_date?: string
+  cia_impact?: string[]
+  data_compromised?: boolean
+  regulatory_notification_required?: boolean
+  reported_by_name?: string
+}
+
+export interface SupplierCreatePayload {
+  supplier_name: string
+  supplier_type: string
+  overall_rating: 'compliant' | 'partially_compliant' | 'non_compliant'
+  risk_level?: 'low' | 'medium' | 'high' | 'critical'
+  data_access_level?: 'none' | 'limited' | 'full'
+  services_provided?: string
+  security_score?: number
+  iso27001_certified?: boolean
+  soc2_certified?: boolean
+  findings_count?: number
+  critical_findings?: number
+  assessment_frequency_months?: number
+}
+
+export interface AccessControlCreatePayload {
+  user_id: number
+  user_name: string
+  user_email?: string
+  user_department?: string
+  system_name: string
+  access_level: 'read' | 'write' | 'admin' | 'owner'
+  granted_date: string
+  granted_by?: string
+  expiry_date?: string
+}
+
+export interface BCPCreatePayload {
+  name: string
+  description: string
+  scope: string
+  rto_hours: number
+  rpo_hours: number
+  mtpd_hours?: number
+  effective_date: string
+  version?: string
+  plan_owner_name?: string
+  activation_criteria?: string
+  test_frequency_months?: number
+}
+
 export const iso27001Api = {
   getDashboard: () => api.get<IsmsApiDashboard>('/api/v1/iso27001/dashboard'),
+
+  // Assets
   getAssets: (params?: { skip?: number; limit?: number; criticality?: string; asset_type?: string }) =>
     api.get<{ total: number; assets: unknown[] }>('/api/v1/iso27001/assets', { params }),
+  getAsset: (assetId: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/iso27001/assets/${assetId}`),
+  createAsset: (payload: AssetCreatePayload) =>
+    api.post<{ id: number; asset_id: string; message: string }>('/api/v1/iso27001/assets', payload),
+  updateAsset: (assetId: number, payload: Partial<AssetCreatePayload> & { status?: string }) =>
+    api.put<{ id: number; message: string }>(`/api/v1/iso27001/assets/${assetId}`, payload),
+
+  // Controls
   getControls: (params?: { domain?: string; implementation_status?: string; is_applicable?: boolean }) =>
     api.get<{ total: number; summary: unknown; controls: unknown[] }>('/api/v1/iso27001/controls', { params }),
-  getSoa: () => api.get<{ version: string; status: string; implementation_percentage: number }>('/api/v1/iso27001/soa'),
-  getRisks: (params?: { skip?: number; limit?: number; min_score?: number }) =>
+  updateControl: (
+    controlId: number,
+    payload: {
+      implementation_status?: 'not_implemented' | 'partial' | 'implemented' | 'excluded'
+      implementation_notes?: string
+      is_applicable?: boolean
+      exclusion_justification?: string
+      effectiveness_rating?: string
+      control_owner_name?: string
+    },
+  ) => api.put<{ id: number; message: string }>(`/api/v1/iso27001/controls/${controlId}`, payload),
+
+  // SoA
+  getSoa: () =>
+    api.get<{ version: string; status: string; implementation_percentage: number; id?: number; approved_by?: string; effective_date?: string }>('/api/v1/iso27001/soa'),
+
+  // Risks
+  getRisks: (params?: { skip?: number; limit?: number; min_score?: number; status?: string; include_closed?: boolean }) =>
     api.get<{ total: number; risks: unknown[] }>('/api/v1/iso27001/risks', { params }),
+  getRisk: (riskId: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/iso27001/risks/${riskId}`),
+  createRisk: (payload: RiskCreatePayload) =>
+    api.post<{ id: number; risk_id: string; message: string }>('/api/v1/iso27001/risks', payload),
+  updateRisk: (riskId: number, payload: Partial<RiskCreatePayload> & { status?: string; treatment_status?: string }) =>
+    api.put<{ id: number; message: string }>(`/api/v1/iso27001/risks/${riskId}`, payload),
+
+  // Incidents
   getIncidents: (params?: { skip?: number; limit?: number; severity?: string; status?: string }) =>
-    api.get<{ total: number; open_incidents: number; incidents: unknown[] }>('/api/v1/iso27001/incidents', { params }),
-  getSuppliers: (params?: { skip?: number; limit?: number; risk_level?: string }) =>
+    api.get<{ total: number; open_incidents: number; critical_incidents: number; incidents: unknown[] }>('/api/v1/iso27001/incidents', { params }),
+  getIncident: (incidentId: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/iso27001/incidents/${incidentId}`),
+  createIncident: (payload: IncidentCreatePayload) =>
+    api.post<{ id: number; incident_id: string; message: string }>('/api/v1/iso27001/incidents', payload),
+  updateIncident: (
+    incidentId: number,
+    payload: {
+      status?: 'open' | 'investigating' | 'contained' | 'eradicating' | 'recovering' | 'closed'
+      severity?: string
+      assigned_to_name?: string
+      root_cause?: string
+      containment_actions?: string
+      eradication_actions?: string
+      recovery_actions?: string
+      lessons_learned?: string
+      regulatory_notification_required?: boolean
+      regulatory_body?: string
+    },
+  ) => api.put<{ id: number; message: string }>(`/api/v1/iso27001/incidents/${incidentId}`, payload),
+
+  // Suppliers
+  getSuppliers: (params?: { skip?: number; limit?: number; risk_level?: string; rating?: string }) =>
     api.get<{ total: number; suppliers: unknown[] }>('/api/v1/iso27001/suppliers', { params }),
+  getSupplier: (supplierId: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/iso27001/suppliers/${supplierId}`),
+  createSupplier: (payload: SupplierCreatePayload) =>
+    api.post<{ id: number; message: string }>('/api/v1/iso27001/suppliers', payload),
+
+  // Access Control
+  getAccessControl: (params?: { active_only?: boolean; skip?: number; limit?: number }) =>
+    api.get<{ total: number; overdue_reviews: number; records: unknown[] }>('/api/v1/iso27001/access-control', { params }),
+  createAccessControl: (payload: AccessControlCreatePayload) =>
+    api.post<{ id: number; message: string }>('/api/v1/iso27001/access-control', payload),
+
+  // Business Continuity Plans
+  getBCPs: (params?: { active_only?: boolean; skip?: number; limit?: number }) =>
+    api.get<{ total: number; plans: unknown[] }>('/api/v1/iso27001/business-continuity', { params }),
+  getBCP: (planId: number) =>
+    api.get<Record<string, unknown>>(`/api/v1/iso27001/business-continuity/${planId}`),
+  createBCP: (payload: BCPCreatePayload) =>
+    api.post<{ id: number; plan_id: string; message: string }>('/api/v1/iso27001/business-continuity', payload),
+  updateBCP: (planId: number, payload: Partial<BCPCreatePayload> & { is_active?: boolean; last_test_date?: string; last_test_type?: string; last_test_result?: string }) =>
+    api.put<{ id: number; message: string }>(`/api/v1/iso27001/business-continuity/${planId}`, payload),
 }
 
 // ============ Global Search API ============

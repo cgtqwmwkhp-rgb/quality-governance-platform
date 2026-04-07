@@ -124,12 +124,16 @@ class ISO27001Control(Base):
     """ISO 27001:2022 Annex A Controls"""
 
     __tablename__ = "iso27001_controls"
+    __table_args__ = (
+        # control_id is unique per tenant (same control can exist in multiple tenants)
+        {"comment": "ISO 27001:2022 Annex A controls — composite unique enforced at DB level"},
+    )
 
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # Control identification
-    control_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)  # e.g., A.5.1
+    # Control identification — uniqueness is per-tenant; see migration uq_iso27001_controls_control_id_tenant
+    control_id: Mapped[str] = mapped_column(String(20), nullable=False)  # e.g., A.5.1
     control_name: Mapped[str] = mapped_column(String(255), nullable=False)
     control_description: Mapped[str] = mapped_column(Text, nullable=False)
 
