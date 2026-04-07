@@ -20,7 +20,7 @@ Use this template for significant technical decisions. Store completed ADRs as m
 | [ADR-0010](../adr/ADR-0010-backend-i18n-strategy.md) | Backend I18n Strategy | Accepted |
 | [ADR-0011](../adr/ADR-0011-api-versioning-strategy.md) | API Versioning Strategy | Accepted |
 | [ADR-0012](../adr/ADR-0012-testing-strategy.md) | Testing Strategy | Accepted |
-| [ADR-0013](../adr/ADR-0013-readiness-probe-db-check.md) | Readiness Probe Database Check | Accepted |
+| [ADR-0014](../adr/ADR-0014-readiness-probe-db-check.md) | Readiness Probe Database Check | Accepted |
 
 ---
 
