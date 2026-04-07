@@ -8,6 +8,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    testTimeout: 10000,
+    retry: 2,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

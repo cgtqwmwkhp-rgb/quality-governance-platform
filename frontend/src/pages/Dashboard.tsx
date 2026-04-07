@@ -28,6 +28,7 @@ import {
   actionsApi,
   auditsApi,
   notificationsApi,
+  complianceApi,
   type Incident,
   type RTA,
   type Complaint,
@@ -337,6 +338,7 @@ export default function Dashboard() {
         actionsApi.list(1, 100),
         auditsApi.listRuns(1, 100),
         notificationsApi.getUnreadCount(),
+        complianceApi.getCoverage(), // index 7 — live per-standard coverage
       ])
 
       const getData = <T,>(r: PromiseSettledResult<{ data: T }>, def: T): T =>
@@ -509,7 +511,19 @@ export default function Dashboard() {
         },
         actions: { total: actionTotal, overdue: actionOverdue, dueSoon: actionDueSoon, trend: 0 },
         risks: { total: riskTotal, high: riskHigh, outsideAppetite: 0 },
-        compliance: { iso9001: 0, iso14001: 0, iso45001: 0, iso27001: 0 },
+        compliance: (() => {
+          const coverageResult = results[7]
+          const byStd =
+            coverageResult.status === 'fulfilled'
+              ? (coverageResult.value?.data?.by_standard ?? {})
+              : {}
+          return {
+            iso9001: Math.round(byStd.iso9001?.percentage ?? 0),
+            iso14001: Math.round(byStd.iso14001?.percentage ?? 0),
+            iso45001: Math.round(byStd.iso45001?.percentage ?? 0),
+            iso27001: Math.round(byStd.iso27001?.percentage ?? 0),
+          }
+        })(),
         carbon: { totalEmissions: 0, perFTE: 0, trend: 0 },
       })
     } catch (err) {

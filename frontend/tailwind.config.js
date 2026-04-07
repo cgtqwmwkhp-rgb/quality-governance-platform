@@ -5,6 +5,16 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Safelist for ISO standard dynamic color classes (e.g. text-${color}-400).
+  // These are constructed at runtime so Tailwind JIT cannot detect them statically.
+  safelist: [
+    {
+      pattern: /(bg|text|from|to)-(blue|green|orange|purple|teal|yellow)-(400|500|600)/,
+    },
+    {
+      pattern: /bg-(blue|green|orange|purple|teal|yellow)-500\/20/,
+    },
+  ],
   theme: {
     extend: {
       fontFamily: {
