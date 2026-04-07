@@ -20,6 +20,7 @@ from src.api.routes import (
     compliance_automation,
     copilot,
     cross_standard_mappings,
+    dlq_admin,
     document_control,
     documents,
     drivers,
@@ -31,9 +32,11 @@ from src.api.routes import (
     external_audit_records,
     feature_flags,
     form_config,
+    gdpr,
     global_search,
     governance,
     health,
+    ims_dashboard,
     incidents,
     inductions,
     investigation_templates,
@@ -45,6 +48,7 @@ from src.api.routes import (
     planet_mark,
     policies,
     policy_acknowledgment,
+    push_notifications,
     rca_tools,
     realtime,
     risk_register,
@@ -117,6 +121,8 @@ router.include_router(
 )
 # ISO 27001 Information Security Management System
 router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS"])
+# IMS (Integrated Management System) Dashboard
+router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
 # UVDB Achilles Verify B2 Audit Protocol
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 # Planet Mark Carbon Management
@@ -131,6 +137,8 @@ router.include_router(tenants.router, prefix="/tenants", tags=["Multi-Tenancy"])
 router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Trail"])
 # Admin Form Builder & Configuration
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
+# Dead-letter queue admin (superuser only)
+router.include_router(dlq_admin.router, tags=["DLQ Admin"])
 # Near Misses
 router.include_router(near_miss.router, prefix="/near-misses", tags=["Near Misses"])
 # Evidence Assets (Shared Attachments Module)
@@ -180,6 +188,10 @@ router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feat
 router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 # Health & Resource Monitoring
 router.include_router(health.router, prefix="/health", tags=["Health"])
+# GDPR data-subject rights (Art. 15 export, Art. 17 erasure)
+router.include_router(gdpr.router, tags=["GDPR"])
+# Push Notification Service (VAPID web-push)
+router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
 # Vehicle Checklists (PAMS Integration)
 router.include_router(
     vehicle_checklists.router,

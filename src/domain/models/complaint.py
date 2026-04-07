@@ -63,7 +63,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
         Index("ix_complaints_tenant_status", "tenant_id", "status"),
         Index("ix_complaints_tenant_created", "tenant_id", "created_at"),
         CheckConstraint(
-            "source_type IN ('manual', 'email', 'api', 'phone')",
+            "source_type IN ('manual', 'email', 'api', 'phone', 'portal')",
             name="ck_complaint_source_type",
         ),
         CheckConstraint(
@@ -136,7 +136,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     linked_risk_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Email ingestion source
-    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api, phone
+    source_type: Mapped[str] = mapped_column(String(50), default="manual")  # manual, email, api, phone, portal
     source_email_id: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     original_email_subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     original_email_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
