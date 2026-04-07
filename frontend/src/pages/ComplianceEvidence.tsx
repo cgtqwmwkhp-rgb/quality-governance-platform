@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Award,
@@ -116,6 +116,9 @@ export default function ComplianceEvidence() {
   const [error, setError] = useState<string | null>(null)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  // Ref to avoid selectedClauseId as a loadData dependency (prevents double-fetch
+  // caused by the auto-select logic inside loadData itself setting selectedClauseId).
+  const selectedClauseIdRef = useRef<string | null>(null)
 
   // Debounce search query to avoid firing an API call on every keystroke
   useEffect(() => {
@@ -132,6 +135,12 @@ export default function ComplianceEvidence() {
     if (!standardFromUrl) return
     setSelectedStandard(standardFromUrl)
   }, [standardFromUrl])
+
+  // Keep ref in sync with state so loadData can read current value without
+  // needing selectedClauseId as a dependency (which would cause infinite loops).
+  useEffect(() => {
+    selectedClauseIdRef.current = selectedClauseId
+  }, [selectedClauseId])
 
   useEffect(() => {
     if (!clauseFromUrl || clauses.length === 0) return
@@ -192,15 +201,18 @@ export default function ComplianceEvidence() {
 
           const reportData = rep.status === 'fulfilled' ? rep.value.data : null
           const clausesData = cr.status === 'fulfilled' ? cr.value.data : []
+          // Use ref (not state) to read selectedClauseId inside this effect to
+          // avoid adding it to the deps array and causing infinite re-fetches.
+          const currentClauseId = selectedClauseIdRef.current
           if (
             reportData &&
-            selectedClauseId &&
-            !clausesData.some((clause) => clause.id === selectedClauseId) &&
+            currentClauseId &&
+            !clausesData.some((clause) => clause.id === currentClauseId) &&
             reportData.clauses.length > 0
           ) {
             setSelectedClauseId(reportData.clauses[0].clause_id)
           }
-          if (reportData && !selectedClauseId && reportData.clauses.length > 0) {
+          if (reportData && !currentClauseId && reportData.clauses.length > 0) {
             setSelectedClauseId(reportData.clauses[0].clause_id)
           }
         }
@@ -220,7 +232,10 @@ export default function ComplianceEvidence() {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearchQuery, selectedStandard, selectedClauseId])
+  // selectedClauseId intentionally excluded: read via selectedClauseIdRef to prevent
+  // the auto-select logic from causing a second fetch on every clause change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearchQuery, selectedStandard])
 
   useEffect(() => {
     if (viewMode !== 'imported') return
@@ -1160,8 +1175,7 @@ export default function ComplianceEvidence() {
             <div>
               <h3 className="text-base font-bold text-foreground mb-3 flex items-center gap-2">
                 <Tag className="w-5 h-5 text-primary" aria-hidden="true" />
-                Detected ISO Clauses
-                <Badge variant="secondary">{autoTagResults.length}</Badge>
+                {`Detected ISO Clauses (${autoTagResults.length})`}
               </h3>
               <div className="space-y-2">
                 {autoTagResults.map((clause) => {
