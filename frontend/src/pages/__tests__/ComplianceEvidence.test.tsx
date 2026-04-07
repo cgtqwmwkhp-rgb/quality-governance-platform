@@ -86,6 +86,8 @@ const coverageResponse = {
       iso9001: {
         total: 1,
         covered: 1,
+        partial_coverage: 0,
+        gaps: 0,
         percentage: 100,
       },
     },

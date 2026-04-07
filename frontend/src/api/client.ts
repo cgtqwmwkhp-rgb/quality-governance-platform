@@ -3176,6 +3176,8 @@ export interface ComplianceCoverageResponse {
     {
       total: number
       covered: number
+      partial_coverage: number
+      gaps: number
       percentage: number
     }
   >
