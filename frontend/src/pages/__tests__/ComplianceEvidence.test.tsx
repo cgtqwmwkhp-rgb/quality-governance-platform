@@ -7,6 +7,7 @@ const mockListClauses = vi.fn()
 const mockGetCoverage = vi.fn()
 const mockGetReport = vi.fn()
 const mockListEvidenceLinks = vi.fn()
+const mockDeleteEvidenceLink = vi.fn()
 const mockListMappings = vi.fn()
 const mockAutoTag = vi.fn()
 
@@ -17,10 +18,14 @@ vi.mock('../../api/client', () => ({
     getCoverage: (...args: unknown[]) => mockGetCoverage(...args),
     getReport: (...args: unknown[]) => mockGetReport(...args),
     listEvidenceLinks: (...args: unknown[]) => mockListEvidenceLinks(...args),
+    deleteEvidenceLink: (...args: unknown[]) => mockDeleteEvidenceLink(...args),
     autoTag: (...args: unknown[]) => mockAutoTag(...args),
   },
   crossStandardMappingsApi: {
     list: (...args: unknown[]) => mockListMappings(...args),
+  },
+  externalAuditRecordsApi: {
+    list: vi.fn().mockResolvedValue({ data: { records: [], total: 0 } }),
   },
   getApiErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : 'Something went wrong',
@@ -149,6 +154,7 @@ describe('ComplianceEvidence', () => {
     mockGetCoverage.mockResolvedValue(coverageResponse)
     mockGetReport.mockResolvedValue(reportResponse)
     mockListEvidenceLinks.mockResolvedValue(evidenceLinksResponse)
+    mockDeleteEvidenceLink.mockResolvedValue({ data: { status: 'deleted' } })
     mockListMappings.mockResolvedValue(mappingsResponse)
     mockAutoTag.mockResolvedValue({
       data: [

@@ -22,6 +22,7 @@ import {
   Zap,
   Download,
   Tag,
+  Trash2,
 } from 'lucide-react'
 import {
   complianceApi,
@@ -56,6 +57,29 @@ import {
   SelectValue,
 } from '../components/ui'
 import { cn } from '../helpers/utils'
+
+/**
+ * Maps entity_type values (as stored in ComplianceEvidenceLink) to valid SPA routes.
+ * Using a naive `/${entity_type}s` template produces broken routes such as:
+ *   audit_finding → /audit_findings (no route)
+ *   policy        → /policys        (no route)
+ *   training      → /trainings      (no route — correct is /workforce/training)
+ */
+const ENTITY_TYPE_ROUTE: Record<string, string> = {
+  audit_finding: '/audits',
+  audit: '/audits',
+  incident: '/incidents',
+  complaint: '/complaints',
+  near_miss: '/near-misses',
+  action: '/actions',
+  risk: '/risks',
+  policy: '/policies',
+  document: '/documents',
+  training: '/workforce/training',
+}
+
+const getEntityRoute = (entityType: string): string =>
+  ENTITY_TYPE_ROUTE[entityType] ?? `/${entityType}s`
 
 const evidenceTypeConfig: Record<
   string,
@@ -116,6 +140,7 @@ export default function ComplianceEvidence() {
   const [error, setError] = useState<string | null>(null)
   const [partialLoadWarning, setPartialLoadWarning] = useState<string | null>(null)
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
+  const [deletingLinkId, setDeletingLinkId] = useState<number | null>(null)
   // Ref to avoid selectedClauseId as a loadData dependency (prevents double-fetch
   // caused by the auto-select logic inside loadData itself setting selectedClauseId).
   const selectedClauseIdRef = useRef<string | null>(null)
@@ -372,6 +397,18 @@ export default function ComplianceEvidence() {
       } catch (err) {
         setError(getApiErrorMessage(err))
       }
+    }
+  }
+
+  const handleDeleteLink = async (linkId: number) => {
+    setDeletingLinkId(linkId)
+    try {
+      await complianceApi.deleteEvidenceLink(linkId)
+      setEvidenceLinks((prev) => prev.filter((e) => e.id !== linkId))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setDeletingLinkId(null)
     }
   }
 
@@ -720,11 +757,11 @@ export default function ComplianceEvidence() {
                       return (
                         <div
                           key={evidence.id}
-                          className="p-4 bg-surface hover:bg-muted rounded-lg transition-colors cursor-pointer border border-border"
+                          className="p-4 bg-surface hover:bg-muted rounded-lg transition-colors border border-border"
                         >
                           <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg ${config.color} flex-shrink-0`}>
-                              <Icon className="w-4 h-4 text-white" aria-hidden="true" />
+                            <div className={`p-2 rounded-lg ${config.color} flex-shrink-0`} aria-hidden="true">
+                              <Icon className="w-4 h-4 text-white" />
                             </div>
                             <div className="flex-grow min-w-0">
                               <div className="flex items-center justify-between gap-2 mb-1">
@@ -756,9 +793,26 @@ export default function ComplianceEvidence() {
                                 })()}
                               </div>
                             </div>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">
-                              {new Date(evidence.created_at).toLocaleDateString()}
-                            </span>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(evidence.created_at).toLocaleDateString()}
+                              </span>
+                              <Link
+                                to={getEntityRoute(evidence.entity_type)}
+                                className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ml-1"
+                                aria-label={`View ${config.label}`}
+                              >
+                                <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+                              </Link>
+                              <button
+                                onClick={() => void handleDeleteLink(evidence.id)}
+                                disabled={deletingLinkId === evidence.id}
+                                className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-50"
+                                aria-label={`Unlink ${config.label}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )
@@ -895,7 +949,15 @@ export default function ComplianceEvidence() {
                               Evidence gap for {clause.standard}
                             </p>
                             <div className="flex gap-2 mt-2 ml-12">
-                              <Button size="sm" variant="outline">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedClauseId(clause.clause_id)
+                                  setViewMode('clauses')
+                                }}
+                              >
                                 <Sparkles className="w-3 h-3 mr-1" aria-hidden="true" /> Review Mappings
                               </Button>
                             </div>
@@ -1040,13 +1102,15 @@ export default function ComplianceEvidence() {
                           const config =
                             evidenceTypeConfig[evidence.entity_type] ?? evidenceTypeConfig.document
                           const Icon = config.icon
+                          const route = getEntityRoute(evidence.entity_type)
+                          const isDeleting = deletingLinkId === evidence.id
                           return (
                             <div
                               key={evidence.id}
-                              className="p-3 bg-surface rounded-lg flex items-center gap-3 border border-border"
+                              className="p-3 bg-surface rounded-lg flex items-center gap-3 border border-border hover:border-border-strong transition-colors"
                             >
-                              <div className={`p-1.5 rounded ${config.color} flex-shrink-0`}>
-                                <Icon className="w-3 h-3 text-white" aria-hidden="true" />
+                              <div className={`p-1.5 rounded ${config.color} flex-shrink-0`} aria-hidden="true">
+                                <Icon className="w-3 h-3 text-white" />
                               </div>
                               <div className="flex-grow min-w-0">
                                 <p className="text-sm text-foreground truncate">
@@ -1056,13 +1120,23 @@ export default function ComplianceEvidence() {
                                   {new Date(evidence.created_at).toLocaleString()}
                                 </p>
                               </div>
-                              <Link
-                                to={`/${evidence.entity_type}s`}
-                                className="text-primary hover:text-primary/80 flex-shrink-0"
-                                aria-label={`View ${config.label}`}
-                              >
-                                <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
-                              </Link>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <Link
+                                  to={route}
+                                  className="p-1 rounded text-primary hover:text-primary/80 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                  aria-label={`View ${config.label} in ${route}`}
+                                >
+                                  <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+                                </Link>
+                                <button
+                                  onClick={() => void handleDeleteLink(evidence.id)}
+                                  disabled={isDeleting}
+                                  className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label={`Unlink ${config.label} from this clause`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                                </button>
+                              </div>
                             </div>
                           )
                         })}

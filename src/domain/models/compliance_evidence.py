@@ -65,7 +65,7 @@ class ComplianceEvidenceLink(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_cel_entity", "entity_type", "entity_id"),
         Index("ix_cel_clause", "clause_id"),
-        Index("ix_cel_entity_clause", "entity_type", "entity_id", "clause_id", unique=True),
+        Index("ix_cel_tenant_entity_clause", "tenant_id", "entity_type", "entity_id", "clause_id", unique=True),
     )
 
     def __repr__(self) -> str:
