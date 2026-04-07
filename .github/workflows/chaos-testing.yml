@@ -167,9 +167,11 @@ jobs:
       - name: Write chaos run evidence
         run: |
           mkdir -p docs/evidence/chaos-runs
-          cat > docs/evidence/chaos-runs/chaos-run-$(date +%Y-%m-%d).json <<EOF
+          RUN_DATE="$(date +%Y-%m-%d)"
+          RUN_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > "docs/evidence/chaos-runs/chaos-run-${RUN_DATE}.json" <<EOF
           {
-            "run_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run_date": "${RUN_TIMESTAMP}",
             "workflow_run_id": "${{ github.run_id }}",
             "trigger": "${{ github.event_name }}",
             "target_environment": "staging",
