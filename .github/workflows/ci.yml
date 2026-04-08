@@ -550,9 +550,10 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
           echo "=== Down-Migration Safety Check ==="
-          alembic downgrade pm_enhancements_01@-1
+          # pm_enhancements_01 is a merge migration (two parents); step back to the primary parent
+          alembic downgrade iso27001_schema_drift_02
           alembic upgrade heads
-          echo "[OK] Latest migration is reversible"
+          echo "[OK] Latest migration (merge) is reversible"
 
       - name: Validate quarantine policy
         run: |
