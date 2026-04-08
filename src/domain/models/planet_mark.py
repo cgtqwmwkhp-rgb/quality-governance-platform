@@ -199,6 +199,18 @@ class EmissionSource(Base):
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
 
+    # Import provenance — links back to the external audit import job that created this source
+    source_import_job_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("external_audit_import_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # True when this row was auto-created as an aggregate from a report import
+    # (not a manually-entered per-source record).  Excluded from the "add source"
+    # UI list so users can replace it with real per-source data.
+    is_imported_aggregate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     # Relationships
     reporting_year = relationship("CarbonReportingYear", back_populates="emission_sources")
 
@@ -315,6 +327,14 @@ class ImprovementAction(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
         onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+
+    # Import provenance — links back to the external audit import job that created this action
+    source_import_job_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("external_audit_import_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Relationships

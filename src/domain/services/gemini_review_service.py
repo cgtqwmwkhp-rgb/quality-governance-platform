@@ -157,6 +157,34 @@ Rules:
   If a general policy is stated but no specific date, calculate from
   report_date and note that the deadline was inferred.
 - If ambiguous, add a warning instead of guessing.
+- PLANET MARK SCHEME: If scheme is "planet_mark", you MUST also extract a
+  "planet_mark_carbon" object using visual cues (tables, charts, summary boxes):
+  {
+    "reporting_year_label": "e.g. YE2023 — label used in the report",
+    "period_start": "YYYY-MM-DD",
+    "period_end": "YYYY-MM-DD",
+    "fte_count": <positive integer or null>,
+    "scope_1_co2e_tonnes": <tCO2e — Scope 1 direct emissions or null>,
+    "scope_2_co2e_tonnes": <tCO2e — Scope 2 indirect energy or null>,
+    "scope_3_co2e_tonnes": <tCO2e — Scope 3 value chain or null>,
+    "total_co2e_tonnes": <tCO2e — total market-based or null>,
+    "baseline_year_label": "baseline year reference or null",
+    "baseline_total_co2e_tonnes": <tCO2e or null>,
+    "reduction_percent": <number — % reduction vs baseline or null>,
+    "data_quality_scope_1_2": <integer 0-16 or null>,
+    "data_quality_scope_3": <integer 0-16 or null>,
+    "certification_number": "e.g. PM-XXXX or null",
+    "certification_date": "YYYY-MM-DD or null",
+    "expiry_date": "YYYY-MM-DD or null",
+    "outcome_status": "certified | in_progress | not_certified",
+    "improvement_actions": [
+      {"title": "Action title", "target_scope": "scope_1|scope_2|scope_3|general|null",
+       "deadline": "YYYY-MM-DD or null", "expected_reduction_pct": <number or null>}
+    ]
+  }
+  Planet Mark rules: convert all emissions to tCO2e. Data quality is 0-16 scale,
+  NOT a percentage. "14/16" = score of 14. Visual carbon charts and tables are
+  the primary source.
 - Return ONLY the JSON object.
 """
 
@@ -391,6 +419,16 @@ class GeminiReviewService:
         raw_outcome = parsed.get("outcome")
         validated_outcome = raw_outcome if raw_outcome in _VALID_OUTCOMES else None
 
+        # Extract Planet Mark carbon data if present — reuse Mistral's validator
+        from src.domain.services.mistral_analysis_service import MistralAnalysisService
+
+        pm_carbon_raw = parsed.get("planet_mark_carbon")
+        pm_carbon = (
+            MistralAnalysisService._validate_planet_mark_carbon(pm_carbon_raw)
+            if isinstance(pm_carbon_raw, dict)
+            else None
+        )
+
         return AIAnalysisResult(
             raw=parsed,
             score_breakdown=breakdown,
@@ -418,6 +456,7 @@ class GeminiReviewService:
             items_applicable=self._safe_int(parsed.get("items_applicable")),
             items_na=self._safe_int(parsed.get("items_na")),
             visual_indicators=visual_indicators,
+            planet_mark_carbon=pm_carbon,
         )
 
     @staticmethod

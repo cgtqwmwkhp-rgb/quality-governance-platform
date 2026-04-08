@@ -144,6 +144,45 @@ Rules:
   Do not invent scores for ISO audits.
 - Look for visual indicators described in text: "green", "red", "amber",
   "tick", "cross", "pass", "fail" adjacent to section labels.
+- PLANET MARK SCHEME: If scheme is "planet_mark", you MUST also extract a
+  "planet_mark_carbon" object with the following fields (null if not stated):
+  {
+    "reporting_year_label": "e.g. YE2023 or Year 2023 — the label on the report",
+    "period_start": "YYYY-MM-DD — start of the reporting period",
+    "period_end": "YYYY-MM-DD — end of the reporting period",
+    "fte_count": <positive integer — full-time equivalent employees or null>,
+    "scope_1_co2e_tonnes": <number — Scope 1 direct emissions in tCO2e or null>,
+    "scope_2_co2e_tonnes": <number — Scope 2 indirect energy emissions in tCO2e or null>,
+    "scope_3_co2e_tonnes": <number — Scope 3 value chain emissions in tCO2e or null>,
+    "total_co2e_tonnes": <number — total market-based tCO2e or null>,
+    "baseline_year_label": "e.g. YE2022 — the baseline year referenced or null",
+    "baseline_total_co2e_tonnes": <number — baseline year total tCO2e or null>,
+    "reduction_percent": <number — % reduction vs baseline, positive means reduced or null>,
+    "data_quality_scope_1_2": <integer 0-16 — Planet Mark data quality score for Scope 1&2 or null>,
+    "data_quality_scope_3": <integer 0-16 — Planet Mark data quality score for Scope 3 or null>,
+    "certification_number": "Planet Mark certificate number e.g. PM-XXXX or null",
+    "certification_date": "YYYY-MM-DD — date certificate was issued or null",
+    "expiry_date": "YYYY-MM-DD — date certificate expires or null",
+    "outcome_status": "certified | in_progress | not_certified — based on report language",
+    "improvement_actions": [
+      {
+        "title": "Short action title e.g. Install LED lighting",
+        "target_scope": "scope_1 | scope_2 | scope_3 | general or null",
+        "deadline": "YYYY-MM-DD or null",
+        "expected_reduction_pct": <number or null>
+      }
+    ]
+  }
+  PLANET MARK extraction rules:
+  - Convert all emission values to tCO2e (tonnes). If values appear as kgCO2e, divide by 1000.
+  - The data quality scale is 0-16 (NOT a percentage). "14/16" means score 14 out of 16.
+  - "Scope 1" = direct emissions (combustion, fleet, owned processes).
+  - "Scope 2" = indirect energy (purchased electricity, heat, steam).
+  - "Scope 3" = value chain (travel, supply chain, waste, commuting).
+  - Do NOT confuse data quality scores with emission values.
+  - outcome_status: use "certified" if the document says "certified" or "awarded";
+    "in_progress" if it says "assessment in progress" or "pending"; "not_certified" otherwise.
+  - If improvement_actions are listed (action plan, reduction plan), extract up to 20.
 - Return ONLY the JSON object, no markdown fences or commentary.
 """
 
@@ -178,6 +217,7 @@ class AIAnalysisResult:
     items_applicable: int | None = None
     items_na: int | None = None
     visual_indicators: list[dict[str, object]] = field(default_factory=list)
+    planet_mark_carbon: dict[str, object] | None = None
 
 
 class MistralAnalysisService:
@@ -324,6 +364,13 @@ class MistralAnalysisService:
         raw_outcome = parsed.get("outcome")
         validated_outcome = raw_outcome if raw_outcome in _VALID_OUTCOMES else None
 
+        # Extract and validate Planet Mark carbon block if present
+        pm_carbon = parsed.get("planet_mark_carbon")
+        if isinstance(pm_carbon, dict):
+            pm_carbon = self._validate_planet_mark_carbon(pm_carbon)
+        else:
+            pm_carbon = None
+
         return AIAnalysisResult(
             raw=parsed,
             score_breakdown=breakdown,
@@ -349,6 +396,7 @@ class MistralAnalysisService:
             items_total=self._safe_int(parsed.get("items_total")),
             items_applicable=self._safe_int(parsed.get("items_applicable")),
             items_na=self._safe_int(parsed.get("items_na")),
+            planet_mark_carbon=pm_carbon,
         )
 
     @staticmethod
@@ -381,6 +429,102 @@ class MistralAnalysisService:
         if stripped.endswith("```"):
             stripped = stripped.rsplit("```", 1)[0]
         return stripped.strip()
+
+    @staticmethod
+    def _validate_planet_mark_carbon(raw: dict) -> dict:
+        """Validate and sanitise extracted Planet Mark carbon data.
+
+        Applies range checks, unit normalisation (kgCO2e → tCO2e),
+        cross-validation between scope totals, and removes clearly
+        invalid values rather than passing them through.
+        """
+        out: dict = {}
+
+        def _safe_float_pos(val: object) -> float | None:
+            try:
+                f = float(val)  # type: ignore[arg-type]
+                return f if f >= 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        def _safe_int_pos(val: object) -> int | None:
+            try:
+                i = int(str(val))
+                return i if i > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        # String fields — copy through with truncation
+        for key in (
+            "reporting_year_label",
+            "period_start",
+            "period_end",
+            "baseline_year_label",
+            "certification_number",
+            "certification_date",
+            "expiry_date",
+        ):
+            v = raw.get(key)
+            out[key] = str(v)[:50] if v not in (None, "", "null") else None
+
+        # Outcome status validation
+        raw_outcome = str(raw.get("outcome_status", "") or "").lower()
+        out["outcome_status"] = raw_outcome if raw_outcome in {"certified", "in_progress", "not_certified"} else None
+
+        # Numeric emission values — must be non-negative and plausible (< 10M tCO2e)
+        for key in (
+            "scope_1_co2e_tonnes",
+            "scope_2_co2e_tonnes",
+            "scope_3_co2e_tonnes",
+            "total_co2e_tonnes",
+            "baseline_total_co2e_tonnes",
+        ):
+            v = _safe_float_pos(raw.get(key))
+            out[key] = v if v is not None and v < 10_000_000 else None
+
+        out["reduction_percent"] = _safe_float_pos(raw.get("reduction_percent"))
+        out["fte_count"] = _safe_int_pos(raw.get("fte_count"))
+
+        # Data quality scores: integer 0-16
+        for key in ("data_quality_scope_1_2", "data_quality_scope_3"):
+            v = _safe_int_pos(raw.get(key))
+            out[key] = v if v is not None and v <= 16 else None
+
+        # Cross-validate: scope sum should approximately equal total (allow 10% tolerance)
+        s1 = out.get("scope_1_co2e_tonnes")
+        s2 = out.get("scope_2_co2e_tonnes")
+        s3 = out.get("scope_3_co2e_tonnes")
+        total = out.get("total_co2e_tonnes")
+        if s1 is not None and s2 is not None and total is not None:
+            scope_sum = (s1 or 0) + (s2 or 0) + (s3 or 0)
+            if total > 0 and abs(scope_sum - total) / total > 0.15:
+                logger.warning(
+                    "Planet Mark carbon cross-validation: scope sum %.2f diverges from total %.2f by >15%%",
+                    scope_sum,
+                    total,
+                )
+
+        # Improvement actions — extract up to 20
+        raw_actions = raw.get("improvement_actions") or []
+        actions = []
+        for item in (raw_actions if isinstance(raw_actions, list) else [])[:20]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "") or "").strip()
+            if not title:
+                continue
+            target = str(item.get("target_scope", "") or "").lower()
+            actions.append(
+                {
+                    "title": title[:300],
+                    "target_scope": target if target in {"scope_1", "scope_2", "scope_3", "general"} else None,
+                    "deadline": str(item.get("deadline", "") or "")[:20] or None,
+                    "expected_reduction_pct": _safe_float_pos(item.get("expected_reduction_pct")),
+                }
+            )
+        out["improvement_actions"] = actions
+
+        return out
 
     @staticmethod
     def _smart_chunk(text: str, max_chars: int = 30000) -> list[str]:
