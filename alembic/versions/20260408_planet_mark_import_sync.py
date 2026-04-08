@@ -58,9 +58,9 @@ def upgrade() -> None:
         ["scheme", "tenant_id"],
     )
 
-    # ── emission_sources provenance columns ────────────────────────────────
+    # ── emission_source provenance columns ────────────────────────────────
     op.add_column(
-        "emission_sources",
+        "emission_source",
         sa.Column(
             "source_import_job_id",
             sa.Integer(),
@@ -69,7 +69,7 @@ def upgrade() -> None:
         ),
     )
     op.add_column(
-        "emission_sources",
+        "emission_source",
         sa.Column(
             "is_imported_aggregate",
             sa.Boolean(),
@@ -78,14 +78,14 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_emission_sources_import_job",
-        "emission_sources",
+        "ix_emission_source_import_job",
+        "emission_source",
         ["source_import_job_id"],
     )
 
-    # ── improvement_actions provenance column ──────────────────────────────
+    # ── carbon_improvement_action provenance column ────────────────────────
     op.add_column(
-        "improvement_actions",
+        "carbon_improvement_action",
         sa.Column(
             "source_import_job_id",
             sa.Integer(),
@@ -94,19 +94,19 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_improvement_actions_import_job",
-        "improvement_actions",
+        "ix_carbon_improvement_action_import_job",
+        "carbon_improvement_action",
         ["source_import_job_id"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_improvement_actions_import_job", table_name="improvement_actions")
-    op.drop_column("improvement_actions", "source_import_job_id")
+    op.drop_index("ix_carbon_improvement_action_import_job", table_name="carbon_improvement_action")
+    op.drop_column("carbon_improvement_action", "source_import_job_id")
 
-    op.drop_index("ix_emission_sources_import_job", table_name="emission_sources")
-    op.drop_column("emission_sources", "is_imported_aggregate")
-    op.drop_column("emission_sources", "source_import_job_id")
+    op.drop_index("ix_emission_source_import_job", table_name="emission_source")
+    op.drop_column("emission_source", "is_imported_aggregate")
+    op.drop_column("emission_source", "source_import_job_id")
 
     op.drop_index("ix_external_audit_records_scheme_tenant", table_name="external_audit_records")
     op.drop_column("external_audit_records", "scope_3_co2e")
