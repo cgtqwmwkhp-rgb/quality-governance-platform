@@ -25,6 +25,7 @@ import {
   XCircle,
   ClipboardCheck,
   ArrowUpRight,
+  FileUp,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -37,6 +38,11 @@ import {
   type ExternalAuditRecordSummary,
 } from '../api/client'
 import { SetupRequiredPanel } from '../components/ui/SetupRequiredPanel'
+import { EvidenceUploadRow } from '../components/planet-mark/EvidenceUploadRow'
+import { CertificationStatusPanel } from '../components/planet-mark/CertificationStatusPanel'
+import { ActionCard, type ActionItem } from '../components/planet-mark/ActionCard'
+import { ActionSummaryKPIs } from '../components/planet-mark/ActionSummaryKPIs'
+import { ActionImportModal } from '../components/planet-mark/ActionImportModal'
 
 interface ReportingYear {
   id: number
@@ -131,6 +137,21 @@ export default function PlanetMark() {
   const [loadingImported, setLoadingImported] = useState(false)
   const [isCreatingYear, setIsCreatingYear] = useState(false)
   const [setupActionError, setSetupActionError] = useState<string | null>(null)
+  // New Planet Mark enhancement state
+  const [actionItems, setActionItems] = useState<ActionItem[]>([])
+  const [actionsSummary, setActionsSummary] = useState<{
+    total: number; completed: number; in_progress: number; overdue: number
+    not_started: number; completion_rate_percent: number; avg_progress_percent: number
+  } | null>(null)
+  const [selectedActionIds, setSelectedActionIds] = useState<Set<number>>(new Set())
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [bulkStatus, setBulkStatus] = useState('')
+  const [evidenceList, setEvidenceList] = useState<Array<{
+    id: number; document_name: string; document_type: string; evidence_category: string
+    period_covered: string | null; file_size_kb: number | null; mime_type: string | null
+    is_verified: boolean; verified_by: string | null; linked_action_id: number | null
+    notes: string | null; uploaded_by: string | null; uploaded_at: string; storage_key: string | null
+  }>>([])
   const [setupYearForm, setSetupYearForm] = useState({
     year_label: `YE${defaultYear}`,
     year_number: defaultYear,
@@ -211,23 +232,50 @@ export default function PlanetMark() {
   })
 
   const loadYearDetails = useCallback(async (yearId: number) => {
-    const [sourcesResponse, actionsResponse, scope3Response, certificationResponse, qualityResponse] =
-      await Promise.allSettled([
-        planetMarkApi.listSources(yearId),
-        planetMarkApi.listActions(yearId),
-        planetMarkApi.getScope3(yearId),
-        planetMarkApi.getCertification(yearId),
-        planetMarkApi.getDataQuality(yearId),
-      ])
+    const [
+      sourcesResponse,
+      actionsResponse,
+      scope3Response,
+      certificationResponse,
+      qualityResponse,
+      summaryResponse,
+      evidenceResponse,
+    ] = await Promise.allSettled([
+      planetMarkApi.listSources(yearId),
+      planetMarkApi.listActions(yearId),
+      planetMarkApi.getScope3(yearId),
+      planetMarkApi.getCertification(yearId),
+      planetMarkApi.getDataQuality(yearId),
+      planetMarkApi.getActionsSummary(yearId),
+      planetMarkApi.listEvidence(yearId),
+    ])
 
     setEmissionSources(
       sourcesResponse.status === 'fulfilled' ? (sourcesResponse.value.data.sources ?? []) : [],
     )
-    setActions(
-      actionsResponse.status === 'fulfilled'
-        ? (actionsResponse.value.data.actions ?? []).map(transformAction)
-        : [],
-    )
+
+    if (actionsResponse.status === 'fulfilled') {
+      const rawActions = actionsResponse.value.data.actions ?? []
+      setActions(rawActions.map(transformAction))
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setActionItems(rawActions.map((a: any) => ({
+        id: a.id as number,
+        action_id: a.action_id as string,
+        action_title: a.action_title as string,
+        owner: (a.owner as string | null | undefined) || 'Unassigned',
+        deadline: a.deadline as string,
+        status: a.status as string,
+        progress_percent: (a.progress_percent as number) ?? 0,
+        target_scope: (a.target_scope as string | null | undefined) ?? undefined,
+        expected_reduction_pct: (a.expected_reduction_pct as number | null | undefined) ?? 0,
+        is_overdue: a.is_overdue as boolean,
+        notes: (a.notes as string | null | undefined) ?? null,
+      })))
+    } else {
+      setActions([])
+      setActionItems([])
+    }
+
     setScope3Categories(
       scope3Response.status === 'fulfilled'
         ? (scope3Response.value.data.categories ?? []).map(transformScope3)
@@ -255,6 +303,12 @@ export default function PlanetMark() {
           }
         : null,
     )
+    if (summaryResponse.status === 'fulfilled') {
+      setActionsSummary(summaryResponse.value.data)
+    }
+    if (evidenceResponse.status === 'fulfilled') {
+      setEvidenceList(evidenceResponse.value.data.evidence ?? [])
+    }
   }, [])
 
   const loadData = useCallback(async (isRetry = false) => {
@@ -1111,80 +1165,105 @@ export default function PlanetMark() {
 
           {/* Actions Tab */}
           {activeTab === 'actions' && (
-            <div className="space-y-6">
-              <div className="bg-slate-800 rounded-xl border border-slate-700">
-                <div className="p-4 bg-slate-700 border-b border-slate-600 flex justify-between items-center">
-                  <div>
-                    <h3 className="font-bold text-white">{t('planet_mark.improvement_actions')}</h3>
-                    <p className="text-sm text-gray-400">
-                      {t('planet_mark.improvement_plan_desc')}
-                    </p>
-                  </div>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <div className="space-y-4">
+              {/* KPI strip */}
+              {actionsSummary && <ActionSummaryKPIs summary={actionsSummary} />}
+
+              {/* Toolbar */}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <h3 className="font-bold text-foreground text-lg">
+                  {t('planet_mark.improvement_actions')}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {selectedActionIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={bulkStatus}
+                        onChange={(e) => setBulkStatus(e.target.value)}
+                        className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-green-500 outline-none"
+                        aria-label="Bulk status"
+                      >
+                        <option value="">Set status…</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="on_hold">On Hold</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                      <button
+                        disabled={!bulkStatus || !currentYear}
+                        onClick={async () => {
+                          if (!currentYear || !bulkStatus) return
+                          try {
+                            await planetMarkApi.bulkUpdateActions(
+                              currentYear.id,
+                              Array.from(selectedActionIds),
+                              bulkStatus,
+                            )
+                            setSelectedActionIds(new Set())
+                            setBulkStatus('')
+                            await loadYearDetails(currentYear.id)
+                          } catch { /* show nothing */ }
+                        }}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                      >
+                        Apply ({selectedActionIds.size})
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <FileUp className="w-4 h-4" />
+                    Import Plan
+                  </button>
+                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
                     <Plus className="w-4 h-4" /> {t('planet_mark.add_action')}
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-700/50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
-                          {t('planet_mark.month')}
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
-                          {t('planet_mark.action')}
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">
-                          {t('planet_mark.owner')}
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
-                          {t('planet_mark.progress')}
-                        </th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-gray-300 uppercase">
-                          {t('planet_mark.status')}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                      {actions.map((action) => (
-                        <tr key={action.id} className="hover:bg-slate-700/50">
-                          <td className="px-4 py-3 font-medium text-white">
-                            {action.scheduled_month}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300">{action.action_title}</td>
-                          <td className="px-4 py-3 text-gray-400">{action.owner}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-20 bg-slate-700 rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full ${
-                                    action.status === 'completed'
-                                      ? 'bg-green-500'
-                                      : action.status === 'in_progress'
-                                        ? 'bg-blue-500'
-                                        : 'bg-gray-500'
-                                  }`}
-                                  style={{ width: `${action.progress_percent}%` }}
-                                ></div>
-                              </div>
-                              <span className="text-sm text-gray-400">
-                                {action.progress_percent}%
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(action.status)}`}
-                            >
-                              {action.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
+
+              {/* Action cards */}
+              {actionItems.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-500">
+                  <Target className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="font-medium">No improvement actions yet</p>
+                  <p className="text-sm mt-1">Import your action plan or create actions manually.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {actionItems.map((action) => (
+                    <ActionCard
+                      key={action.id}
+                      yearId={currentYear?.id ?? 0}
+                      action={action}
+                      selected={selectedActionIds.has(action.id)}
+                      onSelect={(id, checked) => {
+                        setSelectedActionIds((prev) => {
+                          const next = new Set(prev)
+                          if (checked) next.add(id)
+                          else next.delete(id)
+                          return next
+                        })
+                      }}
+                      onUpdated={() => currentYear && loadYearDetails(currentYear.id)}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Import modal */}
+              {showImportModal && currentYear && (
+                <ActionImportModal
+                  yearId={currentYear.id}
+                  onClose={() => setShowImportModal(false)}
+                  onImported={async (count) => {
+                    setShowImportModal(false)
+                    await loadYearDetails(currentYear.id)
+                    console.info(`${count} actions imported`)
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -1374,82 +1453,58 @@ export default function PlanetMark() {
           {/* Certification Tab */}
           {activeTab === 'certification' && (
             <div className="space-y-6">
+              {/* Certification Status Panel */}
+              {certification && currentYear && (
+                <CertificationStatusPanel
+                  yearId={currentYear.id}
+                  certification={{
+                    status: certification.status,
+                    certificate_number: null,
+                    certification_date: null,
+                    expiry_date: null,
+                    certifying_body: 'Planet Mark',
+                    assessor_name: null,
+                    readiness_percent: certification.readiness_percent,
+                    data_quality_met: certification.data_quality_met,
+                    actions_completed: certification.actions_completed,
+                    actions_total: certification.actions_total,
+                  }}
+                  onUpdated={() => currentYear && loadYearDetails(currentYear.id)}
+                />
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="p-4 bg-gradient-to-br from-green-500 to-teal-600 rounded-xl">
-                      <Award className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">
-                        {t('planet_mark.certification_title')}
-                      </h3>
-                      <p className="text-gray-400">{t('planet_mark.year_progress')}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">{t('planet_mark.certification_status')}</span>
-                      <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                          certification?.status || currentYear?.certification_status || 'planned',
-                        )}`}
-                      >
-                        {certification?.status || currentYear?.certification_status || t('planet_mark.in_progress')}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">{t('planet_mark.reporting_period')}</span>
-                      <span className="text-white font-medium">{currentYear?.period || '—'}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">{t('planet_mark.evidence_checklist')}</span>
-                      <span className="text-white font-medium">
-                        {certification ? `${certification.readiness_percent}%` : '—'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 bg-slate-700/50 rounded-lg">
-                      <span className="text-gray-300">{t('planet_mark.complete')}</span>
-                      <span className="text-green-400 font-medium">
-                        {certification
-                          ? `${certification.actions_completed}/${certification.actions_total}`
-                          : '—'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-slate-800 rounded-xl border border-slate-700">
-                  <div className="p-4 bg-slate-700 border-b border-slate-600">
-                    <h3 className="font-bold text-white">{t('planet_mark.evidence_checklist')}</h3>
-                    <p className="text-sm text-gray-400">
+                {/* Evidence checklist (existing) */}
+                <div className="bg-card rounded-xl border border-border">
+                  <div className="p-4 bg-surface border-b border-border">
+                    <h3 className="font-bold text-foreground">{t('planet_mark.evidence_checklist')}</h3>
+                    <p className="text-sm text-muted-foreground">
                       {t('planet_mark.evidence_checklist_desc')}
                     </p>
                   </div>
-                  <div className="p-4 space-y-3">
+                  <div className="p-4 space-y-2">
                     {(certification?.evidence_checklist ?? []).map((doc) => (
                       <div
                         key={doc.description}
-                        className="flex items-center justify-between p-2 bg-slate-700/50 rounded-lg"
+                        className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border"
                       >
                         <div className="flex items-center gap-3">
                           {doc.uploaded ? (
                             <CheckCircle2
-                              className={`w-5 h-5 ${doc.verified ? 'text-green-400' : 'text-yellow-400'}`}
+                              className={`w-5 h-5 ${doc.verified ? 'text-green-500' : 'text-amber-500'}`}
                             />
                           ) : (
                             <AlertTriangle className="w-5 h-5 text-red-400" />
                           )}
-                          <span className="text-white text-sm">{doc.description}</span>
+                          <span className="text-sm text-gray-800">{doc.description}</span>
                         </div>
                         <span
-                          className={`text-xs ${
+                          className={`text-xs font-medium ${
                             doc.verified
-                              ? 'text-green-400'
+                              ? 'text-green-600'
                               : doc.uploaded
-                                ? 'text-yellow-400'
-                                : 'text-red-400'
+                                ? 'text-amber-600'
+                                : 'text-red-500'
                           }`}
                         >
                           {doc.verified
@@ -1461,12 +1516,96 @@ export default function PlanetMark() {
                       </div>
                     ))}
                     {!certification && (
-                      <div className="text-sm text-gray-400">
+                      <div className="text-sm text-gray-400 py-2">
                         Certification evidence will appear once the reporting year has live data.
                       </div>
                     )}
                   </div>
                 </div>
+
+                {/* Evidence upload panel */}
+                {currentYear && (
+                  <div className="bg-card rounded-xl border border-border">
+                    <div className="p-4 bg-surface border-b border-border flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-foreground">Upload Evidence</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Upload supporting documents for certification
+                        </p>
+                      </div>
+                      <span className="text-xs text-gray-500">{evidenceList.length} uploaded</span>
+                    </div>
+                    <div className="p-4">
+                      <EvidenceUploadRow
+                        yearId={currentYear.id}
+                        documentType="utility_bill"
+                        evidenceCategory="scope_2"
+                        label="Electricity Bills (12 months)"
+                        description="Upload electricity invoices covering the full reporting period"
+                        required
+                        onUploaded={() => loadYearDetails(currentYear.id)}
+                      />
+                      <EvidenceUploadRow
+                        yearId={currentYear.id}
+                        documentType="utility_bill"
+                        evidenceCategory="scope_1"
+                        label="Gas Bills (12 months)"
+                        description="Upload gas invoices covering the full reporting period"
+                        required
+                        onUploaded={() => loadYearDetails(currentYear.id)}
+                      />
+                      <EvidenceUploadRow
+                        yearId={currentYear.id}
+                        documentType="fuel_card_report"
+                        evidenceCategory="scope_1"
+                        label="Fleet Fuel Card Statements"
+                        description="Full-year fuel card export from your provider"
+                        required
+                        onUploaded={() => loadYearDetails(currentYear.id)}
+                      />
+                      <EvidenceUploadRow
+                        yearId={currentYear.id}
+                        documentType="certificate"
+                        evidenceCategory="certification"
+                        label="Planet Mark Certificate / Inspection Report"
+                        description="Upload your completed certification report or certificate"
+                        onUploaded={() => loadYearDetails(currentYear.id)}
+                      />
+                      <EvidenceUploadRow
+                        yearId={currentYear.id}
+                        documentType="improvement_action"
+                        evidenceCategory="certification"
+                        label="Action Plan Evidence"
+                        description="Any supporting evidence for completed improvement actions"
+                        onUploaded={() => loadYearDetails(currentYear.id)}
+                      />
+
+                      {/* Uploaded evidence list */}
+                      {evidenceList.length > 0 && (
+                        <div className="mt-4">
+                          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            All Uploaded Evidence
+                          </h4>
+                          <div className="space-y-1.5">
+                            {evidenceList.map((ev) => (
+                              <div
+                                key={ev.id}
+                                className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 px-3 py-2 rounded border"
+                              >
+                                <span className="truncate max-w-xs">{ev.document_name}</span>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                                  <span className={ev.is_verified ? 'text-green-600' : 'text-amber-500'}>
+                                    {ev.is_verified ? '✓ Verified' : '⏳ Pending'}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -112,8 +112,9 @@ class CarbonReportingYear(Base):
     certification_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     expiry_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
-    # Planet Mark assessor
+    # Planet Mark assessor / certifying body
     assessor_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    certifying_body: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, default="Planet Mark")
     assessment_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Improvement targets
@@ -296,6 +297,9 @@ class ImprovementAction(Base):
     evidence_required: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     evidence_provided: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
 
+    # Progress notes
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Results
     actual_reduction_achieved: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     lessons_learned: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -397,6 +401,8 @@ class CarbonEvidence(Base):
 
     # File details
     file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    storage_key: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     file_size_kb: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     mime_type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 

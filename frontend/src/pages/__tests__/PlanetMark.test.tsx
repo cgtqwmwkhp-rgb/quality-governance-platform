@@ -10,6 +10,16 @@ const mockGetCertification = vi.fn()
 const mockGetDataQuality = vi.fn()
 const mockCreateReportingYear = vi.fn()
 const mockCreateApiError = vi.fn()
+const mockGetActionsSummary = vi.fn()
+const mockListEvidence = vi.fn()
+const mockUpdateAction = vi.fn()
+const mockBulkUpdateActions = vi.fn()
+const mockPatchCertification = vi.fn()
+const mockUploadEvidence = vi.fn()
+const mockPatchEvidence = vi.fn()
+const mockDeleteEvidence = vi.fn()
+const mockExtractActionPlan = vi.fn()
+const mockConfirmActionImport = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -28,6 +38,16 @@ vi.mock('../../api/client', () => ({
     getScope3: (...args: unknown[]) => mockGetScope3(...args),
     getCertification: (...args: unknown[]) => mockGetCertification(...args),
     getDataQuality: (...args: unknown[]) => mockGetDataQuality(...args),
+    getActionsSummary: (...args: unknown[]) => mockGetActionsSummary(...args),
+    listEvidence: (...args: unknown[]) => mockListEvidence(...args),
+    updateAction: (...args: unknown[]) => mockUpdateAction(...args),
+    bulkUpdateActions: (...args: unknown[]) => mockBulkUpdateActions(...args),
+    patchCertification: (...args: unknown[]) => mockPatchCertification(...args),
+    uploadEvidence: (...args: unknown[]) => mockUploadEvidence(...args),
+    patchEvidence: (...args: unknown[]) => mockPatchEvidence(...args),
+    deleteEvidence: (...args: unknown[]) => mockDeleteEvidence(...args),
+    extractActionPlan: (...args: unknown[]) => mockExtractActionPlan(...args),
+    confirmActionImport: (...args: unknown[]) => mockConfirmActionImport(...args),
   },
   ErrorClass: {
     NETWORK_ERROR: 'NETWORK_ERROR',
@@ -178,6 +198,27 @@ describe('PlanetMark', () => {
       },
     })
     mockCreateApiError.mockReturnValue({ error_class: 'UNKNOWN' })
+    mockGetActionsSummary.mockResolvedValue({
+      data: {
+        year_id: 1,
+        total: 1,
+        completed: 1,
+        in_progress: 0,
+        overdue: 0,
+        not_started: 0,
+        completion_rate_percent: 100,
+        avg_progress_percent: 100,
+      },
+    })
+    mockListEvidence.mockResolvedValue({ data: { total: 0, evidence: [] } })
+    mockUpdateAction.mockResolvedValue({ data: { message: 'Action updated', id: 1 } })
+    mockBulkUpdateActions.mockResolvedValue({ data: { updated_count: 0, updated_ids: [] } })
+    mockPatchCertification.mockResolvedValue({ data: { message: 'Updated', status: 'submitted' } })
+    mockUploadEvidence.mockResolvedValue({ data: { id: 1, document_name: 'test.pdf', storage_key: null, file_hash: 'abc', message: 'ok', duplicate: false } })
+    mockPatchEvidence.mockResolvedValue({ data: { message: 'ok', id: 1 } })
+    mockDeleteEvidence.mockResolvedValue({ data: { message: 'ok', id: 1 } })
+    mockExtractActionPlan.mockResolvedValue({ data: { session_id: 's1', year_id: 1, source_filename: 'plan.pdf', extracted_count: 0, rows: [], extraction_method: 'pdfplumber', warnings: [] } })
+    mockConfirmActionImport.mockResolvedValue({ data: { message: 'ok', created_count: 0, action_ids: [] } })
   })
 
   it('renders live Planet Mark data from the aligned API envelopes', async () => {
