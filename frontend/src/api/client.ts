@@ -2400,6 +2400,166 @@ export const planetMarkApi = {
       `/api/v1/planet-mark/years/${yearId}/actions`,
       data,
     ),
+
+  /**
+   * Update an improvement action's status, progress, and notes.
+   */
+  updateAction: (
+    yearId: number,
+    actionId: number,
+    data: { status?: string; progress_percent?: number; notes?: string },
+  ) =>
+    api.put<{ message: string; id: number }>(
+      `/api/v1/planet-mark/years/${yearId}/actions/${actionId}`,
+      data,
+    ),
+
+  /**
+   * Bulk-update status for multiple actions.
+   */
+  bulkUpdateActions: (yearId: number, actionIds: number[], status: string) =>
+    api.post<{ updated_count: number; updated_ids: number[] }>(
+      `/api/v1/planet-mark/years/${yearId}/actions/bulk-status`,
+      { action_ids: actionIds, status },
+    ),
+
+  /**
+   * Get KPI summary for improvement actions dashboard.
+   */
+  getActionsSummary: (yearId: number) =>
+    api.get<{
+      year_id: number
+      total: number
+      completed: number
+      in_progress: number
+      overdue: number
+      not_started: number
+      completion_rate_percent: number
+      avg_progress_percent: number
+    }>(`/api/v1/planet-mark/years/${yearId}/actions/summary`),
+
+  /**
+   * Update certification status (state-machine guarded).
+   */
+  patchCertification: (
+    yearId: number,
+    data: {
+      status: string
+      certificate_number?: string
+      certification_date?: string
+      expiry_date?: string
+      certifying_body?: string
+      assessor_name?: string
+      assessment_notes?: string
+    },
+  ) =>
+    api.patch<{ message: string; status: string }>(
+      `/api/v1/planet-mark/years/${yearId}/certification`,
+      data,
+    ),
+
+  /**
+   * List evidence documents for a reporting year.
+   */
+  listEvidence: (yearId: number, params?: { document_type?: string; linked_action_id?: number }) => {
+    const sp = new URLSearchParams()
+    if (params?.document_type) sp.set('document_type', params.document_type)
+    if (params?.linked_action_id) sp.set('linked_action_id', String(params.linked_action_id))
+    const query = sp.toString()
+    return api.get<{
+      total: number
+      evidence: Array<{
+        id: number
+        document_name: string
+        document_type: string
+        evidence_category: string
+        period_covered: string | null
+        file_size_kb: number | null
+        mime_type: string | null
+        is_verified: boolean
+        verified_by: string | null
+        linked_action_id: number | null
+        notes: string | null
+        uploaded_by: string | null
+        uploaded_at: string
+        storage_key: string | null
+      }>
+    }>(`/api/v1/planet-mark/years/${yearId}/evidence${query ? `?${query}` : ''}`)
+  },
+
+  /**
+   * Upload an evidence document (multipart/form-data).
+   */
+  uploadEvidence: (yearId: number, formData: FormData) =>
+    api.post<{
+      id: number
+      document_name: string
+      storage_key: string | null
+      file_hash: string
+      message: string
+      duplicate: boolean
+    }>(`/api/v1/planet-mark/years/${yearId}/evidence/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  /**
+   * Verify or annotate an evidence document.
+   */
+  patchEvidence: (
+    yearId: number,
+    evidenceId: number,
+    data: { is_verified?: boolean; verified_by?: string; notes?: string },
+  ) =>
+    api.patch<{ message: string; id: number }>(
+      `/api/v1/planet-mark/years/${yearId}/evidence/${evidenceId}`,
+      data,
+    ),
+
+  /**
+   * Delete an evidence document.
+   */
+  deleteEvidence: (yearId: number, evidenceId: number) =>
+    api.delete<{ message: string; id: number }>(
+      `/api/v1/planet-mark/years/${yearId}/evidence/${evidenceId}`,
+    ),
+
+  /**
+   * Upload and AI-extract actions from an action plan document.
+   */
+  extractActionPlan: (yearId: number, formData: FormData) =>
+    api.post<{
+      session_id: string
+      year_id: number
+      source_filename: string
+      extracted_count: number
+      rows: Array<{
+        action_title: string
+        description: string
+        owner: string
+        deadline: string | null
+        category: string
+        expected_reduction_pct: number
+        confidence: number
+        needs_review: boolean
+      }>
+      extraction_method: string
+      warnings: string[]
+    }>(`/api/v1/planet-mark/years/${yearId}/actions/import/extract`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
+  /**
+   * Confirm and persist selected extracted actions.
+   */
+  confirmActionImport: (
+    yearId: number,
+    sessionId: string,
+    selectedIndices?: number[],
+  ) =>
+    api.post<{ message: string; created_count: number; action_ids: string[] }>(
+      `/api/v1/planet-mark/years/${yearId}/actions/import/confirm`,
+      { session_id: sessionId, selected_indices: selectedIndices ?? null },
+    ),
 }
 
 // ============ UVDB Achilles Types ============

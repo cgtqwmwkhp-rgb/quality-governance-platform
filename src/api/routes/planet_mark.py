@@ -312,6 +312,7 @@ async def create_reporting_year(
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
     year = CarbonReportingYear(
+        tenant_id=current_user.tenant_id,
         **year_data.model_dump(),
     )
     db.add(year)
@@ -674,6 +675,7 @@ async def create_improvement_action(
     action_id = f"ACT-{(count + 1):03d}"
 
     action = ImprovementAction(
+        tenant_id=current_user.tenant_id,
         reporting_year_id=year_id,
         action_id=action_id,
         status="planned",
@@ -714,10 +716,85 @@ async def update_action_status(
     for key, value in status_data.model_dump(exclude_unset=True).items():
         setattr(action, key, value)
 
+    # Auto-complete: 100% progress → completed status + timestamp
+    if action.progress_percent == 100 and action.status != "completed":
+        action.status = "completed"
+        action.actual_completion_date = datetime.now(timezone.utc)
+
     action.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
     return {"message": "Action updated", "id": action.id}
+
+
+@router.post("/years/{year_id}/actions/bulk-status", response_model=dict)
+async def bulk_update_action_status(
+    year_id: int,
+    payload: dict,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Bulk-update status for multiple improvement actions"""
+    action_ids: list[int] = payload.get("action_ids", [])
+    new_status: str = payload.get("status", "")
+    if not action_ids or not new_status:
+        raise HTTPException(status_code=422, detail="action_ids and status are required")
+
+    result = await db.execute(
+        select(ImprovementAction).where(
+            ImprovementAction.id.in_(action_ids),
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
+    )
+    actions = result.scalars().all()
+
+    now = datetime.now(timezone.utc)
+    updated_ids = []
+    for action in actions:
+        action.status = new_status
+        action.updated_at = now
+        if new_status == "completed":
+            action.progress_percent = 100
+            action.actual_completion_date = now
+        updated_ids.append(action.id)
+
+    await db.commit()
+    return {"updated_count": len(updated_ids), "updated_ids": updated_ids}
+
+
+@router.get("/years/{year_id}/actions/summary", response_model=dict)
+async def get_actions_summary(
+    year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """KPI summary for improvement actions dashboard"""
+    result = await db.execute(
+        select(ImprovementAction).where(
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
+    )
+    actions = result.scalars().all()
+    now = datetime.now(timezone.utc)
+
+    total = len(actions)
+    completed = [a for a in actions if a.status == "completed"]
+    in_progress = [a for a in actions if a.status == "in_progress"]
+    overdue = [a for a in actions if a.status not in ("completed",) and a.time_bound < now]
+    avg_progress = round(sum(a.progress_percent or 0 for a in actions) / total, 1) if total else 0
+
+    return {
+        "year_id": year_id,
+        "total": total,
+        "completed": len(completed),
+        "in_progress": len(in_progress),
+        "overdue": len(overdue),
+        "not_started": total - len(completed) - len(in_progress),
+        "completion_rate_percent": (round(len(completed) / total * 100, 1) if total else 0),
+        "avg_progress_percent": avg_progress,
+    }
 
 
 # ============ Data Quality ============
@@ -1082,6 +1159,680 @@ async def get_certification_status(
             if year.certification_status == "draft"
             else []
         ),
+        "certifying_body": year.certifying_body,
+        "assessor_name": year.assessor_name,
+    }
+
+
+# ============ Certification PATCH ============
+
+VALID_CERTIFICATION_TRANSITIONS: dict[str, list[str]] = {
+    "draft": ["submitted"],
+    "submitted": ["certified", "draft"],
+    "certified": ["expired"],
+    "expired": [],
+}
+
+
+class CertificationStatusPatch(BaseModel):
+    status: str
+    certificate_number: Optional[str] = None
+    certification_date: Optional[str] = None
+    expiry_date: Optional[str] = None
+    certifying_body: Optional[str] = None
+    assessor_name: Optional[str] = None
+    assessment_notes: Optional[str] = None
+
+
+@router.patch("/years/{year_id}/certification", response_model=dict)
+async def patch_certification_status(
+    year_id: int,
+    patch: CertificationStatusPatch,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Update certification status with state-machine guard"""
+    year = (
+        await db.execute(
+            select(CarbonReportingYear).where(
+                CarbonReportingYear.id == year_id,
+                CarbonReportingYear.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not year:
+        raise HTTPException(status_code=404, detail="Reporting year not found")
+
+    allowed = VALID_CERTIFICATION_TRANSITIONS.get(year.certification_status, [])
+    if patch.status not in allowed:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Cannot transition from '{year.certification_status}' to '{patch.status}'. "
+                f"Allowed: {allowed or 'none'}"
+            ),
+        )
+
+    year.certification_status = patch.status
+    if patch.certificate_number is not None:
+        year.certificate_number = patch.certificate_number
+    if patch.certification_date is not None:
+        year.certification_date = datetime.fromisoformat(patch.certification_date)
+    if patch.expiry_date is not None:
+        year.expiry_date = datetime.fromisoformat(patch.expiry_date)
+    if patch.certifying_body is not None:
+        year.certifying_body = patch.certifying_body
+    if patch.assessor_name is not None:
+        year.assessor_name = patch.assessor_name
+    if patch.assessment_notes is not None:
+        year.assessment_notes = patch.assessment_notes
+
+    year.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    logger.info(
+        "Certification status updated year_id=%s status=%s tenant=%s",
+        year_id,
+        patch.status,
+        current_user.tenant_id,
+    )
+    return {"message": "Certification status updated", "status": year.certification_status}
+
+
+# ============ Evidence CRUD ============
+
+PLANET_MARK_ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv",
+}
+PLANET_MARK_MAX_SIZE_MB = 20
+
+
+class EvidenceCreate(BaseModel):
+    document_name: str
+    document_type: str
+    evidence_category: str
+    period_covered: Optional[str] = None
+    linked_source_id: Optional[int] = None
+    linked_action_id: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class EvidencePatch(BaseModel):
+    is_verified: Optional[bool] = None
+    verified_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/years/{year_id}/evidence", response_model=dict)
+async def list_evidence(
+    year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    document_type: Optional[str] = Query(None),
+    linked_action_id: Optional[int] = Query(None),
+) -> dict[str, Any]:
+    """List carbon evidence documents for a reporting year"""
+    stmt = select(CarbonEvidence).where(
+        CarbonEvidence.reporting_year_id == year_id,
+        CarbonEvidence.tenant_id == current_user.tenant_id,
+    )
+    if document_type:
+        stmt = stmt.where(CarbonEvidence.document_type == document_type)
+    if linked_action_id:
+        stmt = stmt.where(CarbonEvidence.linked_action_id == linked_action_id)
+
+    result = await db.execute(stmt.order_by(desc(CarbonEvidence.uploaded_at)))
+    docs = result.scalars().all()
+
+    return {
+        "total": len(docs),
+        "evidence": [
+            {
+                "id": d.id,
+                "document_name": d.document_name,
+                "document_type": d.document_type,
+                "evidence_category": d.evidence_category,
+                "period_covered": d.period_covered,
+                "file_size_kb": d.file_size_kb,
+                "mime_type": d.mime_type,
+                "is_verified": d.is_verified,
+                "verified_by": d.verified_by,
+                "linked_action_id": d.linked_action_id,
+                "notes": d.notes,
+                "uploaded_by": d.uploaded_by,
+                "uploaded_at": d.uploaded_at.isoformat(),
+                "storage_key": d.storage_key,
+            }
+            for d in docs
+        ],
+    }
+
+
+@router.post("/years/{year_id}/evidence/upload", response_model=dict, status_code=201)
+async def upload_evidence(
+    year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    request: Request,
+) -> dict[str, Any]:
+    """Upload a carbon evidence document (multipart/form-data)"""
+    import hashlib
+    import os
+
+    from fastapi import UploadFile
+
+    year = (
+        await db.execute(
+            select(CarbonReportingYear).where(
+                CarbonReportingYear.id == year_id,
+                CarbonReportingYear.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not year:
+        raise HTTPException(status_code=404, detail="Reporting year not found")
+
+    form = await request.form()
+    file_raw = form.get("file")
+    file: UploadFile = cast(Any, file_raw)
+    document_name: str = str(form.get("document_name", ""))
+    document_type: str = str(form.get("document_type", "other"))
+    evidence_category: str = str(form.get("evidence_category", "certification"))
+    period_covered_raw = form.get("period_covered")
+    period_covered: Optional[str] = str(period_covered_raw) if period_covered_raw is not None else None
+    linked_action_id_raw = form.get("linked_action_id")
+    linked_action_id = int(str(linked_action_id_raw)) if linked_action_id_raw is not None else None
+    notes_raw = form.get("notes")
+    notes: Optional[str] = str(notes_raw) if notes_raw is not None else None
+
+    if not file or not hasattr(file, "read"):
+        raise HTTPException(status_code=422, detail="A file must be uploaded")
+
+    if file.content_type not in PLANET_MARK_ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{file.content_type}'. Allowed: PDF, images, Excel, CSV.",
+        )
+
+    contents = await file.read()
+    size_kb = len(contents) // 1024
+    if size_kb > PLANET_MARK_MAX_SIZE_MB * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {PLANET_MARK_MAX_SIZE_MB} MB limit",
+        )
+
+    file_hash = hashlib.sha256(contents).hexdigest()
+
+    # Deduplication check
+    existing = (
+        await db.execute(
+            select(CarbonEvidence).where(
+                CarbonEvidence.file_hash == file_hash,
+                CarbonEvidence.reporting_year_id == year_id,
+                CarbonEvidence.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return {
+            "id": existing.id,
+            "document_name": existing.document_name,
+            "message": "Duplicate file detected — existing record returned",
+            "duplicate": True,
+        }
+
+    # Store file
+    storage_key: Optional[str] = None
+    stored_path: Optional[str] = None
+    try:
+        from src.infrastructure.storage import get_storage_service
+
+        storage = get_storage_service()
+        safe_name = os.path.basename(file.filename or document_name or "upload")
+        storage_key = f"planet-mark/tenant-{current_user.tenant_id}/year-{year_id}/{file_hash[:8]}-{safe_name}"
+        stored_path = await storage.upload(storage_key, contents, file.content_type)
+    except Exception as exc:
+        logger.warning("Storage upload failed, continuing without blob URL: %s", exc)
+
+    doc = CarbonEvidence(
+        tenant_id=current_user.tenant_id,
+        reporting_year_id=year_id,
+        document_name=document_name or (file.filename or "upload"),
+        document_type=document_type,
+        evidence_category=evidence_category,
+        period_covered=period_covered,
+        linked_action_id=linked_action_id,
+        file_path=stored_path,
+        storage_key=storage_key,
+        file_hash=file_hash,
+        file_size_kb=size_kb,
+        mime_type=file.content_type,
+        is_verified=False,
+        notes=notes,
+        uploaded_by=getattr(current_user, "email", str(current_user.id)),
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+
+    logger.info(
+        "Evidence uploaded year_id=%s doc_type=%s size_kb=%s tenant=%s",
+        year_id,
+        document_type,
+        size_kb,
+        current_user.tenant_id,
+    )
+    return {
+        "id": doc.id,
+        "document_name": doc.document_name,
+        "storage_key": storage_key,
+        "file_hash": file_hash,
+        "message": "Evidence uploaded successfully",
+        "duplicate": False,
+    }
+
+
+@router.patch("/years/{year_id}/evidence/{evidence_id}", response_model=dict)
+async def patch_evidence(
+    year_id: int,
+    evidence_id: int,
+    patch: EvidencePatch,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Verify or annotate an evidence document"""
+    doc = (
+        await db.execute(
+            select(CarbonEvidence).where(
+                CarbonEvidence.id == evidence_id,
+                CarbonEvidence.reporting_year_id == year_id,
+                CarbonEvidence.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Evidence document not found")
+
+    if patch.is_verified is not None:
+        doc.is_verified = patch.is_verified
+    if patch.verified_by is not None:
+        doc.verified_by = patch.verified_by
+        doc.verified_date = datetime.now(timezone.utc)
+    if patch.notes is not None:
+        doc.notes = patch.notes
+
+    doc.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"message": "Evidence updated", "id": doc.id}
+
+
+@router.delete("/years/{year_id}/evidence/{evidence_id}", response_model=dict)
+async def delete_evidence(
+    year_id: int,
+    evidence_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict[str, Any]:
+    """Delete an evidence document"""
+    doc = (
+        await db.execute(
+            select(CarbonEvidence).where(
+                CarbonEvidence.id == evidence_id,
+                CarbonEvidence.reporting_year_id == year_id,
+                CarbonEvidence.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Evidence document not found")
+
+    if doc.storage_key:
+        try:
+            from src.infrastructure.storage import get_storage_service
+
+            await get_storage_service().delete(doc.storage_key)
+        except Exception as exc:
+            logger.warning("Blob delete failed (continuing): %s", exc)
+
+    await db.delete(doc)
+    await db.commit()
+    return {"message": "Evidence deleted", "id": evidence_id}
+
+
+# ============ AI Action Plan Import ============
+
+
+class ActionImportRow(BaseModel):
+    action_title: str
+    description: str = ""
+    owner: str = ""
+    deadline: Optional[str] = None
+    category: str = "operational"
+    expected_reduction_pct: float = 0.0
+    confidence: float = 1.0
+    needs_review: bool = False
+
+
+class ActionImportPreview(BaseModel):
+    session_id: str
+    year_id: int
+    source_filename: str
+    extracted_count: int
+    rows: list[ActionImportRow]
+    extraction_method: str
+    warnings: list[str]
+
+
+class ActionImportConfirm(BaseModel):
+    session_id: str
+    selected_indices: Optional[list[int]] = None  # None = import all
+
+
+@router.post("/years/{year_id}/actions/import/extract", response_model=dict, status_code=202)
+async def extract_action_plan(
+    year_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+    request: Request,
+) -> dict[str, Any]:
+    """Upload an action plan document and extract actions using AI"""
+    import hashlib
+    import json
+    import uuid
+
+    year = (
+        await db.execute(
+            select(CarbonReportingYear).where(
+                CarbonReportingYear.id == year_id,
+                CarbonReportingYear.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if not year:
+        raise HTTPException(status_code=404, detail="Reporting year not found")
+
+    form = await request.form()
+    file = form.get("file")
+    if not file or not hasattr(file, "read"):
+        raise HTTPException(status_code=422, detail="A PDF or document file is required")
+
+    contents = await file.read()
+    filename = getattr(file, "filename", "upload.pdf") or "upload.pdf"
+    file_hash = hashlib.sha256(contents).hexdigest()
+
+    # Extract text
+    extracted_text = ""
+    extraction_method = "unknown"
+    warnings: list[str] = []
+
+    try:
+        import io
+
+        import pdfplumber
+
+        with pdfplumber.open(io.BytesIO(contents)) as pdf:
+            pages_text = []
+            for page in pdf.pages:
+                t = page.extract_text()
+                if t:
+                    pages_text.append(t)
+            extracted_text = "\n".join(pages_text)
+        extraction_method = "pdfplumber"
+    except Exception as exc:
+        warnings.append(f"pdfplumber extraction failed: {exc}")
+
+    if not extracted_text:
+        try:
+            extracted_text = contents.decode("utf-8", errors="ignore")
+            extraction_method = "raw_text"
+        except Exception as exc2:
+            warnings.append(f"Raw text decode failed: {exc2}")
+
+    # AI extraction
+    rows: list[dict] = []
+    try:
+        from src.domain.services.document_ai_service import DocumentAIService
+
+        ai = DocumentAIService()
+        # Use analyze_document and parse custom schema from the summary field
+        import httpx
+
+        if ai.api_key:
+            headers = {
+                "x-api-key": ai.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            }
+            ai_prompt = f"""You are a sustainability data extractor. Extract every improvement action from this Planet Mark action plan document.
+
+Return a JSON array. Each element must have exactly these keys:
+- action_title (string, max 200 chars)
+- description (string)
+- owner (string, person or team responsible)
+- deadline (string ISO date YYYY-MM-DD or empty string)
+- category (one of: energy, transport, waste, water, supply_chain, operational, other)
+- expected_reduction_pct (number 0-100, estimated carbon reduction %)
+- confidence (number 0.0-1.0, your confidence in the extraction)
+- needs_review (boolean, true if data is ambiguous or incomplete)
+
+Document text:
+---
+{extracted_text[:8000]}
+---
+
+Return ONLY the JSON array, no markdown fences, no explanation."""
+
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{ai.base_url}/messages",
+                    headers=headers,
+                    json={
+                        "model": ai.model,
+                        "max_tokens": 4096,
+                        "messages": [{"role": "user", "content": ai_prompt}],
+                    },
+                )
+                resp.raise_for_status()
+                ai_text = resp.json()["content"][0]["text"]
+                rows = json.loads(ai_text)
+                extraction_method += "+ai_claude"
+        else:
+            raise ValueError("No AI API key configured")
+    except Exception as exc:
+        warnings.append(f"AI extraction failed, falling back to rule-based: {exc}")
+        # Rule-based fallback: look for action-like lines
+        for line in extracted_text.splitlines():
+            line = line.strip()
+            if len(line) > 20 and any(
+                kw in line.lower()
+                for kw in ["reduce", "install", "implement", "switch", "upgrade", "train", "procure", "monitor"]
+            ):
+                rows.append(
+                    {
+                        "action_title": line[:200],
+                        "description": "",
+                        "owner": "",
+                        "deadline": None,
+                        "category": "operational",
+                        "expected_reduction_pct": 0.0,
+                        "confidence": 0.4,
+                        "needs_review": True,
+                    }
+                )
+
+    # Store preview in Redis (or fallback in-memory cache via app state)
+    session_id = str(uuid.uuid4())
+    preview_payload = {
+        "session_id": session_id,
+        "year_id": year_id,
+        "tenant_id": current_user.tenant_id,
+        "source_filename": filename,
+        "file_hash": file_hash,
+        "extracted_count": len(rows),
+        "rows": rows,
+        "extraction_method": extraction_method,
+        "warnings": warnings,
+    }
+
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = "redis://localhost:6379"
+        try:
+            from src.config import settings
+
+            redis_url = getattr(settings, "redis_url", redis_url)
+        except Exception:
+            pass
+
+        redis = await aioredis.from_url(redis_url)
+        await redis.setex(
+            f"pm_import:{current_user.tenant_id}:{session_id}",
+            3600,
+            json.dumps(preview_payload),
+        )
+        await redis.aclose()
+    except Exception as exc:
+        warnings.append(f"Redis store failed — session may expire on restart: {exc}")
+        # Fallback: store in app state dict
+        app = request.app
+        if not hasattr(app.state, "_pm_import_sessions"):
+            app.state._pm_import_sessions = {}
+        app.state._pm_import_sessions[session_id] = preview_payload
+
+    return {
+        "session_id": session_id,
+        "year_id": year_id,
+        "source_filename": filename,
+        "extracted_count": len(rows),
+        "rows": rows,
+        "extraction_method": extraction_method,
+        "warnings": warnings,
+    }
+
+
+@router.post("/years/{year_id}/actions/import/confirm", response_model=dict)
+async def confirm_action_import(
+    year_id: int,
+    confirm: ActionImportConfirm,
+    db: DbSession,
+    current_user: CurrentUser,
+    request: Request,
+) -> dict[str, Any]:
+    """Confirm and persist extracted actions from import session"""
+    import json
+
+    preview: Optional[dict] = None
+
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = "redis://localhost:6379"
+        try:
+            from src.config import settings
+
+            redis_url = getattr(settings, "redis_url", redis_url)
+        except Exception:
+            pass
+
+        redis = await aioredis.from_url(redis_url)
+        raw = await redis.get(f"pm_import:{current_user.tenant_id}:{confirm.session_id}")
+        if raw:
+            preview = json.loads(raw)
+        await redis.aclose()
+    except Exception:
+        pass
+
+    if not preview:
+        app = request.app
+        sessions = getattr(getattr(app, "state", None), "_pm_import_sessions", {})
+        preview = sessions.get(confirm.session_id)
+
+    if not preview:
+        raise HTTPException(status_code=404, detail="Import session not found or expired")
+
+    if preview.get("tenant_id") != current_user.tenant_id:
+        raise HTTPException(status_code=403, detail="Session belongs to a different tenant")
+
+    rows = preview.get("rows", [])
+    if confirm.selected_indices is not None:
+        rows = [rows[i] for i in confirm.selected_indices if 0 <= i < len(rows)]
+
+    # Get current action count for sequential IDs
+    count_result = await db.execute(
+        select(func.count())
+        .select_from(ImprovementAction)
+        .where(
+            ImprovementAction.reporting_year_id == year_id,
+            ImprovementAction.tenant_id == current_user.tenant_id,
+        )
+    )
+    base_count = int(count_result.scalar() or 0)
+
+    created_ids = []
+    for i, row in enumerate(rows):
+        deadline_raw = row.get("deadline")
+        deadline_dt = datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year + 1)
+        if deadline_raw:
+            try:
+                deadline_dt = datetime.fromisoformat(deadline_raw)
+            except ValueError:
+                pass
+
+        action = ImprovementAction(
+            tenant_id=current_user.tenant_id,
+            reporting_year_id=year_id,
+            action_id=f"IMP-{(base_count + i + 1):03d}",
+            action_title=str(row.get("action_title", "Imported Action"))[:200],
+            specific_description=str(row.get("description", "")),
+            achievable_owner=str(row.get("owner", "")),
+            time_bound=deadline_dt,
+            target_scope=str(row.get("category", "operational")),
+            expected_reduction_pct=float(row.get("expected_reduction_pct", 0.0)),
+            status="planned",
+            progress_percent=0,
+            notes=f"Imported from {preview.get('source_filename', 'document')} (confidence: {row.get('confidence', 1.0):.0%})",
+        )
+        db.add(action)
+        created_ids.append(action.action_id)
+
+    await db.commit()
+
+    # Remove session from Redis
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = "redis://localhost:6379"
+        try:
+            from src.config import settings
+
+            redis_url = getattr(settings, "redis_url", redis_url)
+        except Exception:
+            pass
+
+        redis = await aioredis.from_url(redis_url)
+        await redis.delete(f"pm_import:{current_user.tenant_id}:{confirm.session_id}")
+        await redis.aclose()
+    except Exception:
+        pass
+
+    logger.info(
+        "Action import confirmed year_id=%s count=%s tenant=%s",
+        year_id,
+        len(created_ids),
+        current_user.tenant_id,
+    )
+    return {
+        "message": f"{len(created_ids)} actions imported",
+        "created_count": len(created_ids),
+        "action_ids": created_ids,
     }
 
 
