@@ -2567,6 +2567,38 @@ export const planetMarkApi = {
       `/api/v1/planet-mark/years/${yearId}/actions/import/confirm`,
       { session_id: sessionId, selected_indices: selectedIndices ?? null },
     ),
+
+  /**
+   * Apply an imported Planet Mark audit report to the carbon dashboard.
+   * Triggers sync of extracted carbon data into CarbonReportingYear domain.
+   */
+  applyImport: (importJobId: number, reportingYearId?: number) =>
+    api.post<{
+      status: string
+      year_id: number | null
+      year_label: string | null
+      created_year: boolean
+      sources_created: number
+      actions_created: number
+      detail: string | null
+    }>('/api/v1/planet-mark/apply-import', {
+      import_job_id: importJobId,
+      reporting_year_id: reportingYearId ?? null,
+    }),
+
+  /**
+   * Get the Planet Mark carbon sync status for a specific import job.
+   */
+  getImportSyncStatus: (importJobId: number) =>
+    api.get<{
+      import_job_id: number
+      detected_scheme: string
+      status: string
+      planet_mark_sync_status: string
+      planet_mark_sync_detail: Record<string, unknown>
+      has_carbon_data: boolean
+      retry_available: boolean
+    }>(`/api/v1/planet-mark/import-status/${importJobId}`),
 }
 
 // ============ UVDB Achilles Types ============
@@ -4828,6 +4860,11 @@ export interface ExternalAuditRecordSummary {
   observations: number | null
   analysis_summary: string | null
   status: string
+  // Planet Mark specific fields (populated when scheme="planet_mark" and carbon sync succeeds)
+  carbon_reporting_year_id: number | null
+  scope_1_co2e: number | null
+  scope_2_co2e: number | null
+  scope_3_co2e: number | null
 }
 
 export interface ExternalAuditRecordListResponse {

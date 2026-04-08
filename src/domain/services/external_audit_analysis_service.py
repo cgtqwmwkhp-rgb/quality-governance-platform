@@ -57,6 +57,7 @@ class ExternalAuditAnalysisResult:
     nonconformity_summary: list[dict[str, object]]
     improvement_summary: list[dict[str, object]]
     processing_warnings: list[str]
+    planet_mark_carbon: dict[str, object] | None = None
 
 
 class ExternalAuditAnalysisService:
@@ -243,6 +244,19 @@ class ExternalAuditAnalysisService:
         )
         warnings.extend(scheme_warnings)
 
+        # Extract Planet Mark carbon data — prefer AI result, fall back to regex
+        pm_carbon: dict[str, object] | None = None
+        if scheme == "planet_mark":
+            if ai_result and ai_result.planet_mark_carbon:
+                pm_carbon = ai_result.planet_mark_carbon
+            else:
+                pm_carbon = self._extract_planet_mark_carbon_regex(normalized_text)
+            if not pm_carbon:
+                warnings.append(
+                    "Planet Mark carbon data could not be extracted from this document. "
+                    "Manual entry of emission data will be required in the Planet Mark section."
+                )
+
         return ExternalAuditAnalysisResult(
             summary=summary,
             findings=findings,
@@ -269,6 +283,7 @@ class ExternalAuditAnalysisService:
             nonconformity_summary=nonconformity_summary,
             improvement_summary=improvement_summary,
             processing_warnings=warnings,
+            planet_mark_carbon=pm_carbon,
         )
 
     def _merge_ai_scores(
@@ -979,6 +994,72 @@ class ExternalAuditAnalysisService:
             if match:
                 return match.group(1)
         return None
+
+    @staticmethod
+    def _extract_planet_mark_carbon_regex(text: str) -> dict[str, object] | None:
+        """Regex fallback extraction of Planet Mark carbon metrics.
+
+        Handles the most common Planet Mark report formats.  Returns None when
+        no carbon data can be found — callers must treat this as "manual entry
+        required" rather than zeroes.
+        """
+        out: dict[str, object] = {}
+
+        def _find_co2e(pattern: str) -> float | None:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if not m:
+                return None
+            try:
+                val = float(m.group(1).replace(",", ""))
+                # Heuristic: values > 100,000 are almost certainly kgCO2e — convert
+                return round(val / 1000, 4) if val > 100_000 else val
+            except (ValueError, IndexError):
+                return None
+
+        out["scope_1_co2e_tonnes"] = _find_co2e(
+            r"scope\s*1[^\d]{0,30}([\d,]+\.?\d*)\s*(?:tco2e|t\s*co2e|tonnes?\s*co2e|tco2|t\sCO2)"
+        )
+        out["scope_2_co2e_tonnes"] = _find_co2e(
+            r"scope\s*2[^\d]{0,30}([\d,]+\.?\d*)\s*(?:tco2e|t\s*co2e|tonnes?\s*co2e|tco2|t\sCO2)"
+        )
+        out["scope_3_co2e_tonnes"] = _find_co2e(
+            r"scope\s*3[^\d]{0,30}([\d,]+\.?\d*)\s*(?:tco2e|t\s*co2e|tonnes?\s*co2e|tco2|t\sCO2)"
+        )
+        out["total_co2e_tonnes"] = _find_co2e(
+            r"(?:total|overall|grand\s+total)[^\d]{0,30}([\d,]+\.?\d*)\s*(?:tco2e|t\s*co2e|tonnes?\s*co2e)"
+        )
+
+        fte_m = re.search(r"(\d+)\s*(?:fte|full.time equivalents?)", text, re.IGNORECASE)
+        out["fte_count"] = int(fte_m.group(1)) if fte_m else None
+
+        cert_m = re.search(
+            r"(?:certificate|cert(?:ification)?\s*(?:no|number|#|:))\s*[:\-]?\s*([A-Z0-9\-]{4,30})", text, re.IGNORECASE
+        )
+        out["certification_number"] = cert_m.group(1).strip() if cert_m else None
+
+        dq_m = re.search(r"data quality[^\d]{0,20}(\d+)/16", text, re.IGNORECASE)
+        out["data_quality_scope_1_2"] = int(dq_m.group(1)) if dq_m else None
+
+        red_m = re.search(r"(\d+\.?\d*)\s*%\s*(?:reduction|decrease|lower)", text, re.IGNORECASE)
+        out["reduction_percent"] = float(red_m.group(1)) if red_m else None
+
+        # Derive outcome from certification language
+        text_lower = text.lower()
+        if re.search(r"\bawarded\b|\bcertified\b|\bcertification achieved\b", text_lower):
+            out["outcome_status"] = "certified"
+        elif re.search(r"\bin progress\b|\bpending\b|\bassessment underway\b", text_lower):
+            out["outcome_status"] = "in_progress"
+        else:
+            out["outcome_status"] = None
+
+        out["improvement_actions"] = []
+
+        # Return None if we couldn't extract any carbon data at all
+        has_data = any(
+            out.get(k) is not None
+            for k in ("scope_1_co2e_tonnes", "scope_2_co2e_tonnes", "scope_3_co2e_tonnes", "total_co2e_tonnes")
+        )
+        return out if has_data else None
 
     def _detect_issuer_name(self, text: str, scheme: str, assurance_scheme: str | None) -> str | None:
         if scheme == "planet_mark":

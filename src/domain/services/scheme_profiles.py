@@ -62,6 +62,20 @@ SCHEME_PROFILES: dict[str, SchemeProfile] = {
         score_type="percentage",
         overall_min=0,
         overall_max=100,
+        sections=[
+            SchemeSection("Scope 1 – Direct Emissions", 0, 16, required=False),
+            SchemeSection("Scope 2 – Indirect Energy", 0, 16, required=False),
+            SchemeSection("Scope 3 – Value Chain", 0, 16, required=False),
+            SchemeSection("Data Quality", 0, 16, required=False),
+            SchemeSection("Improvement Actions", 0, 100, required=False),
+        ],
+        valid_outcomes=["pass", "fail", "review_required", "certified", "in_progress", "not_certified"],
+        notes=(
+            "Planet Mark uses a carbon footprint certification model. "
+            "Score represents reduction % vs baseline. Data quality is scored 0-16 "
+            "(Scope 1&2 target ≥12/16, Scope 3 target ≥11/16). "
+            "Outcomes: 'certified' = certification awarded, 'in_progress' = assessment underway."
+        ),
     ),
     "smeta": SchemeProfile(
         scheme_id="smeta",

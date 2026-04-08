@@ -37,3 +37,14 @@ class ExternalAuditRecord(Base):
     observations = Column(Integer, nullable=True, default=0)
     analysis_summary = Column(Text, nullable=True)
     status = Column(String(30), nullable=False, default="completed")
+
+    # Planet Mark specific — populated when scheme="planet_mark" and carbon sync succeeds
+    carbon_reporting_year_id = Column(
+        Integer,
+        ForeignKey("carbon_reporting_year.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    scope_1_co2e = Column(Float, nullable=True)
+    scope_2_co2e = Column(Float, nullable=True)
+    scope_3_co2e = Column(Float, nullable=True)

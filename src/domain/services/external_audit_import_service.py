@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TypedDict, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,9 @@ from src.domain.models.external_audit_import import (
     ExternalAuditImportStatus,
 )
 from src.domain.models.external_audit_record import ExternalAuditRecord
+from src.domain.models.planet_mark import CarbonReportingYear, EmissionSource
+from src.domain.models.planet_mark import ImprovementAction as PlanetMarkImprovementAction
+from src.domain.models.planet_mark import Scope3CategoryData
 from src.domain.models.risk_register import EnterpriseRisk
 from src.domain.models.uvdb_achilles import UVDBAudit
 from src.domain.services.ai_consensus_service import AIConsensusService
@@ -35,6 +38,7 @@ from src.domain.services.external_audit_analysis_service import ExternalAuditAna
 from src.domain.services.gemini_review_service import GeminiReviewService
 from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.mistral_ocr_service import MistralOCRService
+from src.domain.services.planet_mark_service import SCOPE3_CATEGORIES, PlanetMarkService
 from src.domain.services.reference_number import ReferenceNumberService
 from src.domain.services.scheme_profiles import validate_against_scheme
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
@@ -737,7 +741,7 @@ class ExternalAuditImportService:
                 job.source_sheet_count = extraction.sheet_count
                 job.has_tabular_data = bool(extraction.has_tables)
                 job.page_texts_json = page_texts or None
-                job.provenance_json = {
+                provenance_update: dict = {
                     **(job.provenance_json or {}),
                     "extraction_note": note,
                     "mapped_frameworks": analysis.mapped_frameworks,
@@ -750,6 +754,10 @@ class ExternalAuditImportService:
                         "detected_scheme_confidence": analysis.detected_scheme_confidence,
                     },
                 }
+                # Store Planet Mark carbon data for downstream sync
+                if analysis.planet_mark_carbon:
+                    provenance_update["planet_mark_carbon"] = analysis.planet_mark_carbon
+                job.provenance_json = provenance_update
                 job.analysis_summary = analysis.summary
                 job.detected_scheme = analysis.detected_scheme
                 job.detected_scheme_confidence = analysis.detected_scheme_confidence
@@ -911,8 +919,17 @@ class ExternalAuditImportService:
                     drafts=reconciled_drafts,
                 )
         except Exception as sync_exc:
-            logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc)
+            logger.warning("Scheme record sync failed (non-fatal): %s", sync_exc, exc_info=True)
             scheme_alignment = {"status": "sync_failed", "error": str(sync_exc)[:200]}
+
+        # Surface Planet Mark sync outcome explicitly in promotion summary
+        pm_sync = (scheme_alignment or {}).get("planet_mark_sync", {})
+        if isinstance(pm_sync, dict) and pm_sync:
+            pm_sync_status = str(pm_sync.get("status", "unknown"))
+        elif (job.detected_scheme or "").lower() == "planet_mark":
+            pm_sync_status = "sync_failed" if (scheme_alignment or {}).get("status") == "sync_failed" else "skipped"
+        else:
+            pm_sync_status = "not_applicable"
 
         reconciliation: dict[str, object] = {}
         try:
@@ -949,6 +966,8 @@ class ExternalAuditImportService:
             "failed_drafts": failed_drafts,
             "scheme_alignment": scheme_alignment,
             "reconciliation": reconciliation,
+            "planet_mark_sync_status": pm_sync_status,
+            "planet_mark_sync_detail": pm_sync if isinstance(pm_sync, dict) else {},
         }
         await self.db.flush()
         await self.db.refresh(job)
@@ -1631,6 +1650,17 @@ class ExternalAuditImportService:
                 "home_label": home_label,
             }
 
+        # Run Planet Mark domain sync before creating the record so we can link it
+        pm_sync_result: dict[str, object] = {}
+        if self._is_planet_mark_scheme(job):
+            pm_sync_result = await self._sync_planet_mark(
+                job=job,
+                run=run,
+                tenant_id=tenant_id,
+            )
+
+        # Extract carbon scope values for the record if available
+        pm_data = (job.provenance_json or {}).get("planet_mark_carbon") or {}
         record = ExternalAuditRecord(
             tenant_id=tenant_id,
             scheme=job.detected_scheme or "unknown",
@@ -1654,6 +1684,11 @@ class ExternalAuditImportService:
             observations=obs,
             analysis_summary=job.analysis_summary,
             status="completed",
+            # Planet Mark specific fields
+            carbon_reporting_year_id=pm_sync_result.get("year_id"),  # type: ignore[arg-type]
+            scope_1_co2e=pm_data.get("scope_1_co2e_tonnes"),  # type: ignore[arg-type]
+            scope_2_co2e=pm_data.get("scope_2_co2e_tonnes"),  # type: ignore[arg-type]
+            scope_3_co2e=pm_data.get("scope_3_co2e_tonnes"),  # type: ignore[arg-type]
         )
         self.db.add(record)
         await self.db.flush()
@@ -1675,6 +1710,7 @@ class ExternalAuditImportService:
             "scheme": job.detected_scheme,
             "external_audit_record_id": record.id,
             "uvdb_audit_id": uvdb_audit_id,
+            "planet_mark_sync": pm_sync_result,
             "home_route": home_route,
             "home_label": home_label,
         }
@@ -1754,3 +1790,338 @@ class ExternalAuditImportService:
         uvdb_audit.audit_notes = job.analysis_summary
         await self.db.flush()
         return uvdb_audit.id
+
+    @staticmethod
+    def _is_planet_mark_scheme(job: ExternalAuditImportJob) -> bool:
+        """Return True when the import job is a Planet Mark certification report."""
+        detected = (job.detected_scheme or "").strip().lower()
+        if detected == "planet_mark":
+            return True
+        provenance = job.provenance_json or {}
+        declared_info = provenance.get("declared_vs_detected", {})
+        if isinstance(declared_info, dict):
+            declared = str(declared_info.get("declared_assurance_scheme", "")).lower()
+            if "planet mark" in declared or "planet_mark" in declared:
+                return True
+        return False
+
+    # Certification status mapping: Planet Mark language → internal enum
+    _PM_OUTCOME_TO_CERT_STATUS: dict[str, str] = {
+        "certified": "certified",
+        "in_progress": "submitted",
+        "not_certified": "draft",
+    }
+
+    async def _sync_planet_mark(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        tenant_id: int | None,
+    ) -> dict[str, object]:
+        """Sync extracted Planet Mark carbon data into the Planet Mark domain tables.
+
+        Creates or updates a CarbonReportingYear and related EmissionSource /
+        ImprovementAction records.  All writes run inside the caller's transaction
+        so a failure rolls back the whole Planet Mark sync block.
+
+        Returns a result dict with sync metadata; never raises (returns
+        {"status": "no_carbon_data"} when provenance contains no carbon fields).
+        """
+        import re as _re
+
+        pm_data: dict = (job.provenance_json or {}).get("planet_mark_carbon") or {}
+
+        has_any_emission = any(
+            pm_data.get(k) is not None
+            for k in ("scope_1_co2e_tonnes", "scope_2_co2e_tonnes", "scope_3_co2e_tonnes", "total_co2e_tonnes")
+        )
+        if not has_any_emission:
+            logger.info("Planet Mark sync skipped for job %s — no carbon data extracted", job.id)
+            return {"status": "no_carbon_data"}
+
+        raw_label = pm_data.get("reporting_year_label") or job.scheme_version or ""
+        year_label = str(raw_label).strip() or "Imported"
+        yr_num_match = _re.search(r"(\d{4})", year_label)
+        year_number = int(yr_num_match.group(1)) if yr_num_match else datetime.utcnow().year
+        if not _re.search(r"^YE\d{4}$", year_label):
+            year_label = f"YE{year_number}"
+
+        year, created_year = await self._resolve_or_create_pm_year(
+            pm_data=pm_data,
+            year_label=year_label,
+            year_number=year_number,
+            tenant_id=tenant_id,
+            run=run,
+        )
+        sources_created = await self._sync_pm_emission_sources(pm_data=pm_data, year=year, job=job, tenant_id=tenant_id)
+        actions_created = await self._sync_pm_improvement_actions(
+            pm_data=pm_data, year=year, job=job, tenant_id=tenant_id
+        )
+
+        await PlanetMarkService.recalculate_year_totals(self.db, year)
+        await self.db.flush()
+
+        logger.info(
+            "Planet Mark sync complete: job=%s year_id=%s created_year=%s sources=%s actions=%s",
+            job.id,
+            year.id,
+            created_year,
+            sources_created,
+            actions_created,
+        )
+        return {
+            "status": "synced",
+            "year_id": year.id,
+            "year_label": year_label,
+            "created_year": created_year,
+            "sources_created": sources_created,
+            "actions_created": actions_created,
+        }
+
+    @staticmethod
+    def _parse_naive_date(s: object) -> datetime | None:
+        if not s:
+            return None
+        try:
+            return datetime.strptime(str(s), "%Y-%m-%d")
+        except ValueError:
+            return None
+
+    async def _resolve_or_create_pm_year(
+        self,
+        *,
+        pm_data: dict,
+        year_label: str,
+        year_number: int,
+        tenant_id: int | None,
+        run: AuditRun,
+    ) -> tuple[CarbonReportingYear, bool]:
+        """Return (CarbonReportingYear, created_new) — idempotent."""
+        period_start = self._parse_naive_date(pm_data.get("period_start")) or datetime(year_number, 1, 1)
+        period_end = self._parse_naive_date(pm_data.get("period_end")) or datetime(year_number, 12, 31)
+        cert_date = self._parse_naive_date(pm_data.get("certification_date"))
+        expiry_date = self._parse_naive_date(pm_data.get("expiry_date"))
+        fte = pm_data.get("fte_count") or 0
+        cert_num = pm_data.get("certification_number")
+        raw_outcome = str(pm_data.get("outcome_status") or "").lower()
+        cert_status = self._PM_OUTCOME_TO_CERT_STATUS.get(raw_outcome, "draft")
+
+        existing = (
+            await self.db.execute(
+                select(CarbonReportingYear).where(
+                    CarbonReportingYear.tenant_id == tenant_id,
+                    CarbonReportingYear.year_label == year_label,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing is None:
+            existing = (
+                await self.db.execute(
+                    select(CarbonReportingYear).where(
+                        CarbonReportingYear.tenant_id == tenant_id,
+                        CarbonReportingYear.year_number == year_number,
+                    )
+                )
+            ).scalar_one_or_none()
+
+        if existing is None:
+            year = CarbonReportingYear(  # type: ignore[misc]
+                tenant_id=tenant_id,
+                year_label=year_label,
+                year_number=year_number,
+                period_start=period_start,
+                period_end=period_end,
+                average_fte=float(fte) if fte else 0.0,
+                organization_name=run.title or "Imported Organisation",
+                certification_status=cert_status,
+                certificate_number=cert_num,
+                certification_date=cert_date,
+                expiry_date=expiry_date,
+            )
+            self.db.add(year)
+            await self.db.flush()
+            for cat in SCOPE3_CATEGORIES:
+                self.db.add(
+                    Scope3CategoryData(  # type: ignore[misc]
+                        reporting_year_id=year.id,
+                        tenant_id=tenant_id,
+                        category_number=cat["number"],
+                        category_name=cat["name"],
+                        category_description=cat["description"],
+                        is_relevant=True,
+                        is_measured=False,
+                    )
+                )
+            logger.info("Planet Mark sync: created CarbonReportingYear id=%s label=%s", year.id, year_label)
+            return year, True
+
+        if cert_status and cert_status != "draft":
+            existing.certification_status = cert_status
+        if cert_date and not existing.certification_date:
+            existing.certification_date = cert_date
+        if expiry_date and not existing.expiry_date:
+            existing.expiry_date = expiry_date
+        if cert_num and not existing.certificate_number:
+            existing.certificate_number = cert_num
+        if fte and not existing.average_fte:
+            existing.average_fte = float(fte)
+        logger.info("Planet Mark sync: updating existing CarbonReportingYear id=%s", existing.id)
+        return existing, False
+
+    async def _sync_pm_emission_sources(
+        self,
+        *,
+        pm_data: dict,
+        year: CarbonReportingYear,
+        job: ExternalAuditImportJob,
+        tenant_id: int | None,
+    ) -> int:
+        """Create aggregate EmissionSource records for each scope; return count."""
+        scope_map = {
+            "scope_1": ("scope_1_co2e_tonnes", "Scope 1 — Direct Emissions (Imported)"),
+            "scope_2": ("scope_2_co2e_tonnes", "Scope 2 — Indirect Energy (Imported)"),
+            "scope_3": ("scope_3_co2e_tonnes", "Scope 3 — Value Chain (Imported)"),
+        }
+        sources_created = 0
+        for scope_key, (data_key, source_name) in scope_map.items():
+            co2e = pm_data.get(data_key)
+            if co2e is None or float(co2e) <= 0:
+                continue
+            for old_agg in (
+                (
+                    await self.db.execute(
+                        select(EmissionSource).where(
+                            EmissionSource.reporting_year_id == year.id,
+                            EmissionSource.scope == scope_key,
+                            EmissionSource.is_imported_aggregate == True,  # noqa: E712
+                            EmissionSource.source_import_job_id == job.id,
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            ):
+                await self.db.delete(old_agg)
+
+            has_real = (
+                await self.db.execute(
+                    select(EmissionSource).where(
+                        EmissionSource.reporting_year_id == year.id,
+                        EmissionSource.scope == scope_key,
+                        EmissionSource.is_imported_aggregate == False,  # noqa: E712
+                    )
+                )
+            ).scalars().first() is not None
+
+            if not has_real:
+                self.db.add(
+                    EmissionSource(  # type: ignore[misc]
+                        tenant_id=tenant_id,
+                        reporting_year_id=year.id,
+                        source_name=source_name,
+                        source_category="imported",
+                        scope=scope_key,
+                        activity_type="imported_aggregate",
+                        activity_value=float(co2e),
+                        activity_unit="tCO2e",
+                        emission_factor=1.0,
+                        emission_factor_unit="tCO2e",
+                        emission_factor_source="Planet Mark Import",
+                        co2e_tonnes=float(co2e),
+                        data_quality_level="estimated",
+                        data_quality_score=2,
+                        is_imported_aggregate=True,
+                        source_import_job_id=job.id,
+                        data_notes=(
+                            f"Auto-imported from Planet Mark audit report (job id={job.id}). "
+                            "Replace with per-source data for full detail."
+                        ),
+                    )
+                )
+                sources_created += 1
+
+        dq_1_2 = pm_data.get("data_quality_scope_1_2")
+        dq_3 = pm_data.get("data_quality_scope_3")
+        if dq_1_2 is not None:
+            year.scope_1_data_quality = min(int(dq_1_2), 16)
+            year.scope_2_data_quality = min(int(dq_1_2), 16)
+        if dq_3 is not None:
+            year.scope_3_data_quality = min(int(dq_3), 16)
+        await self.db.flush()
+        return sources_created
+
+    async def _sync_pm_improvement_actions(
+        self,
+        *,
+        pm_data: dict,
+        year: CarbonReportingYear,
+        job: ExternalAuditImportJob,
+        tenant_id: int | None,
+    ) -> int:
+        """Create ImprovementAction records from PM data or job summary; return count."""
+        raw_actions: list = pm_data.get("improvement_actions") or []
+        if not raw_actions and job.improvement_summary_json:
+            raw_actions = [
+                {"title": item.get("title", "Improvement action"), "target_scope": None, "deadline": None}
+                for item in (job.improvement_summary_json or [])[:20]
+                if isinstance(item, dict) and item.get("title")
+            ]
+
+        actions_created = 0
+        for action_data in raw_actions[:20]:
+            if not isinstance(action_data, dict):
+                continue
+            title = str(action_data.get("title", "")).strip()[:300]
+            if not title:
+                continue
+
+            dup = (
+                await self.db.execute(
+                    select(PlanetMarkImprovementAction).where(
+                        PlanetMarkImprovementAction.reporting_year_id == year.id,
+                        PlanetMarkImprovementAction.action_title == title,
+                    )
+                )
+            ).scalar_one_or_none()
+            if dup is not None:
+                continue
+
+            count = (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(PlanetMarkImprovementAction)
+                    .where(PlanetMarkImprovementAction.reporting_year_id == year.id)
+                )
+            ).scalar_one()
+            action_id = f"IMP-{(count + 1):03d}"
+
+            time_bound: datetime | None = None
+            deadline_str = action_data.get("deadline")
+            if deadline_str:
+                try:
+                    time_bound = datetime.strptime(str(deadline_str), "%Y-%m-%d")
+                except ValueError:
+                    pass
+
+            self.db.add(
+                PlanetMarkImprovementAction(  # type: ignore[misc]
+                    tenant_id=tenant_id,
+                    reporting_year_id=year.id,
+                    action_id=action_id,
+                    action_title=title,
+                    target_scope=action_data.get("target_scope"),
+                    status="planned",
+                    progress_percent=0,
+                    source_import_job_id=job.id,
+                    expected_reduction_pct=action_data.get("expected_reduction_pct"),
+                    time_bound=time_bound,
+                    achievable_owner="To be assigned",
+                    scheduled_month=None,
+                )
+            )
+            actions_created += 1
+
+        await self.db.flush()
+        return actions_created

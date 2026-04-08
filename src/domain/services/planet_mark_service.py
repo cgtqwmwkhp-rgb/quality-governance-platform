@@ -9,7 +9,7 @@ improvement actions, fleet, utilities, dashboard).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import desc, func, select
@@ -284,8 +284,11 @@ class PlanetMarkService:
     # ---- Reporting year operations ----
 
     @staticmethod
-    async def list_reporting_years(db: AsyncSession) -> dict[str, Any]:
-        result = await db.execute(select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number)))
+    async def list_reporting_years(db: AsyncSession, *, tenant_id: int | None = None) -> dict[str, Any]:
+        stmt = select(CarbonReportingYear).order_by(desc(CarbonReportingYear.year_number))
+        if tenant_id is not None:
+            stmt = stmt.where(CarbonReportingYear.tenant_id == tenant_id)
+        result = await db.execute(stmt)
         years = list(result.scalars().all())
         return {
             "total": len(years),
@@ -535,7 +538,8 @@ class PlanetMarkService:
         result = await db.execute(stmt.order_by(ImprovementAction.time_bound))  # type: ignore[attr-defined]  # TYPE-IGNORE: MYPY-OVERRIDE
         actions = result.scalars().all()
 
-        now = datetime.now(timezone.utc)
+        # Use naive UTC for comparison — time_bound is stored as TIMESTAMP WITHOUT TIME ZONE
+        now = datetime.utcnow()
         completed = len([a for a in actions if a.status == "completed"])
         in_progress = len([a for a in actions if a.status == "in_progress"])
         overdue = len([a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < now])
@@ -618,7 +622,8 @@ class PlanetMarkService:
         for key, value in updates.items():
             setattr(action, key, value)
         if hasattr(action, "updated_at"):
-            action.updated_at = datetime.now(timezone.utc)
+            # Store as naive UTC to match TIMESTAMP WITHOUT TIME ZONE column
+            action.updated_at = datetime.utcnow()
         await db.commit()
         return {"message": "Action updated", "id": action.id}
 
@@ -886,7 +891,8 @@ class PlanetMarkService:
         )
         actions = list(actions_result.scalars().all())
 
-        dashboard_now = datetime.now(timezone.utc)
+        # Use naive UTC for comparison — time_bound is stored as TIMESTAMP WITHOUT TIME ZONE
+        dashboard_now = datetime.utcnow()
         overdue_actions = [
             a for a in actions if a.status != "completed" and a.time_bound and a.time_bound < dashboard_now
         ]

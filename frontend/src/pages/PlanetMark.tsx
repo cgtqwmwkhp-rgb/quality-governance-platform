@@ -328,6 +328,12 @@ export default function PlanetMark() {
         if (isSetupRequired(dashboard)) {
           setSetupRequired(dashboard)
           setLoadState('setup_required')
+          // Pre-load imported records so setup screen can show "You have N imported reports"
+          try {
+            const importedRes = await externalAuditRecordsApi.list({ scheme: 'planet_mark' })
+            setImportedRecords(importedRes.data.records)
+            setImportedTotal(importedRes.data.total)
+          } catch { /* non-fatal */ }
           return
         }
         if (isSetupRequired(yearsPayload)) {
@@ -428,6 +434,8 @@ export default function PlanetMark() {
   }, [currentYear?.id])
 
   const [importedError, setImportedError] = useState<string | null>(null)
+  const [applyingImportId, setApplyingImportId] = useState<number | null>(null)
+  const [appliedImportIds, setAppliedImportIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     if (activeTab !== 'imported') return
@@ -453,6 +461,32 @@ export default function PlanetMark() {
     void loadImported()
     return () => { cancelled = true }
   }, [activeTab])
+
+  const handleApplyImport = async (importJobId: number) => {
+    setApplyingImportId(importJobId)
+    try {
+      const res = await planetMarkApi.applyImport(importJobId)
+      const result = res.data
+      if (result.status === 'no_carbon_data') {
+        alert(result.detail || 'No carbon data was found in this import. Please enter data manually.')
+      } else {
+        setAppliedImportIds((prev) => new Set([...prev, importJobId]))
+        // Refresh the main planet mark data so the dashboard reflects the newly applied data
+        await loadData()
+        alert(
+          `Carbon data applied successfully!\n` +
+          `Year: ${result.year_label || 'Created'}\n` +
+          `Emission sources created: ${result.sources_created}\n` +
+          `Improvement actions created: ${result.actions_created}`
+        )
+      }
+    } catch (err) {
+      const apiErr = createApiError(err)
+      alert(`Failed to apply import: ${apiErr.detail || 'Unknown error'}`)
+    } finally {
+      setApplyingImportId(null)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -503,6 +537,24 @@ export default function PlanetMark() {
             loadData()
           }}
         />
+
+        {/* Import-aware prompt: if the user has already uploaded a Planet Mark report */}
+        {importedRecords.length > 0 && (
+          <div className="mt-6 max-w-lg mx-auto rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-start gap-3">
+            <FileUp className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                You have {importedRecords.length} imported Planet Mark report{importedRecords.length > 1 ? 's' : ''}.
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                After creating a reporting year below, go to the{' '}
+                <strong>Imported Assessments</strong> tab and click{' '}
+                <strong>Apply Carbon Data</strong> to populate it automatically.
+              </p>
+            </div>
+          </div>
+        )}
+
         {setupRequired.next_action.includes('/api/v1/planet-mark/years') ? (
           <div className="mt-8 max-w-lg mx-auto bg-card border border-border rounded-xl shadow-lg p-6">
             <div className="flex items-center justify-between gap-4 mb-4">
@@ -1400,6 +1452,16 @@ export default function PlanetMark() {
           {/* Imported Assessments Tab */}
           {activeTab === 'imported' && (
             <div className="space-y-6">
+              {/* Informational banner */}
+              <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                <p className="text-muted-foreground">
+                  <span className="font-medium text-foreground">Importing a report creates an audit record.</span>
+                  {' '}Use <span className="font-medium text-primary">Apply Carbon Data</span> on each record below
+                  to populate your Planet Mark dashboard with the extracted emissions data.
+                </p>
+              </div>
+
               <div className="bg-card rounded-xl border border-border">
                 <div className="p-4 bg-surface border-b border-border">
                   <h3 className="font-bold text-foreground flex items-center gap-2">
@@ -1433,62 +1495,101 @@ export default function PlanetMark() {
                     </div>
                   )}
                   <div className="space-y-3">
-                    {importedRecords.map((record) => (
-                      <div
-                        key={record.id}
-                        className="p-4 bg-surface/50 rounded-lg border border-border hover:border-primary/40 transition-all"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <h4 className="font-medium text-foreground">
-                              {record.scheme_label || 'Planet Mark Assessment'}
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              {record.issuer_name && `${record.issuer_name} · `}
-                              {record.report_date
-                                ? new Date(record.report_date).toLocaleDateString()
-                                : 'Date not available'}
-                            </p>
+                    {importedRecords.map((record) => {
+                      const isApplied = appliedImportIds.has(record.import_job_id ?? -1)
+                      const isApplying = applyingImportId === (record.import_job_id ?? -1)
+                      const alreadyLinked = Boolean(record.carbon_reporting_year_id)
+                      const carbonApplied = isApplied || alreadyLinked
+
+                      return (
+                        <div
+                          key={record.id}
+                          className={`p-4 rounded-lg border transition-all ${
+                            carbonApplied
+                              ? 'bg-success/5 border-success/30'
+                              : 'bg-surface/50 border-border hover:border-primary/40'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <h4 className="font-medium text-foreground flex items-center gap-2">
+                                {record.scheme_label || 'Planet Mark Assessment'}
+                                {carbonApplied && (
+                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-success/15 text-success font-normal">
+                                    <CheckCircle2 className="w-3 h-3" /> Carbon data applied
+                                  </span>
+                                )}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {record.issuer_name && `${record.issuer_name} · `}
+                                {record.report_date
+                                  ? new Date(record.report_date).toLocaleDateString()
+                                  : 'Date not available'}
+                              </p>
+                              {/* Scope summary from record if available */}
+                              {(record.scope_1_co2e != null || record.scope_2_co2e != null || record.scope_3_co2e != null) && (
+                                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                  {record.scope_1_co2e != null && <span>S1: {record.scope_1_co2e.toFixed(1)} t</span>}
+                                  {record.scope_2_co2e != null && <span>S2: {record.scope_2_co2e.toFixed(1)} t</span>}
+                                  {record.scope_3_co2e != null && <span>S3: {record.scope_3_co2e.toFixed(1)} t</span>}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              {record.score_percentage != null && (
+                                <span className="text-lg font-bold text-primary">
+                                  {Math.round(record.score_percentage)}%
+                                </span>
+                              )}
+                              <div className={`text-xs px-2 py-0.5 rounded-full inline-block ${
+                                record.outcome_status === 'pass' || record.outcome_status === 'certified'
+                                  ? 'bg-success/20 text-success'
+                                  : record.outcome_status === 'fail' || record.outcome_status === 'not_certified'
+                                    ? 'bg-destructive/20 text-destructive'
+                                    : 'bg-warning/20 text-warning'
+                              }`}>
+                                {record.outcome_status || record.status}
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            {record.score_percentage != null && (
-                              <span className="text-lg font-bold text-primary">
-                                {Math.round(record.score_percentage)}%
-                              </span>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span>{record.findings_count ?? 0} findings</span>
+                            {(record.major_findings ?? 0) > 0 && (
+                              <span className="text-destructive">{record.major_findings} major</span>
                             )}
-                            <div className={`text-xs mt-1 px-2 py-0.5 rounded-full inline-block ${
-                              record.outcome_status === 'pass' || record.outcome_status === 'approved'
-                                ? 'bg-success/20 text-success'
-                                : record.outcome_status === 'fail'
-                                  ? 'bg-destructive/20 text-destructive'
-                                  : 'bg-warning/20 text-warning'
-                            }`}>
-                              {record.outcome_status || record.status}
+                            {(record.minor_findings ?? 0) > 0 && (
+                              <span className="text-warning">{record.minor_findings} minor</span>
+                            )}
+                            {(record.observations ?? 0) > 0 && (
+                              <span>{record.observations} observations</span>
+                            )}
+                            <div className="ml-auto flex items-center gap-2">
+                              {record.import_job_id && !carbonApplied && (
+                                <button
+                                  onClick={() => handleApplyImport(record.import_job_id!)}
+                                  disabled={isApplying}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {isApplying ? (
+                                    <><RefreshCw className="w-3 h-3 animate-spin" /> Applying…</>
+                                  ) : (
+                                    <><FileUp className="w-3 h-3" /> Apply Carbon Data</>
+                                  )}
+                                </button>
+                              )}
+                              {record.import_job_id && (
+                                <a
+                                  href={`/audits/0/import-review?jobId=${record.import_job_id}`}
+                                  className="text-primary hover:underline flex items-center gap-1"
+                                >
+                                  View Import <ArrowUpRight className="w-3 h-3" />
+                                </a>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                          <span>{record.findings_count ?? 0} findings</span>
-                          {(record.major_findings ?? 0) > 0 && (
-                            <span className="text-destructive">{record.major_findings} major</span>
-                          )}
-                          {(record.minor_findings ?? 0) > 0 && (
-                            <span className="text-warning">{record.minor_findings} minor</span>
-                          )}
-                          {(record.observations ?? 0) > 0 && (
-                            <span>{record.observations} observations</span>
-                          )}
-                          {record.import_job_id && (
-                            <a
-                              href={`/audits/0/import-review?jobId=${record.import_job_id}`}
-                              className="text-primary hover:underline flex items-center gap-1 ml-auto"
-                            >
-                              View Import <ArrowUpRight className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               </div>

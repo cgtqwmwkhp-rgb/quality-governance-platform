@@ -2285,3 +2285,176 @@ def _calc_avg_quality(sources: list) -> int:
     total = sum(s.data_quality_score for s in sources)
     avg = total / len(sources)  # 0-4 average
     return min(16, round(avg * 4))  # Scale to 0-16, cap at 16
+
+
+# ============ Import Sync ============
+
+
+class ApplyImportRequest(BaseModel):
+    """Request body for POST /planet-mark/apply-import."""
+
+    import_job_id: int = Field(..., description="ID of a completed Planet Mark import job to sync from")
+    reporting_year_id: Optional[int] = Field(
+        default=None,
+        description="Target reporting year ID. When null the sync creates or matches a year automatically.",
+    )
+    overwrite_existing: bool = Field(
+        default=False,
+        description="When true, replaces existing imported-aggregate emission sources even if real sources exist.",
+    )
+
+
+class ApplyImportResponse(BaseModel):
+    status: str
+    year_id: Optional[int] = None
+    year_label: Optional[str] = None
+    created_year: bool = False
+    sources_created: int = 0
+    actions_created: int = 0
+    detail: Optional[str] = None
+
+
+@router.post(
+    "/apply-import",
+    response_model=ApplyImportResponse,
+    summary="Apply an imported Planet Mark report to the carbon dashboard",
+)
+async def apply_import_to_planet_mark(
+    payload: ApplyImportRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> ApplyImportResponse:
+    """Trigger Planet Mark domain sync from a previously processed import job.
+
+    This endpoint lets users explicitly push data from an imported Planet Mark
+    audit report (processed via the Audits → External Audit Import pipeline)
+    into the Planet Mark carbon dashboard.  It is idempotent: calling it
+    multiple times with the same job produces the same result.
+
+    **Validation:**
+    - ``import_job_id`` must reference a job with ``detected_scheme = "planet_mark"``
+    - The job must have status ``completed`` (i.e., it has been promoted)
+    - The job must have Planet Mark carbon data in its ``provenance_json``
+    """
+    from src.domain.models.external_audit_import import ExternalAuditImportJob, ExternalAuditImportStatus
+    from src.domain.services.external_audit_import_service import ExternalAuditImportService
+
+    # Fetch and validate the import job
+    job_result = await db.execute(
+        select(ExternalAuditImportJob).where(
+            ExternalAuditImportJob.id == payload.import_job_id,
+            ExternalAuditImportJob.tenant_id == current_user.tenant_id,
+        )
+    )
+    job = job_result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    if (job.detected_scheme or "").lower() != "planet_mark":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Import job {payload.import_job_id} is scheme '{job.detected_scheme}', not 'planet_mark'.",
+        )
+
+    if job.status not in {
+        ExternalAuditImportStatus.COMPLETED,
+        ExternalAuditImportStatus.REVIEW_REQUIRED,
+    }:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Import job must be completed or review_required (currently '{job.status}').",
+        )
+
+    pm_data = (job.provenance_json or {}).get("planet_mark_carbon") or {}
+    has_carbon = any(
+        pm_data.get(k) is not None
+        for k in ("scope_1_co2e_tonnes", "scope_2_co2e_tonnes", "scope_3_co2e_tonnes", "total_co2e_tonnes")
+    )
+    if not has_carbon:
+        return ApplyImportResponse(
+            status="no_carbon_data",
+            detail=(
+                "No carbon data was extracted from this import. "
+                "Re-process the job or enter emission data manually in the Planet Mark section."
+            ),
+        )
+
+    # Fetch the associated audit run for context
+    from src.domain.models.audit import AuditRun
+
+    run_result = await db.execute(select(AuditRun).where(AuditRun.id == job.audit_run_id))
+    run = run_result.scalar_one_or_none()
+    if run is None:
+        raise HTTPException(status_code=404, detail="Associated audit run not found")
+
+    service = ExternalAuditImportService(db)
+    try:
+        sync_result = await service._sync_planet_mark(
+            job=job,
+            run=run,
+            tenant_id=current_user.tenant_id,
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.error("apply-import: Planet Mark sync failed for job %s: %s", payload.import_job_id, exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Planet Mark sync failed: {str(exc)[:200]}")
+
+    _audit(
+        "apply_import",
+        current_user.tenant_id,
+        current_user.id,
+        import_job_id=payload.import_job_id,
+        year_id=sync_result.get("year_id"),
+        status=sync_result.get("status"),
+    )
+
+    return ApplyImportResponse(
+        status=str(sync_result.get("status", "ok")),
+        year_id=sync_result.get("year_id"),  # type: ignore[arg-type]
+        year_label=sync_result.get("year_label"),  # type: ignore[arg-type]
+        created_year=bool(sync_result.get("created_year", False)),
+        sources_created=int(str(sync_result.get("sources_created", 0))),
+        actions_created=int(str(sync_result.get("actions_created", 0))),
+    )
+
+
+@router.get(
+    "/import-status/{import_job_id}",
+    summary="Get Planet Mark sync status for an import job",
+)
+async def get_import_sync_status(
+    import_job_id: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> dict:
+    """Return the Planet Mark carbon sync status for a specific import job.
+
+    Reads ``planet_mark_sync_status`` from the job's ``promotion_summary_json``
+    to let the frontend show whether carbon data was successfully synced.
+    """
+    from src.domain.models.external_audit_import import ExternalAuditImportJob
+
+    job_result = await db.execute(
+        select(ExternalAuditImportJob).where(
+            ExternalAuditImportJob.id == import_job_id,
+            ExternalAuditImportJob.tenant_id == current_user.tenant_id,
+        )
+    )
+    job = job_result.scalar_one_or_none()
+    if job is None:
+        raise HTTPException(status_code=404, detail="Import job not found")
+
+    summary = job.promotion_summary_json or {}
+    pm_status = summary.get("planet_mark_sync_status", "unknown")
+    pm_detail = summary.get("planet_mark_sync_detail", {})
+    has_carbon = bool((job.provenance_json or {}).get("planet_mark_carbon"))
+
+    return {
+        "import_job_id": import_job_id,
+        "detected_scheme": job.detected_scheme,
+        "status": job.status,
+        "planet_mark_sync_status": pm_status,
+        "planet_mark_sync_detail": pm_detail,
+        "has_carbon_data": has_carbon,
+        "retry_available": pm_status in {"sync_failed", "no_carbon_data", "unknown"} and has_carbon,
+    }
