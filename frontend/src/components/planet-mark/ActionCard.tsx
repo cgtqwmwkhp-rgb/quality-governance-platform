@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Clock, User, AlertTriangle, CheckCircle2, Loader2, ChevronDown } from 'lucide-react'
 import { planetMarkApi } from '../../api/client'
 
@@ -39,6 +39,15 @@ export function ActionCard({ yearId, action, onUpdated, selected, onSelect }: Ac
   const [progress, setProgress] = useState(action.progress_percent)
   const [status, setStatus] = useState(action.status)
   const [error, setError] = useState<string | null>(null)
+
+  // Sync local editing state when server data changes (e.g. after parent refresh)
+  useEffect(() => {
+    if (!isExpanded) {
+      setNotes(action.notes || '')
+      setProgress(action.progress_percent)
+      setStatus(action.status)
+    }
+  }, [action.notes, action.progress_percent, action.status, isExpanded])
 
   const isOverdue = action.is_overdue && action.status !== 'completed'
 

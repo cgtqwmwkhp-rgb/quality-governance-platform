@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { X, Upload, Loader2, CheckCircle2, AlertTriangle, ChevronRight, FileText } from 'lucide-react'
 import { planetMarkApi } from '../../api/client'
 
@@ -31,6 +31,31 @@ export function ActionImportModal({ yearId, onClose, onImported }: ActionImportM
   const [extractionMethod, setExtractionMethod] = useState('')
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Focus trap: keep Tab/Shift-Tab inside the modal
+  useEffect(() => {
+    const el = modalRef.current
+    if (!el) return
+    const focusable = el.querySelectorAll<HTMLElement>(
+      'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])',
+    )
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    first?.focus()
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab') return
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last?.focus() }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first?.focus() }
+      }
+    }
+    el.addEventListener('keydown', handleKeyDown)
+    return () => el.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const handleFileSelect = useCallback(async (file: File) => {
     setError(null)
@@ -92,6 +117,7 @@ export function ActionImportModal({ yearId, onClose, onImported }: ActionImportM
 
   return (
     <div
+      ref={modalRef}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
@@ -105,6 +131,7 @@ export function ActionImportModal({ yearId, onClose, onImported }: ActionImportM
             <h2 className="text-base font-semibold text-gray-900">Import Action Plan</h2>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="Close modal"
@@ -153,7 +180,12 @@ export function ActionImportModal({ yearId, onClose, onImported }: ActionImportM
                 role="button"
                 tabIndex={0}
                 aria-label="Upload action plan document"
-                onKeyDown={(e) => e.key === 'Enter' && step !== 'extracting' && fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && step !== 'extracting') {
+                    e.preventDefault()
+                    fileInputRef.current?.click()
+                  }
+                }}
               >
                 {step === 'extracting' ? (
                   <div className="flex flex-col items-center gap-2">
@@ -227,7 +259,12 @@ export function ActionImportModal({ yearId, onClose, onImported }: ActionImportM
                     role="button"
                     tabIndex={0}
                     onClick={() => toggleRow(idx)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleRow(idx) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleRow(idx)
+                      }
+                    }}
                   >
                     <input
                       type="checkbox"

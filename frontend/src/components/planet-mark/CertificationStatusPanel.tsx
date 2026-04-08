@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Award, ChevronDown, Loader2, CheckCircle2, AlertTriangle, Clock } from 'lucide-react'
 import { planetMarkApi } from '../../api/client'
 
@@ -46,14 +46,29 @@ export function CertificationStatusPanel({
   const [isExpanded, setIsExpanded] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    certificate_number: certification.certificate_number || '',
-    certification_date: certification.certification_date?.slice(0, 10) || '',
-    expiry_date: certification.expiry_date?.slice(0, 10) || '',
-    certifying_body: certification.certifying_body || 'Planet Mark',
-    assessor_name: certification.assessor_name || '',
+  const buildForm = (c: CertificationInfo) => ({
+    certificate_number: c.certificate_number || '',
+    certification_date: c.certification_date?.slice(0, 10) || '',
+    expiry_date: c.expiry_date?.slice(0, 10) || '',
+    certifying_body: c.certifying_body || 'Planet Mark',
+    assessor_name: c.assessor_name || '',
     assessment_notes: '',
   })
+
+  const [form, setForm] = useState(() => buildForm(certification))
+
+  // Sync form when parent refreshes certification data (e.g. after status change)
+  useEffect(() => {
+    setForm(buildForm(certification))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    certification.status,
+    certification.certificate_number,
+    certification.certification_date,
+    certification.expiry_date,
+    certification.certifying_body,
+    certification.assessor_name,
+  ])
 
   const statusInfo = STATUS_LABELS[certification.status] ?? STATUS_LABELS.draft
   const available = TRANSITIONS[certification.status] ?? []
@@ -69,7 +84,7 @@ export function CertificationStatusPanel({
     try {
       await planetMarkApi.patchCertification(yearId, {
         status: toStatus,
-        ...(toStatus === 'certified' ? form : {}),
+        ...(toStatus === 'certified' ? form : { assessment_notes: form.assessment_notes || undefined }),
       })
       onUpdated()
     } catch (err: unknown) {
@@ -89,6 +104,7 @@ export function CertificationStatusPanel({
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
+        aria-label={isExpanded ? 'Collapse certification details' : 'Expand certification details'}
       >
         <div className="flex items-center gap-3">
           <Award className="w-5 h-5 text-green-600" />
