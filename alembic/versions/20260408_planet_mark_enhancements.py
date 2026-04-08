@@ -1,13 +1,13 @@
 """Planet Mark enhancements: evidence storage, certifying_body, action notes.
 
 Revision ID: pm_enhancements_01
-Revises: iso27001_controls_cols_01
+Revises: iso27001_schema_drift_02, cel_tenant_unique_01
 Create Date: 2026-04-08
 
-Adds:
+Merge migration that combines iso27001_schema_drift_02 and cel_tenant_unique_01
+branches, then adds Planet Mark evidence columns:
   - carbon_evidence.file_hash (SHA-256 dedup)
   - carbon_evidence.storage_key (blob path)
-  - carbon_evidence.verified_by / verified_at
   - carbon_reporting_year.certifying_body
   - carbon_improvement_action.notes
   - index on carbon_evidence (file_hash, reporting_year_id, tenant_id)
@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from typing import Tuple, Union
 
 revision = "pm_enhancements_01"
-down_revision = "iso27001_controls_cols_01"
+down_revision: Union[Tuple[str, str], str] = ("iso27001_schema_drift_02", "cel_tenant_unique_01")
 branch_labels = None
 depends_on = None
 
