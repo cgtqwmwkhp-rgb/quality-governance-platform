@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("")
+@router.get("/")
 async def list_records(
     db: DbSession,
     current_user: CurrentUser,
