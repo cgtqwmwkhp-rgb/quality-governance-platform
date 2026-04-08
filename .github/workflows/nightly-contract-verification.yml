@@ -204,7 +204,7 @@ jobs:
           esac
 
       - name: Upload Verification Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nightly-verification-${{ steps.env.outputs.environment }}-${{ github.run_id }}
           path: probe-result.json

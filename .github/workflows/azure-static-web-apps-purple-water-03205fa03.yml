@@ -527,7 +527,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
       
       - name: Upload Playwright HTML Report (Audit Artifact)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report-staging
@@ -535,7 +535,7 @@ jobs:
           retention-days: 90
       
       - name: Upload Playwright JUnit Report (Machine-Readable)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-junit-staging
@@ -544,7 +544,7 @@ jobs:
           if-no-files-found: warn
       
       - name: Upload Playwright JSON Report (Machine-Readable)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-json-staging
@@ -553,7 +553,7 @@ jobs:
           if-no-files-found: warn
       
       - name: Upload Playwright Test Results (Screenshots/Videos)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-test-results-staging
@@ -562,7 +562,7 @@ jobs:
           if-no-files-found: ignore
       
       - name: Upload Playwright Traces
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-traces-staging
