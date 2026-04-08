@@ -74,7 +74,7 @@ jobs:
       staging_reachable: ${{ steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_TIMEOUT' && steps.tokens.outputs.token_failure_reason != 'STAGING_UNREACHABLE_MAX_ATTEMPTS' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -108,7 +108,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -166,7 +166,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -220,7 +220,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -274,7 +274,7 @@ jobs:
     if: needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -330,7 +330,7 @@ jobs:
     if: always() && needs.check-trigger.outputs.should_run == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
