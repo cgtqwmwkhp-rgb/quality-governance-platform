@@ -734,7 +734,7 @@ export default function PlanetMark() {
           { id: 'actions', label: t('planet_mark.improvement_plan'), icon: Target },
           { id: 'quality', label: t('planet_mark.data_quality'), icon: Gauge },
           { id: 'certification', label: t('planet_mark.certification'), icon: Award },
-          { id: 'imported', label: 'Imported Assessments', icon: ClipboardCheck },
+          { id: 'imported', label: t('planet_mark.imported_assessments'), icon: ClipboardCheck },
         ].map((tab, idx, arr) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -1336,9 +1336,9 @@ export default function PlanetMark() {
                     ].map((dq) => (
                       <div
                         key={dq.scopeKey}
-                        className="bg-slate-800 rounded-xl p-6 border border-slate-700"
+                        className="bg-card rounded-xl p-6 border border-border"
                       >
-                        <h3 className="font-bold text-white mb-4">{t(dq.scopeKey)}</h3>
+                        <h3 className="font-bold text-foreground mb-4">{t(dq.scopeKey)}</h3>
                         <div className="relative w-32 h-32 mx-auto mb-4">
                           <svg className="w-full h-full transform -rotate-90">
                             <circle
@@ -1348,7 +1348,7 @@ export default function PlanetMark() {
                               stroke="currentColor"
                               strokeWidth="8"
                               fill="transparent"
-                              className="text-slate-700"
+                              className="text-border"
                             />
                             <circle
                               cx="64"
@@ -1358,21 +1358,21 @@ export default function PlanetMark() {
                               strokeWidth="8"
                               fill="transparent"
                               strokeDasharray={`${(dq.score / dataQuality.max_score) * 352} 352`}
-                              className={dq.score >= 12 ? 'text-green-500' : 'text-yellow-500'}
+                              className={dq.score >= 12 ? 'text-success' : 'text-warning'}
                             />
                           </svg>
                           <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-3xl font-bold text-white">{dq.score}</span>
-                            <span className="text-sm text-gray-400">/ {dataQuality.max_score}</span>
+                            <span className="text-3xl font-bold text-foreground">{dq.score}</span>
+                            <span className="text-sm text-muted-foreground">/ {dataQuality.max_score}</span>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div className="bg-slate-800 rounded-xl border border-slate-700">
-                    <div className="p-4 bg-slate-700 border-b border-slate-600">
-                      <h3 className="font-bold text-white">
+                  <div className="bg-card rounded-xl border border-border">
+                    <div className="p-4 bg-surface border-b border-border">
+                      <h3 className="font-bold text-foreground">
                         {t('planet_mark.data_quality_recommendations')}
                       </h3>
                     </div>
@@ -1380,10 +1380,10 @@ export default function PlanetMark() {
                       {dataQuality.priority_improvements.map((rec) => (
                         <div
                           key={`${rec.action}-${rec.impact}`}
-                          className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-surface/50 rounded-lg border border-border/50"
                         >
-                          <span className="text-white">{rec.action}</span>
-                          <span className="text-green-400 font-medium">{rec.impact}</span>
+                          <span className="text-foreground">{rec.action}</span>
+                          <span className="text-success font-medium">{rec.impact}</span>
                         </div>
                       ))}
                     </div>
@@ -1404,10 +1404,10 @@ export default function PlanetMark() {
                 <div className="p-4 bg-surface border-b border-border">
                   <h3 className="font-bold text-foreground flex items-center gap-2">
                     <ClipboardCheck className="w-5 h-5 text-primary" />
-                    Imported Planet Mark Assessments ({importedTotal})
+                    {t('planet_mark.imported_assessments_title')} ({importedTotal})
                   </h3>
                   <p className="text-sm text-muted-foreground">
-                    Assessment results imported via the external audit pipeline
+                    {t('planet_mark.imported_assessments_desc')}
                   </p>
                 </div>
                 <div className="p-4">
@@ -1418,17 +1418,17 @@ export default function PlanetMark() {
                   )}
                   {loadingImported && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                      <RefreshCw className="w-4 h-4 animate-spin" /> Loading imported assessments...
+                      <RefreshCw className="w-4 h-4 animate-spin" /> {t('planet_mark.loading_imported')}
                     </div>
                   )}
-                  {!loadingImported && importedRecords.length === 0 && (
+                  {!loadingImported && !importedError && importedRecords.length === 0 && (
                     <div className="text-center py-12">
                       <ClipboardCheck className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                       <h4 className="text-lg font-semibold text-muted-foreground mb-2">
-                        No imported assessments
+                        {t('planet_mark.no_imported_assessments')}
                       </h4>
                       <p className="text-sm text-muted-foreground">
-                        Import Planet Mark assessment reports via the Audits page to see them here.
+                        {t('planet_mark.no_imported_assessments_hint')}
                       </p>
                     </div>
                   )}
