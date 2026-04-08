@@ -471,7 +471,7 @@ jobs:
       - name: Pre-deploy staging canary verification (D18 — progressive delivery gate)
         run: |
           echo "=== Pre-Deploy Staging Canary Gate ==="
-          STAGING_URL="https://${{ secrets.AZURE_STAGING_WEBAPP_NAME }}.azurewebsites.net"
+          STAGING_URL="https://${{ secrets.AZURE_WEBAPP_NAME }}.azurewebsites.net"
           echo "Verifying staging is healthy before promoting to production..."
           STAGING_VERSION=$(curl -sf --max-time 15 "$STAGING_URL/api/v1/meta/version" 2>/dev/null || echo '{}')
           STAGING_SHA=$(echo "$STAGING_VERSION" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
