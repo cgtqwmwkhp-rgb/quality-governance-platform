@@ -1,0 +1,108 @@
+{
+  "drill_id": "DRILL-2026-Q2-02",
+  "scenario_id": "DB-01",
+  "scenario_name": "Database Connection Pool Exhaustion",
+  "drill_type": "structured_simulation",
+  "date_utc": "2026-04-08T09:00:00Z",
+  "facilitator": "Platform Engineering Lead",
+  "participants": [
+    {"role": "On-call Engineer", "action": "Primary responder"},
+    {"role": "Platform Engineering Lead", "action": "Facilitator / secondary"},
+    {"role": "Head of Infrastructure", "action": "Observer"}
+  ],
+  "environment": "Simulation against production-equivalent runbook (not live production)",
+  "scenario_description": "All database connection pool slots are exhausted. New API requests begin failing with 503 Service Unavailable. The /readyz endpoint degrades to { status: degraded }. Users experience API errors across all authenticated endpoints.",
+  "steps_executed": [
+    {
+      "step": 1,
+      "time_offset_minutes": 0,
+      "action": "Azure Monitor alert fires: 'DB pool saturation > 95%'",
+      "actor": "Automated (Azure Monitor)",
+      "result": "On-call engineer paged via PagerDuty"
+    },
+    {
+      "step": 2,
+      "time_offset_minutes": 2,
+      "action": "Engineer checks /readyz endpoint",
+      "actor": "On-call Engineer",
+      "result": "{ status: 'degraded', database: 'unhealthy' } — confirmed degradation",
+      "command": "curl https://app-qgp-prod.azurewebsites.net/readyz"
+    },
+    {
+      "step": 3,
+      "time_offset_minutes": 4,
+      "action": "Check Azure PostgreSQL metrics for connection count",
+      "actor": "On-call Engineer",
+      "result": "Connections at 100/100 (pool limit reached)",
+      "command": "az monitor metrics list --resource /subscriptions/.../Microsoft.DBforPostgreSQL/... --metric active_connections"
+    },
+    {
+      "step": 4,
+      "time_offset_minutes": 6,
+      "action": "Identify runaway query via pg_stat_activity",
+      "actor": "On-call Engineer",
+      "result": "3 long-running queries identified; no automatic timeout enforced",
+      "gap_identified": "statement_timeout not set globally in production PostgreSQL — runbook gap"
+    },
+    {
+      "step": 5,
+      "time_offset_minutes": 8,
+      "action": "Terminate long-running queries via pg_terminate_backend()",
+      "actor": "On-call Engineer",
+      "result": "Connections dropped to 12/100; API requests recovering"
+    },
+    {
+      "step": 6,
+      "time_offset_minutes": 10,
+      "action": "Verify /readyz returns healthy",
+      "actor": "On-call Engineer",
+      "result": "{ status: 'ok', database: 'healthy' }",
+      "command": "curl https://app-qgp-prod.azurewebsites.net/readyz"
+    },
+    {
+      "step": 7,
+      "time_offset_minutes": 12,
+      "action": "Post-incident review scheduled",
+      "actor": "Platform Engineering Lead",
+      "result": "Action items logged (see below)"
+    }
+  ],
+  "metrics": {
+    "time_to_detect_minutes": 2,
+    "time_to_diagnose_minutes": 6,
+    "time_to_resolve_minutes": 10,
+    "total_mttr_minutes": 10,
+    "slo_breach": false,
+    "slo_target_availability": "99.5%",
+    "estimated_error_window_minutes": 8
+  },
+  "gaps_identified": [
+    {
+      "gap_id": "DB-01-GAP-01",
+      "description": "PostgreSQL statement_timeout not set — prevents automatic termination of runaway queries",
+      "severity": "medium",
+      "action": "Set statement_timeout = 30000 (30s) in PostgreSQL database parameters via Azure portal",
+      "owner": "Platform Engineering",
+      "due": "2026-04-22"
+    },
+    {
+      "gap_id": "DB-01-GAP-02",
+      "description": "No Azure Monitor alert defined for connection count > 80% threshold",
+      "severity": "medium",
+      "action": "Create Azure Monitor metric alert: active_connections > 80 of max_connections",
+      "owner": "Infrastructure",
+      "due": "2026-04-22"
+    },
+    {
+      "gap_id": "DB-01-GAP-03",
+      "description": "Runbook for DB-01 does not include pg_stat_activity query — engineer had to recall from memory",
+      "severity": "low",
+      "action": "Update INCIDENT_TABLETOP_DRILL.md runbook with explicit pg_stat_activity commands",
+      "owner": "Platform Engineering",
+      "due": "2026-04-15"
+    }
+  ],
+  "runbook_reference": "docs/runbooks/INCIDENT_TABLETOP_DRILL.md",
+  "overall_result": "PASS",
+  "notes": "DB-01 scenario resolved within SLO window. Three runbook gaps identified and actioned. Next drill: NET-01 (network partition) — Q3 2026."
+}

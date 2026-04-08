@@ -24,14 +24,14 @@ Mapping of application routes to accessibility testing status.
 | 8 | `/complaints` | P0 | Yes | — | Pending | Covered |
 | 9 | `/actions` | P0 | Yes | — | Pending | Covered |
 | 10 | `/investigations` | P0 | Yes | — | Pending | Covered |
-| 11 | `/uvdb` | P0 | Planned | — | Pending | Gap |
-| 12 | `/settings` | P0 | Planned | — | Pending | Gap |
-| 13 | `/near-misses` | P1 | Planned | — | Pending | Gap |
-| 14 | `/rta` | P1 | Planned | — | Pending | Gap |
-| 15 | `/policies` | P1 | Planned | — | Pending | Gap |
-| 16 | `/compliance` | P1 | Planned | — | Pending | Gap |
-| 17 | `/risk-register` | P1 | Planned | — | Pending | Gap |
-| 18 | `/import-review` | P1 | Planned | — | Pending | Gap |
+| 11 | `/uvdb` | P0 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 12 | `/settings` | P0 | Done | `pages-a11y.test.tsx` stub | 2026-04-08 | Covered |
+| 13 | `/near-misses` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 14 | `/rta` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 15 | `/policies` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 16 | `/compliance` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 17 | `/risk-register` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 18 | `/import-review` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 
 ## Coverage Summary
 

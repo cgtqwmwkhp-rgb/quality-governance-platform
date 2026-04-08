@@ -1,0 +1,85 @@
+{
+  "generated_at": "2026-04-08T08:46:48.189868Z",
+  "generated_by": "scripts/governance/audit_pii_fields.py",
+  "scan_path": "src/domain/models",
+  "total_pii_fields": 10,
+  "category_summary": {
+    "identity": 3,
+    "contact": 4,
+    "health": 3
+  },
+  "fields": [
+    {
+      "model": "AuditTemplate",
+      "field": "name",
+      "pii_category": "identity",
+      "file": "src/domain/models/audit_template.py",
+      "line": 113
+    },
+    {
+      "model": "FeatureFlag",
+      "field": "name",
+      "pii_category": "identity",
+      "file": "src/domain/models/feature_flag.py",
+      "line": 16
+    },
+    {
+      "model": "FieldType",
+      "field": "EMAIL",
+      "pii_category": "contact",
+      "file": "src/domain/models/form_config.py",
+      "line": 31
+    },
+    {
+      "model": "FieldType",
+      "field": "PHONE",
+      "pii_category": "contact",
+      "file": "src/domain/models/form_config.py",
+      "line": 32
+    },
+    {
+      "model": "IncidentType",
+      "field": "INJURY",
+      "pii_category": "health",
+      "file": "src/domain/models/incident.py",
+      "line": 23
+    },
+    {
+      "model": "InvestigationTemplate",
+      "field": "name",
+      "pii_category": "identity",
+      "file": "src/domain/models/investigation.py",
+      "line": 72
+    },
+    {
+      "model": "NotificationChannel",
+      "field": "EMAIL",
+      "pii_category": "contact",
+      "file": "src/domain/models/notification.py",
+      "line": 82
+    },
+    {
+      "model": "RTASeverity",
+      "field": "SERIOUS_INJURY",
+      "pii_category": "health",
+      "file": "src/domain/models/rta.py",
+      "line": 25
+    },
+    {
+      "model": "RTASeverity",
+      "field": "MINOR_INJURY",
+      "pii_category": "health",
+      "file": "src/domain/models/rta.py",
+      "line": 26
+    },
+    {
+      "model": "ActionType",
+      "field": "SEND_EMAIL",
+      "pii_category": "contact",
+      "file": "src/domain/models/workflow_rules.py",
+      "line": 61
+    }
+  ],
+  "status": "current",
+  "next_review": "2026-07-07"
+}

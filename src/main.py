@@ -180,6 +180,15 @@ def configure_logging():
     uvicorn_access_logger.addHandler(json_handler)
     uvicorn_access_logger.setLevel(settings.log_level)
 
+    # D19 WCS closure: wire feature_flag.audit structured logger to the same
+    # JSON handler so audit events flow to Azure Monitor / Log Analytics.
+    # These events are emitted by FeatureFlagService._emit_toggle_audit().
+    feature_flag_audit_logger = logging.getLogger("feature_flag.audit")
+    feature_flag_audit_logger.handlers = []
+    feature_flag_audit_logger.addHandler(json_handler)
+    feature_flag_audit_logger.setLevel(logging.INFO)
+    feature_flag_audit_logger.propagate = False  # avoid double-logging to root handler
+
     logger.info("Logging configured successfully", extra={"app_name": settings.app_name})
 
 

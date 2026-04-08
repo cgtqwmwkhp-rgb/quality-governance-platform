@@ -47,8 +47,10 @@ function loadP0Pages(): PageEntry[] {
     ...(registry.admin_routes || []),
   ];
 
+  // D03 WCS closure 2026-04-08: expanded to include P1 routes for a11y coverage.
+  // P0 + P1 routes without dynamic segments (:id etc.) are required for 9.5 target.
   return allPages.filter(
-    (p) => p.criticality === 'P0' && !p.route.includes(':')
+    (p) => (p.criticality === 'P0' || p.criticality === 'P1') && !p.route.includes(':')
   );
 }
 

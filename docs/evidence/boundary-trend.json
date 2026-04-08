@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "recorded_at": "2026-04-08T08:55:13.059518Z",
+      "ci_run_id": "local",
+      "head_sha": "local",
+      "violation_count": 0,
+      "check_passed": true
+    }
+  ],
+  "description": "Boundary enforcement trend \u2014 violation count per CI run",
+  "last_updated": "2026-04-08T08:55:13.059518Z",
+  "total_runs": 1,
+  "consecutive_clean_runs": 1
+}
