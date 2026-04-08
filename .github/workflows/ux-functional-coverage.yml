@@ -125,7 +125,7 @@ jobs:
 
       - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: auth-tokens
           path: .
@@ -183,7 +183,7 @@ jobs:
 
       - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: auth-tokens
           path: .
@@ -237,7 +237,7 @@ jobs:
 
       - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: auth-tokens
           path: .
@@ -291,7 +291,7 @@ jobs:
 
       - name: Download auth tokens
         if: needs.acquire-tokens.outputs.tokens_acquired == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: auth-tokens
           path: .
@@ -338,7 +338,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Download all audit results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: audit-results
 
