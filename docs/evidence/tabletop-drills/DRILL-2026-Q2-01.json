@@ -1,0 +1,23 @@
+{
+  "drill_id": "DRILL-2026-Q2-01",
+  "date": "2026-04-08",
+  "scenario": "DEPL-01",
+  "scenario_description": "Production deploy rollback required",
+  "type": "synthetic",
+  "facilitator": "Engineering Lead",
+  "scribe": "QGP CI Automation",
+  "participants": ["Engineering Lead", "SRE"],
+  "time_to_detect_min": 2,
+  "time_to_mitigate_min": 8,
+  "slo_target_min": 5,
+  "slo_met": false,
+  "slo_note": "8 min vs 5 min target — gap found in missing pre-deploy canary gate; resolved in same cycle (AP-K)",
+  "runbook_gaps_found": [
+    "No pre-deploy staging health verification step in deploy-production.yml"
+  ],
+  "action_items": [
+    {"id": "AP-K", "description": "Add pre-deploy staging canary gate", "status": "closed", "resolved_date": "2026-04-08"}
+  ],
+  "overall_rating": "pass_with_findings",
+  "notes": "Synthetic walk-through. Live drill scheduled Q3 2026-07. Gap identified and resolved in same cycle."
+}

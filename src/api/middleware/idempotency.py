@@ -2,12 +2,15 @@
 Idempotency Middleware for FastAPI
 
 Features:
-- Intercepts POST requests with Idempotency-Key header
+- Intercepts POST/PUT/PATCH requests with Idempotency-Key header
+- Keys are scoped by tenant (from JWT sub claim) + HTTP method + URL path
+  to prevent cross-tenant and cross-endpoint idempotency collisions
 - Caches responses in Redis with 24h TTL
 - Detects payload mismatches and returns 409 conflict
 - Gracefully falls back if Redis is unavailable
 """
 
+import base64 as _base64
 import hashlib
 import json
 import logging
@@ -69,9 +72,36 @@ def _compute_payload_hash(body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
-def _make_key(idempotency_key: str) -> str:
-    """Create Redis key with prefix."""
-    return f"idem:{idempotency_key}"
+def _extract_tenant_fingerprint(request: Request) -> str:
+    """Extract a tenant-scoped fingerprint from the Authorization header.
+
+    Uses the first 16 hex chars of SHA-256(token) so that:
+    - Two requests from the same user session share the same fingerprint
+    - Two requests from different tenants/users never share a fingerprint
+    - The raw token value is never stored in Redis
+    """
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:]
+    else:
+        token = auth_header or "anonymous"
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
+
+
+def _make_key(idempotency_key: str, tenant_fingerprint: str, method: str, path: str) -> str:
+    """Create a Redis key scoped by tenant + endpoint + client-supplied key.
+
+    Scope components:
+      tenant_fingerprint — SHA-256[:16] of the bearer token (prevents cross-tenant collisions)
+      method             — HTTP method (prevents cross-endpoint collisions with same key string)
+      path               — URL path (prevents cross-endpoint collisions)
+      idempotency_key    — client-supplied idempotency key
+
+    The compound key is hashed to keep Redis key lengths bounded.
+    """
+    compound = f"{tenant_fingerprint}:{method.upper()}:{path}:{idempotency_key}"
+    compound_hash = hashlib.sha256(compound.encode()).hexdigest()
+    return f"idem:{compound_hash}"
 
 
 _IDEMPOTENT_METHODS = {"POST", "PUT", "PATCH"}
@@ -114,8 +144,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         # Compute payload hash
         payload_hash = _compute_payload_hash(body_bytes)
 
-        # Check Redis for existing key
-        redis_key = _make_key(idempotency_key)
+        # Build tenant + endpoint scoped Redis key (prevents cross-tenant collisions)
+        tenant_fingerprint = _extract_tenant_fingerprint(request)
+        redis_key = _make_key(idempotency_key, tenant_fingerprint, request.method, request.url.path)
         try:
             cached_data = await redis_client.get(redis_key)
             if cached_data:
@@ -149,9 +180,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
                 # Handle body encoding (may be base64 if original was binary)
                 body_content = cached_response["body"]
                 if cached_response["headers"].get("X-Idempotency-Body-Encoding") == "base64":
-                    import base64
-
-                    body_content = base64.b64decode(body_content)
+                    body_content = _base64.b64decode(body_content)
                     # Remove the encoding header from response
                     response_headers = {
                         k: v for k, v in cached_response["headers"].items() if k != "X-Idempotency-Body-Encoding"
@@ -205,10 +234,7 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             try:
                 body_str = response_body.decode("utf-8")
             except UnicodeDecodeError:
-                # If it's binary, encode as base64 or store as-is
-                import base64
-
-                body_str = base64.b64encode(response_body).decode("utf-8")
+                body_str = _base64.b64encode(response_body).decode("utf-8")
                 response_headers["X-Idempotency-Body-Encoding"] = "base64"
 
             # Store in Redis with 24h TTL (86400 seconds)

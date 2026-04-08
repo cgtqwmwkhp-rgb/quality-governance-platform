@@ -38,7 +38,7 @@ jobs:
 
       - name: Run API resilience test suite
         env:
-          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: |
           echo "=== API Resilience Probes: $CHAOS_TARGET_URL ==="
           python scripts/chaos/run_resilience_probes.py
@@ -65,7 +65,7 @@ jobs:
 
       - name: Verify /healthz and /readyz under simulated load
         env:
-          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: |
           echo "=== Health endpoint resilience under concurrent load ==="
           python - <<'EOF'
@@ -93,7 +93,7 @@ jobs:
 
       - name: Verify /readyz returns structured response
         env:
-          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: |
           python - <<'EOF'
           import httpx, sys, os, json
@@ -127,7 +127,7 @@ jobs:
 
       - name: Verify 4xx/5xx budget against core endpoints
         env:
-          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL }}
+          CHAOS_TARGET_URL: ${{ secrets.STAGING_BASE_URL || format('https://{0}.azurewebsites.net', secrets.AZURE_WEBAPP_NAME) }}
         run: |
           echo "=== Error budget check against public endpoints ==="
           python - <<'EOF'

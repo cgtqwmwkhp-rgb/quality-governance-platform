@@ -468,6 +468,28 @@ jobs:
             --backup-name "pre-deploy-$(date +%Y%m%d-%H%M%S)" \
             2>/dev/null || echo "::warning::Database backup command failed — verify Azure PostgreSQL backup is configured"
 
+      - name: Pre-deploy staging canary verification (D18 — progressive delivery gate)
+        run: |
+          echo "=== Pre-Deploy Staging Canary Gate ==="
+          STAGING_URL="https://${{ secrets.AZURE_STAGING_WEBAPP_NAME }}.azurewebsites.net"
+          echo "Verifying staging is healthy before promoting to production..."
+          STAGING_VERSION=$(curl -sf --max-time 15 "$STAGING_URL/api/v1/meta/version" 2>/dev/null || echo '{}')
+          STAGING_SHA=$(echo "$STAGING_VERSION" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('build_sha','unknown'))" 2>/dev/null || echo "unknown")
+          EXPECTED_SHA="${{ env.RELEASE_SHA }}"
+          echo "  Staging build_sha : $STAGING_SHA"
+          echo "  Expected SHA      : $EXPECTED_SHA"
+          if [ "${STAGING_SHA:0:12}" != "${EXPECTED_SHA:0:12}" ]; then
+            echo "::warning::Staging SHA $STAGING_SHA does not match expected $EXPECTED_SHA — verify staging deploy succeeded before proceeding"
+          else
+            echo "  ✅ Staging SHA matches — safe to promote to production"
+          fi
+          STAGING_HEALTH=$(curl -sf --max-time 15 -o /dev/null -w "%{http_code}" "$STAGING_URL/health" 2>/dev/null || echo "000")
+          if [ "$STAGING_HEALTH" != "200" ]; then
+            echo "::error::Staging health check returned HTTP $STAGING_HEALTH — cannot promote to production"
+            exit 1
+          fi
+          echo "  ✅ Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
+
       - name: Deploy to Azure Web App
         run: |
           echo "🚀 Updating Azure Web App container image..."
