@@ -51,8 +51,15 @@ Production deployment is blocked unless the merge commit SHA matches the signed-
 | Phase 3 | Slack/Teams notification on deployment approval | Planned |
 | Phase 4 | Automated rollback on post-deploy health check failure | Done (`deploy-production.yml` auto-rollback step) |
 
+## CAB Meeting Minutes
+
+| Meeting | Date | Release | Status |
+|---------|------|---------|--------|
+| [CAB-2026-04-08-001](../evidence/cab-minutes/CAB-2026-04-08-wcs-closure.md) | 2026-04-08 | WCS 9.5 closure | Approved |
+
 ## Related Documents
 
 - [`docs/evidence/release_signoff.json`](../evidence/release_signoff.json) — current signoff
+- [`docs/evidence/cab-minutes/`](../evidence/cab-minutes/) — CAB meeting minutes
 - [`.github/workflows/deploy-production.yml`](../../.github/workflows/deploy-production.yml) — prod deploy
 - [`scripts/governance/pr_body_template.md`](../../scripts/governance/pr_body_template.md) — PR template

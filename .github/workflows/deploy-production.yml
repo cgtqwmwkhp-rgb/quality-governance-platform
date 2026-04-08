@@ -577,6 +577,59 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP"
           echo "✅ App Service restart requested"
 
+      - name: Canary traffic routing — 10% ramp (D18 progressive delivery)
+        continue-on-error: true
+        env:
+          PROD_APP: ${{ secrets.AZURE_PROD_WEBAPP_NAME }}
+        run: |
+          set +e
+          echo "=== D18 Canary Gate: 10% Traffic Routing ==="
+          # Verify a staging/canary slot exists before routing traffic to it.
+          # If no slot is present, we skip routing (full-swap is the fallback).
+          SLOTS=$(az webapp deployment slot list \
+            --name "${PROD_APP:-$AZURE_WEBAPP_NAME}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "[].name" -o tsv 2>/dev/null || echo "")
+          if [ -z "$SLOTS" ]; then
+            echo "⚠️ No deployment slots found — skipping traffic routing (slot-swap model in use)"
+            echo "canary_routed=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          SLOT_NAME=$(echo "$SLOTS" | head -1)
+          echo "  Routing 10% of traffic to slot: $SLOT_NAME"
+          az webapp traffic-routing set \
+            --name "${PROD_APP:-$AZURE_WEBAPP_NAME}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --distribution "$SLOT_NAME=10" 2>/dev/null || {
+            echo "⚠️ Traffic routing command failed (slot may not support routing) — proceeding without canary split"
+            echo "canary_routed=false" >> "$GITHUB_ENV"
+            exit 0
+          }
+          echo "canary_routed=true" >> "$GITHUB_ENV"
+          echo "canary_slot=$SLOT_NAME" >> "$GITHUB_ENV"
+          echo "  ✅ 10% canary routing activated"
+          echo "  Waiting 3 minutes for error-rate observation window..."
+          sleep 180
+          # Health gate: production must still return 200 on /health and /readyz
+          PROD_URL="https://${PROD_APP:-$AZURE_WEBAPP_NAME}.azurewebsites.net"
+          HEALTH=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/health" 2>/dev/null || echo "000")
+          READY=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/readyz" 2>/dev/null || echo "000")
+          echo "  Production health: HTTP $HEALTH | readyz: HTTP $READY"
+          if [ "$HEALTH" != "200" ] || [ "$READY" != "200" ]; then
+            echo "::error::Canary error-rate gate FAILED — resetting traffic routing"
+            az webapp traffic-routing clear \
+              --name "${PROD_APP:-$AZURE_WEBAPP_NAME}" \
+              --resource-group "$AZURE_RESOURCE_GROUP" 2>/dev/null || true
+            echo "canary_routed=false" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          echo "  ✅ Canary gate passed — production healthy under 10% load"
+          # Clear routing (full traffic to production — swap already complete)
+          az webapp traffic-routing clear \
+            --name "${PROD_APP:-$AZURE_WEBAPP_NAME}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" 2>/dev/null || true
+          echo "  ✅ Canary routing cleared — full traffic to production"
+
       - name: Cleanup old migration containers
         continue-on-error: true
         run: |

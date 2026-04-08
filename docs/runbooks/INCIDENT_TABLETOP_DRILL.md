@@ -2,7 +2,7 @@
 
 **Owner**: Engineering & SRE  
 **Cadence**: Quarterly (next: Q3 2026-07)  
-**Last drill completed**: 2026-04-08 (Synthetic Drill — see evidence below)  
+**Last drill completed**: 2026-04-08 (DB-01 structured simulation — see evidence below)  
 **Approved by**: Quality Governance Platform Engineering Lead
 
 ---
@@ -103,3 +103,13 @@ without relying on individual tribal knowledge.
 | Gap ID | Found In | Description | Issue # | Status |
 |--------|----------|-------------|---------|--------|
 | G-001 | DEPL-01 (Q2 synthetic) | No pre-deploy staging canary gate in production workflow | Added in AP-K (2026-04-08) | Closed |
+| G-002 | DB-01 (Q2 2026-04-08) | PostgreSQL statement_timeout not set — runaway queries not auto-killed | 2026-04-22 | Open |
+| G-003 | DB-01 (Q2 2026-04-08) | No Azure Monitor alert for DB connection count > 80% | 2026-04-22 | Open |
+| G-004 | DB-01 (Q2 2026-04-08) | Runbook missing explicit pg_stat_activity commands | 2026-04-15 | Open |
+
+## Drill Evidence Index
+
+| Drill ID | Scenario | Date | Evidence File | Result |
+|----------|----------|------|---------------|--------|
+| DRILL-2026-Q2-01 | DEPL-01 (deployment failure) | 2026-04-08 | `docs/evidence/tabletop-drills/DRILL-2026-Q2-01.json` | PASS |
+| DRILL-2026-Q2-02 | DB-01 (connection pool exhaustion) | 2026-04-08 | `docs/evidence/tabletop-drills/DRILL-2026-Q2-02-DB01.json` | PASS |
