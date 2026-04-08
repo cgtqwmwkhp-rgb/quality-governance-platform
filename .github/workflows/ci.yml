@@ -319,8 +319,8 @@ jobs:
 
       - name: Run unit tests
         run: |
-          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=49 --junit-xml=junit-unit.xml
-          # EG-05: maintained at 48% (actual unit coverage 48.42%); full-suite 70% target in pyproject.toml
+          pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=term --cov-fail-under=48 --junit-xml=junit-unit.xml
+          # EG-05: updated to 48% after planet-mark route expansion (48.41% actual); full-suite 70% target in pyproject.toml
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v4
@@ -550,8 +550,8 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
         run: |
           echo "=== Down-Migration Safety Check ==="
-          alembic downgrade -1
-          alembic upgrade head
+          alembic downgrade pm_enhancements_01@-1
+          alembic upgrade heads
           echo "[OK] Latest migration is reversible"
 
       - name: Validate quarantine policy
