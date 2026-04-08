@@ -1,7 +1,7 @@
 """Planet Mark enhancements: evidence storage, certifying_body, action notes.
 
 Revision ID: pm_enhancements_01
-Revises: iso27001_table_fix_01
+Revises: iso27001_controls_cols_01
 Create Date: 2026-04-08
 
 Adds:
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "pm_enhancements_01"
-down_revision = "iso27001_table_fix_01"
+down_revision = "iso27001_controls_cols_01"
 branch_labels = None
 depends_on = None
 
