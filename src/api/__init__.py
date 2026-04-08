@@ -122,7 +122,7 @@ router.include_router(
 # ISO 27001 Information Security Management System
 router.include_router(iso27001.router, prefix="/iso27001", tags=["ISO 27001 ISMS"])
 # IMS (Integrated Management System) Dashboard
-router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])
+router.include_router(ims_dashboard.router, tags=["IMS Dashboard"])  # prefix="/ims" declared on router
 # UVDB Achilles Verify B2 Audit Protocol
 router.include_router(uvdb.router, prefix="/uvdb", tags=["UVDB Achilles Verify"])
 # Planet Mark Carbon Management
@@ -138,7 +138,7 @@ router.include_router(audit_trail.router, prefix="/audit-trail", tags=["Audit Tr
 # Admin Form Builder & Configuration
 router.include_router(form_config.router, prefix="/admin/config", tags=["Admin Configuration"])
 # Dead-letter queue admin (superuser only)
-router.include_router(dlq_admin.router, tags=["DLQ Admin"])
+router.include_router(dlq_admin.router, tags=["DLQ Admin"])  # prefix="/admin/dlq" declared on router
 # Near Misses
 router.include_router(near_miss.router, prefix="/near-misses", tags=["Near Misses"])
 # Evidence Assets (Shared Attachments Module)
@@ -154,15 +154,19 @@ router.include_router(
     tags=["External Audit Records"],
 )
 # Workflow Engine (SLA, Escalation, Automation)
-router.include_router(workflow.router, tags=["Workflow Engine"])
+router.include_router(workflow.router, tags=["Workflow Engine"])  # prefix="/workflow" declared on router
 # Key Risk Indicators & SIF Classification
-router.include_router(kri.router, tags=["Key Risk Indicators"])
+router.include_router(kri.router, tags=["Key Risk Indicators"])  # prefix="/kri" declared on router
 # Policy Acknowledgments & Document Read Tracking
-router.include_router(policy_acknowledgment.router, tags=["Policy Acknowledgments"])
+router.include_router(
+    policy_acknowledgment.router, tags=["Policy Acknowledgments"]
+)  # prefix="/policy-acknowledgments" declared on router
 # Executive Dashboard
-router.include_router(executive_dashboard.router, tags=["Executive Dashboard"])
+router.include_router(
+    executive_dashboard.router, tags=["Executive Dashboard"]
+)  # prefix="/executive-dashboard" declared on router
 # RCA Tools (5-Whys, Fishbone, CAPA)
-router.include_router(rca_tools.router, tags=["RCA Tools"])
+router.include_router(rca_tools.router, tags=["RCA Tools"])  # prefix="/rca-tools" declared on router
 # CAPA (Corrective and Preventive Actions)
 router.include_router(capa.router, prefix="/capa", tags=["CAPA"])
 # Asset Registry (Workforce Development Platform)
@@ -176,12 +180,14 @@ router.include_router(wdp_analytics.router, prefix="/wdp-analytics", tags=["Work
 # Governance Framework (Workforce Development Platform)
 router.include_router(governance.router, prefix="/governance", tags=["Governance Framework"])
 # Auditor Competence Management
-router.include_router(auditor_competence.router, tags=["Auditor Competence"])
+router.include_router(
+    auditor_competence.router, tags=["Auditor Competence"]
+)  # prefix="/auditor-competence" declared on router
 # CI Testing Endpoints (Staging Only) — gated by env to avoid exposure in production
 if not settings.is_production:
     router.include_router(testing.router, prefix="/testing", tags=["Testing (Staging Only)"])
 # Telemetry (EXP-001 and future experiments)
-router.include_router(telemetry.router, tags=["Telemetry"])
+router.include_router(telemetry.router, tags=["Telemetry"])  # prefix="/telemetry" declared on router
 # Feature Flags (DB-backed, toggleable without redeploy)
 router.include_router(feature_flags.router, prefix="/feature-flags", tags=["Feature Flags"])
 # SLO/SLI Metrics

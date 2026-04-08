@@ -1,12 +1,16 @@
-"""Feature flag evaluation service with caching."""
+"""Feature flag evaluation service with caching and toggle audit logging (D19)."""
 
 import hashlib
-from typing import Dict, List, Optional
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models.feature_flag import FeatureFlag
+
+_audit_logger = logging.getLogger("feature_flag.audit")
 
 _flag_cache: Dict[str, FeatureFlag] = {}
 
@@ -59,6 +63,32 @@ class FeatureFlagService:
         result = await self.db.execute(select(FeatureFlag).order_by(FeatureFlag.key))
         return list(result.scalars().all())
 
+    def _emit_toggle_audit(
+        self,
+        action: str,
+        key: str,
+        before: Optional[Dict[str, Any]] = None,
+        after: Optional[Dict[str, Any]] = None,
+        actor: str = "system",
+    ) -> None:
+        """Emit a structured audit log entry for every flag create/update/delete.
+
+        Log entries are machine-parseable JSON via Python's structured logging.
+        In production these are shipped to Azure Monitor via the OTel log exporter.
+        """
+        _audit_logger.info(
+            "feature_flag_toggle",
+            extra={
+                "event": "feature_flag_toggle",
+                "action": action,
+                "flag_key": key,
+                "before": before,
+                "after": after,
+                "actor": actor,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
     async def create_flag(
         self,
         key: str,
@@ -79,25 +109,36 @@ class FeatureFlagService:
         self.db.add(flag)
         await self.db.flush()
         _flag_cache[key] = flag
+        self._emit_toggle_audit(
+            action="create",
+            key=key,
+            after={"enabled": enabled, "rollout_percentage": rollout_percentage, "name": name},
+            actor=created_by or "system",
+        )
         return flag
 
-    async def update_flag(self, key: str, **kwargs) -> Optional[FeatureFlag]:
+    async def update_flag(self, key: str, actor: str = "system", **kwargs) -> Optional[FeatureFlag]:
         flag = await self._get_flag(key)
         if not flag:
             return None
+        before = {k: getattr(flag, k) for k in kwargs if hasattr(flag, k)}
         for k, v in kwargs.items():
             if hasattr(flag, k):
                 setattr(flag, k, v)
         await self.db.flush()
         _flag_cache[key] = flag
+        after = {k: getattr(flag, k) for k in kwargs if hasattr(flag, k)}
+        self._emit_toggle_audit(action="update", key=key, before=before, after=after, actor=actor)
         return flag
 
-    async def delete_flag(self, key: str) -> bool:
+    async def delete_flag(self, key: str, actor: str = "system") -> bool:
         flag = await self._get_flag(key)
         if not flag:
             return False
+        before = {"enabled": flag.enabled, "rollout_percentage": flag.rollout_percentage, "name": flag.name}
         await self.db.delete(flag)
         _flag_cache.pop(key, None)
+        self._emit_toggle_audit(action="delete", key=key, before=before, actor=actor)
         return True
 
     @staticmethod

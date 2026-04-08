@@ -158,14 +158,48 @@ async def diagnostics():
     except Exception as _exc:
         registry_status = {"status": "error", "detail": str(_exc)}
 
+    # Migration reversibility evidence (D12/D32 — AP-C)
+    migration_reversibility: dict[str, Any] = {}
+    try:
+        import json as _json2
+        from pathlib import Path as _Path2
+
+        rev_path = _Path2("docs/evidence/migration-reversibility-evidence.json")
+        if rev_path.exists():
+            rev_data = _json2.loads(rev_path.read_text())
+            migration_reversibility = {
+                "last_checked": rev_data.get("generated_at", "unknown"),
+                "total_migrations": rev_data.get("total_migrations", "?"),
+                "reversibility_check": rev_data.get("reversibility_check", "unknown"),
+                "ci_run_id": rev_data.get("ci_run_id", "unknown"),
+                "head_sha": rev_data.get("head_sha", "unknown"),
+            }
+        else:
+            migration_reversibility = {"status": "evidence_pending", "note": "First CI run will generate this"}
+    except Exception as _exc2:
+        migration_reversibility = {"status": "error", "detail": str(_exc2)}
+
+    # Build SHA (D32 — deployment identity)
+    build_sha = os.getenv("BUILD_SHA", os.getenv("GITHUB_SHA", "dev"))[:12]
+
+    # Idempotency middleware key-scoping info (D24 — operational transparency)
+    idempotency_info = {
+        "scoping": "tenant_fingerprint + method + path + client_key",
+        "ttl_seconds": 86400,
+        "redis_configured": bool(os.getenv("REDIS_URL")),
+    }
+
     return {
         "app_version": os.getenv("APP_VERSION", "dev"),
+        "build_sha": build_sha,
         "python_version": platform.python_version(),
         "migration_head": migration_head,
+        "migration_reversibility": migration_reversibility,
         "telemetry_enabled": os.getenv("TELEMETRY_ENABLED", "true"),
         "feature_flag_count": feature_flag_count,
         "uptime_seconds": round(time.monotonic() - _start_time, 1),
         "registry_freshness": registry_status,
+        "idempotency": idempotency_info,
         "runbooks": {
             "deployment": "docs/DEPLOYMENT_RUNBOOK.md",
             "disaster_recovery": "docs/ops/DISASTER_RECOVERY_RUNBOOK.md",

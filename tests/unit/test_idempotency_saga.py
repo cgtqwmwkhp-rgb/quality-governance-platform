@@ -20,7 +20,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.api.middleware.idempotency import _IDEMPOTENT_METHODS, IdempotencyMiddleware, _compute_payload_hash, _make_key
+from src.api.middleware.idempotency import (
+    _IDEMPOTENT_METHODS,
+    IdempotencyMiddleware,
+    _compute_payload_hash,
+    _extract_tenant_fingerprint,
+    _make_key,
+)
 from src.domain.error_codes import ErrorCode
 from src.domain.exceptions import IdempotencyConflictError
 
@@ -49,14 +55,16 @@ class TestIdempotencyReplayScenario:
 
         assert _compute_payload_hash(payload_a) != _compute_payload_hash(payload_b)
 
-    def test_redis_key_format_includes_idempotency_key(self) -> None:
-        idempotency_key = "my-op-uuid-1234"
-        redis_key = _make_key(idempotency_key)
-        assert idempotency_key in redis_key
-
     def test_redis_key_format_has_idem_prefix(self) -> None:
-        redis_key = _make_key("any-key")
+        redis_key = _make_key("any-key", "abcd1234abcd1234", "POST", "/api/v1/incidents/")
         assert redis_key.startswith("idem:")
+
+    def test_redis_key_is_deterministic(self) -> None:
+        """Same inputs always produce the same Redis key (no randomness)."""
+        fp = "abcd1234abcd1234"
+        k1 = _make_key("my-op-uuid-1234", fp, "POST", "/api/v1/incidents/")
+        k2 = _make_key("my-op-uuid-1234", fp, "POST", "/api/v1/incidents/")
+        assert k1 == k2
 
 
 # ---------------------------------------------------------------------------
@@ -188,33 +196,96 @@ class TestMiddlewareDispatchWithCachedResponse:
 
 
 class TestCrossTenantIdempotencyIsolation:
-    """Idempotency keys must not leak across tenant boundaries."""
+    """Idempotency keys must not leak across tenant boundaries.
 
-    def test_same_key_different_tenant_produces_different_redis_key(self) -> None:
-        """
-        If tenants are included in the Redis key namespace, the same idempotency
-        key from two different tenants must not collide.
+    Since AP-A (2026-04-08), _make_key() is scoped by tenant fingerprint +
+    HTTP method + URL path + client-supplied key.  The same client-supplied
+    key string from two different bearer tokens MUST produce different Redis
+    keys so that a cross-tenant replay attack is impossible.
+    """
 
-        This test verifies the invariant at the design level:
-        the middleware _make_key function only namespaces by the Idempotency-Key
-        value itself. Tenant isolation must be enforced by including tenant context
-        in the key or by scoping the cache per-tenant.
-        """
-        # Both tenants send the same idempotency key string
-        key_from_tenant_a = _make_key("shared-key-001")
-        key_from_tenant_b = _make_key("shared-key-001")
+    def test_same_key_different_token_produces_different_redis_key(self) -> None:
+        """Tenant A and Tenant B with the same idempotency key must use different Redis slots."""
+        fingerprint_a = "aaaabbbbccccdddd"  # SHA-256[:16] of Tenant A token
+        fingerprint_b = "1111222233334444"  # SHA-256[:16] of Tenant B token
 
-        # These will be EQUAL — this documents the known gap:
-        # without tenant_id in the key, same string → same Redis slot.
-        # The fix is: _make_key(f"{tenant_id}:{idempotency_key}")
-        assert key_from_tenant_a == key_from_tenant_b, (
-            "If this assertion fails, tenant isolation has been added to the key — "
-            "update this test to verify isolation instead."
+        key_tenant_a = _make_key("shared-key-001", fingerprint_a, "POST", "/api/v1/incidents/")
+        key_tenant_b = _make_key("shared-key-001", fingerprint_b, "POST", "/api/v1/incidents/")
+
+        assert key_tenant_a != key_tenant_b, (
+            "Cross-tenant isolation BROKEN: same idempotency key from two different "
+            "bearer tokens must NOT map to the same Redis key."
         )
-        # Gap documented: AP-24 (future) — prefix key with tenant_id
+
+    def test_same_key_different_method_produces_different_redis_key(self) -> None:
+        """POST and PUT with the same idempotency key must not share a Redis slot."""
+        fp = "aaaabbbbccccdddd"
+        key_post = _make_key("shared-key-001", fp, "POST", "/api/v1/incidents/")
+        key_put = _make_key("shared-key-001", fp, "PUT", "/api/v1/incidents/1")
+
+        assert key_post != key_put, (
+            "Cross-endpoint isolation BROKEN: same idempotency key on different methods "
+            "must NOT map to the same Redis key."
+        )
+
+    def test_same_key_different_path_produces_different_redis_key(self) -> None:
+        """Same idempotency key on different paths must not share a Redis slot."""
+        fp = "aaaabbbbccccdddd"
+        key_incidents = _make_key("shared-key-001", fp, "POST", "/api/v1/incidents/")
+        key_audits = _make_key("shared-key-001", fp, "POST", "/api/v1/audits/")
+
+        assert key_incidents != key_audits, (
+            "Cross-endpoint isolation BROKEN: same idempotency key on different paths "
+            "must NOT map to the same Redis key."
+        )
+
+    def test_same_tenant_same_key_same_endpoint_produces_same_redis_key(self) -> None:
+        """A genuine duplicate from the same tenant+endpoint must map to the same slot."""
+        fp = "aaaabbbbccccdddd"
+        key_1 = _make_key("shared-key-001", fp, "POST", "/api/v1/incidents/")
+        key_2 = _make_key("shared-key-001", fp, "POST", "/api/v1/incidents/")
+
+        assert key_1 == key_2, "Genuine duplicate request from same tenant must reuse cached slot."
 
     def test_unique_keys_never_collide(self) -> None:
-        """Different idempotency keys must always produce different Redis keys."""
-        key_1 = _make_key("operation-uuid-aaa-111")
-        key_2 = _make_key("operation-uuid-bbb-222")
+        """Different idempotency keys from the same tenant must always produce different Redis keys."""
+        fp = "aaaabbbbccccdddd"
+        key_1 = _make_key("operation-uuid-aaa-111", fp, "POST", "/api/v1/incidents/")
+        key_2 = _make_key("operation-uuid-bbb-222", fp, "POST", "/api/v1/incidents/")
         assert key_1 != key_2
+
+    def test_extract_tenant_fingerprint_different_tokens_differ(self) -> None:
+        """Two different bearer tokens must produce different fingerprints."""
+        import hashlib
+        from unittest.mock import MagicMock
+
+        req_a = MagicMock()
+        req_a.headers = {"Authorization": "Bearer token-for-tenant-a"}
+        req_b = MagicMock()
+        req_b.headers = {"Authorization": "Bearer token-for-tenant-b"}
+
+        fp_a = _extract_tenant_fingerprint(req_a)
+        fp_b = _extract_tenant_fingerprint(req_b)
+
+        assert fp_a != fp_b
+        assert len(fp_a) == 16  # Always 16 hex chars
+
+    def test_extract_tenant_fingerprint_same_token_stable(self) -> None:
+        """Same bearer token always produces the same fingerprint (stable across calls)."""
+        from unittest.mock import MagicMock
+
+        req = MagicMock()
+        req.headers = {"Authorization": "Bearer stable-token-value"}
+
+        assert _extract_tenant_fingerprint(req) == _extract_tenant_fingerprint(req)
+
+    def test_extract_tenant_fingerprint_no_auth_falls_back(self) -> None:
+        """Missing Authorization header does not raise; returns anonymous fingerprint."""
+        from unittest.mock import MagicMock
+
+        req = MagicMock()
+        req.headers = {}
+
+        fp = _extract_tenant_fingerprint(req)
+        assert isinstance(fp, str)
+        assert len(fp) == 16

@@ -39,14 +39,21 @@ class TestComputePayloadHash:
 
 
 class TestMakeKey:
+    _FP = "abcd1234abcd1234"
+    _METHOD = "POST"
+    _PATH = "/api/v1/incidents/"
+
     def test_prefix(self):
-        assert _make_key("abc").startswith("idem:")
+        assert _make_key("abc", self._FP, self._METHOD, self._PATH).startswith("idem:")
 
-    def test_includes_key(self):
-        assert _make_key("my-key") == "idem:my-key"
+    def test_deterministic(self):
+        k1 = _make_key("my-key", self._FP, self._METHOD, self._PATH)
+        k2 = _make_key("my-key", self._FP, self._METHOD, self._PATH)
+        assert k1 == k2
 
-    def test_empty_key(self):
-        assert _make_key("") == "idem:"
+    def test_empty_key_does_not_raise(self):
+        key = _make_key("", self._FP, self._METHOD, self._PATH)
+        assert key.startswith("idem:")
 
 
 class TestIdempotentMethods:
