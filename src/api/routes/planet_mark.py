@@ -13,12 +13,13 @@ Features:
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional, cast
+from typing import Annotated, Any, Optional, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from pydantic.functional_validators import AfterValidator
 from sqlalchemy import desc, func, select
-from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession
@@ -40,6 +41,21 @@ logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("planet_mark.audit")
 
 router = APIRouter()
+
+
+def _to_naive_utc(v: datetime) -> datetime:
+    """Strip timezone from a datetime, converting to UTC first if tz-aware.
+
+    asyncpg rejects timezone-aware datetimes for TIMESTAMP WITHOUT TIME ZONE
+    columns. Callers that supply an ISO-8601 string with a 'Z' suffix or
+    explicit offset get transparently normalised here.
+    """
+    if v.tzinfo is not None:
+        return v.astimezone(timezone.utc).replace(tzinfo=None)
+    return v
+
+
+NaiveUtcDatetime = Annotated[datetime, AfterValidator(_to_naive_utc)]
 
 
 def _audit(event: str, tenant_id: Any, user_id: Any, **extra: Any) -> None:
@@ -183,8 +199,8 @@ DATA_QUALITY_CRITERIA = {
 class ReportingYearCreate(BaseModel):
     year_label: str = Field(..., min_length=4, max_length=20)
     year_number: int = Field(..., ge=1)
-    period_start: datetime
-    period_end: datetime
+    period_start: NaiveUtcDatetime
+    period_end: NaiveUtcDatetime
     average_fte: float = Field(..., gt=0)
     organization_name: str = Field(default="Plantexpand Limited")
     sites_included: Optional[list] = None
@@ -210,7 +226,7 @@ class ImprovementActionCreate(BaseModel):
     measurable: str
     achievable_owner: str
     relevant: Optional[str] = None
-    time_bound: datetime
+    time_bound: NaiveUtcDatetime
     scheduled_month: Optional[str] = None
     target_scope: Optional[str] = None
     target_source: Optional[str] = None
@@ -220,7 +236,7 @@ class ImprovementActionCreate(BaseModel):
 class ActionStatusUpdate(BaseModel):
     status: str
     progress_percent: int = Field(ge=0, le=100)
-    actual_completion_date: Optional[datetime] = None
+    actual_completion_date: Optional[NaiveUtcDatetime] = None
     actual_reduction_achieved: Optional[float] = None
     lessons_learned: Optional[str] = None
 
@@ -241,7 +257,7 @@ class UtilityReadingCreate(BaseModel):
     meter_reference: str
     utility_type: str
     site_name: str
-    reading_date: datetime
+    reading_date: NaiveUtcDatetime
     reading_value: float
     reading_unit: str
     reading_type: str = "actual_read"
@@ -323,27 +339,32 @@ async def create_reporting_year(
     current_user: CurrentUser,
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
-    year = CarbonReportingYear(
-        tenant_id=current_user.tenant_id,
-        **year_data.model_dump(),
-    )
-    db.add(year)
-    await db.commit()
-    await db.refresh(year)
-
-    # Initialize Scope 3 categories
-    for cat in SCOPE3_CATEGORIES:
-        scope3 = Scope3CategoryData(
+    try:
+        year = CarbonReportingYear(
             tenant_id=current_user.tenant_id,
-            reporting_year_id=year.id,
-            category_number=cat["number"],
-            category_name=cat["name"],
-            category_description=cat["description"],
-            is_relevant=True,
-            is_measured=False,
+            **year_data.model_dump(),
         )
-        db.add(scope3)
-    await db.commit()
+        db.add(year)
+        await db.commit()
+        await db.refresh(year)
+
+        # Initialize Scope 3 categories
+        for cat in SCOPE3_CATEGORIES:
+            scope3 = Scope3CategoryData(
+                tenant_id=current_user.tenant_id,
+                reporting_year_id=year.id,
+                category_number=cat["number"],
+                category_name=cat["name"],
+                category_description=cat["description"],
+                is_relevant=True,
+                is_measured=False,
+            )
+            db.add(scope3)
+        await db.commit()
+    except (DataError, OperationalError, ProgrammingError) as exc:
+        await db.rollback()
+        logger.error("create_reporting_year DB error: %s", str(exc)[:400])
+        raise HTTPException(status_code=422, detail=f"Database error creating reporting year: {str(exc)[:200]}")
 
     _audit("create_reporting_year", current_user.tenant_id, current_user.id, year_id=year.id, label=year.year_label)
     return {
@@ -1306,14 +1327,14 @@ async def patch_certification_status(
         year.certificate_number = patch.certificate_number
     if patch.certification_date is not None:
         try:
-            year.certification_date = datetime.fromisoformat(patch.certification_date)
+            year.certification_date = _to_naive_utc(datetime.fromisoformat(patch.certification_date))
         except ValueError:
             raise HTTPException(
                 status_code=422, detail=f"certification_date '{patch.certification_date}' is not a valid ISO date"
             )
     if patch.expiry_date is not None:
         try:
-            year.expiry_date = datetime.fromisoformat(patch.expiry_date)
+            year.expiry_date = _to_naive_utc(datetime.fromisoformat(patch.expiry_date))
         except ValueError:
             raise HTTPException(status_code=422, detail=f"expiry_date '{patch.expiry_date}' is not a valid ISO date")
     if patch.certifying_body is not None:
