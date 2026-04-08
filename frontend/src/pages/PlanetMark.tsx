@@ -419,6 +419,14 @@ export default function PlanetMark() {
     void loadYearDetails(currentYear.id)
   }, [currentYear, loadYearDetails])
 
+  // Reset per-year data when year changes to avoid stale state on slow networks
+  useEffect(() => {
+    if (!currentYear) return
+    setActionsSummary(null)
+    setEvidenceList([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentYear?.id])
+
   const [importedError, setImportedError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -622,11 +630,23 @@ export default function PlanetMark() {
           </div>
         </div>
         <div className="flex gap-3 mt-4 md:mt-0">
-          <button className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors">
+          <button
+            onClick={() => {
+              if (currentYear) {
+                window.open(`/api/v1/planet-mark/years/${currentYear.id}/export`, '_blank')
+              }
+            }}
+            disabled={!currentYear}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border hover:bg-surface rounded-lg transition-colors disabled:opacity-40"
+            aria-label="Export carbon report"
+          >
             <Download className="w-4 h-4" />
             {t('planet_mark.export_report')}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={() => setActiveTab('emissions')}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             {t('planet_mark.add_emission')}
           </button>
@@ -682,7 +702,7 @@ export default function PlanetMark() {
                 <div
                   className={`text-3xl font-bold ${yoyChange && yoyChange < 0 ? 'text-primary-foreground' : 'text-warning'}`}
                 >
-                  {yoyChange ? `${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%` : '—'}
+                  {yoyChange !== null && yoyChange !== undefined ? `${yoyChange > 0 ? '+' : ''}${yoyChange.toFixed(1)}%` : '—'}
                 </div>
                 <div className="text-primary-foreground/80 text-sm">
                   {t('planet_mark.vs_baseline')}
@@ -702,7 +722,11 @@ export default function PlanetMark() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto">
+      <div
+        role="tablist"
+        aria-label="Planet Mark sections"
+        className="flex gap-2 mb-6 border-b border-border pb-2 overflow-x-auto"
+      >
         {[
           { id: 'dashboard', label: t('planet_mark.dashboard'), icon: BarChart3 },
           { id: 'emissions', label: t('planet_mark.emissions'), icon: Factory },
@@ -711,14 +735,27 @@ export default function PlanetMark() {
           { id: 'quality', label: t('planet_mark.data_quality'), icon: Gauge },
           { id: 'certification', label: t('planet_mark.certification'), icon: Award },
           { id: 'imported', label: 'Imported Assessments', icon: ClipboardCheck },
-        ].map((tab) => {
+        ].map((tab, idx, arr) => {
           const Icon = tab.icon
+          const isActive = activeTab === tab.id
           return (
             <button
               key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight') {
+                  const next = arr[(idx + 1) % arr.length]
+                  setActiveTab(next.id as typeof activeTab)
+                } else if (e.key === 'ArrowLeft') {
+                  const prev = arr[(idx - 1 + arr.length) % arr.length]
+                  setActiveTab(prev.id as typeof activeTab)
+                }
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                activeTab === tab.id
+                isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-surface hover:text-foreground'
               }`}
@@ -770,7 +807,10 @@ export default function PlanetMark() {
           <Leaf className="w-12 h-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold text-foreground mb-2">{t('planet_mark.no_data')}</h3>
           <p className="text-muted-foreground mb-4">{t('planet_mark.no_data_description')}</p>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors">
+          <button
+            onClick={() => loadData()}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary-hover rounded-lg transition-colors"
+          >
             <Plus className="w-4 h-4" />
             {t('planet_mark.add_reporting_year')}
           </button>
@@ -1202,7 +1242,10 @@ export default function PlanetMark() {
                             setSelectedActionIds(new Set())
                             setBulkStatus('')
                             await loadYearDetails(currentYear.id)
-                          } catch { /* show nothing */ }
+                          } catch (err: unknown) {
+                            const msg = err instanceof Error ? err.message : 'Bulk update failed'
+                            alert(msg)
+                          }
                         }}
                         className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
                       >
@@ -1217,7 +1260,10 @@ export default function PlanetMark() {
                     <FileUp className="w-4 h-4" />
                     Import Plan
                   </button>
-                  <button className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                  >
                     <Plus className="w-4 h-4" /> {t('planet_mark.add_action')}
                   </button>
                 </div>
@@ -1257,10 +1303,9 @@ export default function PlanetMark() {
                 <ActionImportModal
                   yearId={currentYear.id}
                   onClose={() => setShowImportModal(false)}
-                  onImported={async (count) => {
+                  onImported={async (_count) => {
                     setShowImportModal(false)
                     await loadYearDetails(currentYear.id)
-                    console.info(`${count} actions imported`)
                   }}
                 />
               )}

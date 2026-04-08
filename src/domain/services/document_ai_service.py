@@ -162,6 +162,104 @@ Respond with JSON matching this schema:
 
         return self._fallback_analysis(content, file_name)
 
+    async def extract_structured_actions(self, content: str, file_name: str) -> tuple[list[dict], str, list[str]]:
+        """Extract Planet Mark improvement actions from document text using Claude AI.
+
+        Returns:
+            (rows, extraction_method, warnings) where rows is a list of action dicts.
+        """
+        rows: list[dict] = []
+        warnings: list[str] = []
+        extraction_method = "unknown"
+
+        if not self.api_key:
+            warnings.append("No AI API key configured — using rule-based fallback")
+            return self._rule_based_action_extraction(content, warnings)
+
+        prompt = f"""You are a sustainability data extractor for Planet Mark certification.
+Extract every improvement action from this action plan document.
+
+Return a JSON array. Each element must have exactly these keys:
+- action_title (string, max 200 chars)
+- description (string, what exactly will be done)
+- measurable (string, how success is measured — e.g. "Reduce energy by 10%")
+- owner (string, person or team responsible)
+- deadline (string ISO date YYYY-MM-DD or empty string)
+- category (one of: energy, transport, waste, water, supply_chain, operational, other)
+- expected_reduction_pct (number 0-100, estimated carbon reduction %)
+- confidence (number 0.0-1.0, your confidence in the extraction)
+- needs_review (boolean, true if data is ambiguous or incomplete)
+
+Document text:
+---
+{content[:8000]}
+---
+
+Return ONLY the JSON array, no markdown fences, no preamble."""
+
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.post(
+                    f"{self.base_url}/messages",
+                    headers={
+                        "x-api-key": self.api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": self.model,
+                        "max_tokens": 4096,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+                resp.raise_for_status()
+                ai_text = resp.json()["content"][0]["text"]
+                clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", ai_text.strip(), flags=re.MULTILINE).strip()
+                raw_rows = json.loads(clean)
+                # Validate and clamp fields
+                for row in raw_rows:
+                    row["confidence"] = max(0.0, min(1.0, float(row.get("confidence", 1.0))))
+                    row.setdefault("action_title", "Imported Action")
+                    row.setdefault("description", "")
+                    row.setdefault("measurable", "")
+                    row.setdefault("owner", "")
+                    row.setdefault("deadline", None)
+                    row.setdefault("category", "operational")
+                    row.setdefault("expected_reduction_pct", 0.0)
+                    row.setdefault("needs_review", row["confidence"] < 0.7)
+                rows = raw_rows
+                extraction_method = "ai_claude"
+        except Exception as exc:
+            warnings.append(f"AI extraction failed, using rule-based fallback: {exc}")
+            rows, extraction_method, fallback_warnings = self._rule_based_action_extraction(content, [])
+            warnings.extend(fallback_warnings)
+
+        return rows, extraction_method, warnings
+
+    def _rule_based_action_extraction(self, content: str, warnings: list[str]) -> tuple[list[dict], str, list[str]]:
+        """Simple keyword-based action extraction fallback."""
+        rows: list[dict] = []
+        for line in content.splitlines():
+            line = line.strip()
+            if len(line) > 20 and any(
+                kw in line.lower()
+                for kw in ["reduce", "install", "implement", "switch", "upgrade", "train", "procure", "monitor"]
+            ):
+                rows.append(
+                    {
+                        "action_title": line[:200],
+                        "description": "",
+                        "measurable": "",
+                        "owner": "",
+                        "deadline": None,
+                        "category": "operational",
+                        "expected_reduction_pct": 0.0,
+                        "confidence": 0.4,
+                        "needs_review": True,
+                    }
+                )
+        return rows, "rule_based", warnings
+
     def _fallback_analysis(self, content: str, file_name: str) -> DocumentAnalysis:
         """Fallback analysis when AI is unavailable."""
 

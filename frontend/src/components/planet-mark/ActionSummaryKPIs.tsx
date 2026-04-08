@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, AlertTriangle, BarChart3 } from 'lucide-react'
+import { CheckCircle2, Clock, AlertTriangle, BarChart3, Circle, TrendingUp } from 'lucide-react'
 
 interface ActionsSummaryData {
   total: number
@@ -16,7 +16,7 @@ interface ActionSummaryKPIsProps {
 
 export function ActionSummaryKPIs({ summary }: ActionSummaryKPIsProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
       <KPICard
         icon={<CheckCircle2 className="w-5 h-5 text-green-600" />}
         label="Completed"
@@ -32,6 +32,13 @@ export function ActionSummaryKPIs({ summary }: ActionSummaryKPIsProps) {
         colour="blue"
       />
       <KPICard
+        icon={<Circle className="w-5 h-5 text-gray-400" />}
+        label="Not Started"
+        value={summary.not_started ?? (summary.total - summary.completed - summary.in_progress - summary.overdue)}
+        total={summary.total}
+        colour="gray"
+      />
+      <KPICard
         icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
         label="Overdue"
         value={summary.overdue}
@@ -43,6 +50,13 @@ export function ActionSummaryKPIs({ summary }: ActionSummaryKPIsProps) {
         label="Completion Rate"
         value={`${Math.round(summary.completion_rate_percent)}%`}
         colour="purple"
+        isPercent
+      />
+      <KPICard
+        icon={<TrendingUp className="w-5 h-5 text-teal-600" />}
+        label="Avg Progress"
+        value={`${Math.round(summary.avg_progress_percent ?? 0)}%`}
+        colour="teal"
         isPercent
       />
     </div>
@@ -61,7 +75,7 @@ function KPICard({
   label: string
   value: number | string
   total?: number
-  colour: 'green' | 'blue' | 'red' | 'purple'
+  colour: 'green' | 'blue' | 'red' | 'purple' | 'gray' | 'teal'
   isPercent?: boolean
 }) {
   const bg = {
@@ -69,6 +83,8 @@ function KPICard({
     blue: 'bg-blue-50',
     red: value !== 0 ? 'bg-red-50' : 'bg-gray-50',
     purple: 'bg-purple-50',
+    gray: 'bg-gray-50',
+    teal: 'bg-teal-50',
   }[colour]
 
   return (

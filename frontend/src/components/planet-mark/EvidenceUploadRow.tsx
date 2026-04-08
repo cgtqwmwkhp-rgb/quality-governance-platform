@@ -63,6 +63,8 @@ export function EvidenceUploadRow({
       if (res.data.duplicate) {
         setState('duplicate')
         setUploadedName(res.data.document_name)
+        setUploadedId(res.data.id)
+        onUploaded?.(res.data.id)
       } else {
         setState('success')
         setUploadedName(res.data.document_name)
@@ -126,7 +128,12 @@ export function EvidenceUploadRow({
           role="button"
           tabIndex={0}
           aria-label={`Upload ${label}`}
-          onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              fileInputRef.current?.click()
+            }
+          }}
         >
           <Upload className="w-6 h-6 mx-auto mb-1 text-gray-400" />
           <p className="text-xs text-gray-500">Drag & drop or click to upload</p>

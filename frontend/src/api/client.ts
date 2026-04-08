@@ -2498,9 +2498,7 @@ export const planetMarkApi = {
       file_hash: string
       message: string
       duplicate: boolean
-    }>(`/api/v1/planet-mark/years/${yearId}/evidence/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    }>(`/api/v1/planet-mark/years/${yearId}/evidence/upload`, formData),
 
   /**
    * Verify or annotate an evidence document.
@@ -2524,6 +2522,17 @@ export const planetMarkApi = {
     ),
 
   /**
+   * Get a signed download URL for an evidence document.
+   */
+  getEvidenceDownloadUrl: (yearId: number, evidenceId: number) =>
+    api.get<{
+      id: number
+      document_name: string
+      url: string
+      expires_in_seconds: number
+    }>(`/api/v1/planet-mark/years/${yearId}/evidence/${evidenceId}/download`),
+
+  /**
    * Upload and AI-extract actions from an action plan document.
    */
   extractActionPlan: (yearId: number, formData: FormData) =>
@@ -2544,9 +2553,7 @@ export const planetMarkApi = {
       }>
       extraction_method: string
       warnings: string[]
-    }>(`/api/v1/planet-mark/years/${yearId}/actions/import/extract`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
+    }>(`/api/v1/planet-mark/years/${yearId}/actions/import/extract`, formData),
 
   /**
    * Confirm and persist selected extracted actions.
