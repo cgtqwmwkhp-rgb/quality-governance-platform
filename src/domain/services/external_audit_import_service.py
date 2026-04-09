@@ -1629,8 +1629,35 @@ class ExternalAuditImportService:
             )
         )
         existing = existing_record.scalar_one_or_none()
+
+        # Run Planet Mark domain sync (idempotent) regardless of whether the
+        # ExternalAuditRecord already exists, so that re-promotion always
+        # re-hydrates the Planet Mark domain tables.
+        pm_sync_result: dict[str, object] = {}
+        if self._is_planet_mark_scheme(job):
+            pm_sync_result = await self._sync_planet_mark(
+                job=job,
+                run=run,
+                tenant_id=tenant_id,
+            )
+
         if existing is not None:
-            logger.info("ExternalAuditRecord for job %s already exists — skipping duplicate insert", job.id)
+            logger.info(
+                "ExternalAuditRecord for job %s already exists — updating PM linkage fields",
+                job.id,
+            )
+            # Patch in the PM carbon year linkage so the frontend can display scope summaries
+            pm_data_ex = (job.provenance_json or {}).get("planet_mark_carbon") or {}
+            if pm_sync_result.get("year_id"):
+                existing.carbon_reporting_year_id = pm_sync_result["year_id"]  # type: ignore[assignment]
+            if pm_data_ex.get("scope_1_co2e_tonnes") is not None:
+                existing.scope_1_co2e = pm_data_ex["scope_1_co2e_tonnes"]  # type: ignore[assignment]
+            if pm_data_ex.get("scope_2_co2e_tonnes") is not None:
+                existing.scope_2_co2e = pm_data_ex["scope_2_co2e_tonnes"]  # type: ignore[assignment]
+            if pm_data_ex.get("scope_3_co2e_tonnes") is not None:
+                existing.scope_3_co2e = pm_data_ex["scope_3_co2e_tonnes"]  # type: ignore[assignment]
+            await self.db.flush()
+
             uvdb_audit_id = None
             if self._is_uvdb_scheme(job, run):
                 uvdb_result = await self.db.execute(
@@ -1646,18 +1673,10 @@ class ExternalAuditImportService:
                 "scheme": job.detected_scheme,
                 "external_audit_record_id": existing.id,
                 "uvdb_audit_id": uvdb_audit_id,
+                "planet_mark_sync": pm_sync_result,
                 "home_route": home_route,
                 "home_label": home_label,
             }
-
-        # Run Planet Mark domain sync before creating the record so we can link it
-        pm_sync_result: dict[str, object] = {}
-        if self._is_planet_mark_scheme(job):
-            pm_sync_result = await self._sync_planet_mark(
-                job=job,
-                run=run,
-                tenant_id=tenant_id,
-            )
 
         # Extract carbon scope values for the record if available
         pm_data = (job.provenance_json or {}).get("planet_mark_carbon") or {}
@@ -1957,16 +1976,21 @@ class ExternalAuditImportService:
             logger.info("Planet Mark sync: created CarbonReportingYear id=%s label=%s", year.id, year_label)
             return year, True
 
+        # Always overwrite with imported values — the import is the authoritative source
         if cert_status and cert_status != "draft":
             existing.certification_status = cert_status
-        if cert_date and not existing.certification_date:
+        if cert_date:
             existing.certification_date = cert_date
-        if expiry_date and not existing.expiry_date:
+        if expiry_date:
             existing.expiry_date = expiry_date
-        if cert_num and not existing.certificate_number:
+        if cert_num:
             existing.certificate_number = cert_num
-        if fte and not existing.average_fte:
+        if fte:
             existing.average_fte = float(fte)
+        if period_start:
+            existing.period_start = period_start
+        if period_end:
+            existing.period_end = period_end
         logger.info("Planet Mark sync: updating existing CarbonReportingYear id=%s", existing.id)
         return existing, False
 
@@ -2049,6 +2073,49 @@ class ExternalAuditImportService:
             year.scope_2_data_quality = min(int(dq_1_2), 16)
         if dq_3 is not None:
             year.scope_3_data_quality = min(int(dq_3), 16)
+
+        # Populate scope_2_location_based as well as market-based when available
+        scope_2_loc = pm_data.get("scope_2_location_co2e_tonnes") or pm_data.get("scope_2_co2e_tonnes")
+        if scope_2_loc is not None:
+            year.scope_2_location = float(scope_2_loc)
+
+        # Populate Scope 3 aggregate into the "Other/Unattributed" category (category 15)
+        # so that the Scope 3 breakdown tab is non-empty even for aggregate imports
+        scope_3_total = pm_data.get("scope_3_co2e_tonnes")
+        if scope_3_total is not None and float(scope_3_total) > 0:
+            other_cat = (
+                await self.db.execute(
+                    select(Scope3CategoryData).where(
+                        Scope3CategoryData.reporting_year_id == year.id,
+                        Scope3CategoryData.category_number == 15,
+                    )
+                )
+            ).scalar_one_or_none()
+            if other_cat is not None:
+                other_cat.total_co2e = float(scope_3_total)
+                other_cat.is_measured = True
+                other_cat.calculation_method = "spend_based"
+                other_cat.category_description = (
+                    "Aggregate Scope 3 from Planet Mark import. " "Break down by category to improve data quality."
+                )
+            else:
+                self.db.add(
+                    Scope3CategoryData(  # type: ignore[misc]
+                        reporting_year_id=year.id,
+                        tenant_id=year.tenant_id,
+                        category_number=15,
+                        category_name="Other (Unattributed Scope 3)",
+                        category_description=(
+                            "Aggregate Scope 3 from Planet Mark import. "
+                            "Break down by category to improve data quality."
+                        ),
+                        is_relevant=True,
+                        is_measured=True,
+                        total_co2e=float(scope_3_total),
+                        calculation_method="spend_based",
+                    )
+                )
+
         await self.db.flush()
         return sources_created
 
@@ -2100,10 +2167,27 @@ class ExternalAuditImportService:
             time_bound: datetime | None = None
             deadline_str = action_data.get("deadline")
             if deadline_str:
-                try:
-                    time_bound = datetime.strptime(str(deadline_str), "%Y-%m-%d")
-                except ValueError:
-                    pass
+                for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y"):
+                    try:
+                        time_bound = datetime.strptime(str(deadline_str), fmt)
+                        break
+                    except ValueError:
+                        continue
+            if time_bound is None:
+                # Default to end of current year if no deadline extracted
+                time_bound = datetime(year.year_number + 1, 12, 31) if year.year_number else datetime(2026, 12, 31)
+
+            specific_text = (
+                str(action_data.get("specific") or action_data.get("description") or title).strip()[:2000] or title
+            )
+            measurable_text = str(action_data.get("measurable") or action_data.get("metric") or "").strip()[:2000]
+            if not measurable_text:
+                reduction_pct = action_data.get("expected_reduction_pct")
+                measurable_text = (
+                    f"Achieve {reduction_pct}% reduction in targeted emissions"
+                    if reduction_pct
+                    else "Reduction to be quantified"
+                )
 
             self.db.add(
                 PlanetMarkImprovementAction(  # type: ignore[misc]
@@ -2111,13 +2195,16 @@ class ExternalAuditImportService:
                     reporting_year_id=year.id,
                     action_id=action_id,
                     action_title=title,
+                    specific=specific_text,
+                    measurable=measurable_text,
                     target_scope=action_data.get("target_scope"),
                     status="planned",
                     progress_percent=0,
                     source_import_job_id=job.id,
                     expected_reduction_pct=action_data.get("expected_reduction_pct"),
                     time_bound=time_bound,
-                    achievable_owner="To be assigned",
+                    achievable_owner=str(action_data.get("owner") or "To be assigned")[:255],
+                    relevant=str(action_data.get("relevant") or "").strip()[:2000] or None,
                     scheduled_month=None,
                 )
             )

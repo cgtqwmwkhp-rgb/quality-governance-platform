@@ -141,4 +141,9 @@ def _record_to_dict(r: ExternalAuditRecord) -> dict:
         "observations": r.observations,
         "analysis_summary": r.analysis_summary,
         "status": r.status,
+        # Planet Mark carbon linkage fields
+        "carbon_reporting_year_id": getattr(r, "carbon_reporting_year_id", None),
+        "scope_1_co2e": getattr(r, "scope_1_co2e", None),
+        "scope_2_co2e": getattr(r, "scope_2_co2e", None),
+        "scope_3_co2e": getattr(r, "scope_3_co2e", None),
     }

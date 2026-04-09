@@ -66,6 +66,10 @@ class AIConsensusService:
 
         merged_vis = list(result_a.visual_indicators) + list(result_b.visual_indicators)
 
+        # Merge Planet Mark carbon data: prefer the result with more non-null fields,
+        # then fall back to the other provider's extraction.
+        pm_carbon = self._reconcile_planet_mark_carbon(result_a, result_b, warnings)
+
         return AIAnalysisResult(
             raw={"consensus_from": [result_a.provider_name, result_b.provider_name]},
             score_breakdown=scores["breakdown"],
@@ -93,7 +97,98 @@ class AIConsensusService:
             items_applicable=metadata.get("items_applicable"),
             items_na=metadata.get("items_na"),
             visual_indicators=merged_vis,
+            planet_mark_carbon=pm_carbon,
         )
+
+    @staticmethod
+    def _reconcile_planet_mark_carbon(
+        a: AIAnalysisResult,
+        b: AIAnalysisResult,
+        warnings: list[str],
+    ) -> dict | None:
+        """Merge Planet Mark carbon blocks from both providers.
+
+        Strategy:
+        - If only one provider extracted carbon data, use that.
+        - If both extracted it, merge field-by-field: prefer the non-None value;
+          where both have a numeric value, average scope emissions and log divergence.
+        - Log a warning when scope totals diverge by more than 20%.
+        """
+        pa = a.planet_mark_carbon
+        pb = b.planet_mark_carbon
+
+        if not pa and not pb:
+            return None
+        if pa and not pb:
+            warnings.append("Planet Mark carbon: only Mistral extracted carbon data (Gemini returned none)")
+            return pa
+        if pb and not pa:
+            warnings.append("Planet Mark carbon: only Gemini extracted carbon data (Mistral returned none)")
+            return pb
+
+        # Both have data — merge field-by-field
+        assert pa is not None and pb is not None
+        merged: dict = {}
+        numeric_keys = (
+            "scope_1_co2e_tonnes",
+            "scope_2_co2e_tonnes",
+            "scope_3_co2e_tonnes",
+            "total_co2e_tonnes",
+            "baseline_total_co2e_tonnes",
+            "reduction_percent",
+            "data_quality_scope_1_2",
+            "data_quality_scope_3",
+        )
+        for key in numeric_keys:
+            va = pa.get(key)
+            vb = pb.get(key)
+            if va is None and vb is None:
+                merged[key] = None
+            elif va is None:
+                merged[key] = vb
+            elif vb is None:
+                merged[key] = va
+            else:
+                try:
+                    fa, fb = float(str(va)), float(str(vb))
+                    if fa > 0 and abs(fa - fb) / fa > 0.20:
+                        warnings.append(
+                            f"Planet Mark carbon: providers disagree on {key} "
+                            f"(Mistral={fa:.2f}, Gemini={fb:.2f}); averaging"
+                        )
+                    merged[key] = round((fa + fb) / 2, 4)
+                except (TypeError, ValueError):
+                    merged[key] = va
+
+        # String / date fields: prefer Mistral, fall back to Gemini
+        string_keys = (
+            "reporting_year_label",
+            "period_start",
+            "period_end",
+            "baseline_year_label",
+            "certification_number",
+            "certification_date",
+            "expiry_date",
+            "outcome_status",
+        )
+        for key in string_keys:
+            merged[key] = pa.get(key) or pb.get(key)
+
+        # Improvement actions: union by title, Mistral takes precedence
+        raw_a = pa.get("improvement_actions")
+        raw_b = pb.get("improvement_actions")
+        actions_a: list = raw_a if isinstance(raw_a, list) else []
+        actions_b: list = raw_b if isinstance(raw_b, list) else []
+        titles_seen: set[str] = set()
+        merged_actions: list = []
+        for action in actions_a + actions_b:
+            title = str(action.get("title", "")).strip().lower()
+            if title and title not in titles_seen:
+                titles_seen.add(title)
+                merged_actions.append(action)
+        merged["improvement_actions"] = merged_actions[:20]
+
+        return merged
 
     def _reconcile_scores(
         self,

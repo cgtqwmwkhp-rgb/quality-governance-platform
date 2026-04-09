@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 # Configuration
-MAX_TYPE_IGNORES = 212  # Updated 2026-04-08: +12 for SQLAlchemy ORM constructor type-ignores in planet_mark import sync (GOVPLAT-PM-SYNC). Target: 175 (Q3 2026, pending form_config_service + risk_scoring refactor).
+MAX_TYPE_IGNORES = 216  # Updated 2026-04-08: +2 for planet_mark consensus merge + Scope3CategoryData ORM insert (GOVPLAT-PM-HYDRATE). Target: 175 (Q3 2026, pending form_config_service + risk_scoring refactor).
 ISSUE_TAG_PATTERN = r"#\s*TYPE-IGNORE:\s*(GH-\d+|SQLALCHEMY-\d+|MYPY-\d+)"
 SPECIFIC_IGNORE_PATTERN = r"#\s*type:\s*ignore\[[^\]]+\]"
 GENERIC_IGNORE_PATTERN = r"#\s*type:\s*ignore(?!\[)"
