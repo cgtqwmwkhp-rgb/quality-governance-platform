@@ -436,6 +436,7 @@ export default function PlanetMark() {
   const [importedError, setImportedError] = useState<string | null>(null)
   const [applyingImportId, setApplyingImportId] = useState<number | null>(null)
   const [appliedImportIds, setAppliedImportIds] = useState<Set<number>>(new Set())
+  const [expandedPreviewIds, setExpandedPreviewIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     if (activeTab !== 'imported') return
@@ -468,24 +469,41 @@ export default function PlanetMark() {
       const res = await planetMarkApi.applyImport(importJobId)
       const result = res.data
       if (result.status === 'no_carbon_data') {
-        alert(result.detail || 'No carbon data was found in this import. Please enter data manually.')
+        setImportedError(
+          result.detail ||
+          'No carbon data was extracted from this import. The report may need to be re-processed, or you can enter emission data manually in the Planet Mark section.'
+        )
       } else {
         setAppliedImportIds((prev) => new Set([...prev, importJobId]))
-        // Refresh the main planet mark data so the dashboard reflects the newly applied data
+        // Refresh all planet mark data so dashboard reflects the newly applied data
         await loadData()
-        alert(
-          `Carbon data applied successfully!\n` +
-          `Year: ${result.year_label || 'Created'}\n` +
-          `Emission sources created: ${result.sources_created}\n` +
-          `Improvement actions created: ${result.actions_created}`
-        )
+        // Auto-switch to dashboard and select the synced year
+        if (result.year_id) {
+          const syncedYearId = result.year_id
+          setYears((prev) => {
+            const matched = prev.find((y) => y.id === syncedYearId)
+            if (matched) setCurrentYear(matched)
+            return prev
+          })
+          void loadYearDetails(syncedYearId)
+        }
+        setActiveTab('dashboard')
       }
     } catch (err) {
       const apiErr = createApiError(err)
-      alert(`Failed to apply import: ${apiErr.detail || 'Unknown error'}`)
+      setImportedError(`Failed to apply import: ${apiErr.detail || 'Unknown error'}`)
     } finally {
       setApplyingImportId(null)
     }
+  }
+
+  const togglePreview = (recordId: number) => {
+    setExpandedPreviewIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(recordId)) next.delete(recordId)
+      else next.add(recordId)
+      return next
+    })
   }
 
   const getStatusColor = (status: string) => {
@@ -1454,12 +1472,16 @@ export default function PlanetMark() {
             <div className="space-y-6">
               {/* Informational banner */}
               <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
-                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
-                <p className="text-muted-foreground">
-                  <span className="font-medium text-foreground">Importing a report creates an audit record.</span>
-                  {' '}Use <span className="font-medium text-primary">Apply Carbon Data</span> on each record below
-                  to populate your Planet Mark dashboard with the extracted emissions data.
-                </p>
+                <FileUp className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
+                <div className="text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">Planet Mark certification reports imported via the Audit pipeline appear here.</span>
+                    {' '}Click <span className="font-medium text-primary">Apply to Dashboard</span> to populate your emissions data, improvement actions, Scope 3 breakdown, data quality scores and certification status.
+                  </p>
+                  <p className="text-xs">
+                    Records already applied show a green badge. You can re-sync at any time to pick up any updated extraction.
+                  </p>
+                </div>
               </div>
 
               <div className="bg-card rounded-xl border border-border">
@@ -1474,8 +1496,16 @@ export default function PlanetMark() {
                 </div>
                 <div className="p-4">
                   {importedError && (
-                    <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                      {importedError}
+                    <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span className="flex-1">{importedError}</span>
+                      <button
+                        onClick={() => setImportedError(null)}
+                        className="shrink-0 text-destructive/70 hover:text-destructive transition-colors"
+                        aria-label="Dismiss"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                   {loadingImported && (
@@ -1500,91 +1530,157 @@ export default function PlanetMark() {
                       const isApplying = applyingImportId === (record.import_job_id ?? -1)
                       const alreadyLinked = Boolean(record.carbon_reporting_year_id)
                       const carbonApplied = isApplied || alreadyLinked
+                      const hasExtractedCarbon = record.scope_1_co2e != null || record.scope_2_co2e != null || record.scope_3_co2e != null
+                      const isPreviewOpen = expandedPreviewIds.has(record.id)
 
                       return (
                         <div
                           key={record.id}
-                          className={`p-4 rounded-lg border transition-all ${
+                          className={`rounded-lg border transition-all ${
                             carbonApplied
                               ? 'bg-success/5 border-success/30'
                               : 'bg-surface/50 border-border hover:border-primary/40'
                           }`}
                         >
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <h4 className="font-medium text-foreground flex items-center gap-2">
-                                {record.scheme_label || 'Planet Mark Assessment'}
-                                {carbonApplied && (
-                                  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-success/15 text-success font-normal">
-                                    <CheckCircle2 className="w-3 h-3" /> Carbon data applied
+                          <div className="p-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-foreground flex items-center gap-2 flex-wrap">
+                                  {record.scheme_label || 'Planet Mark Assessment'}
+                                  {carbonApplied && (
+                                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-success/15 text-success font-normal">
+                                      <CheckCircle2 className="w-3 h-3" /> Applied to dashboard
+                                    </span>
+                                  )}
+                                </h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {record.issuer_name && `${record.issuer_name} · `}
+                                  {record.report_date
+                                    ? new Date(record.report_date).toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
+                                    : 'Date not available'}
+                                </p>
+                                {hasExtractedCarbon && (
+                                  <div className="flex items-center gap-3 mt-1.5 text-xs font-medium">
+                                    {record.scope_1_co2e != null && (
+                                      <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400">
+                                        S1: {record.scope_1_co2e.toFixed(1)} tCO₂e
+                                      </span>
+                                    )}
+                                    {record.scope_2_co2e != null && (
+                                      <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">
+                                        S2: {record.scope_2_co2e.toFixed(1)} tCO₂e
+                                      </span>
+                                    )}
+                                    {record.scope_3_co2e != null && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                                        S3: {record.scope_3_co2e.toFixed(1)} tCO₂e
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() => togglePreview(record.id)}
+                                      className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline ml-1"
+                                    >
+                                      {isPreviewOpen ? 'Hide details' : 'Show details'}
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col items-end gap-2 shrink-0 ml-4">
+                                {record.score_percentage != null && (
+                                  <span className="text-lg font-bold text-primary">
+                                    {Math.round(record.score_percentage)}%
                                   </span>
                                 )}
-                              </h4>
-                              <p className="text-sm text-muted-foreground">
-                                {record.issuer_name && `${record.issuer_name} · `}
-                                {record.report_date
-                                  ? new Date(record.report_date).toLocaleDateString()
-                                  : 'Date not available'}
-                              </p>
-                              {/* Scope summary from record if available */}
-                              {(record.scope_1_co2e != null || record.scope_2_co2e != null || record.scope_3_co2e != null) && (
-                                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                  {record.scope_1_co2e != null && <span>S1: {record.scope_1_co2e.toFixed(1)} t</span>}
-                                  {record.scope_2_co2e != null && <span>S2: {record.scope_2_co2e.toFixed(1)} t</span>}
-                                  {record.scope_3_co2e != null && <span>S3: {record.scope_3_co2e.toFixed(1)} t</span>}
+                                <div className={`text-xs px-2 py-0.5 rounded-full inline-block ${
+                                  record.outcome_status === 'pass' || record.outcome_status === 'certified'
+                                    ? 'bg-success/20 text-success'
+                                    : record.outcome_status === 'fail' || record.outcome_status === 'not_certified'
+                                      ? 'bg-destructive/20 text-destructive'
+                                      : 'bg-warning/20 text-warning'
+                                }`}>
+                                  {record.outcome_status || record.status}
                                 </div>
-                              )}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              {record.score_percentage != null && (
-                                <span className="text-lg font-bold text-primary">
-                                  {Math.round(record.score_percentage)}%
-                                </span>
-                              )}
-                              <div className={`text-xs px-2 py-0.5 rounded-full inline-block ${
-                                record.outcome_status === 'pass' || record.outcome_status === 'certified'
-                                  ? 'bg-success/20 text-success'
-                                  : record.outcome_status === 'fail' || record.outcome_status === 'not_certified'
-                                    ? 'bg-destructive/20 text-destructive'
-                                    : 'bg-warning/20 text-warning'
-                              }`}>
-                                {record.outcome_status || record.status}
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span>{record.findings_count ?? 0} findings</span>
-                            {(record.major_findings ?? 0) > 0 && (
-                              <span className="text-destructive">{record.major_findings} major</span>
-                            )}
-                            {(record.minor_findings ?? 0) > 0 && (
-                              <span className="text-warning">{record.minor_findings} minor</span>
-                            )}
-                            {(record.observations ?? 0) > 0 && (
-                              <span>{record.observations} observations</span>
-                            )}
-                            <div className="ml-auto flex items-center gap-2">
-                              {record.import_job_id && !carbonApplied && (
-                                <button
-                                  onClick={() => handleApplyImport(record.import_job_id!)}
-                                  disabled={isApplying}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  {isApplying ? (
-                                    <><RefreshCw className="w-3 h-3 animate-spin" /> Applying…</>
-                                  ) : (
-                                    <><FileUp className="w-3 h-3" /> Apply Carbon Data</>
+
+                            {/* Expandable data preview */}
+                            {isPreviewOpen && hasExtractedCarbon && (
+                              <div className="mt-3 p-3 rounded-lg bg-background/60 border border-border/50 text-xs space-y-2">
+                                <p className="font-semibold text-foreground mb-1">Extracted Carbon Data Preview</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                  {record.scope_1_co2e != null && (
+                                    <div className="p-2 rounded bg-surface">
+                                      <div className="text-muted-foreground">Scope 1 (Direct)</div>
+                                      <div className="font-bold text-foreground text-sm">{record.scope_1_co2e.toFixed(2)} tCO₂e</div>
+                                    </div>
                                   )}
-                                </button>
+                                  {record.scope_2_co2e != null && (
+                                    <div className="p-2 rounded bg-surface">
+                                      <div className="text-muted-foreground">Scope 2 (Indirect)</div>
+                                      <div className="font-bold text-foreground text-sm">{record.scope_2_co2e.toFixed(2)} tCO₂e</div>
+                                    </div>
+                                  )}
+                                  {record.scope_3_co2e != null && (
+                                    <div className="p-2 rounded bg-surface">
+                                      <div className="text-muted-foreground">Scope 3 (Value Chain)</div>
+                                      <div className="font-bold text-foreground text-sm">{record.scope_3_co2e.toFixed(2)} tCO₂e</div>
+                                    </div>
+                                  )}
+                                  {record.scope_1_co2e != null && record.scope_2_co2e != null && record.scope_3_co2e != null && (
+                                    <div className="p-2 rounded bg-primary/5 border border-primary/20">
+                                      <div className="text-muted-foreground">Total</div>
+                                      <div className="font-bold text-primary text-sm">
+                                        {(record.scope_1_co2e + record.scope_2_co2e + record.scope_3_co2e).toFixed(2)} tCO₂e
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="text-muted-foreground italic mt-1">
+                                  Clicking "Apply to Dashboard" will populate Emissions, Scope 3, Improvement Plan, Data Quality and Certification sections.
+                                </p>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground flex-wrap">
+                              <span>{record.findings_count ?? 0} findings</span>
+                              {(record.major_findings ?? 0) > 0 && (
+                                <span className="text-destructive">{record.major_findings} major</span>
                               )}
-                              {record.import_job_id && (
-                                <a
-                                  href={`/audits/0/import-review?jobId=${record.import_job_id}`}
-                                  className="text-primary hover:underline flex items-center gap-1"
-                                >
-                                  View Import <ArrowUpRight className="w-3 h-3" />
-                                </a>
+                              {(record.minor_findings ?? 0) > 0 && (
+                                <span className="text-warning">{record.minor_findings} minor</span>
                               )}
+                              {(record.observations ?? 0) > 0 && (
+                                <span>{record.observations} observations</span>
+                              )}
+                              <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+                                {record.import_job_id && (
+                                  <button
+                                    onClick={() => handleApplyImport(record.import_job_id!)}
+                                    disabled={isApplying}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                      carbonApplied
+                                        ? 'bg-surface border border-border text-muted-foreground hover:bg-surface/80 hover:text-foreground'
+                                        : 'bg-primary/10 text-primary hover:bg-primary/20'
+                                    }`}
+                                  >
+                                    {isApplying ? (
+                                      <><RefreshCw className="w-3 h-3 animate-spin" /> Applying…</>
+                                    ) : carbonApplied ? (
+                                      <><RefreshCw className="w-3 h-3" /> Re-sync Dashboard</>
+                                    ) : (
+                                      <><FileUp className="w-3 h-3" /> Apply to Dashboard</>
+                                    )}
+                                  </button>
+                                )}
+                                {record.import_job_id && (
+                                  <a
+                                    href={`/audits/0/import-review?jobId=${record.import_job_id}`}
+                                    className="text-primary hover:underline flex items-center gap-1"
+                                  >
+                                    View Import <ArrowUpRight className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
