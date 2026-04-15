@@ -19,7 +19,7 @@ PyJWT[crypto]>=2.12.1,<3.0.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 pyasn1>=0.6.3,<1.0.0
-python-multipart==0.0.22
+python-multipart==0.0.26
 nh3>=0.3.4,<1.0.0
 
 # Email Processing
