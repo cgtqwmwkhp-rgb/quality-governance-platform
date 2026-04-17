@@ -63,9 +63,14 @@ def parse_waivers(waiver_file: Path) -> Dict[str, datetime]:
     content = waiver_file.read_text()
     waivers = {}
 
-    # Pattern to match CVE IDs and expiry dates
+    # Pattern to match advisory IDs and expiry dates.
+    # Recognised forms: CVE-YYYY-NNNNNNN, PYSEC-YYYY-N, and GitHub Security
+    # Advisory IDs (GHSA-xxxx-xxxx-xxxx) which pip-audit emits for
+    # advisories that don't yet have a CVE assignment.
     # Looking for lines like: "**Expiry Date**: 2026-04-04 (90 days)"
-    cve_pattern = r"CVE-\d{4}-\d{4,7}|PYSEC-\d{4}-\d+"
+    cve_pattern = (
+        r"CVE-\d{4}-\d{4,7}|PYSEC-\d{4}-\d+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}"
+    )
     expiry_pattern = r"\*\*Expiry Date\*\*:\s*(\d{4}-\d{2}-\d{2})"
 
     # Split into sections by "###" headers
