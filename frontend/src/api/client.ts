@@ -272,8 +272,22 @@ async function refreshAndGetToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Public wrapper around the single-flight refresh helper.
+ *
+ * Safe to call from anywhere (e.g. a session-keepalive hook). Returns the
+ * new access token on success, or null if refresh isn't possible (no refresh
+ * token on disk, or the server rejected the refresh request).
+ *
+ * Concurrent callers share the same in-flight refresh promise, so we never
+ * issue more than one /auth/refresh request at a time.
+ */
+export async function refreshSession(): Promise<string | null> {
+  return refreshAndGetToken()
+}
+
 // CRITICAL: Enforce HTTPS on all requests at interceptor level
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   activeRequests++
   useAppStore.getState().setLoading(true)
   // Force HTTPS on baseURL
@@ -290,38 +304,62 @@ api.interceptors.request.use((config) => {
   }
 
   // Add auth token using centralized accessor
-  const token = getPlatformToken()
+  let token = getPlatformToken()
 
   // DEBUG: Log auth header presence (not the token itself)
   const isApiCall = config.url?.startsWith('/api/')
-  const isAuthEndpoint =
-    config.url?.includes('/auth/login') || config.url?.includes('/auth/token-exchange')
+  const isAuthEndpointUrl =
+    config.url?.includes('/auth/login') ||
+    config.url?.includes('/auth/token-exchange') ||
+    config.url?.includes('/auth/refresh')
 
-  if (import.meta.env.DEV && isApiCall && !isAuthEndpoint) {
+  if (import.meta.env.DEV && isApiCall && !isAuthEndpointUrl) {
     console.log(
       `[Auth Debug] ${config.method?.toUpperCase()} ${config.url} | token_present=${!!token} | token_length=${token?.length || 0}`,
     )
   }
 
-  if (token) {
-    // Check if token is expired before attaching
+  if (token && !isAuthEndpointUrl) {
+    // If the access token is expired (or about to expire), try to silently
+    // refresh BEFORE clearing anything. The previous behaviour was to call
+    // clearTokens() here, which removed the refresh token too and forced a
+    // hard redirect to /login — making long audit sessions on tablets
+    // (where >30 min can pass between API calls) look like an unexpected
+    // logout. Now we attempt refresh first; only if that fails do we clear.
     if (isTokenExpired(token)) {
-      if (import.meta.env.DEV)
-        console.warn('[Axios] Token expired - clearing and redirecting to login')
-      // Clear expired tokens
-      clearTokens()
-      // Only redirect if not already on login page and not an auth endpoint
-      const currentPath = window.location.pathname
-      const isLoginPage = isLoginPagePath(currentPath)
-      if (!isLoginPage && !isAuthEndpoint) {
-        window.location.href = getLoginRedirectPath(currentPath)
-        // Return a rejected promise to stop the request
+      const refreshToken = getPlatformRefreshToken()
+      if (refreshToken) {
+        if (import.meta.env.DEV)
+          console.warn('[Axios] Access token expired - attempting silent refresh')
+        try {
+          const newToken = await refreshAndGetToken()
+          if (newToken) {
+            token = newToken
+          } else {
+            token = null
+          }
+        } catch {
+          token = null
+        }
+      } else {
+        token = null
+      }
+
+      if (!token) {
+        if (import.meta.env.DEV)
+          console.warn('[Axios] Token expired and refresh failed - redirecting to login')
+        clearTokens()
+        const currentPath = window.location.pathname
+        const isLoginPage = isLoginPagePath(currentPath)
+        if (!isLoginPage) {
+          window.location.href = getLoginRedirectPath(currentPath)
+        }
         return Promise.reject(new Error('Token expired - redirecting to login'))
       }
-    } else {
-      config.headers.Authorization = `Bearer ${token}`
     }
-  } else if (import.meta.env.DEV && isApiCall && !isAuthEndpoint) {
+
+    config.headers.Authorization = `Bearer ${token}`
+  } else if (import.meta.env.DEV && isApiCall && !isAuthEndpointUrl) {
     console.warn('[Auth Debug] No token available for API call - will likely get 401')
   }
   return config

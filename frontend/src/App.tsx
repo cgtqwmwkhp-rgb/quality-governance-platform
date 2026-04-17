@@ -10,6 +10,7 @@ import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
 import { getValidPlatformToken, setAdminToken, clearTokens } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
+import { useSessionKeepalive } from './hooks/useSessionKeepalive'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
@@ -170,6 +171,11 @@ function RouteErrorBoundary() {
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(getValidPlatformToken()))
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
+
+  // Keep the access JWT warm for long sessions (e.g. tablet auditors who
+  // can sit on the questionnaire for >30 min between API calls without
+  // realising the access token has expired).
+  useSessionKeepalive({ enabled: isAuthenticated })
 
   useEffect(() => {
     if (isAuthenticated) {

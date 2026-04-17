@@ -111,19 +111,63 @@ export function decodeTokenPayload(token: string): Record<string, unknown> | nul
 }
 
 /**
+ * Clock-skew buffer for token expiry comparisons.
+ *
+ * Treat a token as expired when the device clock is within this many
+ * seconds of the JWT `exp`. We're generous (120s) because tablets in the
+ * field frequently have drifted system clocks, and a wrong-but-recoverable
+ * "needs refresh" decision is far cheaper than a hard logout.
+ */
+export const TOKEN_SKEW_SECONDS = 120
+
+/**
+ * Schedule a proactive refresh this many seconds before `exp`.
+ * Used by the session-keepalive hook to keep long audit sessions warm.
+ */
+export const TOKEN_REFRESH_LEAD_SECONDS = 300
+
+/**
+ * Read the JWT `exp` claim (unix seconds) or null if absent/invalid.
+ */
+export function getTokenExpirySeconds(token: string): number | null {
+  const payload = decodeTokenPayload(token)
+  if (!payload || typeof payload.exp !== 'number') {
+    return null
+  }
+  return payload.exp
+}
+
+/**
  * Check if a token is expired.
+ *
+ * Uses TOKEN_SKEW_SECONDS as a buffer so we treat a token as expired
+ * slightly before its true `exp`. This protects against device clock drift
+ * common on tablets in the field.
  *
  * @param token - The JWT token to check
  * @returns true if expired or invalid, false if still valid
  */
 export function isTokenExpired(token: string): boolean {
-  const payload = decodeTokenPayload(token)
-  if (!payload || typeof payload.exp !== 'number') {
+  const exp = getTokenExpirySeconds(token)
+  if (exp === null) {
     return true
   }
-  // Add 30 second buffer to account for clock skew
   const now = Math.floor(Date.now() / 1000)
-  return payload.exp < now - 30
+  return exp < now - TOKEN_SKEW_SECONDS
+}
+
+/**
+ * Check whether a token is expired OR within the proactive-refresh window.
+ * Used to decide if we should silently refresh before letting a request go out
+ * or before letting the user resume an audit after a long pause.
+ */
+export function shouldRefreshToken(token: string): boolean {
+  const exp = getTokenExpirySeconds(token)
+  if (exp === null) {
+    return true
+  }
+  const now = Math.floor(Date.now() / 1000)
+  return exp - now <= TOKEN_REFRESH_LEAD_SECONDS
 }
 
 /**
