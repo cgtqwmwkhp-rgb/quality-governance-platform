@@ -23,6 +23,13 @@ import {
   Loader2,
 } from 'lucide-react'
 import { auditsApi, getApiErrorMessage } from '../api/client'
+import {
+  registerDraftSnapshot,
+  getAuditDraft,
+  deleteAuditDraft,
+  saveAuditDraft,
+  type AuditDraft,
+} from '../services/auditDraftStore'
 
 // ============================================================================
 // TYPES
@@ -422,7 +429,46 @@ export default function AuditExecution() {
   const [autoAdvancePending, setAutoAdvancePending] = useState(false)
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Periodic-autosave + soft-recovery state
+  // -----------------------------------------------------------------------
+  // `dirtyRef` flips to true whenever the user edits an answer, and back to
+  // false after a successful server save. The autosave interval only fires
+  // a network request when dirtyRef is true, so a user reading questions
+  // for an hour won't generate any traffic at all.
+  // The latest section/question/responses/responseIdMap go into refs so the
+  // single setInterval and the snapshot provider always see fresh values
+  // without re-arming the timer on every keystroke.
+  const dirtyRef = useRef(false)
+  const responsesRef = useRef<Record<string, QuestionResponse>>({})
+  const responseIdMapRef = useRef<Record<string, number>>({})
+  const sectionIndexRef = useRef(0)
+  const questionIndexRef = useRef(0)
+  const runCompletedRef = useRef(false)
+  const savingRef = useRef(false)
+  const [autosaveError, setAutosaveError] = useState<string | null>(null)
+  const [recoveryPrompt, setRecoveryPrompt] = useState<AuditDraft | null>(null)
+
   const runIdNum = runId ? Number(runId) : null
+
+  // Keep refs in sync with state so background callbacks see fresh values
+  useEffect(() => {
+    responsesRef.current = responses
+  }, [responses])
+  useEffect(() => {
+    responseIdMapRef.current = responseIdMap
+  }, [responseIdMap])
+  useEffect(() => {
+    sectionIndexRef.current = currentSectionIndex
+  }, [currentSectionIndex])
+  useEffect(() => {
+    questionIndexRef.current = currentQuestionIndex
+  }, [currentQuestionIndex])
+  useEffect(() => {
+    runCompletedRef.current = runCompleted
+  }, [runCompleted])
+  useEffect(() => {
+    savingRef.current = saving
+  }, [saving])
 
   // Timer
   useEffect(() => {
@@ -580,6 +626,127 @@ export default function AuditExecution() {
     }
   }, [runIdNum])
 
+  // Soft-recovery: on mount, see if we have a stashed local draft that's
+  // newer than what came back from the server (e.g. user got logged out
+  // mid-audit and we flushed answers to IndexedDB before redirecting).
+  useEffect(() => {
+    if (!runIdNum || !audit) return
+    let cancelled = false
+    void getAuditDraft(runIdNum).then((draft) => {
+      if (cancelled || !draft) return
+      const draftHasMore =
+        Object.keys(draft.responses).length > Object.keys(responsesRef.current).length
+      const draftHasNewer = Object.values(draft.responses).some((d) => {
+        const existing = responsesRef.current[d.questionId]
+        if (!existing) return true
+        return new Date(d.timestamp).getTime() > new Date(existing.timestamp).getTime()
+      })
+      if (draftHasMore || draftHasNewer) {
+        setRecoveryPrompt(draft)
+      } else {
+        // Stale draft (everything is already on the server) — clean it up.
+        void deleteAuditDraft(runIdNum)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // Intentionally only depend on runIdNum + audit being loaded; we want
+    // this to fire exactly once per audit, not whenever responses change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runIdNum, audit])
+
+  // Snapshot registration: api/client.ts calls every registered snapshot
+  // just before any auth-loss redirect so unsaved answers get stashed in
+  // IndexedDB. The provider reads from refs so it always returns the latest
+  // state without needing the effect to re-run on every keystroke.
+  useEffect(() => {
+    if (!runIdNum) return
+    const provider = (): AuditDraft | null => {
+      if (!dirtyRef.current) return null
+      return {
+        runId: runIdNum,
+        responses: { ...responsesRef.current },
+        responseIdMap: { ...responseIdMapRef.current },
+        currentSectionIndex: sectionIndexRef.current,
+        currentQuestionIndex: questionIndexRef.current,
+        savedAt: Date.now(),
+        reason: 'auth-loss',
+      }
+    }
+    const unregister = registerDraftSnapshot(runIdNum, provider)
+    return unregister
+  }, [runIdNum])
+
+  // Keep a stable handle to the latest saveAllResponses for the autosave
+  // interval (the function itself closes over `responses`/`responseIdMap`,
+  // so we always invoke the freshest closure).
+  const saveAllResponsesRef = useRef<() => Promise<boolean>>(async () => false)
+
+  // Periodic autosave (~60s). Acts as both a write-through for unsaved
+  // edits and as a session keepalive: if the user has been editing, the
+  // request itself keeps the access token warm; if they've been idle, no
+  // request fires (so we don't spam the API or pollute server logs).
+  useEffect(() => {
+    if (!runIdNum || !audit) return
+
+    const AUTOSAVE_INTERVAL_MS = 60_000
+
+    const tick = async () => {
+      if (!dirtyRef.current) return
+      if (savingRef.current) return
+      if (runCompletedRef.current) return
+      // Skip while paused — the auditor has explicitly stepped away and we
+      // don't want to surface a "Saving..." indicator when they're not at
+      // the device. Snapshot+IndexedDB still protect them on auth loss.
+      if (isPaused) return
+      // Offline: skip the network call. The next online tick (or any
+      // explicit Save) will flush. The IndexedDB snapshot path still
+      // protects the data if the session times out before reconnect.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        // Best-effort local stash so coming back online + getting logged
+        // out doesn't lose the work.
+        void saveAuditDraft({
+          runId: runIdNum,
+          responses: { ...responsesRef.current },
+          responseIdMap: { ...responseIdMapRef.current },
+          currentSectionIndex: sectionIndexRef.current,
+          currentQuestionIndex: questionIndexRef.current,
+          savedAt: Date.now(),
+          reason: 'autosave',
+        })
+        return
+      }
+      try {
+        const ok = await saveAllResponsesRef.current()
+        if (!ok) {
+          setAutosaveError('Auto-save failed — your changes will retry shortly.')
+        }
+      } catch {
+        setAutosaveError('Auto-save failed — your changes will retry shortly.')
+      }
+    }
+
+    const interval = setInterval(() => {
+      void tick()
+    }, AUTOSAVE_INTERVAL_MS)
+
+    // Best-effort save on tab hide / page unload so a user backgrounding
+    // their tablet doesn't lose answers if their session times out before
+    // they come back.
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        void tick()
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [runIdNum, audit, isPaused])
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -615,6 +782,13 @@ export default function AuditExecution() {
       }
 
       setResponseIdMap(updatedIdMap)
+      // Successful server-side save: clear the dirty flag and drop any
+      // stashed local-only draft now that the server is the source of truth.
+      dirtyRef.current = false
+      setAutosaveError(null)
+      if (runIdNum) {
+        void deleteAuditDraft(runIdNum)
+      }
       return true
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -624,8 +798,27 @@ export default function AuditExecution() {
     }
   }
 
+  // Keep the autosave interval pointed at the latest closure (which holds
+  // the freshest `responses` / `responseIdMap`).
+  saveAllResponsesRef.current = saveAllResponses
+
   const handleSaveDraft = async () => {
     await saveAllResponses()
+  }
+
+  const handleRestoreDraft = () => {
+    if (!recoveryPrompt) return
+    setResponses(recoveryPrompt.responses as Record<string, QuestionResponse>)
+    setResponseIdMap(recoveryPrompt.responseIdMap)
+    setCurrentSectionIndex(recoveryPrompt.currentSectionIndex)
+    setCurrentQuestionIndex(recoveryPrompt.currentQuestionIndex)
+    dirtyRef.current = true
+    setRecoveryPrompt(null)
+  }
+
+  const handleDiscardDraft = () => {
+    if (runIdNum) void deleteAuditDraft(runIdNum)
+    setRecoveryPrompt(null)
   }
 
   const handleSubmitAudit = async () => {
@@ -770,6 +963,7 @@ export default function AuditExecution() {
 
   // Update response
   const updateResponse = (updates: Partial<Omit<QuestionResponse, 'questionId' | 'timestamp'>>) => {
+    dirtyRef.current = true
     setResponses((prev) => ({
       ...prev,
       [currentQuestion.id]: {
@@ -1219,6 +1413,58 @@ export default function AuditExecution() {
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto p-4 pb-32">
+          {/* Soft-recovery prompt: shows when we found a stashed local draft
+              that's newer than the server (e.g. user got logged out
+              mid-audit). Lets them restore or discard. */}
+          {recoveryPrompt && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <RotateCcw className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-foreground">Unsaved answers found</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    We saved {Object.keys(recoveryPrompt.responses).length} answer
+                    {Object.keys(recoveryPrompt.responses).length === 1 ? '' : 's'} locally before
+                    your session ended. Restore them?
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={handleRestoreDraft}
+                      className="px-3 py-1.5 text-sm font-medium rounded-lg bg-amber-500 text-amber-950 hover:bg-amber-400 transition-colors"
+                    >
+                      Restore answers
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDiscardDraft}
+                      className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-foreground hover:bg-card/80 transition-colors"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Autosave failure: subtle banner so the user knows their last
+              edits aren't on the server yet (the next tick will retry). */}
+          {autosaveError && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-4 rounded-xl border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-300 flex items-center gap-2"
+            >
+              <Info className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>{autosaveError}</span>
+            </div>
+          )}
+
           {/* Question Card */}
           <div className="bg-card/50 border border-border rounded-3xl overflow-hidden">
             {/* Question Header */}

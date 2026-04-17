@@ -11,6 +11,7 @@ import { useNotificationStore } from './stores'
 import { getValidPlatformToken, setAdminToken, clearTokens } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { useSessionKeepalive } from './hooks/useSessionKeepalive'
+import { useServiceWorkerAuthBridge } from './hooks/useServiceWorkerAuthBridge'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Incidents = lazy(() => import('./pages/Incidents'))
@@ -176,6 +177,11 @@ function App() {
   // can sit on the questionnaire for >30 min between API calls without
   // realising the access token has expired).
   useSessionKeepalive({ enabled: isAuthenticated })
+
+  // When the service worker reports a 401/403 from a fetch it intercepted,
+  // trigger a silent token refresh instead of waiting for the next axios
+  // call to discover the problem.
+  useServiceWorkerAuthBridge({ enabled: isAuthenticated })
 
   useEffect(() => {
     if (isAuthenticated) {

@@ -12,6 +12,7 @@ import {
 import { API_BASE_URL } from '../config/apiBase'
 import { toast } from '../contexts/ToastContext'
 import { useAppStore } from '../stores/useAppStore'
+import { flushAllDraftsToIndexedDb } from '../services/auditDraftStore'
 import {
   riskRegisterBowtieElementPath,
   riskRegisterBowtieElementsPath,
@@ -230,6 +231,31 @@ function isLocalDevHost(url: string): boolean {
   return url.includes('localhost') || url.includes('127.0.0.1')
 }
 
+/**
+ * Centralised auth-loss handler. Stashes any in-flight audit drafts to
+ * IndexedDB BEFORE clearing tokens so the user can recover their unsaved
+ * answers after re-login. The flush is fire-and-forget — we never block
+ * navigation on it (browsers throttle JS once `location.href` is set, but
+ * IndexedDB writes through `idb` are typically <50ms and the OS will let
+ * them complete).
+ *
+ * Always call this instead of the bare clearTokens() + window.location.href
+ * pattern so soft-recovery is consistent everywhere.
+ */
+function clearAndRedirectToLogin(): void {
+  try {
+    void flushAllDraftsToIndexedDb('auth-loss')
+  } catch {
+    /* never let the soft-recovery hook block the redirect */
+  }
+  clearTokens()
+  const currentPath = window.location.pathname
+  const isLoginPage = isLoginPagePath(currentPath)
+  if (!isLoginPage) {
+    window.location.href = getLoginRedirectPath(currentPath)
+  }
+}
+
 async function doRefreshToken(): Promise<string | null> {
   const refreshToken = getPlatformRefreshToken()
   if (!refreshToken) {
@@ -348,12 +374,7 @@ api.interceptors.request.use(async (config) => {
       if (!token) {
         if (import.meta.env.DEV)
           console.warn('[Axios] Token expired and refresh failed - redirecting to login')
-        clearTokens()
-        const currentPath = window.location.pathname
-        const isLoginPage = isLoginPagePath(currentPath)
-        if (!isLoginPage) {
-          window.location.href = getLoginRedirectPath(currentPath)
-        }
+        clearAndRedirectToLogin()
         return Promise.reject(new Error('Token expired - redirecting to login'))
       }
     }
@@ -398,8 +419,7 @@ api.interceptors.response.use(
 
       // Auth endpoints (login, token-exchange, refresh): never try refresh; clear and redirect
       if (isAuth && !isLoginPage) {
-        clearTokens()
-        window.location.href = getLoginRedirectPath(currentPath)
+        clearAndRedirectToLogin()
         return Promise.reject(error)
       }
 
@@ -412,8 +432,7 @@ api.interceptors.response.use(
         const config = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
         const refreshToken = getPlatformRefreshToken()
         if (!refreshToken) {
-          clearTokens()
-          if (!isLoginPage) window.location.href = getLoginRedirectPath(currentPath)
+          clearAndRedirectToLogin()
           ;(error as ClassifiedAxiosError).classifiedMessage =
             'Session expired. Please sign in again.'
           return Promise.reject(error)
@@ -430,8 +449,7 @@ api.interceptors.response.use(
           // refreshAndGetToken returns null on failure; fall through to clear
         }
 
-        clearTokens()
-        if (!isLoginPage) window.location.href = getLoginRedirectPath(currentPath)
+        clearAndRedirectToLogin()
       }
 
       ;(error as ClassifiedAxiosError).classifiedMessage = 'Session expired. Please sign in again.'
