@@ -156,12 +156,14 @@ const ResponseButton = ({
   variant,
   children,
   icon: Icon,
+  autoAdvancePending = false,
 }: {
   selected: boolean
   onClick: () => void
   variant: 'success' | 'danger' | 'warning' | 'neutral'
   children: React.ReactNode
   icon?: React.ElementType
+  autoAdvancePending?: boolean
 }) => {
   const variantStyles = {
     success: 'border-success bg-success/20 text-success',
@@ -181,11 +183,15 @@ const ResponseButton = ({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200
+      className={`relative flex-1 flex items-center justify-center gap-2 py-4 px-4 rounded-xl border-2 font-semibold transition-all duration-200 overflow-hidden
         ${selected ? variantStyles[variant] : `border-border bg-secondary text-muted-foreground ${hoverStyles[variant]}`}`}
     >
       {Icon && <Icon className="w-5 h-5" />}
       {children}
+      {/* Countdown shrink bar visible on the selected button while auto-advance is pending */}
+      {autoAdvancePending && (
+        <span className="absolute bottom-0 left-0 h-1 w-full bg-current opacity-60 animate-[shrink_600ms_linear_forwards]" />
+      )}
     </button>
   )
 }
@@ -413,6 +419,8 @@ export default function AuditExecution() {
   const [showGuidance, setShowGuidance] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [runCompleted, setRunCompleted] = useState(false)
+  const [autoAdvancePending, setAutoAdvancePending] = useState(false)
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const runIdNum = runId ? Number(runId) : null
 
@@ -426,6 +434,13 @@ export default function AuditExecution() {
 
     return () => clearInterval(timer)
   }, [isPaused, audit])
+
+  // Clean up auto-advance timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current)
+    }
+  }, [])
 
   // Load audit run from API
   useEffect(() => {
@@ -677,6 +692,19 @@ export default function AuditExecution() {
   const currentResponse = responses[currentQuestion.id]
   const allQuestions = audit.sections.flatMap((s) => s.questions)
 
+  // Auto-advance — question types that advance immediately on tap
+  const AUTO_ADVANCE_TYPES = new Set(['pass_fail', 'yes_no', 'yes_no_na'])
+  const isAutoAdvanceType = AUTO_ADVANCE_TYPES.has(currentQuestion.type)
+
+  // Navigation helpers
+  const isLastQuestion =
+    currentSectionIndex === audit.sections.length - 1 &&
+    currentQuestionIndex === currentSection.questions.length - 1
+  const canAdvance = !currentQuestion.required || Boolean(currentResponse?.response)
+  const globalQuestionIndex =
+    audit.sections.slice(0, currentSectionIndex).reduce((sum, s) => sum + s.questions.length, 0) +
+    currentQuestionIndex
+
   const isFindingResponse = (response: QuestionResponse): boolean => {
     const question = allQuestions.find((q) => q.id === response.questionId)
     if (!question) return false
@@ -766,12 +794,36 @@ export default function AuditExecution() {
   }
 
   const goPrev = () => {
+    // Cancel any pending auto-advance when going back
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+      setAutoAdvancePending(false)
+    }
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex((prev) => prev - 1)
     } else if (currentSectionIndex > 0) {
       setCurrentSectionIndex((prev) => prev - 1)
       setCurrentQuestionIndex(audit.sections[currentSectionIndex - 1].questions.length - 1)
     }
+  }
+
+  // Auto-advance handler for binary question types (YES/NO, PASS/FAIL, N/A)
+  const handleBinaryResponse = (value: string) => {
+    // Cancel any in-flight timer — user changed their answer or re-tapped
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current)
+      autoAdvanceTimerRef.current = null
+    }
+
+    updateResponse({ response: value as ResponseType })
+    setAutoAdvancePending(true)
+
+    autoAdvanceTimerRef.current = setTimeout(() => {
+      setAutoAdvancePending(false)
+      autoAdvanceTimerRef.current = null
+      goNext()
+    }, 600)
   }
 
   // Render question input based on type
@@ -788,17 +840,19 @@ export default function AuditExecution() {
           <div className="flex gap-4">
             <ResponseButton
               selected={currentResponse?.response === 'pass'}
-              onClick={() => updateResponse({ response: 'pass' })}
+              onClick={() => handleBinaryResponse('pass')}
               variant={yesVariant}
               icon={yesIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'pass'}
             >
               PASS
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'fail'}
-              onClick={() => updateResponse({ response: 'fail' })}
+              onClick={() => handleBinaryResponse('fail')}
               variant={noVariant}
               icon={noIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'fail'}
             >
               FAIL
             </ResponseButton>
@@ -810,17 +864,19 @@ export default function AuditExecution() {
           <div className="flex gap-4">
             <ResponseButton
               selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
+              onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
+              onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
             </ResponseButton>
@@ -832,25 +888,28 @@ export default function AuditExecution() {
           <div className="flex gap-3">
             <ResponseButton
               selected={currentResponse?.response === 'yes'}
-              onClick={() => updateResponse({ response: 'yes' })}
+              onClick={() => handleBinaryResponse('yes')}
               variant={yesVariant}
               icon={yesIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'yes'}
             >
               YES
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'no'}
-              onClick={() => updateResponse({ response: 'no' })}
+              onClick={() => handleBinaryResponse('no')}
               variant={noVariant}
               icon={noIcon}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'no'}
             >
               NO
             </ResponseButton>
             <ResponseButton
               selected={currentResponse?.response === 'na'}
-              onClick={() => updateResponse({ response: 'na' })}
+              onClick={() => handleBinaryResponse('na')}
               variant="neutral"
               icon={MinusCircle}
+              autoAdvancePending={autoAdvancePending && currentResponse?.response === 'na'}
             >
               N/A
             </ResponseButton>
@@ -1294,44 +1353,46 @@ export default function AuditExecution() {
       </main>
 
       {/* Navigation Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-xl border-t border-border p-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
+      <footer className="mobile-action-bar z-50">
+        <div className="max-w-2xl mx-auto flex items-center gap-3">
+
+          {/* Compact Previous — icon only to maximise Next button width */}
           <button
             onClick={goPrev}
             disabled={currentSectionIndex === 0 && currentQuestionIndex === 0}
-            className="flex items-center gap-2 px-6 py-3 bg-secondary text-foreground rounded-xl hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous question"
+            className="w-12 h-12 shrink-0 flex items-center justify-center bg-secondary text-foreground rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors hover:bg-muted"
           >
             <ArrowLeft className="w-5 h-5" />
-            Previous
           </button>
 
-          {/* Quick Jump */}
-          <div className="flex items-center gap-1">
-            {currentSection.questions.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentQuestionIndex(idx)}
-                className={`w-3 h-3 rounded-full transition-all ${
-                  idx === currentQuestionIndex
-                    ? 'bg-primary w-6'
-                    : responses[currentSection.questions[idx].id]
-                      ? 'bg-success'
-                      : 'bg-input hover:bg-muted'
-                }`}
-              />
-            ))}
-          </div>
+          {/* Global question counter — replaces the per-question dot strip */}
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0 tabular-nums">
+            {globalQuestionIndex + 1} / {totalQuestions}
+          </span>
 
-          <button
-            onClick={goNext}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 transition-opacity"
-          >
-            {currentSectionIndex === audit.sections.length - 1 &&
-            currentQuestionIndex === currentSection.questions.length - 1
-              ? 'Finish'
-              : 'Next'}
-            <ArrowRight className="w-5 h-5" />
-          </button>
+          {/* Next / Finish — full remaining width, shown for non-auto-advance types */}
+          {!isAutoAdvanceType && (
+            <button
+              onClick={goNext}
+              disabled={!canAdvance}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+            >
+              {isLastQuestion ? 'Finish' : 'Next'}
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* For auto-advance types: show Continue when answered but timer was cancelled */}
+          {isAutoAdvanceType && currentResponse?.response && !autoAdvancePending && (
+            <button
+              onClick={goNext}
+              className="flex-1 flex items-center justify-center gap-2 py-3 bg-secondary text-foreground rounded-xl text-sm font-medium transition-colors hover:bg-muted"
+            >
+              Continue <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+
         </div>
       </footer>
     </div>
