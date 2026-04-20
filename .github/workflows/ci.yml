@@ -331,7 +331,7 @@ jobs:
         if: always()
 
       - name: Upload JUnit XML (Stage 2.0)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-unit-tests
           path: junit-unit.xml
@@ -425,7 +425,7 @@ jobs:
           echo "[OK] SBOM generated: sbom.json"
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom-cyclonedx
           path: sbom.json
@@ -577,7 +577,7 @@ jobs:
         if: always()
 
       - name: Upload JUnit XML (Stage 2.0)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-integration-tests
           path: junit-integration.xml
@@ -823,7 +823,7 @@ jobs:
           echo "=== DEPLOY-PROOF EVIDENCE COMPLETE ===" | tee -a deploy-proof.txt
 
       - name: Upload Deploy-Proof Evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deploy-proof-evidence
           path: deploy-proof.txt
@@ -831,7 +831,7 @@ jobs:
         if: always()
 
       - name: Upload Smoke Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-smoke-tests
           path: junit-smoke.xml
@@ -980,7 +980,7 @@ jobs:
           echo "========================================================================"
 
       - name: Upload E2E Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: junit-e2e-tests
           path: junit-e2e.xml
@@ -1120,7 +1120,7 @@ jobs:
           fi
 
       - name: Upload UAT Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: uat-test-results
           path: |
@@ -1161,7 +1161,7 @@ jobs:
           echo "[OK] API path drift check completed"
 
       - name: Upload drift report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: api-path-drift-report
@@ -1266,7 +1266,7 @@ jobs:
           fi
 
       - name: Upload quality trend artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: quality-trend-${{ github.run_id }}
           path: ./quality-reports/
@@ -1323,7 +1323,7 @@ jobs:
           fi
 
       - name: Upload OpenAPI schema
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openapi-schema
           path: openapi-current.json
@@ -1511,7 +1511,7 @@ jobs:
             --only-summary
 
       - name: Upload Locust results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: locust-load-test
           path: locust-results*.csv
@@ -1606,7 +1606,7 @@ jobs:
           cat mutmut-results.txt | tail -20 || true
 
       - name: Upload mutation report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutation-testing-report
           path: |
@@ -1809,7 +1809,7 @@ jobs:
           fail_action: false
 
       - name: Upload ZAP reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: zap-scan-report
@@ -1854,7 +1854,7 @@ jobs:
           echo "[OK] npm license check passed"
 
       - name: Upload license reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: license-reports
@@ -1880,7 +1880,7 @@ jobs:
         run: python3 scripts/check_adr_lifecycle.py
 
       - name: Upload ADR lifecycle evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: adr-lifecycle-report
@@ -1907,7 +1907,7 @@ jobs:
         run: python3 scripts/validate_registries.py
 
       - name: Upload registry validation evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: registry-validation-report
@@ -2082,7 +2082,7 @@ jobs:
           bash scripts/generate_gate_summary.sh
 
       - name: Upload gate summary (Stage 2.0)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gate-summary
           path: gate-summary.txt
