@@ -217,3 +217,118 @@ class TestMarkAsRead:
         service = NotificationService(db=None)
         result = await service.get_notifications(user_id=1)
         assert result == []
+
+
+class TestEmailEnqueueDelivery:
+    """WCS-A03: _deliver_email must enqueue Celery send_email, not theatre-log."""
+
+    def _notification(self, user_id: int = 7):
+        return SimpleNamespace(
+            id=101,
+            user_id=user_id,
+            title="Action assigned",
+            message="Please review CAPA-42",
+            type="assignment",
+            delivered_channels=[],
+            extra_data={},
+        )
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_enqueues_send_email_delay(self):
+        db = AsyncMock()
+        user = SimpleNamespace(id=7, email="engineer@example.com")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+        notification = self._notification()
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock()
+            await service._deliver_email(notification)
+
+        mock_send_email.delay.assert_called_once_with(
+            "engineer@example.com",
+            "Action assigned",
+            "Please review CAPA-42",
+            False,
+        )
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_missing_user_email_raises(self):
+        db = AsyncMock()
+        user = SimpleNamespace(id=7, email="")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock()
+            with pytest.raises(ValueError, match="missing recipient email"):
+                await service._deliver_email(self._notification())
+            mock_send_email.delay.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_missing_user_raises(self):
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock()
+            with pytest.raises(ValueError, match="missing recipient email"):
+                await service._deliver_email(self._notification())
+            mock_send_email.delay.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_deliver_email_celery_delay_failure_raises(self):
+        db = AsyncMock()
+        user = SimpleNamespace(id=7, email="engineer@example.com")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+
+        service = NotificationService(db=db)
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock(side_effect=ConnectionError("broker down"))
+            with pytest.raises(RuntimeError, match="Failed to enqueue email"):
+                await service._deliver_email(self._notification())
+
+    @pytest.mark.asyncio
+    async def test_create_notification_records_failed_channels_on_email_enqueue_error(self):
+        from src.domain.models.notification import NotificationChannel, NotificationPriority, NotificationType
+
+        db = AsyncMock()
+        user = SimpleNamespace(id=1, email="engineer@example.com")
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = user
+        db.execute = AsyncMock(return_value=result)
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        service = NotificationService(db=db)
+
+        with (
+            patch.object(service, "_deliver_in_app", new_callable=AsyncMock),
+            patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email,
+        ):
+            mock_send_email.delay = MagicMock(side_effect=RuntimeError("celery unavailable"))
+            notification = await service.create_notification(
+                user_id=1,
+                notification_type=NotificationType.ASSIGNMENT,
+                title="Test",
+                message="Body",
+                priority=NotificationPriority.LOW,
+                channels=[NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+            )
+
+        assert NotificationChannel.EMAIL.value in notification.extra_data.get("failed_channels", [])
+        assert NotificationChannel.EMAIL.value not in (notification.delivered_channels or [])
