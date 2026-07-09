@@ -2,6 +2,7 @@
 # Format: <rule_id>\t<action>  (IGNORE | WARN | FAIL)
 # Reviewed: 2026-04-07 — suppressions are scope-limited to known-acceptable findings only.
 # FAIL is the default for HIGH/CRITICAL; WARNs appear in report but do not block.
+# CI: zaproxy/action-baseline@v0.15.0 allow_issue_writing=false; artifact_name=zap-scan; continue-on-error (advisory).
 
 # ── Informational / style alerts (non-exploitable in this context) ──
 10021	IGNORE	# X-Content-Type-Options header — set by Azure WAF upstream, not app layer
