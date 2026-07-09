@@ -6,10 +6,10 @@ import logging
 from datetime import datetime
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.api.dependencies import DbSession, require_permission
 from src.domain.models.external_audit_import import ExternalAuditDraftStatus, ExternalAuditImportStatus
 from src.domain.models.user import User
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
@@ -221,13 +221,12 @@ async def queue_import_job(
     job_id: int,
     db: DbSession,
     current_user: Annotated[User, Depends(require_permission("audit:update"))],
-    background_tasks: BackgroundTasks,
 ) -> ExternalAuditImportJobResponse:
-    """Set an import job to QUEUED status (fast — no inline processing).
+    """Queue an import job and dispatch Celery processing when available.
 
-    The frontend should follow up with a ``POST /jobs/{job_id}/process``
-    call from the import-review page where a longer client timeout and
-    proper progress UX are available.
+    If the broker/Celery dispatch fails, the job is marked FAILED with
+    ``QUEUE_DISPATCH_FAILED`` so it never sits forever in ``queued``.
+    Operators can retry queueing or call ``POST /jobs/{job_id}/process``.
     """
     service = ExternalAuditImportService(db)
     job, should_enqueue = await service.queue_job(
@@ -237,17 +236,27 @@ async def queue_import_job(
     )
 
     if should_enqueue:
-
-        def _dispatch_celery() -> None:
-            try:
-                process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
-            except Exception:
-                logger.warning(
-                    "Celery dispatch unavailable for job %s — use the Process button on the review page",
-                    job.id,
-                )
-
-        background_tasks.add_task(_dispatch_celery)
+        # Dispatch synchronously so broker failures are reflected in this response
+        # instead of leaving the job silently QUEUED after a BackgroundTasks miss.
+        # If the process crashes after QUEUED is flushed but before this returns,
+        # stale recovery (STALE_QUEUE_TIMEOUT) still clears forever-queued jobs.
+        try:
+            process_external_audit_import_job.delay(job.id, current_user.tenant_id, current_user.id)
+        except Exception as exc:
+            logger.warning(
+                "Celery dispatch unavailable for job %s (%s) — marking QUEUE_DISPATCH_FAILED",
+                job.id,
+                type(exc).__name__,
+            )
+            job = await service.mark_queue_dispatch_failed(
+                job_id=job.id,
+                tenant_id=current_user.tenant_id,
+                user_id=current_user.id,
+                detail=(
+                    "Unable to dispatch the import job to the background queue "
+                    f"({type(exc).__name__}). Retry queueing or use Process."
+                ),
+            )
 
     return _annotate_job_response(ExternalAuditImportJobResponse.model_validate(job))
 

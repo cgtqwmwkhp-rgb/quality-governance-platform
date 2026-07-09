@@ -25,6 +25,22 @@ console.log(`[QGP] Build: ${BUILD_SHA} @ ${BUILD_TIME}`)
 initErrorTracking()
 reportWebVitals()
 
+// Register the service worker only in production builds (SWA / deployed).
+// Skip in local Vite/dev to avoid stale-cache interference during development.
+// Do not attach controllerchange → location.reload() (reload loops).
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(
+      (registration) => {
+        console.log('SW registered:', registration.scope)
+      },
+      (error) => {
+        console.log('SW registration failed:', error)
+      },
+    )
+  })
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>

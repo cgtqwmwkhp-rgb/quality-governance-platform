@@ -11,6 +11,15 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { API_BASE_URL } from '../config/apiBase'
+import { getPlatformToken } from '../utils/auth'
+
+/** Backend closes with these codes for missing/invalid token or forbidden identity. */
+const WS_CLOSE_UNAUTHORIZED = 4001
+const WS_CLOSE_FORBIDDEN = 4003
+
+function isAuthCloseCode(code: number): boolean {
+  return code === WS_CLOSE_UNAUTHORIZED || code === WS_CLOSE_FORBIDDEN
+}
 
 interface WebSocketMessage {
   type: string
@@ -82,11 +91,19 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Get WebSocket URL
-  const getWsUrl = useCallback(() => {
+  // Get WebSocket URL with access token (fail closed if missing userId or token)
+  const getWsUrl = useCallback((): string | null => {
+    if (!userId) {
+      return null
+    }
+    const token = getPlatformToken()
+    if (!token) {
+      return null
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = API_BASE_URL.replace(/^https?:\/\//, '')
-    return `${protocol}//${host}/api/v1/realtime/ws/${userId || 0}`
+    const params = new URLSearchParams({ token })
+    return `${protocol}//${host}/api/v1/realtime/ws/${userId}?${params.toString()}`
   }, [userId])
 
   // Send heartbeat
@@ -170,9 +187,16 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
       return
     }
 
-    setIsConnecting(true)
     const url = getWsUrl()
-    console.log(`Connecting to WebSocket: ${url}`)
+    if (!url) {
+      console.warn('WebSocket connect skipped: missing userId or access token')
+      setIsConnecting(false)
+      return
+    }
+
+    setIsConnecting(true)
+    // Avoid logging the raw JWT
+    console.log(`Connecting to WebSocket: ${url.replace(/([?&]token=)[^&]+/, '$1***')}`)
 
     try {
       const ws = new WebSocket(url)
@@ -195,7 +219,16 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
         stopHeartbeat()
         onDisconnect?.()
 
-        // Attempt reconnection
+        // Auth failures: do not reconnect (token missing/invalid or forbidden)
+        if (isAuthCloseCode(event.code)) {
+          console.warn(
+            `WebSocket auth close (${event.code}); skipping reconnect`,
+          )
+          reconnectAttemptsRef.current = reconnectAttempts
+          return
+        }
+
+        // Attempt reconnection for transient disconnects
         if (reconnectAttemptsRef.current < reconnectAttempts) {
           const delay = reconnectInterval * Math.pow(2, reconnectAttemptsRef.current)
           console.log(
@@ -287,9 +320,9 @@ const useWebSocket = (options: UseWebSocketOptions = {}): UseWebSocketReturn => 
     setUnreadCount((prev) => Math.max(0, prev - 1))
   }, [])
 
-  // Auto-connect on mount
+  // Auto-connect on mount (fail closed without userId or token)
   useEffect(() => {
-    if (autoConnect && userId) {
+    if (autoConnect && userId && getPlatformToken()) {
       // Request notification permission
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission()

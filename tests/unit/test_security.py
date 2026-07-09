@@ -1,15 +1,20 @@
 """Unit tests for security module."""
 
 from datetime import timedelta
+from unittest.mock import AsyncMock
+
+import pytest
 
 from src.core.security import (
     build_access_token_claims,
     create_access_token,
     create_refresh_token,
     decode_token,
+    ensure_access_token_not_revoked,
     get_password_hash,
     verify_password,
 )
+from src.domain.exceptions import TokenRevokedError
 
 
 class TestPasswordHashing:
@@ -133,3 +138,42 @@ class TestJWTTokens:
         assert claims["role"] == "admin"
         assert claims["roles"] == ["admin"]
         assert claims["is_superuser"] is True
+
+
+class TestAccessTokenRevocationHelper:
+    """Tests for shared access-token revocation validation."""
+
+    @pytest.mark.asyncio
+    async def test_ensure_access_token_not_revoked_passes_when_active(self, monkeypatch):
+        token = create_access_token(subject="123")
+        payload = decode_token(token)
+        assert payload is not None
+        db = AsyncMock()
+
+        monkeypatch.setattr(
+            "src.core.security.is_token_revoked",
+            AsyncMock(return_value=False),
+        )
+
+        await ensure_access_token_not_revoked(payload, db)
+
+    @pytest.mark.asyncio
+    async def test_ensure_access_token_not_revoked_raises_when_blacklisted(self, monkeypatch):
+        token = create_access_token(subject="123")
+        payload = decode_token(token)
+        assert payload is not None
+        db = AsyncMock()
+
+        monkeypatch.setattr(
+            "src.core.security.is_token_revoked",
+            AsyncMock(return_value=True),
+        )
+
+        with pytest.raises(TokenRevokedError):
+            await ensure_access_token_not_revoked(payload, db)
+
+    @pytest.mark.asyncio
+    async def test_ensure_access_token_not_revoked_requires_jti(self):
+        db = AsyncMock()
+        with pytest.raises(ValueError, match="jti"):
+            await ensure_access_token_not_revoked({"sub": "1", "type": "access"}, db)

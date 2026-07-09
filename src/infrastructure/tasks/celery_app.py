@@ -34,17 +34,43 @@ def _redis_ssl_options(url: str) -> dict[str, Any] | None:
     return {"ssl_cert_reqs": ssl.CERT_REQUIRED}
 
 
-broker_url = (
-    _normalize_redis_ssl_url(settings.celery_broker_url) if settings.celery_broker_url else "redis://localhost:6379/0"
-)
-result_backend = (
-    _normalize_redis_ssl_url(settings.celery_result_backend)
-    if settings.celery_result_backend
-    else "redis://localhost:6379/1"
-)
+broker_url: str
+result_backend: str
 
-if not settings.celery_broker_url:
+_strict_celery = settings.is_production or (settings.is_staging and settings.external_audit_import_enabled)
+
+if settings.celery_broker_url:
+    broker_url = _normalize_redis_ssl_url(settings.celery_broker_url)
+elif _strict_celery:
+    raise ValueError(
+        "CONFIGURATION ERROR: CELERY_BROKER_URL must be set in production "
+        "(and in staging when external audit import is enabled). "
+        "Silent localhost defaults are not allowed."
+    )
+else:
+    broker_url = "redis://localhost:6379/0"
     logger.warning("CELERY_BROKER_URL not configured — using default redis://localhost:6379/0")
+
+if settings.celery_result_backend:
+    result_backend = _normalize_redis_ssl_url(settings.celery_result_backend)
+elif settings.celery_broker_url:
+    # Derive a distinct DB index from the broker when only broker is set.
+    result_backend = _normalize_redis_ssl_url(settings.celery_broker_url)
+elif _strict_celery:
+    raise ValueError(
+        "CONFIGURATION ERROR: CELERY_RESULT_BACKEND (or CELERY_BROKER_URL) must be set "
+        "in production (and in staging when external audit import is enabled)."
+    )
+else:
+    result_backend = "redis://localhost:6379/1"
+
+if _strict_celery:
+    lowered_broker = broker_url.lower()
+    if "localhost" in lowered_broker or "127.0.0.1" in lowered_broker or "[::1]" in lowered_broker:
+        raise ValueError(
+            "CONFIGURATION ERROR: CELERY_BROKER_URL must not use localhost or 127.0.0.1 "
+            "in production/staging with imports enabled."
+        )
 
 celery_app = Celery(
     "quality_governance",

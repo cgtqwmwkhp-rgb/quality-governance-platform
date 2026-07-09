@@ -3,13 +3,17 @@
 import logging
 from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.core.security import decode_token
+from src.api.schemas.error_codes import ErrorCode
+from src.api.utils.errors import api_error
+from src.core.config import settings
+from src.core.security import decode_token, ensure_access_token_not_revoked
+from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
@@ -21,16 +25,38 @@ security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
 
 
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _token_revoked_exception(message: str = "Access token has been revoked") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=api_error(ErrorCode.TOKEN_REVOKED.value, message),
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def _enforce_access_token_not_revoked(payload: dict, db: AsyncSession) -> None:
+    """Raise 401 TOKEN_REVOKED (or credentials error) when the access token is unusable."""
+    try:
+        await ensure_access_token_not_revoked(payload, db)
+    except TokenRevokedError as exc:
+        raise _token_revoked_exception(str(exc)) from exc
+    except ValueError as exc:
+        raise _credentials_exception() from exc
+
+
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """Get the current authenticated user from JWT token."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    credentials_exception = _credentials_exception()
 
     token = credentials.credentials
     payload = decode_token(token)
@@ -40,6 +66,8 @@ async def get_current_user(
 
     if payload.get("type") != "access":
         raise credentials_exception
+
+    await _enforce_access_token_not_revoked(payload, db)
 
     user_id_raw = payload.get("sub")
     if user_id_raw is None:
@@ -112,6 +140,9 @@ async def get_optional_current_user(
     supporting authenticated access for additional permissions.
     Used by portal users who authenticate via Azure AD (tokens not validated here)
     but can still filter by their email address.
+
+    A presented but revoked access token is rejected with 401 TOKEN_REVOKED
+    (same contract as :func:`get_current_user`).
     """
     if credentials is None:
         return None
@@ -122,6 +153,11 @@ async def get_optional_current_user(
     if payload is None:
         # Invalid token - return None instead of raising error
         return None
+
+    if payload.get("type") != "access":
+        return None
+
+    await _enforce_access_token_not_revoked(payload, db)
 
     user_id_raw = payload.get("sub")
     if user_id_raw is None:
@@ -139,7 +175,12 @@ async def get_optional_current_user(
 
 
 async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
-    """Backfill in-request tenant context from active tenant membership."""
+    """Backfill in-request tenant context from active tenant membership.
+
+    In production, users without an explicit tenant membership fail closed —
+    no silent first-tenant assignment and no auto-created
+    ``Default Organisation``.
+    """
     if user.tenant_id is not None:
         return
 
@@ -161,6 +202,19 @@ async def _resolve_user_tenant_context(db: AsyncSession, user: User) -> None:
             user.id,
         )
         return
+
+    if settings.is_production:
+        logger.warning(
+            "User %s has no tenant membership in production — refusing auto-bootstrap",
+            user.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=api_error(
+                ErrorCode.TENANT_ACCESS_DENIED.value,
+                "User has no tenant membership",
+            ),
+        )
 
     tenant_result = await db.execute(select(Tenant).where(Tenant.is_active == True).order_by(Tenant.id.asc()).limit(1))
     tenant = tenant_result.scalar_one_or_none()

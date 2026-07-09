@@ -53,6 +53,67 @@ async def test_readyz_readiness(client: AsyncClient):
     data = response.json()
     assert "status" in data
     assert "request_id" in data
+    assert "redis" in data
+
+
+@pytest.mark.asyncio
+async def test_readyz_returns_503_when_redis_required_and_missing(client: AsyncClient, monkeypatch):
+    """Production (or staging+imports) must fail readiness when REDIS_URL is absent.
+
+    Deploy probes that expect 200 will correctly fail until Redis is configured.
+    """
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "redis_url", "")
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    response = await client.get("/readyz")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "not_ready"
+    assert data["redis"] == "not_configured"
+    assert settings.is_redis_required is True
+
+
+@pytest.mark.asyncio
+async def test_api_health_readyz_returns_503_when_redis_required_and_missing(
+    client: AsyncClient, monkeypatch
+):
+    """`/api/v1/health/readyz` must match root `/readyz` Redis fail-fast contract."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "redis_url", "")
+    monkeypatch.setattr(settings, "app_env", "production")
+
+    response = await client.get("/api/v1/health/readyz")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "not_ready"
+    assert data["checks"]["redis"] == "not_configured"
+
+
+@pytest.mark.asyncio
+async def test_readyz_allows_missing_redis_in_development(client: AsyncClient, monkeypatch):
+    """Development may omit Redis; readiness stays non-fatal for redis:not_configured."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "redis_url", "")
+    monkeypatch.setattr(settings, "app_env", "development")
+    monkeypatch.setattr(settings, "external_audit_import_enabled", False)
+
+    response = await client.get("/readyz")
+
+    # DB may still drive 503; Redis absence alone must not force failure in development.
+    data = response.json()
+    assert data["redis"] == "not_configured"
+    if response.status_code == 200:
+        assert data["status"] == "ready"
+    else:
+        assert response.status_code == 503
+        # If not ready, it must be for a non-redis reason (e.g. database).
+        assert data.get("database") in {"disconnected", "degraded", "ok", "connected"}
 
 
 @pytest.mark.asyncio

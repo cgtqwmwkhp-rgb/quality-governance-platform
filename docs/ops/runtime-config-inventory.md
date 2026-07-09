@@ -57,9 +57,9 @@ Exact Key Vault secret names and slot assignments are environment-specific; alig
 
 | Variable | Description | Source (typical) | Required environments |
 | --- | --- | --- | --- |
-| `REDIS_URL` | Redis for idempotency middleware (and related use). | Key Vault / `.env.example` | Optional |
-| `CELERY_BROKER_URL` | Celery broker (often Redis). | Key Vault / `.env.example` | Optional |
-| `CELERY_RESULT_BACKEND` | Celery result backend. | Key Vault / `.env.example` | Optional |
+| `REDIS_URL` | Redis for idempotency middleware, distributed rate limiting, and cache. | Key Vault / `.env.example` | **Prod** (required). **Staging** when `EXTERNAL_AUDIT_IMPORT_ENABLED=true`. Optional in Dev. Must not be localhost in Prod/strict staging. |
+| `CELERY_BROKER_URL` | Celery broker (often Redis). No silent localhost default in Prod. | Key Vault / `.env.example` | **Prod** (required). **Staging** when imports enabled. Optional in Dev (localhost default allowed only outside Prod/strict staging). |
+| `CELERY_RESULT_BACKEND` | Celery result backend. | Key Vault / `.env.example` | **Prod** recommended (set explicitly or share broker URL). Required alongside broker for workers in Prod. |
 
 ---
 
@@ -132,4 +132,10 @@ Frontend Azure AD variables (`VITE_*`) are documented in **`frontend/.env.exampl
 - **`frontend/.env.example`** — frontend build-time variables.
 - **`docs/ops/SECRETS_ROTATION_RUNBOOK.md`** — secret rotation practices.
 
-**Last updated:** 2026-04-03
+**Last updated:** 2026-07-09
+
+### Production Redis / Celery fail-fast (Stream E)
+
+When `APP_ENV=production`, startup validation in `src/core/config.py` (`Settings`) requires a non-empty, non-loopback `REDIS_URL` and `CELERY_BROKER_URL` because rate limiting and idempotency middleware are always mounted (and external audit imports also depend on Redis/Celery). Staging (`APP_ENV=staging`) applies the same Redis/Celery rules when `EXTERNAL_AUDIT_IMPORT_ENABLED=true`.
+
+`/readyz` (root in `src/main.py` and `src/api/routes/health.py`) returns **503** when Redis is required but missing or unreachable — not a degraded 200.

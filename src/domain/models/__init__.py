@@ -180,6 +180,7 @@ from src.domain.models.risk_register import (
 from src.domain.models.rta import RoadTrafficCollision, RTAAction
 from src.domain.models.standard import Clause, Control, Standard
 from src.domain.models.tenant import Tenant, TenantInvitation, TenantUser
+from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.models.user import Role, User, UserRole
 
 # UVDB Achilles Verify B2 Audit Protocol
@@ -208,6 +209,7 @@ __all__ = [
     "Tenant",
     "TenantUser",
     "TenantInvitation",
+    "TokenBlacklist",
     # Standard models
     "Standard",
     "Clause",

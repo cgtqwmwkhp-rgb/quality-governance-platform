@@ -186,3 +186,22 @@ async def is_token_revoked(jti: str, db: AsyncSession) -> bool:
     from src.domain.services.token_service import TokenService
 
     return await TokenService.is_revoked(db, jti)
+
+
+async def ensure_access_token_not_revoked(payload: dict[str, Any], db: AsyncSession) -> None:
+    """Ensure a decoded access-token payload has not been revoked.
+
+    Wraps :func:`is_token_revoked` so REST and WebSocket auth share one check.
+
+    Raises:
+        ValueError: If the payload is missing a ``jti`` claim.
+        TokenRevokedError: If the token's ``jti`` is on the blacklist.
+    """
+    from src.domain.exceptions import TokenRevokedError
+
+    jti = payload.get("jti")
+    if not jti:
+        raise ValueError("Access token missing jti claim")
+
+    if await is_token_revoked(str(jti), db):
+        raise TokenRevokedError("Access token has been revoked")

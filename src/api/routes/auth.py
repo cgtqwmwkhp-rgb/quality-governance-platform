@@ -1,11 +1,13 @@
 """Authentication API routes."""
 
 import logging
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, security
 from src.api.schemas.auth import (
     LoginRequest,
     PasswordChangeRequest,
@@ -17,9 +19,7 @@ from src.api.schemas.auth import (
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
-from src.core.security import decode_token
 from src.domain.services.auth_service import AuthService
-from src.domain.services.email_service import email_service
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,12 @@ def _auth_http_error(status_code: int, code: str, message: str) -> HTTPException
         detail=api_error(code, message),
         headers={"WWW-Authenticate": "Bearer"} if status_code == status.HTTP_401_UNAUTHORIZED else None,
     )
+
+
+class LogoutRequest(BaseModel):
+    """Optional body for logout — refresh token is revoked when present."""
+
+    refresh_token: Optional[str] = Field(default=None)
 
 
 # =============================================================================
@@ -172,8 +178,23 @@ async def whoami(current_user: CurrentUser) -> WhoAmIResponse:
 
 
 @router.post("/logout")
-async def logout(current_user: CurrentUser) -> dict:
-    """Log out the current user. Records a telemetry event for audit trail."""
+async def logout(
+    current_user: CurrentUser,
+    db: DbSession,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    body: LogoutRequest | None = None,
+) -> dict:
+    """Log out the current user and revoke the presented access token.
+
+    When a refresh token is included in the body it is revoked as well.
+    """
+    service = AuthService(db)
+    refresh_token = body.refresh_token if body is not None else None
+    try:
+        await service.logout(credentials.credentials, refresh_token=refresh_token)
+    except ValueError as exc:
+        raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, str(exc)) from exc
+
     record_auth_logout()
     logger.info("User %s (id=%s) logged out", current_user.email, current_user.id)
     return {"message": "Logged out successfully"}
