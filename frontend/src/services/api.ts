@@ -4,6 +4,7 @@
  */
 
 import { API_BASE_URL } from '../config/apiBase'
+import { getPlatformToken } from '../utils/auth'
 
 // Use centralized API base URL
 const API_BASE = API_BASE_URL
@@ -44,7 +45,7 @@ async function apiRequest<T>(endpoint: string, options: ApiOptions = {}): Promis
     }
   }
 
-  const token = localStorage.getItem('access_token')
+  const token = getPlatformToken()
 
   const response = await fetch(url, {
     method,

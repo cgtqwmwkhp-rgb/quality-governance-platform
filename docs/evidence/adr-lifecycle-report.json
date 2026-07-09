@@ -1,6 +1,6 @@
 {
-  "generated": "2026-04-07",
-  "adr_count": 14,
+  "generated": "2026-07-09",
+  "adr_count": 17,
   "total_violations": 0,
   "adrs": [
     {
@@ -89,8 +89,8 @@
     },
     {
       "file": "ADR-0013-iac-adoption.md",
-      "status": "Proposed",
-      "date": "2026-04-03",
+      "status": "Accepted",
+      "date": "2026-07-09",
       "superseded_by": null,
       "violations": []
     },
@@ -98,6 +98,27 @@
       "file": "ADR-0014-readiness-probe-db-check.md",
       "status": "Accepted",
       "date": "2026-01-05",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0015-error-code-catalog-enforcement.md",
+      "status": "Accepted",
+      "date": "2026-04-07",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0016-sbom-publishing-strategy.md",
+      "status": "Accepted",
+      "date": "2026-04-07",
+      "superseded_by": null,
+      "violations": []
+    },
+    {
+      "file": "ADR-0017-idempotency-key-strategy.md",
+      "status": "Accepted",
+      "date": "2026-04-07",
       "superseded_by": null,
       "violations": []
     }

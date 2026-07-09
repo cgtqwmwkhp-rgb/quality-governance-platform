@@ -18,15 +18,14 @@ name: Azure Static Web Apps CI/CD
 # =============================================================================
 # VITE_API_URL RATIONALE (INTENTIONAL)
 # =============================================================================
-# The staging SWA build uses VITE_API_URL pointing to the PRODUCTION backend.
+# The staging SWA build uses VITE_API_URL pointing to the STAGING backend.
 # This is INTENTIONAL because:
-#   1. Azure SWA is a single-environment deployment (no separate staging backend)
-#   2. The SWA serves as a "staging" environment for the FRONTEND only
-#   3. E2E tests are READ-ONLY verification (no write operations)
-#   4. This allows testing the frontend against the real production API
+#   1. Staging frontend must talk to the staging API (environment parity)
+#   2. PR validation and deploy_to_staging share the same VITE_API_URL
+#   3. E2E / staging UI verification exercises the staging stack end-to-end
+#   4. Production API URL is reserved for production frontend builds only
 #
-# If a true staging backend is provisioned in the future, update VITE_API_URL
-# to https://app-qgp-staging.azurewebsites.net
+# Staging FE → Staging API: https://app-qgp-staging.azurewebsites.net
 # =============================================================================
 # VALIDATION MODE (Manual Testing)
 # =============================================================================
@@ -148,7 +147,7 @@ jobs:
       - name: Build Frontend
         working-directory: frontend
         env:
-          VITE_API_URL: https://app-qgp-prod.azurewebsites.net
+          VITE_API_URL: https://app-qgp-staging.azurewebsites.net
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}

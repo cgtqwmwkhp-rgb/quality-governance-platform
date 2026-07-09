@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AuditImportReview from '../AuditImportReview'
 
 const mockGetJob = vi.fn()
@@ -72,8 +72,20 @@ function renderPage(initialEntry = '/audits/41/import-review?jobId=72') {
 }
 
 describe('AuditImportReview', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => false,
+    })
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => false,
+    })
     mockGetReconciliation.mockResolvedValue({ data: null })
     mockBulkReviewJob.mockResolvedValue({ data: [] })
     mockGetLatestJobForRun.mockResolvedValue({
@@ -636,5 +648,121 @@ describe('AuditImportReview', () => {
     await waitFor(() => {
       expect(mockQueueJob).toHaveBeenCalledWith(72)
     })
+  })
+
+  it('sends draft status when Reset is clicked', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+        promotion_summary_json: null,
+        positive_summary_json: [],
+        nonconformity_summary_json: [],
+        improvement_summary_json: [],
+        evidence_preview_json: [],
+        processing_warnings_json: [],
+        provenance_json: {
+          processing_template_id: 11,
+          processing_template_version: 3,
+          declared_source_origin: 'third_party',
+          declared_assurance_scheme: 'Achilles UVDB',
+        },
+      },
+    })
+    mockListDrafts.mockResolvedValue({
+      data: [
+        {
+          id: 11,
+          import_job_id: 72,
+          audit_run_id: 41,
+          status: 'accepted',
+          title: 'Needs follow-up',
+          description: 'Evidence snippet',
+          severity: 'high',
+          finding_type: 'nonconformity',
+          confidence_score: 0.88,
+          competence_verdict: null,
+          evidence_snippets_json: ['Evidence snippet'],
+          mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+          mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+          suggested_action_title: 'Address issue',
+          suggested_risk_title: 'Create risk',
+        },
+      ],
+    })
+    mockReviewDraft.mockResolvedValue({
+      data: {
+        id: 11,
+        import_job_id: 72,
+        audit_run_id: 41,
+        status: 'draft',
+        title: 'Needs follow-up',
+        description: 'Evidence snippet',
+        severity: 'high',
+        finding_type: 'nonconformity',
+        confidence_score: 0.88,
+        competence_verdict: null,
+        evidence_snippets_json: ['Evidence snippet'],
+        mapped_frameworks_json: [{ framework: 'Achilles UVDB' }],
+        mapped_standards_json: [{ standard: 'ISO 9001', clause_number: '8.1' }],
+        suggested_action_title: 'Address issue',
+        suggested_risk_title: 'Create risk',
+      },
+    })
+
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /Reset finding to draft/i }))
+
+    await waitFor(() => {
+      expect(mockReviewDraft).toHaveBeenCalledWith(11, { status: 'draft' })
+    })
+  })
+
+  it('does not poll while the document is hidden', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => true,
+    })
+
+    const processingJob = {
+      id: 72,
+      audit_run_id: 41,
+      reference_number: 'IMP-00072',
+      status: 'processing',
+      specialist_home_path: '/uvdb',
+      specialist_home_label: 'Open Achilles / UVDB',
+      analysis_summary: 'Still analysing',
+      promotion_summary_json: null,
+      positive_summary_json: [],
+      nonconformity_summary_json: [],
+      improvement_summary_json: [],
+      evidence_preview_json: [],
+      processing_warnings_json: [],
+      provenance_json: {
+        processing_template_id: 11,
+        processing_template_version: 3,
+        declared_source_origin: 'third_party',
+        declared_assurance_scheme: 'Achilles UVDB',
+      },
+    }
+
+    mockGetJob.mockResolvedValue({ data: processingJob })
+    mockListDrafts.mockResolvedValue({ data: [] })
+
+    renderPage()
+
+    await waitFor(() => {
+      expect(mockGetJob).toHaveBeenCalledTimes(1)
+    })
+
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(mockGetJob).toHaveBeenCalledTimes(1)
   })
 })

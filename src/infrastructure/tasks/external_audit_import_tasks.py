@@ -52,17 +52,35 @@ def process_external_audit_import_job(self, job_id: int, tenant_id: int | None, 
                 "status": str(job.status),
                 "detected_scheme": job.detected_scheme,
                 "outcome_status": job.outcome_status,
+                "error_code": job.error_code,
             }
 
     try:
         return asyncio.run(_run())
     except MaxRetriesExceededError:
         logger.error("External audit import job %s exhausted all retries", job_id)
-        asyncio.run(_mark_job_failed(job_id, "MAX_RETRIES_EXCEEDED", "Processing failed after all retry attempts"))
-        return {"job_id": job_id, "status": "failed"}
+        asyncio.run(
+            _mark_job_failed(
+                job_id,
+                "MAX_RETRIES_EXCEEDED",
+                "Processing failed after all retry attempts. Review logs and retry the job.",
+            )
+        )
+        return {"job_id": job_id, "status": "failed", "error_code": "MAX_RETRIES_EXCEEDED"}
     except Exception as exc:
         logger.exception("External audit import job %s failed", job_id)
-        raise self.retry(exc=exc, countdown=10)
+        try:
+            raise self.retry(exc=exc, countdown=10)
+        except MaxRetriesExceededError:
+            logger.error("External audit import job %s exhausted retries after exception", job_id)
+            asyncio.run(
+                _mark_job_failed(
+                    job_id,
+                    "MAX_RETRIES_EXCEEDED",
+                    "Processing failed after all retry attempts. Review logs and retry the job.",
+                )
+            )
+            return {"job_id": job_id, "status": "failed", "error_code": "MAX_RETRIES_EXCEEDED"}
 
 
 @celery_app.task(
@@ -70,18 +88,38 @@ def process_external_audit_import_job(self, job_id: int, tenant_id: int | None, 
     queue="default",
 )
 def recover_stale_import_jobs() -> dict:
-    """Find QUEUED/PROCESSING jobs older than 30 minutes and mark them FAILED."""
+    """Find QUEUED/PROCESSING/PROMOTING jobs older than 30 minutes and mark them FAILED.
+
+    QUEUED jobs get ``STALE_QUEUE_TIMEOUT`` so a missing worker/broker never
+    leaves imports silently queued forever. In-flight processing uses
+    ``STALE_JOB_TIMEOUT``.
+    """
 
     async def _run() -> dict:
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
         async with async_session_maker() as session:
-            result = await session.execute(
+            queued = await session.execute(
+                update(ExternalAuditImportJob)
+                .where(
+                    ExternalAuditImportJob.status == ExternalAuditImportStatus.QUEUED,
+                    ExternalAuditImportJob.updated_at < cutoff,
+                )
+                .values(
+                    status=ExternalAuditImportStatus.FAILED,
+                    error_code="STALE_QUEUE_TIMEOUT",
+                    error_detail=(
+                        "Job remained queued beyond the 30-minute recovery window without a "
+                        "worker picking it up. Retry queueing or process synchronously."
+                    ),
+                )
+            )
+            in_flight = await session.execute(
                 update(ExternalAuditImportJob)
                 .where(
                     ExternalAuditImportJob.status.in_(
                         [
-                            ExternalAuditImportStatus.QUEUED,
                             ExternalAuditImportStatus.PROCESSING,
+                            ExternalAuditImportStatus.PROMOTING,
                         ]
                     ),
                     ExternalAuditImportJob.updated_at < cutoff,
@@ -89,13 +127,19 @@ def recover_stale_import_jobs() -> dict:
                 .values(
                     status=ExternalAuditImportStatus.FAILED,
                     error_code="STALE_JOB_TIMEOUT",
-                    error_detail="Job exceeded 30-minute processing window and was marked failed by the recovery sweep",
+                    error_detail=(
+                        "Job exceeded 30-minute processing window and was marked failed by the recovery sweep"
+                    ),
                 )
             )
             await session.commit()
-            count = result.rowcount
+            count = int(queued.rowcount or 0) + int(in_flight.rowcount or 0)
             if count:
                 logger.warning("Recovered %d stale import jobs", count)
-            return {"recovered": count}
+            return {
+                "recovered": count,
+                "queued_recovered": int(queued.rowcount or 0),
+                "processing_recovered": int(in_flight.rowcount or 0),
+            }
 
     return asyncio.run(_run())

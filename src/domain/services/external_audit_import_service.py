@@ -171,10 +171,39 @@ class ExternalAuditImportService:
         }:
             return job, False
         job.status = ExternalAuditImportStatus.QUEUED
+        job.error_code = None
+        job.error_detail = None
         job.updated_by_id = user_id
         await self.db.flush()
         await self.db.refresh(job)
         return job, True
+
+    async def mark_queue_dispatch_failed(
+        self,
+        *,
+        job_id: int,
+        tenant_id: int | None,
+        user_id: int,
+        detail: str | None = None,
+    ) -> ExternalAuditImportJob:
+        """Mark a job failed when the background queue broker cannot accept work.
+
+        Leaves the job retryable via ``queue_job`` (FAILED is outside the
+        in-flight status set) with an explicit reason code for operators/UI.
+        """
+        job = await self.get_job(job_id=job_id, tenant_id=tenant_id)
+        if job.status != ExternalAuditImportStatus.QUEUED:
+            return job
+        job.status = ExternalAuditImportStatus.FAILED
+        job.error_code = "QUEUE_DISPATCH_FAILED"
+        job.error_detail = detail or (
+            "Unable to dispatch the import job to the background queue. "
+            "Celery/broker is unavailable. Retry queueing or use Process."
+        )
+        job.updated_by_id = user_id
+        await self.db.flush()
+        await self.db.refresh(job)
+        return job
 
     async def get_job(self, *, job_id: int, tenant_id: int | None) -> ExternalAuditImportJob:
         result = await self.db.execute(
@@ -217,8 +246,12 @@ class ExternalAuditImportService:
         return job
 
     async def _recover_stale_processing(self, job: ExternalAuditImportJob) -> None:
-        """Auto-recover jobs stuck in PROCESSING or PROMOTING beyond the TTL."""
-        if job.status not in (ExternalAuditImportStatus.PROCESSING, ExternalAuditImportStatus.PROMOTING):
+        """Auto-recover jobs stuck in QUEUED, PROCESSING, or PROMOTING beyond the TTL."""
+        if job.status not in (
+            ExternalAuditImportStatus.QUEUED,
+            ExternalAuditImportStatus.PROCESSING,
+            ExternalAuditImportStatus.PROMOTING,
+        ):
             return
         updated_at = job.updated_at if hasattr(job, "updated_at") and job.updated_at else job.created_at
         if updated_at is None:
@@ -228,17 +261,26 @@ class ExternalAuditImportService:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
         elapsed = (now - updated_at).total_seconds()
         if elapsed > PROCESSING_TTL_SECONDS:
+            prior_status = job.status
             logger.warning(
-                "Recovering stale PROCESSING job %s (stuck for %.0fs)",
+                "Recovering stale %s job %s (stuck for %.0fs)",
+                prior_status.value if hasattr(prior_status, "value") else prior_status,
                 job.id,
                 elapsed,
             )
             job.status = ExternalAuditImportStatus.FAILED
-            job.error_code = "PROCESSING_TIMEOUT"
-            job.error_detail = (
-                f"Processing did not complete within {PROCESSING_TTL_SECONDS // 60} minutes. "
-                "The job has been automatically reset. Please retry."
-            )
+            if prior_status == ExternalAuditImportStatus.QUEUED:
+                job.error_code = "STALE_QUEUE_TIMEOUT"
+                job.error_detail = (
+                    f"Job remained queued for more than {PROCESSING_TTL_SECONDS // 60} minutes "
+                    "without a worker picking it up. Retry queueing or process synchronously."
+                )
+            else:
+                job.error_code = "PROCESSING_TIMEOUT"
+                job.error_detail = (
+                    f"Processing did not complete within {PROCESSING_TTL_SECONDS // 60} minutes. "
+                    "The job has been automatically reset. Please retry."
+                )
             await self.db.flush()
 
     async def get_latest_job_for_run(self, *, audit_run_id: int, tenant_id: int | None) -> ExternalAuditImportJob:
@@ -654,6 +696,7 @@ class ExternalAuditImportService:
 
             ocr_text = ""
             ocr_pages: list[str] = []
+            ocr_provider_status: str | None = None
             if self.ocr_service.is_configured:
                 ocr_result = await self.ocr_service.ocr_bytes(
                     raw,
@@ -662,8 +705,20 @@ class ExternalAuditImportService:
                 )
                 ocr_text = ocr_result.text.strip()
                 ocr_pages = ocr_result.pages or []
+                ocr_provider_status = ocr_result.provider_status
                 if ocr_result.note and note is None:
                     note = ocr_result.note
+
+            if ocr_provider_status == "failed" and not native_text and not ocr_text:
+                job.status = ExternalAuditImportStatus.FAILED
+                job.error_code = "OCR_FAILED"
+                job.error_detail = (
+                    note or "OCR provider failed and no native text could be extracted from the source document."
+                )
+                logger.warning("OCR hard-failed for job %s with no recoverable text", job.id)
+                await self.db.flush()
+                await self.db.refresh(job)
+                return job
 
             text, page_texts, extraction_method = self._merge_extractions(
                 native_text=native_text,
@@ -686,6 +741,18 @@ class ExternalAuditImportService:
                 ),
             )
             ai_result = self.consensus_service.reconcile(mistral_result, gemini_result)
+
+            if self._is_hard_ai_failure(mistral_result, gemini_result):
+                job.status = ExternalAuditImportStatus.FAILED
+                job.error_code = "AI_ANALYSIS_FAILED"
+                warning_text = "; ".join(ai_result.warnings[:3]) if ai_result.warnings else ""
+                job.error_detail = warning_text or (
+                    "Configured AI analysis providers failed before review could begin. Retry the job."
+                )
+                logger.warning("AI analysis hard-failed for job %s", job.id)
+                await self.db.flush()
+                await self.db.refresh(job)
+                return job
 
             scheme_warnings = validate_against_scheme(
                 scheme=job.detected_scheme or "",
@@ -794,13 +861,53 @@ class ExternalAuditImportService:
             await self.db.refresh(job)
             return job
         except Exception as exc:
+            error_code, error_detail = self._classify_processing_failure(exc)
             job.status = ExternalAuditImportStatus.FAILED
-            job.error_code = "IMPORT_PROCESSING_FAILED"
-            job.error_detail = "Import analysis failed before review could begin. Review logs and retry the job."
+            job.error_code = error_code
+            job.error_detail = error_detail
             logger.exception("External audit import processing failed for job %s", job.id, exc_info=exc)
             await self.db.flush()
             await self.db.refresh(job)
             return job
+
+    @staticmethod
+    def _is_hard_ai_failure(mistral_result: object, gemini_result: object) -> bool:
+        """True when a configured AI provider failed and none completed successfully.
+
+        ``not_configured`` / ``skipped`` are soft degradations so native-only
+        heuristic analysis can still produce reviewable drafts.
+        """
+        mistral_status = str(getattr(mistral_result, "provider_status", "") or "")
+        gemini_status = str(getattr(gemini_result, "provider_status", "") or "")
+        if mistral_status == "completed" or gemini_status == "completed":
+            return False
+        return mistral_status == "failed" or gemini_status == "failed"
+
+    @staticmethod
+    def _classify_processing_failure(exc: BaseException) -> tuple[str, str]:
+        """Map processing exceptions to stable operator-facing reason codes."""
+        name = type(exc).__name__.lower()
+        message = str(exc).lower()
+        combined = f"{name} {message}"
+        if "ocr" in combined:
+            return (
+                "OCR_FAILED",
+                "OCR processing failed before review could begin. Review logs and retry the job.",
+            )
+        if any(token in combined for token in ("mistral", "gemini", "ai_analysis", "consensus", "openai")):
+            return (
+                "AI_ANALYSIS_FAILED",
+                "AI analysis failed before review could begin. Review logs and retry the job.",
+            )
+        if any(token in combined for token in ("queue", "celery", "broker", "kombu", "amqp")):
+            return (
+                "QUEUE_DISPATCH_FAILED",
+                "Background queue dispatch failed during processing. Retry queueing or process synchronously.",
+            )
+        return (
+            "IMPORT_PROCESSING_FAILED",
+            "Import analysis failed before review could begin. Review logs and retry the job.",
+        )
 
     async def review_draft(
         self,

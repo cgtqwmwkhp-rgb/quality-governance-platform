@@ -564,9 +564,17 @@ async def readiness_check(request: Request):
             await r.aclose()
         else:
             redis_status = "not_configured"
+            if settings.is_redis_required:
+                logger.error(
+                    "Readiness: REDIS_URL required but not configured",
+                    extra={"request_id": request_id},
+                )
+                status_code = 503
     except Exception as e:
         logger.warning("Readiness: Redis check failed: %s", e, extra={"request_id": request_id})
         redis_status = "degraded"
+        if settings.is_redis_required:
+            status_code = 503
 
     overall = "ready" if status_code == 200 else "not_ready"
     if status_code == 200:
@@ -578,4 +586,9 @@ async def readiness_check(request: Request):
         "redis": redis_status,
         "request_id": request_id,
     }
+    if redis_status == "not_configured" and settings.is_redis_required:
+        payload["redis_note"] = (
+            "REDIS_URL is required in this environment for rate limiting, "
+            "idempotency, and/or external audit imports."
+        )
     return JSONResponse(content=payload, status_code=status_code)

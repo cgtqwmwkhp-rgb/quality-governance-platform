@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   clearTokens,
+  getPlatformToken,
   getTokenExpirySeconds,
   getUserRole,
   getUserRoles,
   hasRole,
   isTokenExpired,
   setAdminToken,
+  setPortalToken,
   shouldRefreshToken,
   TOKEN_REFRESH_LEAD_SECONDS,
   TOKEN_SKEW_SECONDS,
@@ -41,6 +43,32 @@ describe('auth role utilities', () => {
     expect(getUserRoles()).toEqual(['admin', 'supervisor'])
     expect(hasRole('admin')).toBe(true)
     expect(hasRole('supervisor')).toBe(true)
+  })
+})
+
+describe('getPlatformToken preference', () => {
+  beforeEach(() => {
+    clearTokens()
+  })
+
+  it('returns admin localStorage token when present', () => {
+    setAdminToken('admin-token')
+    expect(getPlatformToken()).toBe('admin-token')
+  })
+
+  it('falls back to portal sessionStorage token', () => {
+    setPortalToken('portal-token')
+    expect(getPlatformToken()).toBe('portal-token')
+  })
+
+  it('prefers admin token over portal token', () => {
+    setAdminToken('admin-token')
+    setPortalToken('portal-token')
+    expect(getPlatformToken()).toBe('admin-token')
+  })
+
+  it('returns null when no tokens are stored', () => {
+    expect(getPlatformToken()).toBeNull()
   })
 })
 

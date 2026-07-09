@@ -3,7 +3,7 @@
 # Uses data-testid selectors for stability
 
 version: "1.0"
-last_updated: "2026-01-26"
+last_updated: "2026-07-09"
 
 # ==============================================================================
 # PORTAL ACTIONS (P0 Critical - Employee Self-Service)

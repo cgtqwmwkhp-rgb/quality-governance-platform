@@ -77,8 +77,23 @@ def test_mapping_create_rejects_unknown_mapping_type():
         )
 
 
+def _collect_paths(routes):
+    paths = []
+    for route in routes:
+        path = getattr(route, "path", None)
+        if isinstance(path, str):
+            paths.append(path)
+        nested = getattr(route, "routes", None)
+        if nested is not None:
+            paths.extend(_collect_paths(nested))
+    return paths
+
+
 def test_cross_standard_route_is_mounted_in_main_api():
     from src.main import app
 
-    mounted_paths = {route.path for route in app.routes}
-    assert any(path.startswith("/api/v1/cross-standard-mappings") for path in mounted_paths)
+    # Mounted APIRouters may nest under Mount/Include without a top-level `.path`.
+    mounted_paths = _collect_paths(app.routes)
+    openapi_paths = list(app.openapi().get("paths", {}))
+    all_paths = mounted_paths + openapi_paths
+    assert any(path.startswith("/api/v1/cross-standard-mappings") for path in all_paths)

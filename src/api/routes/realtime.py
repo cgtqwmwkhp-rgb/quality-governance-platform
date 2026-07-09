@@ -13,14 +13,25 @@ from typing import Optional
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser
-from src.core.security import decode_token
+from src.core.config import settings
+from src.core.security import decode_token, ensure_access_token_not_revoked
+from src.domain.exceptions import TokenRevokedError
+from src.domain.models.tenant import TenantUser
+from src.domain.models.user import User
+from src.infrastructure.database import async_session_maker
 from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# WebSocket close codes used by this module
+WS_CLOSE_UNAUTHORIZED = 4001
+WS_CLOSE_FORBIDDEN = 4003
 
 
 class ConnectionStats(BaseModel):
@@ -39,6 +50,60 @@ class PresenceResponse(BaseModel):
     status: str
     last_seen: str
     active_connections: int
+
+
+async def authenticate_websocket_connection(
+    token: str,
+    path_user_id: int,
+) -> tuple[Optional[User], int]:
+    """Validate WS access token, revocation, identity, and production tenancy.
+
+    Returns:
+        ``(user, 0)`` on success, or ``(None, close_code)`` on failure.
+    """
+    payload = decode_token(token)
+    if payload is None or payload.get("type") != "access":
+        return None, WS_CLOSE_UNAUTHORIZED
+
+    token_user_id = payload.get("sub")
+    try:
+        if token_user_id is None or int(token_user_id) != path_user_id:
+            return None, WS_CLOSE_FORBIDDEN
+    except (TypeError, ValueError):
+        return None, WS_CLOSE_FORBIDDEN
+
+    async with async_session_maker() as db:
+        try:
+            await ensure_access_token_not_revoked(payload, db)
+        except (TokenRevokedError, ValueError):
+            return None, WS_CLOSE_UNAUTHORIZED
+
+        result = await db.execute(select(User).where(User.id == path_user_id).options(selectinload(User.roles)))
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active:
+            return None, WS_CLOSE_UNAUTHORIZED
+
+        if settings.is_production:
+            has_tenant = user.tenant_id is not None
+            if not has_tenant:
+                membership_result = await db.execute(
+                    select(TenantUser.id)
+                    .where(
+                        TenantUser.user_id == user.id,
+                        TenantUser.is_active == True,
+                    )
+                    .limit(1)
+                )
+                has_tenant = membership_result.scalar_one_or_none() is not None
+            if not has_tenant:
+                logger.warning(
+                    "WebSocket rejected for user %s — no tenant membership in production",
+                    user.id,
+                )
+                return None, WS_CLOSE_FORBIDDEN
+
+        db.expunge(user)
+        return user, 0
 
 
 @router.websocket("/ws/{user_id}")
@@ -64,20 +129,19 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
     """
 
     if not token:
-        await websocket.close(code=4001)
+        await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
         return
 
-    payload = decode_token(token)
-    if payload is None:
-        await websocket.close(code=4001)
+    user, close_code = await authenticate_websocket_connection(token, user_id)
+    if user is None:
+        await websocket.close(code=close_code)
         return
 
-    token_user_id = payload.get("sub")
-    if token_user_id is None or int(token_user_id) != user_id:
-        await websocket.close(code=4003)
-        return
-
-    connection = await connection_manager.connect(websocket=websocket, user_id=user_id, metadata={"token": token})
+    connection = await connection_manager.connect(
+        websocket=websocket,
+        user_id=user_id,
+        metadata={"token": token, "tenant_id": user.tenant_id},
+    )
 
     try:
         while True:

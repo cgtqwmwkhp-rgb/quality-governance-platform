@@ -100,11 +100,59 @@ class Settings(BaseSettings):
                     "Use a production database hostname."
                 )
 
+            self._validate_redis_celery_requirements()
+
+        elif self.is_staging and self.external_audit_import_enabled:
+            # Staging with import features enabled needs the same Redis/Celery guarantees.
+            self._validate_redis_celery_requirements()
+
         # Always validate database URL format
         if not self.database_url.startswith(("postgresql", "sqlite")):
             raise ValueError(
                 f"CONFIGURATION ERROR: Invalid DATABASE_URL format: {self.database_url}. "
                 "Must start with 'postgresql' or 'sqlite'."
+            )
+
+    @staticmethod
+    def _is_loopback_url(url: str) -> bool:
+        """Return True when a URL points at localhost / loopback."""
+        if not url or not url.strip():
+            return False
+        lowered = url.lower()
+        return "localhost" in lowered or "127.0.0.1" in lowered or "[::1]" in lowered
+
+    def _redis_dependent_features_enabled(self) -> bool:
+        """Rate limiting and idempotency are always mounted; imports are flag-gated."""
+        # Rate-limit middleware and idempotency middleware are always active.
+        # External audit import also depends on Redis/Celery for job processing.
+        return True
+
+    def _validate_redis_celery_requirements(self) -> None:
+        """Fail fast when Redis/Celery are required but missing or loopback-bound."""
+        if self._redis_dependent_features_enabled():
+            redis_url = (self.redis_url or "").strip()
+            if not redis_url:
+                raise ValueError(
+                    "CONFIGURATION ERROR: REDIS_URL must be set when rate limiting, "
+                    "idempotency, or external audit imports are enabled! "
+                    "Distributed rate limits and idempotency require Redis in this environment."
+                )
+            if self._is_loopback_url(redis_url):
+                raise ValueError(
+                    "CONFIGURATION ERROR: REDIS_URL must not use localhost or 127.0.0.1 "
+                    "when Redis-backed features are required! Use a managed Redis hostname."
+                )
+
+        broker = (self.celery_broker_url or "").strip()
+        if not broker:
+            raise ValueError(
+                "CONFIGURATION ERROR: CELERY_BROKER_URL must be set in this environment! "
+                "Empty Celery broker is not allowed (no silent localhost default)."
+            )
+        if self._is_loopback_url(broker):
+            raise ValueError(
+                "CONFIGURATION ERROR: CELERY_BROKER_URL must not use localhost or 127.0.0.1! "
+                "Use a production/staging broker hostname."
             )
 
     def _log_config_summary(self) -> None:
@@ -215,10 +263,12 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
-    # Redis (optional — used by idempotency middleware when available)
+    # Redis — required in production (rate limiting / idempotency); also required in
+    # staging when external_audit_import_enabled. Optional in local development.
     redis_url: str = ""
 
-    # Celery (optional — background task processing)
+    # Celery — required in production (no silent localhost broker); same staging rule
+    # as Redis when imports are enabled. Localhost default only outside those envs.
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
@@ -277,6 +327,27 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if running in production mode."""
         return self.app_env == "production"
+
+    @property
+    def is_staging(self) -> bool:
+        """Check if running in staging mode."""
+        return self.app_env.lower() == "staging"
+
+    @property
+    def is_redis_required(self) -> bool:
+        """Whether Redis must be configured for this environment to be ready.
+
+        Production always requires Redis when rate-limit/idempotency/imports are
+        enabled (rate-limit and idempotency are always mounted). Staging is treated
+        the same when external audit import is enabled.
+        """
+        if not self._redis_dependent_features_enabled():
+            return False
+        if self.is_production:
+            return True
+        if self.is_staging and self.external_audit_import_enabled:
+            return True
+        return False
 
     @property
     def azure_ad_client_id(self) -> str:

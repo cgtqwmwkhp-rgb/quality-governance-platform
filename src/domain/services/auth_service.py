@@ -55,6 +55,13 @@ def _mask_email(email: str) -> str:
     return f"{local[:3]}***@{domain or '***'}"
 
 
+def _naive_utc_from_timestamp(ts: float | int | None) -> datetime:
+    """Return naive UTC datetime for DB columns typed TIMESTAMP WITHOUT TIME ZONE."""
+    if ts is None:
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(float(ts), tz=timezone.utc).replace(tzinfo=None)
+
+
 class AuthService:
     """Handles authentication, token lifecycle, and password management."""
 
@@ -88,9 +95,21 @@ class AuthService:
         await self.db.refresh(user)
 
     async def _resolve_default_tenant(self, user: User) -> Tenant | None:
-        """Assign a new user to the first active tenant and create a TenantUser row."""
+        """Assign a new user to the first active tenant and create a TenantUser row.
+
+        Production fail-closed: never silently assign the first active tenant.
+        Callers must provision tenant membership explicitly before the user can
+        access tenant-scoped resources.
+        """
         existing = await self.db.execute(select(TenantUser).where(TenantUser.user_id == user.id).limit(1))
         if existing.scalar_one_or_none() is not None:
+            return None
+
+        if settings.is_production:
+            logger.warning(
+                "Refusing silent first-tenant assignment for user %s in production",
+                user.id,
+            )
             return None
 
         tenant_result = await self.db.execute(
@@ -198,7 +217,7 @@ class AuthService:
             raise ValueError("User not found or inactive")
 
         # Revoke the old refresh token
-        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
+        expires_at = _naive_utc_from_timestamp(payload.get("exp", 0))
         await TokenService.revoke_token(
             db=self.db,
             jti=jti,
@@ -212,24 +231,46 @@ class AuthService:
 
         return new_access, new_refresh
 
-    async def logout(self, token: str) -> None:
-        """Revoke an access token.
+    async def logout(self, access_token: str, refresh_token: str | None = None) -> None:
+        """Revoke the presented access token and, when provided, the refresh token.
 
         Raises:
-            ValueError: If the token is invalid or missing required claims.
+            ValueError: If the access token is invalid or missing required claims.
         """
+        await self._revoke_presented_token(access_token, reason="logout", require_valid=True)
+
+        if refresh_token:
+            # Best-effort: a missing/invalid refresh must not undo access revocation.
+            try:
+                await self._revoke_presented_token(refresh_token, reason="logout", require_valid=False)
+            except ValueError:
+                logger.info("Logout refresh token could not be revoked (invalid or expired)")
+
+    async def _revoke_presented_token(
+        self,
+        token: str,
+        *,
+        reason: str,
+        require_valid: bool,
+    ) -> None:
+        """Revoke a single JWT by ``jti`` if it is still valid enough to decode."""
         payload = decode_token(token)
         if payload is None:
-            raise ValueError("Invalid or expired token")
+            if require_valid:
+                raise ValueError("Invalid or expired token")
+            return
 
         jti = payload.get("jti")
         if jti is None:
-            raise ValueError("Token missing jti claim")
+            if require_valid:
+                raise ValueError("Token missing jti claim")
+            return
+
+        if await is_token_revoked(jti, self.db):
+            return
 
         exp_timestamp = payload.get("exp")
-        expires_at = (
-            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else datetime.now(timezone.utc)
-        )
+        expires_at = _naive_utc_from_timestamp(exp_timestamp)
 
         user_id_raw = payload.get("sub")
         user_id = int(user_id_raw) if user_id_raw else None
@@ -239,7 +280,7 @@ class AuthService:
             jti=jti,
             user_id=user_id,
             expires_at=expires_at,
-            reason="logout",
+            reason=reason,
         )
 
     async def change_password(self, user: User, current_password: str, new_password: str) -> None:
@@ -312,7 +353,7 @@ class AuthService:
 
         user.hashed_password = get_password_hash(new_password)
 
-        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
+        expires_at = _naive_utc_from_timestamp(payload.get("exp", 0))
         await TokenService.revoke_token(
             db=self.db,
             jti=jti,

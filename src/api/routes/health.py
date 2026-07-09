@@ -53,10 +53,10 @@ async def readiness_check():
         overall_status = "not_ready"
         status_code = 503
 
+    from src.core.config import settings
+
     try:
         import redis.asyncio as aioredis
-
-        from src.core.config import settings
 
         if settings.redis_url:
             r = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
@@ -64,9 +64,15 @@ async def readiness_check():
             await r.aclose()
         else:
             redis_status = "not_configured"
+            if settings.is_redis_required:
+                overall_status = "not_ready"
+                status_code = 503
     except Exception as exc:
         logger.warning("Readiness probe: Redis check failed: %s", exc)
         redis_status = "degraded"
+        if settings.is_redis_required:
+            overall_status = "not_ready"
+            status_code = 503
 
     pams_status = "not_configured"
     pams_tables_reflected = 0
@@ -100,9 +106,15 @@ async def readiness_check():
         "circuit_breakers": circuit_breakers,
     }
     if redis_status == "not_configured":
-        checks["redis_note"] = (
-            "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
-        )
+        if settings.is_redis_required:
+            checks["redis_note"] = (
+                "REDIS_URL is required in this environment for rate limiting, "
+                "idempotency, and/or external audit imports."
+            )
+        else:
+            checks["redis_note"] = (
+                "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
+            )
 
     payload = {
         "status": overall_status,

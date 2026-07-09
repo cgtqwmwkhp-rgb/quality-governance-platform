@@ -242,10 +242,15 @@ async def _test_get_current_user(
 ) -> _MockUser:
     """Test-only override for ``get_current_user``.
 
-    Validates the JWT signature and ``jti`` claim, then returns a
-    ``_MockUser`` constructed from the token claims – no database
-    session required.
+    Validates the JWT signature, ``jti`` claim, and revocation blacklist
+    (mirroring production ``get_current_user``), then returns a
+    ``_MockUser`` constructed from the token claims.
     """
+    from src.api.schemas.error_codes import ErrorCode
+    from src.api.utils.errors import api_error
+    from src.core.security import ensure_access_token_not_revoked
+    from src.domain.exceptions import TokenRevokedError
+
     cred_exc = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -253,6 +258,8 @@ async def _test_get_current_user(
     )
     payload = decode_token(credentials.credentials)
     if payload is None:
+        raise cred_exc
+    if payload.get("type") != "access":
         raise cred_exc
     if not payload.get("jti"):
         raise cred_exc
@@ -266,6 +273,17 @@ async def _test_get_current_user(
     from src.infrastructure.database import async_session_maker
 
     async with async_session_maker() as session:
+        try:
+            await ensure_access_token_not_revoked(payload, session)
+        except TokenRevokedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=api_error(ErrorCode.TOKEN_REVOKED.value, str(exc)),
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        except ValueError as exc:
+            raise cred_exc from exc
+
         result = await session.execute(
             select(User).where(User.id == int(user_id_raw)).options(selectinload(User.roles))
         )
@@ -304,6 +322,7 @@ async def _bootstrap_test_schema(request):
     from src.domain.models.evidence_asset import EvidenceAsset
     from src.domain.models.external_audit_import import ExternalAuditDraft, ExternalAuditImportJob
     from src.domain.models.tenant import Tenant
+    from src.domain.models.token_blacklist import TokenBlacklist
     from src.domain.models.user import Role, User, user_roles
     from src.infrastructure.database import Base, close_db, engine
 
@@ -320,6 +339,7 @@ async def _bootstrap_test_schema(request):
             Role.__table__,
             User.__table__,
             user_roles,
+            TokenBlacklist.__table__,
             AuditTemplate.__table__,
             AuditSection.__table__,
             AuditQuestion.__table__,

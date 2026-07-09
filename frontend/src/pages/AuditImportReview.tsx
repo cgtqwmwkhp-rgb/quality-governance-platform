@@ -384,7 +384,12 @@ export default function AuditImportReview() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [promotionFailedDrafts, setPromotionFailedDrafts] = useState<PromotionFailedDraftRow[] | null>(null)
   const [reconciliationNotice, setReconciliationNotice] = useState<string | null>(null)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
+  const [isDocumentHidden, setIsDocumentHidden] = useState(
+    () => typeof document !== 'undefined' && document.hidden,
+  )
   const processingTriggered = useRef(false)
+  const pollDelayMs = useRef(5000)
 
   const load = useCallback(async () => {
     if (!jobId && (!Number.isFinite(routeAuditId) || routeAuditId <= 0)) {
@@ -452,6 +457,7 @@ export default function AuditImportReview() {
       setReconciliation(reconciliationResult.data)
       setReconciliationNotice(reconciliationResult.notice)
       setPromotionFailedDrafts(null)
+      setLastUpdatedAt(new Date())
     } catch (err) {
       console.error('Failed to load external audit review workspace', err)
       setAuditRun(null)
@@ -478,6 +484,14 @@ export default function AuditImportReview() {
   }, [load])
 
   useEffect(() => {
+    const onVisibilityChange = () => {
+      setIsDocumentHidden(document.hidden)
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [])
+
+  useEffect(() => {
     if (!job || job.status !== 'queued' || isProcessing || processingTriggered.current) return
     processingTriggered.current = true
     setIsProcessing(true)
@@ -492,12 +506,20 @@ export default function AuditImportReview() {
   }, [job, isProcessing, load])
 
   useEffect(() => {
-    if (!job || !['processing', 'promoting'].includes(job.status)) return
+    if (!job || !['processing', 'promoting'].includes(job.status)) {
+      pollDelayMs.current = 5000
+      return
+    }
+    if (isDocumentHidden) return
+
+    const delay = pollDelayMs.current
     const timeoutId = window.setTimeout(() => {
-      void load()
-    }, 5000)
+      void load().finally(() => {
+        pollDelayMs.current = Math.min(pollDelayMs.current * 2, 30000)
+      })
+    }, delay)
     return () => window.clearTimeout(timeoutId)
-  }, [job, load])
+  }, [job, load, isDocumentHidden])
 
   const approvedCount = useMemo(
     () =>
@@ -564,7 +586,7 @@ export default function AuditImportReview() {
 
   const handleDraftDecision = async (
     draftId: number,
-    status: 'accepted' | 'rejected',
+    status: 'accepted' | 'rejected' | 'draft',
     extras?: Record<string, string>,
   ) => {
     setBusyDraftId(draftId)
@@ -1002,6 +1024,31 @@ export default function AuditImportReview() {
               <CardDescription>
                 Status: {job.status.replace(/_/g, ' ')}.{' '}
                 {job.analysis_summary || 'Analysis summary pending.'}
+                {['processing', 'promoting'].includes(job.status) || isProcessing ? (
+                  <span className="mt-1 block text-xs">
+                    {isProcessing || job.status === 'processing' || job.status === 'promoting'
+                      ? 'Processing in progress — this workspace refreshes automatically.'
+                      : null}
+                    {lastUpdatedAt
+                      ? ` Last updated ${new Intl.DateTimeFormat('en-GB', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        }).format(lastUpdatedAt)}.`
+                      : ''}
+                    {isDocumentHidden ? ' Updates paused while this tab is hidden.' : ''}
+                  </span>
+                ) : lastUpdatedAt ? (
+                  <span className="mt-1 block text-xs">
+                    Last updated{' '}
+                    {new Intl.DateTimeFormat('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    }).format(lastUpdatedAt)}
+                    .
+                  </span>
+                ) : null}
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1526,7 +1573,11 @@ function DraftFindingsList({
   busyDraftId: number | null
   isBulkReviewing: boolean
   specialistHome: { path: string; label: string }
-  onDecision: (id: number, status: 'accepted' | 'rejected', extras?: Record<string, string>) => void
+  onDecision: (
+    id: number,
+    status: 'accepted' | 'rejected' | 'draft',
+    extras?: Record<string, string>,
+  ) => void
   onLoad: () => void
 }) {
   const [expandedProvenance, setExpandedProvenance] = useState<Set<number>>(new Set())
@@ -1996,7 +2047,7 @@ function DraftFindingsList({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => void onDecision(draft.id, 'draft' as 'accepted')}
+                    onClick={() => void onDecision(draft.id, 'draft')}
                     disabled={busyDraftId === draft.id || isBulkReviewing}
                     aria-label={`Reset finding to draft: ${draft.title}`}
                   >

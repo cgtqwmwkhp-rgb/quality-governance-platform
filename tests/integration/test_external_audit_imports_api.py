@@ -600,12 +600,11 @@ async def test_external_audit_import_job_queue_is_idempotent(
 
 
 @pytest.mark.asyncio
-async def test_external_audit_import_queue_failure_keeps_job_retryable(
-    client: AsyncClient,
+async def test_external_audit_import_queue_failure_marks_queue_dispatch_failed(
     test_session: AsyncSession,
-    auth_headers: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Broker dispatch failures must not leave jobs forever-queued."""
     template = AuditTemplate(
         name="External Audit Intake",
         category="Compliance",
@@ -654,26 +653,54 @@ async def test_external_audit_import_queue_failure_keeps_job_retryable(
     run.source_document_asset_id = asset.id
     await test_session.commit()
 
-    create_response = await client.post(
-        "/api/v1/external-audit-imports/jobs",
-        json={"audit_run_id": run.id, "source_document_asset_id": asset.id},
-        headers=auth_headers,
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
     )
-    assert create_response.status_code == 201
-    job_id = create_response.json()["id"]
+    job, should_enqueue = await service.queue_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    assert should_enqueue is True
+    assert job.status == ExternalAuditImportStatus.QUEUED
 
     monkeypatch.setattr(
         external_audit_imports.process_external_audit_import_job,
         "delay",
         lambda *_args: (_ for _ in ()).throw(ValueError("broker misconfigured")),
     )
+    try:
+        external_audit_imports.process_external_audit_import_job.delay(
+            job.id, DEFAULT_TEST_TENANT_ID, DEFAULT_TEST_USER_ID
+        )
+        raise AssertionError("expected Celery delay to raise")
+    except ValueError:
+        job = await service.mark_queue_dispatch_failed(
+            job_id=job.id,
+            tenant_id=DEFAULT_TEST_TENANT_ID,
+            user_id=DEFAULT_TEST_USER_ID,
+            detail="Unable to dispatch the import job to the background queue (ValueError).",
+        )
 
-    fallback_queue = await client.post(
-        f"/api/v1/external-audit-imports/jobs/{job_id}/queue",
-        headers=auth_headers,
+    await test_session.commit()
+    assert job.status == ExternalAuditImportStatus.FAILED
+    assert job.error_code == "QUEUE_DISPATCH_FAILED"
+    assert job.error_detail
+    assert "ValueError" in job.error_detail
+
+    # FAILED jobs remain retryable via a subsequent queue call.
+    retried, should_enqueue_again = await service.queue_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
     )
-    assert fallback_queue.status_code == 200
-    assert fallback_queue.json()["status"] == "queued"
+    assert should_enqueue_again is True
+    assert retried.status == ExternalAuditImportStatus.QUEUED
+    assert retried.error_code is None
 
 
 @pytest.mark.asyncio
@@ -866,8 +893,118 @@ async def test_process_job_failure_preserves_existing_drafts(
 
     drafts = await service.list_job_drafts(job_id=job.id, tenant_id=DEFAULT_TEST_TENANT_ID)
     assert processed_job.status == ExternalAuditImportStatus.FAILED
+    assert processed_job.error_code == "IMPORT_PROCESSING_FAILED"
+    assert processed_job.error_detail
     assert len(drafts) == 1
     assert drafts[0].title == "Preserve me"
+
+
+@pytest.mark.asyncio
+async def test_process_job_ai_hard_failure_sets_ai_analysis_failed(
+    test_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template = AuditTemplate(
+        name="External Audit Intake",
+        category="Compliance",
+        audit_type="audit",
+        created_by_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        reference_number=generate_test_reference("TPL"),
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.commit()
+    await test_session.refresh(template)
+
+    run = AuditRun(
+        template_id=template.id,
+        title="AI failure import run",
+        status=AuditStatus.SCHEDULED,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        assigned_to_id=DEFAULT_TEST_USER_ID,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        assurance_scheme="Achilles UVDB",
+        reference_number=generate_test_reference("AUD"),
+    )
+    test_session.add(run)
+    await test_session.commit()
+    await test_session.refresh(run)
+
+    asset = EvidenceAsset(
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        storage_key="evidence/audit/test/ai-fail.md",
+        original_filename="ai-fail.md",
+        content_type="text/markdown",
+        file_size_bytes=256,
+        checksum_sha256="ai-fail-sha",
+        asset_type=EvidenceAssetType.DOCUMENT,
+        source_module=EvidenceSourceModule.AUDIT,
+        source_id=str(run.id),
+        visibility=EvidenceVisibility.INTERNAL_CUSTOMER,
+        retention_policy=EvidenceRetentionPolicy.STANDARD,
+        created_by_id=DEFAULT_TEST_USER_ID,
+        updated_by_id=DEFAULT_TEST_USER_ID,
+    )
+    test_session.add(asset)
+    await test_session.commit()
+    await test_session.refresh(asset)
+
+    run.source_document_asset_id = asset.id
+    await test_session.commit()
+
+    service = ExternalAuditImportService(test_session)
+    job = await service.create_job(
+        audit_run_id=run.id,
+        source_document_asset_id=asset.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    job.status = ExternalAuditImportStatus.QUEUED
+    await test_session.commit()
+
+    import src.domain.services.external_audit_import_service as import_service_module
+
+    monkeypatch.setattr(
+        import_service_module,
+        "storage_service",
+        lambda: SimpleNamespace(download=AsyncMock(return_value=b"Achilles audit report with enough words " * 5)),
+    )
+    monkeypatch.setattr(
+        service.ai_analysis_service,
+        "analyze_text",
+        AsyncMock(return_value=SimpleNamespace(provider_status="failed", warnings=["mistral down"], findings=[])),
+    )
+    monkeypatch.setattr(
+        service.gemini_review_service,
+        "review",
+        AsyncMock(return_value=SimpleNamespace(provider_status="failed", warnings=["gemini down"], findings=[])),
+    )
+    monkeypatch.setattr(
+        service.consensus_service,
+        "reconcile",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            provider_status="failed",
+            warnings=["Both AI providers failed"],
+            findings=[],
+            overall_score=None,
+            max_score=None,
+            score_percentage=None,
+            score_breakdown=[],
+            outcome=None,
+        ),
+    )
+
+    processed_job = await service.process_job(
+        job_id=job.id,
+        tenant_id=DEFAULT_TEST_TENANT_ID,
+        user_id=DEFAULT_TEST_USER_ID,
+    )
+    await test_session.commit()
+
+    assert processed_job.status == ExternalAuditImportStatus.FAILED
+    assert processed_job.error_code == "AI_ANALYSIS_FAILED"
+    assert processed_job.error_detail
 
 
 @pytest.mark.asyncio
