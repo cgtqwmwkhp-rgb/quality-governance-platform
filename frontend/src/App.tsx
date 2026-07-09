@@ -8,7 +8,7 @@ import PortalLayout from './components/PortalLayout'
 import Login from './pages/Login'
 import { PortalAuthProvider } from './contexts/PortalAuthContext'
 import { useNotificationStore } from './stores'
-import { getValidPlatformToken, setAdminToken, clearTokens } from './utils/auth'
+import { getValidPlatformToken, setAdminToken, clearTokens, revokeSession } from './utils/auth'
 import { useFeatureFlag } from './hooks/useFeatureFlag'
 import { useSessionKeepalive } from './hooks/useSessionKeepalive'
 import { useServiceWorkerAuthBridge } from './hooks/useServiceWorkerAuthBridge'
@@ -194,7 +194,8 @@ function App() {
     setIsAuthenticated(true)
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await revokeSession()
     clearTokens()
     useNotificationStore.getState().clearAll()
     setIsAuthenticated(false)

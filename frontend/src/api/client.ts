@@ -1560,6 +1560,8 @@ export interface ActionCreate {
 // ============ API Functions ============
 export const authApi = {
   login: (data: LoginRequest) => api.post<LoginResponse>('/api/v1/auth/login', data),
+  logout: (refreshToken?: string | null) =>
+    api.post('/api/v1/auth/logout', refreshToken ? { refresh_token: refreshToken } : {}),
 }
 
 // NOTE: FastAPI has redirect_slashes=False. Trailing slashes MUST match

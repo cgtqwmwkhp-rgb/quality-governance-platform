@@ -250,6 +250,36 @@ class TestWebSocket:
         manager = ConnectionManager()
         assert manager is not None
 
+    @pytest.mark.asyncio
+    async def test_disconnect_user_closes_all_connections(self):
+        """disconnect_user closes every connection for the user and cleans up."""
+        from src.infrastructure.websocket.connection_manager import ConnectionManager, UserConnection
+
+        manager = ConnectionManager()
+        ws1 = MagicMock()
+        ws1.close = AsyncMock()
+        ws2 = MagicMock()
+        ws2.close = AsyncMock()
+
+        conn1 = UserConnection(websocket=ws1, user_id=42, connection_id="c1")
+        conn2 = UserConnection(websocket=ws2, user_id=42, connection_id="c2")
+        manager.user_connections[42] = [conn1, conn2]
+        manager.presence[42] = MagicMock()
+
+        count = await manager.disconnect_user(42, code=4001)
+
+        assert count == 2
+        ws1.close.assert_awaited_once_with(code=4001)
+        ws2.close.assert_awaited_once_with(code=4001)
+        assert 42 not in manager.user_connections
+
+    @pytest.mark.asyncio
+    async def test_disconnect_user_returns_zero_when_offline(self):
+        from src.infrastructure.websocket.connection_manager import ConnectionManager
+
+        manager = ConnectionManager()
+        assert await manager.disconnect_user(99) == 0
+
 
 # ============================================================================
 # API Dependencies Tests

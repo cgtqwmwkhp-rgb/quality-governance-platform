@@ -1,7 +1,7 @@
 """Integration tests for access-token revocation and production tenant fail-closed."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -151,3 +151,32 @@ async def test_production_dependencies_do_not_create_default_organisation(
     assert defaults.scalar_one_or_none() is None
     memberships = await test_session.execute(select(TenantUser).where(TenantUser.user_id == user_id))
     assert memberships.scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_http_logout_revokes_access_token(client, test_session, test_user):
+    """POST /api/v1/auth/logout blacklists the presented access token."""
+    access = create_access_token(subject=test_user.id)
+    refresh = create_refresh_token(subject=test_user.id)
+    access_jti = decode_token(access)["jti"]
+
+    with patch(
+        "src.api.routes.auth.connection_manager.disconnect_user",
+        new_callable=AsyncMock,
+        return_value=0,
+    ) as disconnect_mock:
+        response = await client.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": f"Bearer {access}"},
+            json={"refresh_token": refresh},
+        )
+
+    assert response.status_code == 200
+    assert await TokenService.is_revoked(test_session, access_jti) is True
+    disconnect_mock.assert_awaited_once_with(test_user.id)
+
+    me = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {access}"},
+    )
+    assert me.status_code == 401
