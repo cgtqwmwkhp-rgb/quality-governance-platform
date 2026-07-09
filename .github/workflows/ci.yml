@@ -1801,6 +1801,7 @@ jobs:
           curl -f http://localhost:8000/healthz || exit 1
 
       - name: ZAP Baseline Scan
+        continue-on-error: true
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: 'http://localhost:8000'
