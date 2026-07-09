@@ -269,6 +269,7 @@ jobs:
     if: needs.pre-deployment-checks.outputs.approved == 'true' && needs.prod-dependencies-gate.result == 'success'
     outputs:
       release_sha: ${{ steps.release_sha.outputs.release_sha }}
+      previous_image: ${{ steps.capture_previous_image.outputs.previous_image }}
     environment:
       name: production
       url: https://app-qgp-prod.azurewebsites.net
@@ -489,6 +490,24 @@ jobs:
             exit 1
           fi
           echo "  ✅ Staging healthy (HTTP $STAGING_HEALTH) — proceeding with production deploy"
+
+      - name: Capture previous production image
+        id: capture_previous_image
+        run: |
+          set -euo pipefail
+          RAW=$(az webapp config container show \
+            --resource-group "${{ env.AZURE_RESOURCE_GROUP }}" \
+            --name "${{ env.AZURE_WEBAPP_NAME }}" \
+            --query "linuxFxVersion" -o tsv 2>/dev/null || echo "")
+          PREV="${RAW#DOCKER|}"
+          if [ -z "$PREV" ] || [ "$PREV" = "None" ]; then
+            echo "::warning::Unable to capture previous production image before deploy"
+            echo "previous_image=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Previous production image: $PREV"
+            echo "previous_image=$PREV" >> "$GITHUB_OUTPUT"
+            echo "PREVIOUS_IMAGE=$PREV" >> "$GITHUB_ENV"
+          fi
 
       - name: Deploy to Azure Web App
         run: |
@@ -1676,12 +1695,25 @@ jobs:
             -o json | tee -a "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Document rollback via slot swap
+      - name: Document rollback commands
         run: |
           {
-            echo "## Rollback command (slot swap)"
+            echo "## Rollback commands"
             echo ""
-            echo "This job **documents** rollback. Swap a **known-good** deployment slot (for example \`staging\`) into production:"
+            echo "Production runs on \`app-qgp-prod\` in \`rg-qgp-staging\` (shared RG; no deployment slots today)."
+            echo "Prefer restoring a known-good container image (same path as Emergency Rollback):"
+            echo ""
+            echo '```bash'
+            echo "az webapp config container set \\"
+            echo "  --resource-group \"${{ env.AZURE_RESOURCE_GROUP }}\" \\"
+            echo "  --name \"${{ secrets.PROD_AZURE_WEBAPP_NAME }}\" \\"
+            echo "  --container-image-name \"<acr>/<image>@sha256:...\""
+            echo "az webapp restart \\"
+            echo "  --resource-group \"${{ env.AZURE_RESOURCE_GROUP }}\" \\"
+            echo "  --name \"${{ secrets.PROD_AZURE_WEBAPP_NAME }}\""
+            echo '```'
+            echo ""
+            echo "If a deployment slot exists later, slot swap is also valid:"
             echo ""
             echo '```bash'
             echo "az webapp deployment slot swap \\"
@@ -1690,10 +1722,6 @@ jobs:
             echo "  --slot staging \\"
             echo "  --target-slot production"
             echo '```'
-            echo ""
-            echo "Replace \`--slot\` with the slot that holds the **previous known-good** image if your naming differs."
-            echo ""
-            echo "To deploy a specific prior image instead, set the app’s container image to the saved digest/tag from ACR after \`az webapp config show\` / ACR history, then restart the app."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Rollback documentation written to job summary."
 
@@ -1702,6 +1730,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-and-deploy]
     if: failure() && needs.build-and-deploy.result == 'failure'
+    # Align with successful deploy path: shared RG + PROD_AZURE_WEBAPP_NAME (app-qgp-prod).
+    # Do not use hardcoded rg-qgp-production / qgp-production — those resources do not exist.
 
     steps:
       - name: Login to Azure
@@ -1709,19 +1739,54 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Execute slot swap rollback
+      - name: Execute production rollback
+        env:
+          PREVIOUS_IMAGE: ${{ needs.build-and-deploy.outputs.previous_image }}
         run: |
-          echo "🔄 Auto-rollback triggered — swapping staging back to production"
-          az webapp deployment slot swap \
-            --resource-group ${{ vars.AZURE_RG || 'rg-qgp-production' }} \
-            --name ${{ vars.AZURE_APP_NAME || 'qgp-production' }} \
-            --slot staging \
-            --target-slot production
-          echo "✅ Slot swap rollback completed"
+          set -euo pipefail
+          RG="${{ env.AZURE_RESOURCE_GROUP }}"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          if [ -z "$APP" ]; then
+            echo "❌ PROD_AZURE_WEBAPP_NAME / AZURE_WEBAPP_NAME is empty — cannot rollback"
+            exit 1
+          fi
+          echo "🔄 Auto-rollback targeting ${APP} in ${RG}"
+
+          SLOTS=$(az webapp deployment slot list \
+            --name "$APP" \
+            --resource-group "$RG" \
+            --query "[].name" -o tsv 2>/dev/null || true)
+
+          if echo "$SLOTS" | grep -qx "staging"; then
+            echo "Deployment slot 'staging' found — performing slot swap rollback"
+            az webapp deployment slot swap \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --slot staging \
+              --target-slot production
+            echo "✅ Slot swap rollback completed"
+          elif [ -n "${PREVIOUS_IMAGE:-}" ]; then
+            echo "No staging slot — restoring previous container image: $PREVIOUS_IMAGE"
+            az webapp config container set \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --container-image-name "$PREVIOUS_IMAGE" \
+              --output none
+            az webapp restart \
+              --resource-group "$RG" \
+              --name "$APP" \
+              --output none
+            echo "✅ Previous image restored"
+          else
+            echo "❌ Cannot auto-rollback: no staging slot and no previous_image captured before deploy"
+            echo "Use workflow Emergency Rollback - Production with a known-good image SHA."
+            exit 1
+          fi
 
       - name: Verify rollback health
         run: |
-          APP_URL="https://${{ vars.AZURE_APP_NAME || 'qgp-production' }}.azurewebsites.net"
+          APP="${{ env.AZURE_WEBAPP_NAME }}"
+          APP_URL="https://${APP}.azurewebsites.net"
           echo "Verifying rollback health at ${APP_URL}/healthz ..."
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "${APP_URL}/healthz")
           if [ "$STATUS" = "200" ]; then
