@@ -928,6 +928,12 @@ jobs:
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
+
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "❌ ERROR: Failed to retrieve REDIS-URL from Key Vault (required for Settings fail-fast during alembic current)"
+            exit 1
+          fi
 
           CONTAINER_ARGS=()
           if [ -n "${MIGRATION_SUBNET_ID:-}" ]; then
@@ -950,6 +956,10 @@ jobs:
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              APP_ENV="production" \
+              REDIS_URL="$REDIS_URL_VAL" \
+              CELERY_BROKER_URL="$REDIS_URL_VAL" \
+              CELERY_RESULT_BACKEND="$REDIS_URL_VAL" \
             --command-line "alembic current" \
             --cpu 1 \
             --memory 1
