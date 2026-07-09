@@ -513,10 +513,14 @@ jobs:
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
           GENSPARK_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name GENSPARK-API-KEY --query value -o tsv 2>/dev/null || true)
-          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv 2>/dev/null || true)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
 
           if [ -z "$DB_URL" ]; then
             echo "❌ Failed to retrieve DATABASE_URL from Key Vault"
+            exit 1
+          fi
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "❌ Failed to retrieve REDIS-URL from Key Vault (required for production)"
             exit 1
           fi
           if [ -z "$STORAGE_CONTAINER_NAME" ]; then
@@ -778,6 +782,7 @@ jobs:
           STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
           STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-prod --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
           
           # Validate secrets - FAIL if missing (no silent skip)
           if [ -z "$DB_URL" ]; then
@@ -787,6 +792,11 @@ jobs:
           fi
           if [ -z "$STORAGE_CONN" ]; then
             echo "❌ ERROR: Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
+            echo "migration_status=failed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "❌ ERROR: Failed to retrieve REDIS-URL from Key Vault (required for Settings fail-fast during alembic)"
             echo "migration_status=failed" >> "$GITHUB_OUTPUT"
             exit 1
           fi
@@ -819,6 +829,10 @@ jobs:
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
               AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              APP_ENV="production" \
+              REDIS_URL="$REDIS_URL_VAL" \
+              CELERY_BROKER_URL="$REDIS_URL_VAL" \
+              CELERY_RESULT_BACKEND="$REDIS_URL_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
             --memory 1; then
@@ -914,6 +928,12 @@ jobs:
           SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
           JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
+
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "❌ ERROR: Failed to retrieve REDIS-URL from Key Vault (required for Settings fail-fast during alembic current)"
+            exit 1
+          fi
 
           CONTAINER_ARGS=()
           if [ -n "${MIGRATION_SUBNET_ID:-}" ]; then
@@ -936,6 +956,10 @@ jobs:
               SECRET_KEY="$SECRET_KEY_VAL" \
               JWT_SECRET_KEY="$JWT_SECRET_VAL" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              APP_ENV="production" \
+              REDIS_URL="$REDIS_URL_VAL" \
+              CELERY_BROKER_URL="$REDIS_URL_VAL" \
+              CELERY_RESULT_BACKEND="$REDIS_URL_VAL" \
             --command-line "alembic current" \
             --cpu 1 \
             --memory 1
