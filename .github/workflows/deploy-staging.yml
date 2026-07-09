@@ -220,7 +220,7 @@ jobs:
           MISTRAL_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name MISTRAL-API-KEY --query value -o tsv 2>/dev/null || true)
           GEMINI_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name GOOGLE-GEMINI-API-KEY --query value -o tsv 2>/dev/null || true)
           GENSPARK_API_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name GENSPARK-API-KEY --query value -o tsv 2>/dev/null || true)
-          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv 2>/dev/null || true)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv)
           
           if [ -z "$DB_URL" ]; then
             echo "   ❌ Failed to retrieve DATABASE_URL from Key Vault"
@@ -228,6 +228,10 @@ jobs:
           fi
           if [ -z "$STORAGE_CONN" ]; then
             echo "   ❌ Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
+            exit 1
+          fi
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "   ❌ Failed to retrieve REDIS-URL from Key Vault (required for staging)"
             exit 1
           fi
           if [ -z "$STORAGE_CONTAINER_NAME" ]; then
@@ -305,6 +309,7 @@ jobs:
           STORAGE_CONN=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONNECTION-STRING --query value -o tsv)
           STORAGE_CONTAINER_NAME=$(az keyvault secret show --vault-name kv-qgp-staging --name AZURE-STORAGE-CONTAINER-NAME --query value -o tsv 2>/dev/null || true)
           PEPPER_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name PSEUDONYMIZATION-PEPPER --query value -o tsv)
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv)
           
           # Validate secrets
           if [ -z "$DB_URL" ]; then
@@ -313,6 +318,10 @@ jobs:
           fi
           if [ -z "$STORAGE_CONN" ]; then
             echo "❌ ERROR: Failed to retrieve AZURE_STORAGE_CONNECTION_STRING from Key Vault"
+            exit 1
+          fi
+          if [ -z "$REDIS_URL_VAL" ]; then
+            echo "❌ ERROR: Failed to retrieve REDIS-URL from Key Vault (required for Settings fail-fast during alembic)"
             exit 1
           fi
           if [ -z "$STORAGE_CONTAINER_NAME" ]; then
@@ -340,6 +349,10 @@ jobs:
               AZURE_STORAGE_CONNECTION_STRING="$STORAGE_CONN" \
               AZURE_STORAGE_CONTAINER_NAME="$STORAGE_CONTAINER_NAME" \
               PSEUDONYMIZATION_PEPPER="$PEPPER_VAL" \
+              APP_ENV="staging" \
+              REDIS_URL="$REDIS_URL_VAL" \
+              CELERY_BROKER_URL="$REDIS_URL_VAL" \
+              CELERY_RESULT_BACKEND="$REDIS_URL_VAL" \
             --command-line "alembic upgrade head" \
             --cpu 1 \
             --memory 1
