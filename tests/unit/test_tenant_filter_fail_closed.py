@@ -54,12 +54,12 @@ def test_require_tenant_id_fails_closed_with_403():
     assert detail["code"] == "TENANT_ACCESS_DENIED"
 
 
-def test_audit_get_entity_source_is_fail_closed():
-    """Guard against regressions that reintroduce NULL-inclusive OR in _get_entity."""
+def test_apply_tenant_filter_source_is_fail_closed():
+    """Guard against regressions that reintroduce NULL-inclusive OR in the shared helper."""
     import inspect
 
-    from src.domain.services.audit_service import AuditService
+    from src.api.utils import tenant as tenant_utils
 
-    source = inspect.getsource(AuditService._get_entity)
+    source = inspect.getsource(tenant_utils.apply_tenant_filter)
     assert "is_(None)" not in source
-    assert "tenant_id == tenant_id" in source or "model_any.tenant_id == tenant_id" in source
+    assert "tenant_id == tenant_id" in source or "model.tenant_id == tenant_id" in source

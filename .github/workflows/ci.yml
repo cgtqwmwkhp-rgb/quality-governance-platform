@@ -1485,6 +1485,7 @@ jobs:
           JWT_SECRET_KEY: test-jwt-secret-min16chars
           TESTING: "1"
           APP_ENV: development
+          DEFAULT_TENANT_ID: "1"
         run: |
           uvicorn src.main:app --host 127.0.0.1 --port 8000 &
           for i in $(seq 1 30); do
