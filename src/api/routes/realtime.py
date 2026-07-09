@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentSuperuser, CurrentUser
 from src.core.config import settings
 from src.core.security import decode_token, ensure_access_token_not_revoked
 from src.domain.exceptions import TokenRevokedError
@@ -106,12 +106,36 @@ async def authenticate_websocket_connection(
         return user, 0
 
 
+def _extract_websocket_token(websocket: WebSocket, query_token: Optional[str]) -> Optional[str]:
+    """Resolve WS access token from Authorization header, then query ``?token=``.
+
+    Browser clients typically cannot set custom headers on WebSocket open and
+    should continue using ``?token=``. Non-browser clients should prefer
+    ``Authorization: Bearer <jwt>``.
+    """
+    auth_header = websocket.headers.get("authorization")
+    if auth_header:
+        scheme, _, value = auth_header.partition(" ")
+        if scheme.lower() == "bearer" and value.strip():
+            return value.strip()
+
+    if query_token:
+        return query_token
+
+    return None
+
+
 @router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional[str] = Query(None)):
     """
     WebSocket endpoint for real-time communication.
 
+    Auth (first match wins):
+    1. ``Authorization: Bearer <jwt>`` header (preferred for non-browser clients)
+    2. Query ``?token=<jwt>`` (fallback for browser clients)
+
     Connect with: ws://host/api/v1/realtime/ws/{user_id}?token=JWT_TOKEN
+    or with Authorization header when the client stack supports it.
 
     Message Protocol:
 
@@ -127,6 +151,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int, token: Optional
     - { "type": "channel_message", "data": {...} } - Channel broadcast
     - { "type": "presence_update", "data": {...} } - Presence change
     """
+    token = _extract_websocket_token(websocket, token)
 
     if not token:
         await websocket.close(code=WS_CLOSE_UNAUTHORIZED)
@@ -215,14 +240,14 @@ async def get_user_presence(user_id: int, current_user: CurrentUser):
 
 
 @router.post("/broadcast")
-async def broadcast_message(message: dict, current_user: CurrentUser, channel: Optional[str] = None):
+async def broadcast_message(message: dict, current_user: CurrentSuperuser, channel: Optional[str] = None):
     """
     Broadcast a message to connected users.
 
     If channel is provided, broadcasts only to that channel.
     Otherwise, broadcasts to all connected users.
 
-    Admin only endpoint.
+    Superuser only endpoint.
     """
     if channel:
         count = await connection_manager.broadcast_to_channel(

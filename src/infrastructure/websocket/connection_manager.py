@@ -160,6 +160,37 @@ class ConnectionManager:
             {"user_id": user_id, "connection_id": connection.connection_id},
         )
 
+    async def disconnect_user(self, user_id: int, code: int = 4001) -> int:
+        """Close and clean up all WebSocket connections for a user.
+
+        Args:
+            user_id: User whose connections should be closed
+            code: WebSocket close code (default 4001 unauthorized / session ended)
+
+        Returns:
+            Number of connections disconnected
+        """
+        connections = list(self.user_connections.get(user_id, []))
+        if not connections:
+            return 0
+
+        disconnected = 0
+        for connection in connections:
+            try:
+                await connection.websocket.close(code=code)
+            except Exception as e:
+                logger.debug(
+                    "Failed to close WebSocket for user %s connection %s: %s",
+                    user_id,
+                    connection.connection_id,
+                    e,
+                )
+            await self.disconnect(connection)
+            disconnected += 1
+
+        logger.info("Disconnected %s WebSocket connection(s) for user %s", disconnected, user_id)
+        return disconnected
+
     async def subscribe_to_channel(self, connection: UserConnection, channel: str):
         """Subscribe a connection to a channel"""
         if channel not in self.channels:

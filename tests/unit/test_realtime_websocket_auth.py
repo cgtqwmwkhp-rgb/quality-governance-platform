@@ -4,7 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.api.routes.realtime import WS_CLOSE_FORBIDDEN, WS_CLOSE_UNAUTHORIZED, authenticate_websocket_connection
+from src.api.routes.realtime import (
+    WS_CLOSE_FORBIDDEN,
+    WS_CLOSE_UNAUTHORIZED,
+    _extract_websocket_token,
+    authenticate_websocket_connection,
+    broadcast_message,
+)
 from src.core.security import create_access_token, create_refresh_token
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.user import User
@@ -173,3 +179,33 @@ async def test_websocket_auth_accepts_valid_token_with_tenant(
     assert code == 0
     assert user is active
     db.expunge.assert_called_once_with(active)
+
+
+def test_extract_websocket_token_prefers_authorization_header() -> None:
+    websocket = MagicMock()
+    websocket.headers = {"authorization": "Bearer header-token"}
+    assert _extract_websocket_token(websocket, "query-token") == "header-token"
+
+
+def test_extract_websocket_token_falls_back_to_query() -> None:
+    websocket = MagicMock()
+    websocket.headers = {}
+    assert _extract_websocket_token(websocket, "query-token") == "query-token"
+
+
+def test_extract_websocket_token_returns_none_when_missing() -> None:
+    websocket = MagicMock()
+    websocket.headers = {"authorization": "Basic nope"}
+    assert _extract_websocket_token(websocket, None) is None
+
+
+def test_broadcast_endpoint_requires_superuser_dependency() -> None:
+    """POST /realtime/broadcast must depend on CurrentSuperuser, not CurrentUser."""
+    import inspect
+
+    from src.api.dependencies import CurrentSuperuser, get_current_superuser
+
+    annotation = inspect.signature(broadcast_message).parameters["current_user"].annotation
+    assert annotation is CurrentSuperuser
+    # Annotated[..., Depends(get_current_superuser)]
+    assert annotation.__metadata__[0].dependency is get_current_superuser

@@ -8,6 +8,8 @@
  * This module provides a single source of truth for token access.
  */
 
+import { API_BASE_URL } from '../config/apiBase'
+
 const ADMIN_TOKEN_KEY = 'access_token'
 const ADMIN_REFRESH_TOKEN_KEY = 'refresh_token'
 const PORTAL_TOKEN_KEY = 'platform_access_token'
@@ -60,6 +62,29 @@ export function clearTokens(): void {
   localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY)
   sessionStorage.removeItem(PORTAL_TOKEN_KEY)
   sessionStorage.removeItem(PORTAL_REFRESH_TOKEN_KEY)
+}
+
+/**
+ * Best-effort server-side session revoke before clearing local tokens.
+ * Failures are swallowed so local logout always proceeds.
+ */
+export async function revokeSession(): Promise<void> {
+  const access = getPlatformToken()
+  if (!access) return
+
+  const refresh = getPlatformRefreshToken()
+  try {
+    await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${access}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
+    })
+  } catch {
+    // best-effort — local logout must still clear state
+  }
 }
 
 /**
