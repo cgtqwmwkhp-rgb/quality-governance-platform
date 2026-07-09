@@ -20,8 +20,8 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
 from src.domain.services.auth_service import AuthService
-from src.infrastructure.websocket.connection_manager import connection_manager
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
+from src.infrastructure.websocket.connection_manager import connection_manager
 
 logger = logging.getLogger(__name__)
 
