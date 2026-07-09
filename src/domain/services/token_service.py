@@ -40,7 +40,13 @@ class TokenService:
         user_id: int,
         reason: str = "admin_revoke",
     ) -> int:
-        """Revoke all tokens for a user by updating the reason on existing entries."""
+        """Update reason on existing blacklist rows for a user.
+
+        NOTE: This does **not** revoke active (not-yet-blacklisted) tokens. A
+        proper "revoke all sessions" needs a ``token_version`` (or similar)
+        claim checked at validation time. Prefer presenting tokens to
+        ``revoke_token`` / logout until that exists.
+        """
         from sqlalchemy import update
 
         result = await db.execute(update(TokenBlacklist).where(TokenBlacklist.user_id == user_id).values(reason=reason))

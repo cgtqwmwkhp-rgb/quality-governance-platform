@@ -20,6 +20,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.user import UserResponse
 from src.api.utils.errors import api_error
 from src.domain.services.auth_service import AuthService
+from src.infrastructure.websocket.connection_manager import connection_manager
 from src.infrastructure.monitoring.azure_monitor import record_auth_logout, track_metric
 
 logger = logging.getLogger(__name__)
@@ -187,6 +188,7 @@ async def logout(
     """Log out the current user and revoke the presented access token.
 
     When a refresh token is included in the body it is revoked as well.
+    Active WebSocket connections for the user are closed after revocation.
     """
     service = AuthService(db)
     refresh_token = body.refresh_token if body is not None else None
@@ -194,6 +196,8 @@ async def logout(
         await service.logout(credentials.credentials, refresh_token=refresh_token)
     except ValueError as exc:
         raise _auth_http_error(status.HTTP_401_UNAUTHORIZED, ErrorCode.INVALID_CREDENTIALS, str(exc)) from exc
+
+    await connection_manager.disconnect_user(current_user.id)
 
     record_auth_logout()
     logger.info("User %s (id=%s) logged out", current_user.email, current_user.id)

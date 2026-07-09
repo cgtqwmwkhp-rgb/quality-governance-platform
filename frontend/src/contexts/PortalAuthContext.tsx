@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { API_BASE_URL } from '../config/apiBase'
+import { revokeSession } from '../utils/auth'
 
 // Microsoft Entra ID (Azure AD) configuration
 const MSAL_CONFIG = {
@@ -51,7 +52,7 @@ interface PortalAuthContextType {
   isLoading: boolean
   login: () => Promise<void>
   loginWithDemo: () => void
-  logout: () => void
+  logout: () => Promise<void>
   error: string | null
   isAzureADAvailable: boolean
   platformToken: string | null // Platform JWT for API calls
@@ -318,8 +319,11 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
   }
 
   // Logout
-  const logout = () => {
+  const logout = async () => {
     const wasAzureUser = user && !user.isDemoUser && isAzureConfigured()
+
+    // Revoke server-side session while tokens are still available
+    await revokeSession()
 
     setUser(null)
     setPlatformToken(null)
