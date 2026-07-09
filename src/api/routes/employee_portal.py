@@ -213,12 +213,10 @@ def get_default_portal_tenant_id() -> int:
     """Resolve the tenant used for unauthenticated portal intake.
 
     Fail closed when the portal tenant is not configured so public submissions
-    cannot silently land in the wrong tenant.
+    cannot silently land in tenant ``1`` / Default Organisation.
     """
     tenant_id = settings.default_tenant_id
     if tenant_id is None:
-        if not settings.is_production:
-            return 1
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=api_error(

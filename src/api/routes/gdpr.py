@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.services.gdpr_service import GDPRService
 
@@ -22,7 +23,7 @@ async def export_user_data(
     exported without side-effects.
     """
     service = GDPRService(db, dry_run=dry_run)
-    data = await service.export_user_data(current_user.id, current_user.tenant_id or 0)
+    data = await service.export_user_data(current_user.id, require_tenant_id(current_user.tenant_id))
     if dry_run:
         return {
             "dry_run": True,
@@ -51,7 +52,7 @@ async def request_data_erasure(
         raise BadRequestError("Confirmation required. Set 'confirm=true' to proceed with data erasure.")
 
     service = GDPRService(db, dry_run=dry_run)
-    result = await service.request_erasure(current_user.id, current_user.tenant_id or 0, reason)
+    result = await service.request_erasure(current_user.id, require_tenant_id(current_user.tenant_id), reason)
     return result
 
 

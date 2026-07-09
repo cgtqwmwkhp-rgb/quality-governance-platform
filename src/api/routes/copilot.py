@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.tenant import require_tenant_id
 from src.core.security import decode_token
 from src.domain.exceptions import NotFoundError
 from src.infrastructure.database import async_session_maker
@@ -388,7 +389,7 @@ async def search_knowledge(
 
     results = await service.search_knowledge(
         query=query,
-        tenant_id=current_user.tenant_id or 1,
+        tenant_id=require_tenant_id(current_user.tenant_id),
         category=category,
         limit=limit,
     )
@@ -423,7 +424,7 @@ async def add_knowledge(
         title=title,
         content=content,
         category=category,
-        tenant_id=current_user.tenant_id or 1,
+        tenant_id=require_tenant_id(current_user.tenant_id),
         tags=tags,
     )
 
@@ -505,7 +506,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int):
             return
 
         user_id = user.id
-        tenant_id = user.tenant_id or 1
+        try:
+            tenant_id = require_tenant_id(user.tenant_id)
+        except HTTPException:
+            await websocket.close(code=4003, reason="Tenant access denied")
+            return
 
     await manager.connect(websocket, session_id)
 

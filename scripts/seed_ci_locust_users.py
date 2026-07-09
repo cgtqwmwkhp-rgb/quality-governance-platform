@@ -16,7 +16,8 @@ from src.infrastructure.database import async_session_maker, engine
 
 async def _ensure() -> None:
     async with async_session_maker() as db:
-        # Portal intake uses tenant_id=1 when default_tenant_id is unset (non-production).
+        # Portal intake requires DEFAULT_TENANT_ID (fail-closed; no silent tenant=1).
+        # CI seeds tenant id=1 so local/CI can set DEFAULT_TENANT_ID=1.
         r1 = await db.execute(select(Tenant).where(Tenant.id == 1))
         tenant_one = r1.scalar_one_or_none()
         if tenant_one is None:

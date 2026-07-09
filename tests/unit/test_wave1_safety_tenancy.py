@@ -76,13 +76,17 @@ def test_has_permission_requires_exact_permission_match():
 
 
 def test_get_default_portal_tenant_id_fails_closed_when_missing(monkeypatch):
+    """Missing portal tenant must never silently fall back to tenant 1."""
     monkeypatch.setattr("src.api.routes.employee_portal.settings.default_tenant_id", None)
-    monkeypatch.setattr("src.api.routes.employee_portal.settings.app_env", "production")
+    monkeypatch.setattr("src.api.routes.employee_portal.settings.app_env", "development")
 
     with pytest.raises(HTTPException) as exc:
         get_default_portal_tenant_id()
 
     assert exc.value.status_code == 503
+    detail = exc.value.detail
+    assert isinstance(detail, dict)
+    assert detail["code"] == "CONFIGURATION_ERROR"
 
 
 @pytest.mark.asyncio
