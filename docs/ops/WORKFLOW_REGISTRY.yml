@@ -3,7 +3,7 @@
 # P0 workflows must complete successfully for production readiness
 
 version: "1.0"
-last_updated: "2026-01-26"
+last_updated: "2026-07-09"
 
 # ==============================================================================
 # P0 CRITICAL WORKFLOWS - Must Pass for Production

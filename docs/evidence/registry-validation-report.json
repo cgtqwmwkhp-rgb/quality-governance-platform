@@ -1,5 +1,5 @@
 {
-  "generated": "2026-04-07",
+  "generated": "2026-07-09",
   "registries_checked": 3,
   "total_violations": 0,
   "max_stale_days": 120,
@@ -7,19 +7,19 @@
     {
       "registry": "BUTTON_REGISTRY.yml",
       "path": "docs/ops/BUTTON_REGISTRY.yml",
-      "last_updated": "2026-01-26",
+      "last_updated": "2026-07-09",
       "violations": []
     },
     {
       "registry": "PAGE_REGISTRY.yml",
       "path": "docs/ops/PAGE_REGISTRY.yml",
-      "last_updated": "2026-01-26",
+      "last_updated": "2026-07-09",
       "violations": []
     },
     {
       "registry": "WORKFLOW_REGISTRY.yml",
       "path": "docs/ops/WORKFLOW_REGISTRY.yml",
-      "last_updated": "2026-01-26",
+      "last_updated": "2026-07-09",
       "violations": []
     }
   ]
