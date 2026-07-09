@@ -1,30 +1,34 @@
 # QGP Production Conveyor Policy
 
-Single-lane merge bot for `cgtqwmwkhp-rgb/quality-governance-platform`.
-Source of truth for progress: WCS canvas `qgp-wcs-15-stage-audit.canvas.tsx`.
+Multi-lane merge bot for `cgtqwmwkhp-rgb/quality-governance-platform`.
+Source of truth for progress: WCS canvas `qgp-wcs-action-plan.canvas.tsx`.
 
 ## Goals
 
-- Keep a free lane: at most one merge-to-main in flight.
+- Keep merge lanes productive without fighting: coordinate tip promote, value, and Dependabot.
 - Avoid conflicts: rebase/update PR branches onto latest `main` before merge.
-- Continue the queue when the lane frees: merge the next green PR automatically.
+- Continue the queue when a lane frees: merge the next green PR that matches priority.
 - Never promote production without staging SHA match + security green + Redis/Celery readiness.
 
-## Merge order (priority queue) — post-promote
+## Merge order (priority queue) — WCS value lane
 
-Promoted / closed (do not re-queue): #549 (ZAP), #552 (staging REDIS-URL), #551 (Trivy HIGH), #550 (PWA SOS).
+Promoted / closed (do not re-queue): #549 (ZAP), #552 (staging REDIS-URL), #551 (Trivy HIGH), #550 (PWA SOS), #548 (JWT revoke BE / import / Redis fail-fast).
+
+Completed value (do not re-queue): **#574** tenant filter, **#575** logout revoke.
 
 Current priority:
 
-1. **#555** — release signoff for signed main SHA (`6cc641e6` or current tip)
-2. **#556** — prod auto-rollback RG alignment (app deploy; wait staging SHA after merge)
-3. Any other open PRs — oldest first, only if green and mergeable (skip CONFLICTING; rebase first)
-4. Dependabot — only after human/app PRs above; one at a time; never conflict-merge
+1. **Promote tip if lag** — if staging `build_sha` lags signed `main`, wait for Deploy Staging cutover (or diagnose) before merging more app PRs
+2. **Value P0s from action plan** — next product value from `qgp-wcs-action-plan` (e.g. live Notifications UI / email enqueue); one app change at a time with staging gate
+3. **Remaining hard Dependabot only with code fix** — `#290` `#558` `#287` `#274` `#573`; one at a time; never conflict-merge; push code fix to PR branch when CI/red
+4. **#355 human decision** — Gemini SDK + audit metadata; do not auto-merge; await explicit human go
+
+Stale queue items removed: **#555** / **#556** (no longer head-of-queue).
 
 ## Lane rules (hard)
 
-1. **One lane.** Do not merge if:
-   - another PR merge is in progress
+1. **Coordinated lanes.** Do not merge if:
+   - another PR merge is in progress on the same runtime surface
    - main CI is running for a just-merged SHA
    - Deploy Staging / Deploy Production is in progress
 2. **Green only.** Squash-merge only when:
@@ -44,7 +48,8 @@ Current priority:
 ## Heartbeat cadence
 
 - Every **5 minutes** while the conveyor is armed.
-- Each tick: status → fix blockers on head-of-queue PR → merge if lane free → update WCS canvas.
+- Each tick: status → fix blockers on head-of-queue PR → merge if lane free → refresh WCS action-plan canvas when queue state changes.
+- Advisory only: do not hammer GitHub API (single `gh` list/status per tick; no tight retry loops).
 
 ## Stop conditions
 
