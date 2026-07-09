@@ -253,8 +253,6 @@ class TestWebSocket:
     @pytest.mark.asyncio
     async def test_disconnect_user_closes_all_connections(self):
         """disconnect_user closes every connection for the user and cleans up."""
-        from unittest.mock import AsyncMock, MagicMock
-
         from src.infrastructure.websocket.connection_manager import ConnectionManager, UserConnection
 
         manager = ConnectionManager()

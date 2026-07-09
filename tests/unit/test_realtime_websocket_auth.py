@@ -181,7 +181,6 @@ async def test_websocket_auth_accepts_valid_token_with_tenant(
     db.expunge.assert_called_once_with(active)
 
 
-
 def test_extract_websocket_token_prefers_authorization_header() -> None:
     websocket = MagicMock()
     websocket.headers = {"authorization": "Bearer header-token"}

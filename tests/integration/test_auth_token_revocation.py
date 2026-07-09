@@ -153,7 +153,6 @@ async def test_production_dependencies_do_not_create_default_organisation(
     assert memberships.scalars().first() is None
 
 
-
 @pytest.mark.asyncio
 async def test_http_logout_revokes_access_token(client, test_session, test_user):
     """POST /api/v1/auth/logout blacklists the presented access token."""
