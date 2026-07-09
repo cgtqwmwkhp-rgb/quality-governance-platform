@@ -77,9 +77,7 @@ async def test_readyz_returns_503_when_redis_required_and_missing(client: AsyncC
 
 
 @pytest.mark.asyncio
-async def test_api_health_readyz_returns_503_when_redis_required_and_missing(
-    client: AsyncClient, monkeypatch
-):
+async def test_api_health_readyz_returns_503_when_redis_required_and_missing(client: AsyncClient, monkeypatch):
     """`/api/v1/health/readyz` must match root `/readyz` Redis fail-fast contract."""
     from src.core.config import settings
 

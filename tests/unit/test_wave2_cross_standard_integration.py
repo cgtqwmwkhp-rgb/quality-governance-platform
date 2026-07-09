@@ -80,5 +80,6 @@ def test_mapping_create_rejects_unknown_mapping_type():
 def test_cross_standard_route_is_mounted_in_main_api():
     from src.main import app
 
-    mounted_paths = {route.path for route in app.routes}
+    # Starlette may include `_IncludedRouter` entries without a `.path`.
+    mounted_paths = {route.path for route in app.routes if hasattr(route, "path")}
     assert any(path.startswith("/api/v1/cross-standard-mappings") for path in mounted_paths)

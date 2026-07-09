@@ -47,6 +47,8 @@ class TokenService:
     @staticmethod
     async def cleanup_expired(db: AsyncSession) -> int:
         """Remove expired blacklist entries."""
-        result = await db.execute(delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.now(timezone.utc)))
+        result = await db.execute(
+            delete(TokenBlacklist).where(TokenBlacklist.expires_at < datetime.now(timezone.utc).replace(tzinfo=None))
+        )
         await db.commit()
         return result.rowcount

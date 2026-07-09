@@ -709,16 +709,11 @@ class ExternalAuditImportService:
                 if ocr_result.note and note is None:
                     note = ocr_result.note
 
-            if (
-                ocr_provider_status == "failed"
-                and not native_text
-                and not ocr_text
-            ):
+            if ocr_provider_status == "failed" and not native_text and not ocr_text:
                 job.status = ExternalAuditImportStatus.FAILED
                 job.error_code = "OCR_FAILED"
                 job.error_detail = (
-                    note
-                    or "OCR provider failed and no native text could be extracted from the source document."
+                    note or "OCR provider failed and no native text could be extracted from the source document."
                 )
                 logger.warning("OCR hard-failed for job %s with no recoverable text", job.id)
                 await self.db.flush()

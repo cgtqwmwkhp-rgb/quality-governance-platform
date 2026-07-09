@@ -43,12 +43,16 @@ class TestEnvironmentDetection:
             secret_key="a-very-secure-production-key-1234",
             jwt_secret_key="another-secure-jwt-key-5678",
             pseudonymization_pepper="super-secret-pepper-value-1234",
+            redis_url="rediss://redis.example:6380/0",
+            celery_broker_url="rediss://redis.example:6380/0",
+            celery_result_backend="rediss://redis.example:6380/0",
         )
         assert s.is_production is True
         assert s.is_development is False
 
     def test_unknown_env_is_neither(self):
-        s = _make_settings(app_env="staging")
+        # Staging with imports enabled requires Redis/Celery; disable imports for this property check.
+        s = _make_settings(app_env="staging", external_audit_import_enabled=False)
         assert s.is_development is False
         assert s.is_production is False
 
@@ -125,6 +129,9 @@ class TestProductionValidation:
             "secret_key": "a-very-secure-production-key-1234",
             "jwt_secret_key": "another-secure-jwt-key-5678",
             "pseudonymization_pepper": "super-secret-pepper-value-1234",
+            "redis_url": "rediss://redis.example:6380/0",
+            "celery_broker_url": "rediss://redis.example:6380/0",
+            "celery_result_backend": "rediss://redis.example:6380/0",
         }
         defaults.update(overrides)
         return defaults

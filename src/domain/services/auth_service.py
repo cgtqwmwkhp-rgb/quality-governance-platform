@@ -55,6 +55,13 @@ def _mask_email(email: str) -> str:
     return f"{local[:3]}***@{domain or '***'}"
 
 
+def _naive_utc_from_timestamp(ts: float | int | None) -> datetime:
+    """Return naive UTC datetime for DB columns typed TIMESTAMP WITHOUT TIME ZONE."""
+    if ts is None:
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.fromtimestamp(float(ts), tz=timezone.utc).replace(tzinfo=None)
+
+
 class AuthService:
     """Handles authentication, token lifecycle, and password management."""
 
@@ -210,7 +217,7 @@ class AuthService:
             raise ValueError("User not found or inactive")
 
         # Revoke the old refresh token
-        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
+        expires_at = _naive_utc_from_timestamp(payload.get("exp", 0))
         await TokenService.revoke_token(
             db=self.db,
             jti=jti,
@@ -263,9 +270,7 @@ class AuthService:
             return
 
         exp_timestamp = payload.get("exp")
-        expires_at = (
-            datetime.fromtimestamp(exp_timestamp, tz=timezone.utc) if exp_timestamp else datetime.now(timezone.utc)
-        )
+        expires_at = _naive_utc_from_timestamp(exp_timestamp)
 
         user_id_raw = payload.get("sub")
         user_id = int(user_id_raw) if user_id_raw else None
@@ -348,7 +353,7 @@ class AuthService:
 
         user.hashed_password = get_password_hash(new_password)
 
-        expires_at = datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)
+        expires_at = _naive_utc_from_timestamp(payload.get("exp", 0))
         await TokenService.revoke_token(
             db=self.db,
             jti=jti,

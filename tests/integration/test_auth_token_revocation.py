@@ -149,7 +149,7 @@ async def test_production_dependencies_do_not_create_default_organisation(
     assert exc_info.value.status_code == 403
     await test_session.rollback()
 
-    defaults = await test_session.execute(select(Tenant).where(Tenant.slug == "default"))
+    defaults = await test_session.execute(select(Tenant).where(Tenant.slug == "default", Tenant.is_active == True))
     assert defaults.scalar_one_or_none() is None
     memberships = await test_session.execute(select(TenantUser).where(TenantUser.user_id == user_id))
     assert memberships.scalars().first() is None

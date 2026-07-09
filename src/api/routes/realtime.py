@@ -78,9 +78,7 @@ async def authenticate_websocket_connection(
         except (TokenRevokedError, ValueError):
             return None, WS_CLOSE_UNAUTHORIZED
 
-        result = await db.execute(
-            select(User).where(User.id == path_user_id).options(selectinload(User.roles))
-        )
+        result = await db.execute(select(User).where(User.id == path_user_id).options(selectinload(User.roles)))
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
             return None, WS_CLOSE_UNAUTHORIZED
