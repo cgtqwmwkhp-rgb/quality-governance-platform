@@ -1801,8 +1801,11 @@ jobs:
           curl -f http://localhost:8000/healthz || exit 1
 
       - name: ZAP Baseline Scan
+        # Advisory: do not fail the job on action/tooling errors (issue write, artifact API).
         continue-on-error: true
-        uses: zaproxy/action-baseline@v0.12.0
+        # v0.15.0 uses current artifact upload APIs; older tags hit 400 "artifact name is not valid"
+        # even for valid names (zaproxy/action-baseline#134).
+        uses: zaproxy/action-baseline@v0.15.0
         with:
           target: 'http://localhost:8000'
           rules_file_name: '.zap/rules.tsv'
@@ -1812,7 +1815,6 @@ jobs:
           # and POST /issues fails CI with "Resource not accessible by integration".
           # Keep advisory (fail_action: false); reports remain as artifacts.
           allow_issue_writing: false
-          # Default artifact_name zap_scan is rejected by Actions artifact API (400).
           artifact_name: zap-scan
 
       - name: Upload ZAP reports
