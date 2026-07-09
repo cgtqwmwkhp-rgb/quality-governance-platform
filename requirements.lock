@@ -131,9 +131,9 @@ aiosignal==1.4.0 \
     --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e \
     --hash=sha256:f47eecd9468083c2029cc99945502cb7708b082c232f9aca65da147157b251c7
     # via aiohttp
-aiosmtplib==3.0.1 \
-    --hash=sha256:43580604b152152a221598be3037f0ae6359c2817187ac4433bd857bc3fc6513 \
-    --hash=sha256:abcceae7e820577307b4cda2041b2c25e5121469c0e186764ddf8e15b12064cd
+aiosmtplib==5.1.1 \
+    --hash=sha256:9d384f0c3d8906f745c1cf6819f073145bb2de8b10407905f5e2ee3389bfe6c7 \
+    --hash=sha256:d9a35e9d170bc1a9f66e2fdfe7fd212f7eebb8c1581c621f79395d0bcaba7a68
     # via -r requirements.txt
 aiosqlite==0.20.0 \
     --hash=sha256:36a1deaca0cac40ebe32aac9977a6e2bbc7f5189f23f4a54d5908986729e5bd6 \
