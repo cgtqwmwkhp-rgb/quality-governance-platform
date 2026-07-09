@@ -12,6 +12,10 @@ import os
 import sys
 from typing import Any, Generator, Optional
 
+# Portal intake fails closed without an explicit tenant; seed a safe default for tests
+# before any application settings are imported/cached.
+os.environ.setdefault("DEFAULT_TENANT_ID", "1")
+
 import pytest
 
 # Add src to path

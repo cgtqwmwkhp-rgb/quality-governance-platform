@@ -74,8 +74,11 @@ def _get_priority_label(priority: str) -> str:
 class PortalService:
     """Handles employee portal report submission, tracking, and statistics."""
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, *, tenant_id: int):
+        if tenant_id is None:
+            raise ValueError("PortalService requires an explicit tenant_id")
         self.db = db
+        self.tenant_id = tenant_id
 
     # ------------------------------------------------------------------
     # Submit quick report
@@ -128,7 +131,7 @@ class PortalService:
             department=data.get("department"),
             incident_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
-            tenant_id=1,
+            tenant_id=self.tenant_id,
             reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             source_form_id="portal_incident_v1",
@@ -163,7 +166,7 @@ class PortalService:
             priority=priority,
             status=ComplaintStatus.RECEIVED,
             received_date=datetime.now(timezone.utc),
-            tenant_id=1,
+            tenant_id=self.tenant_id,
             complainant_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             complainant_email=data.get("reporter_email") if not is_anonymous else None,
             complainant_phone=data.get("reporter_phone") if not is_anonymous else None,
@@ -202,7 +205,7 @@ class PortalService:
             location=data.get("location") or "Not specified",
             collision_date=datetime.now(timezone.utc),
             reported_date=datetime.now(timezone.utc),
-            tenant_id=1,
+            tenant_id=self.tenant_id,
             reporter_name=(data.get("reporter_name") if not is_anonymous else "Anonymous"),
             reporter_email=data.get("reporter_email") if not is_anonymous else None,
             driver_name=data.get("reporter_name") if not is_anonymous else "Anonymous",
@@ -242,7 +245,7 @@ class PortalService:
             potential_severity=data.get("severity", "medium").lower(),
             status="REPORTED",
             priority=priority,
-            tenant_id=1,
+            tenant_id=self.tenant_id,
             source_form_id="portal_near_miss_v1",
         )
         self.db.add(near_miss)

@@ -252,12 +252,8 @@ class AuditService:
         model_any: Any = model
         stmt: Any = select(model).where(model_any.id == entity_id)
         if tenant_id is not None:
-            stmt = stmt.where(
-                or_(
-                    model_any.tenant_id == tenant_id,
-                    model_any.tenant_id.is_(None),
-                )
-            )
+            # Fail-closed: never include NULL-tenant rows when scoping by tenant.
+            stmt = stmt.where(model_any.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         entity = result.scalar_one_or_none()
         if entity is None:
