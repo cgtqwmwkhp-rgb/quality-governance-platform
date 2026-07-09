@@ -8,7 +8,6 @@ from sqlalchemy import select
 
 from src.core.security import create_access_token, create_refresh_token, decode_token
 from src.domain.models.tenant import Tenant, TenantUser
-from src.domain.models.token_blacklist import TokenBlacklist
 from src.domain.services.auth_service import AuthService
 from src.domain.services.token_service import TokenService
 
@@ -89,15 +88,14 @@ async def test_integration_override_honours_blacklist(client, test_session, test
     payload = decode_token(access)
     assert payload is not None
 
-    test_session.add(
-        TokenBlacklist(
-            jti=payload["jti"],
-            user_id=1,
-            expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
-            reason="logout",
-        )
+    # Column is TIMESTAMP WITHOUT TIME ZONE — store naive UTC (same as TokenService).
+    await TokenService.revoke_token(
+        db=test_session,
+        jti=payload["jti"],
+        user_id=1,
+        expires_at=datetime.fromtimestamp(payload["exp"], tz=timezone.utc),
+        reason="logout",
     )
-    await test_session.commit()
 
     response = await client.get(
         "/api/v1/auth/whoami",
