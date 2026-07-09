@@ -12,14 +12,14 @@ import os
 import sys
 from typing import Any, Generator, Optional
 
-# Portal intake fails closed without an explicit tenant; seed a safe default for tests
-# before any application settings are imported/cached.
-os.environ.setdefault("DEFAULT_TENANT_ID", "1")
-
 import pytest
 
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+# Portal intake fails closed without an explicit tenant; seed a safe default for tests
+# before application settings are imported/cached by fixtures.
+os.environ.setdefault("DEFAULT_TENANT_ID", "1")
 
 if sys.version_info < (3, 11):
     raise RuntimeError(
