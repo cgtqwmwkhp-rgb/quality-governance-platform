@@ -560,7 +560,7 @@ async def readiness_check(request: Request):
 
         if settings.redis_url:
             r = aioredis.from_url(settings.redis_url, socket_connect_timeout=2)
-            await asyncio.wait_for(r.ping(), timeout=2.0)
+            await asyncio.wait_for(r.ping(), timeout=2.0)  # type: ignore[arg-type]
             await r.aclose()
         else:
             redis_status = "not_configured"
