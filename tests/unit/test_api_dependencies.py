@@ -4,11 +4,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-from src.api.dependencies import (
-    _resolve_user_tenant_context,
-    get_current_user,
-    get_optional_current_user,
-)
+from src.api.dependencies import _resolve_user_tenant_context, get_current_user, get_optional_current_user
 from src.core.security import create_access_token, create_refresh_token, decode_token
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import TenantUser

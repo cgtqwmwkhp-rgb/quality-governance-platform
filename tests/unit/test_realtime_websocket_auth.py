@@ -4,11 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.api.routes.realtime import (
-    WS_CLOSE_FORBIDDEN,
-    WS_CLOSE_UNAUTHORIZED,
-    authenticate_websocket_connection,
-)
+from src.api.routes.realtime import WS_CLOSE_FORBIDDEN, WS_CLOSE_UNAUTHORIZED, authenticate_websocket_connection
 from src.core.security import create_access_token, create_refresh_token
 from src.domain.exceptions import TokenRevokedError
 from src.domain.models.user import User

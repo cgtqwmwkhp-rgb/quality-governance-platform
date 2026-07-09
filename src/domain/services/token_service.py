@@ -17,6 +17,9 @@ class TokenService:
         expires_at: datetime,
         reason: str = "logout",
     ) -> None:
+        # TIMESTAMP WITHOUT TIME ZONE columns require naive UTC.
+        if expires_at.tzinfo is not None:
+            expires_at = expires_at.astimezone(timezone.utc).replace(tzinfo=None)
         entry = TokenBlacklist(
             jti=jti,
             user_id=user_id,
