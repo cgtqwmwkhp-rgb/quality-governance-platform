@@ -68,10 +68,10 @@
       "icons": [{ "src": "/icons/shortcut-report.png", "sizes": "96x96" }]
     },
     {
-      "name": "Emergency SOS",
-      "short_name": "SOS",
-      "description": "Emergency assistance",
-      "url": "/portal/sos",
+      "name": "Help / Emergency",
+      "short_name": "Help",
+      "description": "Help and emergency contacts",
+      "url": "/portal/help",
       "icons": [{ "src": "/icons/shortcut-sos.png", "sizes": "96x96" }]
     },
     {
