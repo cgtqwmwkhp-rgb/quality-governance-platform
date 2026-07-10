@@ -1,16 +1,14 @@
 """Form configuration API routes for admin form builder."""
 
 from datetime import datetime, timezone
-from typing import List, Optional, Annotated
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.form_config import (
     ContractCreate,
@@ -38,6 +36,7 @@ from src.api.schemas.form_config import (
 )
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
