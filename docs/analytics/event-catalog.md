@@ -46,8 +46,8 @@ All core business metrics are now wired with direct call-sites.
 | `track_metric("audits.completed")` | **Live** | `src/domain/services/audit_service.py` | Counter on run complete |
 | `track_metric("audits.findings")` | **Live** | `src/domain/services/audit_service.py` | Counter on finding create |
 | `auth.logout` | **Live** | `src/api/routes/auth.py` → `POST /logout` | Wired via `record_auth_logout()` |
-| `celery.task_failures` | **Deferred** | — | Wire when Celery failure hook is enabled (Celery worker not yet deployed) |
-| `celery.queue_depth` | **Deferred** | — | Wire when Celery monitoring is enabled (Celery worker not yet deployed) |
+| `celery.task_failures` | **Deferred** | — | Wire when Celery failure hook is enabled (worker/beat App Service provisioned — see docs/runbooks/CELERY_WORKER_BEAT_DEPLOY.md) |
+| `celery.queue_depth` | **Deferred** | — | Wire when Celery monitoring is enabled (worker/beat App Service provisioned — see docs/runbooks/CELERY_WORKER_BEAT_DEPLOY.md) |
 
 **16 of 18 instruments live** (89%). Remaining 2 are explicitly **deferred** pending Celery worker deployment — the instruments are defined in `azure_monitor.py` and will be wired when the Celery infrastructure is enabled. Core business, security, and platform health metrics are fully covered.
 

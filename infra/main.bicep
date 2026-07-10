@@ -15,6 +15,9 @@ param postgresSkuName string = 'Standard_B1ms'
 @secure()
 param postgresAdminPassword string
 
+@description('Deploy Celery worker + beat App Service sites (same plan as API)')
+param deployCeleryWorkers bool = true
+
 var prefix = 'qgp-${environment}'
 
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-01-01' = {
@@ -39,6 +42,39 @@ resource webApp 'Microsoft.Web/sites@2023-01-01' = {
       alwaysOn: true
       healthCheckPath: '/healthz'
       httpLoggingEnabled: true
+      appCommandLine: 'uvicorn src.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \'*\''
+    }
+    httpsOnly: true
+  }
+}
+
+resource celeryWorkerApp 'Microsoft.Web/sites@2023-01-01' = if (deployCeleryWorkers) {
+  name: '${prefix}-worker'
+  location: location
+  properties: {
+    serverFarmId: appServicePlan.id
+    siteConfig: {
+      linuxFxVersion: 'DOCKER'
+      alwaysOn: true
+      healthCheckPath: '/healthz'
+      httpLoggingEnabled: true
+      appCommandLine: 'bash scripts/celery/start_worker.sh'
+    }
+    httpsOnly: true
+  }
+}
+
+resource celeryBeatApp 'Microsoft.Web/sites@2023-01-01' = if (deployCeleryWorkers) {
+  name: '${prefix}-beat'
+  location: location
+  properties: {
+    serverFarmId: appServicePlan.id
+    siteConfig: {
+      linuxFxVersion: 'DOCKER'
+      alwaysOn: true
+      healthCheckPath: '/healthz'
+      httpLoggingEnabled: true
+      appCommandLine: 'bash scripts/celery/start_beat.sh'
     }
     httpsOnly: true
   }
@@ -84,5 +120,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
 
 output webAppName string = webApp.name
 output webAppUrl string = 'https://${webApp.properties.defaultHostName}'
+output celeryWorkerAppName string = deployCeleryWorkers ? celeryWorkerApp.name : ''
+output celeryBeatAppName string = deployCeleryWorkers ? celeryBeatApp.name : ''
 output postgresHost string = postgres.properties.fullyQualifiedDomainName
 output storageAccountName string = storageAccount.name

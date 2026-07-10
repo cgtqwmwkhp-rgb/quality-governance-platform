@@ -57,8 +57,10 @@ Startup validation lives in `src/core/config.py` (`_validate_redis_celery_requir
 
 ### Confirm workers
 
+> **Deploy**: Worker/beat App Service sites are provisioned via [`CELERY_WORKER_BEAT_DEPLOY.md`](./CELERY_WORKER_BEAT_DEPLOY.md) (`scripts/infra/provision-celery-workers.sh`). Until those sites exist, `inspect ping` will return empty — Redis env alone is not a worker.
+
 ```bash
-# On the worker host / container
+# On the worker host / container (or CI smoke)
 celery -A src.infrastructure.tasks.celery_app.celery_app inspect ping
 celery -A src.infrastructure.tasks.celery_app.celery_app inspect active
 celery -A src.infrastructure.tasks.celery_app.celery_app inspect reserved

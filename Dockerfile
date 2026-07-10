@@ -49,6 +49,9 @@ COPY --chown=appuser:appgroup src/ ./src/
 COPY --chown=appuser:appgroup alembic/ ./alembic/
 COPY --chown=appuser:appgroup alembic.ini .
 COPY --chown=appuser:appgroup certs/ ./certs/
+COPY --chown=appuser:appgroup scripts/celery/ ./scripts/celery/
+
+RUN chmod +x scripts/celery/*.sh
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
