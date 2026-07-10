@@ -1,13 +1,13 @@
 """Near Miss API routes."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.error_codes import ErrorCode
@@ -16,6 +16,7 @@ from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetE
 from src.api.utils.errors import api_error
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.near_miss_service import NearMissService
 from src.domain.services.reference_number import ReferenceNumberService
@@ -42,7 +43,7 @@ async def _get_near_miss_or_404(db, near_miss_id: int, current_user: CurrentUser
 async def create_near_miss(
     data: NearMissCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:create"))],
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """
@@ -158,7 +159,7 @@ async def update_near_miss(
     near_miss_id: int,
     data: NearMissUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:update"))],
     request_id: str = Depends(get_request_id),
 ) -> NearMiss:
     """Update a near miss."""
@@ -185,7 +186,7 @@ async def update_near_miss(
 async def delete_near_miss(
     near_miss_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("near_miss:update"))],
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a near miss."""
