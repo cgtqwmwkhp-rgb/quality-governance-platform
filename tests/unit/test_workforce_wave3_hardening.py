@@ -6,11 +6,10 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
+from src.api.dependencies import require_permission
 from src.api.routes.assessments import create_assessment_run
-from src.api.routes.assets import create_asset_type
 from src.api.routes.inductions import create_induction_run
 from src.api.schemas.assessment import AssessmentRunCreate
-from src.api.schemas.asset import AssetTypeCreate
 from src.api.schemas.induction import InductionRunCreate
 
 
@@ -23,19 +22,19 @@ def _reference_conflict(table_name: str) -> IntegrityError:
 
 
 @pytest.mark.asyncio
-async def test_create_asset_type_denies_non_manager_user():
-    user = types.SimpleNamespace(id=42, tenant_id=1, is_superuser=False, roles=[])
-    db = types.SimpleNamespace()
+async def test_asset_create_permission_denies_user_without_permission():
+    user = types.SimpleNamespace(
+        id=42,
+        is_superuser=False,
+        roles=[],
+        has_permission=lambda _permission: False,
+    )
 
     with pytest.raises(HTTPException) as exc:
-        await create_asset_type(
-            AssetTypeCreate(category="power", name="Transformer"),
-            db,
-            user,
-        )
+        await require_permission("asset:create")(user)
 
     assert exc.value.status_code == 403
-    assert exc.value.detail["code"] == "PERMISSION_DENIED"
+    assert "asset:create" in str(exc.value.detail)
 
 
 @pytest.mark.asyncio
