@@ -1,11 +1,11 @@
 {
-  "release_sha": "259408a933c1d0eb560dd2ac2e95343d46f4222e",
+  "release_sha": "12763ceee566477ea40fcbf0c4ffd1fdf957f31a",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip 259408a9 \u2014 WCS-B05 Import/Celery/DLQ runbook (#594) + WCS-B06 VAPID readiness (#595); includes prior tip train through WCS-B04 SMTP.",
-  "approved_at_utc": "2026-07-10T05:28:57+00:00"
+  "notes": "Release signoff for tip 12763cee \u2014 Gemini google-genai SDK migration + audit metadata (#598); includes prior tip train through WCS-TEN2 (#597) and WCS-B06 (#595).",
+  "approved_at_utc": "2026-07-10T06:37:41+00:00"
 }
