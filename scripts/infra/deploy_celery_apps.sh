@@ -63,6 +63,12 @@ deploy_one() {
   if [ -n "${JWT_SECRET_KEY:-}" ]; then
     settings+=(JWT_SECRET_KEY="$JWT_SECRET_KEY")
   fi
+  # Optional SMTP — only wire when present (Key Vault / pipeline env). Never invent credentials.
+  for key in EMAIL_ENABLED SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD FROM_EMAIL FROM_NAME; do
+    if [ -n "${!key:-}" ]; then
+      settings+=("${key}=${!key}")
+    fi
+  done
 
   az webapp config appsettings set \
     --name "$name" \

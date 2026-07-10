@@ -95,10 +95,12 @@ async def readiness_check():
     except Exception:
         pass
 
-    # WCS-B06: surface push/VAPID readiness (informational; never fails readiness)
+    # WCS-B06 / Lane-1 email: surface push + SMTP readiness (informational; never fails readiness)
+    from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
 
     vapid = get_vapid_readiness()
+    email = get_email_readiness()
 
     checks: dict[str, Any] = {
         "database": db_status,
@@ -114,12 +116,23 @@ async def readiness_check():
             "contact_email_configured": vapid["contact_email_configured"],
             "library": vapid["library"],
         },
+        "email_configured": email["email_configured"],
+        "email": {
+            "status": email["status"],
+            "email_enabled": email["email_enabled"],
+            "email_configured": email["email_configured"],
+            "smtp_user_present": email["smtp_user_present"],
+            "smtp_password_present": email["smtp_password_present"],
+            "from_email_present": email["from_email_present"],
+        },
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "circuit_breakers": circuit_breakers,
     }
     if vapid.get("note"):
         checks["push_note"] = vapid["note"]
+    if email.get("note"):
+        checks["email_note"] = email["note"]
     if redis_status == "not_configured":
         if settings.is_redis_required:
             checks["redis_note"] = (
