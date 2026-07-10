@@ -80,7 +80,7 @@ class Complaint(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Idempotency key for ETL/external systems
     # When provided, enforces uniqueness to prevent duplicate imports
