@@ -2,7 +2,9 @@
 
 import asyncio
 import importlib
+import json
 import os
+from pathlib import Path
 from logging.config import fileConfig
 
 from alembic.operations import ops as alembic_ops
@@ -149,22 +151,52 @@ def _filter_upgrade_ops(ops_list: list) -> list:
     return kept
 
 
-def process_revision_directives(context, revision, directives):  # noqa: ARG001
-    """When ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1, drop noisy autogen ops for CI `alembic check`.
+def _serialize_upgrade_ops(ops_list: list) -> list[dict]:
+    """Return a stable, JSON-safe summary of Alembic autogenerate operations."""
+    inventory: list[dict] = []
+    for op in ops_list:
+        entry = {"type": type(op).__name__}
+        table_name = getattr(op, "table_name", None)
+        if table_name:
+            entry["table"] = table_name
+        constraint_type = getattr(op, "constraint_type", None)
+        if constraint_type:
+            entry["constraint_type"] = constraint_type
+        if isinstance(op, alembic_ops.ModifyTableOps):
+            entry["ops"] = _serialize_upgrade_ops(list(op.ops))
+        inventory.append(entry)
+    return inventory
 
-    ORM vs migrated PostgreSQL still differ widely (columns, indexes, FKs, uniques). This mode strips
-    column/index/constraint churn so `alembic check` can still catch add/drop *table* drift. Run
-    without the env var locally when authoring real migrations.
-    """
-    if os.environ.get("ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT") != "1":
+
+def _write_drift_inventory(before_filter: list, after_filter: list) -> None:
+    """Write CI evidence when ALEMBIC_DRIFT_INVENTORY_FILE is configured."""
+    inventory_file = os.environ.get("ALEMBIC_DRIFT_INVENTORY_FILE")
+    if not inventory_file:
         return
+    path = Path(inventory_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {"before_filter": before_filter, "after_filter": after_filter},
+            indent=2,
+            sort_keys=True,
+        ) + "\n",
+        encoding="utf-8",
+    )
+
+
+def process_revision_directives(context, revision, directives):  # noqa: ARG001
+    """Filter configured CI drift and emit pre/post-filter operation evidence."""
     if not directives:
         return
     script = directives[0]
     uo = getattr(script, "upgrade_ops", None)
-    if uo is None or not uo.ops:
+    if uo is None:
         return
-    uo.ops = _filter_upgrade_ops(list(uo.ops))
+    before_filter = _serialize_upgrade_ops(list(uo.ops))
+    if os.environ.get("ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT") == "1":
+        uo.ops = _filter_upgrade_ops(list(uo.ops))
+    _write_drift_inventory(before_filter, _serialize_upgrade_ops(list(uo.ops)))
 
 
 def run_migrations_offline() -> None:
