@@ -745,11 +745,14 @@ jobs:
       - name: Celery inspect ping smoke (W-01)
         run: |
           set -euo pipefail
+          REDIS_URL_VAL=""
           REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-staging --name REDIS-URL --query value -o tsv)
           export APP_ENV=staging
           export REDIS_URL="$REDIS_URL_VAL"
           export CELERY_BROKER_URL="$REDIS_URL_VAL"
           export CELERY_RESULT_BACKEND="$REDIS_URL_VAL"
+          PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
+          export PYTHONPATH
           # Staging worker App Service is provisioned and returns pong — fail closed.
           python3 scripts/celery/smoke_inspect_ping.py --retries 4 --sleep 5
           echo "Celery ping step complete (fail-closed)"
@@ -759,6 +762,7 @@ jobs:
           set -euo pipefail
           # Pull EMAIL_ENABLED / SMTP_* from API app settings when present (no fake send).
           for key in EMAIL_ENABLED SMTP_USER SMTP_PASSWORD SMTP_HOST FROM_EMAIL; do
+            val=""
             val=$(az webapp config appsettings list \
               -g rg-qgp-staging -n "${{ secrets.AZURE_WEBAPP_NAME }}" \
               --query "[?name=='$key'].value | [0]" -o tsv 2>/dev/null || true)
