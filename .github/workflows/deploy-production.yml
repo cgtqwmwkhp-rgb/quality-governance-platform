@@ -600,6 +600,27 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP"
           echo "✅ App Service restart requested"
 
+
+      - name: Deploy Celery worker + beat (if provisioned)
+        env:
+          IMAGE_DIGEST_REF: ${{ env.IMAGE_DIGEST_REF }}
+        run: |
+          set -euo pipefail
+          REDIS_URL_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name REDIS-URL --query value -o tsv)
+          DB_URL=$(az keyvault secret show --vault-name kv-qgp-prod --name DATABASE-URL --query value -o tsv)
+          SECRET_KEY_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name SECRET-KEY --query value -o tsv)
+          JWT_SECRET_VAL=$(az keyvault secret show --vault-name kv-qgp-prod --name JWT-SECRET-KEY --query value -o tsv)
+          RESOURCE_GROUP="${{ env.AZURE_RESOURCE_GROUP }}" \
+          API_WEBAPP_NAME="${{ env.AZURE_WEBAPP_NAME }}" \
+          IMAGE_DIGEST_REF="$IMAGE_DIGEST_REF" \
+          APP_ENV=production \
+          BUILD_SHA="${{ github.sha }}" \
+          REDIS_URL="$REDIS_URL_VAL" \
+          DATABASE_URL="$DB_URL" \
+          SECRET_KEY="$SECRET_KEY_VAL" \
+          JWT_SECRET_KEY="$JWT_SECRET_VAL" \
+            bash scripts/infra/deploy_celery_apps.sh
+
       - name: Canary traffic routing — 10% ramp (D18 progressive delivery)
         continue-on-error: true
         env:

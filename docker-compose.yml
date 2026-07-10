@@ -75,5 +75,56 @@ services:
     profiles:
       - tools
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  celery-worker:
+    build:
+      context: .
+      target: production
+    command: ["bash", "scripts/celery/start_worker.sh"]
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/quality_governance
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - WEBSITES_PORT=8000
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  celery-beat:
+    build:
+      context: .
+      target: production
+    command: ["bash", "scripts/celery/start_beat.sh"]
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/quality_governance
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - JWT_SECRET_KEY=dev-jwt-secret-change-in-production
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - WEBSITES_PORT=8000
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    profiles:
+      - celery
+
+
 volumes:
   postgres_data:
