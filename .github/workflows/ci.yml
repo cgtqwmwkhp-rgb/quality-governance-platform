@@ -1718,11 +1718,21 @@ jobs:
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
           ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT: "1"
+          ALEMBIC_DRIFT_INVENTORY_FILE: alembic-drift-inventory.json
         run: |
           echo "=== Alembic Migration Drift Check ==="
           alembic upgrade head
           alembic check
           echo "[OK] No migration drift detected"
+
+      - name: Upload Alembic drift inventory
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: alembic-drift-inventory
+          path: alembic-drift-inventory.json
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Generate migration reversibility evidence (D12)
         env:
