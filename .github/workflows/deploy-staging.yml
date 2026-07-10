@@ -737,6 +737,11 @@ jobs:
             --password "$E2E_PASSWORD" \
             --json
 
+      - name: Azure Login (smoke Key Vault / app settings)
+        uses: azure/login@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Celery inspect ping smoke (W-01)
         run: |
           set -euo pipefail
