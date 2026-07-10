@@ -10,6 +10,8 @@ Source of truth for progress: WCS canvas `qgp-wcs-action-plan.canvas.tsx`.
 - Continue the queue when a lane frees: merge the next green PR that matches priority.
 - Never promote production without staging SHA match + security green + Redis/Celery readiness.
 
+Ops runbook for import jobs, Celery workers, and DLQ retry/purge: [`docs/runbooks/IMPORT_CELERY_DLQ_OPS.md`](../docs/runbooks/IMPORT_CELERY_DLQ_OPS.md) (WCS-B05).
+
 ## Merge order (priority queue) — WCS value lane
 
 Promoted / closed (do not re-queue): #549 (ZAP), #552 (staging REDIS-URL), #551 (Trivy HIGH), #550 (PWA SOS), #548 (JWT revoke BE / import / Redis fail-fast).
