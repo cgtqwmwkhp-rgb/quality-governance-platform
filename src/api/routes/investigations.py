@@ -1109,7 +1109,7 @@ async def generate_customer_pack(
 
     # Create pack entity
     pack = InvestigationService.create_customer_pack_entity(
-        investigation_id=investigation_id,
+        investigation=investigation,
         audience=audience_enum,
         content=content,
         redaction_log=redaction_log,
