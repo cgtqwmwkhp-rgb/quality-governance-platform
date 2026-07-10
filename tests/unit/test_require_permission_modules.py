@@ -116,3 +116,15 @@ def test_document_control_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/document_control.py")
     assert "document:create" in perms
     assert "document:update" in perms
+
+
+def test_evidence_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/evidence_assets.py")
+    assert "evidence:create" in perms
+    assert "evidence:update" in perms
+
+
+def test_workflow_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/workflows.py")
+    assert "workflow:create" in perms
+    assert "workflow:update" in perms

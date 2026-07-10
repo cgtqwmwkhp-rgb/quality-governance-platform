@@ -14,12 +14,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.evidence_asset import (
     EvidenceAssetCreate,
     EvidenceAssetListResponse,
@@ -160,7 +161,7 @@ async def _normalize_evidence_upload_source(
 @router.post("/upload", response_model=EvidenceAssetUploadResponse, status_code=201)
 async def upload_evidence_asset(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:create"))],
     file: UploadFile = File(..., description="File to upload"),
     source_module: str = Form(..., description="Source module (near_miss, road_traffic_collision, etc.)"),
     source_id: int = Form(
@@ -493,7 +494,7 @@ async def update_evidence_asset(
     asset_id: int,
     asset_data: EvidenceAssetUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
 ):
     """Update evidence asset metadata."""
     query = select(EvidenceAsset).where(
@@ -531,7 +532,7 @@ async def update_evidence_asset(
 async def delete_evidence_asset(
     asset_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
 ):
     """Soft delete an evidence asset.
 
@@ -566,7 +567,7 @@ async def link_asset_to_investigation(
     asset_id: int,
     investigation_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("evidence:update"))],
 ):
     """Link an evidence asset to an investigation.
 
