@@ -484,7 +484,7 @@ jobs:
           else
             echo "  ✅ Staging SHA matches — safe to promote to production"
           fi
-          STAGING_HEALTH=$(curl -sf --max-time 15 -o /dev/null -w "%{http_code}" "$STAGING_URL/health" 2>/dev/null || echo "000")
+          STAGING_HEALTH=$(curl -sf --max-time 15 -o /dev/null -w "%{http_code}" "$STAGING_URL/healthz" 2>/dev/null || echo "000")
           if [ "$STAGING_HEALTH" != "200" ]; then
             echo "::error::Staging health check returned HTTP $STAGING_HEALTH — cannot promote to production"
             exit 1
@@ -656,7 +656,7 @@ jobs:
           sleep 180
           # Health gate: production must still return 200 on /health and /readyz
           PROD_URL="https://${PROD_APP:-$AZURE_WEBAPP_NAME}.azurewebsites.net"
-          HEALTH=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/health" 2>/dev/null || echo "000")
+          HEALTH=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/healthz" 2>/dev/null || echo "000")
           READY=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" "$PROD_URL/readyz" 2>/dev/null || echo "000")
           echo "  Production health: HTTP $HEALTH | readyz: HTTP $READY"
           if [ "$HEALTH" != "200" ] || [ "$READY" != "200" ]; then
