@@ -36,9 +36,9 @@ def test_audit_finding_orm_tenant_id_is_required():
     assert column.index is True
 
 
-def test_audit_run_orm_tenant_id_remains_nullable():
-    """Phase 2 is findings-only; do not mass-NOT-NULL audit_runs."""
-    assert AuditRun.__table__.c.tenant_id.nullable is True
+def test_audit_run_orm_tenant_id_is_required_after_ar_followup():
+    """Follow-up `20260710_ar_tenant_nn` made audit_runs.tenant_id required in ORM."""
+    assert AuditRun.__table__.c.tenant_id.nullable is False
 
 
 def test_migration_fail_safe_helper_only_enforces_when_zero_nulls():
