@@ -1,11 +1,11 @@
 {
-  "release_sha": "a27b15de1158b40a7d592ffebca169d82506d350",
+  "release_sha": "3759e92c1518c069e08c6f4ddbbbad444c194441",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip a27b15de1158b40a7d592ffebca169d82506d350 (#574 fail-closed tenant filters, #575 logout revoke + WS auth, #577 Celery email enqueue). Staging verified for tip on qgp-staging-plantexpand.",
-  "approved_at_utc": "2026-07-10T00:15:03+00:00"
+  "notes": "Release signoff for tip 3759e92c (#574/#575 security-tenancy, #577 Celery email, #578 live notifications).",
+  "approved_at_utc": "2026-07-10T00:39:07+00:00"
 }
