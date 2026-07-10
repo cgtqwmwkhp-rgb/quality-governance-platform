@@ -1,4 +1,4 @@
-"""Guardrails: near_miss + policies write routes use require_permission."""
+"""Guardrails: write routes use require_permission (AST contract)."""
 
 from __future__ import annotations
 
@@ -91,3 +91,16 @@ def test_assessment_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/assessments.py")
     assert "assessment:create" in perms
     assert "assessment:update" in perms
+
+
+def test_action_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/actions.py")
+    assert "action:create" in perms
+    assert "action:update" in perms
+
+
+def test_risk_register_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/risk_register.py")
+    assert "risk:create" in perms
+    assert "risk:update" in perms
+
