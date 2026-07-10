@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 10 |
-| Owned nullable `tenant_id` | 98 |
+| Required `tenant_id` (`nullable=False`) | 13 |
+| Owned nullable `tenant_id` | 95 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **117** |
+| **Nullable total** | **114** |
 
 ## Phase 1 decision
 
@@ -31,7 +31,7 @@ This phase lands:
 | `audit_findings` | **Done (incremental)** | Fail-safe backfill from `audit_runs` + conditional `NOT NULL` (`20260710_af_tenant_nn`). ORM `nullable=False`. See `docs/data/audit-findings-tenant-backfill.md`. |
 | `incident_actions` | **Done (incremental)** | Fail-safe backfill from `incidents` + conditional `NOT NULL` (`20260710_ia_tenant_nn`). ORM `nullable=False`. See `docs/data/incident-actions-tenant-backfill.md`. |
 | `complaint_actions` | **Done (incremental)** | Fail-safe backfill from `complaints` + conditional `NOT NULL` (`20260710_ca_tenant_nn`). ORM `nullable=False`. See `docs/data/complaint-actions-tenant-backfill.md`. |
-| `audit_runs` | Deferred | Parent may still be NULL — do not invent `tenant_id=1`. |
+| `audit_runs` | **Done (incremental)** | Fail-safe backfill from `audit_templates` + conditional `NOT NULL` (`20260710_ar_tenant_nn`). ORM `nullable=False`. See `docs/data/audit-runs-tenant-backfill.md`. |
 | `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
@@ -41,9 +41,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 
 | Table | Model |
 | --- | --- |
-| `audit_runs` | `AuditRun` |
 | `complaints` | `Complaint` |
-| `incident_actions` | `IncidentAction` |
 | `incidents` | `Incident` |
 | `risk_assessments` | `RiskAssessment` |
 | `risks` | `Risk` |
@@ -54,9 +52,12 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | Table | Model |
 | --- | --- |
 | `audit_findings` | `AuditFinding` |
+| `audit_runs` | `AuditRun` |
+| `complaint_actions` | `ComplaintAction` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
 | `copilot_sessions` | `CopilotSession` |
+| `incident_actions` | `IncidentAction` |
 | `signature_audit_logs` | `SignatureAuditLog` |
 | `signature_requests` | `SignatureRequest` |
 | `signature_templates` | `SignatureTemplate` |
@@ -73,7 +74,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `assessment_responses` | `AssessmentResponse` |
 | `assessment_runs` | `AssessmentRun` |
 | `assets` | `Asset` |
-| `audit_runs` | `AuditRun` |
 | `benchmark_data` | `BenchmarkData` |
 | `bow_tie_elements` | `BowTieElement` |
 | `business_continuity_plans` | `BusinessContinuityPlan` |
@@ -83,7 +83,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `carbon_reporting_year` | `CarbonReportingYear` |
 | `competency_records` | `CompetencyRecord` |
 | `competency_requirements` | `CompetencyRequirement` |
-| `complaint_actions` | `ComplaintAction` |
 | `complaints` | `Complaint` |
 | `contracts` | `Contract` |
 | `controlled_document_versions` | `ControlledDocumentVersion` |
@@ -120,7 +119,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `ims_objectives` | `IMSObjective` |
 | `ims_process_maps` | `IMSProcessMap` |
 | `ims_requirements` | `IMSRequirement` |
-| `incident_actions` | `IncidentAction` |
 | `incidents` | `Incident` |
 | `index_jobs` | `IndexJob` |
 | `induction_responses` | `InductionResponse` |
