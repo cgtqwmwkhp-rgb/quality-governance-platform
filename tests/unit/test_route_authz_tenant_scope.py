@@ -334,6 +334,60 @@ async def test_incident_running_sheet_requires_tenant():
         incidents_routes.IncidentService = original
 
 
+
+@pytest.mark.asyncio
+async def test_complaints_list_requires_tenant_for_non_superuser():
+    from src.api.routes import complaints as complaints_routes
+
+    with pytest.raises(HTTPException) as exc:
+        await complaints_routes.list_complaints(
+            db=AsyncMock(),
+            current_user=SimpleNamespace(id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False),
+            request_id="t",
+            page=1,
+            page_size=20,
+            status_filter=None,
+            complainant_email=None,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_near_miss_list_requires_tenant_for_non_superuser():
+    from src.api.routes import near_miss as near_miss_routes
+
+    with pytest.raises(HTTPException) as exc:
+        await near_miss_routes.list_near_misses(
+            db=AsyncMock(),
+            current_user=SimpleNamespace(id=1, email="a@b.c", is_superuser=False, tenant_id=None),
+            page=1,
+            page_size=20,
+            status_filter=None,
+            priority=None,
+            contract=None,
+            reporter_email=None,
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_rtas_list_requires_tenant_for_non_superuser():
+    from src.api.routes import rtas as rtas_routes
+
+    with pytest.raises(HTTPException) as exc:
+        await rtas_routes.list_rtas(
+            db=AsyncMock(),
+            current_user=SimpleNamespace(id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False),
+            request_id="t",
+            page=1,
+            page_size=10,
+            severity=None,
+            status_filter=None,
+            reporter_email=None,
+        )
+    assert exc.value.status_code == 403
+
+
 def test_apply_tenant_filter_pattern_on_models():
     """Sanity: shared helper exact-match SQL for models used by fixed routes."""
     for model, tid in ((AuditTemplate, 1), (AuditRun, 2), (AuditFinding, 3), (Risk, 4), (IncidentRunningSheetEntry, 5)):
@@ -344,7 +398,7 @@ def test_apply_tenant_filter_pattern_on_models():
 
 def test_route_source_guards_drop_null_inclusive_list_patterns():
     """Guards for the specific list endpoints we fixed (not every audits.py lookup)."""
-    from src.api.routes import audit_templates, audits, documents, incidents, risks
+    from src.api.routes import audit_templates, audits, complaints, documents, incidents, near_miss, risks, rtas
 
     # audits.list_templates body must use helpers, not or_/is_(None)
     src = inspect.getsource(audits.list_templates)
@@ -368,6 +422,24 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
 
     src = inspect.getsource(documents._scope_stmt_to_current_tenant)
     assert "require_tenant_id" in src
+
+
+    src = inspect.getsource(complaints.list_complaints)
+    assert "require_tenant_id" in src
+    assert "apply_tenant_filter" in src
+    assert "tenant_id.is_(None)" not in src
+    assert "or_(" not in src
+
+    src = inspect.getsource(near_miss.list_near_misses)
+    assert "require_tenant_id" in src
+    assert "apply_tenant_filter" in src
+    assert "tenant_id.is_(None)" not in src
+
+    src = inspect.getsource(rtas.list_rtas)
+    assert "require_tenant_id" in src
+    assert "apply_tenant_filter" in src
+    assert "tenant_id.is_(None)" not in src
+
 
 
 def test_require_tenant_id_still_403():
