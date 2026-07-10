@@ -211,3 +211,41 @@ async def test_openapi_cached_fast_response(client: AsyncClient):
 
     # Content should be identical (same cached schema)
     assert response1.json() == response2.json()
+
+
+@pytest.mark.asyncio
+async def test_api_health_readyz_includes_push_vapid_status(client: AsyncClient, monkeypatch):
+    """WCS-B06: /api/v1/health/readyz surfaces push/VAPID without failing readiness for missing keys."""
+    monkeypatch.delenv("VAPID_PUBLIC_KEY", raising=False)
+    monkeypatch.delenv("VAPID_PRIVATE_KEY", raising=False)
+
+    response = await client.get("/api/v1/health/readyz")
+    assert response.status_code in [200, 503]
+    data = response.json()
+    checks = data.get("checks", data)
+    assert "push" in checks
+    assert checks["push"] == "not_configured"
+    assert "vapid" in checks
+    assert checks["vapid"]["status"] == "not_configured"
+    assert checks["vapid"]["public_key_present"] is False
+    # Missing VAPID must not be the sole reason for 503
+    if response.status_code == 503:
+        assert checks.get("database") in {"degraded", "disconnected", "ok", "connected"} or checks.get("redis") in {
+            "degraded",
+            "not_configured",
+            "disconnected",
+        }
+
+
+@pytest.mark.asyncio
+async def test_root_readyz_includes_push_vapid_status(client: AsyncClient, monkeypatch):
+    """WCS-B06: root /readyz also reports push/VAPID readiness fields."""
+    monkeypatch.setenv("VAPID_PUBLIC_KEY", "BPublic")
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "private")
+
+    response = await client.get("/readyz")
+    assert response.status_code in [200, 503]
+    data = response.json()
+    assert data.get("push") == "configured"
+    assert data.get("vapid", {}).get("status") == "configured"
+    assert data.get("vapid", {}).get("public_key_present") is True

@@ -580,10 +580,21 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
+    # WCS-B06: informational only — missing VAPID must not flip readiness to 503
+    from src.infrastructure.push.vapid_status import get_vapid_readiness
+
+    vapid = get_vapid_readiness()
     payload = {
         "status": overall,
         "database": db_status,
         "redis": redis_status,
+        "push": vapid["status"],
+        "vapid": {
+            "status": vapid["status"],
+            "public_key_present": vapid["public_key_present"],
+            "private_key_present": vapid["private_key_present"],
+            "library": vapid["library"],
+        },
         "request_id": request_id,
     }
     if redis_status == "not_configured" and settings.is_redis_required:
@@ -591,4 +602,6 @@ async def readiness_check(request: Request):
             "REDIS_URL is required in this environment for rate limiting, "
             "idempotency, and/or external audit imports."
         )
+    if vapid.get("note"):
+        payload["push_note"] = vapid["note"]
     return JSONResponse(content=payload, status_code=status_code)
