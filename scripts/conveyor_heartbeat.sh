@@ -5,7 +5,10 @@
 set -u
 REPO="${CONVEYOR_REPO:-cgtqwmwkhp-rgb/quality-governance-platform}"
 STAGING_VERSION_URL="${STAGING_VERSION_URL:-https://qgp-staging-plantexpand.azurewebsites.net/api/v1/meta/version}"
-PRIORITY_PRS=(555 556)
+# Priority mirrors scripts/conveyor_policy.md.
+# Value P0s (#574/#575) MERGED — promote-tip handled via staging/main SHA below.
+# Next open queue: hard Dependabot with code fix, then #355 human (do not auto-merge).
+PRIORITY_PRS=(290 558 287 274 573 355)
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 echo "CONVEYOR_STATUS {\"ts\":\"$TS\",\"repo\":\"$REPO\",\"phase\":\"start\"}"
@@ -50,7 +53,7 @@ OPEN_PRS="$(gh pr list --repo "$REPO" --state open --limit 100 \
 echo "$OPEN_PRS" | python3 -c '
 import sys,json
 prs=json.load(sys.stdin)
-priority={555,556}
+priority={290,558,287,274,573,355}
 def failing(pr):
   fails=[]
   for c in (pr.get("statusCheckRollup") or []):
