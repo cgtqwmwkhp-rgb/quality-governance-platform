@@ -1,11 +1,11 @@
 {
-  "release_sha": "13cab4e78099e84f1a06188f16d9169581d0b165",
+  "release_sha": "08918b08963f02172ddbad8f295f9a948ec13960",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 13cab4e7 \u2014 WCS Path-to-10 evening wave: #649 TEN2 external_audit_import_drafts, #650 evidence+workflow require_permission, #651 Documents axe coverage.",
-  "approved_at_utc": "2026-07-10T21:25:25+00:00"
+  "notes": "Release signoff for main tip 08918b08 — overnight CUJ/UX Path-to-10: #653+#658 ImportReview extract phases 4–5, #656 nav More programmes + role-shaped analytics + AI theatre kill (Risk/Portal demo already gated).",
+  "approved_at_utc": "2026-07-10T22:16:00+00:00"
 }
