@@ -3,12 +3,10 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
   AlertTriangle,
-  Building2,
   CheckCircle2,
   FileText,
   Loader2,
   ShieldCheck,
-  User,
 } from 'lucide-react'
 import {
   auditsApi,
@@ -21,10 +19,11 @@ import {
 } from '../api/client'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
-import { PromotionImpactPanel } from '../components/audit-import/PromotionImpactPanel'
+import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
+import { ImportReviewAuditSummary } from '../components/audit-import/ImportReviewAuditSummary'
+import { ImportReviewEvidenceCard } from '../components/audit-import/ImportReviewEvidenceCard'
 import { ImportReviewOverview } from '../components/audit-import/ImportReviewOverview'
 
 import {
@@ -34,7 +33,6 @@ import {
   deriveDeclaredProgramLabel,
   deriveSpecialistHome,
   extractPromotionFailedDrafts,
-  formatDate,
   readProvenanceNumber,
   readProvenanceString,
   type PromotionFailedDraftRow,
@@ -514,131 +512,10 @@ export default function AuditImportReview() {
       ) : null}
 
       {reconciliation ? (
-        <Card className="border-border/70">
-          <CardHeader>
-            <CardTitle className="text-base">Downstream Workflow Proof</CardTitle>
-            <CardDescription>
-              Canonical read model: {reconciliation.canonical_read_model.replace(/_/g, ' ')}.
-              {reconciliation.failed_total > 0
-                ? ` ${reconciliation.failed_total} accepted draft(s) still need recovery before the workflow is complete.`
-                : ' All downstream workflow steps are traceable from this import.'}{' '}
-              UVDB and unified registry rows appear here only after findings materialize; if promotion did not finish,
-              sync or registry proof may show as missing—that usually reflects sequencing, not a separate outage.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Findings</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {reconciliation.materialized.audit_findings}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">CAPA Actions</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {reconciliation.materialized.capa_actions}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Enterprise Risks</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {reconciliation.materialized.enterprise_risks}
-                </p>
-              </div>
-              <div className="rounded-lg border border-border p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">UVDB Sync</p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {reconciliation.materialized.uvdb_audit_id ? `Row #${reconciliation.materialized.uvdb_audit_id}` : 'Not visible'}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              {reconciliation.proof_matrix.map((step) => (
-                <div key={step.step} className="rounded-lg border border-border p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {step.step.replace(/_/g, ' ')}
-                    </p>
-                    <Badge
-                      variant={
-                        step.status === 'ok'
-                          ? 'success'
-                          : step.status === 'partial'
-                            ? 'warning'
-                            : step.status === 'none' || step.status === 'n/a'
-                              ? 'secondary'
-                              : 'destructive'
-                      }
-                    >
-                      {step.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">{step.detail}</p>
-                </div>
-              ))}
-            </div>
-
-            {reconciliation.failed_total > 0 ? (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                <p className="text-sm font-medium text-amber-800">Accepted drafts still pending recovery</p>
-                <div className="mt-2 space-y-1 text-xs text-amber-900">
-                  {reconciliation.failed_drafts.map((draft, index) => (
-                    <p key={`failed-draft-${index}`}>
-                      Draft #{String(draft.draft_id ?? '?')}: {String(draft.title || draft.error || 'Promotion failed')}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              {reconciliation.view_links.actions ? (
-                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.actions)}>
-                  View Audit Actions
-                </Button>
-              ) : null}
-              {reconciliation.view_links.risk_register ? (
-                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.risk_register)}>
-                  View Audit Risks
-                </Button>
-              ) : null}
-              {reconciliation.view_links.uvdb ? (
-                <Button variant="outline" size="sm" onClick={() => navigate(reconciliation.view_links.uvdb)}>
-                  View UVDB Sync
-                </Button>
-              ) : null}
-            </div>
-
-            {reconciliation.materialized.capa_actions > 0 || reconciliation.materialized.enterprise_risks > 0 ? (
-              <div className="mt-4 rounded-lg border border-border/80 bg-muted/30 p-4 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Governance hand-off after promotion</p>
-                <p className="mt-2">
-                  CAPA actions from this import are live in <span className="text-foreground">Actions</span> as usual.
-                  Enterprise risk suggestions from the same import may appear under{' '}
-                  <span className="text-foreground">Risk Register → Import triage</span> until accepted or rejected.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      navigate(
-                        reconciliation.view_links.actions || '/actions?sourceType=audit_finding',
-                      )
-                    }
-                  >
-                    Open audit-sourced actions
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={() => navigate('/risk-register?triage=import')}>
-                    Open import risk triage
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+        <DownstreamWorkflowProof
+          reconciliation={reconciliation}
+          onNavigate={(path) => navigate(path)}
+        />
       ) : null}
 
       {error ? (
@@ -718,89 +595,7 @@ export default function AuditImportReview() {
         />
       ) : null}
 
-      {(() => {
-        const prov = job?.provenance_json ?? {}
-        const orgName = String(
-          job?.organization_name ?? prov.organization_name ?? prov.declared_organization_name ?? '',
-        )
-        const auditorName = String(job?.auditor_name ?? prov.auditor_name ?? '')
-        const auditType = String(job?.audit_type ?? prov.audit_type ?? '')
-        const certNo = String(job?.certificate_number ?? prov.certificate_number ?? '')
-        const scope = String(job?.audit_scope ?? prov.audit_scope ?? '')
-        const nextDate = String(job?.next_audit_date ?? prov.next_audit_date ?? '')
-        const siteName = String(prov.site_name ?? '')
-        const siteAddr = String(prov.site_address ?? '')
-        const hasAny = orgName || auditorName || auditType || certNo || scope || nextDate
-        if (!job || !hasAny) return null
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                Audit Report Summary
-              </CardTitle>
-              <CardDescription>
-                Key metadata extracted from the audit document by AI analysis.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {orgName ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Organisation audited
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">{orgName}</p>
-                </div>
-              ) : null}
-              {siteName ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Site / Facility</p>
-                  <p className="mt-1 font-medium text-foreground">{siteName}</p>
-                  {siteAddr ? <p className="mt-1 text-xs text-muted-foreground">{siteAddr}</p> : null}
-                </div>
-              ) : null}
-              {auditorName ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                    <User size={12} /> Lead auditor
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">{auditorName}</p>
-                </div>
-              ) : null}
-              {auditType ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit type</p>
-                  <p className="mt-1 font-medium text-foreground capitalize">
-                    {auditType.replace(/_/g, ' ')}
-                  </p>
-                </div>
-              ) : null}
-              {certNo ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Certificate / Registration No.
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">{certNo}</p>
-                </div>
-              ) : null}
-              {scope ? (
-                <div className="col-span-full rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Audit scope</p>
-                  <p className="mt-1 text-sm text-foreground line-clamp-4">{scope}</p>
-                </div>
-              ) : null}
-              {nextDate ? (
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Next audit date
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">{formatDate(nextDate)}</p>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        )
-      })()}
+      {job ? <ImportReviewAuditSummary job={job} /> : null}
 
       {isProcessing ? (
         <Card className="border-primary/30 bg-primary/5" aria-busy="true" role="status">
@@ -897,66 +692,14 @@ export default function AuditImportReview() {
       ) : null}
 
       {job ? (
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle>Evidence and mappings</CardTitle>
-              <CardDescription>
-                ISO evidence candidates and scheme mappings extracted from the source document.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {job.evidence_preview_json?.length ? (
-                  job.evidence_preview_json.slice(0, 8).map((mapping, index) => (
-                    <Badge key={`evidence-${index}`} variant="secondary">
-                      {String(mapping.clause_number || mapping.clause_id || 'Clause')}{' '}
-                      {String(mapping.standard || '')}
-                    </Badge>
-                  ))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No clause-level evidence preview available yet.
-                  </p>
-                )}
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Positive evidence
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {job.positive_summary_json?.length || 0}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Non-compliances
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {job.nonconformity_summary_json?.length || 0}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-border p-4">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                    Improvements
-                  </p>
-                  <p className="mt-1 font-medium text-foreground">
-                    {job.improvement_summary_json?.length || 0}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <PromotionImpactPanel
-            approvedCount={approvedCount}
-            acceptedClauseCount={acceptedClauseCount}
-            acceptedActionCandidates={acceptedActionCandidates}
-            acceptedRiskCandidates={acceptedRiskCandidates}
-            schemeAlignment={schemeAlignment}
-          />
-        </div>
+        <ImportReviewEvidenceCard
+          job={job}
+          approvedCount={approvedCount}
+          acceptedClauseCount={acceptedClauseCount}
+          acceptedActionCandidates={acceptedActionCandidates}
+          acceptedRiskCandidates={acceptedRiskCandidates}
+          schemeAlignment={schemeAlignment}
+        />
       ) : null}
 
       <DraftFindingsList
