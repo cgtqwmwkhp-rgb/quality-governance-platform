@@ -12,13 +12,12 @@ Features:
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, require_permission
-from src.domain.models.user import User
 from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.models.user import User
 from src.domain.services.workflow_engine import workflow_engine
 
 router = APIRouter()

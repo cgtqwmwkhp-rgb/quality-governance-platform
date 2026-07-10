@@ -20,7 +20,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.evidence_asset import (
     EvidenceAssetCreate,
     EvidenceAssetListResponse,
@@ -37,6 +36,7 @@ from src.domain.models.evidence_asset import (
     EvidenceSourceModule,
     EvidenceVisibility,
 )
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
