@@ -966,11 +966,7 @@ class AuditService:
         template_id: int | None = None,
         assigned_to_id: int | None = None,
     ) -> PaginatedResult:
-        query = (
-            select(AuditRun)
-            .options(selectinload(AuditRun.template))
-            .where(AuditRun.tenant_id == tenant_id)
-        )
+        query = select(AuditRun).options(selectinload(AuditRun.template)).where(AuditRun.tenant_id == tenant_id)
         if status_filter:
             query = query.where(AuditRun.status == status_filter)
         if template_id:

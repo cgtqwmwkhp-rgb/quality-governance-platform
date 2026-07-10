@@ -278,9 +278,7 @@ def test_documents_scope_exact_tenant_sql():
     from src.domain.models.document import Document
 
     stmt = select(Document)
-    scoped = _scope_stmt_to_current_tenant(
-        stmt, Document.tenant_id, SimpleNamespace(tenant_id=12, is_superuser=False)
-    )
+    scoped = _scope_stmt_to_current_tenant(stmt, Document.tenant_id, SimpleNamespace(tenant_id=12, is_superuser=False))
     sql = _sql(scoped)
     _assert_exact_tenant_sql(sql, 12)
 
@@ -306,9 +304,7 @@ async def test_incident_running_sheet_list_exact_tenant_no_null_path():
     try:
         db = SimpleNamespace(execute=AsyncMock(side_effect=execute))
         user = SimpleNamespace(tenant_id=33, is_superuser=False)
-        await incidents_routes.list_incident_running_sheet_entries(
-            incident_id=7, db=db, current_user=user
-        )
+        await incidents_routes.list_incident_running_sheet_entries(incident_id=7, db=db, current_user=user)
     finally:
         incidents_routes.IncidentService = original
 
