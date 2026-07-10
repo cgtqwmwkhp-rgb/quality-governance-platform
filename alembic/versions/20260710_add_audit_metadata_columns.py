@@ -1,7 +1,7 @@
 """Add audit metadata columns to external_audit_import_jobs.
 
 Revision ID: 20260710_audit_meta
-Revises: 20260710_doc_ctl_tenant
+Revises: 20260710_af_tenant_nn
 Create Date: 2026-07-10
 
 Adds nullable AI-extracted metadata columns so review UI and APIs can
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260710_audit_meta"
-down_revision: Union[str, None] = "20260710_doc_ctl_tenant"
+down_revision: Union[str, None] = "20260710_af_tenant_nn"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
