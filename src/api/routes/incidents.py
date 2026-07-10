@@ -15,6 +15,7 @@ from src.api.schemas.incident import IncidentCreate, IncidentListResponse, Incid
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.api.utils.pagination import PaginationParams
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.services.audit_service import record_audit_event
@@ -269,10 +270,12 @@ async def list_incident_running_sheet_entries(
         raise NotFoundError(f"Incident {incident_id} not found")
 
     query = select(IncidentRunningSheetEntry).where(IncidentRunningSheetEntry.incident_id == incident_id)
-    if incident.tenant_id is None:
-        query = query.where(IncidentRunningSheetEntry.tenant_id.is_(None))
+    if getattr(current_user, "is_superuser", False):
+        if incident.tenant_id is not None:
+            query = apply_tenant_filter(query, IncidentRunningSheetEntry, incident.tenant_id)
     else:
-        query = query.where(IncidentRunningSheetEntry.tenant_id == incident.tenant_id)
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, IncidentRunningSheetEntry, tenant_id)
 
     result = await db.execute(
         query.order_by(IncidentRunningSheetEntry.created_at.desc(), IncidentRunningSheetEntry.id.asc())

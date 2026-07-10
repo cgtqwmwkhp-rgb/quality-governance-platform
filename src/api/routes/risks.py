@@ -25,6 +25,7 @@ from src.api.schemas.risk import (
     RiskUpdate,
 )
 from src.api.utils.errors import api_error
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -143,7 +144,8 @@ async def list_risks(
     query = select(Risk).where(Risk.is_active == True)
 
     if not current_user.is_superuser:
-        query = query.where(Risk.tenant_id == current_user.tenant_id)
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, Risk, tenant_id)
 
     if search:
         search_filter = f"%{search}%"
@@ -242,8 +244,11 @@ async def get_risk_statistics(
     current_user: CurrentUser,
 ) -> RiskStatistics:
     """Get risk register statistics."""
-    tid = current_user.tenant_id
-    tf: ColumnElement[bool] = Risk.tenant_id == tid if not current_user.is_superuser else true()
+    if current_user.is_superuser:
+        tf: ColumnElement[bool] = true()
+    else:
+        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+        tf = Risk.tenant_id == tid
 
     # Total and active risks
     total_result = await db.execute(select(func.count()).select_from(Risk).where(tf))
@@ -314,7 +319,11 @@ async def get_risk_matrix(
     current_user: CurrentUser,
 ) -> RiskMatrixResponse:
     """Get the risk matrix with risk counts per cell."""
-    tf: ColumnElement[bool] = Risk.tenant_id == current_user.tenant_id if not current_user.is_superuser else true()
+    if current_user.is_superuser:
+        tf: ColumnElement[bool] = true()
+    else:
+        tid = require_tenant_id(getattr(current_user, "tenant_id", None))
+        tf = Risk.tenant_id == tid
     # Get risk counts by likelihood and impact
     result = await db.execute(
         select(Risk.likelihood, Risk.impact, func.count())
