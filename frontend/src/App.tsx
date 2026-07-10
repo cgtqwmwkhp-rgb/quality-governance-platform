@@ -168,6 +168,7 @@ function RouteErrorBoundary() {
   )
 }
 
+/** Legacy /risks routes redirect to Risk Register (orphan Risks.tsx retired). */
 function RedirectToRiskRegister() {
   const { search } = useLocation()
   return <Navigate to={`/risk-register${search}`} replace />
