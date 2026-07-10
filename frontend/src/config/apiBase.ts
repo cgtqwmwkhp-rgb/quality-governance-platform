@@ -14,7 +14,7 @@ import { trackError } from '../utils/errorTracker'
 
 // API URLs for each environment
 const API_URLS = {
-  staging: 'https://app-qgp-staging.azurewebsites.net',
+  staging: 'https://qgp-staging-plantexpand.azurewebsites.net',
   production: 'https://app-qgp-prod.azurewebsites.net',
   development: 'http://localhost:8000',
 } as const
