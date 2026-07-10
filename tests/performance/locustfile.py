@@ -128,25 +128,6 @@ class QGPUser(HttpUser):
             name="/api/v1/incidents?page=[n]",
         )
 
-    @task(3)
-    def create_incident(self):
-        """Create a new incident."""
-        incident_data = {
-            "title": f"Load Test Incident {random_string(8)}",
-            "description": f"This is a test incident created during load testing at {datetime.now().isoformat()}",
-            "severity": random.choice(["low", "medium", "high", "critical"]),
-            "incident_type": random.choice(
-                ["injury", "near_miss", "hazard", "environmental", "quality", "security", "other"]
-            ),
-            "incident_date": datetime.now().isoformat(),
-            "location": f"Test Location {random.randint(1, 100)}",
-        }
-        self.client.post(
-            "/api/v1/incidents/",
-            json=incident_data,
-            headers=self.auth_headers,
-        )
-
     @task(2)
     def get_incident_detail(self):
         """Get incident details."""
@@ -313,6 +294,25 @@ class AdminUser(HttpUser):
         if self.token:
             return {"Authorization": f"Bearer {self.token}"}
         return {}
+
+    @task(3)
+    def create_incident(self):
+        """Create a new incident."""
+        incident_data = {
+            "title": f"Load Test Incident {random_string(8)}",
+            "description": f"This is a test incident created during load testing at {datetime.now().isoformat()}",
+            "severity": random.choice(["low", "medium", "high", "critical"]),
+            "incident_type": random.choice(
+                ["injury", "near_miss", "hazard", "environmental", "quality", "security", "other"]
+            ),
+            "incident_date": datetime.now().isoformat(),
+            "location": f"Test Location {random.randint(1, 100)}",
+        }
+        self.client.post(
+            "/api/v1/incidents/",
+            json=incident_data,
+            headers=self.auth_headers,
+        )
 
     @task(3)
     def list_users(self):

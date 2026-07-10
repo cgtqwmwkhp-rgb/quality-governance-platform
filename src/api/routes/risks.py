@@ -1,13 +1,13 @@
 """Risk Register API routes."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import ColumnElement, and_, func, select, true
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.risk import (
     RiskAssessmentCreate,
@@ -28,6 +28,7 @@ from src.api.utils.errors import api_error
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.risk import OperationalRiskControl, Risk, RiskAssessment, RiskStatus
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 from src.services.reference_number import ReferenceNumberService
 
@@ -189,7 +190,7 @@ async def list_risks(
 async def create_risk(
     risk_data: RiskCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
 ) -> RiskResponse:
     """Create a new risk."""
     # Calculate risk score and level
@@ -405,7 +406,7 @@ async def update_risk(
     risk_id: int,
     risk_data: RiskUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
 ) -> RiskResponse:
     """Update a risk."""
     query = select(Risk).where(Risk.id == risk_id)

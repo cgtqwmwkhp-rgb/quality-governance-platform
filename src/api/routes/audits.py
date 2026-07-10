@@ -350,7 +350,7 @@ async def list_templates(
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditTemplateResponse:
     """Create a new audit template."""
     try:
@@ -498,7 +498,7 @@ async def update_template(
     template_id: int,
     template_data: AuditTemplateUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditTemplateResponse:
     """Update an audit template."""
     result = await db.execute(
@@ -936,7 +936,7 @@ async def list_runs(
 async def create_run(
     run_data: AuditRunCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditRunResponse:
     """Create a new audit run from a template."""
     started = time.perf_counter()
@@ -1062,7 +1062,7 @@ async def update_run(
     run_id: int,
     run_data: AuditRunUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> AuditRunResponse:
     """Update an audit run."""
     started = time.perf_counter()
@@ -1400,7 +1400,7 @@ async def create_finding(
     run_id: int,
     finding_data: AuditFindingCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> AuditFindingResponse:
     """Create a new finding for an audit run."""
     started = time.perf_counter()
