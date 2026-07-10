@@ -30,6 +30,7 @@ class ControlledDocument(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Identification
     document_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
@@ -124,6 +125,7 @@ class ControlledDocumentVersion(Base):
     __tablename__ = "controlled_document_versions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(
         ForeignKey("controlled_documents.id", ondelete="CASCADE"),
@@ -174,6 +176,7 @@ class DocumentApprovalWorkflow(Base):
     __tablename__ = "document_approval_workflows"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     # Workflow identification
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -212,6 +215,7 @@ class DocumentApprovalInstance(Base):
     __tablename__ = "document_approval_instances"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
     workflow_id: Mapped[int] = mapped_column(
@@ -254,6 +258,7 @@ class DocumentApprovalAction(Base):
     __tablename__ = "document_approval_actions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     instance_id: Mapped[int] = mapped_column(
         ForeignKey("document_approval_instances.id", ondelete="CASCADE"), nullable=False
@@ -286,6 +291,7 @@ class DocumentDistribution(Base):
     __tablename__ = "document_distributions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
     version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_document_versions.id"), nullable=True)
@@ -331,6 +337,7 @@ class DocumentTrainingLink(Base):
     __tablename__ = "document_training_links"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
@@ -364,6 +371,7 @@ class DocumentAccessLog(Base):
     __tablename__ = "document_access_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(
         ForeignKey("controlled_documents.id", ondelete="CASCADE"),
@@ -397,6 +405,7 @@ class ObsoleteDocumentRecord(Base):
     __tablename__ = "obsolete_document_records"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
 
