@@ -294,7 +294,7 @@ jobs:
             echo "[WARN] VALIDATION MODE: Simulating NO_TESTS by using filter that matches nothing"
             npx playwright test --grep="NONEXISTENT_TEST_PATTERN_12345" --reporter=list,json,junit 2>&1
           else
-            npx playwright test tests/e2e/staging-verification.spec.ts --reporter=list,json,junit 2>&1
+            npx playwright test tests/e2e/staging-verification.spec.ts tests/e2e/import-reset-promote.spec.ts --reporter=list,json,junit 2>&1
           fi
           EXIT_CODE=$?
           set -e
