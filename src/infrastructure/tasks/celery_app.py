@@ -72,10 +72,29 @@ if _strict_celery:
             "in production/staging with imports enabled."
         )
 
+# Explicit task modules for worker import. Do NOT use
+# autodiscover_tasks(["src.infrastructure.tasks"]) — that looks for a nested
+# Django-style ``tasks.tasks`` module and silently skips these siblings, leaving
+# the worker registry empty (inspect ping still works; send_email → NotRegistered).
+CELERY_TASK_MODULES = (
+    "src.infrastructure.tasks.cleanup_tasks",
+    "src.infrastructure.tasks.competency_tasks",
+    "src.infrastructure.tasks.dlq_replay",
+    "src.infrastructure.tasks.email_tasks",
+    "src.infrastructure.tasks.external_audit_import_tasks",
+    "src.infrastructure.tasks.monitor_tasks",
+    "src.infrastructure.tasks.notification_tasks",
+    "src.infrastructure.tasks.pams_sync_tasks",
+    "src.infrastructure.tasks.report_tasks",
+    "src.infrastructure.tasks.sms_tasks",
+    "src.infrastructure.tasks.webhook_tasks",
+)
+
 celery_app = Celery(
     "quality_governance",
     broker=broker_url,
     backend=result_backend,
+    include=list(CELERY_TASK_MODULES),
 )
 
 celery_app.conf.update(
@@ -104,6 +123,7 @@ celery_app.conf.update(
     task_retry_jitter=True,
     broker_use_ssl=_redis_ssl_options(broker_url),
     redis_backend_use_ssl=_redis_ssl_options(result_backend),
+    imports=list(CELERY_TASK_MODULES),
 )
 
 celery_app.conf.beat_schedule = {
@@ -145,10 +165,5 @@ celery_app.conf.beat_schedule = {
     },
 }
 
-celery_app.autodiscover_tasks(
-    [
-        "src.infrastructure.tasks",
-    ]
-)
-
+# DLQ signal handlers (not a @task module — keep explicit).
 import src.infrastructure.tasks.dlq  # noqa: F401, E402
