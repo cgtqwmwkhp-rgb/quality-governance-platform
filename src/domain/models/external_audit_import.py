@@ -52,7 +52,9 @@ class ExternalAuditImportJob(Base, TimestampMixin, ReferenceNumberMixin, AuditTr
         nullable=False,
         index=True,
     )
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    # Required; inherited from audit_runs via audit_run_id.
+    # Migration 20260710_external_audit_import_jobs_tenant_nn is fail-safe for legacy rows.
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     status: Mapped[ExternalAuditImportStatus] = mapped_column(
         CaseInsensitiveEnum(ExternalAuditImportStatus),
         default=ExternalAuditImportStatus.PENDING,
