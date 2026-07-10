@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 
 const hasRoleMock = vi.fn(() => true)
@@ -70,6 +71,27 @@ describe('Layout', () => {
     expect(screen.getByText('QGP')).toBeInTheDocument()
     expect(screen.getByText('nav.dashboard')).toBeInTheDocument()
     expect(screen.getByText('nav.incidents')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /nav\.more|More/i })).toBeInTheDocument()
+  })
+
+  it('keeps library and analytics items under collapsed More until expanded', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.overview')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /nav\.more|More/i }))
+
+    expect(screen.getByText('nav.documents')).toBeInTheDocument()
+    expect(screen.getByText('nav.overview')).toBeInTheDocument()
+    expect(screen.getByText('nav.workflow_center')).toBeInTheDocument()
   })
 
   it('renders the logout button', async () => {

@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
-  Shield,
   Plus,
   Eye,
   Edit2,
@@ -14,7 +13,6 @@ import {
   AlertCircle,
   Filter,
   Download,
-  Zap,
   GitBranch,
   Clock,
   User,
@@ -897,129 +895,16 @@ export default function RiskRegister() {
             <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>
 
             {selectedRisk ? (
-              <div className="relative">
-                {/* Bow-Tie Diagram */}
-                <div className="flex items-center justify-center gap-4">
-                  {/* Causes (Left Side) */}
-                  <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-destructive mb-4">CAUSES</h3>
-                    <div className="space-y-2">
-                      {['Equipment failure', 'Human error', 'Process breakdown'].map((cause, i) => (
-                        <div
-                          key={i}
-                          className="bg-destructive/20 border border-destructive/50 rounded-lg p-3 text-center text-sm text-destructive"
-                        >
-                          {cause}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Prevention Barriers */}
-                  <div className="w-16 flex flex-col items-center justify-center">
-                    <div className="h-full w-1 bg-gradient-to-b from-destructive to-warning"></div>
-                    <div
-                      className="my-2 text-xs text-muted-foreground text-center"
-                      style={{ writingMode: 'vertical-rl' }}
-                    >
-                      Prevention
-                    </div>
-                  </div>
-
-                  {/* Central Risk Event */}
-                  <div className="w-1/5">
-                    <div className="rounded-full p-8 text-center border-4 border-warning bg-warning/20">
-                      <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning" />
-                      <span className="font-bold text-foreground text-sm">
-                        {selectedRisk.title.substring(0, 50)}...
-                      </span>
-                      <div className="mt-2">
-                        <Badge variant="warning">Score: {selectedRisk.residual_score}</Badge>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Mitigation Barriers */}
-                  <div className="w-16 flex flex-col items-center justify-center">
-                    <div className="h-full w-1 bg-gradient-to-b from-warning to-info"></div>
-                    <div
-                      className="my-2 text-xs text-muted-foreground text-center"
-                      style={{ writingMode: 'vertical-rl' }}
-                    >
-                      Mitigation
-                    </div>
-                  </div>
-
-                  {/* Consequences (Right Side) */}
-                  <div className="w-1/4">
-                    <h3 className="text-center font-semibold text-info mb-4">CONSEQUENCES</h3>
-                    <div className="space-y-2">
-                      {['Financial loss', 'Reputational damage', 'Regulatory penalty'].map(
-                        (consequence, i) => (
-                          <div
-                            key={i}
-                            className="bg-info/20 border border-info/50 rounded-lg p-3 text-center text-sm text-info"
-                          >
-                            {consequence}
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Controls/Barriers */}
-                <div className="mt-8 grid grid-cols-2 gap-6">
-                  <Card>
-                    <CardContent className="p-4">
-                      <h4 className="font-semibold text-success mb-3 flex items-center gap-2">
-                        <Shield className="w-4 h-4" />
-                        Prevention Controls
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">
-                            Preventive maintenance program
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">
-                            Training and competency assessments
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">Procedure documentation</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardContent className="p-4">
-                      <h4 className="font-semibold text-info mb-3 flex items-center gap-2">
-                        <Zap className="w-4 h-4" />
-                        Mitigation Controls
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Emergency response plan</span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-success rounded-full"></div>
-                          <span className="text-sm text-foreground">Insurance coverage</span>
-                        </div>
-                        <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                          <div className="w-2 h-2 bg-warning rounded-full"></div>
-                          <span className="text-sm text-foreground">Communication protocols</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+              <div className="text-center py-12 text-muted-foreground">
+                <GitBranch className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p className="text-foreground font-medium mb-2">{selectedRisk.title}</p>
+                <p>Bow-tie analysis is not available yet for this risk</p>
+                <p className="text-sm mt-2">
+                  Structured causes, consequences, and controls will appear here when this feature is ready.
+                </p>
+                <Button onClick={() => setView('register')} className="mt-4">
+                  Back to Risk Register
+                </Button>
               </div>
             ) : (
               <div className="text-center py-12 text-muted-foreground">

@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
   AlertTriangle,
@@ -34,6 +34,7 @@ import {
   Leaf,
   FileSignature,
   Bot,
+  ChevronDown,
 } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -56,7 +57,7 @@ export default function Layout({ onLogout }: LayoutProps) {
   const canManageUsers = isSuperuser()
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
 
-  const navSections = [
+  const primarySections = [
     {
       title: t('nav.core'),
       items: [
@@ -93,18 +94,32 @@ export default function Layout({ onLogout }: LayoutProps) {
       ],
     },
     {
-      title: t('nav.library'),
-      items: [
-        { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
-        { path: '/policies', icon: FileText, label: t('nav.policies') },
-      ],
-    },
-    {
       title: t('nav.enterprise'),
       items: [
         { path: '/risk-register', icon: Target, label: t('nav.risk_register') },
         { path: '/ims', icon: GitMerge, label: t('nav.ims_dashboard') },
         { path: '/ai-intelligence', icon: Brain, label: t('nav.ai_intelligence') },
+      ],
+    },
+    {
+      title: t('nav.admin'),
+      items: [
+        ...(canManageUsers && adminUserManagementEnabled
+          ? [{ path: '/admin/users', icon: Users, label: t('nav.user_management') }]
+          : []),
+        { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
+      ],
+    },
+  ]
+    .filter((section) => canAccessWorkforce || section.title !== t('nav.workforce'))
+    .filter((section) => section.items.length > 0)
+
+  const moreGroups = [
+    {
+      title: t('nav.library'),
+      items: [
+        { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
+        { path: '/policies', icon: FileText, label: t('nav.policies') },
       ],
     },
     {
@@ -126,16 +141,21 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/signatures', icon: FileSignature, label: t('nav.digital_signatures') },
       ],
     },
-    {
-      title: t('nav.admin'),
-      items: [
-        ...(canManageUsers && adminUserManagementEnabled
-          ? [{ path: '/admin/users', icon: Users, label: t('nav.user_management') }]
-          : []),
-        { path: '/audit-trail', icon: History, label: t('nav.audit_trail') },
-      ],
-    },
-  ].filter((section) => canAccessWorkforce || section.title !== t('nav.workforce'))
+  ].filter((group) => group.items.length > 0)
+
+  const morePaths = moreGroups.flatMap((group) => group.items.map((item) => item.path))
+  const location = useLocation()
+  const routeInMore = morePaths.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`),
+  )
+  const [moreExpanded, setMoreExpanded] = useState(routeInMore)
+
+  useEffect(() => {
+    if (routeInMore) {
+      setMoreExpanded(true)
+    }
+  }, [routeInMore])
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
   const [copilotOpen, setCopilotOpen] = useState(false)
@@ -272,7 +292,7 @@ export default function Layout({ onLogout }: LayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 overflow-y-auto">
-            {navSections.map((section) => (
+            {primarySections.map((section) => (
               <div key={section.title} className="mb-6">
                 <h3 className="px-4 text-2xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
                   {section.title}
@@ -314,6 +334,75 @@ export default function Layout({ onLogout }: LayoutProps) {
                 </div>
               </div>
             ))}
+
+            {moreGroups.length > 0 && (
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={() => setMoreExpanded((open) => !open)}
+                  aria-expanded={moreExpanded}
+                  className={cn(
+                    'flex w-full items-center justify-between px-4 text-2xs font-bold',
+                    'text-muted-foreground uppercase tracking-wider mb-2',
+                    'hover:text-foreground transition-colors',
+                  )}
+                >
+                  <span>{t('nav.more', 'More')}</span>
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 transition-transform',
+                      moreExpanded ? 'rotate-0' : '-rotate-90',
+                    )}
+                  />
+                </button>
+                {moreExpanded && (
+                  <div className="space-y-4">
+                    {moreGroups.map((group) => (
+                      <div key={group.title}>
+                        <h4 className="px-4 text-[10px] font-semibold text-muted-foreground/80 uppercase tracking-wider mb-1">
+                          {group.title}
+                        </h4>
+                        <div className="space-y-1">
+                          {group.items.map((item) => (
+                            <NavLink
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setSidebarOpen(false)}
+                              className={({ isActive }) =>
+                                cn(
+                                  'flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium',
+                                  'transition-all duration-200 group',
+                                  isActive
+                                    ? 'bg-primary/10 text-primary border border-primary/20'
+                                    : 'text-muted-foreground hover:text-foreground hover:bg-surface',
+                                )
+                              }
+                            >
+                              {({ isActive }) => (
+                                <>
+                                  <item.icon
+                                    className={cn(
+                                      'w-5 h-5 transition-colors',
+                                      isActive
+                                        ? 'text-primary'
+                                        : 'text-muted-foreground group-hover:text-foreground',
+                                    )}
+                                  />
+                                  {item.label}
+                                  {isActive && (
+                                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+                                  )}
+                                </>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
 
           {/* Footer */}
