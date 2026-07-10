@@ -279,6 +279,7 @@ async def test_rta_investigations_linkage(client: AsyncClient, auth_headers: dic
 
     # Source uniqueness allows one investigation per RTA.
     investigation = InvestigationRun(
+        tenant_id=1,
         template_id=template.id,
         title="Investigation 0",
         description="Test",
@@ -344,6 +345,7 @@ async def test_complaint_investigations_linkage(client: AsyncClient, auth_header
     await test_session.refresh(template)
 
     investigation = InvestigationRun(
+        tenant_id=1,
         template_id=template.id,
         title="Complaint Investigation 0",
         description="Test",
@@ -442,6 +444,7 @@ async def test_rta_investigations_pagination_fields(client: AsyncClient, auth_he
     await test_session.refresh(template)
 
     investigation = InvestigationRun(
+        tenant_id=1,
         template_id=template.id,
         title="Investigation 0",
         description="Test",
@@ -576,6 +579,7 @@ async def test_complaint_investigations_pagination_fields(client: AsyncClient, a
     await test_session.refresh(template)
 
     investigation = InvestigationRun(
+        tenant_id=1,
         template_id=template.id,
         title="Complaint Investigation 0",
         description="Test",

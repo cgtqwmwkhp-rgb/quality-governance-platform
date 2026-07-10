@@ -62,7 +62,6 @@
     "investigation_comments",
     "investigation_customer_packs",
     "investigation_revision_events",
-    "investigation_runs",
     "iso27001_controls",
     "key_risk_indicators",
     "loler_defects",
