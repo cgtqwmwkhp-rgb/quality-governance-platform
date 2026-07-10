@@ -18,7 +18,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import NotFoundError
 from src.domain.models.document_control import (
@@ -31,6 +30,7 @@ from src.domain.models.document_control import (
     DocumentDistribution,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.user import User
 
 router = APIRouter()
 
