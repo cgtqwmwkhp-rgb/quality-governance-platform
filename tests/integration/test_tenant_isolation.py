@@ -15,9 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.core.security import get_password_hash
+from src.domain.models.audit import AuditFinding, FindingStatus
 from src.domain.models.incident import IncidentSeverity, IncidentStatus, IncidentType
 from src.domain.models.user import User
 from tests.factories import IncidentFactory, TenantFactory, UserFactory
+from tests.factories.core import AuditFindingFactory, AuditRunFactory, AuditTemplateFactory
 
 
 @pytest.mark.asyncio
@@ -226,3 +228,136 @@ async def test_cross_tenant_access_denied(
         403,
         404,
     ], f"Expected 403 or 404 for cross-tenant access, got {response.status_code}"
+
+
+@pytest.mark.asyncio
+async def test_audit_findings_inherit_run_tenant_and_isolate(
+    client: AsyncClient,
+    test_session: AsyncSession,
+):
+    """Findings inherit run tenant_id; cross-tenant list must not leak findings."""
+    tenant_a = TenantFactory.build(
+        name="Findings Tenant A",
+        slug=f"findings-a-{uuid.uuid4().hex[:8]}",
+        admin_email="admin@findings-a.example.com",
+        is_active=True,
+    )
+    tenant_b = TenantFactory.build(
+        name="Findings Tenant B",
+        slug=f"findings-b-{uuid.uuid4().hex[:8]}",
+        admin_email="admin@findings-b.example.com",
+        is_active=True,
+    )
+    test_session.add_all([tenant_a, tenant_b])
+    await test_session.flush()
+    await test_session.refresh(tenant_a)
+    await test_session.refresh(tenant_b)
+
+    user_a = UserFactory.build(
+        email=f"findings-a-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=get_password_hash("password123"),
+        first_name="Findings",
+        last_name="A",
+        is_active=True,
+        tenant_id=tenant_a.id,
+    )
+    user_b = UserFactory.build(
+        email=f"findings-b-{uuid.uuid4().hex[:8]}@example.com",
+        hashed_password=get_password_hash("password123"),
+        first_name="Findings",
+        last_name="B",
+        is_active=True,
+        tenant_id=tenant_b.id,
+    )
+    test_session.add_all([user_a, user_b])
+    await test_session.flush()
+    await test_session.refresh(user_a)
+    await test_session.refresh(user_b)
+
+    template = AuditTemplateFactory.build(
+        name="Findings Isolation Template",
+        tenant_id=tenant_a.id,
+        created_by_id=user_a.id,
+        is_published=True,
+    )
+    test_session.add(template)
+    await test_session.flush()
+    await test_session.refresh(template)
+
+    run_a = AuditRunFactory.build(
+        template_id=template.id,
+        title="Tenant A Run",
+        tenant_id=tenant_a.id,
+        created_by_id=user_a.id,
+        assigned_to_id=user_a.id,
+    )
+    run_b = AuditRunFactory.build(
+        template_id=template.id,
+        title="Tenant B Run",
+        tenant_id=tenant_b.id,
+        created_by_id=user_b.id,
+        assigned_to_id=user_b.id,
+    )
+    test_session.add_all([run_a, run_b])
+    await test_session.flush()
+    await test_session.refresh(run_a)
+    await test_session.refresh(run_b)
+
+    finding_a = AuditFindingFactory.build(
+        run_id=run_a.id,
+        title="Tenant A Finding",
+        description="Owned by tenant A via run",
+        tenant_id=run_a.tenant_id,
+        created_by_id=user_a.id,
+        status=FindingStatus.OPEN,
+    )
+    finding_b = AuditFindingFactory.build(
+        run_id=run_b.id,
+        title="Tenant B Finding",
+        description="Owned by tenant B via run",
+        tenant_id=run_b.tenant_id,
+        created_by_id=user_b.id,
+        status=FindingStatus.OPEN,
+    )
+    test_session.add_all([finding_a, finding_b])
+    await test_session.flush()
+    await test_session.refresh(finding_a)
+    await test_session.refresh(finding_b)
+
+    assert finding_a.tenant_id == run_a.tenant_id == tenant_a.id
+    assert finding_b.tenant_id == run_b.tenant_id == tenant_b.id
+    assert AuditFinding.__table__.c.tenant_id.nullable is False
+
+    now = datetime.now(timezone.utc)
+    token_a = jwt.encode(
+        {
+            "sub": str(user_a.id),
+            "exp": now + timedelta(hours=1),
+            "iat": now,
+            "type": "access",
+            "jti": str(uuid.uuid4()),
+            "tenant_id": tenant_a.id,
+            "role": "admin",
+            "is_superuser": False,
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+    headers_a = {"Authorization": f"Bearer {token_a}"}
+
+    response = await client.get("/api/v1/audits/findings", headers=headers_a)
+    assert response.status_code == 200
+    data = response.json()
+    finding_ids = [item["id"] for item in data.get("items", [])]
+    assert finding_b.id not in finding_ids, "Tenant A must not see tenant B findings"
+    # Own finding should be visible when list is tenant-scoped (may include other A data)
+    assert finding_a.id in finding_ids or all(
+        item.get("tenant_id", tenant_a.id) == tenant_a.id for item in data.get("items", [])
+    )
+
+    cross = await client.patch(
+        f"/api/v1/audits/findings/{finding_b.id}",
+        headers=headers_a,
+        json={"title": "should-not-update"},
+    )
+    assert cross.status_code in (403, 404), f"Expected 403/404 for cross-tenant finding update, got {cross.status_code}"

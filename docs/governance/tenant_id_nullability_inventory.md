@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 9 |
-| Owned nullable `tenant_id` | 99 |
+| Required `tenant_id` (`nullable=False`) | 10 |
+| Owned nullable `tenant_id` | 98 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **118** |
+| **Nullable total** | **117** |
 
 ## Phase 1 decision
 
@@ -24,6 +24,14 @@ This phase lands:
 2. CI lint forbidding **new** owned entities with nullable `tenant_id`.
 3. Explicit catalog/global exception list.
 
+## Phase 2 progress
+
+| Table | Status | Notes |
+| --- | --- | --- |
+| `audit_findings` | **Done (incremental)** | Fail-safe backfill from `audit_runs` + conditional `NOT NULL` (`20260710_af_tenant_nn`). ORM `nullable=False`. See `docs/data/audit-findings-tenant-backfill.md`. |
+| `audit_runs` | Deferred | Parent may still be NULL — do not invent `tenant_id=1`. |
+| `incidents` / `incident_actions` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Out of scope for the findings-only revision. |
+
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
 Do **not** enforce `NOT NULL` until NULL counts are zero in every environment
@@ -31,7 +39,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 
 | Table | Model |
 | --- | --- |
-| `audit_findings` | `AuditFinding` |
 | `audit_runs` | `AuditRun` |
 | `complaints` | `Complaint` |
 | `incident_actions` | `IncidentAction` |
@@ -44,6 +51,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 
 | Table | Model |
 | --- | --- |
+| `audit_findings` | `AuditFinding` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
 | `copilot_sessions` | `CopilotSession` |
@@ -63,7 +71,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `assessment_responses` | `AssessmentResponse` |
 | `assessment_runs` | `AssessmentRun` |
 | `assets` | `Asset` |
-| `audit_findings` | `AuditFinding` |
 | `audit_runs` | `AuditRun` |
 | `benchmark_data` | `BenchmarkData` |
 | `bow_tie_elements` | `BowTieElement` |
