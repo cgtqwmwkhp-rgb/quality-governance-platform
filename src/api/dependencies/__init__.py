@@ -17,6 +17,7 @@ from src.domain.exceptions import TokenRevokedError
 from src.domain.models.tenant import Tenant, TenantUser
 from src.domain.models.user import User
 from src.infrastructure.database import get_db
+from src.infrastructure.middleware.tenant_context import apply_tenant_guc, set_request_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,19 @@ async def _enforce_access_token_not_revoked(payload: dict, db: AsyncSession) -> 
         raise _token_revoked_exception(str(exc)) from exc
     except ValueError as exc:
         raise _credentials_exception() from exc
+
+
+async def _bind_tenant_rls_guc(db: AsyncSession, user: User) -> None:
+    """Bind tenant GUC on the request session after tenant resolution.
+
+    Sets ContextVar + ``set_config`` for any user with a tenant_id (including
+    app superusers) so FORCE RLS policies match. Cross-tenant admin requires
+    a DB role with BYPASSRLS.
+    """
+    if user.tenant_id is None:
+        return
+    set_request_tenant_id(user.tenant_id)
+    await apply_tenant_guc(db, user.tenant_id)
 
 
 async def get_current_user(
@@ -87,6 +101,7 @@ async def get_current_user(
         )
 
     await _resolve_user_tenant_context(db, user)
+    await _bind_tenant_rls_guc(db, user)
     return user
 
 
@@ -171,6 +186,7 @@ async def get_optional_current_user(
         return None
 
     await _resolve_user_tenant_context(db, user)
+    await _bind_tenant_rls_guc(db, user)
     return user
 
 

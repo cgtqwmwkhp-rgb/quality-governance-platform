@@ -112,8 +112,31 @@ async def emit_db_pool_usage_metric() -> None:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency to get database session."""
+    """Dependency to get database session.
+
+    When a request-scoped tenant id is present (ContextVar set by auth /
+    TenantContextMiddleware), re-apply ``app.current_tenant_id`` via
+    ``set_config(..., true)`` on each new transaction begin so FORCE RLS
+    policies see the correct GUC on the real request session.
+    """
+    from sqlalchemy import text as sa_text
+
+    from src.infrastructure.middleware.tenant_context import get_request_tenant_id
+
     async with async_session_maker() as session:
+
+        def _apply_tenant_guc_after_begin(sync_session, transaction, connection) -> None:
+            tenant_id = get_request_tenant_id()
+            if tenant_id is None:
+                return
+            if connection.dialect.name != "postgresql":
+                return
+            connection.execute(
+                sa_text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+                {"tid": str(tenant_id)},
+            )
+
+        event.listen(session.sync_session, "after_begin", _apply_tenant_guc_after_begin)
         try:
             yield session
             await session.commit()
@@ -121,6 +144,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
+            event.remove(session.sync_session, "after_begin", _apply_tenant_guc_after_begin)
             await session.close()
 
 
