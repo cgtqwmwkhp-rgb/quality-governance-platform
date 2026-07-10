@@ -7,12 +7,12 @@ to the same AuditService that backs /api/v1/audits/templates.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditQuestionCreate,
@@ -29,6 +29,7 @@ from src.api.schemas.audit import (
 )
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.audit import AuditTemplate
+from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
@@ -113,7 +114,7 @@ async def list_templates(
 async def create_template(
     template_data: AuditTemplateCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Create a new audit template."""
     service = AuditService(db)
@@ -149,7 +150,7 @@ async def update_template(
     template_id: int,
     updates: AuditTemplateUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
 ):
     """Update an existing audit template with optimistic locking."""
     from datetime import datetime as dt
@@ -183,7 +184,7 @@ async def update_template(
 async def archive_template(
     template_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:delete"))],
 ):
     """Archive (soft-delete) an audit template."""
     service = AuditService(db)
@@ -199,7 +200,7 @@ async def archive_template(
 async def restore_template(
     template_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
 ):
     """Restore an archived template."""
     service = AuditService(db)
@@ -219,7 +220,7 @@ async def restore_template(
 async def duplicate_template(
     template_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Duplicate an existing template."""
     service = AuditService(db)
@@ -235,7 +236,7 @@ async def duplicate_template(
 async def publish_template(
     template_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
 ):
     """Publish a template."""
     service = AuditService(db)
@@ -259,7 +260,7 @@ async def create_section(
     template_id: int,
     section_data: AuditSectionCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Add a section to a template."""
     service = AuditService(db)
@@ -276,7 +277,7 @@ async def update_section(
     section_id: int,
     section_data: AuditSectionUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
 ):
     """Update a section."""
     service = AuditService(db)
@@ -292,7 +293,7 @@ async def update_section(
 async def delete_section(
     section_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:delete"))],
 ):
     """Delete a section."""
     service = AuditService(db)
@@ -314,7 +315,7 @@ async def create_question(
     template_id: int,
     question_data: AuditQuestionCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Add a question to a template."""
     service = AuditService(db)
@@ -331,7 +332,7 @@ async def update_question(
     question_id: int,
     question_data: AuditQuestionUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:update"))],
 ):
     """Update a question."""
     service = AuditService(db)
@@ -347,7 +348,7 @@ async def update_question(
 async def delete_question(
     question_id: int,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:delete"))],
 ):
     """Delete a question."""
     service = AuditService(db)

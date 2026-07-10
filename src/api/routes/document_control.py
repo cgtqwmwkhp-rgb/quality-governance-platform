@@ -11,13 +11,13 @@ Provides endpoints for:
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import NotFoundError
 from src.domain.models.document_control import (
@@ -30,6 +30,7 @@ from src.domain.models.document_control import (
     DocumentDistribution,
     ObsoleteDocumentRecord,
 )
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -186,7 +187,7 @@ async def list_documents(
 @router.post("/", response_model=dict, status_code=201)
 async def create_document(
     document_data: DocumentCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
@@ -345,7 +346,7 @@ async def get_document(
 async def update_document(
     document_id: int,
     document_data: DocumentUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update document metadata"""
@@ -378,7 +379,7 @@ async def update_document(
 async def create_new_version(
     document_id: int,
     version_data: VersionCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
@@ -524,7 +525,7 @@ async def list_workflows(
 @router.post("/workflows", response_model=dict, status_code=201)
 async def create_workflow(
     workflow_data: WorkflowCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create approval workflow"""
@@ -539,7 +540,7 @@ async def create_workflow(
 @router.post("/{document_id}/submit-for-approval", response_model=dict)
 async def submit_for_approval(
     document_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     workflow_id: int = Query(...),
     db: DbSession = None,
 ) -> dict[str, Any]:
@@ -598,7 +599,7 @@ async def submit_for_approval(
 async def take_approval_action(
     instance_id: int,
     action_request: ApprovalActionRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
@@ -695,7 +696,7 @@ async def take_approval_action(
 async def distribute_document(
     document_id: int,
     distribution: DistributionCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
@@ -734,7 +735,7 @@ async def distribute_document(
 async def acknowledge_distribution(
     document_id: int,
     distribution_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
@@ -767,7 +768,7 @@ async def acknowledge_distribution(
 async def mark_document_obsolete(
     document_id: int,
     obsolete_data: ObsoleteRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
