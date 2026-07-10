@@ -15,6 +15,7 @@ import { useLiveAnnouncer } from '../components/ui/LiveAnnouncer'
 import {
   authApi,
   classifyLoginError,
+  LOGIN_ERROR_I18N_KEYS,
   LOGIN_ERROR_MESSAGES,
   getDurationBucket,
   type LoginErrorCode,
@@ -348,7 +349,7 @@ export default function Login({ onLogin }: LoginProps) {
 
       setErrorCode(code)
       setLoginState(`error_${code.toLowerCase()}` as LoginState)
-      announce(LOGIN_ERROR_MESSAGES[code] || 'Login failed', 'assertive')
+      announce(t(LOGIN_ERROR_I18N_KEYS[code], LOGIN_ERROR_MESSAGES[code]) || t('login.error'), 'assertive')
     } finally {
       // CRITICAL: Always clear timers to prevent state leaks
       if (spinnerTimerRef.current) {
@@ -370,7 +371,9 @@ export default function Login({ onLogin }: LoginProps) {
   const showRecoveryActions = errorCode && errorCode !== 'UNAUTHORIZED'
 
   // Get error message from bounded list
-  const errorMessage = errorCode ? LOGIN_ERROR_MESSAGES[errorCode] : null
+  const errorMessage = errorCode
+    ? t(LOGIN_ERROR_I18N_KEYS[errorCode], LOGIN_ERROR_MESSAGES[errorCode])
+    : null
 
   return (
     <div data-testid="login-page" className="min-h-screen flex items-center justify-center p-4 bg-background relative">

@@ -62,7 +62,17 @@ export type LoginErrorCode =
   | 'NETWORK_ERROR'
   | 'UNKNOWN'
 
-// Error code to user message mapping (bounded, no PII)
+// i18n keys for Login error copy (bounded codes, no PII). English fallbacks below.
+export const LOGIN_ERROR_I18N_KEYS: Record<LoginErrorCode, string> = {
+  TIMEOUT: 'login.error.TIMEOUT',
+  UNAUTHORIZED: 'login.error.UNAUTHORIZED',
+  UNAVAILABLE: 'login.error.UNAVAILABLE',
+  SERVER_ERROR: 'login.error.SERVER_ERROR',
+  NETWORK_ERROR: 'login.error.NETWORK_ERROR',
+  UNKNOWN: 'login.error.UNKNOWN',
+}
+
+/** @deprecated Prefer t(LOGIN_ERROR_I18N_KEYS[code]) — English fallbacks for non-i18n callers/tests */
 export const LOGIN_ERROR_MESSAGES: Record<LoginErrorCode, string> = {
   TIMEOUT: 'Request timed out. Please try again.',
   UNAUTHORIZED: 'Incorrect email or password.',
