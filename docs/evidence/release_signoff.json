@@ -1,11 +1,11 @@
 {
-  "release_sha": "13cab4e78099e84f1a06188f16d9169581d0b165",
+  "release_sha": "66e9b957405e2b4b1f6aec0b65b2808565fa8e6b",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 13cab4e7 \u2014 WCS Path-to-10 evening wave: #649 TEN2 external_audit_import_drafts, #650 evidence+workflow require_permission, #651 Documents axe coverage.",
-  "approved_at_utc": "2026-07-10T21:25:25+00:00"
+  "notes": "Release signoff for main tip 66e9b957 \u2014 overnight ops: #660 honest Celery healthz + lightweight inspect smoke; includes #655 TEN2 incidents, #656 UX More/AI theatre, #658 ImportReview phase 5.",
+  "approved_at_utc": "2026-07-10T22:23:28+00:00"
 }
