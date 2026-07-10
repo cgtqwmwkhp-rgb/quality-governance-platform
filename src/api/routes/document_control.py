@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import NotFoundError
 from src.domain.models.document_control import (
     ControlledDocument,
@@ -27,11 +28,20 @@ from src.domain.models.document_control import (
     DocumentApprovalInstance,
     DocumentApprovalWorkflow,
     DocumentDistribution,
-    DocumentTrainingLink,
     ObsoleteDocumentRecord,
 )
 
 router = APIRouter()
+
+
+def _tenant_id(current_user: CurrentUser) -> int:
+    """Return the authenticated tenant or reject unscoped document-control access."""
+    return require_tenant_id(getattr(current_user, "tenant_id", None))
+
+
+def _tenant_stmt(stmt: Any, model: Any, current_user: CurrentUser) -> Any:
+    """Scope a statement to the exact authenticated tenant."""
+    return apply_tenant_filter(stmt, model, _tenant_id(current_user))
 
 
 # ============ Pydantic Schemas ============
@@ -126,7 +136,11 @@ async def list_documents(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """List controlled documents with filtering"""
-    stmt = select(ControlledDocument).where(ControlledDocument.is_current == True)
+    stmt = _tenant_stmt(
+        select(ControlledDocument).where(ControlledDocument.is_current == True),
+        ControlledDocument,
+        current_user,
+    )
 
     if document_type:
         stmt = stmt.where(ControlledDocument.document_type == document_type)
@@ -176,11 +190,13 @@ async def create_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new controlled document"""
+    tenant_id = _tenant_id(current_user)
     type_prefix = document_data.document_type[:3].upper()
     unique_suffix = uuid.uuid4().hex[:8].upper()
     document_number = f"{type_prefix}-{unique_suffix}"
 
     document = ControlledDocument(
+        tenant_id=tenant_id,
         document_number=document_number,
         current_version="1.0",
         major_version=1,
@@ -195,6 +211,7 @@ async def create_document(
 
     # Create initial version record
     version = ControlledDocumentVersion(
+        tenant_id=tenant_id,
         document_id=document.id,
         version_number="0.1",
         major_version=0,
@@ -221,25 +238,41 @@ async def get_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get detailed document information"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
 
     # Get version history
     result = await db.execute(
-        select(ControlledDocumentVersion)
-        .where(ControlledDocumentVersion.document_id == document_id)
-        .order_by(ControlledDocumentVersion.created_at.desc())
+        apply_tenant_filter(
+            select(ControlledDocumentVersion).where(ControlledDocumentVersion.document_id == document_id),
+            ControlledDocumentVersion,
+            tenant_id,
+        ).order_by(ControlledDocumentVersion.created_at.desc())
     )
     versions = result.scalars().all()
 
     # Get distributions
-    result = await db.execute(select(DocumentDistribution).where(DocumentDistribution.document_id == document_id))
+    result = await db.execute(
+        apply_tenant_filter(
+            select(DocumentDistribution).where(DocumentDistribution.document_id == document_id),
+            DocumentDistribution,
+            tenant_id,
+        )
+    )
     distributions = result.scalars().all()
 
     # Log access
     log = DocumentAccessLog(
+        tenant_id=tenant_id,
         document_id=document_id,
         user_name=current_user.full_name,
         action="view",
@@ -316,7 +349,13 @@ async def update_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update document metadata"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    result = await db.execute(
+        _tenant_stmt(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            current_user,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
@@ -343,7 +382,14 @@ async def create_new_version(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a new version of the document"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
@@ -367,6 +413,7 @@ async def create_new_version(
 
     # Create version record
     version = ControlledDocumentVersion(
+        tenant_id=tenant_id,
         document_id=document_id,
         version_number=new_version_number,
         major_version=new_major,
@@ -396,10 +443,15 @@ async def get_version_diff(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get diff between versions"""
+    tenant_id = _tenant_id(current_user)
     result = await db.execute(
-        select(ControlledDocumentVersion).where(
-            ControlledDocumentVersion.id == version_id,
-            ControlledDocumentVersion.document_id == document_id,
+        apply_tenant_filter(
+            select(ControlledDocumentVersion).where(
+                ControlledDocumentVersion.id == version_id,
+                ControlledDocumentVersion.document_id == document_id,
+            ),
+            ControlledDocumentVersion,
+            tenant_id,
         )
     )
     version = result.scalar_one_or_none()
@@ -419,9 +471,13 @@ async def get_version_diff(
 
     if compare_to:
         result = await db.execute(
-            select(ControlledDocumentVersion).where(
-                ControlledDocumentVersion.id == compare_to,
-                ControlledDocumentVersion.document_id == document_id,
+            apply_tenant_filter(
+                select(ControlledDocumentVersion).where(
+                    ControlledDocumentVersion.id == compare_to,
+                    ControlledDocumentVersion.document_id == document_id,
+                ),
+                ControlledDocumentVersion,
+                tenant_id,
             )
         )
         compare_version = result.scalar_one_or_none()
@@ -443,7 +499,13 @@ async def list_workflows(
     db: DbSession = None,
 ) -> list[dict[str, Any]]:
     """List approval workflows"""
-    result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True))
+    result = await db.execute(
+        _tenant_stmt(
+            select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.is_active == True),
+            DocumentApprovalWorkflow,
+            current_user,
+        )
+    )
     workflows = result.scalars().all()
 
     return [
@@ -466,7 +528,7 @@ async def create_workflow(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create approval workflow"""
-    workflow = DocumentApprovalWorkflow(**workflow_data.model_dump())
+    workflow = DocumentApprovalWorkflow(tenant_id=_tenant_id(current_user), **workflow_data.model_dump())
     db.add(workflow)
     await db.commit()
     await db.refresh(workflow)
@@ -482,18 +544,32 @@ async def submit_for_approval(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Submit document for approval"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
 
-    result = await db.execute(select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id))
+    result = await db.execute(
+        apply_tenant_filter(
+            select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == workflow_id),
+            DocumentApprovalWorkflow,
+            tenant_id,
+        )
+    )
     workflow = result.scalar_one_or_none()
     if not workflow:
         raise NotFoundError("Workflow not found")
 
     # Create approval instance
     instance = DocumentApprovalInstance(
+        tenant_id=tenant_id,
         document_id=document_id,
         workflow_id=workflow_id,
         current_step=1,
@@ -526,13 +602,21 @@ async def take_approval_action(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Take action on an approval request"""
-    result = await db.execute(select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(DocumentApprovalInstance).where(DocumentApprovalInstance.id == instance_id),
+            DocumentApprovalInstance,
+            tenant_id,
+        )
+    )
     instance = result.scalar_one_or_none()
     if not instance:
         raise NotFoundError("Approval instance not found")
 
     # Record the action
     action = DocumentApprovalAction(
+        tenant_id=tenant_id,
         instance_id=instance_id,
         workflow_step=instance.current_step,
         approver_id=current_user.id,
@@ -546,13 +630,23 @@ async def take_approval_action(
 
     # Get workflow to determine next steps
     result = await db.execute(
-        select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == instance.workflow_id)
+        apply_tenant_filter(
+            select(DocumentApprovalWorkflow).where(DocumentApprovalWorkflow.id == instance.workflow_id),
+            DocumentApprovalWorkflow,
+            tenant_id,
+        )
     )
     workflow = result.scalar_one_or_none()
     if not workflow:
         raise HTTPException(status_code=404, detail="Approval workflow not found")
 
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == instance.document_id))
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == instance.document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
 
     if action_request.action == "approved":
@@ -605,12 +699,20 @@ async def distribute_document(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Distribute document to recipients"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
 
     dist = DocumentDistribution(
+        tenant_id=tenant_id,
         document_id=document_id,
         notified_date=datetime.now(timezone.utc),
         **distribution.model_dump(),
@@ -637,9 +739,13 @@ async def acknowledge_distribution(
 ) -> dict[str, Any]:
     """Acknowledge receipt of document"""
     result = await db.execute(
-        select(DocumentDistribution).where(
-            DocumentDistribution.id == distribution_id,
-            DocumentDistribution.document_id == document_id,
+        _tenant_stmt(
+            select(DocumentDistribution).where(
+                DocumentDistribution.id == distribution_id,
+                DocumentDistribution.document_id == document_id,
+            ),
+            DocumentDistribution,
+            current_user,
         )
     )
     dist = result.scalar_one_or_none()
@@ -665,7 +771,14 @@ async def mark_document_obsolete(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Mark document as obsolete"""
-    result = await db.execute(select(ControlledDocument).where(ControlledDocument.id == document_id))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(ControlledDocument).where(ControlledDocument.id == document_id),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     document = result.scalar_one_or_none()
     if not document:
         raise NotFoundError("Document not found")
@@ -679,6 +792,7 @@ async def mark_document_obsolete(
 
     # Create obsolete record
     record = ObsoleteDocumentRecord(
+        tenant_id=tenant_id,
         document_id=document_id,
         obsolete_date=datetime.now(timezone.utc),
         obsolete_reason=obsolete_data.obsolete_reason,
@@ -707,8 +821,11 @@ async def get_access_log(
 ) -> list[dict[str, Any]]:
     """Get document access log"""
     result = await db.execute(
-        select(DocumentAccessLog)
-        .where(DocumentAccessLog.document_id == document_id)
+        _tenant_stmt(
+            select(DocumentAccessLog).where(DocumentAccessLog.document_id == document_id),
+            DocumentAccessLog,
+            current_user,
+        )
         .order_by(DocumentAccessLog.timestamp.desc())
         .limit(limit)
     )
@@ -735,59 +852,96 @@ async def get_document_summary(
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Get document control summary statistics"""
-    result = await db.execute(select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True))
+    tenant_id = _tenant_id(current_user)
+    result = await db.execute(
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(ControlledDocument.is_current == True),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     total = result.scalar()
 
     result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(
-            ControlledDocument.status == "active",
-            ControlledDocument.is_current == True,
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(
+                ControlledDocument.status == "active",
+                ControlledDocument.is_current == True,
+            ),
+            ControlledDocument,
+            tenant_id,
         )
     )
     active = result.scalar()
 
     result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(
-            ControlledDocument.status == "draft",
-            ControlledDocument.is_current == True,
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(
+                ControlledDocument.status == "draft",
+                ControlledDocument.is_current == True,
+            ),
+            ControlledDocument,
+            tenant_id,
         )
     )
     draft = result.scalar()
 
     result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(
-            ControlledDocument.status == "pending_approval",
-            ControlledDocument.is_current == True,
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(
+                ControlledDocument.status == "pending_approval",
+                ControlledDocument.is_current == True,
+            ),
+            ControlledDocument,
+            tenant_id,
         )
     )
     pending_approval = result.scalar()
 
     result = await db.execute(
-        select(func.count(ControlledDocument.id)).where(
-            ControlledDocument.next_review_date < datetime.now(timezone.utc),
-            ControlledDocument.status == "active",
-            ControlledDocument.is_current == True,
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(
+                ControlledDocument.next_review_date < datetime.now(timezone.utc),
+                ControlledDocument.status == "active",
+                ControlledDocument.is_current == True,
+            ),
+            ControlledDocument,
+            tenant_id,
         )
     )
     overdue_review = result.scalar()
 
-    result = await db.execute(select(func.count(ControlledDocument.id)).where(ControlledDocument.status == "obsolete"))
+    result = await db.execute(
+        apply_tenant_filter(
+            select(func.count(ControlledDocument.id)).where(ControlledDocument.status == "obsolete"),
+            ControlledDocument,
+            tenant_id,
+        )
+    )
     obsolete = result.scalar()
 
     # Pending acknowledgments
     result = await db.execute(
-        select(func.count(DocumentDistribution.id)).where(
-            DocumentDistribution.acknowledged == False,
-            DocumentDistribution.acknowledgment_required == True,
+        apply_tenant_filter(
+            select(func.count(DocumentDistribution.id)).where(
+                DocumentDistribution.acknowledged == False,
+                DocumentDistribution.acknowledgment_required == True,
+            ),
+            DocumentDistribution,
+            tenant_id,
         )
     )
     pending_ack = result.scalar()
 
     # By type
     result = await db.execute(
-        select(ControlledDocument.document_type, func.count(ControlledDocument.id))
-        .where(ControlledDocument.is_current == True)
-        .group_by(ControlledDocument.document_type)
+        apply_tenant_filter(
+            select(ControlledDocument.document_type, func.count(ControlledDocument.id)).where(
+                ControlledDocument.is_current == True
+            ),
+            ControlledDocument,
+            tenant_id,
+        ).group_by(ControlledDocument.document_type)
     )
     by_type = result.all()
 
