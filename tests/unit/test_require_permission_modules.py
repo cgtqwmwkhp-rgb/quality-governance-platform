@@ -103,3 +103,16 @@ def test_risk_register_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/risk_register.py")
     assert "risk:create" in perms
     assert "risk:update" in perms
+
+
+def test_audit_templates_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/audit_templates.py")
+    assert "audit:create" in perms
+    assert "audit:update" in perms
+    assert "audit:delete" in perms
+
+
+def test_document_control_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/document_control.py")
+    assert "document:create" in perms
+    assert "document:update" in perms
