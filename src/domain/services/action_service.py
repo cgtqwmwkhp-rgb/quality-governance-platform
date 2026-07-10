@@ -139,6 +139,7 @@ class ActionService:
             due_date=parsed_due_date,
             owner_id=owner_id,
             ref_number=ref_number,
+            tenant_id=tenant_id,
         )
 
         try:
@@ -327,7 +328,10 @@ class ActionService:
         due_date: Optional[datetime],
         owner_id: Optional[int],
         ref_number: str,
+        tenant_id: int | None,
     ) -> Union[IncidentAction, RTAAction, ComplaintAction, InvestigationAction]:
+        if tenant_id is None:
+            raise ValueError("tenant_id is required to create an action")
         common = {
             "title": title,
             "description": description,
@@ -336,6 +340,7 @@ class ActionService:
             "due_date": due_date,
             "owner_id": owner_id,
             "reference_number": ref_number,
+            "tenant_id": tenant_id,
         }
         if src_type == "incident":
             return IncidentAction(incident_id=source_id, status=ActionStatus.OPEN, **common)
