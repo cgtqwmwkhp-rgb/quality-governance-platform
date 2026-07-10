@@ -47,8 +47,8 @@ from src.api.schemas.audit import (
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
-from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.api.utils.pagination import PaginationParams
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.audit import (
     AuditFinding,

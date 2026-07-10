@@ -13,7 +13,6 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
-from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditQuestionCreate,
@@ -28,6 +27,7 @@ from src.api.schemas.audit import (
     AuditTemplateResponse,
     AuditTemplateUpdate,
 )
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.audit import AuditTemplate
 from src.domain.services.audit_service import AuditService
 
