@@ -50,7 +50,8 @@ def send_sms(self, phone_number: str, message: str) -> dict:
         sms_service = SMSService()
 
         if not sms_service.enabled:
-            logger.warning("SMS service not configured — skipping send to %s", masked_to)
+            # Do not log phone-derived values (CodeQL clear-text logging).
+            logger.warning("SMS service not configured — skipping send")
             return {
                 "status": "skipped",
                 "to": masked_to,
@@ -59,7 +60,7 @@ def send_sms(self, phone_number: str, message: str) -> dict:
 
         result = _run_async(sms_service.send_sms(to=phone_number, message=message))
         if result.success:
-            logger.info("SMS sent to %s", masked_to)
+            logger.info("SMS sent successfully")
             return {
                 "status": "sent",
                 "to": masked_to,
@@ -67,7 +68,7 @@ def send_sms(self, phone_number: str, message: str) -> dict:
             }
 
         error = result.error_message or "SMS delivery failed"
-        logger.error("SMS failed to %s: %s", masked_to, error)
+        logger.error("SMS delivery failed")
         return {"status": "failed", "to": masked_to, "error": error}
     except Exception as exc:
         logger.error("SMS send failed: %s", exc)
