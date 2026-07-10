@@ -214,13 +214,16 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
 class InvestigationComment(Base, TimestampMixin):
     """Internal comments on investigations.
 
+    tenant_id is fail-safe NOT NULL when attributable from investigation_runs
+    (WCS-TEN2 / C-01 Phase 2).
+
     Comments are INTERNAL ONLY - never included in customer packs.
     Can be threaded (replies) and attached to specific sections/fields.
     """
 
     __tablename__ = "investigation_comments"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,

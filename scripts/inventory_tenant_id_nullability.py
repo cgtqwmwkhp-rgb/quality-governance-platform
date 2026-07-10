@@ -147,6 +147,7 @@ def render_markdown(data: dict[str, Any]) -> str:
         "| `rta_actions` | **Done (incremental)** | Fail-safe backfill from `road_traffic_collisions` + conditional `NOT NULL` (`20260710_rta_act_nn`). ORM `nullable=False`. See `docs/data/rta-actions-tenant-backfill.md`. |",
         "| `capa_actions` | **Done (incremental)** | Fail-safe backfill from `users` (creator) + conditional `NOT NULL` (`20260710_capa_act_nn`). ORM `nullable=False`. See `docs/data/capa-actions-tenant-backfill.md`. |",
         "| `investigation_actions` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_act_nn`). ORM `nullable=False`. See `docs/data/investigation-actions-tenant-backfill.md`. |",
+        "| `investigation_comments` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_cmt_nn`). ORM `nullable=False`. See `docs/data/investigation-comments-tenant-backfill.md`. |",
         "| `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |",
         "",
         "## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)",
