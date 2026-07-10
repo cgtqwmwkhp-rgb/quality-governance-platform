@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -52,7 +52,7 @@ def _enum_values(enum_cls: type[PyEnum]) -> list[str]:
 class CAPAAction(Base):
     __tablename__ = "capa_actions"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id = Column(Integer, primary_key=True, autoincrement=True)
     reference_number = Column(String(50), unique=True, nullable=False, index=True)
     title = Column(String(255), nullable=False)
