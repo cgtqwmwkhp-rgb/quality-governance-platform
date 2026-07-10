@@ -147,4 +147,3 @@ def test_induction_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/inductions.py")
     assert "induction:create" in perms
     assert "induction:update" in perms
-
