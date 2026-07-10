@@ -9,8 +9,8 @@ API App Service sets `CELERY_BROKER_URL` / `REDIS_URL` but historically only ran
 
 | Artifact | Role |
 |----------|------|
-| `scripts/celery/start_worker.sh` | Worker entrypoint (+ `/healthz` for App Service) |
-| `scripts/celery/start_beat.sh` | Beat entrypoint (+ `/healthz`) |
+| `scripts/celery/start_worker.sh` | Worker entrypoint (+ honest `/healthz` tied to Celery PID) |
+| `scripts/celery/start_beat.sh` | Beat entrypoint (+ honest `/healthz` tied to beat PID) |
 | `infra/main.bicep` | `${prefix}-worker` / `${prefix}-beat` sites on API plan |
 | `scripts/infra/provision-celery-workers.sh` | Create sites against an existing API plan |
 | `scripts/infra/deploy_celery_apps.sh` | Deploy same image digest + Celery startup |
@@ -35,7 +35,8 @@ On each staging/production deploy, after the API container is updated:
 
 1. `deploy_celery_apps.sh` updates worker/beat image to the same digest (no-op if sites missing).
 2. Startup files: `bash scripts/celery/start_worker.sh` / `bash scripts/celery/start_beat.sh`.
-3. Staging smoke runs `smoke_inspect_ping.py` fail-closed (workers provisioned; pong required).
+3. Staging smoke installs `celery[redis]` and runs `smoke_inspect_ping.py` fail-closed (lightweight client; no full-app import; pong required).
+4. Worker/beat `/healthz` returns 200 only while the Celery process PID is alive (503 if it dies).
 
 ## Verify
 
@@ -43,6 +44,7 @@ On each staging/production deploy, after the API container is updated:
 export REDIS_URL=... CELERY_BROKER_URL=... CELERY_RESULT_BACKEND=...
 python scripts/celery/smoke_inspect_ping.py
 # expect JSON with workers: { "<hostname>": {"ok": "pong"} }
+curl -sS https://<worker-host>/healthz   # {"status":"ok","role":"worker","celery":"alive"}
 ```
 
 Local:

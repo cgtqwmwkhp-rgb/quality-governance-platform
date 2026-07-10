@@ -751,9 +751,10 @@ jobs:
           export REDIS_URL="$REDIS_URL_VAL"
           export CELERY_BROKER_URL="$REDIS_URL_VAL"
           export CELERY_RESULT_BACKEND="$REDIS_URL_VAL"
-          PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
-          export PYTHONPATH
-          # Staging worker App Service is provisioned and returns pong — fail closed.
+          # Lightweight client only — do not import the full app (avoids SQLAlchemy on runner).
+          python3 -m pip install --upgrade pip
+          python3 -m pip install 'celery[redis]' redis
+          # Staging worker App Service is provisioned and returns pong — fail closed (no --allow-missing).
           python3 scripts/celery/smoke_inspect_ping.py --retries 4 --sleep 5
           echo "Celery ping step complete (fail-closed)"
 
