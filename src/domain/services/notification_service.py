@@ -201,15 +201,30 @@ class NotificationService:
         logger.debug(f"In-app notification sent to user {notification.user_id}")
 
     async def _deliver_email(self, notification: Notification):
-        """Deliver notification via email"""
-        # Lazy load email service
-        if self.email_service is None:
-            from src.domain.services.email_service import EmailService
+        """Deliver notification via email (dispatched to Celery task)."""
+        from src.domain.models.user import User
+        from src.infrastructure.tasks.email_tasks import send_email
 
-            self.email_service = EmailService()
+        if not self.db:
+            raise RuntimeError(f"Cannot deliver email for user {notification.user_id}: no database session")
 
-        # Email delivery handled by Celery task (send_email)
-        logger.debug(f"Email notification queued for user {notification.user_id}")
+        result = await self.db.execute(select(User).where(User.id == notification.user_id))
+        user = result.scalar_one_or_none()
+        recipient = (user.email if user else None) or None
+        if not recipient:
+            raise ValueError(f"Cannot deliver email for user {notification.user_id}: missing recipient email")
+
+        try:
+            send_email.delay(
+                recipient,
+                notification.title,
+                notification.message,
+                False,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Failed to enqueue email for user {notification.user_id}: {exc}") from exc
+
+        logger.info("Email notification dispatched for user %d", notification.user_id)
 
     async def _deliver_sms(self, notification: Notification):
         """Deliver notification via SMS"""
