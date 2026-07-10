@@ -1,11 +1,11 @@
 {
-  "release_sha": "8f8dcdd6736a72909d0e9dc5dbdf23793845e5b8",
+  "release_sha": "322e437c435e1561e012ae76e0009fc0595c96dc",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 8f8dcdd6 \u2014 FE overnight Path-to-10: #659 real Notifications/Investigations axe, investigations/actions client extracts, vitest statements threshold 3\u21924.",
-  "approved_at_utc": "2026-07-10T22:32:13+00:00"
+  "notes": "Release signoff for main tip 322e437c \u2014 overnight CUJ/UX: #653+#658 ImportReview extract, #656 nav/theatre, #666 recon guard (unblocks SWA Import Review e2e).",
+  "approved_at_utc": "2026-07-10T22:36:53+00:00"
 }
