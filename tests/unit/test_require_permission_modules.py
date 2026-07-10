@@ -103,4 +103,3 @@ def test_risk_register_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/risk_register.py")
     assert "risk:create" in perms
     assert "risk:update" in perms
-
