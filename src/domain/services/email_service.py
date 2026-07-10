@@ -8,17 +8,27 @@ for the Quality Governance Platform.
 import html as html_mod
 import logging
 import os
-import smtplib
+from dataclasses import dataclass
 from datetime import datetime
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
+import aiosmtplib
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EmailSendResult:
+    """Structured outcome of an email send attempt."""
+
+    success: bool
+    status: Literal["sent", "skipped", "failed"]
+    error_message: Optional[str] = None
 
 
 class EmailService:
@@ -209,9 +219,12 @@ class EmailService:
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
-    ) -> bool:
+    ) -> EmailSendResult:
         """
-        Send an HTML email.
+        Send an HTML email via async SMTP.
+
+        Transient SMTP failures are logged and re-raised so tenacity can retry.
+        Callers that need a bool should use wrapper methods or catch exceptions.
 
         Args:
             to: List of recipient email addresses
@@ -222,11 +235,15 @@ class EmailService:
             attachments: Optional list of attachments with 'filename' and 'content' keys
 
         Returns:
-            True if email sent successfully, False otherwise
+            EmailSendResult with status sent/skipped (failed is raised after retries)
         """
         if not self.enabled:
             logger.warning("Email service not configured. Skipping email send.")
-            return False
+            return EmailSendResult(
+                success=False,
+                status="skipped",
+                error_message="Email service not configured",
+            )
 
         try:
             msg = MIMEMultipart("alternative")
@@ -256,17 +273,46 @@ class EmailService:
             # Calculate all recipients
             all_recipients = to + (cc or []) + (bcc or [])
 
-            # Send email
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.smtp_user, self.smtp_password)
-                server.sendmail(self.from_email, all_recipients, msg.as_string())
+            async with aiosmtplib.SMTP(
+                hostname=self.smtp_host,
+                port=self.smtp_port,
+                username=self.smtp_user,
+                password=self.smtp_password,
+                start_tls=True,
+                use_tls=False,
+            ) as smtp:
+                await smtp.send_message(msg, recipients=all_recipients)
 
             logger.info(f"Email sent successfully to {to}")
-            return True
+            return EmailSendResult(success=True, status="sent")
 
         except Exception as e:
             logger.error("Failed to send email to %s: %s", to[:3] + ["***"], str(e), exc_info=True)
+            # Re-raise so tenacity retries transient SMTP failures
+            raise
+
+    async def _send_email_as_bool(
+        self,
+        *,
+        to: List[str],
+        subject: str,
+        html_content: str,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
+        """Call send_email and map to bool for wrapper callers."""
+        try:
+            result = await self.send_email(
+                to=to,
+                subject=subject,
+                html_content=html_content,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments,
+            )
+            return result.success
+        except Exception:
             return False
 
     async def send_incident_notification(
@@ -323,7 +369,11 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(to=to, subject=f"[{severity.upper()}] Incident: {title}", html_content=html)
+        return await self._send_email_as_bool(
+            to=to,
+            subject=f"[{severity.upper()}] Incident: {title}",
+            html_content=html,
+        )
 
     async def send_action_reminder(
         self,
@@ -376,7 +426,7 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(
+        return await self._send_email_as_bool(
             to=to,
             subject=f"{'[OVERDUE]' if is_overdue else '[REMINDER]'} Action: {title}",
             html_content=html,
@@ -437,7 +487,7 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(to=to, subject="📊 Weekly IMS Summary", html_content=html)
+        return await self._send_email_as_bool(to=to, subject="📊 Weekly IMS Summary", html_content=html)
 
     async def send_password_reset_email(
         self,
@@ -497,7 +547,7 @@ class EmailService:
             year=datetime.now().year,
         )
 
-        return await self.send_email(
+        return await self._send_email_as_bool(
             to=[to],
             subject="🔐 Reset Your Password - Quality Governance Platform",
             html_content=html,
