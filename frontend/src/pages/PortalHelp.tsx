@@ -340,7 +340,9 @@ export default function PortalHelp() {
             {t('portal.still_need_help')}
           </h2>
           <div className="grid gap-3">
-            <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href={contacts.chatHref} />
+            {contacts.chatHref && (
+              <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href={contacts.chatHref} />
+            )}
             {contacts.emailHref && (
               <QuickLink icon={Mail} title={t('portal.email_support')} href={contacts.emailHref} />
             )}
