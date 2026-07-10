@@ -39,7 +39,7 @@ def test_migration_enforces_only_when_all_runs_are_attributed():
 def test_migration_chains_from_inv_rev_evt_and_never_invents_tenant():
     body = MIGRATION_PATH.read_text(encoding="utf-8")
     assert 'revision: str = "20260710_ir_tenant_nn"' in body
-    assert 'down_revision: Union[str, Sequence[str], None] = "20260710_inv_rev_evt_nn"' in body
+    assert 'down_revision: Union[str, Sequence[str], None] = "20260710_force_rls"' in body
     assert 'TABLE = "investigation_runs"' in body
     assert 'PARENT = "investigation_templates"' in body
     assert 'PARENT_KEY = "template_id"' in body

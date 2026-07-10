@@ -1,7 +1,7 @@
 """Fail-safe backfill + conditional NOT NULL for investigation_runs.tenant_id.
 
 Revision ID: 20260710_ir_tenant_nn
-Revises: 20260710_inv_rev_evt_nn
+Revises: 20260710_force_rls
 Create Date: 2026-07-10
 
 WCS-TEN2 / C-01 Phase 2 (single table family): inherit tenant_id from the
@@ -23,7 +23,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "20260710_ir_tenant_nn"
-down_revision: Union[str, Sequence[str], None] = "20260710_inv_rev_evt_nn"
+down_revision: Union[str, Sequence[str], None] = "20260710_force_rls"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
