@@ -60,14 +60,16 @@ class TestWorkflowCenterSmoke:
         assert "active_workflows" in stats
         assert "pending_approvals" in stats
 
-    def test_can_start_workflow(self, auth_client: Any) -> None:
-        """Verify workflow can be started."""
+    def test_can_start_workflow(self, client: Any, admin_headers: dict) -> None:
+        """Verify workflow can be started by a privileged (superuser) account."""
+        if not admin_headers.get("Authorization"):
+            pytest.skip("Admin auth required for workflow start permission gate")
         payload = {
             "template_code": "CAPA",
             "entity_type": "action",
             "entity_id": f"SMOKE-{pytest.importorskip('time').time()}",
         }
-        response = auth_client.post("/api/v1/workflows/start", json=payload)
+        response = client.post("/api/v1/workflows/start", json=payload, headers=admin_headers)
         assert response.status_code == 200
         assert "id" in response.json()
 
