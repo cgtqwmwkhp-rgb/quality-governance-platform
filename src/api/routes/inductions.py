@@ -5,14 +5,14 @@ REST endpoints for induction/training runs and responses.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.induction import (
     InductionResponseCreate,
@@ -34,6 +34,7 @@ from src.domain.models.induction import (
     InductionStatus,
     UnderstandingVerdict,
 )
+from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService
@@ -186,7 +187,7 @@ async def list_induction_runs(
 async def create_induction_run(
     data: InductionRunCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:create"))],
 ):
     """Create an induction run. Reference number is auto-generated as IND-YYYY-NNNN."""
     supervisor_check = await GovernanceService.validate_supervisor(
@@ -268,7 +269,7 @@ async def update_induction_run(
     run_id: str,
     data: InductionRunUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:update"))],
 ):
     """Update an induction run."""
     query = select(InductionRun).where(InductionRun.id == run_id)
@@ -304,7 +305,7 @@ async def update_induction_run(
 async def start_induction(
     run_id: str,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:update"))],
 ):
     """Start an induction run."""
     query = select(InductionRun).where(InductionRun.id == run_id)
@@ -333,7 +334,7 @@ async def start_induction(
 async def complete_induction(
     run_id: str,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:update"))],
 ):
     """Complete an induction and run CompetencyScoringService.score_induction()."""
     query = select(InductionRun).options(selectinload(InductionRun.responses)).where(InductionRun.id == run_id)
@@ -488,7 +489,7 @@ async def create_induction_response(
     run_id: str,
     data: InductionResponseCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:update"))],
 ):
     """Create an induction response for a run."""
     query = select(InductionRun).where(InductionRun.id == run_id)
@@ -562,7 +563,7 @@ async def update_induction_response(
     response_id: str,
     data: InductionResponseUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("induction:update"))],
 ):
     """Update an induction response."""
     query = (
