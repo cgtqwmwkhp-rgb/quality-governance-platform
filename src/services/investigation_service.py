@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.exceptions import ValidationError
 from src.domain.models.evidence_asset import EvidenceAsset, EvidenceSourceModule, EvidenceVisibility
 from src.domain.models.investigation import (
     AssignedEntityType,
@@ -472,7 +473,7 @@ class InvestigationService:
     @classmethod
     def create_customer_pack_entity(
         cls,
-        investigation_id: int,
+        investigation: InvestigationRun,
         audience: CustomerPackAudience,
         content: Dict[str, Any],
         redaction_log: List[Dict[str, Any]],
@@ -480,13 +481,24 @@ class InvestigationService:
         generated_by_id: int,
         generated_by_role: Optional[str] = None,
     ) -> InvestigationCustomerPack:
-        """Create InvestigationCustomerPack entity."""
+        """Create InvestigationCustomerPack entity.
+
+        tenant_id is required (NOT NULL) and inherited from the parent investigation.
+        Never invent a default tenant.
+        """
+        if investigation.tenant_id is None:
+            raise ValidationError(
+                "tenant_id is required to create an investigation customer pack",
+                details={"investigation_id": investigation.id},
+            )
+
         # Calculate checksum
         content_json = json.dumps(content, sort_keys=True, default=str)
         checksum = hashlib.sha256(content_json.encode()).hexdigest()
 
         return InvestigationCustomerPack(
-            investigation_id=investigation_id,
+            tenant_id=investigation.tenant_id,
+            investigation_id=investigation.id,
             pack_uuid=str(uuid.uuid4()),
             audience=audience,
             content=content,

@@ -3,7 +3,7 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional, Union, cast
+from typing import Annotated, Any, Optional, Union, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._action_unified import (
     CAPA_ONLY_API_SOURCE_TYPES,
@@ -711,7 +711,7 @@ async def list_actions(
 async def create_action(  # noqa: C901 - complexity justified by multi-entity support
     action_data: ActionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:create"))],
     request_id: str = Depends(get_request_id),
 ) -> ActionResponse:
     """Create a new action for an incident, RTA, complaint, investigation, assessment, induction, or audit finding."""
@@ -1262,7 +1262,7 @@ async def list_action_owner_notes(
 async def create_action_owner_note(
     data: ActionOwnerNoteCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:update"))],
     request_id: str = Depends(get_request_id),
 ) -> ActionOwnerNoteRead:
     """Append an owner commentary note; timestamp is set by the server."""
@@ -1383,7 +1383,7 @@ async def update_action(  # noqa: C901 - complexity justified by unified action 
     action_id: int,
     action_data: ActionUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("action:update"))],
     request_id: str = Depends(get_request_id),
     source_type: str = Query(
         ...,
