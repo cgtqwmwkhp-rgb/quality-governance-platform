@@ -21,10 +21,11 @@ migrations (or model alignment) land.
 | Retained model after drop | Model still imported for metadata while the physical table was dropped by a later migration. |
 
 CI sets `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` so `process_revision_directives`
-can strip noisy FK / index / unique / column ops. Phase 1 of WCS C-04 documents
-exclusions only; widening the op filter (e.g. surfacing `AddColumnOp` /
-`AlterColumnOp`) is deferred because ORM vs migrated column shapes still differ
-widely and would fail `alembic check` in CI.
+can strip noisy FK / index / column ops. Phase 2 of WCS C-04 removes the unique
+`DropConstraintOp` suppression, so unique-constraint removals now fail `alembic check`.
+`AddColumnOp` / `AlterColumnOp` remain deferred because ORM vs migrated column shapes
+still differ widely. CI also publishes the `alembic-drift-inventory` artifact, which lists
+autogenerate operations before and after filtering for every check attempt.
 
 ## Inventory
 
