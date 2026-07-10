@@ -8,14 +8,15 @@ and vehicle status updates.
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import Depends, APIRouter, Query, status
 from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.vehicle_registry import (
     ComplianceGateResponse,
     FleetHealthResponse,
@@ -249,7 +250,7 @@ async def update_vehicle(
     reg: str,
     body: VehicleRegistryUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("vehicle:update"))],
 ):
     """Update fleet status or assign a driver to a vehicle."""
     query = select(VehicleRegistry).where(VehicleRegistry.vehicle_reg == reg)
@@ -298,7 +299,7 @@ class DefectCAPAResponse(BaseModel):
 async def create_capa_from_defect(
     body: DefectCAPARequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("capa:create"))],
 ):
     """Manually create a CAPA action from a vehicle defect."""
     defect_q = select(VehicleDefect).where(
@@ -343,7 +344,7 @@ class AllocationRequest(BaseModel):
 async def allocate_vehicle(
     body: AllocationRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("vehicle:allocate"))],
 ):
     """Allocate a vehicle to a driver with compliance gate enforcement.
 
@@ -371,7 +372,7 @@ class BatchGateRequest(BaseModel):
 async def batch_compliance_check(
     body: BatchGateRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("vehicle:update"))],
 ):
     """Check compliance gate for multiple vehicles at once."""
     from src.domain.services.allocation_gate import check_allocation

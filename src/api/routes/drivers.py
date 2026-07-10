@@ -7,13 +7,14 @@ acknowledgement workflows linking QGP users to PAMS driver data.
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import Depends, APIRouter, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.driver_profile import (
     AcknowledgementAction,
     AcknowledgementCreate,
@@ -77,7 +78,7 @@ async def list_drivers(
 async def create_driver_profile(
     body: DriverProfileCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("driver:create"))],
 ):
     """Create a new driver profile linking a user to PAMS driver data."""
     existing = await db.execute(select(DriverProfile).where(DriverProfile.user_id == body.user_id))
@@ -117,7 +118,7 @@ async def update_driver(
     driver_id: int,
     body: DriverProfileUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("driver:update"))],
 ):
     """Update a driver profile (vehicle assignment, licence, active status)."""
     query = select(DriverProfile).where(DriverProfile.id == driver_id)
@@ -145,7 +146,7 @@ async def create_acknowledgement_request(
     driver_id: int,
     body: AcknowledgementCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("driver:update"))],
 ):
     """Create an acknowledgement request for a driver (defect or assignment)."""
     query = select(DriverProfile).where(DriverProfile.id == driver_id)

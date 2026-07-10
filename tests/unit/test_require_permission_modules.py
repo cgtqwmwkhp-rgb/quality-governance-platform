@@ -128,3 +128,23 @@ def test_workflow_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/workflows.py")
     assert "workflow:create" in perms
     assert "workflow:update" in perms
+
+
+def test_vehicle_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/vehicles.py")
+    assert "vehicle:update" in perms
+    assert "vehicle:allocate" in perms
+    assert "capa:create" in perms
+
+
+def test_driver_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/drivers.py")
+    assert "driver:create" in perms
+    assert "driver:update" in perms
+
+
+def test_induction_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/inductions.py")
+    assert "induction:create" in perms
+    assert "induction:update" in perms
+
