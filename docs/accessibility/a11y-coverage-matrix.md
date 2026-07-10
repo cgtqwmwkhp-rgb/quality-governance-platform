@@ -14,7 +14,7 @@ Mapping of application routes to accessibility testing status.
 
 | # | Route | Priority | axe Test | Lighthouse | Manual | Status |
 |---|-------|----------|----------|------------|--------|--------|
-| 1 | `/login` | P0 | Done | `Login.a11y.test.tsx; Documents.a11y.test.tsx` (real page), Playwright P0 | Pending | Covered |
+| 1 | `/login` | P0 | Done | `Login.a11y.test.tsx` (real page), Playwright P0 | Pending | Covered |
 | 2 | `/dashboard` | P0 | Yes | Yes | Pending | Covered |
 | 3 | `/incidents` | P0 | Yes | — | Pending | Covered |
 | 4 | `/incidents/:id` | P0 | Yes | — | Pending | Covered |
@@ -23,7 +23,7 @@ Mapping of application routes to accessibility testing status.
 | 7 | `/risks` | P0 | Yes | — | Pending | Covered |
 | 8 | `/complaints` | P0 | Yes | — | Pending | Covered |
 | 9 | `/actions` | P0 | Yes | — | Pending | Covered |
-| 10 | `/investigations` | P0 | Yes | — | Pending | Covered |
+| 10 | `/investigations` | P0 | Done | `Investigations.a11y.test.tsx` (real page), Playwright P0 | 2026-07-10 | Covered |
 | 11 | `/uvdb` | P0 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 | 12 | `/settings` | P0 | Done | `pages-a11y.test.tsx` stub | 2026-04-08 | Covered |
 | 13 | `/near-misses` | P1 | Done | `NearMisses.a11y.test.tsx` (real page), Playwright P1 | 2026-07-10 | Covered |
@@ -32,11 +32,12 @@ Mapping of application routes to accessibility testing status.
 | 16 | `/compliance` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 | 17 | `/risk-register` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 | 18 | `/import-review` | P1 | Done | `AuditImportReview.a11y.test.tsx` (real page), Playwright P1 | 2026-07-10 | Covered |
+| 19 | `/notifications` | P1 | Done | `Notifications.a11y.test.tsx` (real page) | 2026-07-10 | Covered |
 
 ## Coverage Summary
 
-- **P0 routes covered**: 10/12 (83%)
-- **All routes covered**: 10/18 (56%)
+- **P0 routes covered**: 11/12 (92%)
+- **All routes covered**: 12/19 (63%)
 - **Target**: 100% P0 routes, 80% all routes
 
 ## WCAG 2.1 AA Compliance

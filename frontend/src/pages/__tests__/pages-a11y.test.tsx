@@ -14,6 +14,10 @@
  *
  * /documents is covered by a real-page axe test in Documents.a11y.test.tsx.
  *
+ * /notifications is covered by a real-page axe test in Notifications.a11y.test.tsx.
+ *
+ * /investigations is covered by a real-page axe test in Investigations.a11y.test.tsx.
+ *
  * Strategy: render a representative stub for each remaining page route in
  * isolation, verify no critical or serious axe violations.
  * Full-page Playwright integration is covered in tests/ux-coverage/tests/a11y-audit.spec.ts

@@ -727,7 +727,7 @@ export default function Investigations() {
           <p className="text-muted-foreground mt-1">{t('investigations.subtitle')}</p>
         </div>
         <Button onClick={() => setShowModal(true)}>
-          <Plus size={20} />
+          <Plus size={20} aria-hidden="true" />
           {t('investigations.new')}
         </Button>
       </div>
@@ -831,9 +831,9 @@ export default function Investigations() {
                         {investigation.assigned_entity_type.replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold text-foreground mb-1">
+                    <h2 className="text-lg font-semibold text-foreground mb-1">
                       {investigation.title}
-                    </h3>
+                    </h2>
                     {investigation.description && (
                       <p className="text-sm text-muted-foreground line-clamp-2">
                         {investigation.description}
