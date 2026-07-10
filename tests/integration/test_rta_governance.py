@@ -217,6 +217,7 @@ async def test_list_rta_actions_deterministic_ordering(client: AsyncClient, auth
     for i in range(3):
         action = RTAAction(
             rta_id=rta_id,
+            tenant_id=1,
             title=f"Action {i}",
             description="Test",
             reference_number=f"RTAACT-{uuid.uuid4().hex[:8]}{i}",

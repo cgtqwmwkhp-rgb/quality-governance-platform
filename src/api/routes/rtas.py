@@ -290,10 +290,21 @@ async def create_rta_action(
 
     ref_number = await ReferenceNumberService.generate(db, "rta_action", RTAAction)
 
+    tenant_id = rta.tenant_id if rta.tenant_id is not None else current_user.tenant_id
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=api_error(
+                ErrorCode.VALIDATION_ERROR,
+                "tenant_id is required to create an RTA action",
+            ),
+        )
+
     action = RTAAction(
         **action_in.model_dump(),
         rta_id=rta_id,
         reference_number=ref_number,
+        tenant_id=tenant_id,
         created_by_id=current_user.id,
         updated_by_id=current_user.id,
     )
