@@ -192,16 +192,24 @@ FEATURES = {
 
 ### Email Configuration
 
+Outbound email uses `EmailService` (`SMTP_*` App Settings / Key Vault refs). Set
+`EMAIL_ENABLED=true` only when credentials are wired; `/readyz` reports
+`email_configured` honestly and smoke fails if `EMAIL_ENABLED` is set without SMTP.
+
 ```python
-# For SMTP
+# For SMTP (App Settings on API + Celery worker)
+EMAIL_ENABLED=true
 SMTP_HOST=smtp.office365.com
 SMTP_PORT=587
 SMTP_USER=notifications@plantexpand.com
 SMTP_PASSWORD=****
+FROM_EMAIL=notifications@plantexpand.com
 
-# For SendGrid
+# For SendGrid (legacy note — not used by EmailService today)
 SENDGRID_API_KEY=****
 ```
+
+See `docs/runbooks/CELERY_WORKER_BEAT_DEPLOY.md` (SMTP section) for Key Vault wiring.
 
 ### Notification Templates
 
