@@ -31,7 +31,7 @@ Mapping of application routes to accessibility testing status.
 | 15 | `/policies` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 | 16 | `/compliance` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
 | 17 | `/risk-register` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
-| 18 | `/import-review` | P1 | Done | `pages-a11y.test.tsx`, Playwright P1 | 2026-04-08 | Covered |
+| 18 | `/import-review` | P1 | Done | `AuditImportReview.a11y.test.tsx` (real page), Playwright P1 | 2026-07-10 | Covered |
 
 ## Coverage Summary
 
