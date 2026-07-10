@@ -1,11 +1,11 @@
 {
-  "release_sha": "503acdf80d3795755938730c0869ed666b62f059",
+  "release_sha": "3759e92c1518c069e08c6f4ddbbbad444c194441",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for PR #571 merge 503acdf80d3795755938730c0869ed666b62f059. CI run https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/29050227047 ; Staging deploy https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/actions/runs/29050564409 ; Staging version build_sha verified on qgp-staging-plantexpand.azurewebsites.net.",
-  "approved_at_utc": "2026-07-09T21:20:59+00:00"
+  "notes": "Release signoff for tip 3759e92c (#574/#575 security-tenancy, #577 Celery email, #578 live notifications).",
+  "approved_at_utc": "2026-07-10T00:39:07+00:00"
 }
