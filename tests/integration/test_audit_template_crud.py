@@ -241,6 +241,7 @@ class TestAuditSectionCRUD:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -277,6 +278,7 @@ class TestAuditSectionCRUD:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -315,6 +317,7 @@ class TestAuditSectionCRUD:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -449,6 +452,7 @@ class TestAuditQuestionCRUD:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
