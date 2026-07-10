@@ -232,7 +232,6 @@ class TestAuditSectionCRUD:
         self,
         client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         superuser_auth_headers: dict,
     ):
         """Test creating a section in a template."""
@@ -240,7 +239,8 @@ class TestAuditSectionCRUD:
             name="Template With Sections",
             category="Safety",
             audit_type="inspection",
-            created_by_id=test_user.id,
+            created_by_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -268,7 +268,6 @@ class TestAuditSectionCRUD:
         self,
         client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         superuser_auth_headers: dict,
     ):
         """Test updating a section."""
@@ -276,7 +275,8 @@ class TestAuditSectionCRUD:
             name="Template",
             category="Safety",
             audit_type="inspection",
-            created_by_id=test_user.id,
+            created_by_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -306,7 +306,6 @@ class TestAuditSectionCRUD:
         self,
         client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         superuser_auth_headers: dict,
     ):
         """Test soft-deleting a section."""
@@ -314,7 +313,8 @@ class TestAuditSectionCRUD:
             name="Template",
             category="Safety",
             audit_type="inspection",
-            created_by_id=test_user.id,
+            created_by_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)
@@ -440,7 +440,6 @@ class TestAuditQuestionCRUD:
         self,
         client: AsyncClient,
         test_session: AsyncSession,
-        test_user: User,
         superuser_auth_headers: dict,
     ):
         """Test soft-deleting a question."""
@@ -448,7 +447,8 @@ class TestAuditQuestionCRUD:
             name="Template",
             category="Safety",
             audit_type="inspection",
-            created_by_id=test_user.id,
+            created_by_id=1,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
         )
         test_session.add(template)

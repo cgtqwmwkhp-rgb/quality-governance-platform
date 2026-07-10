@@ -450,6 +450,7 @@ class TestAuditsAPI:
             category="Safety",
             audit_type="inspection",
             created_by_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("TPL"),
             is_published=True,
         )
@@ -462,6 +463,7 @@ class TestAuditsAPI:
             title="Equipment Audit",
             status=AuditStatus.SCHEDULED,
             assigned_to_id=test_user.id,
+            tenant_id=1,
             reference_number=generate_test_reference("AUD"),
         )
         test_session.add(audit_run)
