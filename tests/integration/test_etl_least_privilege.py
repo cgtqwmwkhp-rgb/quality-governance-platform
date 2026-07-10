@@ -131,6 +131,7 @@ async def test_etl_user_cannot_delete_complaint(client: AsyncClient, etl_user_to
         received_date=datetime.now(),
         complainant_name="Test User",
         reference_number=f"DEL-TEST-{uuid.uuid4().hex[:8]}",
+        tenant_id=1,
     )
     test_session.add(complaint)
     await test_session.commit()
