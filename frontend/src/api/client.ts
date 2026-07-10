@@ -18,6 +18,19 @@ import {
   riskRegisterBowtieElementsPath,
   riskRegisterKriValuePath,
 } from './riskRegisterPaths'
+import {
+  beginGlobalLoading,
+  endGlobalLoading,
+  shouldTrackGlobalLoading,
+} from './globalLoading'
+
+
+// Opt-in global loading flag (see globalLoading.ts). Default: no global flash.
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    globalLoading?: boolean
+  }
+}
 
 // Use centralized API base URL from config (environment-aware)
 const HTTPS_API_BASE = API_BASE_URL
@@ -201,7 +214,8 @@ const api = axios.create({
   },
 })
 
-let activeRequests = 0
+/** In-flight count for requests that opted into globalLoading. */
+let activeGlobalLoadingRequests = 0
 
 // Token refresh: prevent infinite loops and queue concurrent 401s
 let refreshPromise: Promise<string | null> | null = null
@@ -314,8 +328,12 @@ export async function refreshSession(): Promise<string | null> {
 
 // CRITICAL: Enforce HTTPS on all requests at interceptor level
 api.interceptors.request.use(async (config) => {
-  activeRequests++
-  useAppStore.getState().setLoading(true)
+  const trackGlobalLoading = shouldTrackGlobalLoading(config)
+  activeGlobalLoadingRequests = beginGlobalLoading(
+    activeGlobalLoadingRequests,
+    trackGlobalLoading,
+    (loading) => useAppStore.getState().setLoading(loading),
+  )
   // Force HTTPS on baseURL
   if (config.baseURL && !isLocalDevHost(config.baseURL) && !config.baseURL.startsWith('https://')) {
     config.baseURL = config.baseURL.replace(/^http:/, 'https:')
@@ -375,6 +393,11 @@ api.interceptors.request.use(async (config) => {
         if (import.meta.env.DEV)
           console.warn('[Axios] Token expired and refresh failed - redirecting to login')
         clearAndRedirectToLogin()
+        activeGlobalLoadingRequests = endGlobalLoading(
+          activeGlobalLoadingRequests,
+          trackGlobalLoading,
+          (loading) => useAppStore.getState().setLoading(loading),
+        )
         return Promise.reject(new Error('Token expired - redirecting to login'))
       }
     }
@@ -393,18 +416,20 @@ interface ClassifiedAxiosError extends AxiosError {
 
 api.interceptors.response.use(
   (response) => {
-    activeRequests--
-    if (activeRequests === 0) {
-      useAppStore.getState().setLoading(false)
-    }
+    activeGlobalLoadingRequests = endGlobalLoading(
+      activeGlobalLoadingRequests,
+      shouldTrackGlobalLoading(response.config),
+      (loading) => useAppStore.getState().setLoading(loading),
+    )
     useAppStore.getState().setConnectionStatus('connected')
     return response
   },
   async (error: AxiosError) => {
-    activeRequests--
-    if (activeRequests === 0) {
-      useAppStore.getState().setLoading(false)
-    }
+    activeGlobalLoadingRequests = endGlobalLoading(
+      activeGlobalLoadingRequests,
+      shouldTrackGlobalLoading(error.config),
+      (loading) => useAppStore.getState().setLoading(loading),
+    )
     if (!error.response) {
       useAppStore.getState().setConnectionStatus('disconnected')
     }
