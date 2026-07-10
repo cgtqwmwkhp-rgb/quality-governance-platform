@@ -614,7 +614,7 @@ export default function Notifications() {
 
           <div className="p-6 border-b border-border space-y-4">
             <h3 className="text-sm font-semibold text-foreground">
-              {t('notifications.settings.channels', 'Delivery channels')}
+              {t('notifications.settings.channels')}
             </h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">

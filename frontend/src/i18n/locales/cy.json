@@ -1172,6 +1172,7 @@
   "notifications.preferences": "Dewisiadau",
   "notifications.preferences_description": "Cyfluniwch sut a phryd rydych yn derbyn hysbysiadau",
   "notifications.preferences_title": "Dewisiadau Hysbysu",
+  "notifications.settings.channels": "Sianeli dosbarthu",
   "notifications.settings.desktop_notifications": "Hysbysiadau Bwrdd Gwaith",
   "notifications.settings.desktop_notifications_description": "Dangos hysbysiadau porwr ar eich bwrdd gwaith",
   "notifications.settings.email": "E-bost",

@@ -1173,6 +1173,7 @@
   "notifications.preferences": "Preferences",
   "notifications.preferences_description": "Configure how and when you receive notifications",
   "notifications.preferences_title": "Notification Preferences",
+  "notifications.settings.channels": "Delivery channels",
   "notifications.settings.desktop_notifications": "Desktop Notifications",
   "notifications.settings.desktop_notifications_description": "Show browser notifications on your desktop",
   "notifications.settings.email": "Email",
