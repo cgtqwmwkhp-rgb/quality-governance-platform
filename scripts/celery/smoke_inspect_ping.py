@@ -8,6 +8,12 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
+
+# Repo root on sys.path so CI runners can import `src` without PYTHONPATH.
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 
 def main() -> int:
