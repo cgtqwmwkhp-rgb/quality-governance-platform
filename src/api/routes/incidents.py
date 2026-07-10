@@ -1,13 +1,13 @@
 """Incident API routes."""
 
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.error_codes import ErrorCode
@@ -18,6 +18,7 @@ from src.api.utils.pagination import PaginationParams
 from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.incident_service import IncidentService
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 async def create_incident(
     incident_data: IncidentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:create"))],
     request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
@@ -387,7 +388,7 @@ async def update_incident(
     incident_id: int,
     incident_data: IncidentUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:update"))],
     request_id: str = Depends(get_request_id),
 ) -> Incident:
     """
@@ -414,7 +415,7 @@ async def update_incident(
 async def delete_incident(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("incident:delete"))],
     request_id: str = Depends(get_request_id),
 ) -> None:
     """

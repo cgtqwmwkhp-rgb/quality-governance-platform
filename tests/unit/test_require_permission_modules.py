@@ -35,3 +35,22 @@ def test_policies_write_routes_require_permission():
     assert "policy:create" in perms
     assert "policy:update" in perms
     assert "policy:delete" in perms
+
+
+def test_incident_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/incidents.py")
+    assert "incident:create" in perms
+    assert "incident:update" in perms
+    assert "incident:delete" in perms
+
+
+def test_risk_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/risks.py")
+    assert "risk:create" in perms
+    assert "risk:update" in perms
+
+
+def test_audit_primary_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/audits.py")
+    assert "audit:create" in perms
+    assert "audit:update" in perms
