@@ -1,6 +1,6 @@
 """Fail-safe backfill + conditional NOT NULL for external_audit_import_jobs.tenant_id.
 
-Revision ID: 20260710_external_audit_import_jobs_tenant_nn
+Revision ID: 20260710_ext_audit_tenant_nn
 Revises: 20260710_inv_pack_nn
 Create Date: 2026-07-10
 
@@ -21,7 +21,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "20260710_external_audit_import_jobs_tenant_nn"
+revision: str = "20260710_ext_audit_tenant_nn"
 down_revision: Union[str, Sequence[str], None] = "20260710_inv_pack_nn"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
