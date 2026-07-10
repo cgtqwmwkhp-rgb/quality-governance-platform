@@ -242,11 +242,20 @@ class NotificationService:
             prefs = result.scalar_one_or_none()
 
             if prefs and prefs.phone_number:
-                await self.sms_service.send_sms(
+                sms_result = await self.sms_service.send_sms(
                     to=prefs.phone_number,
                     message=f"{notification.title}\n\n{notification.message}",
                 )
-                logger.info(f"SMS sent to user {notification.user_id}")
+                if sms_result.success:
+                    logger.info("SMS sent to user %s", notification.user_id)
+                else:
+                    error = sms_result.error_message or "SMS delivery failed"
+                    logger.warning(
+                        "SMS delivery failed for user %s: %s",
+                        notification.user_id,
+                        error,
+                    )
+                    raise RuntimeError(f"SMS delivery failed for user {notification.user_id}: {error}")
 
     async def _deliver_push(self, notification: Notification):
         """Deliver notification via Web Push (dispatched to Celery task)."""
