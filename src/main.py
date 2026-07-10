@@ -22,6 +22,7 @@ from src.core.middleware import RequestStateMiddleware
 from src.core.uat_safety import UATSafetyMiddleware
 from src.infrastructure.database import close_db, emit_db_pool_usage_metric, init_db
 from src.infrastructure.middleware.request_logger import RequestLoggerMiddleware
+from src.infrastructure.middleware.tenant_context import TenantContextMiddleware
 from src.infrastructure.monitoring.azure_monitor import setup_telemetry
 from src.infrastructure.pams_database import close_pams, init_pams
 from src.infrastructure.storage import validate_storage_dependencies
@@ -298,6 +299,11 @@ def create_application() -> FastAPI:
     # Add UAT Safety Middleware (production read-only mode)
     # Must be early in stack to block writes before they reach handlers
     app.add_middleware(UATSafetyMiddleware)
+
+    # Tenant RLS context (after RequestState so request.state exists).
+    # Does not SET LOCAL on a throwaway session — GUC bind happens on the
+    # real get_db session after auth resolves tenant (ContextVar + apply_tenant_guc).
+    app.add_middleware(TenantContextMiddleware)
 
     # Add Security Headers Middleware
     app.add_middleware(SecurityHeadersMiddleware)
