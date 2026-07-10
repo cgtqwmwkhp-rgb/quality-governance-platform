@@ -38,6 +38,7 @@ async def test_user(isolated_db_session: AsyncSession):
         last_name="Tester",
         is_active=True,
         is_superuser=True,
+        tenant_id=1,
     )
     isolated_db_session.add(user)
     await isolated_db_session.commit()

@@ -505,6 +505,7 @@ class TestAuditsAPI:
                 title=f"Audit Run {i}",
                 status=AuditStatus.DRAFT,
                 assigned_to_id=test_user.id,
+                tenant_id=test_user.tenant_id or 1,
                 reference_number=generate_test_reference("AUD"),
             )
             for i in range(1, 4)
