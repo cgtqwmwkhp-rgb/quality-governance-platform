@@ -113,6 +113,9 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     Represents an actual investigation instance based on a template,
     assigned to a specific entity (RTA, Incident, NearMiss, or Complaint).
 
+    tenant_id is fail-safe NOT NULL when attributable from investigation_templates
+    (WCS-TEN2 / C-01 Phase 2).
+
     Stage 2 Enhancements:
     - Source snapshot: immutable copy of source record at creation
     - Level gating: LOW/MEDIUM/HIGH determines required sections
@@ -125,7 +128,7 @@ class InvestigationRun(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMix
     id = Column(Integer, primary_key=True, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Template reference
     template_id = Column(Integer, ForeignKey("investigation_templates.id"), nullable=False, index=True)

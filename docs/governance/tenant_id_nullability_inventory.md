@@ -37,6 +37,7 @@ This phase lands:
 | `investigation_actions` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_act_nn`). ORM `nullable=False`. See `docs/data/investigation-actions-tenant-backfill.md`. |
 | `investigation_comments` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_cmt_nn`). ORM `nullable=False`. See `docs/data/investigation-comments-tenant-backfill.md`. |
 | `investigation_revision_events` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_rev_evt_nn`). ORM `nullable=False`. See `docs/data/investigation-revision-events-tenant-backfill.md`. |
+| `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
@@ -62,6 +63,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `investigation_actions` | `InvestigationAction` |
 | `investigation_comments` | `InvestigationComment` |
 | `investigation_revision_events` | `InvestigationRevisionEvent` |
+| `investigation_runs` | `InvestigationRun` |
 | `complaint_actions` | `ComplaintAction` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
@@ -135,7 +137,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `information_assets` | `InformationAsset` |
 | `information_security_risks` | `InformationSecurityRisk` |
 | `investigation_customer_packs` | `InvestigationCustomerPack` |
-| `investigation_runs` | `InvestigationRun` |
 | `iso27001_controls` | `ISO27001Control` |
 | `key_risk_indicators` | `EnterpriseKeyRiskIndicator` |
 | `loler_defects` | `LOLERDefect` |
