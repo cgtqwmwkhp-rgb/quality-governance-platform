@@ -68,6 +68,7 @@ class NotificationPreferencesUpdate(BaseModel):
     quiet_hours_end: Optional[str] = None
     email_digest_enabled: Optional[bool] = None
     email_digest_frequency: Optional[str] = None
+    category_preferences: Optional[dict] = None
 
 
 class CreateNotificationRequest(BaseModel):
@@ -197,6 +198,18 @@ async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
     return {"success": True, "count": result.rowcount}
 
 
+@router.delete("/")
+async def clear_all_notifications(current_user: CurrentUser, db: DbSession):
+    """Delete all notifications for the current user."""
+    from sqlalchemy import delete
+
+    from src.domain.models.notification import Notification
+
+    result = await db.execute(delete(Notification).where(Notification.user_id == current_user.id))
+    await db.commit()
+    return {"success": True, "count": result.rowcount}
+
+
 @router.delete("/{notification_id}")
 async def delete_notification(notification_id: int, current_user: CurrentUser, db: DbSession):
     """Delete a specific notification."""
@@ -274,12 +287,12 @@ async def update_notification_preferences(
         prefs = NotificationPreference(user_id=current_user.id)
         db.add(prefs)
 
-    for key, value in preferences.dict(exclude_unset=True).items():
+    for key, value in preferences.model_dump(exclude_unset=True).items():
         if hasattr(prefs, key):
             setattr(prefs, key, value)
 
     await db.commit()
-    return {"success": True, "preferences": preferences.dict(exclude_unset=True)}
+    return {"success": True, "preferences": preferences.model_dump(exclude_unset=True)}
 
 
 @router.get("/mentions/search", response_model=List[MentionSearchResult])

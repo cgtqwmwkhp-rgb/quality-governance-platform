@@ -73,9 +73,12 @@ SCOPED_FILES = [
     "frontend/src/pages/Standards.tsx",
     # PR4 scope - API-backed and mock-free ✅
     "frontend/src/pages/Audits.tsx",
+    # WCS-A02 — Notifications live API (no NOT00x mocks)
+    "frontend/src/pages/Notifications.tsx",
     # Pending - uncomment when fixed
     # "frontend/src/pages/ComplianceEvidence.tsx",
 ]
+
 
 # Allowlist patterns - files matching these are skipped
 ALLOWLIST_PATTERNS = [
