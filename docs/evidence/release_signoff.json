@@ -1,11 +1,11 @@
 {
-  "release_sha": "35c8d6b3d47051e93918ddc4bfc454c1bb5eea1c",
+  "release_sha": "c0cb84e087047337a7385777db19edbeb9de5ddf",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip 35c8d6b \u2014 #620 investigation_actions TEN2 fail-safe NOT NULL.",
-  "approved_at_utc": "2026-07-10T14:06:18+00:00"
+  "notes": "Release signoff for tip c0cb84e \u2014 #623 investigation_comments TEN2 fail-safe and #622 Risk Register API client extraction.",
+  "approved_at_utc": "2026-07-10T14:31:42+00:00"
 }
