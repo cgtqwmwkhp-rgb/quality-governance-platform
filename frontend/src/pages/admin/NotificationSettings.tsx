@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Bell, Mail, Smartphone, Globe } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
+import { API_BASE_URL } from '../../config/apiBase'
 
 interface NotificationChannel {
   key: string
@@ -12,8 +13,17 @@ interface NotificationChannel {
   description: string
 }
 
+type PushReadiness = {
+  status: string
+  public_key_present?: boolean
+  private_key_present?: boolean
+  library?: string
+  note?: string
+}
+
 export default function NotificationSettings() {
   const { t } = useTranslation()
+  const [pushReadiness, setPushReadiness] = useState<PushReadiness | null>(null)
   const [channels, setChannels] = useState<NotificationChannel[]>([
     {
       key: 'email',
@@ -45,9 +55,38 @@ export default function NotificationSettings() {
     },
   ])
 
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/v1/notifications/push/vapid-status`, {
+          credentials: 'include',
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as PushReadiness
+        if (!cancelled) setPushReadiness(data)
+      } catch {
+        // Optional readiness — leave null on failure
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const toggleChannel = (key: string) => {
     setChannels((prev) => prev.map((ch) => (ch.key === key ? { ...ch, enabled: !ch.enabled } : ch)))
   }
+
+  const pushStatusLabel =
+    pushReadiness?.status === 'configured'
+      ? 'VAPID ready'
+      : pushReadiness?.status === 'partial'
+        ? 'VAPID partial'
+        : pushReadiness
+          ? 'VAPID not configured'
+          : null
 
   return (
     <div className="space-y-6">
@@ -59,6 +98,29 @@ export default function NotificationSettings() {
           {t('admin.notifications.subtitle', 'Configure how and when notifications are sent')}
         </p>
       </div>
+
+      {pushReadiness && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            pushReadiness.status === 'configured'
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+          data-testid="push-vapid-readiness"
+        >
+          <p className="font-medium">Push / VAPID readiness: {pushStatusLabel}</p>
+          <p className="mt-1 text-muted-foreground">
+            {pushReadiness.note ||
+              (pushReadiness.status === 'configured'
+                ? 'Web Push keys are present; outbound push can be sent.'
+                : 'Push sends are skipped until VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are set.')}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            public_key={String(!!pushReadiness.public_key_present)} · private_key=
+            {String(!!pushReadiness.private_key_present)} · library={pushReadiness.library || 'unknown'}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4">
         {channels.map((ch) => (
@@ -75,6 +137,9 @@ export default function NotificationSettings() {
                 <div>
                   <p className="font-medium">{ch.label}</p>
                   <p className="text-sm text-muted-foreground">{ch.description}</p>
+                  {ch.key === 'push' && pushStatusLabel && (
+                    <p className="text-xs mt-1 text-muted-foreground">{pushStatusLabel}</p>
+                  )}
                 </div>
               </div>
               <Button

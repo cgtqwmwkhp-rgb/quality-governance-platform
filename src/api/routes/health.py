@@ -95,16 +95,31 @@ async def readiness_check():
     except Exception:
         pass
 
+    # WCS-B06: surface push/VAPID readiness (informational; never fails readiness)
+    from src.infrastructure.push.vapid_status import get_vapid_readiness
+
+    vapid = get_vapid_readiness()
+
     checks: dict[str, Any] = {
         "database": db_status,
         "database_latency_ms": db_latency_ms,
         "redis": redis_status,
         "pams": pams_status,
         "pams_tables_reflected": pams_tables_reflected,
+        "push": vapid["status"],
+        "vapid": {
+            "status": vapid["status"],
+            "public_key_present": vapid["public_key_present"],
+            "private_key_present": vapid["private_key_present"],
+            "contact_email_configured": vapid["contact_email_configured"],
+            "library": vapid["library"],
+        },
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "circuit_breakers": circuit_breakers,
     }
+    if vapid.get("note"):
+        checks["push_note"] = vapid["note"]
     if redis_status == "not_configured":
         if settings.is_redis_required:
             checks["redis_note"] = (

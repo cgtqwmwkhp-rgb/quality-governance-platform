@@ -495,6 +495,17 @@ async def send_notification(
     }
 
 
+@router.get("/vapid-status", response_model=dict)
+async def get_vapid_status() -> dict[str, Any]:
+    """Public push/VAPID readiness (no secrets beyond the public key).
+
+    Used by admin UI and ops probes. Missing VAPID is not an error — push is optional.
+    """
+    from src.infrastructure.push.vapid_status import get_vapid_readiness
+
+    return get_vapid_readiness()
+
+
 @router.get("/test", response_model=dict)
 async def test_push_notification(
     current_user: CurrentUser,
