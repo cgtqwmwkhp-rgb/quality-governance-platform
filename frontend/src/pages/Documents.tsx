@@ -413,7 +413,7 @@ export default function Documents() {
 
         <div className="flex gap-2">
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px]" aria-label="Filter by document type">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
@@ -427,7 +427,7 @@ export default function Documents() {
           </Select>
 
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[140px]" aria-label="Filter by document status">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent>
@@ -441,6 +441,9 @@ export default function Documents() {
 
           <div className="flex bg-surface rounded-xl p-1 border border-border">
             <button
+              type="button"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
               className={cn(
                 'p-2 rounded-lg transition-all',
@@ -449,9 +452,12 @@ export default function Documents() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Grid3X3 size={20} />
+              <Grid3X3 size={20} aria-hidden="true" />
             </button>
             <button
+              type="button"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
               onClick={() => setViewMode('list')}
               className={cn(
                 'p-2 rounded-lg transition-all',
@@ -460,7 +466,7 @@ export default function Documents() {
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <List size={20} />
+              <List size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -503,7 +509,7 @@ export default function Documents() {
                     <span className="font-mono text-xs text-primary">
                       {result.reference_number}
                     </span>
-                    <h4 className="text-sm font-medium text-foreground truncate">{result.title}</h4>
+                    <h2 className="text-sm font-medium text-foreground truncate">{result.title}</h2>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                     {result.chunk_preview}
@@ -547,7 +553,7 @@ export default function Documents() {
                       {doc.status}
                     </Badge>
                   </div>
-                  <h3 className="font-semibold text-foreground truncate mb-1">{doc.title}</h3>
+                  <h2 className="font-semibold text-foreground truncate mb-1 text-base">{doc.title}</h2>
 
                   {doc.ai_summary && (
                     <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
