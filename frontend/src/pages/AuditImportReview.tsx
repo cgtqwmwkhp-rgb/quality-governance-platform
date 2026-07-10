@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   auditsApi,
@@ -24,16 +24,12 @@ import { ImportReviewProcessingPanels } from '../components/audit-import/ImportR
 import { ImportReviewPromoteBanner } from '../components/audit-import/ImportReviewPromoteBanner'
 
 import {
-  ACTION_FINDING_TYPES,
   describePromotionFailure,
   describeReconciliationFailure,
-  deriveDeclaredProgramLabel,
-  deriveSpecialistHome,
   extractPromotionFailedDrafts,
-  readProvenanceNumber,
-  readProvenanceString,
   type PromotionFailedDraftRow,
 } from '../components/audit-import/importReviewHelpers'
+import { useImportReviewDerived } from '../components/audit-import/useImportReviewDerived'
 
 export default function AuditImportReview() {
   const { auditId } = useParams()
@@ -200,68 +196,25 @@ export default function AuditImportReview() {
     return () => window.clearTimeout(timeoutId)
   }, [job, load, isDocumentHidden])
 
-  const approvedCount = useMemo(
-    () =>
-      drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted').length,
-    [drafts],
-  )
-  const promoteableCount = useMemo(
-    () =>
-      drafts.filter((draft) => draft.status === 'accepted' && !draft.promoted_finding_id).length,
-    [drafts],
-  )
-  const pendingDraftCount = useMemo(
-    () => drafts.filter((draft) => draft.status === 'draft' && !draft.promoted_finding_id).length,
-    [drafts],
-  )
-  const acceptedDrafts = useMemo(
-    () => drafts.filter((draft) => draft.status === 'accepted' || draft.status === 'promoted'),
-    [drafts],
-  )
-  const acceptedClauseCount = useMemo(() => {
-    const clauseKeys = new Set<string>()
-    acceptedDrafts.forEach((draft) => {
-      draft.mapped_standards_json?.forEach((mapping) => {
-        const clauseKey =
-          typeof mapping?.clause_id === 'string'
-            ? mapping.clause_id
-            : [mapping?.standard, mapping?.clause_number].filter(Boolean).join(':')
-        if (clauseKey) clauseKeys.add(clauseKey)
-      })
-    })
-    return clauseKeys.size
-  }, [acceptedDrafts])
-  const acceptedActionCandidates = useMemo(
-    () =>
-      acceptedDrafts.filter((draft) => ACTION_FINDING_TYPES.includes(draft.finding_type)).length,
-    [acceptedDrafts],
-  )
-  const acceptedRiskCandidates = useMemo(
-    () =>
-      acceptedDrafts.filter(
-        (draft) => ACTION_FINDING_TYPES.includes(draft.finding_type) && ['medium', 'high', 'critical'].includes(draft.severity),
-      ).length,
-    [acceptedDrafts],
-  )
-  const promotionSummary = job?.promotion_summary_json ?? null
-  const schemeAlignment = promotionSummary?.scheme_alignment as Record<string, unknown> | undefined
-  const declaredProgramLabel = deriveDeclaredProgramLabel(auditRun, job)
-  const declaredSourceOrigin =
-    auditRun?.source_origin || readProvenanceString(job, 'declared_source_origin')
-  const declaredScheme =
-    auditRun?.assurance_scheme || readProvenanceString(job, 'declared_assurance_scheme')
-  const resolvedTemplateVersion =
-    auditRun?.template_version ?? readProvenanceNumber(job, 'processing_template_version')
-  const resolvedTemplateId =
-    auditRun?.template_id ?? readProvenanceNumber(job, 'processing_template_id')
-  const resolvedTemplateName = auditRun?.template_name
-  const declaredExternalBody =
-    auditRun?.external_body_name || readProvenanceString(job, 'declared_external_body_name')
-  const declaredExternalReference =
-    auditRun?.external_reference || readProvenanceString(job, 'declared_external_reference')
-  const specialistHome = useMemo(() => deriveSpecialistHome(job), [job])
-  const specialistHomePath =
-    reconciliation?.view_links?.specialist_home || reconciliation?.view_links?.uvdb || specialistHome.path
+  const {
+    approvedCount,
+    promoteableCount,
+    pendingDraftCount,
+    acceptedClauseCount,
+    acceptedActionCandidates,
+    acceptedRiskCandidates,
+    schemeAlignment,
+    declaredProgramLabel,
+    declaredSourceOrigin,
+    declaredScheme,
+    resolvedTemplateVersion,
+    resolvedTemplateId,
+    resolvedTemplateName,
+    declaredExternalBody,
+    declaredExternalReference,
+    specialistHome,
+    specialistHomePath,
+  } = useImportReviewDerived(job, auditRun, drafts, reconciliation)
 
   const handleDraftDecision = async (
     draftId: number,
