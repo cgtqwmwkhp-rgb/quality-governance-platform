@@ -25,6 +25,7 @@ import { Card } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
 import { cn } from '../helpers/utils'
+import { getPortalHelpContacts } from '../config/portalHelpContacts'
 
 // FAQ Item component
 const FAQItem = ({
@@ -105,6 +106,7 @@ export default function PortalHelp() {
   const [openFAQ, setOpenFAQ] = useState<number | null>(null)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [feedbackGiven, setFeedbackGiven] = useState<{ [key: number]: 'up' | 'down' | null }>({})
+  const contacts = getPortalHelpContacts()
 
   const categories = [
     {
@@ -338,13 +340,13 @@ export default function PortalHelp() {
             {t('portal.still_need_help')}
           </h2>
           <div className="grid gap-3">
-            <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href="#chat" />
-            <QuickLink
-              icon={Mail}
-              title={t('portal.email_support')}
-              href="mailto:safety@plantexpand.com"
-            />
-            <QuickLink icon={Phone} title={t('portal.call_helpline')} href="tel:08001234567" />
+            <QuickLink icon={MessageCircle} title={t('portal.live_chat')} href={contacts.chatHref} />
+            {contacts.emailHref && (
+              <QuickLink icon={Mail} title={t('portal.email_support')} href={contacts.emailHref} />
+            )}
+            {contacts.phoneHref && (
+              <QuickLink icon={Phone} title={t('portal.call_helpline')} href={contacts.phoneHref} />
+            )}
           </div>
         </Card>
 
