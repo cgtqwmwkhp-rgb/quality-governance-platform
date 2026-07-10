@@ -213,7 +213,9 @@ def _mock_user_from_jwt(payload: dict, db_user: object | None = None) -> _MockUs
         perms = _VIEWER_PERMS
     user_id = int(payload.get("sub", "1"))
     email = getattr(db_user, "email", f"{role}@test.example.com")
-    tenant_id = getattr(db_user, "tenant_id", payload.get("tenant_id", 1))
+    # Prefer explicit JWT tenant claim so tokens stay fail-closed-stable even when
+    # a leftover DB user row (Postgres no-drop harness) shares the token subject.
+    tenant_id = payload.get("tenant_id", getattr(db_user, "tenant_id", 1) if db_user else 1)
     first_name = getattr(db_user, "first_name", "Test")
     last_name = getattr(db_user, "last_name", "User")
     is_active = getattr(db_user, "is_active", True)
@@ -402,12 +404,34 @@ async def _seed_default_data():
                     tenant_id=1,
                 )
             )
+
+        # Superuser JWT fixtures use sub=2. On Postgres the schema is not dropped
+        # between tests, so a leftover User(id=2) from test_user can steal that
+        # identity with a mismatched tenant_id and break fail-closed lookups.
+        # Keep a stable superuser row on tenant 1 for those tokens.
+        result = await session.execute(select(User).where(User.id == 2))
+        existing_super = result.scalar_one_or_none()
+        if existing_super is None:
+            session.add(
+                UserFactory.build(
+                    id=2,
+                    email="superuser@test.example.com",
+                    hashed_password=get_password_hash("testpassword123"),
+                    is_active=True,
+                    is_superuser=True,
+                    tenant_id=1,
+                )
+            )
+        else:
+            existing_super.is_superuser = True
+            existing_super.tenant_id = 1
+            existing_super.is_active = True
         await session.commit()
 
     if "postgresql" in str(engine.url):
         async with engine.begin() as conn:
             await conn.execute(text("SELECT setval('tenants_id_seq', GREATEST((SELECT MAX(id) FROM tenants), 1))"))
-            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 1))"))
+            await conn.execute(text("SELECT setval('users_id_seq', GREATEST((SELECT MAX(id) FROM users), 2))"))
 
     yield
 

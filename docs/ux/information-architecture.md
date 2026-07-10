@@ -1,6 +1,6 @@
 # Information Architecture — Quality Governance Platform
 
-> Last updated: 2026-03-07
+> Last updated: 2026-07-10
 
 ## 1. Current Sitemap
 
@@ -14,7 +14,7 @@ The platform exposes **55 API route modules** under `/api/v1/`. They map to the 
 | near_miss | /near-misses | Near-miss event tracking |
 | complaints | /complaints | External complaint management |
 | rtas | /rtas | Road traffic collision management |
-| risks | /risks | Operational risk register |
+| risks | /risks → /risk-register | Operational risk UI redirects to Enterprise Risk Register (APIs unchanged) |
 | risk_register | /risk-register | Enterprise risk register (bow-tie, KRIs) |
 | policies | /policies | Policy & document library |
 | compliance | /compliance | ISO clause mapping & evidence linking |
@@ -147,7 +147,7 @@ Settings
 
 ### Key IA Issues to Address
 
-1. **Duplicate risk modules** — `/risks` (operational) and `/risk-register` (enterprise) should be unified under a single "Risk" section with tabs.
+1. **Duplicate risk modules** — Partially addressed: nav points only to `/risk-register` (Enterprise Risk Register); `/risks` and `/risks/*` redirect there with a consolidation banner. Operational vs enterprise data models remain separate pending a later migration.
 2. **Scattered audit-related routes** — `audits`, `audit-templates`, `audit_trail`, and `auditor_competence` should be co-located under "Audits & Inspections".
 3. **Actions visibility** — The unified actions endpoint should surface as a "My Actions" widget on the dashboard, not hidden in a separate route.
 4. **Deep nesting** — `compliance-automation` contains sub-features (RIDDOR, certificates, scheduled audits) that deserve top-level visibility within the Compliance group.

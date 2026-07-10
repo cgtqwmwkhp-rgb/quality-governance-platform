@@ -1,7 +1,7 @@
 /**
  * Web Vitals reporter — sends Core Web Vitals to the telemetry endpoint.
  *
- * Metrics collected: CLS, FID, LCP, TTFB, INP.
+ * Metrics collected: CLS, LCP, TTFB, INP (FID removed in web-vitals v5).
  * Uses the `web-vitals` library (already in package.json).
  *
  * Call `reportWebVitals()` once from the app entry point.
@@ -53,10 +53,10 @@ function sendMetric(metric: Metric): void {
 }
 
 export function reportWebVitals(): void {
-  import('web-vitals').then(({ onCLS, onFCP, onFID, onLCP, onTTFB, onINP }) => {
+  // web-vitals v5 removed onFID; INP is the interaction metric replacement.
+  import('web-vitals').then(({ onCLS, onFCP, onLCP, onTTFB, onINP }) => {
     onCLS(sendMetric)
     onFCP(sendMetric)
-    onFID(sendMetric)
     onLCP(sendMetric)
     onTTFB(sendMetric)
     onINP(sendMetric)

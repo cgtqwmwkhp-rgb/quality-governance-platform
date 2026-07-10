@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { API_BASE_URL } from '../config/apiBase'
+import { isPortalDemoLoginEnabled } from '../config/portalDemoLogin'
 import { revokeSession } from '../utils/auth'
 
 // Microsoft Entra ID (Azure AD) configuration
@@ -55,6 +56,7 @@ interface PortalAuthContextType {
   logout: () => Promise<void>
   error: string | null
   isAzureADAvailable: boolean
+  isDemoLoginAvailable: boolean
   platformToken: string | null // Platform JWT for API calls
 }
 
@@ -80,7 +82,10 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     // Restore platform token from sessionStorage on mount
     return sessionStorage.getItem('platform_access_token')
   })
-  const isAuthenticated = Boolean(user && (user.isDemoUser || platformToken))
+  const demoLoginAvailable = isPortalDemoLoginEnabled()
+  const isAuthenticated = Boolean(
+    user && ((demoLoginAvailable && user.isDemoUser) || platformToken),
+  )
 
   // Exchange Azure AD id_token for platform JWT
   const exchangeToken = async (idToken: string): Promise<TokenExchangeResponse | null> => {
@@ -211,28 +216,41 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
           if (sessionTime) {
             const elapsed = Date.now() - parseInt(sessionTime)
             if (elapsed < 24 * 60 * 60 * 1000) {
-              // CRITICAL: Only restore full session if platform token exists
-              // Without platformToken, My Reports won't work (half-authenticated state)
-              const storedPlatformToken = sessionStorage.getItem('platform_access_token')
-              if (storedPlatformToken) {
-                setUser(parsedUser)
-                setPlatformToken(storedPlatformToken)
-                console.log(
-                  '[PortalAuth] Session restored with platform token for:',
-                  parsedUser.email,
-                )
-              } else {
-                // Fail closed instead of restoring a misleading partial session.
+              // Demo sessions are only valid when the non-prod + explicit flag gate is open.
+              if (parsedUser?.isDemoUser && !isPortalDemoLoginEnabled()) {
                 localStorage.removeItem('portal_user')
                 localStorage.removeItem('portal_session_time')
-                console.warn(
-                  '[PortalAuth] Discarded portal session without platform token - re-login required',
-                )
-                setError(
-                  'Your session needs to be refreshed. Please sign out and sign in again to view your reports.',
-                )
+                console.warn('[PortalAuth] Discarded demo portal session — demo login gate closed')
                 setUser(null)
                 setPlatformToken(null)
+              } else {
+                // CRITICAL: Only restore full session if platform token exists
+                // Without platformToken, My Reports won't work (half-authenticated state)
+                // Exception: gated demo users may restore without a platform token.
+                const storedPlatformToken = sessionStorage.getItem('platform_access_token')
+                if (storedPlatformToken) {
+                  setUser(parsedUser)
+                  setPlatformToken(storedPlatformToken)
+                  console.log(
+                    '[PortalAuth] Session restored with platform token for:',
+                    parsedUser.email,
+                  )
+                } else if (parsedUser?.isDemoUser && isPortalDemoLoginEnabled()) {
+                  setUser(parsedUser)
+                  console.log('[PortalAuth] Demo portal session restored for:', parsedUser.email)
+                } else {
+                  // Fail closed instead of restoring a misleading partial session.
+                  localStorage.removeItem('portal_user')
+                  localStorage.removeItem('portal_session_time')
+                  console.warn(
+                    '[PortalAuth] Discarded portal session without platform token - re-login required',
+                  )
+                  setError(
+                    'Your session needs to be refreshed. Please sign out and sign in again to view your reports.',
+                  )
+                  setUser(null)
+                  setPlatformToken(null)
+                }
               }
             } else {
               // Session expired - clear everything
@@ -265,7 +283,9 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
       if (!isAzureConfigured()) {
         // Azure AD not configured - show helpful error
         setError(
-          'Microsoft login is not configured. Please use Demo Login or contact your administrator.',
+          isPortalDemoLoginEnabled()
+            ? 'Microsoft login is not configured. Please use Demo Login or contact your administrator.'
+            : 'Microsoft login is not configured. Please contact your administrator.',
         )
         setIsLoading(false)
         return
@@ -299,8 +319,13 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
     }
   }
 
-  // Demo login for testing/development
+  // Demo login for testing/development — gated: non-production + explicit flag
   const loginWithDemo = () => {
+    if (!isPortalDemoLoginEnabled()) {
+      setError('Demo login is disabled in this environment.')
+      return
+    }
+
     const demoUser: PortalUser = {
       id: 'demo-user-001',
       email: 'demo.employee@plantexpand.com',
@@ -359,6 +384,7 @@ export function PortalAuthProvider({ children }: PortalAuthProviderProps) {
         logout,
         error,
         isAzureADAvailable: isAzureConfigured(),
+        isDemoLoginAvailable: demoLoginAvailable,
         platformToken,
       }}
     >

@@ -59,6 +59,7 @@ target_metadata = Base.metadata
 
 # ORM vs migration naming drift and models not yet covered by migrations.
 # Excluded from `alembic check` / autogenerate compare until additive migrations land.
+# Owner + reason inventory: docs/governance/alembic_check_excluded_tables.md
 _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
     {
         # Legacy singular table names (still present after add_iso27001_isms)

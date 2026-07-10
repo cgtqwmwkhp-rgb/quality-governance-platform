@@ -3317,6 +3317,27 @@ export interface NotificationEntry {
   created_at: string
 }
 
+export interface NotificationCategoryChannels {
+  email: boolean
+  push: boolean
+  in_app: boolean
+  /** Tolerant reader for legacy FE payloads */
+  inApp?: boolean
+}
+
+export interface NotificationPreferences {
+  email_enabled: boolean
+  sms_enabled: boolean
+  push_enabled: boolean
+  phone_number?: string | null
+  quiet_hours_enabled?: boolean
+  quiet_hours_start?: string | null
+  quiet_hours_end?: string | null
+  email_digest_enabled?: boolean
+  email_digest_frequency?: string
+  category_preferences?: Record<string, NotificationCategoryChannels>
+}
+
 export const notificationsApi = {
   list: (params?: { page?: number; page_size?: number; unread_only?: boolean }) => {
     const sp = new URLSearchParams()
@@ -3327,15 +3348,21 @@ export const notificationsApi = {
       items: NotificationEntry[]
       total: number
       unread_count: number
+      page?: number
+      page_size?: number
     }>(`/api/v1/notifications/?${sp}`)
   },
   getUnreadCount: () => api.get<{ unread_count: number }>('/api/v1/notifications/unread-count'),
   markRead: (id: number) => api.post<{ success: boolean }>(`/api/v1/notifications/${id}/read`),
   markAllRead: () => api.post<{ success: boolean }>('/api/v1/notifications/read-all'),
   delete: (id: number) => api.delete<{ success: boolean }>(`/api/v1/notifications/${id}`),
-  getPreferences: () => api.get<Record<string, unknown>>('/api/v1/notifications/preferences'),
-  updatePreferences: (data: Record<string, unknown>) =>
-    api.put<{ success: boolean }>('/api/v1/notifications/preferences', data),
+  clearAll: () => api.delete<{ success: boolean; count: number }>('/api/v1/notifications/'),
+  getPreferences: () => api.get<NotificationPreferences>('/api/v1/notifications/preferences'),
+  updatePreferences: (data: Partial<NotificationPreferences>) =>
+    api.put<{ success: boolean; preferences: Partial<NotificationPreferences> }>(
+      '/api/v1/notifications/preferences',
+      data,
+    ),
 }
 
 // ============ Compliance API ============

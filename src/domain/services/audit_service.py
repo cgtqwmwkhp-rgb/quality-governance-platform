@@ -252,15 +252,9 @@ class AuditService:
         model_any: Any = model
         stmt: Any = select(model).where(model_any.id == entity_id)
         if tenant_id is not None:
-            # Shared/global rows may still have tenant_id NULL until the NOT NULL
-            # migration (WCS C-01). Keep NULL-inclusive here; list helpers use
-            # apply_tenant_filter which is fail-closed.
-            stmt = stmt.where(
-                or_(
-                    model_any.tenant_id == tenant_id,
-                    model_any.tenant_id.is_(None),
-                )
-            )
+            # Fail-closed: exact tenant match only. NULL tenant_id rows are not
+            # visible when a tenant scope is provided (WCS C-01 / PR #574 follow-up).
+            stmt = stmt.where(model_any.tenant_id == tenant_id)
         result = await self.db.execute(stmt)
         entity = result.scalar_one_or_none()
         if entity is None:
