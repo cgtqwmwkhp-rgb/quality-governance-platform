@@ -208,7 +208,21 @@ async function openImportReview(page: Page) {
   }, E2E_JWT);
 
   const counters = await installImportMocks(page);
-  await page.goto(`/audits/${AUDIT_ID}/import-review?jobId=${JOB_ID}`);
+  // Also absorb non-/api/v1 traffic that can otherwise 429 against live staging.
+  await page.route("**/api/**", async (route) => {
+    if (route.request().url().includes("/api/v1/")) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "{}",
+    });
+  });
+  await page.goto(`/audits/${AUDIT_ID}/import-review?jobId=${JOB_ID}`, {
+    waitUntil: "domcontentloaded",
+  });
   await expect(page.getByRole("heading", { name: "External Audit Review" })).toBeVisible({
     timeout: 20_000,
   });
