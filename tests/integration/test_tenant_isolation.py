@@ -360,6 +360,4 @@ async def test_audit_findings_inherit_run_tenant_and_isolate(
         headers=headers_a,
         json={"title": "should-not-update"},
     )
-    assert cross.status_code in (403, 404), (
-        f"Expected 403/404 for cross-tenant finding update, got {cross.status_code}"
-    )
+    assert cross.status_code in (403, 404), f"Expected 403/404 for cross-tenant finding update, got {cross.status_code}"

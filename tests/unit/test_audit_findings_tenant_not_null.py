@@ -12,7 +12,6 @@ import pytest
 from src.domain.models.audit import AuditFinding, AuditRun
 from src.domain.services.audit_service import AuditService
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATION_PATH = REPO_ROOT / "alembic/versions/20260710_audit_findings_tenant_not_null.py"
 
