@@ -41,7 +41,8 @@ This phase lands:
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
 | `external_audit_import_drafts` | **Done (incremental)** | Fail-safe backfill from `external_audit_import_jobs` + conditional `NOT NULL` (`20260710_ext_draft_nn`). ORM `nullable=False`. See `docs/data/external-audit-import-drafts-tenant-backfill.md`. |
 | `incidents` | **Done (incremental)** | Fail-safe backfill from `users` (creator) + conditional `NOT NULL` (`20260710_inc_tenant_nn`). ORM `nullable=False`. See `docs/data/incidents-tenant-backfill.md`. |
-| `risks` / `risks_v2` / `risk_assessments` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
+| `risks` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
+| `risks_v2` / `risk_assessments` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
 | `complaints` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
