@@ -33,6 +33,7 @@ This phase lands:
 | `complaint_actions` | **Done (incremental)** | Fail-safe backfill from `complaints` + conditional `NOT NULL` (`20260710_ca_tenant_nn`). ORM `nullable=False`. See `docs/data/complaint-actions-tenant-backfill.md`. |
 | `audit_runs` | **Done (incremental)** | Fail-safe backfill from `audit_templates` + conditional `NOT NULL` (`20260710_ar_tenant_nn`). ORM `nullable=False`. See `docs/data/audit-runs-tenant-backfill.md`. |
 | `rta_actions` | **Done (incremental)** | Fail-safe backfill from `road_traffic_collisions` + conditional `NOT NULL` (`20260710_rta_act_nn`). ORM `nullable=False`. See `docs/data/rta-actions-tenant-backfill.md`. |
+| `capa_actions` | **Done (incremental)** | Fail-safe backfill from `users` (creator) + conditional `NOT NULL` (`20260710_capa_act_nn`). ORM `nullable=False`. See `docs/data/capa-actions-tenant-backfill.md`. |
 | `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
@@ -54,6 +55,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | --- | --- |
 | `audit_findings` | `AuditFinding` |
 | `audit_runs` | `AuditRun` |
+| `capa_actions` | `CAPAAction` |
 | `complaint_actions` | `ComplaintAction` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
@@ -79,7 +81,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `benchmark_data` | `BenchmarkData` |
 | `bow_tie_elements` | `BowTieElement` |
 | `business_continuity_plans` | `BusinessContinuityPlan` |
-| `capa_actions` | `CAPAAction` |
 | `carbon_evidence` | `CarbonEvidence` |
 | `carbon_improvement_action` | `ImprovementAction` |
 | `carbon_reporting_year` | `CarbonReportingYear` |
