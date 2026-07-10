@@ -1,12 +1,13 @@
 """Investigation Template API routes."""
 
 import math
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -23,6 +24,7 @@ async def create_template(
     template_data: InvestigationTemplateCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("investigation:create"))],
 ):
     """Create a new investigation template.
 
@@ -130,6 +132,7 @@ async def update_template(
     template_data: InvestigationTemplateUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("investigation:update"))],
 ):
     """Update an investigation template.
 
@@ -174,6 +177,7 @@ async def delete_template(
     template_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("investigation:delete"))],
 ):
     """Delete an investigation template.
 
