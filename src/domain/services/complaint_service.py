@@ -95,6 +95,7 @@ class ComplaintService:
             **data,
             reference_number=ref_num,
             tenant_id=tenant_id,
+            created_by_id=user_id,
         )
 
         self.db.add(complaint)
