@@ -1036,7 +1036,8 @@ class AuditService:
             )
             .where(
                 AuditRun.id == run_id,
-                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+                # Fail-closed: exact tenant match only (no OR IS NULL bleed).
+                AuditRun.tenant_id == tenant_id,
             )
         )
         run = result.scalar_one_or_none()
@@ -1460,7 +1461,8 @@ class AuditService:
             )
             .where(
                 AuditRun.id == run_id,
-                or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)),
+                # Fail-closed: exact tenant match only (no OR IS NULL bleed).
+                AuditRun.tenant_id == tenant_id,
             )
         )
         run = result.scalar_one_or_none()
