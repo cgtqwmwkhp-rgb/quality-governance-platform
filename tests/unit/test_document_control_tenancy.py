@@ -10,12 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from src.api.routes.document_control import (
-    DocumentCreate,
-    create_document,
-    get_document,
-    list_documents,
-)
+from src.api.routes.document_control import DocumentCreate, create_document, get_document, list_documents
 from src.domain.exceptions import NotFoundError
 from src.domain.models.document_control import (
     ControlledDocument,
