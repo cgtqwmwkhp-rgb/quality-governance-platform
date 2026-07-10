@@ -750,6 +750,7 @@ jobs:
           export REDIS_URL="$REDIS_URL_VAL"
           export CELERY_BROKER_URL="$REDIS_URL_VAL"
           export CELERY_RESULT_BACKEND="$REDIS_URL_VAL"
+          export PYTHONPATH="${PYTHONPATH:-}:$(pwd)"
           # Staging worker App Service is provisioned and returns pong — fail closed.
           python3 scripts/celery/smoke_inspect_ping.py --retries 4 --sleep 5
           echo "Celery ping step complete (fail-closed)"
