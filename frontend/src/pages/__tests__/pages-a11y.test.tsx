@@ -9,6 +9,9 @@
  * AuditImportReview.a11y.test.tsx, which renders the actual
  * AuditImportReview component with mocked API responses.
  *
+ * /login is covered by a real-page axe test in Login.a11y.test.tsx
+ * (not a route stub).
+ *
  * Strategy: render a representative stub for each remaining page route in
  * isolation, verify no critical or serious axe violations.
  * Full-page Playwright integration is covered in tests/ux-coverage/tests/a11y-audit.spec.ts
