@@ -9,7 +9,6 @@ from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
 
-
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.models.user import User
 from src.api.dependencies.request_context import get_request_id

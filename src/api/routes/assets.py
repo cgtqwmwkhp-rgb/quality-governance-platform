@@ -5,7 +5,7 @@ REST endpoints for asset types, equipment assets, and template-asset-type linkag
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.models.user import User
@@ -21,8 +21,6 @@ from src.api.schemas.asset import (
     AuditTemplateSummaryResponse,
     TemplateListResponse,
 )
-from src.api.schemas.error_codes import ErrorCode
-from src.api.utils.errors import api_error
 from src.domain.models.asset import AssetType
 from src.domain.services.asset_service import AssetService
 
