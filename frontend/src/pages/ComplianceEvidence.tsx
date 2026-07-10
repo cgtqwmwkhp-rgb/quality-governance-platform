@@ -80,7 +80,7 @@ const ENTITY_TYPE_ROUTE: Record<string, string> = {
   complaint: '/complaints',
   near_miss: '/near-misses',
   action: '/actions',
-  risk: '/risks',
+  risk: '/risk-register',
   policy: '/policies',
   document: '/documents',
   training: '/workforce/training',

@@ -385,6 +385,19 @@ export default function RiskRegister() {
 
   return (
     <div className="space-y-6">
+      {/* IA consolidation notice: /risks redirects here */}
+      <div
+        className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+        role="status"
+      >
+        <p className="font-medium">Single Risk Register</p>
+        <p className="mt-1 text-amber-900/90">
+          Operational Risks (<code className="text-xs">/risks</code>) now redirects here. Use this
+          Enterprise Risk Register as the canonical risk workspace. Legacy operational risk APIs are
+          unchanged.
+        </p>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
