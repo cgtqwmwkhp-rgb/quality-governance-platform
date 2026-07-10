@@ -154,22 +154,62 @@ class ActionExecutor:
         entity_id: int,
         entity_data: Dict,
     ) -> Dict:
-        """Send email notification."""
-        # Import email service when available
-        # For now, log the intent
+        """Queue email notification via Celery email tasks."""
+        from src.infrastructure.tasks.email_tasks import send_bulk_email, send_email
+
         template = config.get("template", "default")
-        recipients = config.get("recipients", [])
+        recipients = config.get("recipients") or config.get("to") or []
+        if isinstance(recipients, str):
+            recipients = [recipients]
+        recipients = [str(r).strip() for r in recipients if str(r).strip()]
         subject = config.get("subject", f"Notification for {entity_type.value} #{entity_id}")
+        body = (
+            config.get("body")
+            or config.get("message")
+            or (f"{subject}\n\nEntity: {entity_type.value} #{entity_id}\nTemplate: {template}")
+        )
+        html = bool(config.get("html", False))
+        use_bulk = bool(config.get("use_bulk", False))
 
-        # Future: wire to EmailService Celery task
-        logger.info(f"Would send email: template={template}, recipients={recipients}, subject={subject}")
+        if not recipients:
+            raise ValueError("send_email action requires at least one recipient")
 
+        try:
+            if use_bulk and len(recipients) > 1:
+                async_result = send_bulk_email.delay(recipients, subject, body)
+                task_ids = [async_result.id]
+            elif len(recipients) == 1:
+                async_result = send_email.delay(recipients[0], subject, body, html)
+                task_ids = [async_result.id]
+            else:
+                task_ids = []
+                for recipient in recipients:
+                    async_result = send_email.delay(recipient, subject, body, html)
+                    task_ids.append(async_result.id)
+        except Exception as exc:
+            logger.error(
+                "Failed to enqueue workflow email template=%s recipients=%s: %s",
+                template,
+                recipients,
+                exc,
+            )
+            raise RuntimeError(f"Failed to enqueue email: {exc}") from exc
+
+        logger.info(
+            "Queued workflow email template=%s recipients=%s subject=%s task_ids=%s",
+            template,
+            recipients,
+            subject,
+            task_ids,
+        )
         return {
             "action": "send_email",
             "template": template,
             "recipients": recipients,
             "subject": subject,
             "queued": True,
+            "task_ids": task_ids,
+            "task_id": task_ids[0] if len(task_ids) == 1 else None,
         }
 
     async def _execute_send_sms(
@@ -420,19 +460,48 @@ class ActionExecutor:
         entity_id: int,
         entity_data: Dict,
     ) -> Dict:
-        """Call external webhook."""
+        """Queue external webhook delivery via Celery + httpx."""
+        from src.infrastructure.tasks.webhook_tasks import deliver_webhook
+
         url = config.get("url")
+        if not url:
+            raise ValueError("webhook action requires a url")
+
         method = config.get("method", "POST")
-        headers = config.get("headers", {})
+        headers = config.get("headers") or {}
+        body = config.get("body")
+        payload = config.get("payload")
+        timeout = config.get("timeout")
 
-        # Future: implement async HTTP call via httpx
-        logger.info(f"Would call webhook: {method} {url}")
+        try:
+            async_result = deliver_webhook.delay(
+                url=url,
+                method=method,
+                headers=headers,
+                entity_type=entity_type.value,
+                entity_id=entity_id,
+                body=body if isinstance(body, dict) else None,
+                payload=payload if isinstance(payload, dict) else None,
+                timeout=timeout,
+            )
+        except Exception as exc:
+            logger.error("Failed to enqueue webhook url=%s method=%s: %s", url, method, exc)
+            raise RuntimeError(f"Failed to enqueue webhook: {exc}") from exc
 
+        logger.info(
+            "Queued workflow webhook method=%s url=%s entity=%s#%s task_id=%s",
+            method,
+            url,
+            entity_type.value,
+            entity_id,
+            async_result.id,
+        )
         return {
             "action": "webhook",
             "url": url,
             "method": method,
             "queued": True,
+            "task_id": async_result.id,
         }
 
     def _get_model_for_entity(self, entity_type: EntityType) -> Optional[Type[Any]]:

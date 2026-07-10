@@ -199,24 +199,86 @@ class TestActionExecutor:
 
     @pytest.mark.asyncio
     async def test_execute_send_email(self, executor):
-        """Test email sending action."""
+        """Test email sending action queues Celery send_email."""
         config = {
             "template": "escalation",
             "recipients": ["manager@example.com"],
             "subject": "Test Alert",
+            "body": "Please review",
         }
 
-        result = await executor.execute(
-            ActionType.SEND_EMAIL,
-            config,
-            EntityType.INCIDENT,
-            1,
-            {"id": 1},
-        )
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_result = MagicMock()
+            mock_result.id = "email-task-1"
+            mock_send_email.delay = MagicMock(return_value=mock_result)
+            result = await executor.execute(
+                ActionType.SEND_EMAIL,
+                config,
+                EntityType.INCIDENT,
+                1,
+                {"id": 1},
+            )
 
+        mock_send_email.delay.assert_called_once_with(
+            "manager@example.com",
+            "Test Alert",
+            "Please review",
+            False,
+        )
         assert result["success"] is True
         assert result["action"] == "send_email"
         assert result["template"] == "escalation"
+        assert result["queued"] is True
+        assert result["task_ids"] == ["email-task-1"]
+        assert result["task_id"] == "email-task-1"
+
+    @pytest.mark.asyncio
+    async def test_execute_send_email_multiple_recipients(self, executor):
+        """Multiple recipients enqueue one send_email task each."""
+        config = {
+            "template": "escalation",
+            "recipients": ["a@example.com", "b@example.com"],
+            "subject": "Bulk Alert",
+            "body": "Body",
+        }
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock(side_effect=[MagicMock(id="t1"), MagicMock(id="t2")])
+            result = await executor.execute(
+                ActionType.SEND_EMAIL,
+                config,
+                EntityType.INCIDENT,
+                2,
+                {"id": 2},
+            )
+
+        assert mock_send_email.delay.call_count == 2
+        assert result["success"] is True
+        assert result["queued"] is True
+        assert result["task_ids"] == ["t1", "t2"]
+        assert result["task_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_execute_send_email_queue_failure(self, executor):
+        """Broker failures surface as structured action failure."""
+        config = {
+            "recipients": ["manager@example.com"],
+            "subject": "Test Alert",
+            "body": "Body",
+        }
+
+        with patch("src.infrastructure.tasks.email_tasks.send_email") as mock_send_email:
+            mock_send_email.delay = MagicMock(side_effect=ConnectionError("broker down"))
+            result = await executor.execute(
+                ActionType.SEND_EMAIL,
+                config,
+                EntityType.INCIDENT,
+                1,
+                {"id": 1},
+            )
+
+        assert result["success"] is False
+        assert "Failed to enqueue email" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_change_status(self, executor, mock_db):
@@ -258,24 +320,73 @@ class TestActionExecutor:
 
     @pytest.mark.asyncio
     async def test_execute_webhook(self, executor):
-        """Test webhook action."""
+        """Test webhook action queues Celery deliver_webhook."""
         config = {
             "url": "https://api.example.com/webhook",
             "method": "POST",
             "headers": {"X-Api-Key": "secret"},
+            "body": {"event": "escalated"},
+            "timeout": 15,
         }
 
+        with patch("src.infrastructure.tasks.webhook_tasks.deliver_webhook") as mock_deliver:
+            mock_result = MagicMock()
+            mock_result.id = "webhook-task-1"
+            mock_deliver.delay = MagicMock(return_value=mock_result)
+            result = await executor.execute(
+                ActionType.WEBHOOK,
+                config,
+                EntityType.INCIDENT,
+                1,
+                {"id": 1},
+            )
+
+        mock_deliver.delay.assert_called_once_with(
+            url="https://api.example.com/webhook",
+            method="POST",
+            headers={"X-Api-Key": "secret"},
+            entity_type="incident",
+            entity_id=1,
+            body={"event": "escalated"},
+            payload=None,
+            timeout=15,
+        )
+        assert result["success"] is True
+        assert result["action"] == "webhook"
+        assert result["url"] == "https://api.example.com/webhook"
+        assert result["queued"] is True
+        assert result["task_id"] == "webhook-task-1"
+
+    @pytest.mark.asyncio
+    async def test_execute_webhook_queue_failure(self, executor):
+        """Broker failures surface as structured webhook action failure."""
+        config = {"url": "https://api.example.com/webhook"}
+
+        with patch("src.infrastructure.tasks.webhook_tasks.deliver_webhook") as mock_deliver:
+            mock_deliver.delay = MagicMock(side_effect=RuntimeError("celery unavailable"))
+            result = await executor.execute(
+                ActionType.WEBHOOK,
+                config,
+                EntityType.INCIDENT,
+                1,
+                {"id": 1},
+            )
+
+        assert result["success"] is False
+        assert "Failed to enqueue webhook" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_execute_webhook_missing_url(self, executor):
+        """Missing URL is a structured failure."""
         result = await executor.execute(
             ActionType.WEBHOOK,
-            config,
+            {},
             EntityType.INCIDENT,
             1,
             {"id": 1},
         )
-
-        assert result["success"] is True
-        assert result["action"] == "webhook"
-        assert result["url"] == "https://api.example.com/webhook"
+        assert result["success"] is False
+        assert "url" in result["error"].lower()
 
 
 class TestSLAService:
