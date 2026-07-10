@@ -178,7 +178,7 @@ jobs:
             echo ""
             echo "[FAIL] Configuration drift detected!"
             echo "  - Staging platform: azure-app-service"
-            echo "  - Staging API base URL: https://app-qgp-staging.azurewebsites.net"
+            echo "  - Staging API base URL: https://qgp-staging-plantexpand.azurewebsites.net"
             exit 1
           fi
           

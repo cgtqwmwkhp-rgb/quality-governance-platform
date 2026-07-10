@@ -4,7 +4,7 @@
 # 
 # Usage:
 #   ./scripts/smoke_test.sh <environment_url>
-#   ./scripts/smoke_test.sh https://app-qgp-staging.azurewebsites.net
+#   ./scripts/smoke_test.sh https://qgp-staging-plantexpand.azurewebsites.net
 #   ./scripts/smoke_test.sh https://app-qgp-prod.azurewebsites.net
 #
 

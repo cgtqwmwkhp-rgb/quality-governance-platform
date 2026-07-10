@@ -191,7 +191,7 @@ def main():
     email, password = get_credentials()
 
     # Get staging URL
-    staging_url = os.environ.get("APP_URL", "https://app-qgp-staging.azurewebsites.net")
+    staging_url = os.environ.get("APP_URL", "https://qgp-staging-plantexpand.azurewebsites.net")
     logger.info(f"🌐 Staging URL: {staging_url}")
 
     # Verify authentication

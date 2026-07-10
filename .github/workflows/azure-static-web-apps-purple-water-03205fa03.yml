@@ -25,7 +25,7 @@ name: Azure Static Web Apps CI/CD
 #   3. E2E / staging UI verification exercises the staging stack end-to-end
 #   4. Production API URL is reserved for production frontend builds only
 #
-# Staging FE → Staging API: https://app-qgp-staging.azurewebsites.net
+# Staging FE → Staging API: https://qgp-staging-plantexpand.azurewebsites.net
 # =============================================================================
 # VALIDATION MODE (Manual Testing)
 # =============================================================================
@@ -92,7 +92,7 @@ jobs:
       - name: Build Frontend (PR validation only)
         working-directory: frontend
         env:
-          VITE_API_URL: https://app-qgp-staging.azurewebsites.net
+          VITE_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
           VITE_BUILD_SHA: ${{ github.sha }}
           VITE_BUILD_TIME: ${{ github.event.pull_request.updated_at }}
         run: npm run build
@@ -147,7 +147,7 @@ jobs:
       - name: Build Frontend
         working-directory: frontend
         env:
-          VITE_API_URL: https://app-qgp-staging.azurewebsites.net
+          VITE_API_URL: https://qgp-staging-plantexpand.azurewebsites.net
           VITE_AZURE_CLIENT_ID: ${{ secrets.VITE_AZURE_CLIENT_ID }}
           VITE_AZURE_AUTHORITY: ${{ secrets.VITE_AZURE_AUTHORITY }}
           VITE_AZURE_REDIRECT_URI: ${{ secrets.VITE_AZURE_REDIRECT_URI }}

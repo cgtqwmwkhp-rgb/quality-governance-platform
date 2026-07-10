@@ -33,7 +33,7 @@ const http = require('http');
 const fs = require('fs');
 
 // Configuration
-const APP_URL = process.env.APP_URL || 'https://app-qgp-staging.azurewebsites.net';
+const APP_URL = process.env.APP_URL || 'https://qgp-staging-plantexpand.azurewebsites.net';
 const TEST_EMAIL = process.env.UX_TEST_USER_EMAIL;
 const TEST_PASSWORD = process.env.UX_TEST_USER_PASSWORD;
 const CI_TEST_SECRET = process.env.CI_TEST_SECRET;
