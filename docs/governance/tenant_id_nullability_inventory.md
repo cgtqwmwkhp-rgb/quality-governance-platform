@@ -39,6 +39,7 @@ This phase lands:
 | `investigation_revision_events` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_rev_evt_nn`). ORM `nullable=False`. See `docs/data/investigation-revision-events-tenant-backfill.md`. |
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
+| `external_audit_import_drafts` | **Done (incremental)** | Fail-safe backfill from `external_audit_import_jobs` + conditional `NOT NULL` (`20260710_ext_draft_nn`). ORM `nullable=False`. See `docs/data/external-audit-import-drafts-tenant-backfill.md`. |
 | `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
@@ -76,6 +77,8 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `signature_requests` | `SignatureRequest` |
 | `signature_templates` | `SignatureTemplate` |
 | `signatures` | `Signature` |
+| `external_audit_import_drafts` | `ExternalAuditDraft` |
+| `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `tenant_invitations` | `TenantInvitation` |
 | `tenant_users` | `TenantUser` |
 
@@ -124,8 +127,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `engineers` | `Engineer` |
 | `enterprise_risk_controls` | `EnterpriseRiskControl` |
 | `evidence_assets` | `EvidenceAsset` |
-| `external_audit_import_drafts` | `ExternalAuditDraft` |
-| `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `fleet_emission_record` | `FleetEmissionRecord` |
 | `ims_control_requirement_mappings` | `IMSControlRequirementMapping` |
 | `ims_controls` | `IMSControl` |

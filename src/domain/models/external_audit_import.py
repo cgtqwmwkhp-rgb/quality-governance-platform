@@ -118,7 +118,9 @@ class ExternalAuditDraft(Base, TimestampMixin, AuditTrailMixin):
     audit_run_id: Mapped[int] = mapped_column(
         ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    # Required; inherited from external_audit_import_jobs via import_job_id.
+    # Migration 20260710_ext_draft_nn is fail-safe for legacy rows.
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     status: Mapped[ExternalAuditDraftStatus] = mapped_column(
         CaseInsensitiveEnum(ExternalAuditDraftStatus),
         default=ExternalAuditDraftStatus.DRAFT,
