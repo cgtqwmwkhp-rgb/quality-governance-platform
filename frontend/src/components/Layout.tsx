@@ -54,6 +54,7 @@ interface LayoutProps {
 export default function Layout({ onLogout }: LayoutProps) {
   const { t } = useTranslation()
   const canAccessWorkforce = hasRole('admin', 'supervisor')
+  const canAccessAdvancedNav = canAccessWorkforce || isSuperuser()
   const canManageUsers = isSuperuser()
   const adminUserManagementEnabled = useFeatureFlag('admin_user_management')
 
@@ -86,8 +87,6 @@ export default function Layout({ onLogout }: LayoutProps) {
         { path: '/audit-templates', icon: Sparkles, label: t('nav.audit_builder') },
         { path: '/compliance', icon: Shield, label: t('nav.iso_compliance') },
         { path: '/uvdb', icon: Award, label: t('nav.uvdb_achilles') },
-        { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
-        { path: '/customer-audits', icon: Users, label: t('nav.customer_audits') },
         { path: '/investigations', icon: FlaskConical, label: t('nav.investigations') },
         { path: '/standards', icon: BookOpen, label: t('nav.standards') },
         { path: '/actions', icon: ListTodo, label: t('nav.actions') },
@@ -98,7 +97,6 @@ export default function Layout({ onLogout }: LayoutProps) {
       items: [
         { path: '/risk-register', icon: Target, label: t('nav.risk_register') },
         { path: '/ims', icon: GitMerge, label: t('nav.ims_dashboard') },
-        { path: '/ai-intelligence', icon: Brain, label: t('nav.ai_intelligence') },
       ],
     },
     {
@@ -123,24 +121,44 @@ export default function Layout({ onLogout }: LayoutProps) {
       ],
     },
     {
-      title: t('nav.analytics'),
+      title: t('nav.programmes', 'Programmes'),
       items: [
-        { path: '/analytics', icon: BarChart3, label: t('nav.overview') },
-        { path: '/analytics/advanced', icon: BarChart3, label: t('nav.advanced_analytics') },
-        { path: '/analytics/dashboards', icon: LayoutDashboard, label: t('nav.dashboard_builder') },
-        { path: '/analytics/reports', icon: FileText, label: t('nav.report_generator') },
-        { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
-        { path: '/exports', icon: Download, label: t('nav.export_center') },
+        { path: '/planet-mark', icon: Leaf, label: t('nav.planet_mark') },
+        { path: '/customer-audits', icon: Users, label: t('nav.customer_audits') },
+        { path: '/ai-intelligence', icon: Brain, label: t('nav.ai_intelligence') },
       ],
     },
-    {
-      title: t('nav.automation'),
-      items: [
-        { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
-        { path: '/compliance-automation', icon: Shield, label: t('nav.compliance_automation') },
-        { path: '/signatures', icon: FileSignature, label: t('nav.digital_signatures') },
-      ],
-    },
+    ...(canAccessAdvancedNav
+      ? [
+          {
+            title: t('nav.analytics'),
+            items: [
+              { path: '/analytics', icon: BarChart3, label: t('nav.overview') },
+              { path: '/analytics/advanced', icon: BarChart3, label: t('nav.advanced_analytics') },
+              {
+                path: '/analytics/dashboards',
+                icon: LayoutDashboard,
+                label: t('nav.dashboard_builder'),
+              },
+              { path: '/analytics/reports', icon: FileText, label: t('nav.report_generator') },
+              { path: '/calendar', icon: Calendar, label: t('nav.calendar') },
+              { path: '/exports', icon: Download, label: t('nav.export_center') },
+            ],
+          },
+          {
+            title: t('nav.automation'),
+            items: [
+              { path: '/workflows', icon: GitBranch, label: t('nav.workflow_center') },
+              {
+                path: '/compliance-automation',
+                icon: Shield,
+                label: t('nav.compliance_automation'),
+              },
+              { path: '/signatures', icon: FileSignature, label: t('nav.digital_signatures') },
+            ],
+          },
+        ]
+      : []),
   ].filter((group) => group.items.length > 0)
 
   const morePaths = moreGroups.flatMap((group) => group.items.map((item) => item.path))
