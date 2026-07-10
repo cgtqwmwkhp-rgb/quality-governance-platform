@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 18 |
-| Owned nullable `tenant_id` | 90 |
+| Required `tenant_id` (`nullable=False`) | 19 |
+| Owned nullable `tenant_id` | 89 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **109** |
+| **Nullable total** | **108** |
 
 ## Phase 1 decision
 
@@ -40,7 +40,8 @@ This phase lands:
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
 | `external_audit_import_drafts` | **Done (incremental)** | Fail-safe backfill from `external_audit_import_jobs` + conditional `NOT NULL` (`20260710_ext_draft_nn`). ORM `nullable=False`. See `docs/data/external-audit-import-drafts-tenant-backfill.md`. |
-| `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
+| `incidents` | **Done (incremental)** | Fail-safe backfill from `users` (creator) + conditional `NOT NULL` (`20260710_inc_tenant_nn`). ORM `nullable=False`. See `docs/data/incidents-tenant-backfill.md`. |
+| `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -50,7 +51,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | Table | Model |
 | --- | --- |
 | `complaints` | `Complaint` |
-| `incidents` | `Incident` |
 | `risk_assessments` | `RiskAssessment` |
 | `risks` | `Risk` |
 | `risks_v2` | `EnterpriseRisk` |
@@ -72,6 +72,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `copilot_feedback` | `CopilotFeedback` |
 | `copilot_sessions` | `CopilotSession` |
 | `incident_actions` | `IncidentAction` |
+| `incidents` | `Incident` |
 | `rta_actions` | `RTAAction` |
 | `signature_audit_logs` | `SignatureAuditLog` |
 | `signature_requests` | `SignatureRequest` |
@@ -133,7 +134,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `ims_objectives` | `IMSObjective` |
 | `ims_process_maps` | `IMSProcessMap` |
 | `ims_requirements` | `IMSRequirement` |
-| `incidents` | `Incident` |
 | `index_jobs` | `IndexJob` |
 | `induction_responses` | `InductionResponse` |
 | `induction_runs` | `InductionRun` |
