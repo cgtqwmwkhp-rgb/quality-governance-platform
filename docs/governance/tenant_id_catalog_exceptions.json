@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "wcs_finding": "C-01",
+  "description": "Catalog/global/shared tables allowed to keep nullable tenant_id by design. Additions require an explicit owner + reason in the same PR.",
+  "tables": {
+    "standards": "ISO standards library \u2014 shared catalog (global unique codes)",
+    "clauses": "ISO clause library \u2014 shared under standards",
+    "controls": "ISO control library \u2014 shared under clauses",
+    "cross_standard_mappings": "Cross-standard mapping catalog",
+    "planet_mark_iso14001_mapping": "Planet Mark \u2194 ISO14001 mapping catalog",
+    "uvdb_iso_cross_mapping": "UVDB \u2194 ISO mapping catalog",
+    "uvdb_section": "UVDB question bank section catalog",
+    "uvdb_question": "UVDB question bank catalog",
+    "lookup_options": "Shared lookup/option catalog (may be global)",
+    "system_settings": "Platform settings; tenant_id optional for global keys",
+    "roles": "Role definitions historically global (C-05 follow-on for tenant-scoped roles)",
+    "asset_types": "Asset type taxonomy; may be shared across tenants",
+    "form_templates": "Form template library; may include global templates",
+    "form_steps": "Child of form_templates",
+    "form_fields": "Child of form_templates",
+    "investigation_templates": "Investigation template library; may include global templates",
+    "audit_templates": "Audit template library; may include global/shared templates",
+    "template_versions": "Child of audit_templates",
+    "template_asset_types": "Template\u2194asset-type junction for shared templates"
+  }
+}
