@@ -40,12 +40,14 @@ def send_email(self, to: str, subject: str, body: str, html: bool = False) -> di
             logger.warning("Email service not configured — skipping send to %s", masked_to)
             return {"status": "skipped", "to": masked_to, "subject": subject}
 
-        success = _run_async(
+        result = _run_async(
             email_service.send_email(to=[to], subject=subject, html_content=body if html else f"<pre>{body}</pre>")
         )
-        send_status = "sent" if success else "failed"
-        logger.info("Email %s to %s: %s", send_status, masked_to, subject[:30])
-        return {"status": send_status, "to": masked_to, "subject": subject}
+        logger.info("Email %s to %s: %s", result.status, masked_to, subject[:30])
+        payload = {"status": result.status, "to": masked_to, "subject": subject}
+        if result.error_message:
+            payload["error"] = result.error_message
+        return payload
     except Exception as exc:
         logger.error("Email send failed: %s", exc)
         raise self.retry(exc=exc)
