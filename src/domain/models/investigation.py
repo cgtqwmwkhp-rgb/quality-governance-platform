@@ -374,11 +374,14 @@ class InvestigationAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrail
 
     Actions are trackable work items that arise from investigation findings,
     such as corrective actions, preventive measures, or improvements.
+
+    tenant_id is fail-safe NOT NULL when attributable from investigation_runs
+    (WCS-TEN2 / C-01 Phase 2).
     """
 
     __tablename__ = "investigation_actions"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
