@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   AlertCircle,
   AlertTriangle,
@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
-  Shield,
   ShieldCheck,
   User,
 } from 'lucide-react'
