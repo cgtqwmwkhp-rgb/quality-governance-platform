@@ -145,6 +145,8 @@ def _filter_upgrade_ops(ops_list: list) -> list:
             continue
         if isinstance(op, alembic_ops.AlterColumnOp):
             continue
+        if isinstance(op, alembic_ops.DropConstraintOp) and op.constraint_type == "unique":
+            continue
         kept.append(op)
     return kept
 
