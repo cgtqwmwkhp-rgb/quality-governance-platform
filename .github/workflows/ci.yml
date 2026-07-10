@@ -1945,6 +1945,9 @@ jobs:
       - name: Run schema constraint validation
         run: python3 scripts/validate_schema_constraints.py
 
+      - name: Forbid new owned nullable tenant_id (WCS C-01 Phase 1)
+        run: python3 scripts/validate_tenant_id_not_null.py
+
   error-code-coverage:
     name: Error Code Test Coverage Gate (D14)
     runs-on: ubuntu-latest
