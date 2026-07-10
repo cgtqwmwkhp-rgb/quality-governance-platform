@@ -47,3 +47,31 @@ def test_migration_chains_from_investigation_comments_and_never_invents_tenant()
     assert "tenant_id = 1" not in body
     assert "SET tenant_id = 1" not in body.upper()
     assert (REPO_ROOT / "docs/data/investigation-revision-events-tenant-backfill.md").is_file()
+
+
+def _create_revision_event_snippet(source: str) -> str:
+    start = source.index("async def create_revision_event")
+    markers = (
+        "\n    @classmethod\n    async def ",
+        "\n    @classmethod\n    def ",
+    )
+    next_def = -1
+    for marker in markers:
+        idx = source.find(marker, start + 1)
+        if idx != -1 and (next_def == -1 or idx < next_def):
+            next_def = idx
+    return source[start:] if next_def == -1 else source[start:next_def]
+
+
+def test_create_revision_event_stamps_tenant_from_investigation_and_never_invents():
+    """Write path must inherit tenant_id from the parent investigation run."""
+    for rel in (
+        "src/domain/services/investigation_service.py",
+        "src/services/investigation_service.py",
+    ):
+        body = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        snippet = _create_revision_event_snippet(body)
+        assert "tenant_id=investigation.tenant_id" in snippet
+        assert "tenant_id is required to create an investigation revision event" in snippet
+        assert "tenant_id=1" not in snippet
+        assert "SET tenant_id = 1" not in snippet.upper()
