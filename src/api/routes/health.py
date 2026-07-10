@@ -95,12 +95,14 @@ async def readiness_check():
     except Exception:
         pass
 
-    # WCS-B06 / Lane-1 email: surface push + SMTP readiness (informational; never fails readiness)
+    # WCS-B06 / Lane-1 channels: surface push + SMTP + SMS readiness (informational; never fails readiness)
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
+    from src.infrastructure.sms.sms_status import get_sms_readiness
 
     vapid = get_vapid_readiness()
     email = get_email_readiness()
+    sms = get_sms_readiness()
 
     checks: dict[str, Any] = {
         "database": db_status,
@@ -125,6 +127,21 @@ async def readiness_check():
             "smtp_password_present": email["smtp_password_present"],
             "from_email_present": email["from_email_present"],
         },
+        "sms_configured": sms["sms_configured"],
+        "sms": {
+            "status": sms["status"],
+            "sms_enabled": sms["sms_enabled"],
+            "sms_configured": sms["sms_configured"],
+            "twilio_account_sid_present": sms["twilio_account_sid_present"],
+            "twilio_auth_token_present": sms["twilio_auth_token_present"],
+            "twilio_from_number_present": sms["twilio_from_number_present"],
+            "library": sms["library"],
+        },
+        "channels": {
+            "email": email["status"],
+            "sms": sms["status"],
+            "push": vapid["status"],
+        },
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "circuit_breakers": circuit_breakers,
@@ -133,6 +150,8 @@ async def readiness_check():
         checks["push_note"] = vapid["note"]
     if email.get("note"):
         checks["email_note"] = email["note"]
+    if sms.get("note"):
+        checks["sms_note"] = sms["note"]
     if redis_status == "not_configured":
         if settings.is_redis_required:
             checks["redis_note"] = (

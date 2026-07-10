@@ -586,12 +586,14 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06 / Lane-1 email: informational only — missing VAPID/SMTP must not flip readiness to 503
+    # WCS-B06 / Lane-1 channels: informational only — missing VAPID/SMTP/Twilio must not flip readiness to 503
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
+    from src.infrastructure.sms.sms_status import get_sms_readiness
 
     vapid = get_vapid_readiness()
     email = get_email_readiness()
+    sms = get_sms_readiness()
     payload = {
         "status": overall,
         "database": db_status,
@@ -612,6 +614,21 @@ async def readiness_check(request: Request):
             "smtp_password_present": email["smtp_password_present"],
             "from_email_present": email["from_email_present"],
         },
+        "sms_configured": sms["sms_configured"],
+        "sms": {
+            "status": sms["status"],
+            "sms_enabled": sms["sms_enabled"],
+            "sms_configured": sms["sms_configured"],
+            "twilio_account_sid_present": sms["twilio_account_sid_present"],
+            "twilio_auth_token_present": sms["twilio_auth_token_present"],
+            "twilio_from_number_present": sms["twilio_from_number_present"],
+            "library": sms["library"],
+        },
+        "channels": {
+            "email": email["status"],
+            "sms": sms["status"],
+            "push": vapid["status"],
+        },
         "request_id": request_id,
     }
     if redis_status == "not_configured" and settings.is_redis_required:
@@ -623,4 +640,6 @@ async def readiness_check(request: Request):
         payload["push_note"] = vapid["note"]
     if email.get("note"):
         payload["email_note"] = email["note"]
+    if sms.get("note"):
+        payload["sms_note"] = sms["note"]
     return JSONResponse(content=payload, status_code=status_code)

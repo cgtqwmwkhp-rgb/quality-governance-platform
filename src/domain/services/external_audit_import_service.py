@@ -109,6 +109,9 @@ class ExternalAuditImportService:
     ) -> ExternalAuditImportJob:
         self.ensure_feature_enabled()
         run = await self._get_run(audit_run_id=audit_run_id, tenant_id=tenant_id)
+        parent_tenant_id = run.tenant_id
+        if parent_tenant_id is None:
+            raise ValidationError("Audit run must have a tenant before creating an external audit import job")
         asset_id = source_document_asset_id or run.source_document_asset_id
         if not asset_id:
             raise ValidationError("Audit run does not have a source document asset attached")
@@ -122,7 +125,7 @@ class ExternalAuditImportService:
             checksum = hashlib.sha256(payload).hexdigest()
 
         idempotency_key = f"{run.id}:{asset.id}:{checksum}"
-        existing = await self._get_job_by_idempotency(idempotency_key=idempotency_key, tenant_id=tenant_id)
+        existing = await self._get_job_by_idempotency(idempotency_key=idempotency_key, tenant_id=parent_tenant_id)
         if existing:
             return existing
 
@@ -131,7 +134,7 @@ class ExternalAuditImportService:
             reference_number=ref,
             audit_run_id=run.id,
             source_document_asset_id=asset.id,
-            tenant_id=tenant_id,
+            tenant_id=parent_tenant_id,
             status=ExternalAuditImportStatus.PENDING,
             provider_name="mistral" if self.ocr_service.is_configured else "native_only",
             provider_model=self.ocr_service.model if self.ocr_service.is_configured else None,

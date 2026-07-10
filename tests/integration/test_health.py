@@ -279,3 +279,25 @@ async def test_api_health_readyz_email_misconfigured_when_enabled(client: AsyncC
     assert checks.get("email_configured") is False
     assert checks.get("email", {}).get("status") == "misconfigured"
     assert checks.get("email", {}).get("email_enabled") is True
+
+
+@pytest.mark.asyncio
+async def test_root_readyz_includes_sms_and_channels(client: AsyncClient, monkeypatch):
+    """Lane 1: /readyz reports SMS + channels summary without failing readiness."""
+    monkeypatch.delenv("SMS_ENABLED", raising=False)
+    monkeypatch.delenv("TWILIO_ACCOUNT_SID", raising=False)
+    monkeypatch.delenv("TWILIO_AUTH_TOKEN", raising=False)
+
+    response = await client.get("/readyz")
+    assert response.status_code in [200, 503]
+    data = response.json()
+    assert data.get("sms_configured") is False
+    assert data.get("sms", {}).get("status") == "not_configured"
+    assert data.get("channels", {}).get("email") in {
+        "not_configured",
+        "misconfigured",
+        "credentials_present",
+        "configured",
+    }
+    assert data.get("channels", {}).get("sms") == "not_configured"
+    assert data.get("channels", {}).get("push") in {"not_configured", "partial", "configured"}
