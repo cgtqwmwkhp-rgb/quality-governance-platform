@@ -3,10 +3,14 @@
  *
  * Gap routes from docs/accessibility/a11y-coverage-matrix.md:
  *   /uvdb, /settings, /near-misses, /rta, /policies,
- *   /compliance, /risk-register, /import-review
+ *   /compliance, /risk-register
  *
- * Strategy: render a representative stub for each page route in isolation,
- * verify no critical or serious axe violations.
+ * /import-review is covered by a real-page axe test (not a stub) in
+ * AuditImportReview.a11y.test.tsx, which renders the actual
+ * AuditImportReview component with mocked API responses.
+ *
+ * Strategy: render a representative stub for each remaining page route in
+ * isolation, verify no critical or serious axe violations.
  * Full-page Playwright integration is covered in tests/ux-coverage/tests/a11y-audit.spec.ts
  * which has been updated to include P1 routes.
  */
@@ -136,20 +140,6 @@ describe('Risk Register page accessibility (D03 gap route /risk-register)', () =
       </main>
     )
     const { container } = render(<Wrapper><RiskRegisterStub /></Wrapper>)
-    await expectNoA11yViolations(container)
-  })
-})
-
-// ─── Gap Route 6: Audit Import Review ────────────────────────────────────────
-describe('Audit Import Review page accessibility (D03 gap route /import-review)', () => {
-  it('renders Audit Import Review stub without critical a11y violations', async () => {
-    const AuditImportReviewStub = () => (
-      <main>
-        <h1>Audit Import Review</h1>
-        <p role="status">No pending imports.</p>
-      </main>
-    )
-    const { container } = render(<Wrapper><AuditImportReviewStub /></Wrapper>)
     await expectNoA11yViolations(container)
   })
 })
