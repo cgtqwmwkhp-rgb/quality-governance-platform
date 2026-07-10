@@ -568,7 +568,7 @@ export default function Notifications() {
                           size="sm"
                           onClick={() => void deleteNotification(notification.id)}
                           className="text-destructive hover:text-destructive"
-                          aria-label={t('notifications.delete', 'Delete notification')}
+                          aria-label="Delete notification"
                         >
                           <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </Button>
