@@ -1,11 +1,11 @@
 {
-  "release_sha": "d37b39530a85480e7efd8aa1146f34e1d8000ca7",
+  "release_sha": "35c8d6b3d47051e93918ddc4bfc454c1bb5eea1c",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip d37b3953 \u2014 #616 Near Misses axe, #617 complaints+RTA require_permission, #618 capa_actions TEN2 fail-safe.",
-  "approved_at_utc": "2026-07-10T13:21:29+00:00"
+  "notes": "Release signoff for tip 35c8d6b \u2014 #620 investigation_actions TEN2 fail-safe NOT NULL.",
+  "approved_at_utc": "2026-07-10T14:06:18+00:00"
 }
