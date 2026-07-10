@@ -23,6 +23,7 @@ from src.api.schemas.rta import (
 )
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
@@ -137,7 +138,8 @@ async def list_rtas(
         query = select(RoadTrafficCollision)
 
         if not getattr(current_user, "is_superuser", False):
-            query = query.where(RoadTrafficCollision.tenant_id == current_user.tenant_id)
+            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+            query = apply_tenant_filter(query, RoadTrafficCollision, tenant_id)
 
         if severity:
             query = query.where(RoadTrafficCollision.severity == severity)
@@ -169,6 +171,8 @@ async def list_rtas(
             "page_size": page_size,
             "pages": total_pages,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         error_str = str(e).lower()
         logger.error(f"Error listing RTAs: {e}", exc_info=True)

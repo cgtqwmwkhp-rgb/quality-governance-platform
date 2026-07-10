@@ -14,6 +14,7 @@ from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.near_miss import NearMissCreate, NearMissListResponse, NearMissResponse, NearMissUpdate
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import StateTransitionError
 from src.domain.models.near_miss import NearMiss, NearMissRunningSheetEntry
 from src.domain.models.user import User
@@ -105,7 +106,8 @@ async def list_near_misses(
     query = select(NearMiss)
 
     if not current_user.is_superuser:
-        query = query.where(NearMiss.tenant_id == current_user.tenant_id)
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = apply_tenant_filter(query, NearMiss, tenant_id)
 
     # Apply filters — non-admin users can only filter by their own email
     if reporter_email:

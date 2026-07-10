@@ -12,6 +12,7 @@ from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, Co
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
@@ -140,7 +141,8 @@ async def list_complaints(
         query = select(Complaint)
 
         if not current_user.is_superuser:
-            query = query.where(Complaint.tenant_id == current_user.tenant_id)
+            tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+            query = apply_tenant_filter(query, Complaint, tenant_id)
 
         if complainant_email:
             query = query.where(Complaint.complainant_email == complainant_email)
@@ -167,6 +169,8 @@ async def list_complaints(
             page_size=page_size,
             pages=math.ceil(total / page_size) if total > 0 else 1,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         error_str = str(e).lower()
         logger.error(f"Error listing complaints: {e}", exc_info=True)
