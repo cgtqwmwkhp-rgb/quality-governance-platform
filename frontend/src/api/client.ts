@@ -15,6 +15,9 @@ import { useAppStore } from '../stores/useAppStore'
 import { flushAllDraftsToIndexedDb } from '../services/auditDraftStore'
 import { createRiskRegisterApi } from './riskRegisterClient'
 import { createNotificationsApi } from './notificationsClient'
+import { createInvestigationsApi } from './investigationsClient'
+import { createActionsApi } from './actionsClient'
+import type { Investigation } from './investigationsClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -1410,74 +1413,6 @@ export interface CompetencyRecord {
   expires_at?: string
 }
 
-// ============ Investigation Types ============
-export interface Investigation {
-  id: number
-  reference_number: string
-  template_id: number
-  assigned_entity_type: 'road_traffic_collision' | 'reporting_incident' | 'complaint' | 'near_miss'
-  assigned_entity_id: number
-  status: 'draft' | 'in_progress' | 'under_review' | 'completed' | 'closed'
-  title: string
-  description?: string
-  data: Record<string, unknown>
-  started_at?: string
-  completed_at?: string
-  created_at: string
-}
-
-export interface InvestigationCreate {
-  template_id: number
-  assigned_entity_type: string
-  assigned_entity_id: number
-  title: string
-  description?: string
-}
-
-// === From-Record Types (Stage 2.1) ===
-export interface CreateFromRecordRequest {
-  source_type: 'near_miss' | 'road_traffic_collision' | 'complaint' | 'reporting_incident'
-  source_id: number
-  title: string
-  template_id?: number
-}
-
-export interface CreateFromRecordError {
-  error_code:
-    | 'VALIDATION_ERROR'
-    | 'SOURCE_NOT_FOUND'
-    | 'INV_ALREADY_EXISTS'
-    | 'TEMPLATE_NOT_FOUND'
-    | 'INTERNAL_ERROR'
-  message: string
-  details?: {
-    existing_investigation_id?: number
-    existing_reference_number?: string
-    source_type?: string
-    source_id?: number
-  }
-  request_id?: string
-}
-
-export interface SourceRecordItem {
-  source_id: number
-  display_label: string
-  reference_number: string
-  status: string
-  created_at: string
-  investigation_id: number | null
-  investigation_reference: string | null
-}
-
-export interface SourceRecordsResponse {
-  items: SourceRecordItem[]
-  total: number
-  page: number
-  page_size: number
-  total_pages: number
-  source_type: string
-}
-
 // ============ Standard Types ============
 export interface Standard {
   id: number
@@ -1533,61 +1468,15 @@ export interface ComplianceScore {
   setup_required: boolean
 }
 
-// ============ Action Types ============
-export interface Action {
-  id: number
-  reference_number?: string
-  title: string
-  description: string
-  action_type: string
-  priority: string
-  status:
-    | 'open'
-    | 'in_progress'
-    | 'pending_verification'
-    | 'completed'
-    | 'cancelled'
-    | 'closed'
-    | 'verified'
-    | 'overdue'
-    | 'verification'
-  /** Normalized for KPIs (e.g. CAPA closed → completed) */
-  display_status: string
-  /** Stable id: capa:12, incident_action:3 */
-  action_key: string
-  due_date?: string
-  completed_at?: string
-  completion_notes?: string
-  source_type: string
-  source_id: number
-  source_reference?: string
-  source_title?: string
-  source_scheme?: string
-  clause_reference?: string
-  /** Present when source_type is audit_finding — parent run for navigation */
-  audit_run_id?: number | null
-  owner_id?: number
-  owner_email?: string
-  assigned_to_email?: string
-  created_at: string
-}
-
-export interface ActionsSummary {
-  total: number
-  by_display_status: Record<string, number>
-}
-
-export interface ActionCreate {
-  title: string
-  description: string
-  action_type?: string
-  priority?: string
-  due_date?: string
-  source_type: string
-  source_id?: number
-  source_reference?: string
-  assigned_to_email?: string
-}
+// ============ Action Types (extracted: actionsClient.ts) ============
+export type {
+  Action,
+  ActionsSummary,
+  ActionCreate,
+  ActionUpdate,
+  ActionOwnerNote,
+  ActionOwnerNoteListResponse,
+} from './actionsClient'
 
 // ============ API Functions ============
 export const authApi = {
@@ -1925,202 +1814,26 @@ export const workforceApi = {
     }>('/api/v1/wdp-analytics/trends'),
 }
 
-/**
- * Investigation update payload - all fields optional for partial updates.
- */
-export interface InvestigationUpdate {
-  title?: string
-  status?: string
-  data?: Record<string, unknown>
-  notes?: string
-}
-
-/**
- * Autosave payload with version for optimistic locking.
- */
-export interface InvestigationAutosave {
-  data: Record<string, unknown>
-  version: number
-}
-
-// ============ Investigation Stage 1 API Types ============
-
-export interface TimelineEvent {
-  id: number
-  created_at: string
-  event_type: string
-  field_path?: string
-  old_value?: string
-  new_value?: string
-  actor_id?: number
-  event_metadata?: Record<string, unknown>
-}
-
-export interface TimelineResponse {
-  items: TimelineEvent[]
-  total: number
-  page: number
-  page_size: number
-  investigation_id: number
-}
-
-export interface InvestigationComment {
-  id: number
-  investigation_id: number
-  created_at: string
-  author_id: number
-  content: string
-  section_id?: string
-  field_id?: string
-  parent_comment_id?: number
-  deleted_at?: string | null
-}
-
-export interface CommentsResponse {
-  items: InvestigationComment[]
-  total: number
-  page: number
-  page_size: number
-}
-
-export interface CustomerPackSummary {
-  id: number
-  investigation_id?: number
-  generated_at: string
-  pack_uuid: string
-  audience: string
-  checksum_sha256?: string
-  generated_by_id?: number
-}
-
-export interface PacksResponse {
-  items: CustomerPackSummary[]
-  total: number
-  page: number
-  page_size: number
-  investigation_id: number
-}
-
-export interface GeneratedCustomerPack {
-  pack_id: number
-  pack_uuid: string
-  audience: string
-  investigation_id: number
-  investigation_reference: string
-  generated_at: string
-  content: string
-  redaction_log: Record<string, unknown>[]
-  included_assets: Record<string, unknown>[]
-  checksum_sha256?: string
-}
-
-export interface ClosureValidation {
-  can_close: boolean
-  reasons: string[]
-}
-
-export const investigationsApi = {
-  list: (page = 1, pageSize = 10, status?: string) => {
-    const params = new URLSearchParams({
-      page: String(page),
-      page_size: String(pageSize),
-    })
-    if (status) params.set('status', status)
-    return api.get<PaginatedResponse<Investigation>>(`/api/v1/investigations/?${params}`)
-  },
-  create: (data: InvestigationCreate) => api.post<Investigation>('/api/v1/investigations/', data),
-  get: (id: number) => api.get<Investigation>(`/api/v1/investigations/${id}`),
-  /**
-   * Update investigation with partial data.
-   * Returns updated investigation on success.
-   */
-  update: (id: number, data: InvestigationUpdate) =>
-    api.patch<Investigation>(`/api/v1/investigations/${id}`, data),
-  /**
-   * Autosave investigation with version-based optimistic locking.
-   * Returns 409 CONFLICT if version mismatch (stale data).
-   */
-  autosave: (id: number, data: InvestigationAutosave) =>
-    api.patch<Investigation>(`/api/v1/investigations/${id}/autosave`, data),
-  /**
-   * Create investigation from source record using proper JSON body.
-   * Returns 201 on success, 404 if source not found, 409 if already investigated.
-   */
-  createFromRecord: (data: CreateFromRecordRequest) =>
-    api.post<Investigation>('/api/v1/investigations/from-record', data),
-  /**
-   * List source records available for investigation creation.
-   * Records with investigation_id !== null are already investigated.
-   */
-  listSourceRecords: (
-    source_type: string,
-    options?: { q?: string; page?: number; size?: number },
-  ) => {
-    const params = new URLSearchParams({ source_type })
-    if (options?.q) params.set('q', options.q)
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.size) params.set('page_size', String(options.size))
-    return api.get<SourceRecordsResponse>(`/api/v1/investigations/source-records?${params}`)
-  },
-
-  // ============ Stage 1 Endpoints ============
-
-  /**
-   * Get timeline events for an investigation.
-   * Ordered by created_at DESC, id DESC.
-   */
-  getTimeline: (id: number, options?: { page?: number; page_size?: number; type?: string }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    if (options?.type) params.set('event_type', options.type)
-    return api.get<TimelineResponse>(`/api/v1/investigations/${id}/timeline?${params}`)
-  },
-
-  /**
-   * Get comments for an investigation.
-   * Ordered by created_at DESC, id DESC.
-   */
-  getComments: (id: number, options?: { page?: number; page_size?: number }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    return api.get<CommentsResponse>(`/api/v1/investigations/${id}/comments?${params}`)
-  },
-
-  /**
-   * Add a comment to an investigation.
-   */
-  addComment: (id: number, body: string) =>
-    api.post<InvestigationComment>(`/api/v1/investigations/${id}/comments`, {
-      content: body,
-    }),
-
-  /**
-   * Get customer pack summaries for an investigation.
-   * Does NOT include full content for security.
-   */
-  getPacks: (id: number, options?: { page?: number; page_size?: number }) => {
-    const params = new URLSearchParams()
-    if (options?.page) params.set('page', String(options.page))
-    if (options?.page_size) params.set('page_size', String(options.page_size))
-    return api.get<PacksResponse>(`/api/v1/investigations/${id}/packs?${params}`)
-  },
-
-  /**
-   * Generate a new customer pack for an investigation.
-   */
-  generatePack: (id: number, audience: string) =>
-    api.post<GeneratedCustomerPack>(
-      `/api/v1/investigations/${id}/customer-pack?audience=${encodeURIComponent(audience)}`,
-    ),
-
-  /**
-   * Get closure validation status for an investigation.
-   */
-  getClosureValidation: (id: number) =>
-    api.get<ClosureValidation>(`/api/v1/investigations/${id}/closure-validation`),
-}
+// ============ Investigation Types (extracted: investigationsClient.ts) ============
+export type {
+  Investigation,
+  InvestigationCreate,
+  CreateFromRecordRequest,
+  CreateFromRecordError,
+  SourceRecordItem,
+  SourceRecordsResponse,
+  InvestigationUpdate,
+  InvestigationAutosave,
+  TimelineEvent,
+  TimelineResponse,
+  InvestigationComment,
+  CommentsResponse,
+  CustomerPackSummary,
+  PacksResponse,
+  GeneratedCustomerPack,
+  ClosureValidation,
+} from './investigationsClient'
+export const investigationsApi = createInvestigationsApi(api)
 
 export const standardsApi = {
   list: (page = 1, size = 10) =>
@@ -2133,74 +1846,8 @@ export const standardsApi = {
     api.get<ComplianceScore>(`/api/v1/standards/${standardId}/compliance-score`),
 }
 
-/**
- * Action update payload - all fields optional for partial updates.
- */
-export interface ActionUpdate {
-  title?: string
-  description?: string
-  action_type?: string
-  priority?: string
-  status?: string
-  due_date?: string
-  assigned_to_email?: string
-  completion_notes?: string
-}
-
-/** Time-stamped owner commentary on a unified action (from GET/POST .../by-key/notes). */
-export interface ActionOwnerNote {
-  id: number
-  action_key: string
-  body: string
-  author_id: number
-  author_email?: string
-  created_at: string
-}
-
-export interface ActionOwnerNoteListResponse {
-  items: ActionOwnerNote[]
-}
-
-export const actionsApi = {
-  /**
-   * List all actions with pagination and optional filters.
-   * Actions are returned sorted by created_at descending for stable ordering.
-   */
-  list: (page = 1, pageSize = 10, status?: string, source_type?: string, source_id?: number) =>
-    api.get<PaginatedResponse<Action>>(
-      `/api/v1/actions/?page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ''}${source_type ? `&source_type=${source_type}` : ''}${source_id ? `&source_id=${source_id}` : ''}`,
-    ),
-  /** Tenant-wide totals by display_status (not limited to first page). */
-  summary: () => api.get<ActionsSummary>('/api/v1/actions/summary'),
-  /**
-   * Create a new action linked to a source entity.
-   */
-  create: (data: ActionCreate) => api.post<Action>('/api/v1/actions/', data),
-  /**
-   * Get a single action by ID. Requires source_type.
-   */
-  get: (id: number, source_type: string) =>
-    api.get<Action>(`/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`),
-  /** Resolve by stable action_key from list responses. */
-  getByKey: (key: string) =>
-    api.get<Action>(`/api/v1/actions/by-key?key=${encodeURIComponent(key)}`),
-  /**
-   * Update an action with partial data. Requires source_type.
-   * Returns 404 if not found, 400 for validation errors.
-   */
-  update: (id: number, source_type: string, data: ActionUpdate) =>
-    api.patch<Action>(
-      `/api/v1/actions/${id}?source_type=${encodeURIComponent(source_type)}`,
-      data,
-    ),
-  /** Owner commentary for an action; newest first. */
-  listOwnerNotes: (actionKey: string, limit = 100) =>
-    api.get<ActionOwnerNoteListResponse>(
-      `/api/v1/actions/by-key/notes?key=${encodeURIComponent(actionKey)}&limit=${limit}`,
-    ),
-  appendOwnerNote: (actionKey: string, body: string) =>
-    api.post<ActionOwnerNote>('/api/v1/actions/by-key/notes', { key: actionKey, body }),
-}
+// ============ Actions API (extracted: actionsClient.ts) ============
+export const actionsApi = createActionsApi(api)
 
 // ============ Planet Mark Types ============
 

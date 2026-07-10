@@ -518,14 +518,14 @@ export default function Notifications() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3
+                            <h2
                               className={cn(
-                                'font-semibold truncate',
+                                'font-semibold truncate text-base',
                                 notification.read ? 'text-muted-foreground' : 'text-foreground',
                               )}
                             >
                               {notification.title}
-                            </h3>
+                            </h2>
                             {notification.module && (
                               <Badge variant="secondary">{notification.module}</Badge>
                             )}
@@ -568,8 +568,9 @@ export default function Notifications() {
                           size="sm"
                           onClick={() => void deleteNotification(notification.id)}
                           className="text-destructive hover:text-destructive"
+                          aria-label={t('notifications.delete', 'Delete notification')}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" aria-hidden="true" />
                         </Button>
                       </div>
                     </div>
