@@ -1,6 +1,8 @@
 """Google Gemini AI service for intelligent template generation and analysis.
 
-Uses Gemini 2.5 Pro Preview (with grounding/web search) for:
+Uses Gemini via the google-genai SDK (GA). Kill switch: USE_GOOGLE_GENAI=0.
+
+Supports:
 - Document-to-template conversion (OCR + structured extraction)
 - Web search enrichment for manufacturer recommendations
 - Template-from-template conversion (compliance -> competency assessment)
@@ -12,7 +14,6 @@ Uses Gemini 2.5 Pro Preview (with grounding/web search) for:
 import asyncio
 import json
 import logging
-import mimetypes
 import os
 import tempfile
 from pathlib import Path
@@ -26,8 +27,9 @@ logger = logging.getLogger(__name__)
 
 _gemini_cb = CircuitBreaker("gemini_ai", failure_threshold=5, recovery_timeout=60)
 
-GEMINI_MODEL = "gemini-2.5-pro-preview-05-06"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
+USE_GOOGLE_GENAI = os.environ.get("USE_GOOGLE_GENAI", "1").strip().lower() not in {"0", "false", "no", "off"}
 
 
 class GeminiAIService:
@@ -38,14 +40,17 @@ class GeminiAIService:
         self._client = None
 
     def _get_client(self):
+        if not USE_GOOGLE_GENAI:
+            return None
+        if not (self.api_key or "").strip():
+            return None
         if self._client is None:
             try:
-                import google.generativeai as genai
+                from google import genai
 
-                genai.configure(api_key=self.api_key)
-                self._client = genai.GenerativeModel(GEMINI_MODEL)
+                self._client = genai.Client(api_key=self.api_key)
             except ImportError:
-                logger.warning("google-generativeai not installed; AI features disabled")
+                logger.warning("google-genai not installed; AI features disabled")
                 return None
             except Exception as e:
                 logger.error("Failed to initialise Gemini client: %s", e)
@@ -92,7 +97,7 @@ Rules:
 - Only return JSON, no markdown fences."""
 
         def _run():
-            response = client.generate_content(prompt)
+            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
             return response.text
 
         text = await _gemini_cb.call(asyncio.to_thread, _run)
@@ -146,15 +151,12 @@ Return a JSON object with this exact structure:
 Only return valid JSON, no markdown formatting."""
 
         def _run():
-            import google.generativeai as genai
-
-            mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
             with tempfile.NamedTemporaryFile(suffix=Path(filename).suffix or ".bin", delete=False) as tmp:
                 tmp.write(file_content)
                 tmp_path = tmp.name
             try:
-                uploaded = genai.upload_file(path=tmp_path, display_name=filename, mime_type=mime_type)
-                response = client.generate_content([prompt, uploaded])
+                uploaded = client.files.upload(file=tmp_path)
+                response = client.models.generate_content(model=GEMINI_MODEL, contents=[prompt, uploaded])
                 return response.text
             finally:
                 os.unlink(tmp_path)
@@ -219,13 +221,12 @@ Return as JSON:
 Only return valid JSON."""
 
         def _run():
-            # Grounding/web search blocked by SDK limitation; current SDK does not
-            # support Tool(google_search=True). Use standard generation without grounding.
-            from google.generativeai import GenerationConfig
+            from google.genai import types
 
-            response = client.generate_content(
-                prompt,
-                generation_config=GenerationConfig(temperature=0.2),
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.2),
             )
             return response.text
 
@@ -268,7 +269,7 @@ Return the converted template in the same JSON structure but with assessment-foc
 Only return valid JSON."""
 
         def _run():
-            response = client.generate_content(prompt)
+            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
             return response.text
 
         try:
@@ -316,7 +317,7 @@ Return as JSON:
 Only return valid JSON."""
 
         def _run():
-            response = client.generate_content(prompt)
+            response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
             return response.text
 
         try:
@@ -391,13 +392,12 @@ Return as JSON:
 Only return valid JSON."""
 
         def _run():
-            # Grounding/web search blocked by SDK limitation; current SDK does not
-            # support Tool(google_search=True). Use standard generation without grounding.
-            from google.generativeai import GenerationConfig
+            from google.genai import types
 
-            response = client.generate_content(
-                prompt,
-                generation_config=GenerationConfig(temperature=0.3),
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.3),
             )
             return response.text
 

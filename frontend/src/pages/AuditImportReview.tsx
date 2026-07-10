@@ -1262,12 +1262,14 @@ export default function AuditImportReview() {
 
       {(() => {
         const prov = job?.provenance_json ?? {}
-        const orgName = String(prov.organization_name ?? prov.declared_organization_name ?? '')
-        const auditorName = String(prov.auditor_name ?? '')
-        const auditType = String(prov.audit_type ?? '')
-        const certNo = String(prov.certificate_number ?? '')
-        const scope = String(prov.audit_scope ?? '')
-        const nextDate = String(prov.next_audit_date ?? '')
+        const orgName = String(
+          job?.organization_name ?? prov.organization_name ?? prov.declared_organization_name ?? '',
+        )
+        const auditorName = String(job?.auditor_name ?? prov.auditor_name ?? '')
+        const auditType = String(job?.audit_type ?? prov.audit_type ?? '')
+        const certNo = String(job?.certificate_number ?? prov.certificate_number ?? '')
+        const scope = String(job?.audit_scope ?? prov.audit_scope ?? '')
+        const nextDate = String(job?.next_audit_date ?? prov.next_audit_date ?? '')
         const siteName = String(prov.site_name ?? '')
         const siteAddr = String(prov.site_address ?? '')
         const hasAny = orgName || auditorName || auditType || certNo || scope || nextDate
@@ -2091,6 +2093,14 @@ function ProvenanceDetail({ provenance }: { provenance: Record<string, unknown> 
   const trigger = provenance.trigger ? String(provenance.trigger) : null
   const aiConfidence = provenance.ai_confidence != null ? String(provenance.ai_confidence) : null
   const aiProvider = provenance.ai_provider ? String(provenance.ai_provider) : null
+  const clauseRef = provenance.clause_reference ? String(provenance.clause_reference) : null
+  const cadDeadline = provenance.corrective_action_deadline
+    ? String(provenance.corrective_action_deadline)
+    : null
+  const consensus = provenance._consensus ? String(provenance._consensus) : null
+  const providers = Array.isArray(provenance._providers)
+    ? (provenance._providers as string[]).join(', ')
+    : null
 
   return (
     <div className="border-t border-border p-3 text-xs text-muted-foreground space-y-1">
@@ -2103,6 +2113,23 @@ function ProvenanceDetail({ provenance }: { provenance: Record<string, unknown> 
       )}
       {aiConfidence && <p>AI raw confidence: {aiConfidence}</p>}
       {aiProvider && <p>AI provider: {aiProvider}</p>}
+      {clauseRef && <p>Clause reference: {clauseRef}</p>}
+      {cadDeadline && <p>Corrective action deadline: {cadDeadline}</p>}
+      {consensus && (
+        <p>
+          Consensus:{' '}
+          <span
+            className={
+              consensus === 'agreed'
+                ? 'font-semibold text-emerald-600'
+                : 'font-semibold text-amber-600'
+            }
+          >
+            {consensus === 'agreed' ? 'Confirmed by multiple providers' : 'Single source'}
+          </span>
+        </p>
+      )}
+      {providers && <p>Providers: {providers}</p>}
     </div>
   )
 }

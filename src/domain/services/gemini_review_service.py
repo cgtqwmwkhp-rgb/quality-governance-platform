@@ -1,8 +1,10 @@
-"""Gemini 2.5 Pro multimodal review service for audit document analysis.
+"""Gemini multimodal review service for audit document analysis.
 
 Provides an independent second-opinion analysis by sending the raw PDF
 to Gemini, which can visually interpret colors, checkmarks, table layouts,
 stamps, and other visual elements that text-only extraction misses.
+
+Uses the google-genai SDK (GA). Kill switch: USE_GOOGLE_GENAI=0.
 """
 
 from __future__ import annotations
@@ -10,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import mimetypes
 import os
 import tempfile
 from pathlib import Path
@@ -24,8 +25,9 @@ logger = logging.getLogger(__name__)
 
 _gemini_review_cb = CircuitBreaker("gemini_review", failure_threshold=5, recovery_timeout=300)
 
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
 GEMINI_API_KEY_ENV = "GOOGLE_GEMINI_API_KEY"
+USE_GOOGLE_GENAI = os.environ.get("USE_GOOGLE_GENAI", "1").strip().lower() not in {"0", "false", "no", "off"}
 MAX_PDF_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB hard limit
 GEMINI_TIMEOUT_SECONDS = 120
 _VALID_SEVERITIES = frozenset({"low", "medium", "high", "critical"})
@@ -190,7 +192,7 @@ Rules:
 
 
 class GeminiReviewService:
-    """Independent multimodal audit document reviewer using Gemini 2.5 Pro."""
+    """Independent multimodal audit document reviewer using google-genai."""
 
     def __init__(self) -> None:
         from src.core.config import settings
@@ -200,24 +202,16 @@ class GeminiReviewService:
 
     @property
     def is_configured(self) -> bool:
-        return bool((self.api_key or "").strip())
+        return bool(USE_GOOGLE_GENAI and (self.api_key or "").strip())
 
     def _get_client(self):
         if self._client is None:
             try:
-                import google.generativeai as genai
+                from google import genai
 
-                genai.configure(api_key=self.api_key)
-                self._client = genai.GenerativeModel(
-                    GEMINI_MODEL,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.1,
-                        max_output_tokens=8192,
-                        response_mime_type="application/json",
-                    ),
-                )
+                self._client = genai.Client(api_key=self.api_key)
             except ImportError:
-                logger.warning("google-generativeai not installed; Gemini review disabled")
+                logger.warning("google-genai not installed; Gemini review disabled")
                 return None
             except Exception as e:
                 logger.error("Failed to initialise Gemini review client: %s", e)
@@ -271,16 +265,23 @@ class GeminiReviewService:
         )
 
         def _run():
-            import google.generativeai as genai  # noqa: F811
+            from google.genai import types
 
-            mime = mimetypes.guess_type(filename)[0] or content_type
             suffix = Path(filename).suffix or ".pdf"
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                 tmp.write(raw_pdf)
                 tmp_path = tmp.name
             try:
-                uploaded = genai.upload_file(path=tmp_path, display_name=filename, mime_type=mime)
-                response = client.generate_content([user_message, uploaded])
+                uploaded = client.files.upload(file=tmp_path)
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=[user_message, uploaded],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    ),
+                )
                 return response.text
             finally:
                 os.unlink(tmp_path)
