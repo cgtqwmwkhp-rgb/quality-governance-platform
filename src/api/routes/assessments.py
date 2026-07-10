@@ -5,15 +5,15 @@ REST endpoints for competency assessment runs and responses.
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.assessment import (
     AssessmentResponseCreate,
     AssessmentResponseResponse,
@@ -35,6 +35,7 @@ from src.domain.models.assessment import (
 )
 from src.domain.models.audit import AuditQuestion, AuditTemplate
 from src.domain.models.engineer import CompetencyLifecycleState, CompetencyRecord, Engineer
+from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService
@@ -187,7 +188,7 @@ async def list_assessment_runs(
 async def create_assessment_run(
     data: AssessmentRunCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:create"))],
 ):
     """Create an assessment run. Reference number is auto-generated as ASM-YYYY-NNNN."""
     supervisor_check = await GovernanceService.validate_supervisor(
@@ -265,7 +266,7 @@ async def update_assessment_run(
     run_id: str,
     data: AssessmentRunUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Update an assessment run."""
     query = select(AssessmentRun).where(AssessmentRun.id == run_id)
@@ -296,7 +297,7 @@ async def update_assessment_run(
 async def start_assessment(
     run_id: str,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Start an assessment run."""
     query = select(AssessmentRun).where(AssessmentRun.id == run_id)
@@ -322,7 +323,7 @@ async def start_assessment(
 async def complete_assessment(
     run_id: str,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Complete an assessment and run CompetencyScoringService."""
     query = select(AssessmentRun).options(selectinload(AssessmentRun.responses)).where(AssessmentRun.id == run_id)
@@ -478,7 +479,7 @@ async def create_assessment_response(
     run_id: str,
     data: AssessmentResponseCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Create an assessment response for a run."""
     query = select(AssessmentRun).where(AssessmentRun.id == run_id)
@@ -549,7 +550,7 @@ async def update_assessment_response(
     response_id: str,
     data: AssessmentResponseUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("assessment:update"))],
 ):
     """Update an assessment response."""
     query = (
