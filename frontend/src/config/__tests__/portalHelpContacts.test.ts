@@ -11,16 +11,16 @@ describe('getPortalHelpContacts', () => {
     return mod.getPortalHelpContacts
   }
 
-  it('uses safe defaults and hides the phone link when no phone is configured', async () => {
+  it('fail-closes chat/phone placeholders and keeps documented email default', async () => {
     const getPortalHelpContacts = await loadContacts()
 
     expect(getPortalHelpContacts()).toEqual({
       phone: '',
       email: 'safety@plantexpand.com',
-      chatUrl: '#chat',
+      chatUrl: '',
       phoneHref: null,
       emailHref: 'mailto:safety@plantexpand.com',
-      chatHref: '#chat',
+      chatHref: null,
     })
   })
 
@@ -47,5 +47,13 @@ describe('getPortalHelpContacts', () => {
     const getPortalHelpContacts = await loadContacts()
 
     expect(getPortalHelpContacts().phoneHref).toBeNull()
+  })
+
+  it('rejects hash-only chat placeholders', async () => {
+    vi.stubEnv('VITE_PORTAL_HELP_CHAT_URL', '#chat')
+
+    const getPortalHelpContacts = await loadContacts()
+
+    expect(getPortalHelpContacts().chatHref).toBeNull()
   })
 })
