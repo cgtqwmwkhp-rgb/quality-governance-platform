@@ -38,7 +38,7 @@ def test_migration_enforces_only_when_all_jobs_are_attributed():
 
 def test_migration_chains_from_audit_runs_and_never_invents_tenant():
     body = MIGRATION_PATH.read_text(encoding="utf-8")
-    assert 'revision: str = "20260710_external_audit_import_jobs_tenant_nn"' in body
+    assert 'revision: str = "20260710_ext_audit_tenant_nn"' in body
     assert 'down_revision: Union[str, Sequence[str], None] = "20260710_inv_pack_nn"' in body
     assert 'TABLE = "external_audit_import_jobs"' in body
     assert 'PARENT = "audit_runs"' in body
