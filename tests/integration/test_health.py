@@ -249,3 +249,33 @@ async def test_root_readyz_includes_push_vapid_status(client: AsyncClient, monke
     assert data.get("push") == "configured"
     assert data.get("vapid", {}).get("status") == "configured"
     assert data.get("vapid", {}).get("public_key_present") is True
+
+
+@pytest.mark.asyncio
+async def test_root_readyz_includes_email_configured(client: AsyncClient, monkeypatch):
+    """Lane 1: /readyz reports email_configured without failing readiness when SMTP missing."""
+    monkeypatch.delenv("EMAIL_ENABLED", raising=False)
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+
+    response = await client.get("/readyz")
+    assert response.status_code in [200, 503]
+    data = response.json()
+    assert data.get("email_configured") is False
+    assert data.get("email", {}).get("status") == "not_configured"
+    assert data.get("email", {}).get("email_enabled") is False
+
+
+@pytest.mark.asyncio
+async def test_api_health_readyz_email_misconfigured_when_enabled(client: AsyncClient, monkeypatch):
+    """EMAIL_ENABLED without SMTP is honest misconfigured; readiness HTTP status unchanged."""
+    monkeypatch.setenv("EMAIL_ENABLED", "true")
+    monkeypatch.delenv("SMTP_USER", raising=False)
+    monkeypatch.delenv("SMTP_PASSWORD", raising=False)
+
+    response = await client.get("/api/v1/health/readyz")
+    assert response.status_code in [200, 503]
+    checks = response.json().get("checks", {})
+    assert checks.get("email_configured") is False
+    assert checks.get("email", {}).get("status") == "misconfigured"
+    assert checks.get("email", {}).get("email_enabled") is True

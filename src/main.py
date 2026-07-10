@@ -586,10 +586,12 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06: informational only — missing VAPID must not flip readiness to 503
+    # WCS-B06 / Lane-1 email: informational only — missing VAPID/SMTP must not flip readiness to 503
+    from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
 
     vapid = get_vapid_readiness()
+    email = get_email_readiness()
     payload = {
         "status": overall,
         "database": db_status,
@@ -601,6 +603,15 @@ async def readiness_check(request: Request):
             "private_key_present": vapid["private_key_present"],
             "library": vapid["library"],
         },
+        "email_configured": email["email_configured"],
+        "email": {
+            "status": email["status"],
+            "email_enabled": email["email_enabled"],
+            "email_configured": email["email_configured"],
+            "smtp_user_present": email["smtp_user_present"],
+            "smtp_password_present": email["smtp_password_present"],
+            "from_email_present": email["from_email_present"],
+        },
         "request_id": request_id,
     }
     if redis_status == "not_configured" and settings.is_redis_required:
@@ -610,4 +621,6 @@ async def readiness_check(request: Request):
         )
     if vapid.get("note"):
         payload["push_note"] = vapid["note"]
+    if email.get("note"):
+        payload["email_note"] = email["note"]
     return JSONResponse(content=payload, status_code=status_code)
