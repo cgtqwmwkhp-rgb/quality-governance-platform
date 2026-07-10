@@ -14,7 +14,7 @@ Mapping of application routes to accessibility testing status.
 
 | # | Route | Priority | axe Test | Lighthouse | Manual | Status |
 |---|-------|----------|----------|------------|--------|--------|
-| 1 | `/login` | P0 | Done | `Login.a11y.test.tsx` (real page), Playwright P0 | Pending | Covered |
+| 1 | `/login` | P0 | Done | `Login.a11y.test.tsx; Documents.a11y.test.tsx` (real page), Playwright P0 | Pending | Covered |
 | 2 | `/dashboard` | P0 | Yes | Yes | Pending | Covered |
 | 3 | `/incidents` | P0 | Yes | — | Pending | Covered |
 | 4 | `/incidents/:id` | P0 | Yes | — | Pending | Covered |
