@@ -69,9 +69,7 @@ def get_sms_readiness() -> dict[str, Any]:
     elif status == "disabled":
         payload["note"] = "SMS_ENABLED=false; outbound SMS is explicitly disabled."
     elif status == "configured" and library == "missing":
-        payload["note"] = (
-            "Twilio credentials are set but the twilio package is not installed; SMS sends will fail."
-        )
+        payload["note"] = "Twilio credentials are set but the twilio package is not installed; SMS sends will fail."
     elif status == "configured" and not from_number:
         payload["note"] = (
             "Twilio credentials are present but TWILIO_FROM_NUMBER is unset; "
