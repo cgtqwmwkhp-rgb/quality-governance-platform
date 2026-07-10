@@ -1,11 +1,11 @@
 {
-  "release_sha": "35c8d6b3d47051e93918ddc4bfc454c1bb5eea1c",
+  "release_sha": "97a6ea8306f9cd8d7b114b914bfd932121fe1161",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip 35c8d6b \u2014 #620 investigation_actions TEN2 fail-safe NOT NULL.",
-  "approved_at_utc": "2026-07-10T14:06:18+00:00"
+  "notes": "Release signoff for tip 97a6ea83 \u2014 Path-to-10 Lane 2: #632 TenantContextMiddleware + FORCE RLS; #633 investigation_runs tenant_id fail-safe NOT NULL.",
+  "approved_at_utc": "2026-07-10T17:04:43+00:00"
 }
