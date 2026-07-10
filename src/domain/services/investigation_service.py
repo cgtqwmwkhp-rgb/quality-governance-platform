@@ -477,8 +477,19 @@ class InvestigationService:
         new_value: Optional[Any] = None,
         metadata: Optional[Dict] = None,
     ) -> InvestigationRevisionEvent:
-        """Create a revision event for audit trail."""
+        """Create a revision event for audit trail.
+
+        tenant_id is required (NOT NULL) and inherited from the parent investigation.
+        Never invent a default tenant.
+        """
+        if investigation.tenant_id is None:
+            raise ValidationError(
+                "tenant_id is required to create an investigation revision event",
+                details={"investigation_id": investigation.id},
+            )
+
         event = InvestigationRevisionEvent(
+            tenant_id=investigation.tenant_id,
             investigation_id=investigation.id,
             event_type=event_type,
             field_path=field_path,

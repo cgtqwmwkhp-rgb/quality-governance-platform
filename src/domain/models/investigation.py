@@ -269,12 +269,15 @@ class InvestigationComment(Base, TimestampMixin):
 class InvestigationRevisionEvent(Base, TimestampMixin):
     """Audit trail for investigation changes.
 
+    tenant_id is fail-safe NOT NULL when attributable from investigation_runs
+    (WCS-TEN2 / C-01 Phase 2).
+
     Revision events are INTERNAL ONLY - never included in customer packs.
     """
 
     __tablename__ = "investigation_revision_events"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
