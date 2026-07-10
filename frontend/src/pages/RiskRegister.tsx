@@ -30,6 +30,7 @@ import {
 } from '../components/ui/Dialog'
 import { riskRegisterApi } from '../api/client'
 import { toast } from '../contexts/ToastContext'
+import { useFeatureFlag } from '../hooks/useFeatureFlag'
 
 interface Risk {
   id: number
@@ -98,6 +99,7 @@ const TREATMENT_STRATEGIES = [
 export default function RiskRegister() {
   const { t } = useTranslation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const bowtieEnabled = useFeatureFlag('risk_bowtie')
   const [view, setView] = useState<'register' | 'heatmap' | 'bowtie'>('register')
   const [risks, setRisks] = useState<Risk[]>([])
   const [heatMapData, setHeatMapData] = useState<HeatMapData | null>(null)
@@ -579,13 +581,15 @@ export default function RiskRegister() {
           <BarChart3 className="w-4 h-4" />
           Heat Map
         </Button>
-        <Button
-          variant={view === 'bowtie' ? 'default' : 'secondary'}
-          onClick={() => setView('bowtie')}
-        >
-          <GitBranch className="w-4 h-4" />
-          Bow-Tie Analysis
-        </Button>
+        {bowtieEnabled && (
+          <Button
+            variant={view === 'bowtie' ? 'default' : 'secondary'}
+            onClick={() => setView('bowtie')}
+          >
+            <GitBranch className="w-4 h-4" />
+            Bow-Tie Analysis
+          </Button>
+        )}
       </div>
 
       {/* Register View */}
@@ -889,7 +893,7 @@ export default function RiskRegister() {
       )}
 
       {/* Bow-Tie View */}
-      {view === 'bowtie' && (
+      {bowtieEnabled && view === 'bowtie' && (
         <Card>
           <CardContent className="p-6">
             <h2 className="text-xl font-bold mb-6 text-foreground">Bow-Tie Analysis</h2>

@@ -82,3 +82,15 @@ Honesty checks (do **not** fake send):
 - `python scripts/smoke/check_email_config.py` exits **1** when `EMAIL_ENABLED` is set but SMTP credentials are missing
 
 As of Lane 1 cutover, **neither** `kv-qgp-staging` nor `kv-qgp-prod` contained `SMTP-*` secrets — create them before claiming email LIVE.
+
+## Outbound SMS (Twilio) — optional
+
+| Setting | Required for send | Notes |
+|---------|-------------------|-------|
+| `TWILIO_ACCOUNT_SID` | Yes | Account SID — Key Vault preferred |
+| `TWILIO_AUTH_TOKEN` | Yes | Secret — never invent; leave unset until real |
+| `TWILIO_FROM_NUMBER` | Yes | E.164 sender |
+| `SMS_ENABLED` | No | Optional explicit enable/disable |
+
+`/readyz` exposes `sms_configured`, `sms.status`, and a `channels` summary (`email` / `sms` / `push`). Missing Twilio must not invent credentials or flip readiness HTTP status.
+
