@@ -837,6 +837,38 @@ class ExternalAuditImportService:
                     max(0.0, min(analysis.score_percentage, 100.0)) if analysis.score_percentage is not None else None
                 )
                 job.outcome_status = analysis.outcome_status
+
+                if ai_result and getattr(ai_result, "provider_status", None) == "completed":
+                    job.organization_name = ai_result.organization_name or job.organization_name
+                    job.auditor_name = ai_result.auditor_name or job.auditor_name
+                    job.audit_type = ai_result.audit_type or job.audit_type
+                    job.certificate_number = ai_result.certificate_number or job.certificate_number
+                    job.audit_scope = ai_result.audit_scope or job.audit_scope
+                    if ai_result.next_audit_date:
+                        try:
+                            job.next_audit_date = datetime.strptime(
+                                str(ai_result.next_audit_date)[:10], "%Y-%m-%d"
+                            ).replace(tzinfo=timezone.utc)
+                        except (ValueError, TypeError):
+                            pass
+                    # Keep provenance in sync for UI that reads metadata from provenance_json
+                    meta_keys = (
+                        "organization_name",
+                        "auditor_name",
+                        "audit_type",
+                        "certificate_number",
+                        "audit_scope",
+                        "next_audit_date",
+                        "site_name",
+                        "site_address",
+                    )
+                    prov = dict(job.provenance_json or {})
+                    for key in meta_keys:
+                        val = getattr(ai_result, key, None)
+                        if val:
+                            prov[key] = val
+                    job.provenance_json = prov
+
                 job.classification_basis_json = analysis.classification_basis
                 job.score_breakdown_json = analysis.score_breakdown or None
                 job.evidence_preview_json = analysis.evidence_preview or None

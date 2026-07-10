@@ -569,6 +569,10 @@ class ExternalAuditAnalysisService:
                             "analysis_method": "ai_structured",
                             "ai_provider": ai_f.get("_provider", "unknown"),
                             "ai_confidence": ai_conf,
+                            "clause_reference": ai_f.get("clause_reference"),
+                            "corrective_action_deadline": ai_f.get("corrective_action_deadline"),
+                            "_consensus": ai_f.get("_consensus"),
+                            "_providers": ai_f.get("_providers"),
                         },
                     )
                 )
@@ -597,6 +601,12 @@ class ExternalAuditAnalysisService:
                 existing.provenance["ai_confidence"] = ai_conf
                 if ai_f.get("clause_reference"):
                     existing.provenance["clause_reference"] = ai_f["clause_reference"]
+                if ai_f.get("corrective_action_deadline"):
+                    existing.provenance["corrective_action_deadline"] = ai_f["corrective_action_deadline"]
+                if ai_f.get("_consensus"):
+                    existing.provenance["_consensus"] = ai_f["_consensus"]
+                if ai_f.get("_providers"):
+                    existing.provenance["_providers"] = ai_f["_providers"]
                 return True
         return False
 
