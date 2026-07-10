@@ -134,8 +134,7 @@ class TestLoginReliability:
                     redis_status = body["checks"].get("redis")
                 if redis_status == "degraded":
                     pytest.skip(
-                        "Remote /readyz returned 503 with redis=degraded "
-                        "(environment flake; not a PR regression)"
+                        "Remote /readyz returned 503 with redis=degraded " "(environment flake; not a PR regression)"
                     )
 
             assert response.status_code == 200, f"{endpoint} returned {response.status_code}"
