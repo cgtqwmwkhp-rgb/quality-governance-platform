@@ -23,7 +23,6 @@ const RTADetail = lazy(() => import('./pages/RTADetail'))
 const Complaints = lazy(() => import('./pages/Complaints'))
 const ComplaintDetail = lazy(() => import('./pages/ComplaintDetail'))
 const Policies = lazy(() => import('./pages/Policies'))
-const Risks = lazy(() => import('./pages/Risks'))
 const Audits = lazy(() => import('./pages/Audits'))
 const Investigations = lazy(() => import('./pages/Investigations'))
 const InvestigationDetail = lazy(() => import('./pages/InvestigationDetail'))
@@ -167,6 +166,11 @@ function RouteErrorBoundary() {
       <AnimatedOutlet />
     </ErrorBoundary>
   )
+}
+
+function RedirectToRiskRegister() {
+  const { search } = useLocation()
+  return <Navigate to={`/risk-register${search}`} replace />
 }
 
 function App() {
@@ -322,7 +326,8 @@ function App() {
                 <Route path="exports" element={<ExportCenter />} />
                 <Route path="documents" element={<Documents />} />
                 <Route path="policies" element={<Policies />} />
-                <Route path="risks" element={<Risks />} />
+                <Route path="risks" element={<RedirectToRiskRegister />} />
+                <Route path="risks/*" element={<RedirectToRiskRegister />} />
               </Route>
 
               {/* Workforce routes */}

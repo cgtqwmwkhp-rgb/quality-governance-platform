@@ -97,7 +97,6 @@ export default function Layout({ onLogout }: LayoutProps) {
       items: [
         { path: '/documents', icon: FolderOpen, label: t('nav.documents') },
         { path: '/policies', icon: FileText, label: t('nav.policies') },
-        { path: '/risks', icon: Shield, label: t('nav.risks') },
       ],
     },
     {
