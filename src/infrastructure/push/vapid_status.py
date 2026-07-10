@@ -54,7 +54,5 @@ def get_vapid_readiness() -> dict[str, Any]:
             "sends are skipped."
         )
     elif library == "missing":
-        payload["note"] = (
-            "VAPID keys are set but pywebpush is not installed; push sends will fail."
-        )
+        payload["note"] = "VAPID keys are set but pywebpush is not installed; push sends will fail."
     return payload
