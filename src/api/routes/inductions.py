@@ -13,7 +13,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.error_codes import ErrorCode
 from src.api.schemas.induction import (
     InductionResponseCreate,
@@ -35,6 +34,7 @@ from src.domain.models.induction import (
     InductionStatus,
     UnderstandingVerdict,
 )
+from src.domain.models.user import User
 from src.domain.services.capa_auto_service import CAPAAutoService
 from src.domain.services.competency_scoring_service import CompetencyScoringService
 from src.domain.services.governance_service import GovernanceService, NotificationService

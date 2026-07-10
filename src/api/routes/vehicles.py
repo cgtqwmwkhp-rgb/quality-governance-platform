@@ -10,13 +10,12 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import Depends, APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.vehicle_registry import (
     ComplianceGateResponse,
     FleetHealthResponse,
@@ -27,6 +26,7 @@ from src.api.schemas.vehicle_registry import (
     VehicleRegistryUpdate,
 )
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
+from src.domain.models.user import User
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.models.vehicle_registry import ComplianceStatus, FleetStatus, VehicleRegistry
 

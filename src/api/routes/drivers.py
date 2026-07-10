@@ -9,12 +9,11 @@ import math
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 
-from fastapi import Depends, APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.driver_profile import (
     AcknowledgementAction,
     AcknowledgementCreate,
@@ -26,6 +25,7 @@ from src.api.schemas.driver_profile import (
 )
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError
 from src.domain.models.driver_profile import AcknowledgementStatus, DriverAcknowledgement, DriverProfile
+from src.domain.models.user import User
 
 logger = logging.getLogger(__name__)
 
