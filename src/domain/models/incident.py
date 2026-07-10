@@ -190,7 +190,9 @@ class IncidentAction(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin
 
     __tablename__ = "incident_actions"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    # Required; inherited from incidents via incident_id.
+    # Migration 20260710_ia_tenant_nn only enforces DB NOT NULL after a fail-safe backfill.
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="CASCADE"), nullable=False, index=True)
 
