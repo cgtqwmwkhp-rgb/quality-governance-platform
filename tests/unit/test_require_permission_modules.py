@@ -54,3 +54,16 @@ def test_audit_primary_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/audits.py")
     assert "audit:create" in perms
     assert "audit:update" in perms
+
+
+def test_complaint_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/complaints.py")
+    assert "complaint:create" in perms
+    assert "complaint:update" in perms
+
+
+def test_rta_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/rtas.py")
+    assert "rta:create" in perms
+    assert "rta:update" in perms
+    assert "rta:delete" in perms

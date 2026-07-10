@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CHANGELOG.md (this file)
 
 ### Security
+- **[P0]** Added `require_permission` guards on complaint and RTA write endpoints (POST/PATCH/DELETE)
 - **[P0]** Restored authentication guards on all tenant management endpoints (`src/api/routes/tenants.py`)
 - **[P0]** Added authentication to all ISO compliance endpoints (`src/api/routes/compliance.py`)
 - **[P0]** Tenant-scoped data isolation on incidents, complaints, risks, near-misses

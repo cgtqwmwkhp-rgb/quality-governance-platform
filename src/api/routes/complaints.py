@@ -1,11 +1,11 @@
 """API routes for complaint management."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.complaint import ComplaintCreate, ComplaintListResponse, ComplaintResponse, ComplaintUpdate
@@ -14,6 +14,7 @@ from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetE
 from src.api.utils.errors import api_error
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.complaint_service import ComplaintService
 from src.infrastructure.monitoring.azure_monitor import track_metric
@@ -25,7 +26,7 @@ router = APIRouter(tags=["Complaints"])
 async def create_complaint(
     complaint_in: ComplaintCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("complaint:create"))],
     request_id: str = Depends(get_request_id),
 ) -> Complaint:
     """
@@ -198,7 +199,7 @@ async def update_complaint(
     complaint_id: int,
     complaint_in: ComplaintUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("complaint:update"))],
     request_id: str = Depends(get_request_id),
 ) -> Complaint:
     """
