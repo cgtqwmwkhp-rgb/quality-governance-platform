@@ -14,6 +14,9 @@ const FEATURE_FLAG_DEFAULTS: Record<string, boolean> = {
   // EXP-001: Autosave for portal forms
   portal_form_autosave: false,
 
+  // CUJ 5.4: Bow-tie UI remains hidden until backed by production data
+  risk_bowtie: false,
+
   // Other feature flags can be added here
   portal_offline_mode: false,
   admin_ai_copilot: false,
