@@ -147,3 +147,16 @@ def test_induction_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/inductions.py")
     assert "induction:create" in perms
     assert "induction:update" in perms
+
+
+def test_asset_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/assets.py")
+    assert "asset:create" in perms
+    assert "asset:update" in perms
+    assert "asset:delete" in perms
+
+
+def test_form_config_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/form_config.py")
+    assert "form:create" in perms
+    assert "form:update" in perms

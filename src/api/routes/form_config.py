@@ -1,14 +1,14 @@
 """Form configuration API routes for admin form builder."""
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import delete
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.form_config import (
     ContractCreate,
@@ -36,6 +36,7 @@ from src.api.schemas.form_config import (
 )
 from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundError
 from src.domain.models.form_config import Contract, FormField, FormStep, FormTemplate, LookupOption, SystemSetting
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 
 router = APIRouter()
@@ -87,6 +88,7 @@ async def create_form_template(
     data: FormTemplateCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Create a new form template."""
@@ -227,6 +229,7 @@ async def update_form_template(
     data: FormTemplateUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Update a form template."""
@@ -270,6 +273,7 @@ async def publish_form_template(
     template_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
     request_id: str = Depends(get_request_id),
 ) -> FormTemplate:
     """Publish a form template to make it available in the portal."""
@@ -309,6 +313,7 @@ async def delete_form_template(
     template_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:delete"))],
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a form template."""
@@ -350,6 +355,7 @@ async def create_form_step(
     data: FormStepCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
 ) -> FormStep:
     """Create a new step in a form template."""
     result = await db.execute(
@@ -406,6 +412,7 @@ async def update_form_step(
     data: FormStepUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
 ) -> FormStep:
     """Update a form step."""
     result = await db.execute(
@@ -434,6 +441,7 @@ async def delete_form_step(
     step_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:delete"))],
 ) -> None:
     """Delete a form step."""
     result = await db.execute(
@@ -464,6 +472,7 @@ async def create_form_field(
     data: FormFieldCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
 ) -> FormField:
     """Create a new field in a form step."""
     result = await db.execute(
@@ -511,6 +520,7 @@ async def update_form_field(
     data: FormFieldUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
 ) -> FormField:
     """Update a form field."""
     result = await db.execute(
@@ -539,6 +549,7 @@ async def delete_form_field(
     field_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:delete"))],
 ) -> None:
     """Delete a form field."""
     result = await db.execute(
@@ -586,6 +597,7 @@ async def create_contract(
     data: ContractCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Create a new contract."""
@@ -658,6 +670,7 @@ async def update_contract(
     data: ContractUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
     request_id: str = Depends(get_request_id),
 ) -> Contract:
     """Update a contract."""
@@ -699,6 +712,7 @@ async def delete_contract(
     contract_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:delete"))],
     request_id: str = Depends(get_request_id),
 ) -> None:
     """Delete a contract."""
@@ -761,6 +775,7 @@ async def create_system_setting(
     data: SystemSettingCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
 ) -> SystemSetting:
     """Create a new system setting."""
     existing = await db.execute(
@@ -798,6 +813,7 @@ async def update_system_setting(
     data: SystemSettingUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
 ) -> SystemSetting:
     """Update a system setting by key."""
     result = await db.execute(
@@ -865,6 +881,7 @@ async def create_lookup_option(
     data: LookupOptionCreate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:create"))],
 ) -> LookupOption:
     """Create a new lookup option."""
     # Ensure category matches
@@ -896,6 +913,7 @@ async def update_lookup_option(
     data: LookupOptionUpdate,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:update"))],
 ) -> LookupOption:
     """Update a lookup option."""
     result = await db.execute(
@@ -926,6 +944,7 @@ async def delete_lookup_option(
     option_id: int,
     db: DbSession,
     current_user: CurrentUser,
+    _: Annotated[User, Depends(require_permission("form:delete"))],
 ) -> None:
     """Delete a lookup option."""
     result = await db.execute(
