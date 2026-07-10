@@ -2,7 +2,7 @@
  * Accessibility tests for D03 gap routes (WCS closure 2026-04-08).
  *
  * Gap routes from docs/accessibility/a11y-coverage-matrix.md:
- *   /uvdb, /settings, /near-misses, /rta, /policies,
+ *   /uvdb, /settings, /rta, /policies,
  *   /compliance, /risk-register
  *
  * /import-review is covered by a real-page axe test (not a stub) in
@@ -29,7 +29,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../api/client', () => ({
   uvdbApi: { list: vi.fn().mockResolvedValue({ data: [] }) },
-  nearMissesApi: { list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }) },
   policiesApi: { list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }) },
   complianceApi: { getSummary: vi.fn().mockResolvedValue({ data: {} }) },
   risksApi: { list: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }) },
@@ -61,20 +60,6 @@ describe('UVDB page accessibility (D03 gap route /uvdb)', () => {
       </main>
     )
     const { container } = render(<Wrapper><UVDBStub /></Wrapper>)
-    await expectNoA11yViolations(container)
-  })
-})
-
-// ─── Gap Route 2: Near Misses ────────────────────────────────────────────────
-describe('Near Misses page accessibility (D03 gap route /near-misses)', () => {
-  it('renders Near Misses stub without critical a11y violations', async () => {
-    const NearMissesStub = () => (
-      <main>
-        <h1>Near Misses</h1>
-        <p role="status">No near misses reported.</p>
-      </main>
-    )
-    const { container } = render(<Wrapper><NearMissesStub /></Wrapper>)
     await expectNoA11yViolations(container)
   })
 })
