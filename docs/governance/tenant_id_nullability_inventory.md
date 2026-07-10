@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 17 |
-| Owned nullable `tenant_id` | 91 |
+| Required `tenant_id` (`nullable=False`) | 18 |
+| Owned nullable `tenant_id` | 90 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **110** |
+| **Nullable total** | **109** |
 
 ## Phase 1 decision
 
@@ -38,6 +38,7 @@ This phase lands:
 | `investigation_comments` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_cmt_nn`). ORM `nullable=False`. See `docs/data/investigation-comments-tenant-backfill.md`. |
 | `investigation_revision_events` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_rev_evt_nn`). ORM `nullable=False`. See `docs/data/investigation-revision-events-tenant-backfill.md`. |
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
+| `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
 | `incidents` / `risks` / `risks_v2` / `risk_assessments` / `complaints` | Deferred | Parent cores remain nullable; child action families hardened incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
@@ -64,6 +65,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `investigation_comments` | `InvestigationComment` |
 | `investigation_revision_events` | `InvestigationRevisionEvent` |
 | `investigation_runs` | `InvestigationRun` |
+| `investigation_customer_packs` | `InvestigationCustomerPack` |
 | `complaint_actions` | `ComplaintAction` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
@@ -136,7 +138,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `induction_runs` | `InductionRun` |
 | `information_assets` | `InformationAsset` |
 | `information_security_risks` | `InformationSecurityRisk` |
-| `investigation_customer_packs` | `InvestigationCustomerPack` |
 | `iso27001_controls` | `ISO27001Control` |
 | `key_risk_indicators` | `EnterpriseKeyRiskIndicator` |
 | `loler_defects` | `LOLERDefect` |

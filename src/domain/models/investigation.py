@@ -319,11 +319,14 @@ class InvestigationCustomerPack(Base, TimestampMixin):
     """Generated customer pack snapshots.
 
     Immutable artifacts with audience-specific redaction applied.
+
+    tenant_id is fail-safe NOT NULL when attributable from investigation_runs
+    (WCS-TEN2 / C-01 Phase 2).
     """
 
     __tablename__ = "investigation_customer_packs"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     investigation_id: Mapped[int] = mapped_column(
         Integer,
