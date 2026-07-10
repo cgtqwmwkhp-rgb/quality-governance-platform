@@ -1,14 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  FileText,
-  Loader2,
-  ShieldCheck,
-} from 'lucide-react'
-import {
   auditsApi,
   externalAuditImportsApi,
   getApiErrorMessage,
@@ -17,14 +9,16 @@ import {
   type ExternalAuditImportJob,
   type ExternalAuditPromotionReconciliation,
 } from '../api/client'
-import { Button } from '../components/ui/Button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
 import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
 import { ImportReviewAuditSummary } from '../components/audit-import/ImportReviewAuditSummary'
 import { ImportReviewEvidenceCard } from '../components/audit-import/ImportReviewEvidenceCard'
+import { ImportReviewHeader } from '../components/audit-import/ImportReviewHeader'
+import { ImportReviewNotices } from '../components/audit-import/ImportReviewNotices'
 import { ImportReviewOverview } from '../components/audit-import/ImportReviewOverview'
+import { ImportReviewProcessingPanels } from '../components/audit-import/ImportReviewProcessingPanels'
+import { ImportReviewPromoteBanner } from '../components/audit-import/ImportReviewPromoteBanner'
 
 import {
   ACTION_FINDING_TYPES,
@@ -403,113 +397,45 @@ export default function AuditImportReview() {
 
   return (
     <div className="space-y-6 p-6 animate-fade-in">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">External Audit Review</h1>
-          <h2 className="sr-only">Import review workspace</h2>
-          <p className="mt-1 text-muted-foreground">
-            OCR and analysis stay in draft until you approve promotion into completed governance
-            outcomes.
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => void handleBulkApprove()}
-            disabled={!job || pendingDraftCount === 0 || isBulkReviewing || isPromoting}
-          >
-            {isBulkReviewing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-            Approve All Pending
-          </Button>
-          <Button variant="outline" onClick={() => navigate(specialistHomePath)} disabled={!job}>
-            <FileText size={16} />
-            {specialistHome.label}
-          </Button>
-          <Button
-            onClick={handlePromoteClick}
-            disabled={
-              promoteableCount === 0 ||
-              isPromoting ||
-              job?.status === 'completed' ||
-              job?.status === 'promoting'
-            }
-          >
-            {isPromoting ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <ShieldCheck size={16} />
-            )}
-            Promote Accepted Drafts
-          </Button>
-        </div>
-      </div>
+      <ImportReviewHeader
+        pendingDraftCount={pendingDraftCount}
+        promoteableCount={promoteableCount}
+        isBulkReviewing={isBulkReviewing}
+        isPromoting={isPromoting}
+        hasJob={Boolean(job)}
+        jobStatus={job?.status}
+        specialistHomeLabel={specialistHome.label}
+        onBulkApprove={() => void handleBulkApprove()}
+        onOpenSpecialistHome={() => navigate(specialistHomePath)}
+        onPromoteClick={handlePromoteClick}
+      />
 
-      {promoteableCount > 0 && job?.status === 'review_required' && !showPromoteConfirm ? (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={16} className="text-amber-600" />
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              <strong>{promoteableCount}</strong> accepted finding(s) ready for promotion.
-              Click <strong>Promote</strong> to write them into the live governance system (actions, risk register, audit records).
-            </p>
-          </div>
-          <Button size="sm" onClick={handlePromoteClick} disabled={isPromoting}>
-            {isPromoting ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-            Promote Now
-          </Button>
-        </div>
-      ) : null}
+      <ImportReviewPromoteBanner
+        promoteableCount={promoteableCount}
+        acceptedActionCandidates={acceptedActionCandidates}
+        acceptedRiskCandidates={acceptedRiskCandidates}
+        acceptedClauseCount={acceptedClauseCount}
+        jobStatus={job?.status}
+        showPromoteConfirm={showPromoteConfirm}
+        isPromoting={isPromoting}
+        onPromoteClick={handlePromoteClick}
+        onCancelConfirm={() => setShowPromoteConfirm(false)}
+        onConfirmPromote={() => void handlePromoteConfirm()}
+      />
 
-      {showPromoteConfirm ? (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  Confirm promotion of {promoteableCount} accepted finding(s)?
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  This will create {promoteableCount} finding(s), {acceptedActionCandidates} corrective action(s),{' '}
-                  {acceptedRiskCandidates} risk escalation(s), and {acceptedClauseCount} evidence link(s) in the
-                  live governance system. This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowPromoteConfirm(false)}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={() => void handlePromoteConfirm()}>
-                Confirm Promote
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {successMessage ? (
-        <Card className="border-emerald-300 bg-emerald-50" role="alert">
-          <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              <p className="text-sm text-emerald-800">{successMessage}</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setSuccessMessage(null)}>
-              Dismiss
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {reconciliationNotice ? (
-        <Card className="border-amber-300 bg-amber-50" role="status">
-          <CardContent className="flex items-center gap-3 p-5">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
-            <p className="text-sm text-amber-900">{reconciliationNotice}</p>
-          </CardContent>
-        </Card>
-      ) : null}
+      <ImportReviewNotices
+        section="pre-proof"
+        successMessage={successMessage}
+        onDismissSuccess={() => setSuccessMessage(null)}
+        reconciliationNotice={reconciliationNotice}
+        error={error}
+        promotionFailedDrafts={promotionFailedDrafts}
+        onRetryLoad={() => void load()}
+        queueNotice={queueNotice}
+        job={job}
+        isQueueing={isQueueing}
+        onRetryQueue={() => void handleRetryQueue()}
+      />
 
       {reconciliation ? (
         <DownstreamWorkflowProof
@@ -518,62 +444,19 @@ export default function AuditImportReview() {
         />
       ) : null}
 
-      {error ? (
-        <Card className="border-destructive/30 bg-destructive/5" role="alert">
-          <CardContent className="space-y-3 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => void load()}>
-                Retry
-              </Button>
-            </div>
-            {promotionFailedDrafts && promotionFailedDrafts.length > 0 ? (
-              <details className="rounded-md border border-destructive/20 bg-background/80 p-3 text-sm">
-                <summary className="cursor-pointer font-medium text-foreground">
-                  First {promotionFailedDrafts.length} draft failure(s) from server
-                </summary>
-                <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
-                  {promotionFailedDrafts.map((row, idx) => (
-                    <li key={`promo-fail-${row.draft_id ?? idx}`}>
-                      {row.draft_id != null ? <>Draft #{row.draft_id}: </> : null}
-                      {row.error_type ? (
-                        <span className="text-foreground">[{row.error_type}] </span>
-                      ) : null}
-                      {row.title ? <span className="text-foreground">{row.title} — </span> : null}
-                      {row.error ?? 'Unknown error'}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {queueNotice ? (
-        <Card className="border-warning/30 bg-warning/5">
-          <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-warning" />
-              <p className="text-sm text-foreground">{queueNotice}</p>
-            </div>
-            {job?.status === 'pending' || job?.status === 'failed' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleRetryQueue()}
-                disabled={isQueueing}
-              >
-                {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}
-                Retry Queue
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+      <ImportReviewNotices
+        section="post-proof"
+        successMessage={successMessage}
+        onDismissSuccess={() => setSuccessMessage(null)}
+        reconciliationNotice={reconciliationNotice}
+        error={error}
+        promotionFailedDrafts={promotionFailedDrafts}
+        onRetryLoad={() => void load()}
+        queueNotice={queueNotice}
+        job={job}
+        isQueueing={isQueueing}
+        onRetryQueue={() => void handleRetryQueue()}
+      />
 
       {job ? (
         <ImportReviewOverview
@@ -597,99 +480,12 @@ export default function AuditImportReview() {
 
       {job ? <ImportReviewAuditSummary job={job} /> : null}
 
-      {isProcessing ? (
-        <Card className="border-primary/30 bg-primary/5" aria-busy="true" role="status">
-          <CardContent className="flex items-center gap-4 p-6">
-            <Loader2 size={24} className="animate-spin text-primary" />
-            <div>
-              <p className="font-medium text-foreground">
-                Processing import&hellip;
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Extracting text, running dual AI analysis (Mistral + Gemini), and generating draft
-                findings. This may take up to five minutes for large documents.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {job &&
-      !isProcessing &&
-      (job.status === 'pending' ||
-        job.status === 'queued' ||
-        job.error_code === 'QUEUE_DISPATCH_FAILED') ? (
-        <Card className="border-warning/30 bg-warning/5">
-          <CardHeader>
-            <CardTitle className="text-base">Processing queue</CardTitle>
-            <CardDescription>
-              This intake exists, but OCR and analysis are not currently running.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-foreground">
-              {job.error_code === 'QUEUE_DISPATCH_FAILED'
-                ? job.error_detail || 'Background processing could not be started automatically.'
-                : 'Retry queueing this import to continue OCR, schema mapping, and reviewer draft generation.'}
-            </p>
-            <Button onClick={() => void handleRetryQueue()} disabled={isQueueing || isProcessing}>
-              {isQueueing ? <Loader2 size={16} className="animate-spin" /> : null}
-              Retry Queue
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {job?.processing_warnings_json?.length ? (
-        <Card className="border-warning/30 bg-warning/5">
-          <CardHeader>
-            <CardTitle className="text-base">Reviewer warnings</CardTitle>
-            <CardDescription>
-              {job.processing_warnings_json.length} item(s) should be checked before promotion.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {job.processing_warnings_json.map((warning, index) => {
-              const text = typeof warning === 'string' ? warning : String((warning as Record<string, unknown>)?.text ?? warning)
-              const isVisual = text.startsWith('Visual:')
-              const isScore = text.toLowerCase().includes('score')
-              const isOutcome = text.toLowerCase().includes('outcome') || text.toLowerCase().includes('disagreement')
-              return (
-                <div
-                  key={`warning-${index}`}
-                  className={`flex items-start gap-2 rounded px-3 py-2 text-sm ${
-                    isOutcome
-                      ? 'bg-red-50 border-l-2 border-red-400 text-red-800'
-                      : isScore
-                        ? 'bg-amber-50 border-l-2 border-amber-400 text-amber-800'
-                        : isVisual
-                          ? 'bg-blue-50 border-l-2 border-blue-400 text-blue-800'
-                          : 'text-foreground'
-                  }`}
-                >
-                  <span className="mt-0.5 text-xs">
-                    {isOutcome ? '!' : isScore ? '#' : isVisual ? '\u25CB' : '\u2022'}
-                  </span>
-                  <span>{text}</span>
-                </div>
-              )
-            })}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {job?.status === 'failed' ? (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardHeader>
-            <CardTitle className="text-base">Import failed</CardTitle>
-            <CardDescription>The import did not reach reviewer-ready status.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-destructive">
-            <p>{job.error_code || 'IMPORT_FAILED'}</p>
-            <p>{job.error_detail || 'Review logs and retry the import job.'}</p>
-          </CardContent>
-        </Card>
-      ) : null}
+      <ImportReviewProcessingPanels
+        job={job}
+        isProcessing={isProcessing}
+        isQueueing={isQueueing}
+        onRetryQueue={() => void handleRetryQueue()}
+      />
 
       {job ? (
         <ImportReviewEvidenceCard
@@ -715,4 +511,3 @@ export default function AuditImportReview() {
     </div>
   )
 }
-
