@@ -10,13 +10,13 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.risk_register import (
     BowTieElement,
@@ -27,6 +27,7 @@ from src.domain.models.risk_register import (
     RiskAssessmentHistory,
     RiskControlMapping,
 )
+from src.domain.models.user import User
 from src.domain.services.risk_service import BowTieService, KRIService, RiskScoringEngine, RiskService
 from src.infrastructure.cache.redis_cache import invalidate_tenant_cache
 
@@ -216,7 +217,7 @@ async def list_risks(
 
 @router.post("/", response_model=dict, status_code=201)
 async def create_risk(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
     risk_data: RiskCreate,
     db: DbSession,
 ) -> dict[str, Any]:
@@ -317,7 +318,7 @@ async def get_bow_tie(
 
 @router.post("/{risk_id}/bowtie/elements", response_model=dict, status_code=201)
 async def add_bow_tie_element(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     element: BowTieElementCreate,
     db: DbSession,
@@ -354,7 +355,7 @@ async def add_bow_tie_element(
 
 @router.delete("/{risk_id}/bowtie/elements/{element_id}", status_code=204)
 async def delete_bow_tie_element(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     element_id: int,
     db: DbSession,
@@ -391,7 +392,7 @@ async def get_kri_dashboard(
 
 @router.post("/kris", response_model=dict, status_code=201)
 async def create_kri(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
     kri_data: KRICreate,
     db: DbSession,
 ) -> dict[str, Any]:
@@ -419,7 +420,7 @@ async def create_kri(
 
 @router.put("/kris/{kri_id}/value", response_model=dict)
 async def update_kri_value(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     kri_id: int,
     value_update: KRIValueUpdate,
     db: DbSession,
@@ -512,7 +513,7 @@ async def list_controls(
 
 @router.post("/controls", response_model=dict, status_code=201)
 async def create_control(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:create"))],
     control_data: ControlCreate,
     db: DbSession,
 ) -> dict[str, Any]:
@@ -535,7 +536,7 @@ async def create_control(
 
 @router.post("/{risk_id}/controls/{control_id}", response_model=dict, status_code=201)
 async def link_control_to_risk(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     control_id: int,
     db: DbSession,
@@ -733,7 +734,7 @@ async def get_risk_summary(
 async def resolve_suggestion_triage(
     risk_id: int,
     body: SuggestionTriageResolve,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     db: DbSession,
 ) -> dict[str, Any]:
     """Accept or reject an enterprise risk raised from external audit import triage."""
@@ -888,7 +889,7 @@ async def get_risk(
 
 @router.put("/{risk_id}", response_model=dict)
 async def update_risk(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     risk_data: RiskUpdate,
     db: DbSession,
@@ -917,7 +918,7 @@ async def update_risk(
 
 @router.post("/{risk_id}/assess", response_model=dict)
 async def assess_risk(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     assessment: RiskAssessmentUpdate,
     db: DbSession,
@@ -948,7 +949,7 @@ async def assess_risk(
 
 @router.delete("/{risk_id}", status_code=204)
 async def delete_risk(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("risk:update"))],
     risk_id: int,
     db: DbSession,
 ) -> None:
