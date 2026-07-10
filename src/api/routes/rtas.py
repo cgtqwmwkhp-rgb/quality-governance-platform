@@ -2,12 +2,12 @@
 
 import logging
 from math import ceil
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.dependencies.request_context import get_request_id
 from src.api.routes._runner_sheet import assert_can_delete_runner_sheet_entry
 from src.api.schemas.error_codes import ErrorCode
@@ -24,6 +24,7 @@ from src.api.schemas.rta import (
 from src.api.schemas.running_sheet import RunningSheetEntryCreate, RunningSheetEntryResponse
 from src.api.utils.errors import api_error
 from src.domain.models.rta import RoadTrafficCollision, RTAAction, RunningSheetEntry
+from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
 from src.domain.services.reference_number import ReferenceNumberService
 
@@ -50,7 +51,7 @@ async def _get_rta_or_404(db, rta_id: int, current_user) -> RoadTrafficCollision
 async def create_rta(
     rta_in: RTACreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:create"))],
     request_id: str = Depends(get_request_id),
 ):
     """Create a new Road Traffic Collision (RTA)."""
@@ -211,7 +212,7 @@ async def update_rta(
     rta_id: int,
     rta_in: RTAUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:update"))],
     request_id: str = Depends(get_request_id),
 ):
     """Partially update an RTA."""
@@ -249,7 +250,7 @@ async def update_rta(
 async def delete_rta(
     rta_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:delete"))],
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA."""
@@ -282,7 +283,7 @@ async def create_rta_action(
     rta_id: int,
     action_in: RTAActionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:create"))],
     request_id: str = Depends(get_request_id),
 ):
     """Create a new action for an RTA."""
@@ -371,7 +372,7 @@ async def update_rta_action(
     action_id: int,
     action_in: RTAActionUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:update"))],
     request_id: str = Depends(get_request_id),
 ):
     """Update an RTA action."""
@@ -413,7 +414,7 @@ async def delete_rta_action(
     rta_id: int,
     action_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rta:delete"))],
     request_id: str = Depends(get_request_id),
 ):
     """Delete an RTA action."""
