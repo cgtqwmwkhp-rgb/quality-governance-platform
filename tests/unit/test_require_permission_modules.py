@@ -73,3 +73,21 @@ def test_investigation_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/investigations.py")
     assert "investigation:create" in perms
     assert "investigation:update" in perms
+
+
+def test_document_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/documents.py")
+    assert "document:create" in perms
+    assert "document:update" in perms
+
+
+def test_engineer_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/engineers.py")
+    assert "engineer:create" in perms
+    assert "engineer:update" in perms
+
+
+def test_assessment_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/assessments.py")
+    assert "assessment:create" in perms
+    assert "assessment:update" in perms

@@ -4,13 +4,13 @@ REST endpoints for engineer profiles and competency tracking.
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.engineer import (
     CompetencyRecordResponse,
     EngineerCreate,
@@ -138,7 +138,7 @@ async def list_engineers(
 async def create_engineer(
     data: EngineerCreate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("engineer:create"))],
 ):
     """Create a new engineer."""
     if not _is_workforce_manager(user):
@@ -183,7 +183,7 @@ async def update_engineer(
     engineer_id: int,
     data: EngineerUpdate,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
     """Update an engineer."""
     query = select(Engineer).where(Engineer.id == engineer_id)

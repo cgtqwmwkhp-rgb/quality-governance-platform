@@ -12,13 +12,13 @@ import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
@@ -31,6 +31,7 @@ from src.domain.models.document import (
     FileType,
     SensitivityLevel,
 )
+from src.domain.models.user import User
 from src.domain.services.document_ai_service import DocumentAIService, EmbeddingService, VectorSearchService
 from src.domain.services.document_extraction_service import ExtractedDocumentContent as ServiceExtractedDocumentContent
 from src.domain.services.document_extraction_service import extract_document_content as shared_extract_document_content
@@ -315,7 +316,7 @@ async def _process_uploaded_document(
 )
 async def upload_document(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:create"))],
     file: UploadFile = File(...),
     title: str = Form(...),
     description: str = Form(None),
@@ -655,7 +656,7 @@ async def create_annotation(
     document_id: int,
     annotation_data: AnnotationCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("document:update"))],
 ):
     """Create an annotation on a document."""
 
