@@ -11,7 +11,10 @@ import {
 } from '../api/client'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
-import { DownstreamWorkflowProof } from '../components/audit-import/DownstreamWorkflowProof'
+import {
+  DownstreamWorkflowProof,
+  isCompleteReconciliation,
+} from '../components/audit-import/DownstreamWorkflowProof'
 import { ImportReviewAuditSummary } from '../components/audit-import/ImportReviewAuditSummary'
 import { ImportReviewEvidenceCard } from '../components/audit-import/ImportReviewEvidenceCard'
 import { ImportReviewHeader } from '../components/audit-import/ImportReviewHeader'
@@ -437,7 +440,7 @@ export default function AuditImportReview() {
         onRetryQueue={() => void handleRetryQueue()}
       />
 
-      {reconciliation ? (
+      {isCompleteReconciliation(reconciliation) ? (
         <DownstreamWorkflowProof
           reconciliation={reconciliation}
           onNavigate={(path) => navigate(path)}

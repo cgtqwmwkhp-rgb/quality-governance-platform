@@ -8,10 +8,27 @@ type DownstreamWorkflowProofProps = {
   onNavigate: (path: string) => void
 }
 
+export function isCompleteReconciliation(
+  reconciliation: ExternalAuditPromotionReconciliation | null | undefined,
+): reconciliation is ExternalAuditPromotionReconciliation {
+  return Boolean(
+    reconciliation &&
+      typeof reconciliation.canonical_read_model === 'string' &&
+      reconciliation.materialized &&
+      Array.isArray(reconciliation.proof_matrix) &&
+      reconciliation.view_links &&
+      typeof reconciliation.view_links === 'object',
+  )
+}
+
 export function DownstreamWorkflowProof({
   reconciliation,
   onNavigate,
 }: DownstreamWorkflowProofProps) {
+  if (!isCompleteReconciliation(reconciliation)) {
+    return null
+  }
+
   return (
     <Card className="border-border/70">
       <CardHeader>

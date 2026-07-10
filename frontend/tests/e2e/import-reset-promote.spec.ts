@@ -123,9 +123,37 @@ async function installImportMocks(page: Page) {
 
     if (path.includes(`/external-audit-imports/jobs/${JOB_ID}/reconciliation`) && method === "GET") {
       await json(route, {
+        job_id: JOB_ID,
+        audit_run_id: AUDIT_ID,
+        audit_reference: "AUD-00041",
+        job_status: jobStatus,
+        canonical_read_model: "external_audit_import_job",
+        specialist_home: { path: "/uvdb", label: "Open Achilles / UVDB" },
+        accepted_total: 1,
         promoted_total: draftStatus === "promoted" ? 1 : 0,
+        accepted_pending_total: draftStatus === "accepted" ? 1 : 0,
         failed_total: 0,
-        status: draftStatus === "promoted" ? "ok" : "blocked",
+        failed_drafts: [],
+        materialized: {
+          audit_findings: draftStatus === "promoted" ? 1 : 0,
+          capa_actions: draftStatus === "promoted" ? 1 : 0,
+          enterprise_risks: 0,
+          uvdb_audit_id: null,
+        },
+        proof_matrix: [
+          {
+            step: "findings",
+            status: draftStatus === "promoted" ? "ok" : "none",
+            detail: "Mock proof step",
+          },
+        ],
+        draft_results: [],
+        view_links: {
+          actions: "/actions?sourceType=audit_finding",
+          risk_register: "/risk-register?triage=import",
+          uvdb: "/uvdb",
+          specialist_home: "/uvdb",
+        },
       });
       return;
     }
