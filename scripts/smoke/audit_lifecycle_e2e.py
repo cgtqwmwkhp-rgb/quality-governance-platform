@@ -190,13 +190,16 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
         )
         return results
     templates = templates_resp.json().get("items", [])
+    # Fail-closed tenant list endpoints (PR #589) exclude NULL-tenant shared rows.
+    # Global external-audit intake templates are resolved on import via
+    # ExternalAuditIntakeTemplateResolver (tenant OR NULL), not via list_templates.
     intake_templates = [template for template in templates if _is_intake_template(template)]
-    if len(intake_templates) != 1:
+    if len(intake_templates) > 1:
         results.append(
             StepResult(
                 "verify_external_audit_intake_template",
                 False,
-                "Expected exactly one published intake template in the API response",
+                "Expected at most one published tenant-scoped intake template in the API response",
                 {
                     "count": len(intake_templates),
                     "template_ids": [template.get("id") for template in intake_templates],
@@ -204,17 +207,27 @@ def run(base_url: str, email: str, password: str) -> list[StepResult]:
             )
         )
         return results
-    results.append(
-        StepResult(
-            "verify_external_audit_intake_template",
-            True,
-            f"Resolved intake template_id={intake_templates[0].get('id')}",
-            {
-                "template_name": intake_templates[0].get("name"),
-                "tags": intake_templates[0].get("tags"),
-            },
+    if len(intake_templates) == 1:
+        results.append(
+            StepResult(
+                "verify_external_audit_intake_template",
+                True,
+                f"Resolved intake template_id={intake_templates[0].get('id')}",
+                {
+                    "template_name": intake_templates[0].get("name"),
+                    "tags": intake_templates[0].get("tags"),
+                },
+            )
         )
-    )
+    else:
+        results.append(
+            StepResult(
+                "verify_external_audit_intake_template",
+                True,
+                "No tenant-scoped intake template in list_templates (global/NULL-tenant intake OK via import resolver)",
+                {"count": 0, "template_ids": []},
+            )
+        )
 
     schedule_templates = [template for template in templates if not _is_intake_template(template)]
     if not schedule_templates:
