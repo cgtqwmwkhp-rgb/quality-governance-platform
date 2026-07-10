@@ -28,6 +28,14 @@ vi.mock('../../api/client', () => ({
     login: vi.fn().mockRejectedValue(new Error('Network error')),
   },
   classifyLoginError: () => 'NETWORK' as const,
+  LOGIN_ERROR_I18N_KEYS: {
+    TIMEOUT: 'login.error.TIMEOUT',
+    UNAUTHORIZED: 'login.error.UNAUTHORIZED',
+    UNAVAILABLE: 'login.error.UNAVAILABLE',
+    SERVER_ERROR: 'login.error.SERVER_ERROR',
+    NETWORK_ERROR: 'login.error.NETWORK_ERROR',
+    UNKNOWN: 'login.error.UNKNOWN',
+  },
   LOGIN_ERROR_MESSAGES: {
     TIMEOUT: 'Request timed out',
     UNAUTHORIZED: 'Invalid credentials',
