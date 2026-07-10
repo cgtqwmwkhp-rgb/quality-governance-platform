@@ -422,6 +422,7 @@
   "common.inactive": "Inactive",
   "common.items": "items",
   "common.loading_data": "Loading data…",
+  "common.retry": "Retry",
   "common.location": "Location",
   "common.name": "Name",
   "common.next": "Next",

@@ -418,6 +418,7 @@
   "common.in_progress": "Ar y gweill",
   "common.inactive": "Anweithredol",
   "common.items": "eitemau",
+  "common.retry": "Ailgynnig",
   "common.loading_data": "Yn llwytho data…",
   "common.location": "Lleoliad",
   "common.name": "Enw",
