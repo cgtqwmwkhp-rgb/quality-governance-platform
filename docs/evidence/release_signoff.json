@@ -1,11 +1,11 @@
 {
-  "release_sha": "3759e92c1518c069e08c6f4ddbbbad444c194441",
+  "release_sha": "259408a933c1d0eb560dd2ac2e95343d46f4222e",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip 3759e92c (#574/#575 security-tenancy, #577 Celery email, #578 live notifications).",
-  "approved_at_utc": "2026-07-10T00:39:07+00:00"
+  "notes": "Release signoff for tip 259408a9 \u2014 WCS-B05 Import/Celery/DLQ runbook (#594) + WCS-B06 VAPID readiness (#595); includes prior tip train through WCS-B04 SMTP.",
+  "approved_at_utc": "2026-07-10T05:28:57+00:00"
 }
