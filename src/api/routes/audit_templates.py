@@ -10,9 +10,10 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.api.schemas.audit import (
     ArchiveTemplateResponse,
     AuditQuestionCreate,
@@ -36,9 +37,7 @@ router = APIRouter()
 
 
 def _tid(user: CurrentUser) -> int:
-    tid = user.tenant_id
-    assert tid is not None, "Tenant context required"
-    return tid
+    return require_tenant_id(getattr(user, "tenant_id", None))
 
 
 @router.get("/categories")
@@ -47,6 +46,7 @@ async def list_categories(
     user: CurrentUser,
 ) -> list[dict[str, Any]]:
     """Return distinct categories with template counts for the current tenant."""
+    tenant_id = _tid(user)
     query = (
         select(
             AuditTemplate.category,
@@ -55,15 +55,12 @@ async def list_categories(
         .where(
             AuditTemplate.is_active == True,  # noqa: E712
             AuditTemplate.archived_at.is_(None),
-            or_(
-                AuditTemplate.tenant_id == user.tenant_id,
-                AuditTemplate.tenant_id.is_(None),
-            ),
             AuditTemplate.category.isnot(None),
         )
         .group_by(AuditTemplate.category)
         .order_by(AuditTemplate.category)
     )
+    query = apply_tenant_filter(query, AuditTemplate, tenant_id)
     rows = (await db.execute(query)).all()
     return [{"category": row[0], "count": row[1]} for row in rows]
 

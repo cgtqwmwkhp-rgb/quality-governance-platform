@@ -370,10 +370,7 @@ class AuditService:
             .where(
                 AuditTemplate.is_active == True,  # noqa: E712
                 AuditTemplate.archived_at.is_(None),
-                or_(
-                    AuditTemplate.tenant_id == tenant_id,
-                    AuditTemplate.tenant_id.is_(None),
-                ),
+                AuditTemplate.tenant_id == tenant_id,
             )
         )
         if search:
@@ -972,7 +969,7 @@ class AuditService:
         query = (
             select(AuditRun)
             .options(selectinload(AuditRun.template))
-            .where(or_(AuditRun.tenant_id == tenant_id, AuditRun.tenant_id.is_(None)))
+            .where(AuditRun.tenant_id == tenant_id)
         )
         if status_filter:
             query = query.where(AuditRun.status == status_filter)
@@ -1593,10 +1590,7 @@ class AuditService:
         run_id: int | None = None,
     ) -> PaginatedResult:
         query = select(AuditFinding).where(
-            or_(
-                AuditFinding.tenant_id == tenant_id,
-                AuditFinding.tenant_id.is_(None),
-            ),
+            AuditFinding.tenant_id == tenant_id,
         )
         if status_filter:
             query = query.where(AuditFinding.status == status_filter)

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 
 from src.api.dependencies import CurrentUser, DbSession
+from src.api.utils.tenant import require_tenant_id
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.document import (
     Document,
@@ -172,10 +173,11 @@ class ExtractedDocumentContent:
 
 
 def _scope_stmt_to_current_tenant(stmt, tenant_column, current_user: CurrentUser):
-    """Apply tenant scoping unless the caller is a superuser."""
+    """Apply tenant scoping unless the caller is a superuser; require tenant for others."""
     if current_user.is_superuser:
         return stmt
-    return stmt.where(tenant_column == current_user.tenant_id)
+    tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+    return stmt.where(tenant_column == tenant_id)
 
 
 async def _get_document_or_404(

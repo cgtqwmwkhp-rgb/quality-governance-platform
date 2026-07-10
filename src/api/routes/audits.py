@@ -47,6 +47,7 @@ from src.api.schemas.audit import (
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.api.utils.pagination import PaginationParams
 from src.domain.exceptions import BadRequestError, ConflictError, NotFoundError, ValidationError
 from src.domain.models.audit import (
@@ -263,13 +264,9 @@ async def list_templates(
     """List all audit templates with pagination and filtering."""
     started = time.perf_counter()
     try:
-        query = select(AuditTemplate).where(
-            AuditTemplate.is_active == True,
-            or_(
-                AuditTemplate.tenant_id == current_user.tenant_id,
-                AuditTemplate.tenant_id.is_(None),
-            ),
-        )
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
+        query = select(AuditTemplate).where(AuditTemplate.is_active == True)
+        query = apply_tenant_filter(query, AuditTemplate, tenant_id)
 
         if search:
             search_filter = f"%{search}%"
@@ -859,9 +856,10 @@ async def list_runs(
 ) -> Any:
     """List all audit runs with pagination and filtering."""
     try:
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         service = AuditService(db)
         result = await service.list_runs(
-            current_user.tenant_id,
+            tenant_id,
             page=params.page,
             page_size=params.page_size,
             status_filter=status_filter,
@@ -1318,9 +1316,10 @@ async def list_findings(
 ) -> Any:
     """List all audit findings with pagination and filtering."""
     try:
+        tenant_id = require_tenant_id(getattr(current_user, "tenant_id", None))
         service = AuditService(db)
         result = await service.list_findings(
-            current_user.tenant_id,
+            tenant_id,
             page=params.page,
             page_size=params.page_size,
             status_filter=status_filter,
