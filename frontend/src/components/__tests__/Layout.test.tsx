@@ -86,12 +86,36 @@ describe('Layout', () => {
 
     expect(screen.queryByText('nav.documents')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.overview')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.planet_mark')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.ai_intelligence')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /nav\.more|More/i }))
 
     expect(screen.getByText('nav.documents')).toBeInTheDocument()
     expect(screen.getByText('nav.overview')).toBeInTheDocument()
     expect(screen.getByText('nav.workflow_center')).toBeInTheDocument()
+    expect(screen.getByText('nav.planet_mark')).toBeInTheDocument()
+    expect(screen.getByText('nav.ai_intelligence')).toBeInTheDocument()
+  })
+
+  it('hides analytics and automation More groups for non-privileged roles', async () => {
+    const user = userEvent.setup()
+    hasRoleMock.mockReturnValue(false)
+    isSuperuserMock.mockReturnValue(false)
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: /nav\.more|More/i }))
+
+    expect(screen.getByText('nav.documents')).toBeInTheDocument()
+    expect(screen.getByText('nav.planet_mark')).toBeInTheDocument()
+    expect(screen.queryByText('nav.overview')).not.toBeInTheDocument()
+    expect(screen.queryByText('nav.workflow_center')).not.toBeInTheDocument()
   })
 
   it('renders the logout button', async () => {

@@ -93,8 +93,10 @@ class Incident(Base, TimestampMixin, ReferenceNumberMixin, AuditTrailMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    # Multi-tenancy — required; fail-safe NOT NULL after creator backfill
+    # (migration 20260710_inc_tenant_nn / WCS-TEN2). DB may remain nullable
+    # when residual unattributed rows exist.
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Incident identification
     title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
