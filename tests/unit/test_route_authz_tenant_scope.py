@@ -334,7 +334,6 @@ async def test_incident_running_sheet_requires_tenant():
         incidents_routes.IncidentService = original
 
 
-
 @pytest.mark.asyncio
 async def test_complaints_list_requires_tenant_for_non_superuser():
     from src.api.routes import complaints as complaints_routes
@@ -342,7 +341,9 @@ async def test_complaints_list_requires_tenant_for_non_superuser():
     with pytest.raises(HTTPException) as exc:
         await complaints_routes.list_complaints(
             db=AsyncMock(),
-            current_user=SimpleNamespace(id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False),
+            current_user=SimpleNamespace(
+                id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False
+            ),
             request_id="t",
             page=1,
             page_size=20,
@@ -377,7 +378,9 @@ async def test_rtas_list_requires_tenant_for_non_superuser():
     with pytest.raises(HTTPException) as exc:
         await rtas_routes.list_rtas(
             db=AsyncMock(),
-            current_user=SimpleNamespace(id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False),
+            current_user=SimpleNamespace(
+                id=1, email="a@b.c", is_superuser=False, tenant_id=None, has_permission=lambda *_: False
+            ),
             request_id="t",
             page=1,
             page_size=10,
@@ -423,7 +426,6 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
     src = inspect.getsource(documents._scope_stmt_to_current_tenant)
     assert "require_tenant_id" in src
 
-
     src = inspect.getsource(complaints.list_complaints)
     assert "require_tenant_id" in src
     assert "apply_tenant_filter" in src
@@ -439,7 +441,6 @@ def test_route_source_guards_drop_null_inclusive_list_patterns():
     assert "require_tenant_id" in src
     assert "apply_tenant_filter" in src
     assert "tenant_id.is_(None)" not in src
-
 
 
 def test_require_tenant_id_still_403():
