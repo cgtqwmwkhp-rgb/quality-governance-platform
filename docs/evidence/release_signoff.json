@@ -1,11 +1,11 @@
 {
-  "release_sha": "12763ceee566477ea40fcbf0c4ffd1fdf957f31a",
+  "release_sha": "d5b90d63938f4cc6659cc0e608e888dfdeac076e",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for tip 12763cee \u2014 Gemini google-genai SDK migration + audit metadata (#598); includes prior tip train through WCS-TEN2 (#597) and WCS-B06 (#595).",
-  "approved_at_utc": "2026-07-10T06:37:41+00:00"
+  "notes": "Release signoff for tip d5b90d63 \u2014 #601 audit run detail fail-closed, #602 portal help fail-closed, #603 Celery worker+beat deploy wiring (W-01).",
+  "approved_at_utc": "2026-07-10T08:36:23+00:00"
 }
