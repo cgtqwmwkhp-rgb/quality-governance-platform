@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expired/forged JWT rejection verified via automated test suite
 
 ### Fixed
+- Axios global loading is opt-in (`globalLoading: true`); default requests no longer flash app-wide busy state (WCS-NAV7)
 - PostgreSQL version parity: all CI service containers upgraded from 15 to 16
 - Misleading alembic.ini placeholder database URL replaced with documented comment
 - Hardcoded `user_id=1` in tenant routes replaced with `current_user.id` from JWT
