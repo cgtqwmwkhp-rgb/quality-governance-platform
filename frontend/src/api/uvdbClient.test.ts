@@ -10,20 +10,43 @@ describe('createUvdbApi', () => {
     await uvdb.getDashboard()
     await uvdb.getProtocol()
     await uvdb.listSections()
+    await uvdb.getSectionQuestions(2)
     await uvdb.getISOMapping()
+    await uvdb.getAudit(9)
+    await uvdb.getAuditResponses(9)
 
     expect(get).toHaveBeenCalledWith('/api/v1/uvdb/dashboard')
     expect(get).toHaveBeenCalledWith('/api/v1/uvdb/protocol')
     expect(get).toHaveBeenCalledWith('/api/v1/uvdb/sections')
+    expect(get).toHaveBeenCalledWith('/api/v1/uvdb/sections/2/questions')
     expect(get).toHaveBeenCalledWith('/api/v1/uvdb/iso-mapping')
+    expect(get).toHaveBeenCalledWith('/api/v1/uvdb/audits/9')
+    expect(get).toHaveBeenCalledWith('/api/v1/uvdb/audits/9/responses')
   })
 
-  it('lists audits with optional filters', async () => {
+  it('lists audits with optional filters and creates audits', async () => {
     const get = vi.fn().mockResolvedValue({ data: { audits: [] } })
-    const api = { get } as any
+    const post = vi.fn().mockResolvedValue({ data: { id: 1 } })
+    const api = { get, post } as any
     const uvdb = createUvdbApi(api)
-    await uvdb.listAudits({ status: 'open', skip: 0, limit: 10 })
+    await uvdb.listAudits({
+      status: 'open',
+      skip: 0,
+      limit: 10,
+      company_name: 'Acme',
+      search: 'q',
+      audit_type: 'B2',
+      date_from: '2026-01-01',
+      date_to: '2026-12-31',
+      min_score: 1,
+      max_score: 100,
+    })
+    await uvdb.listAudits()
+    await uvdb.createAudit({ company_name: 'Acme', audit_type: 'B2' })
     expect(get.mock.calls[0][0]).toContain('/api/v1/uvdb/audits')
     expect(get.mock.calls[0][0]).toContain('status=open')
+    expect(get.mock.calls[0][0]).toContain('company_name=Acme')
+    expect(get.mock.calls[1][0]).toBe('/api/v1/uvdb/audits')
+    expect(post).toHaveBeenCalledWith('/api/v1/uvdb/audits', expect.objectContaining({ company_name: 'Acme' }))
   })
 })
