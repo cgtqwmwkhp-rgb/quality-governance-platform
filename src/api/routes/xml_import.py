@@ -7,16 +7,17 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.audit import AuditTemplateResponse
 from src.domain.exceptions import BadRequestError, ValidationError
 from src.domain.models.audit import AuditTemplate
+from src.domain.models.user import User
 from src.domain.services.audit_service import AuditService
 from src.domain.services.xml_importer_service import (
     batch_parse_directory,
@@ -62,6 +63,7 @@ class BatchImportResponse(BaseModel):
 
 @router.post("/parse")
 async def parse_xml_file(
+    _user: Annotated[User, Depends(require_permission("audit:create"))],
     file: UploadFile = File(...),
 ) -> dict[str, Any]:
     """Upload a single XML file and return parsed template structure (preview).
@@ -81,7 +83,7 @@ async def parse_xml_file(
 @router.post("/import", response_model=AuditTemplateResponse, status_code=status.HTTP_201_CREATED)
 async def import_xml_file(
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
     file: UploadFile = File(...),
 ) -> Any:
     """Upload XML file and create the audit template in the database."""
@@ -135,6 +137,7 @@ async def import_xml_file(
 
 @router.post("/batch")
 async def batch_parse(
+    _user: Annotated[User, Depends(require_permission("audit:create"))],
     request: BatchImportRequest,
 ) -> list[dict[str, Any]]:
     """Parse all XML layout files from a directory on the server.
@@ -163,7 +166,7 @@ async def batch_parse(
 )
 async def batch_import(
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
     request: BatchImportRequest,
 ) -> Any:
     """Parse all XML files in a directory and persist them as audit templates.
