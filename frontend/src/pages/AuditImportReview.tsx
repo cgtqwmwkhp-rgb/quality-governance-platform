@@ -6,6 +6,7 @@ import { ImportReviewLoadingState } from '../components/audit-import/ImportRevie
 import { useImportReviewActions } from '../components/audit-import/useImportReviewActions'
 import { useImportReviewDerived } from '../components/audit-import/useImportReviewDerived'
 import { useImportReviewLoader } from '../components/audit-import/useImportReviewLoader'
+import { UpstreamDegradedBanner } from '../components/UpstreamDegradedBanner'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 
@@ -174,6 +175,8 @@ export default function AuditImportReview() {
         onOpenSpecialistHome={() => navigate(specialistHomePath)}
         onPromoteClick={handlePromoteClick}
       />
+
+      <UpstreamDegradedBanner pollReadyz />
 
       <ImportReviewBody
         navigate={navigate}
