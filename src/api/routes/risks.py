@@ -648,6 +648,7 @@ async def create_assessment(
 
     assessment = RiskAssessment(
         risk_id=risk_id,
+        tenant_id=risk.tenant_id,
         **assessment_data.model_dump(),
         inherent_score=inherent_score,
         inherent_level=inherent_level,
