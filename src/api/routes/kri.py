@@ -30,7 +30,7 @@ from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
 from src.domain.models.user import User
-from src.services.risk_scoring import KRIService, RiskScoringService
+from src.domain.services.risk_scoring import KRIService, RiskScoringService
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
 
