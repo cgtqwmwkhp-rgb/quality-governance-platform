@@ -36,6 +36,8 @@ SKIP_PATHS = frozenset(
         "/health",
         "/healthz",
         "/readyz",
+        "/.well-known/security.txt",
+        "/api/v1/privacy/contact",
         "/docs",
         "/redoc",
         "/openapi.json",

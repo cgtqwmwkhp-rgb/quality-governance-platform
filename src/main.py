@@ -46,7 +46,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # use cross-origin so SWA (different site) can warm up without ORB/CORP blocks.
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         path = request.url.path
-        if path in ("/healthz", "/readyz", "/health") or path.startswith("/api/v1/health/"):
+        if (
+            path in ("/healthz", "/readyz", "/health", "/.well-known/security.txt")
+            or path.startswith("/api/v1/health/")
+            or path.startswith("/api/v1/privacy/")
+        ):
             response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
@@ -483,6 +487,26 @@ async def root():
     """
 
     return HTMLResponse(content=html_content)
+
+
+@app.get("/.well-known/security.txt", tags=["Security"], include_in_schema=False)
+async def well_known_security_txt() -> Response:
+    """RFC 9116 security.txt — public vulnerability disclosure contacts."""
+    from datetime import datetime, timedelta, timezone
+
+    security_email = (_os.environ.get("SECURITY_CONTACT_EMAIL") or "security@plantexpand.com").strip()
+    privacy_email = (_os.environ.get("PRIVACY_CONTACT_EMAIL") or "privacy@plantexpand.com").strip()
+    expires = (datetime.now(timezone.utc) + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    body = (
+        f"Contact: mailto:{security_email}\n"
+        f"Contact: mailto:{privacy_email}\n"
+        "Preferred-Languages: en\n"
+        "Canonical: https://qgp.plantexpand.com/.well-known/security.txt\n"
+        f"Expires: {expires}\n"
+        "Policy: https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/blob/main/SECURITY.md\n"
+        "Acknowledgments: https://github.com/cgtqwmwkhp-rgb/quality-governance-platform/security/advisories\n"
+    )
+    return Response(content=body, media_type="text/plain; charset=utf-8")
 
 
 @app.get("/health", tags=["Health"])

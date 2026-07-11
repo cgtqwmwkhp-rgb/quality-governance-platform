@@ -22,6 +22,8 @@ SKIP_PATHS = {
     "/health",
     "/healthz",
     "/readyz",
+    "/.well-known/security.txt",
+    "/api/v1/privacy/contact",
     "/api/v1/auth/login",
     "/api/v1/auth/register",
 }
