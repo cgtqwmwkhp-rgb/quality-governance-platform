@@ -13,7 +13,7 @@ from src.api.schemas.validators import sanitize_field
 from src.domain.exceptions import NotFoundError, StateTransitionError, ValidationError
 from src.domain.models.capa import CAPAPriority, CAPASource, CAPAStatus, CAPAType
 from src.domain.models.user import User
-from src.domain.services.capa_service import CAPAService
+from src.services.capa_service import CAPAService
 
 try:
     from opentelemetry import trace
