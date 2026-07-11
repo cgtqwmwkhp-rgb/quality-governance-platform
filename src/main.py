@@ -586,7 +586,7 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06 / Lane-1 channels: informational only — missing VAPID/SMTP/Twilio/PagerDuty must not flip readiness to 503
+    # WCS-B06 / Lane-1 channels: VAPID/SMTP/Twilio informational; PagerDuty fail-closed when key set + last send failed
     from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
@@ -596,6 +596,31 @@ async def readiness_check(request: Request):
     email = get_email_readiness()
     sms = get_sms_readiness()
     pagerduty = get_pagerduty_readiness()
+
+    if pagerduty.get("fail_closed"):
+        status_code = 503
+        overall = "not_ready"
+
+    dlq_depth: int | None = None
+    dlq_status = "unknown"
+    try:
+        from sqlalchemy import func, select
+
+        from src.domain.models.failed_task import FailedTask
+
+        async with async_session_maker() as session:
+            result = await asyncio.wait_for(
+                session.execute(
+                    select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))
+                ),
+                timeout=2.0,
+            )
+            dlq_depth = int(result.scalar() or 0)
+            dlq_status = "ok"
+    except Exception as e:
+        logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
+        dlq_status = "error"
+
     payload = {
         "status": overall,
         "database": db_status,
@@ -633,6 +658,14 @@ async def readiness_check(request: Request):
             "pagerduty_configured": pagerduty["pagerduty_configured"],
             "routing_key_present": pagerduty["routing_key_present"],
             "events_api_url_set": pagerduty["events_api_url_set"],
+            "last_enqueue_status": pagerduty.get("last_enqueue_status"),
+            "fail_closed": pagerduty.get("fail_closed", False),
+        },
+        "dlq": {
+            "status": dlq_status,
+            "depth": dlq_depth,
+            "warn_threshold": 10,
+            "critical_threshold": 50,
         },
         "channels": {
             "email": email["status"],
@@ -655,4 +688,6 @@ async def readiness_check(request: Request):
         payload["sms_note"] = sms["note"]
     if pagerduty.get("note"):
         payload["pagerduty_note"] = pagerduty["note"]
+    if pagerduty.get("last_enqueue_error"):
+        payload["pagerduty"]["last_enqueue_error"] = pagerduty["last_enqueue_error"]
     return JSONResponse(content=payload, status_code=status_code)

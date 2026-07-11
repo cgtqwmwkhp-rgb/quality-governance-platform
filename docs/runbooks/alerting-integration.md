@@ -9,8 +9,25 @@ Setup and configuration for production alerting.
 | Cost alerts | Azure Cost Management | Active |
 | Health check monitoring | Azure App Service | Active |
 | Log-based alerts | Azure Log Analytics | Partial |
-| Incident paging | PagerDuty | Planned |
+| Incident paging | PagerDuty Events API v2 | Partial (env-driven enqueue + /readyz honesty) |
 | Team notifications | Slack/Teams | Planned |
+
+## PagerDuty Events API (app-level)
+
+Env vars (leave unset until Key Vault / App Settings provide real values — never invent secrets):
+
+| Variable | Purpose |
+|----------|---------|
+| `PAGERDUTY_ENABLED` | Explicit ops intent (`true`/`1`/`yes`/`on`) |
+| `PAGERDUTY_ROUTING_KEY` | Events API v2 routing key (integration key) |
+| `PAGERDUTY_EVENTS_API_URL` | Optional override; defaults to `https://events.pagerduty.com/v2/enqueue` |
+
+Behaviour:
+
+- **No routing key** → enqueue returns `not_configured`; `/readyz` reports `pagerduty.status=not_configured` (no 503).
+- **Routing key set + enqueue fails** → raise / Celery retry; `/readyz` reports `send_failed` and **fails closed (503)** until a successful enqueue clears state.
+- Celery task `trigger_pagerduty_alert` pages on DLQ depth CRITICAL (≥50).
+- `/readyz` also surfaces `dlq.depth` (informational metric).
 
 ## Azure Monitor Alert Rules
 
