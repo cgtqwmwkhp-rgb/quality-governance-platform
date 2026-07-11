@@ -42,8 +42,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `supplier_security_assessment` | IMS / ISO27001 | Legacy singular supplier assessment table; rename/model sync pending. |
 | `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
 | `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
-| `controlled_document_versions` | Documents | Document-control ORM table not yet covered by migrations (or rename pending). |
-| `controlled_documents` | Documents | Document-control ORM table not yet covered by migrations (or rename pending). |
 | `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
 | `document_access_logs` | Documents | Document access-log ORM table; migration coverage pending. |
 | `document_approval_actions` | Documents | Approval-action ORM table; migration coverage pending. |
@@ -86,3 +84,7 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 
 - Filter hook: `process_revision_directives` / `_filter_upgrade_ops` in `alembic/env.py`
 - CI: `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` around `alembic check` in `.github/workflows/ci.yml`
+
+## 2026-07-11 unfilter note
+
+Removed `controlled_documents` and `controlled_document_versions` from `_ALEMBIC_CHECK_EXCLUDED_TABLES` after document-control tenancy migrations (`20260710_document_control_tenancy`, `20260711_controlled_document_versions_tenant_not_null`) made compare coverage honest. CI `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` remains for FK/index/unique/column noise until model alignment lands; inventory artifact still published.
