@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 77 |
+| Owned nullable `tenant_id` | 76 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -46,6 +46,7 @@ This phase lands:
 | `risk_control_mappings` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `key_risk_indicators` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risk_assessment_history` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
+| `enterprise_risk_controls` | Done (fail-safe) | Owner backfill from `users` via `control_owner_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -127,7 +128,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `driver_profiles` | `DriverProfile` |
 | `emission_source` | `EmissionSource` |
 | `engineers` | `Engineer` |
-| `enterprise_risk_controls` | `EnterpriseRiskControl` |
 | `evidence_assets` | `EvidenceAsset` |
 | `fleet_emission_record` | `FleetEmissionRecord` |
 | `ims_control_requirement_mappings` | `IMSControlRequirementMapping` |
