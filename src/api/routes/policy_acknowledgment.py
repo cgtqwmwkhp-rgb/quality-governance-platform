@@ -30,7 +30,7 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgmentRequirement,
 )
 from src.domain.models.user import User
-from src.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
+from src.domain.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
 
