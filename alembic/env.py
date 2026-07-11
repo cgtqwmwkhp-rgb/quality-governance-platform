@@ -76,8 +76,8 @@ _ALEMBIC_CHECK_EXCLUDED_TABLES = frozenset(
         # Plural ORM names (no matching table yet or rename pending)
         "access_control_records",
         "business_continuity_plans",
-        "controlled_document_versions",
-        "controlled_documents",
+        # controlled_documents / controlled_document_versions: unfiltered — covered by
+        # document_control tenancy migrations (20260710+) + TEN2 NOT NULL wave.
         "cross_standard_mappings",
         "document_access_logs",
         "document_approval_actions",
