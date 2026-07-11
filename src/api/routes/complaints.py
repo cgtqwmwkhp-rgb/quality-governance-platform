@@ -17,8 +17,8 @@ from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictE
 from src.domain.models.complaint import Complaint, ComplaintRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.complaint_service import ComplaintService
 from src.infrastructure.monitoring.azure_monitor import track_metric
+from src.services.complaint_service import ComplaintService
 
 router = APIRouter(tags=["Complaints"])
 
