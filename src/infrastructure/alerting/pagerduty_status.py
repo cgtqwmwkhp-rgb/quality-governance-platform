@@ -11,10 +11,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from src.infrastructure.alerting.pagerduty_client import (
-    get_last_enqueue_status,
-    should_fail_readiness,
-)
+from src.infrastructure.alerting.pagerduty_client import get_last_enqueue_status, should_fail_readiness
 
 
 def _truthy(raw: str | None) -> bool:

@@ -31,11 +31,7 @@ def trigger_pagerduty_alert(
     - No routing key → ``not_configured`` (honest skip; never fake ``enqueued``).
     - Routing key set but send fails → raise (Celery retry / DLQ).
     """
-    from src.infrastructure.alerting.pagerduty_client import (
-        PagerDutySendError,
-        enqueue_event,
-        is_enabled,
-    )
+    from src.infrastructure.alerting.pagerduty_client import PagerDutySendError, enqueue_event, is_enabled
 
     if not is_enabled():
         logger.info("PagerDuty alert skipped: PAGERDUTY_ENABLED is not set")
