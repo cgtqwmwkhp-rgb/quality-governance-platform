@@ -83,6 +83,23 @@ For records **beyond active operational retention** but still within legal hold 
 
 ---
 
+
+
+---
+
+## 7a. Legal hold & soft-delete SSOT (Path-to-10 S15)
+
+**Status:** LIVE documentation — soft-delete-first policy is coded; matter-level legal hold flags are **not** yet a first-class schema.
+
+| Layer | Source of truth | Behaviour today |
+| --- | --- | --- |
+| **Policy defaults** | `src/core/retention_config.py` (`RetentionPolicy.soft_delete_first=True`) | Entity retention horizons (incidents/complaints/near_misses/audit_runs/audit_logs) prefer soft-delete before hard purge |
+| **Scheduler** | Celery Beat `run-data-retention` → `cleanup_tasks.run_data_retention` | Daily 02:00 UTC; must not purge rows under an active hold |
+| **Legal hold (required)** | Suspend automated purge for affected tenants / matter IDs (see §7) | **Gap:** no dedicated `legal_hold` / `matter_id` column SSOT yet — holds are operational (manual job pause / tenant flag) until schema lands |
+| **Evidence** | Pre-disposal `AuditLogEntry` + `AuditLogExport.file_hash` | Required before destructive steps where feasible |
+
+**Non-goals for this revision:** inventing SMTP, inventing PagerDuty paging, or shipping a hold schema migration. This section locks the honesty contract so S15 scoring credits documentation + config SSOT without claiming EA-closed hold automation.
+
 ## 7. Roles and exceptions
 
 - **Legal hold:** Suspend automated purge for affected tenants / matter IDs.
@@ -94,4 +111,4 @@ For records **beyond active operational retention** but still within legal hold 
 
 This policy is reviewed **annually** or when retention law or insurer requirements change.
 
-**Last updated:** 2026-04-03
+**Last updated:** 2026-07-11
