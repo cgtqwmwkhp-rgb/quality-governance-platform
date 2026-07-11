@@ -39,9 +39,22 @@ export function ImportReviewEvidenceCard({
                 </Badge>
               ))
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No clause-level evidence preview available yet.
-              </p>
+              <div
+                className="w-full rounded-lg border border-dashed border-border bg-muted/30 p-4"
+                role="status"
+                data-testid="import-review-evidence-empty"
+              >
+                <p className="text-sm font-medium text-foreground">
+                  No clause-level evidence preview yet
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {job.positive_summary_json?.length ||
+                  job.nonconformity_summary_json?.length ||
+                  job.improvement_summary_json?.length
+                    ? 'Summary counts are available below. Clause badges appear when the extractor maps ISO clauses from the source document.'
+                    : 'Mappings appear after OCR/analysis extracts clause references. Continue reviewing draft findings — evidence badges will populate when available.'}
+                </p>
+              </div>
             )}
           </div>
           <div className="grid gap-3 md:grid-cols-3">
