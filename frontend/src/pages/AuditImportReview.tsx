@@ -1,17 +1,7 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
-import {
-  DownstreamWorkflowProof,
-  isCompleteReconciliation,
-} from '../components/audit-import/DownstreamWorkflowProof'
-import { ImportReviewAuditSummary } from '../components/audit-import/ImportReviewAuditSummary'
-import { ImportReviewEvidenceCard } from '../components/audit-import/ImportReviewEvidenceCard'
+import { ImportReviewBody } from '../components/audit-import/ImportReviewBody'
 import { ImportReviewHeader } from '../components/audit-import/ImportReviewHeader'
 import { ImportReviewLoadingState } from '../components/audit-import/ImportReviewLoadingState'
-import { ImportReviewNotices } from '../components/audit-import/ImportReviewNotices'
-import { ImportReviewOverview } from '../components/audit-import/ImportReviewOverview'
-import { ImportReviewProcessingPanels } from '../components/audit-import/ImportReviewProcessingPanels'
-import { ImportReviewPromoteBanner } from '../components/audit-import/ImportReviewPromoteBanner'
 import { useImportReviewActions } from '../components/audit-import/useImportReviewActions'
 import { useImportReviewDerived } from '../components/audit-import/useImportReviewDerived'
 import { useImportReviewLoader } from '../components/audit-import/useImportReviewLoader'
@@ -100,7 +90,7 @@ export default function AuditImportReview() {
     pendingDraftCount,
   })
 
-    // Keep the page chrome visible during load so reviewers (and CUJ e2e) always
+  // Keep the page chrome visible during load so reviewers (and CUJ e2e) always
   // see the Import Review heading instead of a blank skeleton-only state.
   if (loading) {
     return (
@@ -126,103 +116,46 @@ export default function AuditImportReview() {
         onPromoteClick={handlePromoteClick}
       />
 
-      <ImportReviewPromoteBanner
+      <ImportReviewBody
+        navigate={navigate}
+        job={job}
+        drafts={drafts}
+        reconciliation={reconciliation}
+        error={error}
+        queueNotice={queueNotice}
+        reconciliationNotice={reconciliationNotice}
+        promotionFailedDrafts={promotionFailedDrafts}
+        lastUpdatedAt={lastUpdatedAt}
+        isProcessing={isProcessing}
+        isDocumentHidden={isDocumentHidden}
+        load={load}
+        approvedCount={approvedCount}
         promoteableCount={promoteableCount}
+        acceptedClauseCount={acceptedClauseCount}
         acceptedActionCandidates={acceptedActionCandidates}
         acceptedRiskCandidates={acceptedRiskCandidates}
-        acceptedClauseCount={acceptedClauseCount}
-        jobStatus={job?.status}
-        showPromoteConfirm={showPromoteConfirm}
-        isPromoting={isPromoting}
-        onPromoteClick={handlePromoteClick}
-        onCancelConfirm={() => setShowPromoteConfirm(false)}
-        onConfirmPromote={() => void handlePromoteConfirm()}
-      />
-
-      <ImportReviewNotices
-        section="pre-proof"
-        successMessage={successMessage}
-        onDismissSuccess={dismissSuccess}
-        reconciliationNotice={reconciliationNotice}
-        error={error}
-        promotionFailedDrafts={promotionFailedDrafts}
-        onRetryLoad={() => void load()}
-        queueNotice={queueNotice}
-        job={job}
-        isQueueing={isQueueing}
-        onRetryQueue={() => void handleRetryQueue()}
-      />
-
-      {isCompleteReconciliation(reconciliation) ? (
-        <DownstreamWorkflowProof
-          reconciliation={reconciliation}
-          onNavigate={(path) => navigate(path)}
-        />
-      ) : null}
-
-      <ImportReviewNotices
-        section="post-proof"
-        successMessage={successMessage}
-        onDismissSuccess={dismissSuccess}
-        reconciliationNotice={reconciliationNotice}
-        error={error}
-        promotionFailedDrafts={promotionFailedDrafts}
-        onRetryLoad={() => void load()}
-        queueNotice={queueNotice}
-        job={job}
-        isQueueing={isQueueing}
-        onRetryQueue={() => void handleRetryQueue()}
-      />
-
-      {job ? (
-        <ImportReviewOverview
-          job={job}
-          drafts={drafts}
-          declaredProgramLabel={declaredProgramLabel}
-          declaredSourceOrigin={declaredSourceOrigin}
-          declaredScheme={declaredScheme}
-          resolvedTemplateName={resolvedTemplateName}
-          resolvedTemplateId={resolvedTemplateId}
-          resolvedTemplateVersion={resolvedTemplateVersion}
-          declaredExternalBody={declaredExternalBody}
-          declaredExternalReference={declaredExternalReference}
-          approvedCount={approvedCount}
-          promoteableCount={promoteableCount}
-          isProcessing={isProcessing}
-          lastUpdatedAt={lastUpdatedAt}
-          isDocumentHidden={isDocumentHidden}
-        />
-      ) : null}
-
-      {job ? <ImportReviewAuditSummary job={job} /> : null}
-
-      <ImportReviewProcessingPanels
-        job={job}
-        isProcessing={isProcessing}
-        isQueueing={isQueueing}
-        onRetryQueue={() => void handleRetryQueue()}
-      />
-
-      {job ? (
-        <ImportReviewEvidenceCard
-          job={job}
-          approvedCount={approvedCount}
-          acceptedClauseCount={acceptedClauseCount}
-          acceptedActionCandidates={acceptedActionCandidates}
-          acceptedRiskCandidates={acceptedRiskCandidates}
-          schemeAlignment={schemeAlignment}
-        />
-      ) : null}
-
-      <DraftFindingsList
-        drafts={drafts}
-        job={job}
-        error={error}
+        schemeAlignment={schemeAlignment}
+        declaredProgramLabel={declaredProgramLabel}
+        declaredSourceOrigin={declaredSourceOrigin}
+        declaredScheme={declaredScheme}
+        resolvedTemplateVersion={resolvedTemplateVersion}
+        resolvedTemplateId={resolvedTemplateId}
+        resolvedTemplateName={resolvedTemplateName}
+        declaredExternalBody={declaredExternalBody}
+        declaredExternalReference={declaredExternalReference}
+        specialistHome={specialistHome}
         busyDraftId={busyDraftId}
         isBulkReviewing={isBulkReviewing}
-        specialistHome={specialistHome}
-        onDecision={handleDraftDecision}
-        onLoad={load}
+        isPromoting={isPromoting}
+        isQueueing={isQueueing}
+        showPromoteConfirm={showPromoteConfirm}
+        setShowPromoteConfirm={setShowPromoteConfirm}
+        successMessage={successMessage}
+        dismissSuccess={dismissSuccess}
+        handleDraftDecision={handleDraftDecision}
+        handlePromoteClick={handlePromoteClick}
+        handlePromoteConfirm={handlePromoteConfirm}
+        handleRetryQueue={handleRetryQueue}
       />
     </div>
   )
