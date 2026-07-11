@@ -198,3 +198,9 @@ def test_workflow_legacy_write_routes_require_permission():
     assert "workflow:create" in perms
     assert "workflow:update" in perms
     assert "workflow:delete" in perms
+
+
+def test_policy_acknowledgment_admin_writes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/policy_acknowledgment.py")
+    assert "policy:create" in perms
+    assert "policy:update" in perms
