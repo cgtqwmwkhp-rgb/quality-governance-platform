@@ -222,3 +222,8 @@ def test_compliance_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/compliance.py")
     assert "audit:create" in perms
     assert "audit:update" in perms
+
+
+def test_vehicle_checklist_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/vehicle_checklists.py")
+    assert "vehicle:update" in perms
