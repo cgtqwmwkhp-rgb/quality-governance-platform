@@ -38,8 +38,8 @@ from src.domain.models.workflow_rules import (
     SLATracking,
     WorkflowRule,
 )
+from src.domain.services.workflow_engine import SLAService, WorkflowEngine
 from src.infrastructure.monitoring.azure_monitor import track_metric
-from src.services.workflow_engine import SLAService, WorkflowEngine
 
 router = APIRouter(prefix="/workflow", tags=["Workflow Engine"])
 
