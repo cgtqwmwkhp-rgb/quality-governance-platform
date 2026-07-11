@@ -273,3 +273,18 @@ def test_analytics_write_routes_require_permission():
     assert "analytics:create" in perms
     assert "analytics:update" in perms
     assert "analytics:delete" in perms
+
+
+def test_audit_trail_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/audit_trail.py")
+    assert "audit:read" in perms
+
+
+def test_push_notifications_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/push_notifications.py")
+    assert "notifications:send" in perms
+
+
+def test_notifications_admin_writes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/notifications.py")
+    assert "notifications:send" in perms

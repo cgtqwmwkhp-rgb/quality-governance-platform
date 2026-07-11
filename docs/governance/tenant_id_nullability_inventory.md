@@ -55,6 +55,7 @@ This phase lands:
 | `document_versions` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `obsolete_document_records` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `document_access_logs` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `document_annotations` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
