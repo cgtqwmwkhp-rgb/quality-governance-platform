@@ -14,6 +14,14 @@ const STEPS: { id: StepId; label: string }[] = [
   { id: 'promote', label: 'Promote' },
 ]
 
+/** User-facing guidance for what comes after the active step. */
+const NEXT_STEP_COPY: Record<StepId, string> = {
+  upload: 'Next: Processing — OCR extracts draft findings from your upload.',
+  processing: 'Next: Review — check draft findings when extraction finishes.',
+  review: 'Next: Promote — accept drafts, then promote into governance outcomes.',
+  promote: 'Promote accepted drafts to finish this import.',
+}
+
 function resolveActiveStep({
   jobStatus,
   isProcessing,
@@ -32,9 +40,21 @@ function resolveActiveStep({
   return 'review'
 }
 
+function resolveNextStepCopy(
+  active: StepId,
+  { jobStatus }: Pick<ImportReviewStepperProps, 'jobStatus'>,
+): string | null {
+  const status = (jobStatus || '').toLowerCase()
+  if (active === 'promote' && (status === 'completed' || status === 'promoted')) {
+    return 'Import complete — accepted drafts have been promoted.'
+  }
+  return NEXT_STEP_COPY[active]
+}
+
 export function ImportReviewStepper(props: ImportReviewStepperProps) {
   const active = resolveActiveStep(props)
   const activeIndex = STEPS.findIndex((s) => s.id === active)
+  const nextCopy = resolveNextStepCopy(active, props)
 
   return (
     <nav aria-label="Import review steps" className="mt-4">
@@ -66,9 +86,18 @@ export function ImportReviewStepper(props: ImportReviewStepperProps) {
           )
         })}
       </ol>
+      {nextCopy ? (
+        <p
+          className="mt-2 text-sm text-muted-foreground"
+          data-testid="import-review-stepper-next"
+          role="status"
+        >
+          {nextCopy}
+        </p>
+      ) : null}
     </nav>
   )
 }
 
-export { resolveActiveStep }
+export { resolveActiveStep, resolveNextStepCopy }
 export type { ImportReviewStepperProps, StepId }
