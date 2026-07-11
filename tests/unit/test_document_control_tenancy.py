@@ -59,11 +59,15 @@ def _sql(statement) -> str:
     return str(statement.compile(compile_kwargs={"literal_binds": True})).lower()
 
 
-def test_all_document_control_models_expose_nullable_tenant_id():
+def test_all_document_control_models_expose_tenant_id():
+    """WCS-TEN2: ControlledDocumentVersion is NOT NULL; siblings remain nullable until promoted."""
     for model in DOCUMENT_CONTROL_MODELS:
         column = model.__table__.c.tenant_id
-        assert column.nullable is True
         assert column.index is True
+        if model is ControlledDocumentVersion:
+            assert column.nullable is False
+        else:
+            assert column.nullable is True
 
 
 @pytest.mark.asyncio
