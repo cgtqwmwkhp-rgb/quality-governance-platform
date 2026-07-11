@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 74 |
+| Owned nullable `tenant_id` | 73 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -49,6 +49,7 @@ This phase lands:
 | `enterprise_risk_controls` | Done (fail-safe) | Owner backfill from `users` via `control_owner_id`; NOT NULL only when residual NULLs=0. |
 | `policy_versions` | Done (fail-safe) | Child of `policies` via `policy_id`; NOT NULL only when residual NULLs=0. |
 | `controlled_document_versions` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `controlled_documents` | Done (fail-safe) | Parent core TEN2 — author/owner user backfill; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -106,7 +107,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `competency_records` | `CompetencyRecord` |
 | `competency_requirements` | `CompetencyRequirement` |
 | `contracts` | `Contract` |
-| `controlled_documents` | `ControlledDocument` |
 | `copilot_actions` | `CopilotAction` |
 | `copilot_knowledge` | `CopilotKnowledge` |
 | `copilot_messages` | `CopilotMessage` |
