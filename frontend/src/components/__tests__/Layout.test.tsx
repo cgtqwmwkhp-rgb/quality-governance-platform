@@ -157,4 +157,21 @@ describe('Layout', () => {
     expect(screen.queryByText('nav.workforce')).not.toBeInTheDocument()
     expect(screen.queryByText('nav.assessments')).not.toBeInTheDocument()
   })
+
+  it('lazy-mounts AI Copilot only after the header control is opened', async () => {
+    const user = userEvent.setup()
+    const Layout = (await import('../Layout')).default
+
+    render(
+      <BrowserRouter>
+        <Layout onLogout={onLogout} />
+      </BrowserRouter>,
+    )
+
+    expect(screen.queryByTestId('ai-copilot')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /nav\.copilot/i }))
+
+    expect(await screen.findByTestId('ai-copilot')).toBeInTheDocument()
+  })
 })

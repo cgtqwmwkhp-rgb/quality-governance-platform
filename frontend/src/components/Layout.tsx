@@ -36,16 +36,18 @@ import {
   Bot,
   ChevronDown,
 } from 'lucide-react'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { notificationsApi } from '../api/client'
-import AICopilot from './copilot/AICopilot'
 import OfflineIndicator from './OfflineIndicator'
 import { ThemeToggle } from './ui/ThemeToggle'
 import { Button } from './ui/Button'
 import { cn } from '../helpers/utils'
 import { hasRole, isSuperuser } from '../utils/auth'
 import { useFeatureFlag } from '../hooks/useFeatureFlag'
+
+/** Deferred until the shell opens Copilot — keeps authenticated first paint lean (S14). */
+const AICopilot = lazy(() => import('./copilot/AICopilot'))
 
 interface LayoutProps {
   onLogout: () => void
@@ -455,12 +457,16 @@ export default function Layout({ onLogout }: LayoutProps) {
         />
       )}
 
-      {/* AI Copilot */}
-      <AICopilot
-        isOpen={copilotOpen}
-        onClose={() => setCopilotOpen(false)}
-        currentPage={window.location.pathname}
-      />
+      {/* AI Copilot — code-split; mount only when opened */}
+      {copilotOpen ? (
+        <Suspense fallback={null}>
+          <AICopilot
+            isOpen={copilotOpen}
+            onClose={() => setCopilotOpen(false)}
+            currentPage={window.location.pathname}
+          />
+        </Suspense>
+      ) : null}
 
       {/* Offline status indicator */}
       <OfflineIndicator />
