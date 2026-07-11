@@ -23,7 +23,6 @@ from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.planet_mark import (
@@ -37,6 +36,7 @@ from src.domain.models.planet_mark import (
     SupplierEmissionData,
     UtilityMeterReading,
 )
+from src.domain.models.user import User
 
 logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("planet_mark.audit")
