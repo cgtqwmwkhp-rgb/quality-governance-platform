@@ -285,6 +285,9 @@ def test_push_notifications_write_routes_require_permission():
     assert "notifications:send" in perms
 
 
-def test_notifications_admin_writes_require_permission():
+def test_notifications_write_routes_require_permission():
+    """User writes use update/delete; test-notification keeps notifications:send (#735)."""
     perms = _permission_depends(REPO / "src/api/routes/notifications.py")
+    assert "notifications:update" in perms
+    assert "notifications:delete" in perms
     assert "notifications:send" in perms

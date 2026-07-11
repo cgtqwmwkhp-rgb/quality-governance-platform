@@ -162,7 +162,11 @@ async def get_unread_count(current_user: CurrentUser, db: DbSession):
 
 
 @router.post("/{notification_id}/read")
-async def mark_notification_read(notification_id: int, current_user: CurrentUser, db: DbSession):
+async def mark_notification_read(
+    notification_id: int,
+    current_user: Annotated[User, Depends(require_permission("notifications:update"))],
+    db: DbSession,
+):
     """Mark a specific notification as read."""
     from sqlalchemy import select
 
@@ -183,7 +187,10 @@ async def mark_notification_read(notification_id: int, current_user: CurrentUser
 
 
 @router.post("/read-all")
-async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
+async def mark_all_notifications_read(
+    current_user: Annotated[User, Depends(require_permission("notifications:update"))],
+    db: DbSession,
+):
     """Mark all notifications as read for the current user."""
     from sqlalchemy import update
 
@@ -199,7 +206,10 @@ async def mark_all_notifications_read(current_user: CurrentUser, db: DbSession):
 
 
 @router.delete("/")
-async def clear_all_notifications(current_user: CurrentUser, db: DbSession):
+async def clear_all_notifications(
+    current_user: Annotated[User, Depends(require_permission("notifications:delete"))],
+    db: DbSession,
+):
     """Delete all notifications for the current user."""
     from sqlalchemy import delete
 
@@ -211,7 +221,11 @@ async def clear_all_notifications(current_user: CurrentUser, db: DbSession):
 
 
 @router.delete("/{notification_id}")
-async def delete_notification(notification_id: int, current_user: CurrentUser, db: DbSession):
+async def delete_notification(
+    notification_id: int,
+    current_user: Annotated[User, Depends(require_permission("notifications:delete"))],
+    db: DbSession,
+):
     """Delete a specific notification."""
     from sqlalchemy import select
 
@@ -272,7 +286,7 @@ async def get_notification_preferences(current_user: CurrentUser, db: DbSession)
 @router.put("/preferences")
 async def update_notification_preferences(
     preferences: NotificationPreferencesUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("notifications:update"))],
     db: DbSession,
 ):
     """Update notification preferences for the current user."""
