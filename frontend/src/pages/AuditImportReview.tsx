@@ -1,5 +1,4 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
 import {
   DownstreamWorkflowProof,
@@ -8,6 +7,7 @@ import {
 import { ImportReviewAuditSummary } from '../components/audit-import/ImportReviewAuditSummary'
 import { ImportReviewEvidenceCard } from '../components/audit-import/ImportReviewEvidenceCard'
 import { ImportReviewHeader } from '../components/audit-import/ImportReviewHeader'
+import { ImportReviewLoadingState } from '../components/audit-import/ImportReviewLoadingState'
 import { ImportReviewNotices } from '../components/audit-import/ImportReviewNotices'
 import { ImportReviewOverview } from '../components/audit-import/ImportReviewOverview'
 import { ImportReviewProcessingPanels } from '../components/audit-import/ImportReviewProcessingPanels'
@@ -104,21 +104,10 @@ export default function AuditImportReview() {
   // see the Import Review heading instead of a blank skeleton-only state.
   if (loading) {
     return (
-      <div className="space-y-6 p-6 animate-fade-in">
-        <ImportReviewHeader
-          pendingDraftCount={0}
-          promoteableCount={0}
-          isBulkReviewing={false}
-          isPromoting={false}
-          hasJob={false}
-          jobStatus={null}
-          specialistHomeLabel={specialistHome.label}
-          onBulkApprove={() => {}}
-          onOpenSpecialistHome={() => navigate(specialistHomePath)}
-          onPromoteClick={() => {}}
-        />
-        <LoadingSkeleton variant="card" rows={5} />
-      </div>
+      <ImportReviewLoadingState
+        specialistHomeLabel={specialistHome.label}
+        onOpenSpecialistHome={() => navigate(specialistHomePath)}
+      />
     )
   }
 
