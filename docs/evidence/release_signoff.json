@@ -1,11 +1,11 @@
 {
-  "release_sha": "dd9931aac072b7ff7530f6d9559ac32f1cb3f7bc",
+  "release_sha": "2483e5abe22827decf4a3dc73b50ef4af1b5fa62",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip dd9931aa \u2014 overnight CUJ/UX final tip: ImportReview extract + nav/theatre + recon/loading/e2e harden (#653/#658/#656/#666/#669/#671).",
-  "approved_at_utc": "2026-07-10T22:59:45+00:00"
+  "notes": "Release signoff for main tip 2483e5ab \u2014 Trust overnight wave: #674 TEN2 complaints tenant NOT NULL, #675 AuthZ require_permission on assets/forms, #676 FE ImportReview extract phase 6 (useImportReviewDerived).",
+  "approved_at_utc": "2026-07-10T23:47:18+00:00"
 }
