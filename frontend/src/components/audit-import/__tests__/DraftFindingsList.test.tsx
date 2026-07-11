@@ -129,4 +129,19 @@ describe('DraftFindingsList', () => {
       }),
     )
   })
+
+  it('shows clear-filter CTA when status filter hides all drafts', () => {
+    renderList({
+      drafts: [baseDraft({ status: 'draft' })],
+      job: { id: 7, status: 'review_required' } as never,
+    })
+
+    fireEvent.change(screen.getByLabelText('Filter draft findings by status'), {
+      target: { value: 'accepted' },
+    })
+    expect(screen.getByText(/No findings match the current status filter/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Clear status filter/i }))
+    expect(screen.getByText('Missing calibration records')).toBeInTheDocument()
+  })
+
 })

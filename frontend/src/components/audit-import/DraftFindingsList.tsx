@@ -296,6 +296,24 @@ export function DraftFindingsList({
           </Button>
         </div>
       </div>
+      {sortedDrafts.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-muted-foreground">
+            <p>
+              No findings match the current status filter
+              {filterStatus !== 'all' ? ` (“${filterStatus}”)` : ''}.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => setFilterStatus('all')}
+            >
+              Clear status filter
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
       {sortedDrafts.map((draft) => {
         const tier = getConfidenceTier(draft.confidence_score)
         const methodLabel = getAnalysisMethodLabel(draft.provenance_json ?? null)
