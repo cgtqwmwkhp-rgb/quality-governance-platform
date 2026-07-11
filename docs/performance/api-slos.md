@@ -9,8 +9,9 @@
 | Search/analytics | < 200ms | < 500ms | < 1500ms | < 0.5% |
 
 ## CI vs Production Thresholds
-- **CI (Locust):** p95 < 500ms — relaxed for runner hardware variability
+- **CI Locust smoke (`LOCUST_PROFILE=ci`):** p95 ≤ 10000ms / error ≤ 3% — relaxed for runner noise (blocking `locust-load-test`)
+- **Staging soft-gate (`LOCUST_PROFILE=staging`):** p95 ≤ 500ms / error ≤ 1% — Preferred S14 bar; non-blocking (see [`locust-soft-gate.md`](locust-soft-gate.md))
 - **Production SLO:** p95 < 200ms — target for real-world performance
 - The gap is documented in ADR-0012.
 
-**Last updated:** 2026-04-03
+**Last updated:** 2026-07-11
