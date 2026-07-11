@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any
+from typing import Any, Awaitable, cast
 from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,9 @@ async def _probe_queue_depths(redis_url: str) -> dict[str, Any]:
         try:
             depths: dict[str, int] = {}
             for queue in KNOWN_QUEUES:
-                depths[queue] = int(await asyncio.wait_for(client.llen(queue), timeout=1.0))
+                # redis-py stubs type llen as Awaitable[int] | int depending on client mode.
+                llen_awaitable = cast(Awaitable[int], client.llen(queue))
+                depths[queue] = int(await asyncio.wait_for(llen_awaitable, timeout=1.0))
             return {
                 "depth_status": "ok",
                 "queues": depths,
