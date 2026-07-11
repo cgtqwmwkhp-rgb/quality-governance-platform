@@ -7,62 +7,100 @@ Run with:
 For headless mode:
     locust -f tests/performance/locustfile.py --host=http://localhost:8000 \
            --headless -u 100 -r 10 --run-time 5m
+
+Profiles (LOCUST_PROFILE):
+    default  — local/dev bar (p95 ≤ 500ms, error ≤ 1%)
+    staging  — Preferred S14 staging soft-gate bar (same thresholds; documented load shape)
+    ci       — GitHub Actions smoke bar (relaxed for runner noise)
+
+Soft-gate (LOCUST_SOFT_GATE=1):
+    Threshold breaches are reported with a clear summary but do not fail the process
+    (exit 0). Use for Preferred staging soft-gate before promoting to a hard gate.
 """
 
-import json
 import logging
 import os
 import random
 import string
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from locust import HttpUser, between, events, task
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tests.performance.thresholds import (  # noqa: E402
+    resolve_perf_thresholds,
+    truthy,
+    write_soft_gate_summary,
+)
+
 logger = logging.getLogger(__name__)
 
-PERF_THRESHOLDS = {
-    "p95_response_ms": int(os.environ.get("LOCUST_P95_MS", "500")),
-    "error_rate_pct": float(os.environ.get("LOCUST_ERROR_RATE_PCT", "1.0")),
-}
+PERF_THRESHOLDS = resolve_perf_thresholds()
+SOFT_GATE = truthy(os.environ.get("LOCUST_SOFT_GATE"))
 
 
 @events.quitting.add_listener
 def check_thresholds(environment, **kwargs):
-    """Enforce pass/fail thresholds at test completion."""
+    """Enforce pass/fail thresholds at test completion (hard or soft-gate)."""
     stats = environment.runner.stats.total
     if stats.num_requests == 0:
         logger.warning("No requests recorded — skipping threshold check")
         return
 
+    thresholds = resolve_perf_thresholds()
+    soft_gate = truthy(os.environ.get("LOCUST_SOFT_GATE"))
     p95 = stats.get_response_time_percentile(0.95) or 0
     error_rate = (stats.num_failures / stats.num_requests) * 100
+    p95_limit = int(thresholds["p95_response_ms"])
+    err_limit = float(thresholds["error_rate_pct"])
 
-    failed = False
-
-    if p95 > PERF_THRESHOLDS["p95_response_ms"]:
-        logger.error(
-            "THRESHOLD BREACH: p95 response time %.0fms > %dms limit",
-            p95,
-            PERF_THRESHOLDS["p95_response_ms"],
-        )
-        failed = True
+    breaches: list[str] = []
+    if p95 > p95_limit:
+        msg = f"p95 response time {p95:.0f}ms > {p95_limit}ms limit"
+        logger.error("THRESHOLD BREACH: %s", msg)
+        breaches.append(msg)
     else:
-        logger.info("p95 response time OK: %.0fms <= %dms", p95, PERF_THRESHOLDS["p95_response_ms"])
+        logger.info("p95 response time OK: %.0fms <= %dms", p95, p95_limit)
 
-    if error_rate > PERF_THRESHOLDS["error_rate_pct"]:
-        logger.error(
-            "THRESHOLD BREACH: error rate %.2f%% > %.1f%% limit",
-            error_rate,
-            PERF_THRESHOLDS["error_rate_pct"],
-        )
-        failed = True
+    if error_rate > err_limit:
+        msg = f"error rate {error_rate:.2f}% > {err_limit:.1f}% limit"
+        logger.error("THRESHOLD BREACH: %s", msg)
+        breaches.append(msg)
     else:
-        logger.info("Error rate OK: %.2f%% <= %.1f%%", error_rate, PERF_THRESHOLDS["error_rate_pct"])
+        logger.info("Error rate OK: %.2f%% <= %.1f%%", error_rate, err_limit)
 
-    if failed:
+    failed = bool(breaches)
+    payload = {
+        "profile": thresholds["profile"],
+        "soft_gate": soft_gate,
+        "num_requests": stats.num_requests,
+        "num_failures": stats.num_failures,
+        "p95_ms": float(p95),
+        "p95_limit_ms": p95_limit,
+        "p95_status": "BREACH" if p95 > p95_limit else "OK",
+        "error_rate_pct": float(error_rate),
+        "error_rate_limit_pct": err_limit,
+        "error_status": "BREACH" if error_rate > err_limit else "OK",
+        "overall": "BREACH" if failed else "PASS",
+        "breaches": breaches,
+    }
+    write_soft_gate_summary(payload)
+
+    if failed and not soft_gate:
         environment.process_exit_code = 1
-
+    elif failed and soft_gate:
+        logger.warning(
+            "SOFT-GATE: thresholds breached under profile=%s — reporting only (exit 0)",
+            thresholds["profile"],
+        )
+        environment.process_exit_code = 0
+    else:
+        environment.process_exit_code = 0
 
 def random_string(length: int = 10) -> str:
     """Generate random string for test data."""
@@ -422,20 +460,24 @@ Recommended test scenarios:
 1. Smoke Test (Quick validation):
    locust -f locustfile.py --headless -u 5 -r 1 --run-time 1m
 
-2. Load Test (Normal load):
+2. Staging soft-gate profile (Preferred S14):
+   LOCUST_PROFILE=staging LOCUST_SOFT_GATE=1 \
+     locust -f locustfile.py --headless -u 20 -r 5 --run-time 60s
+
+3. Load Test (Normal load):
    locust -f locustfile.py --headless -u 50 -r 5 --run-time 10m
 
-3. Stress Test (Find breaking point):
+4. Stress Test (Find breaking point):
    locust -f locustfile.py --headless -u 200 -r 20 --run-time 15m
 
-4. Spike Test (Sudden traffic spike):
+5. Spike Test (Sudden traffic spike):
    locust -f locustfile.py --headless -u 500 -r 100 --run-time 5m
 
-5. Endurance Test (Long-running):
+6. Endurance Test (Long-running):
    locust -f locustfile.py --headless -u 100 -r 10 --run-time 2h
 
-Expected thresholds for production:
-- 95th percentile response time < 500ms
-- Error rate < 1%
-- Throughput > 100 requests/second
+Expected thresholds (staging / default profiles):
+- 95th percentile response time ≤ 500ms
+- Error rate ≤ 1%
+- Throughput > 100 requests/second (production capacity target)
 """

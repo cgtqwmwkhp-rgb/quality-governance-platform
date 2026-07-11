@@ -1,0 +1,127 @@
+# Preferred S14 — Locust soft-gate on staging profile
+#
+# Runs the capacity-plan staging load shape (20 users / 5 spawn / 60s) against
+# a local app with staging SLO thresholds (p95 ≤ 500ms, error ≤ 1%).
+# Soft-gate: threshold breaches are summarised and uploaded but do NOT fail
+# the job (exit 0). Promote to hard-gate once staging p95 is stable.
+name: Locust Soft-Gate (Staging Profile)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: locust-soft-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  locust-staging-soft-gate:
+    name: Locust staging soft-gate
+    runs-on: ubuntu-latest
+    # Soft-gate: never block merge on Preferred staging bar breaches.
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: quality_governance_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install locust
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: alembic upgrade head
+
+      - name: Seed Locust user accounts
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+        run: PYTHONPATH="${{ github.workspace }}" python scripts/seed_ci_locust_users.py
+
+      - name: Start app and wait for healthy
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:testpass@localhost:5432/quality_governance_test
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-minimum16chars
+          JWT_SECRET_KEY: test-jwt-secret-min16chars
+          TESTING: "1"
+          APP_ENV: development
+          DEFAULT_TENANT_ID: "1"
+        run: |
+          uvicorn src.main:app --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/healthz > /dev/null 2>&1; then
+              echo "[OK] App is healthy after ${i}s"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8000/healthz || { echo "[FAIL] App did not become healthy"; exit 1; }
+
+      - name: Run Locust staging soft-gate
+        env:
+          LOCUST_PROFILE: staging
+          LOCUST_SOFT_GATE: "1"
+          LOCUST_SUMMARY_DIR: locust-soft-gate-out
+        run: |
+          mkdir -p locust-soft-gate-out
+          locust -f tests/performance/locustfile.py \
+            --host http://127.0.0.1:8000 \
+            --users 20 --spawn-rate 5 \
+            --run-time 60s --headless \
+            --exit-code-on-error 0 \
+            --csv=locust-soft-gate-out/locust-results \
+            --only-summary
+          echo "=== Soft-gate summary (always exit 0 from Locust under LOCUST_SOFT_GATE=1) ==="
+          if [ -f locust-soft-gate-out/locust-soft-gate-summary.md ]; then
+            cat locust-soft-gate-out/locust-soft-gate-summary.md
+          else
+            echo "[WARN] Summary file missing — threshold listener may not have run"
+          fi
+
+      - name: Upload Locust soft-gate artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: locust-soft-gate-staging
+          path: |
+            locust-soft-gate-out/**
+          retention-days: 30
+        if: always()
