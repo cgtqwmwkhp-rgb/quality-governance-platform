@@ -126,3 +126,11 @@ Operators and attestations can discover soft-delete-first + horizon days without
 This policy is reviewed **annually** or when retention law or insurer requirements change.
 
 **Last updated:** 2026-07-11
+
+## DPIA close-out readiness
+
+For S15 compliance scoring, the DPIA close-out readiness pack (unsigned DPO checklist +
+artifact index) lives in `docs/compliance/dpia-quality-governance-platform.md` §10.
+This retention/legal-hold SSOT is an input to that pack — it does not itself constitute
+DPO sign-off.
+
