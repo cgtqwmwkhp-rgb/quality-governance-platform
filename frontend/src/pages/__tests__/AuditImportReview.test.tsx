@@ -603,6 +603,16 @@ describe('AuditImportReview', () => {
     expect(
       await screen.findByText('Approved 2 pending finding(s). Review and promote when ready.'),
     ).toBeInTheDocument()
+
+    // Phase 9 coverage: dismissSuccess from actions hook clears the banner.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Approved 2 pending finding(s). Review and promote when ready.'),
+      ).not.toBeInTheDocument()
+    })
+    // Phase 10 coverage: promote control remains available after dismiss.
+    expect(screen.getByRole('button', { name: 'Promote Accepted Drafts' })).toBeInTheDocument()
   })
 
   it('shows queue recovery guidance and retries queueing pending imports', async () => {
