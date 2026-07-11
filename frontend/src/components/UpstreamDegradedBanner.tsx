@@ -2,8 +2,8 @@
  * UpstreamDegradedBanner — Path-to-10 Preferred S10 degraded UX for OCR/AI/blob.
  *
  * Controlled mode: pass openCircuits / halfOpenCircuits / message.
- * Optional pollReadyz: reads public /readyz upstream.ai.circuits without
- * inventing secrets or requiring client.ts changes.
+ * Optional pollReadyz: prefers public /readyz `upstream.degraded` aggregate
+ * (falls back to `upstream.ai.circuits`) without inventing secrets.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -19,7 +19,7 @@ export type UpstreamDegradedBannerProps = {
   halfOpenCircuits?: string[]
   /** Controlled override message. */
   message?: string | null
-  /** When true, poll /readyz for upstream.ai.circuits state. */
+  /** When true, poll /readyz for upstream degraded state. */
   pollReadyz?: boolean
   /** Poll interval ms (default 30s). */
   pollIntervalMs?: number
@@ -29,6 +29,12 @@ export type UpstreamDegradedBannerProps = {
 type CircuitHealth = {
   name?: string
   state?: UpstreamCircuitState
+}
+
+type ParsedDegraded = {
+  open: string[]
+  halfOpen: string[]
+  message?: string | null
 }
 
 function buildMessage(open: string[], halfOpen: string[], override?: string | null): string {
@@ -45,15 +51,14 @@ function buildMessage(open: string[], halfOpen: string[], override?: string | nu
   return ''
 }
 
-function parseReadyzCircuits(payload: unknown): { open: string[]; halfOpen: string[] } {
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+}
+
+function parseCircuitsObject(circuitsRaw: unknown): ParsedDegraded {
   const open: string[] = []
   const halfOpen: string[] = []
-  if (!payload || typeof payload !== 'object') return { open, halfOpen }
-
-  const root = payload as Record<string, unknown>
-  const upstream = (root.upstream ?? {}) as Record<string, unknown>
-  const ai = (upstream.ai ?? {}) as Record<string, unknown>
-  const circuitsRaw = ai.circuits
 
   let entries: CircuitHealth[] = []
   if (Array.isArray(circuitsRaw)) {
@@ -72,6 +77,47 @@ function parseReadyzCircuits(payload: unknown): { open: string[]; halfOpen: stri
   return { open, halfOpen }
 }
 
+function resolveUpstreamRoot(payload: Record<string, unknown>): Record<string, unknown> {
+  if (payload.upstream && typeof payload.upstream === 'object') {
+    return payload.upstream as Record<string, unknown>
+  }
+  const checks = payload.checks
+  if (checks && typeof checks === 'object') {
+    const nested = (checks as Record<string, unknown>).upstream
+    if (nested && typeof nested === 'object') {
+      return nested as Record<string, unknown>
+    }
+  }
+  return {}
+}
+
+function parseReadyzCircuits(payload: unknown): ParsedDegraded {
+  if (!payload || typeof payload !== 'object') return { open: [], halfOpen: [] }
+
+  const root = payload as Record<string, unknown>
+  const upstream = resolveUpstreamRoot(root)
+  const degraded = upstream.degraded
+
+  // Prefer Preferred aggregate field from /readyz (includes blob_storage).
+  if (degraded && typeof degraded === 'object') {
+    const block = degraded as Record<string, unknown>
+    const open = asStringList(block.open_circuits)
+    const halfOpen = asStringList(block.half_open_circuits)
+    const message = typeof block.message === 'string' ? block.message : null
+    if (open.length || halfOpen.length || block.degraded === true) {
+      return { open, halfOpen, message }
+    }
+    // Honest cold process: degraded=false with empty lists → no banner.
+    if (block.degraded === false) {
+      return { open: [], halfOpen: [], message: null }
+    }
+  }
+
+  // Fallback: legacy upstream.ai.circuits metadata.
+  const ai = (upstream.ai ?? {}) as Record<string, unknown>
+  return parseCircuitsObject(ai.circuits)
+}
+
 export function UpstreamDegradedBanner({
   openCircuits,
   halfOpenCircuits,
@@ -82,6 +128,7 @@ export function UpstreamDegradedBanner({
 }: UpstreamDegradedBannerProps) {
   const [polledOpen, setPolledOpen] = useState<string[]>([])
   const [polledHalfOpen, setPolledHalfOpen] = useState<string[]>([])
+  const [polledMessage, setPolledMessage] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!pollReadyz) return
@@ -95,6 +142,7 @@ export function UpstreamDegradedBanner({
       const parsed = parseReadyzCircuits(json)
       setPolledOpen(parsed.open)
       setPolledHalfOpen(parsed.halfOpen)
+      setPolledMessage(parsed.message ?? null)
     } catch {
       // Fail closed for UI: do not claim degradation on probe errors.
     }
@@ -112,7 +160,7 @@ export function UpstreamDegradedBanner({
   const degraded = open.length > 0 || halfOpen.length > 0
   if (!degraded) return null
 
-  const text = buildMessage(open, halfOpen, message)
+  const text = buildMessage(open, halfOpen, message ?? polledMessage)
 
   return (
     <div

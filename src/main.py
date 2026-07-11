@@ -660,6 +660,7 @@ async def readiness_check(request: Request):
     from src.infrastructure.sms.sms_status import get_sms_readiness
     from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
     from src.infrastructure.upstream.celery_status import get_upstream_celery_readiness
+    from src.infrastructure.upstream.degraded_status import get_upstream_degraded_readiness
     from src.infrastructure.upstream.storage_status import get_upstream_storage_readiness
 
     vapid = get_vapid_readiness()
@@ -669,6 +670,8 @@ async def readiness_check(request: Request):
     upstream_ai = get_upstream_ai_readiness()
     upstream_storage = get_upstream_storage_readiness()
     upstream_celery = await get_upstream_celery_readiness()
+    # Informational only — never flips readiness HTTP status.
+    upstream_degraded = get_upstream_degraded_readiness()
 
     if pagerduty.get("fail_closed"):
         status_code = 503
@@ -719,6 +722,7 @@ async def readiness_check(request: Request):
             "ai": upstream_ai,
             "storage": upstream_storage,
             "celery": upstream_celery,
+            "degraded": upstream_degraded,
         },
         "request_id": request_id,
     }
@@ -741,4 +745,6 @@ async def readiness_check(request: Request):
         payload["upstream_storage_note"] = upstream_storage["note"]
     if upstream_celery.get("note"):
         payload["upstream_celery_note"] = upstream_celery["note"]
+    if upstream_degraded.get("note"):
+        payload["upstream_degraded_note"] = upstream_degraded["note"]
     return JSONResponse(content=payload, status_code=status_code)
