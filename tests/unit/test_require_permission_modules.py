@@ -216,3 +216,10 @@ def test_cross_standard_mapping_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/cross_standard_mappings.py")
     assert "standard:create" in perms
     assert "standard:update" in perms
+
+
+def test_compliance_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/compliance.py")
+    assert "audit:create" in perms
+    assert "audit:update" in perms
+
