@@ -95,7 +95,8 @@ async def readiness_check():
     except Exception:
         pass
 
-    # WCS-B06 / Lane-1 channels: surface push + SMTP + SMS readiness (informational; never fails readiness)
+    # WCS-B06 / Lane-1 channels: surface push + SMTP + SMS + PagerDuty readiness (informational; never fails readiness)
+    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
@@ -103,6 +104,7 @@ async def readiness_check():
     vapid = get_vapid_readiness()
     email = get_email_readiness()
     sms = get_sms_readiness()
+    pagerduty = get_pagerduty_readiness()
 
     checks: dict[str, Any] = {
         "database": db_status,
@@ -137,10 +139,19 @@ async def readiness_check():
             "twilio_from_number_present": sms["twilio_from_number_present"],
             "library": sms["library"],
         },
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "pagerduty": {
+            "status": pagerduty["status"],
+            "pagerduty_enabled": pagerduty["pagerduty_enabled"],
+            "pagerduty_configured": pagerduty["pagerduty_configured"],
+            "routing_key_present": pagerduty["routing_key_present"],
+            "events_api_url_set": pagerduty["events_api_url_set"],
+        },
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
             "push": vapid["status"],
+            "pagerduty": pagerduty["status"],
         },
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
@@ -152,6 +163,8 @@ async def readiness_check():
         checks["email_note"] = email["note"]
     if sms.get("note"):
         checks["sms_note"] = sms["note"]
+    if pagerduty.get("note"):
+        checks["pagerduty_note"] = pagerduty["note"]
     if redis_status == "not_configured":
         if settings.is_redis_required:
             checks["redis_note"] = (
