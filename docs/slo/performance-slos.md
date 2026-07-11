@@ -46,8 +46,10 @@ Lighthouse runs against the built app (`staticDistDir: ./dist`, `url` in that co
 
 | Budget | SLO target | CI reference |
 |--------|------------|----------------|
-| Main application JS (gzip) | < 300 KB | [`frontend/.size-limit.json`](../../frontend/.size-limit.json) — `dist/assets/index-*.js` (currently **350 kB** gzip; **reduce to ≤ 300 kB** to meet SLO) |
-| Total initial JS load (gzip) | < 500 KB | Same file — sum of entry + critical chunks counted toward first navigation (today: `index-*.js` + `vendor-*.js` at **350 kB** + **250 kB** per-file caps; **align combined budget to ≤ 500 kB** and per-chunk caps as needed) |
+| Main application JS (gzip) | < 150 KB | [`frontend/.size-limit.json`](../../frontend/.size-limit.json) — `dist/assets/index-*.js` (CI-enforced **150 kB** gzip; measured ~114 kB on main 2026-07-11) |
+| Vendor JS chunks (gzip) | < 200 KB | Same file — `dist/assets/vendor-*.js` (CI-enforced **200 kB** gzip; measured ~164 kB) |
+| Main CSS (gzip) | < 35 KB | Same file — `dist/assets/index-*.css` (CI-enforced **35 kB** gzip; measured ~28 kB) |
+| Total initial JS load (gzip) | < 350 KB | Sum of entry + vendor chunk caps (`150 kB` + `200 kB`); measured ~278 kB |
 
 CSS and other assets remain subject to existing limits in `.size-limit.json` unless superseded by a dedicated doc.
 
