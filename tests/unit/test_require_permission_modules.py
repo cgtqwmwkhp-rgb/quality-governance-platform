@@ -210,3 +210,7 @@ def test_rca_tools_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/rca_tools.py")
     assert "rca:create" in perms
     assert "rca:update" in perms
+def test_cross_standard_mapping_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/cross_standard_mappings.py")
+    assert "standard:create" in perms
+    assert "standard:update" in perms
