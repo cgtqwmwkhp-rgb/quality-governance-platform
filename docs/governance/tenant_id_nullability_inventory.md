@@ -6,8 +6,8 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 29 |
-| Owned nullable `tenant_id` | 80 |
+| Required `tenant_id` (`nullable=False`) | 30 |
+| Owned nullable `tenant_id` | 79 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -44,6 +44,7 @@ This phase lands:
 | `risks_v2` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
 | `bow_tie_elements` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risk_control_mappings` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
+| `key_risk_indicators` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -139,7 +140,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `information_assets` | `InformationAsset` |
 | `information_security_risks` | `InformationSecurityRisk` |
 | `iso27001_controls` | `ISO27001Control` |
-| `key_risk_indicators` | `EnterpriseKeyRiskIndicator` |
 | `loler_defects` | `LOLERDefect` |
 | `loler_examinations` | `LOLERExamination` |
 | `management_review_inputs` | `ManagementReviewInput` |
