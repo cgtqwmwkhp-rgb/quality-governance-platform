@@ -189,7 +189,7 @@ class EnterpriseRiskControl(Base):
         CheckConstraint("effectiveness_score BETWEEN 1 AND 5", name="ck_enterprise_risk_controls_effectiveness_range"),
     )
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
     # Control identification
