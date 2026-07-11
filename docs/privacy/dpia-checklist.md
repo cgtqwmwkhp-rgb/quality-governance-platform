@@ -2,8 +2,8 @@
 
 **Platform:** Quality Governance Platform (QGP)  
 **Document type:** DPIA readiness checklist (UK GDPR Art. 35 / accountability)  
-**Version:** 1.0 (LIVE — OCR/AI import covered)  
-**Related:** [`dpia-template.md`](dpia-template.md), [`dpia-incidents.md`](dpia-incidents.md), [`privacy-program-overview.md`](privacy-program-overview.md), [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md), [`../governance/privacy-ocr-ai-dpia.md`](../governance/privacy-ocr-ai-dpia.md)
+**Version:** 1.1 (LIVE — OCR/AI import + S15 unsigned attestation pack)  
+**Related:** [`dpia-template.md`](dpia-template.md), [`dpia-incidents.md`](dpia-incidents.md), [`privacy-program-overview.md`](privacy-program-overview.md), [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md), [`../compliance/s15-dpia-art30-attestation-pack.md`](../compliance/s15-dpia-art30-attestation-pack.md), [`../governance/privacy-ocr-ai-dpia.md`](../governance/privacy-ocr-ai-dpia.md)
 
 ---
 
@@ -50,14 +50,31 @@ If **any** box is checked, complete a DPIA before production enablement. For OCR
 
 | Item | Location |
 | --- | --- |
+| **S15 unsigned attestation pack** | `docs/compliance/s15-dpia-art30-attestation-pack.md` |
+| Art. 30 ROPA checklist | `docs/compliance/article-30-ropa-checklist.md` |
 | DPIA template | `docs/privacy/dpia-template.md` |
 | Incidents DPIA | `docs/privacy/dpia-incidents.md` |
 | **OCR / AI import DPIA** | `docs/compliance/dpia-ocr-ai-import.md` |
 | Governance link | `docs/governance/privacy-ocr-ai-dpia.md` |
 | Platform DPIA (compliance) | `docs/compliance/dpia-quality-governance-platform.md` |
 | Privacy program overview | `docs/privacy/privacy-program-overview.md` |
+| External attestation tracker (EA-01..04 still open) | `docs/evidence/external-attestation-tracker.md` |
 | security.txt | `GET /.well-known/security.txt` |
 | Privacy contact API | `GET /api/v1/privacy/contact` |
+| Art. 30 stub register | `GET /api/v1/privacy/data-processing-register` |
+
+---
+
+## External attestation honesty (do not claim closed)
+
+| ID | Status | Notes |
+|----|--------|-------|
+| EA-01 | 🔴 Not started | External WCAG audit |
+| EA-02 | 🟡 Scheduled | External pen-test not completed |
+| EA-03 | 🟡 In progress | DPIA bodies ready; DPO §9 **unsigned** |
+| EA-04 | 🔴 Not started | ISO auditor validation |
+
+Completing this checklist does **not** close EA-01..04.
 
 ---
 

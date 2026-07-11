@@ -112,6 +112,9 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 The processing register is intentionally a stub — expand activity rows and signed DPA links
 before treating it as a full controller ROPA.
 
+Documentary Art. 30 field map (unsigned): [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md).  
+Unsigned DPIA + Art. 30 attestation pack: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md).
+
 Sub-processors disclosed (also on `/privacy/contact`):
 
 | Processor | Role | Optional |
@@ -122,8 +125,25 @@ Sub-processors disclosed (also on `/privacy/contact`):
 
 ---
 
+## 9. External attestation honesty (EA-01..04)
+
+Preferred S15 (target 9.0) still requires human external attestations. Documentation and LIVE
+stubs do **not** close EA items. Tracker SSOT:
+[`docs/evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md).
+
+| ID | Type | Honest status (2026-07-11) |
+|----|------|----------------------------|
+| EA-01 | WCAG 2.1 AA external audit | 🔴 Not started |
+| EA-02 | External penetration test | 🟡 Scheduled (not completed) |
+| EA-03 | DPO sign-off on DPIAs | 🟡 In progress — pack ready, §9 **unsigned** |
+| EA-04 | ISO auditor validation of evidence tool | 🔴 Not started |
+
+---
+
 ## Related Documents
 
+- [`docs/compliance/s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md) — unsigned ready-for-signoff pack
+- [`docs/compliance/article-30-ropa-checklist.md`](article-30-ropa-checklist.md) — Art. 30 documentary checklist
 - [`docs/evidence/retention-automation-evidence.md`](../evidence/retention-automation-evidence.md) — retention policy evidence
 - [`docs/privacy/data-retention-policy.md`](../privacy/data-retention-policy.md) — retention / soft-delete / legal-hold SSOT (§7a–§7b)
 - `GET /api/v1/privacy/contact` → `retention`, `subprocessors`, `dpia.status`
