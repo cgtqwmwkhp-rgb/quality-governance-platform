@@ -172,18 +172,4 @@ export function createUvdbApi(api: AxiosInstance) {
   }) =>
     api.post<{ id: number; audit_reference: string; message: string }>('/api/v1/uvdb/audits', data),
 }
-
-// ============ User API ============
-
-// User type for search results
-// ============ Users API (extracted: usersClient.ts) ============
-export type {
-  UserSearchResult,
-  UserDetail,
-  RoleDetail,
-  UserCreatePayload,
-  UserUpdatePayload,
-  RoleCreatePayload,
-  RoleUpdatePayload,
-} from './usersClient'
 }

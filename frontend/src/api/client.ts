@@ -828,6 +828,20 @@ export type {
 } from './uvdbClient'
 export const uvdbApi = createUvdbApi(api)
 
+
+// ============ User API ============
+
+// User type for search results
+// ============ Users API (extracted: usersClient.ts) ============
+export type {
+  UserSearchResult,
+  UserDetail,
+  RoleDetail,
+  UserCreatePayload,
+  UserUpdatePayload,
+  RoleCreatePayload,
+  RoleUpdatePayload,
+} from './usersClient'
 export const usersApi = createUsersApi(api)
 
 // ============ Audit Trail API ============
