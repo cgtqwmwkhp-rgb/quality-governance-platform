@@ -17,7 +17,10 @@ import { createRiskRegisterApi } from './riskRegisterClient'
 import { createNotificationsApi } from './notificationsClient'
 import { createInvestigationsApi } from './investigationsClient'
 import { createActionsApi } from './actionsClient'
+import { createIncidentsApi } from './incidentsClient'
+import { createPoliciesApi } from './policiesClient'
 import type { Investigation } from './investigationsClient'
+import type { RunningSheetEntry } from './incidentsClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -610,59 +613,13 @@ export interface PaginatedResponse<T> {
   pages: number
 }
 
-// ============ Incident Types ============
-export interface Incident {
-  id: number
-  reference_number: string
-  title: string
-  description: string
-  incident_type: string
-  severity: string
-  status: string
-  incident_date: string
-  reported_date: string
-  location?: string
-  department?: string
-  created_at: string
-  updated_at?: string
-  reporter_name?: string
-  reporter_email?: string
-  people_involved?: string
-  witnesses?: string
-  immediate_actions?: string
-  first_aid_given?: boolean
-  emergency_services_called?: boolean
-  investigator_id?: number | null
-  is_riddor_reportable?: boolean | null
-  riddor_classification?: string | null
-  is_sif?: boolean | null
-  life_altering_potential?: boolean | null
-  reporter_submission?: Record<string, unknown> | null
-  closed_at?: string | null
-}
-
-export interface IncidentCreate {
-  title: string
-  description: string
-  incident_type: string
-  severity: string
-  incident_date: string
-  reported_date: string
-  location?: string
-  department?: string
-  reporter_email?: string
-  reporter_name?: string
-}
-
-export interface IncidentUpdate {
-  title?: string
-  description?: string
-  incident_type?: string
-  severity?: string
-  status?: string
-  location?: string
-  department?: string
-}
+// ============ Incident Types (extracted: incidentsClient.ts) ============
+export type {
+  Incident,
+  IncidentCreate,
+  IncidentUpdate,
+  RunningSheetEntry,
+} from './incidentsClient'
 
 export interface NearMiss {
   id: number
@@ -758,15 +715,6 @@ export interface Witness {
   email?: string
   statement?: string
   willing_to_provide_statement?: boolean
-}
-
-export interface RunningSheetEntry {
-  id: number
-  content: string
-  entry_type: string
-  author_id?: number
-  author_email?: string
-  created_at: string
 }
 
 export interface RTA {
@@ -942,30 +890,11 @@ export interface ComplaintUpdate {
   resolution_summary?: string
 }
 
-// ============ Policy Types ============
-export interface Policy {
-  id: number
-  reference_number: string
-  title: string
-  description?: string
-  document_type: string
-  status: string
-  category?: string
-  department?: string
-  review_frequency_months: number
-  next_review_date?: string
-  is_public: boolean
-  created_at: string
-}
-
-export interface PolicyCreate {
-  title: string
-  description?: string
-  document_type: string
-  category?: string
-  department?: string
-  review_frequency_months?: number
-}
+// ============ Policy Types (extracted: policiesClient.ts) ============
+export type {
+  Policy,
+  PolicyCreate,
+} from './policiesClient'
 
 // ============ Risk Types ============
 export interface Risk {
@@ -1489,24 +1418,8 @@ export const authApi = {
 // the backend route definition exactly: routes with "/" need a trailing
 // slash; routes like "/templates" must NOT have one.
 
-export const incidentsApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?page=${page}&page_size=${pageSize}`),
-  create: (data: IncidentCreate) => api.post<Incident>('/api/v1/incidents/', data),
-  get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
-  update: (id: number, data: IncidentUpdate) =>
-    api.patch<Incident>(`/api/v1/incidents/${id}`, data),
-  listInvestigations: (id: number, page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/incidents/${id}/investigations?page=${page}&page_size=${pageSize}`,
-    ),
-  listRunningSheet: (incidentId: number) =>
-    api.get<RunningSheetEntry[]>(`/api/v1/incidents/${incidentId}/running-sheet`),
-  addRunningSheetEntry: (incidentId: number, data: { content: string; entry_type?: string }) =>
-    api.post<RunningSheetEntry>(`/api/v1/incidents/${incidentId}/running-sheet`, data),
-  deleteRunningSheetEntry: (incidentId: number, entryId: number) =>
-    api.delete(`/api/v1/incidents/${incidentId}/running-sheet/${entryId}`),
-}
+// ============ Incidents API (extracted: incidentsClient.ts) ============
+export const incidentsApi = createIncidentsApi(api)
 
 export const rtasApi = {
   list: (page = 1, pageSize = 10) =>
@@ -1564,12 +1477,8 @@ export const nearMissesApi = {
     api.delete(`/api/v1/near-misses/${nearMissId}/running-sheet/${entryId}`),
 }
 
-export const policiesApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Policy>>(`/api/v1/policies?page=${page}&page_size=${pageSize}`),
-  create: (data: PolicyCreate) => api.post<Policy>('/api/v1/policies', data),
-  get: (id: number) => api.get<Policy>(`/api/v1/policies/${id}`),
-}
+// ============ Policies API (extracted: policiesClient.ts) ============
+export const policiesApi = createPoliciesApi(api)
 
 export const risksApi = {
   list: (page = 1, pageSize = 10, search?: string) => {
