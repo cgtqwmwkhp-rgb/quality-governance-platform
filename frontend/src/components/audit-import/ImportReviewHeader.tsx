@@ -1,11 +1,13 @@
 import { CheckCircle2, FileText, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '../ui/Button'
+import { ImportReviewStepper } from './ImportReviewStepper'
 
 type ImportReviewHeaderProps = {
   pendingDraftCount: number
   promoteableCount: number
   isBulkReviewing: boolean
   isPromoting: boolean
+  isProcessing?: boolean
   hasJob: boolean
   jobStatus?: string | null
   specialistHomeLabel: string
@@ -19,6 +21,7 @@ export function ImportReviewHeader({
   promoteableCount,
   isBulkReviewing,
   isPromoting,
+  isProcessing = false,
   hasJob,
   jobStatus,
   specialistHomeLabel,
@@ -35,6 +38,12 @@ export function ImportReviewHeader({
           OCR and analysis stay in draft until you approve promotion into completed governance
           outcomes.
         </p>
+        <ImportReviewStepper
+          hasJob={hasJob}
+          jobStatus={jobStatus}
+          isProcessing={isProcessing}
+          promoteableCount={promoteableCount}
+        />
       </div>
       <div className="flex gap-3">
         <Button
