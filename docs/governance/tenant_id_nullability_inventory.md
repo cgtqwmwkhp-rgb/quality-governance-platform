@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 69 |
+| Owned nullable `tenant_id` | 68 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -54,6 +54,7 @@ This phase lands:
 | `documents` | Done (fail-safe) | Parent core TEN2 — creator/reviewer user backfill; NOT NULL only when residual NULLs=0. |
 | `document_versions` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `obsolete_document_records` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `document_access_logs` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -118,7 +119,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `dashboard_widgets` | `DashboardWidget` |
 | `dashboards` | `Dashboard` |
 | `data_quality_assessment` | `DataQualityAssessment` |
-| `document_access_logs` | `DocumentAccessLog` |
 | `document_annotations` | `DocumentAnnotation` |
 | `document_approval_actions` | `DocumentApprovalAction` |
 | `document_approval_instances` | `DocumentApprovalInstance` |

@@ -24,7 +24,6 @@
     "dashboard_widgets",
     "dashboards",
     "data_quality_assessment",
-    "document_access_logs",
     "document_annotations",
     "document_approval_actions",
     "document_approval_instances",
