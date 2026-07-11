@@ -48,6 +48,7 @@ from src.api.routes import (
     planet_mark,
     policies,
     policy_acknowledgment,
+    privacy,
     push_notifications,
     rca_tools,
     realtime,
@@ -196,6 +197,8 @@ router.include_router(slo.router, prefix="/slo", tags=["SLO Metrics"])
 router.include_router(health.router, prefix="/health", tags=["Health"])
 # GDPR data-subject rights (Art. 15 export, Art. 17 erasure)
 router.include_router(gdpr.router, tags=["GDPR"])
+# Public privacy contact + lifecycle capability flags (Path-to-10 S15)
+router.include_router(privacy.router, tags=["Privacy"])
 # Push Notification Service (VAPID web-push)
 router.include_router(push_notifications.router, prefix="/notifications/push", tags=["Push Notifications"])
 # Vehicle Checklists (PAMS Integration)

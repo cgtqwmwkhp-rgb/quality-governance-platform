@@ -3,7 +3,7 @@
 **Platform:** Quality Governance Platform (QGP)
 **Version:** 1.0
 **Effective:** 2026-04-04 | **Review:** 2026-10-04
-**Related:** [`data-classification.md`](data-classification.md), [`data-retention-policy.md`](data-retention-policy.md), [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md), [`dpia-checklist.md`](dpia-checklist.md)
+**Related:** [`data-classification.md`](data-classification.md), [`data-retention-policy.md`](data-retention-policy.md), [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md), [`dpia-checklist.md`](dpia-checklist.md), [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md), [`../governance/privacy-ocr-ai-dpia.md`](../governance/privacy-ocr-ai-dpia.md)
 
 ---
 
@@ -34,7 +34,7 @@ Single-source overview of the Quality Governance Platform's privacy program cove
 | Art. 25 | Privacy by design | `DataClassification` enum in model layer; classification-aware handling |
 | Art. 32 | Security of processing | TLS 1.2+, field-level Fernet encryption, tenant isolation, audit trail |
 | Art. 33–34 | Breach notification | Incident response runbook with 72-hour supervisory authority notification |
-| Art. 35 | DPIA | Completed for incident/complaint modules ([DPIA-001](dpia-incidents.md)) |
+| Art. 35 | DPIA | Incidents/complaints ([DPIA-001](dpia-incidents.md)); OCR/AI import ([DPIA-OCR-AI](../compliance/dpia-ocr-ai-import.md)); checklist ([dpia-checklist.md](dpia-checklist.md)) |
 
 ---
 
@@ -43,7 +43,7 @@ Single-source overview of the Quality Governance Platform's privacy program cove
 | Principle | Implementation | Evidence |
 |-----------|---------------|----------|
 | **Data classification at model layer** | `DataClassification` class (C1–C4) in `src/domain/models/base.py`; every model declares `__data_classification__` | [`data-classification.md`](data-classification.md) |
-| **DPIA process** | Formal DPIA completed before processing special-category data | [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md) |
+| **DPIA process** | Formal DPIA completed before processing special-category data / AI document egress | [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md), [`../compliance/dpia-ocr-ai-import.md`](../compliance/dpia-ocr-ai-import.md) |
 | **Data retention with automated enforcement** | Per-entity retention schedule; `AuditLogEntry.retention_days` (default 2555 ≈ 7 years); Celery purge job | [`data-retention-policy.md`](data-retention-policy.md) |
 | **Pseudonymization** | SHA-256 HMAC one-way hashing of PII fields (`email`, `first_name`, `last_name`, `phone`) via `PseudonymizationService` | `src/domain/services/pseudonymization_service.py` |
 | **Encryption** | Azure managed encryption at rest; field-level Fernet for C4 data; TLS 1.2+ in transit | Infrastructure config |
