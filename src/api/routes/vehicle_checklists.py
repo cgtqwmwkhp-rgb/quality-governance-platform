@@ -7,13 +7,13 @@ plus governance defect management stored in QGP PostgreSQL.
 import logging
 import math
 from datetime import datetime, timezone
-from typing import Any, NoReturn, Optional
+from typing import Annotated, Any, NoReturn, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.vehicle_checklist import (
     ChecklistListResponse,
     ChecklistSchemaResponse,
@@ -25,6 +25,7 @@ from src.api.schemas.vehicle_checklist import (
 )
 from src.domain.exceptions import AuthorizationError, DomainError, NotFoundError, ValidationError
 from src.domain.models.pams_cache import PAMSSyncLog, PAMSVanChecklistCache, PAMSVanChecklistMonthlyCache
+from src.domain.models.user import User
 from src.domain.models.vehicle_defect import VehicleDefect
 from src.domain.services.audit_service import record_audit_event
 from src.infrastructure.pams_database import get_pams_columns, get_pams_db, get_pams_table, is_pams_available
@@ -280,7 +281,7 @@ async def get_monthly_record(
 @router.post("/defects", status_code=status.HTTP_201_CREATED)
 async def create_defect(
     payload: DefectCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("vehicle:update"))],
     db: DbSession,
 ) -> DefectResponse:
     """Flag a vehicle defect with P1/P2/P3 priority."""
@@ -367,7 +368,7 @@ async def get_defect(
 async def update_defect(
     defect_id: int,
     payload: DefectUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("vehicle:update"))],
     db: DbSession,
 ) -> DefectResponse:
     """Update a vehicle defect (priority, status, notes)."""
@@ -395,7 +396,7 @@ async def update_defect(
 async def create_defect_action(
     defect_id: int,
     payload: DefectActionCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("vehicle:update"))],
     db: DbSession,
 ) -> dict[str, Any]:
     """Create an action against a vehicle defect (stored as CAPAAction)."""
@@ -541,7 +542,7 @@ async def _create_p1_notification(
 
 @router.post("/sync", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_sync(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("vehicle:update"))],
 ) -> dict[str, str]:
     """Manually trigger a PAMS sync (admin only)."""
     if not current_user.is_superuser:
