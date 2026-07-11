@@ -5,12 +5,12 @@ and risk score tracking.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import and_, func, select
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.kri import (
     KRIAlertListResponse,
     KRIAlertResponse,
@@ -29,6 +29,7 @@ from src.api.schemas.kri import (
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.incident import Incident
 from src.domain.models.kri import KeyRiskIndicator, KRIAlert, KRIMeasurement, RiskScoreHistory
+from src.domain.models.user import User
 from src.services.risk_scoring import KRIService, RiskScoringService
 
 router = APIRouter(prefix="/kri", tags=["Key Risk Indicators"])
@@ -76,7 +77,7 @@ async def list_kris(
 async def create_kri(
     kri_data: KRICreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:create"))],
 ):
     """Create a new KRI."""
     # Check for duplicate code
@@ -114,7 +115,7 @@ async def get_kri_dashboard(
 @router.post("/calculate-all")
 async def calculate_all_kris(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Trigger calculation for all auto-calculate KRIs."""
     kri_service = KRIService(db)
@@ -153,7 +154,7 @@ async def update_kri(
     kri_id: int,
     kri_data: KRIUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Update a KRI."""
     result = await db.execute(
@@ -183,7 +184,7 @@ async def update_kri(
 async def delete_kri(
     kri_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:delete"))],
 ):
     """Delete a KRI."""
     result = await db.execute(
@@ -205,7 +206,7 @@ async def delete_kri(
 async def calculate_kri(
     kri_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Trigger calculation for a specific KRI."""
     kri_service = KRIService(db)
@@ -281,7 +282,7 @@ async def get_pending_alerts(
 async def acknowledge_alert(
     alert_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
 ):
     """Acknowledge a KRI alert."""
@@ -310,7 +311,7 @@ async def acknowledge_alert(
 async def resolve_alert(
     alert_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
     notes: Optional[str] = None,
 ):
     """Resolve a KRI alert."""
@@ -367,7 +368,7 @@ async def assess_incident_sif(
     incident_id: int,
     assessment: SIFAssessmentCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("kri:update"))],
 ):
     """Assess an incident for SIF/pSIF classification."""
     result = await db.execute(

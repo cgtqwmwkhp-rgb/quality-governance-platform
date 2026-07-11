@@ -172,3 +172,16 @@ def test_investigation_templates_write_routes_require_permission():
 def test_auditor_competence_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/auditor_competence.py")
     assert "audit:update" in perms
+
+
+def test_signature_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/signatures.py")
+    assert "signature:create" in perms
+    assert "signature:update" in perms
+
+
+def test_kri_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/kri.py")
+    assert "kri:create" in perms
+    assert "kri:update" in perms
+    assert "kri:delete" in perms
