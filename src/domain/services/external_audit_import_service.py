@@ -29,14 +29,8 @@ from src.domain.models.external_audit_import import (
 )
 from src.domain.services.ai_consensus_service import AIConsensusService
 from src.domain.services.external_audit_analysis_service import ExternalAuditAnalysisService
-from src.domain.services.external_audit_ocr_service import (
-    MAX_SOURCE_FILE_BYTES,
-    ExternalAuditOcrService,
-)
-from src.domain.services.external_audit_promotion_service import (
-    ExternalAuditPromotionService,
-    PromotionResult,
-)
+from src.domain.services.external_audit_ocr_service import MAX_SOURCE_FILE_BYTES, ExternalAuditOcrService
+from src.domain.services.external_audit_promotion_service import ExternalAuditPromotionService, PromotionResult
 from src.domain.services.gemini_review_service import GeminiReviewService
 from src.domain.services.mistral_analysis_service import MistralAnalysisService
 from src.domain.services.reference_number import ReferenceNumberService

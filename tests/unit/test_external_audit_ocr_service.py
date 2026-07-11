@@ -1,7 +1,7 @@
 """Path-to-10 S1: OCR extraction collaborator for external audit import."""
 
-from src.domain.services.external_audit_ocr_service import ExternalAuditOcrService
 from src.domain.services.external_audit_import_service import ExternalAuditImportService
+from src.domain.services.external_audit_ocr_service import ExternalAuditOcrService
 
 
 def test_merge_extractions_prefers_richer_ocr_corpus() -> None:
@@ -25,6 +25,4 @@ def test_import_facade_reexports_ocr_merge_policy() -> None:
         ocr_pages=[],
         native_method="docx",
     )
-    assert ExternalAuditImportService._merge_extractions(**args) == ExternalAuditOcrService._merge_extractions(
-        **args
-    )
+    assert ExternalAuditImportService._merge_extractions(**args) == ExternalAuditOcrService._merge_extractions(**args)

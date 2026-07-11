@@ -7,10 +7,8 @@ import pytest
 
 from src.domain.models.compliance_evidence import EvidenceLinkMethod
 from src.domain.services.external_audit_import_service import ExternalAuditImportService, PromotionResult
-from src.domain.services.external_audit_promotion_service import (
-    ExternalAuditPromotionService,
-    PromotionResult as DomainPromotionResult,
-)
+from src.domain.services.external_audit_promotion_service import ExternalAuditPromotionService
+from src.domain.services.external_audit_promotion_service import PromotionResult as DomainPromotionResult
 
 
 def test_promotion_result_reexport_is_canonical() -> None:
