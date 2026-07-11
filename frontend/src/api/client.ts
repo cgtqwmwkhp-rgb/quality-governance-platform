@@ -19,6 +19,8 @@ import { createInvestigationsApi } from './investigationsClient'
 import { createActionsApi } from './actionsClient'
 import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
+import { createRtasApi } from './rtasClient'
+import { createComplaintsApi } from './complaintsClient'
 import type { Investigation } from './investigationsClient'
 import type { RunningSheetEntry } from './incidentsClient'
 import {
@@ -693,202 +695,21 @@ export interface NearMissUpdate {
   potential_severity?: string
 }
 
-// ============ RTA Types ============
-export interface ThirdParty {
-  name?: string
-  contact?: string
-  phone?: string
-  email?: string
-  vehicle_reg?: string
-  vehicle_make_model?: string
-  damage?: string
-  injured?: boolean
-  injury_details?: string
-  insurer?: string
-  insurer_policy_number?: string
-  is_at_fault?: boolean
-}
+// ============ RTA Types (extracted: rtasClient.ts) ============
+export type {
+  ThirdParty,
+  Witness,
+  RTA,
+  RTACreate,
+  RTAUpdate,
+} from './rtasClient'
 
-export interface Witness {
-  name?: string
-  phone?: string
-  email?: string
-  statement?: string
-  willing_to_provide_statement?: boolean
-}
-
-export interface RTA {
-  id: number
-  reference_number: string
-  title: string
-  description: string
-  severity: string
-  status: string
-  collision_date: string
-  reported_date: string
-  location: string
-  road_name?: string
-  postcode?: string
-  collision_time?: string
-  weather_conditions?: string
-  road_conditions?: string
-  lighting_conditions?: string
-  company_vehicle_registration?: string
-  company_vehicle_make_model?: string
-  company_vehicle_damage?: string
-  driver_name?: string
-  driver_id?: number
-  driver_email?: string
-  driver_statement?: string
-  driver_injured: boolean
-  driver_injury_details?: string
-  police_attended: boolean
-  police_reference?: string
-  police_station?: string
-  insurance_notified: boolean
-  insurance_reference?: string
-  insurance_notes?: string
-  estimated_cost?: number
-  vehicles_involved_count?: number
-  cctv_available?: boolean
-  cctv_location?: string
-  dashcam_footage_available?: boolean
-  footage_secured?: boolean
-  footage_notes?: string
-  third_parties?: { parties?: ThirdParty[] }
-  witnesses?: string
-  witnesses_structured?: { witnesses?: Witness[] }
-  fault_determination?: string
-  investigation_notes?: string
-  root_cause?: string
-  reporter_name?: string
-  reporter_email?: string
-  reporter_submission?: Record<string, unknown> | null
-  created_at: string
-  updated_at?: string
-}
-
-export interface RTACreate {
-  title: string
-  description: string
-  severity: string
-  collision_date: string
-  reported_date: string
-  location: string
-  road_name?: string
-  postcode?: string
-  weather_conditions?: string
-  road_conditions?: string
-  company_vehicle_registration?: string
-  driver_name?: string
-  driver_injured?: boolean
-  police_attended?: boolean
-  third_parties?: { parties?: ThirdParty[] }
-  reporter_name?: string
-  reporter_email?: string
-  reporter_submission?: Record<string, unknown>
-}
-
-export interface RTAUpdate {
-  title?: string
-  description?: string
-  severity?: string
-  status?: string
-  location?: string
-  road_name?: string
-  postcode?: string
-  collision_time?: string
-  weather_conditions?: string
-  road_conditions?: string
-  lighting_conditions?: string
-  company_vehicle_registration?: string
-  company_vehicle_make_model?: string
-  company_vehicle_damage?: string
-  driver_name?: string
-  driver_id?: number
-  driver_email?: string
-  driver_statement?: string
-  driver_injured?: boolean
-  driver_injury_details?: string
-  police_attended?: boolean
-  police_reference?: string
-  police_station?: string
-  insurance_notified?: boolean
-  insurance_reference?: string
-  insurance_notes?: string
-  estimated_cost?: number
-  vehicles_involved_count?: number
-  cctv_available?: boolean
-  cctv_location?: string
-  dashcam_footage_available?: boolean
-  footage_secured?: boolean
-  footage_notes?: string
-  third_parties?: { parties?: ThirdParty[] }
-  witnesses?: string
-  witnesses_structured?: { witnesses?: Witness[] }
-  fault_determination?: string
-}
-
-// ============ Complaint Types ============
-export interface Complaint {
-  id: number
-  reference_number: string
-  title: string
-  description: string
-  complaint_type: string
-  priority: string
-  status: string
-  received_date: string
-  complainant_name: string
-  complainant_email?: string
-  complainant_phone?: string
-  complainant_company?: string
-  related_reference?: string
-  department?: string
-  target_resolution_date?: string
-  investigation_notes?: string
-  root_cause?: string
-  resolution_summary?: string
-  customer_satisfied?: boolean
-  compensation_offered?: string
-  owner_id?: number
-  reporter_submission?: Record<string, unknown> | null
-  due_date?: string
-  created_at: string
-  updated_at?: string
-  closed_at?: string | null
-}
-
-export interface ComplaintCreate {
-  title: string
-  description: string
-  complaint_type: string
-  priority: string
-  received_date: string
-  complainant_name: string
-  complainant_email?: string
-  complainant_phone?: string
-  complainant_company?: string
-  related_reference?: string
-  department?: string
-  reporter_submission?: Record<string, unknown>
-}
-
-export interface ComplaintUpdate {
-  title?: string
-  description?: string
-  complaint_type?: string
-  priority?: string
-  status?: string
-  complainant_name?: string
-  complainant_email?: string
-  complainant_phone?: string
-  investigation_notes?: string
-  root_cause?: string
-  customer_satisfied?: boolean
-  compensation_offered?: string
-  resolution_summary?: string
-}
+// ============ Complaint Types (extracted: complaintsClient.ts) ============
+export type {
+  Complaint,
+  ComplaintCreate,
+  ComplaintUpdate,
+} from './complaintsClient'
 
 // ============ Policy Types (extracted: policiesClient.ts) ============
 export type {
@@ -1421,42 +1242,11 @@ export const authApi = {
 // ============ Incidents API (extracted: incidentsClient.ts) ============
 export const incidentsApi = createIncidentsApi(api)
 
-export const rtasApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<RTA>>(`/api/v1/rtas/?page=${page}&page_size=${pageSize}`),
-  create: (data: RTACreate) => api.post<RTA>('/api/v1/rtas/', data),
-  get: (id: number) => api.get<RTA>(`/api/v1/rtas/${id}`),
-  update: (id: number, data: RTAUpdate) => api.patch<RTA>(`/api/v1/rtas/${id}`, data),
-  listInvestigations: (id: number, page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/rtas/${id}/investigations?page=${page}&page_size=${pageSize}`,
-    ),
-  listRunningSheet: (rtaId: number) =>
-    api.get<RunningSheetEntry[]>(`/api/v1/rtas/${rtaId}/running-sheet`),
-  addRunningSheetEntry: (rtaId: number, data: { content: string; entry_type?: string }) =>
-    api.post<RunningSheetEntry>(`/api/v1/rtas/${rtaId}/running-sheet`, data),
-  deleteRunningSheetEntry: (rtaId: number, entryId: number) =>
-    api.delete(`/api/v1/rtas/${rtaId}/running-sheet/${entryId}`),
-}
+// ============ RTAs API (extracted: rtasClient.ts) ============
+export const rtasApi = createRtasApi(api)
 
-export const complaintsApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Complaint>>(`/api/v1/complaints/?page=${page}&page_size=${pageSize}`),
-  create: (data: ComplaintCreate) => api.post<Complaint>('/api/v1/complaints/', data),
-  get: (id: number) => api.get<Complaint>(`/api/v1/complaints/${id}`),
-  update: (id: number, data: ComplaintUpdate) =>
-    api.patch<Complaint>(`/api/v1/complaints/${id}`, data),
-  listInvestigations: (id: number, page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/complaints/${id}/investigations?page=${page}&page_size=${pageSize}`,
-    ),
-  listRunningSheet: (complaintId: number) =>
-    api.get<RunningSheetEntry[]>(`/api/v1/complaints/${complaintId}/running-sheet`),
-  addRunningSheetEntry: (complaintId: number, data: { content: string; entry_type?: string }) =>
-    api.post<RunningSheetEntry>(`/api/v1/complaints/${complaintId}/running-sheet`, data),
-  deleteRunningSheetEntry: (complaintId: number, entryId: number) =>
-    api.delete(`/api/v1/complaints/${complaintId}/running-sheet/${entryId}`),
-}
+// ============ Complaints API (extracted: complaintsClient.ts) ============
+export const complaintsApi = createComplaintsApi(api)
 
 export const nearMissesApi = {
   list: (page = 1, pageSize = 10) =>
