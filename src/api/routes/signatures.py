@@ -5,15 +5,16 @@ DocuSign-level e-signature capabilities.
 """
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -132,7 +133,7 @@ class AuditLogResponse(BaseModel):
 @router.post("/requests", response_model=SignatureRequestResponse)
 async def create_signature_request(
     data: SignatureRequestCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     db: DbSession = None,
 ):
     """Create a new signature request."""
@@ -219,7 +220,7 @@ async def get_signature_request(
 @router.post("/requests/{request_id}/send")
 async def send_signature_request(
     request_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     db: DbSession = None,
 ):
     """Send a signature request to signers."""
@@ -240,7 +241,7 @@ async def send_signature_request(
 @router.post("/requests/{request_id}/void")
 async def void_signature_request(
     request_id: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:update"))],
     reason: Optional[str] = None,
     db: DbSession = None,
 ):
@@ -405,7 +406,7 @@ async def decline_signing(
 @router.post("/templates", response_model=TemplateResponse)
 async def create_template(
     data: TemplateCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     db: DbSession = None,
 ):
     """Create a signature template."""
@@ -453,7 +454,7 @@ async def list_templates(
 async def use_template(
     template_id: int,
     signers: list[SignerInput],
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("signature:create"))],
     title: Optional[str] = None,
     db: DbSession = None,
 ):
