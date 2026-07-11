@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 19 |
-| Owned nullable `tenant_id` | 89 |
+| Required `tenant_id` (`nullable=False`) | 25 |
+| Owned nullable `tenant_id` | 83 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **108** |
+| **Nullable total** | **102** |
 
 ## Phase 1 decision
 
@@ -39,11 +39,8 @@ This phase lands:
 | `investigation_revision_events` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_rev_evt_nn`). ORM `nullable=False`. See `docs/data/investigation-revision-events-tenant-backfill.md`. |
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
-| `external_audit_import_drafts` | **Done (incremental)** | Fail-safe backfill from `external_audit_import_jobs` + conditional `NOT NULL` (`20260710_ext_draft_nn`). ORM `nullable=False`. See `docs/data/external-audit-import-drafts-tenant-backfill.md`. |
-| `incidents` | **Done (incremental)** | Fail-safe backfill from `users` (creator) + conditional `NOT NULL` (`20260710_inc_tenant_nn`). ORM `nullable=False`. See `docs/data/incidents-tenant-backfill.md`. |
-| `risks` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
+| `road_traffic_collisions` | Done (fail-safe) | Parent core TEN2 — creator/reporter backfill; NOT NULL only when residual NULLs=0. |
 | `risks_v2` / `risk_assessments` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
-| `complaints` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -52,11 +49,8 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 
 | Table | Model |
 | --- | --- |
-| `complaints` | `Complaint` |
 | `risk_assessments` | `RiskAssessment` |
-| `risks` | `Risk` |
 | `risks_v2` | `EnterpriseRisk` |
-
 ## Required `tenant_id`
 
 | Table | Model |
@@ -64,24 +58,26 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `audit_findings` | `AuditFinding` |
 | `audit_runs` | `AuditRun` |
 | `capa_actions` | `CAPAAction` |
-| `investigation_actions` | `InvestigationAction` |
-| `investigation_comments` | `InvestigationComment` |
-| `investigation_revision_events` | `InvestigationRevisionEvent` |
-| `investigation_runs` | `InvestigationRun` |
-| `investigation_customer_packs` | `InvestigationCustomerPack` |
 | `complaint_actions` | `ComplaintAction` |
+| `complaints` | `Complaint` |
 | `compliance_evidence_links` | `ComplianceEvidenceLink` |
 | `copilot_feedback` | `CopilotFeedback` |
 | `copilot_sessions` | `CopilotSession` |
+| `external_audit_import_drafts` | `ExternalAuditDraft` |
+| `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `incident_actions` | `IncidentAction` |
 | `incidents` | `Incident` |
+| `investigation_comments` | `InvestigationComment` |
+| `investigation_customer_packs` | `InvestigationCustomerPack` |
+| `investigation_revision_events` | `InvestigationRevisionEvent` |
+| `investigation_runs` | `InvestigationRun` |
+| `risks` | `Risk` |
+| `road_traffic_collisions` | `RoadTrafficCollision` |
 | `rta_actions` | `RTAAction` |
 | `signature_audit_logs` | `SignatureAuditLog` |
 | `signature_requests` | `SignatureRequest` |
 | `signature_templates` | `SignatureTemplate` |
 | `signatures` | `Signature` |
-| `external_audit_import_drafts` | `ExternalAuditDraft` |
-| `external_audit_import_jobs` | `ExternalAuditImportJob` |
 | `tenant_invitations` | `TenantInvitation` |
 | `tenant_users` | `TenantUser` |
 
@@ -102,7 +98,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `carbon_reporting_year` | `CarbonReportingYear` |
 | `competency_records` | `CompetencyRecord` |
 | `competency_requirements` | `CompetencyRequirement` |
-| `complaints` | `Complaint` |
 | `contracts` | `Contract` |
 | `controlled_document_versions` | `ControlledDocumentVersion` |
 | `controlled_documents` | `ControlledDocument` |
@@ -156,9 +151,7 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `risk_assessments` | `RiskAssessment` |
 | `risk_control_mappings` | `RiskControlMapping` |
 | `risk_controls` | `OperationalRiskControl` |
-| `risks` | `Risk` |
 | `risks_v2` | `EnterpriseRisk` |
-| `road_traffic_collisions` | `RoadTrafficCollision` |
 | `roi_investments` | `ROIInvestment` |
 | `saved_reports` | `SavedReport` |
 | `scope3_category_data` | `Scope3CategoryData` |
@@ -175,7 +168,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `uvdb_audit_response` | `UVDBAuditResponse` |
 | `uvdb_kpi_record` | `UVDBKPIRecord` |
 | `vehicle_registry` | `VehicleRegistry` |
-
 ## Catalog / global exceptions (nullable allowed)
 
 | Table | Model |
