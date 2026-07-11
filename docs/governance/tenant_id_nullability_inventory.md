@@ -6,7 +6,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 27 |
+| Required `tenant_id` (`nullable=False`) | 28 |
 | Owned nullable `tenant_id` | 81 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
@@ -42,6 +42,7 @@ This phase lands:
 | `road_traffic_collisions` | Done (fail-safe) | Parent core TEN2 — creator/reporter backfill; NOT NULL only when residual NULLs=0. |
 | `risk_assessments` | Done (fail-safe) | Child of `risks` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risks_v2` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
+| `bow_tie_elements` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -92,7 +93,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `assessment_runs` | `AssessmentRun` |
 | `assets` | `Asset` |
 | `benchmark_data` | `BenchmarkData` |
-| `bow_tie_elements` | `BowTieElement` |
 | `business_continuity_plans` | `BusinessContinuityPlan` |
 | `carbon_evidence` | `CarbonEvidence` |
 | `carbon_improvement_action` | `ImprovementAction` |
