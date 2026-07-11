@@ -1,11 +1,11 @@
 {
-  "release_sha": "01dc0270b4db903fc924327261239937ca31fc30",
+  "release_sha": "20a56a87e2a868d7c42773f9d47441805b9e720e",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 01dc0270 \u2014 Trust overnight wave: #678 TEN2 risks, #680 ImportReview p7, #679 AuthZ investigation templates/auditor.",
-  "approved_at_utc": "2026-07-11T00:32:29+00:00"
+  "notes": "Release signoff for main tip 20a56a87 \u2014 Trust overnight wave: #681 TEN2 RTA parent, #682 AuthZ signatures/KRI, #683 ImportReview p8 actions hook.",
+  "approved_at_utc": "2026-07-11T01:05:33+00:00"
 }
