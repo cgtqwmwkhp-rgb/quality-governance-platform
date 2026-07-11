@@ -1,11 +1,11 @@
 {
-  "release_sha": "fefbad5c7b3508d8060e1de891cf4bae96de544c",
+  "release_sha": "a6e8a2cb9748be7fd66394bce83a3d3e86fdf3d0",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip fefbad5c \u2014 Trust overnight wave: #681 TEN2 RTA, #682 AuthZ sig/KRI, #683 ImportReview p8, #686 TEN2 risk_assessments.",
-  "approved_at_utc": "2026-07-11T01:18:08+00:00"
+  "notes": "Release signoff for main tip a6e8a2cb \u2014 Path-to-10 wave: #734 TEN2 document_annotations, #735 AuthZ audit-trail/notifications, #736 Incidents axe CUJ, #737 FE coverage ratchet 25%. No SMTP invent; heartbeat alone.",
+  "approved_at_utc": "2026-07-11T10:59:49+00:00"
 }
