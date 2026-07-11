@@ -204,3 +204,9 @@ def test_policy_acknowledgment_admin_writes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/policy_acknowledgment.py")
     assert "policy:create" in perms
     assert "policy:update" in perms
+
+
+def test_rca_tools_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/rca_tools.py")
+    assert "rca:create" in perms
+    assert "rca:update" in perms

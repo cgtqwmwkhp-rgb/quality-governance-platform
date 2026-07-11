@@ -4,13 +4,14 @@ Provides endpoints for 5-Whys, Fishbone diagrams, and CAPA management.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.deps import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
+from src.domain.models.user import User
 from src.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
@@ -97,7 +98,7 @@ class VerifyCAPARequest(BaseModel):
 async def create_five_whys_analysis(
     request: CreateFiveWhysRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Create a new 5-Whys analysis."""
     service = FiveWhysService(db)
@@ -147,7 +148,7 @@ async def add_why_iteration(
     analysis_id: int,
     request: AddWhyRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Add a why iteration to an existing analysis."""
     service = FiveWhysService(db)
@@ -174,7 +175,7 @@ async def set_five_whys_root_cause(
     analysis_id: int,
     request: SetRootCauseRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Set the root cause for an analysis."""
     service = FiveWhysService(db)
@@ -200,7 +201,7 @@ async def complete_five_whys_analysis(
     analysis_id: int,
     request: CompleteAnalysisRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Mark a 5-Whys analysis as complete."""
     service = FiveWhysService(db)
@@ -256,7 +257,7 @@ async def get_five_whys_for_entity(
 async def create_fishbone_diagram(
     request: CreateFishboneRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Create a new Fishbone diagram."""
     service = FishboneService(db)
@@ -305,7 +306,7 @@ async def add_fishbone_cause(
     diagram_id: int,
     request: AddCauseRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Add a cause to a Fishbone diagram."""
     service = FishboneService(db)
@@ -332,7 +333,7 @@ async def set_fishbone_root_cause(
     diagram_id: int,
     request: SetFishboneRootCauseRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Set the root cause for a Fishbone diagram."""
     service = FishboneService(db)
@@ -359,7 +360,7 @@ async def complete_fishbone_diagram(
     diagram_id: int,
     request: CompleteAnalysisRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Mark a Fishbone diagram as complete."""
     service = FishboneService(db)
@@ -389,7 +390,7 @@ async def complete_fishbone_diagram(
 async def create_capa(
     request: CreateCAPARequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Create a new CAPA item."""
     service = CAPAService(db)
@@ -419,7 +420,7 @@ async def update_capa_status(
     capa_id: int,
     request: UpdateCAPAStatusRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:update"))],
 ):
     """Update CAPA status."""
     service = CAPAService(db)
@@ -445,7 +446,7 @@ async def verify_capa(
     capa_id: int,
     request: VerifyCAPARequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("rca:create"))],
 ):
     """Verify a CAPA has been completed effectively."""
     service = CAPAService(db)
