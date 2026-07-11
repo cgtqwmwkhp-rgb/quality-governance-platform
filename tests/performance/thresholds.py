@@ -10,6 +10,15 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Advisory Preferred S14 queue-depth / soft-gate scale hints (docs only semantics).
+# Ratios apply to the staging soft-gate bar; they never change Locust exit codes.
+QUEUE_DEPTH_SCALE_HINTS: dict[str, float | int] = {
+    "p95_breach_multiplier": 1.5,  # sustained p95 > 1.5× staging limit → investigate/scale
+    "error_rate_breach_multiplier": 2.0,  # sustained error rate > 2× staging limit
+    "sustained_run_count": 3,  # compare ≥ N recent soft-gate trend records
+    "staging_users": 20,  # soft-gate load shape (capacity-plan alignment)
+}
+
 # Named profiles for Preferred S14 performance bar. Env overrides always win.
 LOCUST_PROFILES: dict[str, dict[str, float | int | str]] = {
     "default": {

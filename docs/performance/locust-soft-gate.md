@@ -56,6 +56,14 @@ Use successive artifact downloads to compare Preferred staging-bar drift before
 promoting the soft-gate to a hard gate. The workflow does **not** invent secrets;
 trend fields only reuse public GitHub Actions context env vars.
 
+## Soft-gate dashboard note
+
+Treat each soft-gate workflow run’s **job summary** + `locust-soft-gate-trend.json`
+artifact as the Preferred S14 operator dashboard: PASS/BREACH, p95, error rate,
+and cross-run drift — still advisory (`continue-on-error` + soft exit). For when
+repeated breaches should prompt capacity scale-out (without blocking merges), see
+[`queue-depth-scale-hint.md`](queue-depth-scale-hint.md).
+
 ## Local run
 
 ```bash
@@ -80,5 +88,6 @@ When staging/CI p95 is stable under the staging profile:
 ## Related
 
 - [`docs/performance/api-slos.md`](api-slos.md) — CI vs production latency tiers
+- [`docs/performance/queue-depth-scale-hint.md`](queue-depth-scale-hint.md) — advisory scale-out + non-blocking p95 tighten
 - [`docs/slo/performance-slos.md`](../slo/performance-slos.md) — load-test pass/fail criteria
 - [`tests/performance/locustfile.py`](../../tests/performance/locustfile.py) — profiles + soft-gate listener
