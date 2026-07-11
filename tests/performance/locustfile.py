@@ -32,11 +32,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tests.performance.thresholds import (  # noqa: E402
-    resolve_perf_thresholds,
-    truthy,
-    write_soft_gate_summary,
-)
+from tests.performance.thresholds import resolve_perf_thresholds, truthy, write_soft_gate_summary  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +97,7 @@ def check_thresholds(environment, **kwargs):
         environment.process_exit_code = 0
     else:
         environment.process_exit_code = 0
+
 
 def random_string(length: int = 10) -> str:
     """Generate random string for test data."""

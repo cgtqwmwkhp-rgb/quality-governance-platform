@@ -56,11 +56,7 @@ def resolve_perf_thresholds(
     resolved["profile"] = name
 
     p95_raw = p95_override if p95_override is not None else os.environ.get("LOCUST_P95_MS")
-    err_raw = (
-        error_rate_override
-        if error_rate_override is not None
-        else os.environ.get("LOCUST_ERROR_RATE_PCT")
-    )
+    err_raw = error_rate_override if error_rate_override is not None else os.environ.get("LOCUST_ERROR_RATE_PCT")
     if p95_raw not in (None, ""):
         resolved["p95_response_ms"] = int(p95_raw)
     if err_raw not in (None, ""):
@@ -106,6 +102,4 @@ def write_soft_gate_summary(payload: dict) -> None:
     out_dir = Path(os.environ.get("LOCUST_SUMMARY_DIR", "."))
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "locust-soft-gate-summary.md").write_text(text, encoding="utf-8")
-    (out_dir / "locust-soft-gate-summary.json").write_text(
-        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-    )
+    (out_dir / "locust-soft-gate-summary.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
