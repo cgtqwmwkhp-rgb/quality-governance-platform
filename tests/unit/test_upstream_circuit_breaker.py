@@ -4,13 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from src.infrastructure.resilience.circuit_breaker import (
-    CircuitBreaker,
-    CircuitBreakerOpenError,
-    CircuitState,
-    _circuit_registry,
-    _registry_lock,
-)
 from src.domain.services.upstream_circuit_breaker import (
     UPSTREAM_BREAKER_NAMES,
     call_via_upstream_breaker,
@@ -20,6 +13,13 @@ from src.domain.services.upstream_circuit_breaker import (
     is_upstream_degraded,
     list_upstream_breaker_health,
     upstream_degraded_summary,
+)
+from src.infrastructure.resilience.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerOpenError,
+    CircuitState,
+    _circuit_registry,
+    _registry_lock,
 )
 
 

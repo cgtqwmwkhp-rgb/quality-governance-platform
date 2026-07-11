@@ -220,10 +220,7 @@ def upstream_degraded_summary(
             f"(circuit open: {', '.join(open_names)}). Retry shortly."
         )
     else:
-        message = (
-            "Upstream OCR/AI/blob services are recovering "
-            f"(half-open probe: {', '.join(half_open_names)})."
-        )
+        message = "Upstream OCR/AI/blob services are recovering " f"(half-open probe: {', '.join(half_open_names)})."
 
     return UpstreamDegradedSummary(
         degraded=degraded,
