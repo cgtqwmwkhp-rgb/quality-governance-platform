@@ -1,7 +1,8 @@
 """Public privacy disclosure endpoints (Path-to-10 S15).
 
-Provides machine-readable privacy contact details and data-lifecycle
-capability flags without requiring authentication.
+Provides machine-readable privacy contact details, data-lifecycle
+capability flags, sub-processor disclosure, DPIA status, and a stub
+Article 30-style data-processing register — without authentication.
 """
 
 from __future__ import annotations
@@ -19,6 +20,11 @@ router = APIRouter(prefix="/privacy", tags=["Privacy"])
 _DEFAULT_SECURITY_EMAIL = "security@plantexpand.com"
 _DEFAULT_PRIVACY_EMAIL = "privacy@plantexpand.com"
 
+# Machine-readable DPIA close-out status (docs/compliance/dpia-quality-governance-platform.md).
+# Engineering must not flip to "signed" until Section 9 is completed by the DPO.
+_DPIA_STATUS = "pending_dpo_signoff"
+_DPIA_DOC = "docs/compliance/dpia-quality-governance-platform.md"
+
 
 def _security_email() -> str:
     return (os.getenv("SECURITY_CONTACT_EMAIL") or _DEFAULT_SECURITY_EMAIL).strip()
@@ -26,6 +32,10 @@ def _security_email() -> str:
 
 def _privacy_email() -> str:
     return (os.getenv("PRIVACY_CONTACT_EMAIL") or _DEFAULT_PRIVACY_EMAIL).strip()
+
+
+def _as_of() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _retention_disclosure() -> dict[str, Any]:
@@ -47,13 +57,126 @@ def _retention_disclosure() -> dict[str, Any]:
     }
 
 
+def _dpia_disclosure() -> dict[str, Any]:
+    """DPIA artifact pointers plus live close-out status field."""
+    return {
+        "status": _DPIA_STATUS,
+        "status_doc": _DPIA_DOC,
+        "platform": _DPIA_DOC,
+        "ocr_ai_import": "docs/compliance/dpia-ocr-ai-import.md",
+        "incidents": "docs/privacy/dpia-incidents.md",
+        "checklist": "docs/privacy/dpia-checklist.md",
+        "governance_link": "docs/governance/privacy-ocr-ai-dpia.md",
+        "note": (
+            "status=pending_dpo_signoff until Section 9 of the platform DPIA is signed by the DPO; "
+            "close-out readiness pack is in DPIA §10."
+        ),
+    }
+
+
+def _subprocessors() -> list[dict[str, Any]]:
+    """Public sub-processor list (Art. 28 disclosure stub).
+
+    Mirrors infrastructure + optional OCR/AI processors documented in
+    docs/compliance/dpia-ocr-ai-import.md and gdpr-compliance.md §7.
+    """
+    return [
+        {
+            "name": "Microsoft Azure",
+            "role": "infrastructure_processor",
+            "purposes": [
+                "app_hosting",
+                "postgresql",
+                "blob_storage",
+                "entra_id",
+                "log_analytics",
+                "key_vault",
+            ],
+            "regions": ["UK South"],
+            "transfer_mechanism": "uk_eea_hosting",
+            "optional": False,
+            "dpa_doc": "docs/compliance/gdpr-compliance.md",
+        },
+        {
+            "name": "Mistral AI",
+            "role": "ai_ocr_processor",
+            "purposes": ["ocr", "structured_extraction"],
+            "regions": ["vendor_managed"],
+            "transfer_mechanism": "scc_or_uk_idta_via_vendor_dpa",
+            "optional": True,
+            "enabled_when": "mistral API keys configured",
+            "dpa_doc": "docs/compliance/dpia-ocr-ai-import.md",
+        },
+        {
+            "name": "Google Gemini",
+            "role": "ai_review_processor",
+            "purposes": ["multimodal_review"],
+            "regions": ["vendor_managed"],
+            "transfer_mechanism": "scc_or_uk_idta_via_vendor_dpa",
+            "optional": True,
+            "enabled_when": "google_gemini_api_key configured",
+            "dpa_doc": "docs/compliance/dpia-ocr-ai-import.md",
+        },
+    ]
+
+
+def _processing_activities() -> list[dict[str, Any]]:
+    """Stub Article 30 register rows (high-level; not a full ROPA)."""
+    return [
+        {
+            "activity_id": "user-accounts",
+            "name": "User account administration",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["email", "name", "role"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["users_deleted"].retention_days,
+            "retention_note": "Account lifetime + users_deleted horizon post-deactivation",
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "incidents",
+            "name": "Incident / H&S reporting",
+            "lawful_basis": "legal_obligation",
+            "data_categories": ["description", "location", "severity", "injury_details"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["incidents"].retention_days,
+            "storage": "postgresql",
+        },
+        {
+            "activity_id": "audit-findings",
+            "name": "Audit findings and evidence",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["finding_text", "evidence_references"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["audit_runs"].retention_days,
+            "storage": "postgresql_and_azure_blob",
+        },
+        {
+            "activity_id": "ocr-ai-import",
+            "name": "External audit OCR / AI import",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["document_content", "extracted_findings"],
+            "retention_days": None,
+            "retention_note": "Per parent import job + evidence retention policy",
+            "storage": "azure_blob_plus_optional_ai_processors",
+            "subprocessors": ["Mistral AI", "Google Gemini"],
+            "dpia": "docs/compliance/dpia-ocr-ai-import.md",
+        },
+        {
+            "activity_id": "auth-and-request-logs",
+            "name": "Authentication and API request logs",
+            "lawful_basis": "legitimate_interest",
+            "data_categories": ["login_times", "ip_addresses", "tenant_id", "user_id"],
+            "retention_days": DEFAULT_RETENTION_POLICIES["session_logs"].retention_days,
+            "storage": "structured_logs_and_log_analytics",
+        },
+    ]
+
+
 @router.get("/contact")
 async def privacy_contact() -> dict[str, Any]:
     """Public privacy / security contact and lifecycle capability flags.
 
     Surfaces RFC 9116 security.txt pointers plus documented soft-delete /
-    legal-hold support on evidence assets (C4-adjacent attachments), and a
-    retention SSOT summary under ``retention``.
+    legal-hold support on evidence assets (C4-adjacent attachments), a
+    retention SSOT summary under ``retention``, sub-processors, and DPIA status.
     """
     security = _security_email()
     privacy = _privacy_email()
@@ -66,12 +189,9 @@ async def privacy_contact() -> dict[str, Any]:
             "erasure": "/api/v1/gdpr/me/data-erasure",
             "erasure_status": "/api/v1/gdpr/me/data-erasure/status",
         },
-        "dpia": {
-            "ocr_ai_import": "docs/compliance/dpia-ocr-ai-import.md",
-            "incidents": "docs/privacy/dpia-incidents.md",
-            "checklist": "docs/privacy/dpia-checklist.md",
-            "governance_link": "docs/governance/privacy-ocr-ai-dpia.md",
-        },
+        "data_processing_register": "/api/v1/privacy/data-processing-register",
+        "dpia": _dpia_disclosure(),
+        "subprocessors": _subprocessors(),
         "data_lifecycle": {
             "soft_delete": True,
             "soft_delete_mixin": "src.domain.models.base.SoftDeleteMixin",
@@ -84,5 +204,33 @@ async def privacy_contact() -> dict[str, Any]:
             ),
         },
         "retention": _retention_disclosure(),
-        "as_of": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "as_of": _as_of(),
+    }
+
+
+@router.get("/data-processing-register")
+async def data_processing_register() -> dict[str, Any]:
+    """Stub Article 30-style data-processing register (ROPA summary).
+
+    High-level, machine-readable inventory for Path-to-10 S15 compliance LIVE.
+    Not a substitute for the full controller ROPA / DPO records.
+    """
+    return {
+        "register_kind": "article_30_stub",
+        "status": "stub",
+        "controller": "tenant_organisation",
+        "processor_operator": "Plantexpand (QGP platform operator)",
+        "policy_doc": "docs/compliance/gdpr-compliance.md",
+        "dpia": {
+            "status": _DPIA_STATUS,
+            "status_doc": _DPIA_DOC,
+        },
+        "subprocessors": _subprocessors(),
+        "activities": _processing_activities(),
+        "contact": "/api/v1/privacy/contact",
+        "as_of": _as_of(),
+        "note": (
+            "Stub disclosure for auditors and operators; expand activity rows and "
+            "link to signed DPAs before treating as full Art. 30 ROPA."
+        ),
     }
