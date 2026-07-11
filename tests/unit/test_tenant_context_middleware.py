@@ -31,7 +31,7 @@ def test_tenant_context_middleware_is_registered_on_app():
 
 def test_rls_tables_match_policy_migration():
     # Original 12 + WC-EXP (3) + action expand (3)
-    assert len(RLS_TABLES) == 18
+    assert len(RLS_TABLES) == 21
     assert "incidents" in RLS_TABLES
     assert "users" in RLS_TABLES
     assert "audit_log_entries" in RLS_TABLES
@@ -41,6 +41,9 @@ def test_rls_tables_match_policy_migration():
     assert "incident_actions" in RLS_TABLES
     assert "complaint_actions" in RLS_TABLES
     assert "rta_actions" in RLS_TABLES
+    assert "document_versions" in RLS_TABLES
+    assert "controlled_documents" in RLS_TABLES
+    assert "controlled_document_versions" in RLS_TABLES
 
 
 def test_broken_throwaway_session_pattern_removed():

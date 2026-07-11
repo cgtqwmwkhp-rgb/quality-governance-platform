@@ -72,6 +72,7 @@ def _lane1_channel_snapshot() -> tuple[dict[str, Any], dict[str, Any], dict[str,
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
+    from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
 
     return get_vapid_readiness(), get_email_readiness(), get_sms_readiness(), get_pagerduty_readiness()
 
@@ -108,6 +109,7 @@ def _build_api_readyz_checks(
     dlq: dict[str, Any],
     circuit_breakers: dict[str, Any],
     redis_required: bool,
+    upstream_ai: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: dict[str, Any] = {
         "database": db_status,
@@ -154,8 +156,11 @@ def _build_api_readyz_checks(
         "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
         "circuit_breakers": circuit_breakers,
+        "upstream": {"ai": upstream_ai or {"status": "unknown"}},
     }
     _attach_channel_notes(checks, vapid=vapid, email=email, sms=sms, pagerduty=pagerduty)
+    if upstream_ai and upstream_ai.get("note"):
+        checks["upstream_ai_note"] = upstream_ai["note"]
     if redis_status == "not_configured":
         if redis_required:
             checks["redis_note"] = (
@@ -243,6 +248,9 @@ async def readiness_check():
 
     # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational; PagerDuty fail-closed only when key set + last send failed
     vapid, email, sms, pagerduty = _lane1_channel_snapshot()
+    from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
+
+    upstream_ai = get_upstream_ai_readiness()
 
     if pagerduty.get("fail_closed"):
         overall_status = "not_ready"
@@ -262,6 +270,7 @@ async def readiness_check():
         dlq=dlq,
         circuit_breakers=circuit_breakers,
         redis_required=settings.is_redis_required,
+        upstream_ai=upstream_ai,
     )
 
     payload = {
