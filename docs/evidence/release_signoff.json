@@ -1,11 +1,11 @@
 {
-  "release_sha": "19eaf8666deac95d79bfe0fb43553bac481c81ee",
+  "release_sha": "27ce43d611f1ee3ca30bf3c56ef7dc7a4c8d80e5",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 19eaf866 \u2014 Path-to-10 FE: #756 extract rtas/complaints API clients (post #755 FORCE RLS actions). Frontend-only client shrink; weekend force_deploy for LIVE promote.",
-  "approved_at_utc": "2026-07-11T13:53:40+00:00"
+  "notes": "Release signoff for main tip 27ce43d6 — Path-to-10 land #759 dual risk_scoring, #760 upstream readyz, #761 nearMiss/risks clients, #762 FORCE RLS docs. No SMTP invent; heartbeat alone.",
+  "approved_at_utc": "2026-07-11T15:04:35+00:00"
 }
