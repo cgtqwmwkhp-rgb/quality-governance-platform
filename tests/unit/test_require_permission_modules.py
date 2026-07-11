@@ -250,3 +250,9 @@ def test_compliance_automation_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/compliance_automation.py")
     assert "audit:create" in perms
     assert "audit:update" in perms
+
+
+def test_ai_templates_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/ai_templates.py")
+    assert "audit:create" in perms
+
