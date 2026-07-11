@@ -202,7 +202,7 @@ export default function Policies() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-mono text-xs text-primary mb-1">{policy.reference_number}</p>
-                  <h3 className="font-semibold text-foreground truncate">{policy.title}</h3>
+                  <h2 className="font-semibold text-foreground truncate text-base">{policy.title}</h2>
                   {policy.description && (
                     <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                       {policy.description}
