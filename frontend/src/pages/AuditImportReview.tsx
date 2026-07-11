@@ -108,6 +108,7 @@ export default function AuditImportReview() {
         promoteableCount={promoteableCount}
         isBulkReviewing={isBulkReviewing}
         isPromoting={isPromoting}
+        isProcessing={isProcessing}
         hasJob={Boolean(job)}
         jobStatus={job?.status}
         specialistHomeLabel={specialistHome.label}
