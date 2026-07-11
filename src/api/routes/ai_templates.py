@@ -8,12 +8,13 @@ Provides Gemini-powered endpoints for:
 - Gap analysis for existing templates
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import DbSession, require_permission
+from src.domain.models.user import User
 from src.domain.services.gemini_ai_service import GeminiAIService
 
 router = APIRouter()
@@ -76,7 +77,7 @@ class PromptTemplateRequest(BaseModel):
 @router.post("/from-document")
 async def from_document(
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
     file: UploadFile = File(..., description="PDF or image document to convert to template"),
     asset_type: Optional[str] = None,
 ) -> dict:
@@ -112,7 +113,7 @@ async def from_document(
 async def generate_template(
     request: PromptTemplateRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> list[dict]:
     """Generate template sections from a freeform prompt."""
     service = GeminiAIService()
@@ -129,7 +130,7 @@ async def generate_template(
 async def web_enrich(
     request: WebEnrichRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict:
     """Get web search recommendations for asset type and optional manufacturer.
 
@@ -147,7 +148,7 @@ async def web_enrich(
 async def convert_to_assessment(
     request: ConvertToAssessmentRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict:
     """Convert a compliance/inspection template into a competency assessment version.
 
@@ -161,7 +162,7 @@ async def convert_to_assessment(
 async def assessor_guidance(
     request: AssessorGuidanceRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict:
     """Generate detailed assessor guidance for a specific question/skill.
 
@@ -178,7 +179,7 @@ async def assessor_guidance(
 async def gap_analysis(
     request: GapAnalysisRequest,
     db: DbSession,
-    user: CurrentUser,
+    user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict:
     """Analyse gaps between existing templates and industry standards for an asset type.
 
