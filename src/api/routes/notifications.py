@@ -9,12 +9,12 @@ Features:
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
 from src.domain.models.user import User
@@ -333,7 +333,9 @@ async def search_users_for_mention(
 
 
 @router.post("/test-notification")
-async def send_test_notification(current_user: CurrentUser):
+async def send_test_notification(
+    current_user: Annotated[User, Depends(require_permission("notifications:send"))],
+):
     """
     Send a test notification to the current user.
 
