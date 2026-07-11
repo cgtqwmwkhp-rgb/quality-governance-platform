@@ -44,7 +44,10 @@ SKIP_PATHS = frozenset(
     }
 )
 
-# Tables that already have tenant_isolation policies (20260222_add_row_level_security).
+# Tables with tenant_isolation policies (USING + WITH CHECK).
+# Original 12 from 20260222_add_row_level_security / 20260710_force_rls;
+# expanded in 20260711_rls_with_check_expand (policies, audit_findings,
+# investigation_actions).
 RLS_TABLES = (
     "incidents",
     "complaints",
@@ -58,6 +61,9 @@ RLS_TABLES = (
     "workflow_rules",
     "users",
     "audit_log_entries",
+    "policies",
+    "audit_findings",
+    "investigation_actions",
 )
 
 _current_tenant_id: ContextVar[Optional[int]] = ContextVar("current_tenant_id", default=None)

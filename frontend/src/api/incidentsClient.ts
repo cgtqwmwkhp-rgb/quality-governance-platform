@@ -1,0 +1,103 @@
+/**
+ * Incidents API client extracted from `client.ts` (Path-to-10 FE lane).
+ * Instantiated from `client.ts` with the shared axios instance to avoid cycles.
+ */
+import type { AxiosInstance } from 'axios'
+import type { Investigation } from './investigationsClient'
+
+/** Minimal paginated shape used by incident list responses. */
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  skip?: number
+  limit?: number
+  page?: number
+  page_size?: number
+  pages?: number
+  total_pages?: number
+}
+
+// ============ Incident Types ============
+export interface Incident {
+  id: number
+  reference_number: string
+  title: string
+  description: string
+  incident_type: string
+  severity: string
+  status: string
+  incident_date: string
+  reported_date: string
+  location?: string
+  department?: string
+  created_at: string
+  updated_at?: string
+  reporter_name?: string
+  reporter_email?: string
+  people_involved?: string
+  witnesses?: string
+  immediate_actions?: string
+  first_aid_given?: boolean
+  emergency_services_called?: boolean
+  investigator_id?: number | null
+  is_riddor_reportable?: boolean | null
+  riddor_classification?: string | null
+  is_sif?: boolean | null
+  life_altering_potential?: boolean | null
+  reporter_submission?: Record<string, unknown> | null
+  closed_at?: string | null
+}
+
+export interface IncidentCreate {
+  title: string
+  description: string
+  incident_type: string
+  severity: string
+  incident_date: string
+  reported_date: string
+  location?: string
+  department?: string
+  reporter_email?: string
+  reporter_name?: string
+}
+
+export interface IncidentUpdate {
+  title?: string
+  description?: string
+  incident_type?: string
+  severity?: string
+  status?: string
+  location?: string
+  department?: string
+}
+
+/** Shared running-sheet entry used by incidents and sibling case modules. */
+export interface RunningSheetEntry {
+  id: number
+  content: string
+  entry_type: string
+  author_id?: number
+  author_email?: string
+  created_at: string
+}
+
+export function createIncidentsApi(api: AxiosInstance) {
+  return {
+    list: (page = 1, pageSize = 10) =>
+      api.get<PaginatedResponse<Incident>>(`/api/v1/incidents/?page=${page}&page_size=${pageSize}`),
+    create: (data: IncidentCreate) => api.post<Incident>('/api/v1/incidents/', data),
+    get: (id: number) => api.get<Incident>(`/api/v1/incidents/${id}`),
+    update: (id: number, data: IncidentUpdate) =>
+      api.patch<Incident>(`/api/v1/incidents/${id}`, data),
+    listInvestigations: (id: number, page = 1, pageSize = 10) =>
+      api.get<PaginatedResponse<Investigation>>(
+        `/api/v1/incidents/${id}/investigations?page=${page}&page_size=${pageSize}`,
+      ),
+    listRunningSheet: (incidentId: number) =>
+      api.get<RunningSheetEntry[]>(`/api/v1/incidents/${incidentId}/running-sheet`),
+    addRunningSheetEntry: (incidentId: number, data: { content: string; entry_type?: string }) =>
+      api.post<RunningSheetEntry>(`/api/v1/incidents/${incidentId}/running-sheet`, data),
+    deleteRunningSheetEntry: (incidentId: number, entryId: number) =>
+      api.delete(`/api/v1/incidents/${incidentId}/running-sheet/${entryId}`),
+  }
+}
