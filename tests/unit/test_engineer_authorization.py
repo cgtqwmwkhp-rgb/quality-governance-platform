@@ -213,3 +213,17 @@ async def test_skills_matrix_applies_tenant_scope_to_asset_types():
 
     asset_type_query = db.execute.await_args_list[2].args[0]
     assert "asset_types.tenant_id" in str(asset_type_query)
+
+
+@pytest.mark.asyncio
+async def test_list_engineers_requires_tenant_membership():
+    from fastapi import HTTPException
+
+    db = types.SimpleNamespace(scalar=AsyncMock(), execute=AsyncMock())
+    user = types.SimpleNamespace(id=42, tenant_id=None, is_superuser=False, roles=[])
+
+    with pytest.raises(HTTPException) as exc_info:
+        await list_engineers(db, user, page=1, page_size=20)
+
+    assert exc_info.value.status_code == 403
+    db.execute.assert_not_awaited()
