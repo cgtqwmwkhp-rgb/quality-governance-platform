@@ -1,11 +1,11 @@
 {
-  "release_sha": "b5b938b1387378e7b283fedebfb56c7ac4e242aa",
+  "release_sha": "22478051e27591cbdc88d9fcc2be6d7e606f6c42",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip b5b938b1 \u2014 Path-to-10 FE: #748 extract incidents/policies API clients (post #747 RLS WITH CHECK). Frontend-only client shrink; no SMTP invent.",
-  "approved_at_utc": "2026-07-11T13:06:38+00:00"
+  "notes": "Release signoff for main tip 22478051 \u2014 Path-to-10: #752 FE statements 28\u219231 + Risk Register real axe; includes #750 PagerDuty Events API v2 enqueue + fail-closed readyz. No SMTP invent.",
+  "approved_at_utc": "2026-07-11T13:34:00+00:00"
 }
