@@ -244,3 +244,10 @@ def test_uvdb_write_routes_require_permission():
 def test_xml_import_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/xml_import.py")
     assert "audit:create" in perms
+
+
+def test_compliance_automation_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/compliance_automation.py")
+    assert "audit:create" in perms
+    assert "audit:update" in perms
+
