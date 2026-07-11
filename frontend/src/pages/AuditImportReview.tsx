@@ -104,21 +104,10 @@ export default function AuditImportReview() {
   // see the Import Review heading instead of a blank skeleton-only state.
   if (loading) {
     return (
-      <div className="space-y-6 p-6 animate-fade-in">
-        <ImportReviewHeader
-          pendingDraftCount={0}
-          promoteableCount={0}
-          isBulkReviewing={false}
-          isPromoting={false}
-          hasJob={false}
-          jobStatus={null}
-          specialistHomeLabel={specialistHome.label}
-          onBulkApprove={() => {}}
-          onOpenSpecialistHome={() => navigate(specialistHomePath)}
-          onPromoteClick={() => {}}
-        />
-        <LoadingSkeleton variant="card" rows={5} />
-      </div>
+      <ImportReviewLoadingState
+        specialistHomeLabel={specialistHome.label}
+        onOpenSpecialistHome={() => navigate(specialistHomePath)}
+      />
     )
   }
 
