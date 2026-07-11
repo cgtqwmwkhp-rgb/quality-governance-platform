@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.domain.services.workflow_engine import WorkflowEngine
+from src.domain.services.workflow_engine import WorkflowTemplateEngine as WorkflowEngine
 
 
 @pytest.fixture
