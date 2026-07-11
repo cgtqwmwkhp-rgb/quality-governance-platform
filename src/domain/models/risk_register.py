@@ -302,7 +302,7 @@ class EnterpriseKeyRiskIndicator(Base):
 
     __tablename__ = "key_risk_indicators"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 

@@ -409,7 +409,7 @@ async def create_kri(
 
     kri = EnterpriseKeyRiskIndicator(
         **kri_data.model_dump(),
-        tenant_id=current_user.tenant_id,
+        tenant_id=risk.tenant_id,
     )
     db.add(kri)
     await db.commit()
