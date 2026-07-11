@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 70 |
+| Owned nullable `tenant_id` | 69 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -53,6 +53,7 @@ This phase lands:
 | `policies` | Done (fail-safe) | Parent core TEN2 — creator/owner user backfill; NOT NULL only when residual NULLs=0. |
 | `documents` | Done (fail-safe) | Parent core TEN2 — creator/reviewer user backfill; NOT NULL only when residual NULLs=0. |
 | `document_versions` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `obsolete_document_records` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -147,7 +148,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `loler_examinations` | `LOLERExamination` |
 | `management_review_inputs` | `ManagementReviewInput` |
 | `management_reviews` | `ManagementReview` |
-| `obsolete_document_records` | `ObsoleteDocumentRecord` |
 | `onboarding_checklists` | `OnboardingChecklist` |
 | `risk_appetite_statements` | `RiskAppetiteStatement` |
 | `risk_controls` | `OperationalRiskControl` |
