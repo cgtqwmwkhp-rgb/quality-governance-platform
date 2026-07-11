@@ -4,12 +4,12 @@ Provides CRUD operations for workflow rules, SLA configurations,
 escalation levels, and status checking.
 """
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.workflow import (
     EscalationLevelCreate,
     EscalationLevelListResponse,
@@ -29,6 +29,7 @@ from src.api.schemas.workflow import (
     WorkflowRuleUpdate,
 )
 from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.domain.models.workflow_rules import (
     EntityType,
     EscalationLevel,
@@ -97,7 +98,7 @@ async def list_workflow_rules(
 async def create_workflow_rule(
     rule_data: WorkflowRuleCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new workflow rule."""
     rule = WorkflowRule(
@@ -137,7 +138,7 @@ async def update_workflow_rule(
     rule_id: int,
     rule_data: WorkflowRuleUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update a workflow rule."""
     result = await db.execute(
@@ -166,7 +167,7 @@ async def update_workflow_rule(
 async def delete_workflow_rule(
     rule_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:delete"))],
 ):
     """Delete a workflow rule."""
     result = await db.execute(
@@ -260,7 +261,7 @@ async def list_sla_configurations(
 async def create_sla_configuration(
     config_data: SLAConfigurationCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new SLA configuration."""
     config = SLAConfiguration(
@@ -300,7 +301,7 @@ async def update_sla_configuration(
     config_id: int,
     config_data: SLAConfigurationUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update an SLA configuration."""
     result = await db.execute(
@@ -329,7 +330,7 @@ async def update_sla_configuration(
 async def delete_sla_configuration(
     config_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:delete"))],
 ):
     """Delete an SLA configuration."""
     result = await db.execute(
@@ -417,7 +418,7 @@ async def pause_sla_tracking(
     entity_type: str,
     entity_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Pause SLA tracking for an entity (e.g., waiting for customer response)."""
     sla_service = SLAService(db)
@@ -434,7 +435,7 @@ async def resume_sla_tracking(
     entity_type: str,
     entity_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Resume paused SLA tracking."""
     sla_service = SLAService(db)
@@ -489,7 +490,7 @@ async def list_escalation_levels(
 async def create_escalation_level(
     level_data: EscalationLevelCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Create a new escalation level."""
     level = EscalationLevel(**level_data.dict(), tenant_id=current_user.tenant_id)
@@ -525,7 +526,7 @@ async def update_escalation_level(
     level_id: int,
     level_data: EscalationLevelUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:update"))],
 ):
     """Update an escalation level."""
     result = await db.execute(
@@ -552,7 +553,7 @@ async def update_escalation_level(
 async def delete_escalation_level(
     level_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:delete"))],
 ):
     """Delete an escalation level."""
     result = await db.execute(
@@ -578,7 +579,7 @@ async def delete_escalation_level(
 @router.post("/trigger-check")
 async def trigger_sla_check(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("workflow:create"))],
 ):
     """Manually trigger SLA checks (normally run by scheduler)."""
     engine = WorkflowEngine(db)

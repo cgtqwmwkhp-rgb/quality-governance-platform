@@ -1,12 +1,12 @@
 """Standards Library API routes."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
 from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
@@ -23,6 +23,7 @@ from src.api.schemas.standard import (
     StandardUpdate,
 )
 from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -84,6 +85,7 @@ async def create_standard(
     standard_data: StandardCreate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:create"))],
 ) -> StandardResponse:
     """Create a new standard (superuser only)."""
     # Check if code already exists
@@ -131,6 +133,7 @@ async def update_standard(
     standard_data: StandardUpdate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:update"))],
 ) -> StandardResponse:
     """Update a standard (superuser only)."""
     result = await db.execute(select(Standard).where(Standard.id == standard_id))
@@ -341,6 +344,7 @@ async def create_clause(
     clause_data: ClauseCreate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:create"))],
 ) -> ClauseResponse:
     """Create a new clause for a standard (superuser only)."""
     # Verify standard exists
@@ -390,6 +394,7 @@ async def update_clause(
     clause_data: ClauseUpdate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:update"))],
 ) -> ClauseResponse:
     """Update a clause (superuser only)."""
     result = await db.execute(select(Clause).where(Clause.id == clause_id))
@@ -424,6 +429,7 @@ async def create_control(
     control_data: ControlCreate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:create"))],
 ) -> ControlResponse:
     """Create a new control for a clause (superuser only)."""
     # Verify clause exists
@@ -470,6 +476,7 @@ async def update_control(
     control_data: ControlUpdate,
     db: DbSession,
     current_user: CurrentSuperuser,
+    _: Annotated[User, Depends(require_permission("standard:update"))],
 ) -> ControlResponse:
     """Update a control (superuser only)."""
     result = await db.execute(select(Control).where(Control.id == control_id))
