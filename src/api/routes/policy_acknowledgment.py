@@ -4,12 +4,12 @@ Provides endpoints for managing policy acknowledgment requirements
 tracking user acknowledgments, and compliance reporting.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import and_, select
 
-from src.api.deps import CurrentUser, DbSession
+from src.api.deps import CurrentUser, DbSession, require_permission
 from src.api.schemas.policy_acknowledgment import (
     AcknowledgmentRequirementCreate,
     AcknowledgmentRequirementResponse,
@@ -29,6 +29,7 @@ from src.domain.models.policy_acknowledgment import (
     PolicyAcknowledgment,
     PolicyAcknowledgmentRequirement,
 )
+from src.domain.models.user import User
 from src.services.policy_acknowledgment import DocumentReadLogService, PolicyAcknowledgmentService
 
 router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgments"])
@@ -47,7 +48,7 @@ router = APIRouter(prefix="/policy-acknowledgments", tags=["Policy Acknowledgmen
 async def create_acknowledgment_requirement(
     requirement_data: AcknowledgmentRequirementCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("policy:create"))],
 ):
     """Create an acknowledgment requirement for a policy."""
     service = PolicyAcknowledgmentService(db)
@@ -95,7 +96,7 @@ async def assign_acknowledgments(
     requirement_id: int,
     assign_data: AssignAcknowledgmentRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("policy:update"))],
 ):
     """Assign acknowledgment tasks to users."""
     service = PolicyAcknowledgmentService(db)
@@ -255,7 +256,7 @@ async def get_compliance_dashboard(
 @router.post("/check-overdue")
 async def check_overdue_acknowledgments(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("policy:update"))],
 ):
     """Check for and mark overdue acknowledgments."""
     service = PolicyAcknowledgmentService(db)
