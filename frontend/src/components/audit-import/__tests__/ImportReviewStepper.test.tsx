@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { ImportReviewStepper, resolveActiveStep } from '../ImportReviewStepper'
+import {
+  ImportReviewStepper,
+  resolveActiveStep,
+  resolveNextStepCopy,
+} from '../ImportReviewStepper'
 
 describe('ImportReviewStepper', () => {
   it('resolves upload when no job', () => {
@@ -22,5 +26,29 @@ describe('ImportReviewStepper', () => {
     expect(screen.getByText('Processing')).toBeInTheDocument()
     expect(screen.getByText('Review')).toBeInTheDocument()
     expect(screen.getByText('Promote')).toBeInTheDocument()
+  })
+
+  it('shows next-step copy for the review step', () => {
+    render(<ImportReviewStepper hasJob jobStatus="ready" promoteableCount={0} />)
+    expect(screen.getByTestId('import-review-stepper-next')).toHaveTextContent(
+      'Next: Promote — accept drafts, then promote into governance outcomes.',
+    )
+  })
+
+  it('shows processing next-step copy while extraction runs', () => {
+    render(<ImportReviewStepper hasJob isProcessing jobStatus="processing" />)
+    expect(screen.getByTestId('import-review-stepper-next')).toHaveTextContent(
+      'Next: Review — check draft findings when extraction finishes.',
+    )
+  })
+
+  it('shows completion copy after promotion', () => {
+    expect(resolveNextStepCopy('promote', { jobStatus: 'completed' })).toBe(
+      'Import complete — accepted drafts have been promoted.',
+    )
+    render(<ImportReviewStepper hasJob jobStatus="completed" promoteableCount={0} />)
+    expect(screen.getByTestId('import-review-stepper-next')).toHaveTextContent(
+      'Import complete — accepted drafts have been promoted.',
+    )
   })
 })
