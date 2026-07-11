@@ -337,7 +337,7 @@ class ExternalAuditPromotionService:
         if document_clause_ids:
             try:
                 async with self.db.begin_nested():
-                    await self._link_source_document_evidence(
+                    await self.host._link_source_document_evidence(
                         asset_id=job.source_document_asset_id,
                         clause_ids=sorted(document_clause_ids),
                         tenant_id=resolved_tenant_id,
@@ -350,7 +350,7 @@ class ExternalAuditPromotionService:
         scheme_alignment: dict[str, object] | None = None
         try:
             async with self.db.begin_nested():
-                scheme_alignment = await self._sync_scheme_records(
+                scheme_alignment = await self.host._sync_scheme_records(
                     job=job,
                     run=run,
                     tenant_id=resolved_tenant_id,
@@ -614,7 +614,7 @@ class ExternalAuditPromotionService:
                     finding_id = await self.host._resolve_persisted_finding_id(
                         finding_id=getattr(finding, "id", None), tenant_id=draft_tid
                     )
-                    await self._link_evidence_for_finding(
+                    await self.host._link_evidence_for_finding(
                         finding_id=finding_id,
                         clause_ids=clause_ids,
                         tenant_id=draft_tid,
@@ -1043,6 +1043,13 @@ class ExternalAuditPromotionService:
             if "planet mark" in declared or "planet_mark" in declared:
                 return True
         return False
+
+    # Certification status mapping: Planet Mark language → internal enum
+    _PM_OUTCOME_TO_CERT_STATUS: dict[str, str] = {
+        "certified": "certified",
+        "in_progress": "submitted",
+        "not_certified": "draft",
+    }
 
     async def _sync_planet_mark(
         self,

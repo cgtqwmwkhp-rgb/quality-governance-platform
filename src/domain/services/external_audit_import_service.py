@@ -100,6 +100,51 @@ class ExternalAuditImportService:
             confidence=confidence,
         )
 
+    async def _link_source_document_evidence(
+        self,
+        *,
+        asset_id: int,
+        clause_ids: list[str],
+        tenant_id: int | None,
+        user_id: int,
+        title: str | None,
+    ) -> None:
+        await self.promotion_service._link_source_document_evidence(
+            asset_id=asset_id,
+            clause_ids=clause_ids,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            title=title,
+        )
+
+    async def _sync_scheme_records(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        tenant_id: int | None,
+        drafts: list,
+    ) -> dict[str, object]:
+        return await self.promotion_service._sync_scheme_records(
+            job=job,
+            run=run,
+            tenant_id=tenant_id,
+            drafts=drafts,
+        )
+
+    async def _sync_planet_mark(
+        self,
+        *,
+        job: ExternalAuditImportJob,
+        run: AuditRun,
+        tenant_id: int | None,
+    ) -> dict[str, object]:
+        return await self.promotion_service._sync_planet_mark(
+            job=job,
+            run=run,
+            tenant_id=tenant_id,
+        )
+
     @staticmethod
     def _merge_extractions(
         *,
