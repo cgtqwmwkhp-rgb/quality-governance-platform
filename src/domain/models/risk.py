@@ -148,7 +148,7 @@ class RiskAssessment(Base, TimestampMixin):
         CheckConstraint("inherent_impact BETWEEN 1 AND 5", name="ck_risk_assessments_inherent_impact_range"),
     )
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks.id", ondelete="CASCADE"), nullable=False, index=True)
 
