@@ -58,9 +58,36 @@ describe('ImportReviewEvidenceCard', () => {
       />,
     )
 
+    expect(screen.getByTestId('import-review-evidence-empty')).toBeInTheDocument()
+    expect(screen.getByText('No clause-level evidence preview yet')).toBeInTheDocument()
     expect(
-      screen.getByText('No clause-level evidence preview available yet.'),
+      screen.getByText(/Mappings appear after OCR\/analysis extracts clause references/i),
     ).toBeInTheDocument()
     expect(screen.queryByText('aligned')).not.toBeInTheDocument()
+  })
+
+  it('guides when summaries exist without clause badges', () => {
+    render(
+      <ImportReviewEvidenceCard
+        job={
+          {
+            id: 2,
+            evidence_preview_json: [],
+            positive_summary_json: [{ id: 1 }],
+            nonconformity_summary_json: [],
+            improvement_summary_json: [],
+          } as never
+        }
+        approvedCount={0}
+        acceptedClauseCount={0}
+        acceptedActionCandidates={0}
+        acceptedRiskCandidates={0}
+      />,
+    )
+
+    expect(screen.getByTestId('import-review-evidence-empty')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Summary counts are available below/i),
+    ).toBeInTheDocument()
   })
 })
