@@ -6,11 +6,11 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 68 |
+| Required `tenant_id` (`nullable=False`) | 31 |
+| Owned nullable `tenant_id` | 67 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
-| **Nullable total** | **102** |
+| **Nullable total** | **101** |
 
 ## Phase 1 decision
 
@@ -55,6 +55,7 @@ This phase lands:
 | `document_versions` | Done (fail-safe) | Child of `documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `obsolete_document_records` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `document_access_logs` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
+| `document_distributions` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -124,7 +125,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `document_approval_instances` | `DocumentApprovalInstance` |
 | `document_approval_workflows` | `DocumentApprovalWorkflow` |
 | `document_chunks` | `DocumentChunk` |
-| `document_distributions` | `DocumentDistribution` |
 | `document_search_logs` | `DocumentSearchLog` |
 | `document_training_links` | `DocumentTrainingLink` |
 | `driver_acknowledgements` | `DriverAcknowledgement` |

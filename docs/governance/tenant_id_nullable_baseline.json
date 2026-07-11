@@ -29,7 +29,6 @@
     "document_approval_instances",
     "document_approval_workflows",
     "document_chunks",
-    "document_distributions",
     "document_search_logs",
     "document_training_links",
     "driver_acknowledgements",

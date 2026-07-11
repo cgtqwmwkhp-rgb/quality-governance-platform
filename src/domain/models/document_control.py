@@ -291,7 +291,7 @@ class DocumentDistribution(Base):
     __tablename__ = "document_distributions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     document_id: Mapped[int] = mapped_column(ForeignKey("controlled_documents.id", ondelete="CASCADE"), nullable=False)
     version_id: Mapped[Optional[int]] = mapped_column(ForeignKey("controlled_document_versions.id"), nullable=True)
