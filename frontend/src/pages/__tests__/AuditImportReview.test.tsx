@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AuditImportReview from '../AuditImportReview'
+import AuditImportReview, { resolveImportUnavailableNextStep } from '../AuditImportReview'
 
 const mockGetJob = vi.fn()
 const mockGetLatestJobForRun = vi.fn()
@@ -152,8 +152,45 @@ describe('AuditImportReview', () => {
         'This import job belongs to a different audit run. Re-open it from the audits workspace.',
       ),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open Customer Audits' })).toBeDisabled()
+    expect(screen.getByTestId('import-review-workspace-unavailable')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Next: Open the audits workspace and launch Import Review from the correct audit run.',
+      ),
+    ).toBeInTheDocument()
+    // Recovery CTA must stay enabled so operators can leave the dead-end route.
+    expect(screen.getByRole('button', { name: 'Open Customer Audits' })).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
     expect(mockGetRunDetail).not.toHaveBeenCalled()
+  })
+
+  it('guides operators when no import job exists for the audit yet', async () => {
+    mockGetLatestJobForRun.mockRejectedValue({
+      response: { status: 404, data: { detail: 'missing' } },
+    })
+
+    renderPage('/audits/41/import-review')
+
+    expect(
+      await screen.findByText(
+        'No import job has been created for this audit yet. Attach a source report and queue the import first.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Next: Attach a source report on the audit, queue the import, then return here.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open Customer Audits' })).not.toBeDisabled()
+  })
+
+  it('resolves unavailable next-step copy for missing job reference and generic failures', () => {
+    expect(resolveImportUnavailableNextStep('Missing import job reference.')).toMatch(
+      /Open Import Review from an audit run/,
+    )
+    expect(resolveImportUnavailableNextStep('Failed to load the import review workspace. Please retry.')).toMatch(
+      /Retry loading this workspace/,
+    )
   })
 
   it('resolves the latest job for a run when no job query string is present', async () => {
