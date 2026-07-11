@@ -14,13 +14,13 @@ Provides endpoints for:
 
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import case, func, select, text
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import NotFoundError
 from src.domain.models.iso27001 import (
     AccessControlRecord,
@@ -33,6 +33,7 @@ from src.domain.models.iso27001 import (
     StatementOfApplicability,
     SupplierSecurityAssessment,
 )
+from src.domain.models.user import User
 
 router = APIRouter()
 
@@ -279,7 +280,7 @@ async def list_assets(
 @router.post("/assets", response_model=dict, status_code=201)
 async def create_asset(
     asset_data: AssetCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create information asset with tenant-scoped unique ID."""
@@ -353,7 +354,7 @@ async def get_asset(
 async def update_asset(
     asset_id: int,
     asset_data: AssetUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update an information asset."""
@@ -473,7 +474,7 @@ async def list_controls(
 async def update_control(
     control_id: int,
     control_data: ControlUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update control implementation status."""
@@ -690,7 +691,7 @@ async def get_security_risk(
 @router.post("/risks", response_model=dict, status_code=201)
 async def create_security_risk(
     risk_data: SecurityRiskCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create information security risk with correct residual score calculation."""
@@ -725,7 +726,7 @@ async def create_security_risk(
 async def update_security_risk(
     risk_id: int,
     risk_data: RiskUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update a security risk (for periodic review updates)."""
@@ -828,7 +829,7 @@ async def list_security_incidents(
 @router.post("/incidents", response_model=dict, status_code=201)
 async def create_security_incident(
     incident_data: SecurityIncidentCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create security incident with tenant-scoped ID."""
@@ -913,7 +914,7 @@ async def get_security_incident(
 async def update_security_incident(
     incident_id: int,
     incident_data: IncidentUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update security incident."""
@@ -1042,7 +1043,7 @@ async def get_supplier_assessment(
 @router.post("/suppliers", response_model=dict, status_code=201)
 async def create_supplier_assessment(
     assessment_data: SupplierAssessmentCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create supplier security assessment."""
@@ -1122,7 +1123,7 @@ async def list_access_control(
 @router.post("/access-control", response_model=dict, status_code=201)
 async def create_access_control(
     ac_data: AccessControlCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Record an access control grant."""
@@ -1280,7 +1281,7 @@ async def get_bcp(
 @router.post("/business-continuity", response_model=dict, status_code=201)
 async def create_bcp(
     bcp_data: BCPCreate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Create a business continuity plan."""
@@ -1308,7 +1309,7 @@ async def create_bcp(
 async def update_bcp(
     plan_id: int,
     bcp_data: BCPUpdate,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: DbSession = None,
 ) -> dict[str, Any]:
     """Update a business continuity plan."""
