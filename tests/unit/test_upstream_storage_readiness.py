@@ -13,6 +13,11 @@ def test_upstream_storage_not_configured_when_connection_missing(monkeypatch):
     assert "note" in result
     assert "connection_string" not in result
     assert "AccountKey" not in str(result)
+    # Preferred S10 honesty: circuit metadata + skipped ping; never invent secrets
+    assert result["circuits"]["blob_storage"]["state"] == "unregistered"
+    assert result["ping"]["connectivity"] == "unprobed"
+    assert "password" not in str(result).lower()
+    assert "smtp" not in str(result).lower()
 
 
 def test_upstream_storage_partial_when_container_explicitly_empty(monkeypatch):

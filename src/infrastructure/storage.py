@@ -15,8 +15,12 @@ from typing import Optional
 from urllib.parse import quote, urlencode
 
 from src.core.config import settings
+from src.domain.services.upstream_circuit_breaker import call_via_upstream_breaker
 
 logger = logging.getLogger(__name__)
+
+# Preferred S10 catalog name for Azure Blob I/O (shared registry).
+_BLOB_UPSTREAM_BREAKER = "blob_storage"
 
 
 class StorageError(Exception):
@@ -331,52 +335,64 @@ class AzureBlobStorageService(BlobStorageService):
         content_type: str,
         metadata: Optional[dict] = None,
     ) -> str:
-        """Upload file to Azure Blob Storage."""
-        try:
-            await self._ensure_container_available(auto_create=True)
-            blob_client = self._get_blob_client(storage_key)
-            blob_client.upload_blob(
-                content,
-                content_type=content_type,
-                metadata=metadata,
-                overwrite=True,
-            )
-            logger.info(f"Uploaded file to Azure Storage: {storage_key} ({len(content)} bytes)")
-            return storage_key
-        except StorageDependencyError:
-            raise
-        except Exception as e:
-            logger.error(f"Azure storage upload failed: {e}")
-            raise StorageError(f"Upload failed: {e}") from e
+        """Upload file to Azure Blob Storage via Preferred ``blob_storage`` breaker."""
+
+        async def _do_upload() -> str:
+            try:
+                await self._ensure_container_available(auto_create=True)
+                blob_client = self._get_blob_client(storage_key)
+                blob_client.upload_blob(
+                    content,
+                    content_type=content_type,
+                    metadata=metadata,
+                    overwrite=True,
+                )
+                logger.info(f"Uploaded file to Azure Storage: {storage_key} ({len(content)} bytes)")
+                return storage_key
+            except StorageDependencyError:
+                raise
+            except Exception as e:
+                logger.error(f"Azure storage upload failed: {e}")
+                raise StorageError(f"Upload failed: {e}") from e
+
+        return await call_via_upstream_breaker(_BLOB_UPSTREAM_BREAKER, _do_upload)
 
     async def download(self, storage_key: str) -> bytes:
-        """Download file from Azure Blob Storage."""
-        try:
-            await self._ensure_container_available()
-            blob_client = self._get_blob_client(storage_key)
-            stream = blob_client.download_blob()
-            return stream.readall()
-        except StorageDependencyError:
-            raise
-        except Exception as e:
-            logger.error(f"Azure storage download failed: {e}")
-            raise StorageError(f"Download failed: {e}") from e
+        """Download file from Azure Blob Storage via Preferred ``blob_storage`` breaker."""
+
+        async def _do_download() -> bytes:
+            try:
+                await self._ensure_container_available()
+                blob_client = self._get_blob_client(storage_key)
+                stream = blob_client.download_blob()
+                return stream.readall()
+            except StorageDependencyError:
+                raise
+            except Exception as e:
+                logger.error(f"Azure storage download failed: {e}")
+                raise StorageError(f"Download failed: {e}") from e
+
+        return await call_via_upstream_breaker(_BLOB_UPSTREAM_BREAKER, _do_download)
 
     async def delete(self, storage_key: str) -> bool:
-        """Delete file from Azure Blob Storage."""
-        try:
-            await self._ensure_container_available()
-            blob_client = self._get_blob_client(storage_key)
-            blob_client.delete_blob()
-            logger.info(f"Deleted file from Azure Storage: {storage_key}")
-            return True
-        except StorageDependencyError:
-            raise
-        except Exception as e:
-            if "BlobNotFound" in str(e):
-                return False
-            logger.error(f"Azure storage delete failed: {e}")
-            raise StorageError(f"Delete failed: {e}") from e
+        """Delete file from Azure Blob Storage via Preferred ``blob_storage`` breaker."""
+
+        async def _do_delete() -> bool:
+            try:
+                await self._ensure_container_available()
+                blob_client = self._get_blob_client(storage_key)
+                blob_client.delete_blob()
+                logger.info(f"Deleted file from Azure Storage: {storage_key}")
+                return True
+            except StorageDependencyError:
+                raise
+            except Exception as e:
+                if "BlobNotFound" in str(e):
+                    return False
+                logger.error(f"Azure storage delete failed: {e}")
+                raise StorageError(f"Delete failed: {e}") from e
+
+        return await call_via_upstream_breaker(_BLOB_UPSTREAM_BREAKER, _do_delete)
 
     def get_signed_url(
         self,
