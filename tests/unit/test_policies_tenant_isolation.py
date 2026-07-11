@@ -13,12 +13,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from src.api.routes.policies import (
-    delete_policy,
-    get_policy,
-    list_policies,
-    update_policy,
-)
+from src.api.routes.policies import delete_policy, get_policy, list_policies, update_policy
 from src.api.schemas.policy import PolicyUpdate
 from src.domain.models.policy import Policy
 from src.infrastructure.middleware.tenant_context import RLS_TABLES
