@@ -83,10 +83,6 @@ For records **beyond active operational retention** but still within legal hold 
 
 ---
 
-
-
----
-
 ## 7a. Legal hold & soft-delete SSOT (Path-to-10 S15)
 
 **Status:** LIVE documentation — soft-delete-first policy is coded; matter-level legal hold flags are **not** yet a first-class schema.
@@ -99,6 +95,24 @@ For records **beyond active operational retention** but still within legal hold 
 | **Evidence** | Pre-disposal `AuditLogEntry` + `AuditLogExport.file_hash` | Required before destructive steps where feasible |
 
 **Non-goals for this revision:** inventing SMTP, inventing PagerDuty paging, or shipping a hold schema migration. This section locks the honesty contract so S15 scoring credits documentation + config SSOT without claiming EA-closed hold automation.
+
+---
+
+## 7b. Public retention disclosure API (Path-to-10 S15)
+
+Machine-readable retention capability is exposed on `GET /api/v1/privacy/contact` under the **`retention`** key (additive to the existing `data_lifecycle` block from OCR/AI DPIA disclosure).
+
+| Field | Source | Honesty contract |
+| --- | --- | --- |
+| `soft_delete_first` | `DEFAULT_RETENTION_POLICIES` (`RetentionPolicy.soft_delete_first`) | `true` when all coded entity policies prefer soft-delete before hard purge |
+| `matter_level_legal_hold_schema` | Schema inventory | **`false`** until dedicated hold columns land (same gap as §7a) |
+| `entity_horizons_days` | `src/core/retention_config.DEFAULT_RETENTION_POLICIES` | Days per entity key — mirrors config SSOT, not a substitute for this policy narrative |
+| `policy_doc` | This file | `docs/privacy/data-retention-policy.md` |
+| `purge_schedule` | Celery Beat | Daily 02:00 UTC `run-data-retention` |
+
+Operators and attestations can discover soft-delete-first + horizon days without opening the repo; they must still treat §7a as the legal-hold gap SSOT.
+
+---
 
 ## 7. Roles and exceptions
 
