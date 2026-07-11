@@ -187,4 +187,3 @@ export type {
   RoleUpdatePayload,
 } from './usersClient'
 }
-
