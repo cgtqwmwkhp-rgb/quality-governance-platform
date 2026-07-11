@@ -586,7 +586,8 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06 / Lane-1 channels: informational only — missing VAPID/SMTP/Twilio must not flip readiness to 503
+    # WCS-B06 / Lane-1 channels: informational only — missing VAPID/SMTP/Twilio/PagerDuty must not flip readiness to 503
+    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
@@ -594,6 +595,7 @@ async def readiness_check(request: Request):
     vapid = get_vapid_readiness()
     email = get_email_readiness()
     sms = get_sms_readiness()
+    pagerduty = get_pagerduty_readiness()
     payload = {
         "status": overall,
         "database": db_status,
@@ -624,10 +626,19 @@ async def readiness_check(request: Request):
             "twilio_from_number_present": sms["twilio_from_number_present"],
             "library": sms["library"],
         },
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "pagerduty": {
+            "status": pagerduty["status"],
+            "pagerduty_enabled": pagerduty["pagerduty_enabled"],
+            "pagerduty_configured": pagerduty["pagerduty_configured"],
+            "routing_key_present": pagerduty["routing_key_present"],
+            "events_api_url_set": pagerduty["events_api_url_set"],
+        },
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
             "push": vapid["status"],
+            "pagerduty": pagerduty["status"],
         },
         "request_id": request_id,
     }
@@ -642,4 +653,6 @@ async def readiness_check(request: Request):
         payload["email_note"] = email["note"]
     if sms.get("note"):
         payload["sms_note"] = sms["note"]
+    if pagerduty.get("note"):
+        payload["pagerduty_note"] = pagerduty["note"]
     return JSONResponse(content=payload, status_code=status_code)
