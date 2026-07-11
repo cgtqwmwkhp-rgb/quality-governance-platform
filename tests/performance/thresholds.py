@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,36 @@ def resolve_perf_thresholds(
     return resolved
 
 
+def build_trend_record(payload: dict) -> dict:
+    """Build a single-run trend snapshot for Preferred S14 soft-gate artifacts."""
+    return {
+        "schema": "locust-soft-gate-trend/v1",
+        "recorded_at": datetime.now(timezone.utc).isoformat(),
+        "github": {
+            "run_id": os.environ.get("GITHUB_RUN_ID"),
+            "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT"),
+            "sha": os.environ.get("GITHUB_SHA"),
+            "ref": os.environ.get("GITHUB_REF"),
+            "workflow": os.environ.get("GITHUB_WORKFLOW"),
+            "repository": os.environ.get("GITHUB_REPOSITORY"),
+        },
+        "result": {
+            "profile": payload["profile"],
+            "soft_gate": payload["soft_gate"],
+            "overall": payload["overall"],
+            "p95_ms": payload["p95_ms"],
+            "p95_limit_ms": payload["p95_limit_ms"],
+            "p95_status": payload["p95_status"],
+            "error_rate_pct": payload["error_rate_pct"],
+            "error_rate_limit_pct": payload["error_rate_limit_pct"],
+            "error_status": payload["error_status"],
+            "num_requests": payload["num_requests"],
+            "num_failures": payload.get("num_failures"),
+            "breaches": list(payload.get("breaches") or []),
+        },
+    }
+
+
 def write_soft_gate_summary(payload: dict) -> None:
     """Emit a human + machine readable soft-gate summary for CI artifacts."""
     lines = [
@@ -103,3 +134,6 @@ def write_soft_gate_summary(payload: dict) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "locust-soft-gate-summary.md").write_text(text, encoding="utf-8")
     (out_dir / "locust-soft-gate-summary.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    trend = build_trend_record(payload)
+    (out_dir / "locust-soft-gate-trend.json").write_text(json.dumps(trend, indent=2) + "\n", encoding="utf-8")

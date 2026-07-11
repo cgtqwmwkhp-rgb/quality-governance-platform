@@ -117,6 +117,35 @@ jobs:
             echo "[WARN] Summary file missing — threshold listener may not have run"
           fi
 
+      # Explicit summary step: surface Preferred S14 soft-gate + trend record in the
+      # Actions UI even if the Locust listener step log is collapsed.
+      - name: Publish soft-gate trend to job summary
+        if: always()
+        run: |
+          {
+            echo "## Preferred S14 — Locust soft-gate trend"
+            echo ""
+            if [ -f locust-soft-gate-out/locust-soft-gate-summary.md ]; then
+              cat locust-soft-gate-out/locust-soft-gate-summary.md
+            else
+              echo "_Summary markdown missing — threshold listener may not have run._"
+              echo ""
+            fi
+            if [ -f locust-soft-gate-out/locust-soft-gate-trend.json ]; then
+              echo ""
+              echo "### Trend record (\`locust-soft-gate-trend.json\`)"
+              echo ""
+              echo "_Single-run snapshot for Preferred S14 trend tracking (also in artifact)._"
+              echo ""
+              echo '```json'
+              cat locust-soft-gate-out/locust-soft-gate-trend.json
+              echo '```'
+            else
+              echo ""
+              echo "_Trend JSON missing — soft-gate helper did not emit locust-soft-gate-trend.json._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload Locust soft-gate artifacts
         uses: actions/upload-artifact@v7
         with:

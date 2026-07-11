@@ -37,8 +37,24 @@ Env controls (see `tests/performance/locustfile.py`):
 - **File:** [`.github/workflows/locust-soft-gate.yml`](../../.github/workflows/locust-soft-gate.yml)
 - **Triggers:** `pull_request`, `push` to `main`, `workflow_dispatch`
 - **Merge impact:** non-blocking (`continue-on-error: true` + soft exit)
-- **Artifacts:** `locust-soft-gate-staging` (CSV + markdown/JSON summary)
-- **Step summary:** GitHub Actions job summary mirrors the markdown report
+- **Artifacts:** `locust-soft-gate-staging` (CSV + markdown/JSON summary + trend snapshot)
+- **Step summary:** Dedicated **Publish soft-gate trend to job summary** step mirrors the
+  markdown report and embeds the trend JSON in the Actions UI
+
+## Trend artifact (Preferred S14)
+
+Each soft-gate run also writes `locust-soft-gate-trend.json` (schema
+`locust-soft-gate-trend/v1`) next to the summary files. The record captures:
+
+| Field group | Contents |
+|-------------|----------|
+| `recorded_at` | UTC timestamp |
+| `github.*` | `run_id`, `sha`, `ref`, `workflow` (when present in CI) |
+| `result.*` | profile, overall PASS/BREACH, p95, error rate, limits, breaches |
+
+Use successive artifact downloads to compare Preferred staging-bar drift before
+promoting the soft-gate to a hard gate. The workflow does **not** invent secrets;
+trend fields only reuse public GitHub Actions context env vars.
 
 ## Local run
 
