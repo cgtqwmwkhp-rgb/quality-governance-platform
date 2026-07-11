@@ -1,19 +1,20 @@
 """Cross-standard ISO mapping management API."""
 
 import logging
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
 from src.domain.exceptions import ConflictError, NotFoundError
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
@@ -227,7 +228,7 @@ async def list_standards(
 async def create_mapping(
     data: MappingCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("standard:create"))],
 ):
     """Create a new cross-standard mapping."""
     from src.domain.models.ims_unification import CrossStandardMapping
@@ -308,7 +309,7 @@ async def update_mapping(
     mapping_id: int,
     data: MappingUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("standard:update"))],
 ):
     """Partially update a cross-standard mapping."""
     from src.domain.models.ims_unification import CrossStandardMapping
@@ -324,7 +325,7 @@ async def update_mapping(
 async def delete_mapping(
     mapping_id: int,
     db: DbSession,
-    current_user: CurrentSuperuser,
+    current_user: Annotated[User, Depends(require_permission("standard:update"))],
 ):
     """Delete a cross-standard mapping (admin only)."""
     from src.domain.models.ims_unification import CrossStandardMapping
