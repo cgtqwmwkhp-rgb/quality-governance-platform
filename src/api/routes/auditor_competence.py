@@ -5,13 +5,14 @@ training, and competency assessments.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.dependencies import require_permission
 from src.api.deps import CurrentUser, get_current_user, get_db
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.user import User
@@ -79,8 +80,8 @@ def _auditor_service(db: AsyncSession, current_user: CurrentUser) -> AuditorComp
 
 
 def _is_auditor_manager(user: CurrentUser) -> bool:
-    role_names = {role.name.lower() for role in getattr(user, "roles", []) or []}
-    return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
+    """Manager gate via permission (fail-closed); superusers pass via has_permission."""
+    return bool(getattr(user, "is_superuser", False) or user.has_permission("audit:update"))
 
 
 def _assert_auditor_access(user: CurrentUser, target_user_id: int, *, manager_only: bool = False) -> None:
@@ -113,7 +114,7 @@ async def _validate_auditor_user_assignment(
 @router.post("/profiles", status_code=status.HTTP_201_CREATED)
 async def create_auditor_profile(
     request: CreateProfileRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Create an auditor profile for a user."""
@@ -168,7 +169,7 @@ async def get_auditor_profile(
 async def update_auditor_profile(
     user_id: int,
     request: UpdateProfileRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Update auditor profile."""
@@ -214,7 +215,7 @@ async def calculate_competence_score(
 async def add_certification(
     user_id: int,
     request: AddCertificationRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Add a certification to an auditor."""
@@ -293,7 +294,7 @@ async def get_expiring_certifications(
 
 @router.post("/certifications/update-expired")
 async def update_expired_certifications(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Update status of expired certifications."""
@@ -316,7 +317,7 @@ async def update_expired_certifications(
 async def add_training(
     user_id: int,
     request: AddTrainingRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Add a training record for an auditor."""
@@ -381,7 +382,7 @@ async def complete_training(
 async def assess_competency(
     user_id: int,
     request: AssessCompetencyRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     db: AsyncSession = Depends(get_db),
 ):
     """Record a competency assessment for an auditor."""

@@ -160,3 +160,15 @@ def test_form_config_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/form_config.py")
     assert "form:create" in perms
     assert "form:update" in perms
+
+
+def test_investigation_templates_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/investigation_templates.py")
+    assert "investigation:create" in perms
+    assert "investigation:update" in perms
+    assert "investigation:delete" in perms
+
+
+def test_auditor_competence_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/auditor_competence.py")
+    assert "audit:update" in perms
