@@ -22,7 +22,7 @@ from src.api.schemas.engineer import (
 )
 from src.api.schemas.error_codes import ErrorCode
 from src.api.utils.errors import api_error
-from src.api.utils.tenant import apply_tenant_filter
+from src.api.utils.tenant import apply_tenant_filter, require_tenant_id
 from src.domain.exceptions import AuthorizationError, BadRequestError, ConflictError, NotFoundError
 from src.domain.models.asset import AssetType
 from src.domain.models.engineer import CompetencyRecord, Engineer
@@ -34,6 +34,13 @@ router = APIRouter()
 def _is_workforce_manager(user: CurrentUser) -> bool:
     role_names = {r.name.lower() for r in getattr(user, "roles", []) or []}
     return bool(getattr(user, "is_superuser", False) or "admin" in role_names or "supervisor" in role_names)
+
+
+def _require_engineer_tenant_id(user: CurrentUser) -> int | None:
+    """Superusers may omit tenant; all other callers must have membership."""
+    if getattr(user, "is_superuser", False):
+        return getattr(user, "tenant_id", None)
+    return require_tenant_id(getattr(user, "tenant_id", None))
 
 
 def _assert_engineer_access(user: CurrentUser, engineer: Engineer, *, allow_self_read: bool = False) -> None:
@@ -101,8 +108,9 @@ async def list_engineers(
     is_active: Optional[bool] = None,
 ):
     """List engineers with filtering and pagination."""
+    tenant_id = _require_engineer_tenant_id(user)
     query = select(Engineer)
-    query = apply_tenant_filter(query, Engineer, user.tenant_id)
+    query = apply_tenant_filter(query, Engineer, tenant_id)
     if not _is_workforce_manager(user):
         query = query.where(Engineer.user_id == user.id)
     if is_active is not None:
@@ -141,6 +149,7 @@ async def create_engineer(
     user: Annotated[User, Depends(require_permission("engineer:create"))],
 ):
     """Create a new engineer."""
+    tenant_id = _require_engineer_tenant_id(user)
     if not _is_workforce_manager(user):
         raise AuthorizationError("You do not have permission to create engineer records")
     await _validate_engineer_user_assignment(db, user, data.user_id)
@@ -153,7 +162,7 @@ async def create_engineer(
         start_date=data.start_date,
         specialisations_json=data.specialisations,
         certifications_json=data.certifications,
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
     )
     db.add(engineer)
     await db.commit()
@@ -168,8 +177,9 @@ async def get_engineer(
     user: CurrentUser,
 ):
     """Get an engineer by ID with competency records loaded."""
+    tenant_id = _require_engineer_tenant_id(user)
     query = select(Engineer).options(selectinload(Engineer.competency_records)).where(Engineer.id == engineer_id)
-    query = apply_tenant_filter(query, Engineer, user.tenant_id)
+    query = apply_tenant_filter(query, Engineer, tenant_id)
     result = await db.execute(query)
     engineer = result.scalar_one_or_none()
     if engineer is None:
@@ -186,8 +196,9 @@ async def update_engineer(
     user: Annotated[User, Depends(require_permission("engineer:update"))],
 ):
     """Update an engineer."""
+    tenant_id = _require_engineer_tenant_id(user)
     query = select(Engineer).where(Engineer.id == engineer_id)
-    query = apply_tenant_filter(query, Engineer, user.tenant_id)
+    query = apply_tenant_filter(query, Engineer, tenant_id)
     result = await db.execute(query)
     engineer = result.scalar_one_or_none()
     if engineer is None:
@@ -215,8 +226,9 @@ async def list_engineer_competencies(
     user: CurrentUser,
 ):
     """List competency records for an engineer."""
+    tenant_id = _require_engineer_tenant_id(user)
     engineer_query = select(Engineer).where(Engineer.id == engineer_id)
-    engineer_query = apply_tenant_filter(engineer_query, Engineer, user.tenant_id)
+    engineer_query = apply_tenant_filter(engineer_query, Engineer, tenant_id)
     engineer_result = await db.execute(engineer_query)
     engineer = engineer_result.scalar_one_or_none()
     if engineer is None:
@@ -224,7 +236,7 @@ async def list_engineer_competencies(
     _assert_engineer_access(user, engineer, allow_self_read=True)
 
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
-    query = apply_tenant_filter(query, CompetencyRecord, user.tenant_id)
+    query = apply_tenant_filter(query, CompetencyRecord, tenant_id)
     result = await db.execute(query)
     records = result.scalars().all()
     return [CompetencyRecordResponse.model_validate(r) for r in records]
@@ -237,8 +249,9 @@ async def get_skills_matrix(
     user: CurrentUser,
 ):
     """Get skills matrix: engineer competency across asset types."""
+    tenant_id = _require_engineer_tenant_id(user)
     engineer_query = select(Engineer).where(Engineer.id == engineer_id)
-    engineer_query = apply_tenant_filter(engineer_query, Engineer, user.tenant_id)
+    engineer_query = apply_tenant_filter(engineer_query, Engineer, tenant_id)
     engineer_result = await db.execute(engineer_query)
     engineer = engineer_result.scalar_one_or_none()
     if engineer is None:
@@ -246,7 +259,7 @@ async def get_skills_matrix(
     _assert_engineer_access(user, engineer, allow_self_read=True)
 
     query = select(CompetencyRecord).where(CompetencyRecord.engineer_id == engineer_id)
-    query = apply_tenant_filter(query, CompetencyRecord, user.tenant_id)
+    query = apply_tenant_filter(query, CompetencyRecord, tenant_id)
     result = await db.execute(query)
     records = result.scalars().all()
     if not records:
@@ -255,7 +268,7 @@ async def get_skills_matrix(
     latest_records = _latest_competency_records(records)
     asset_type_ids = list({r.asset_type_id for r in latest_records})
     at_query = select(AssetType).where(AssetType.id.in_(asset_type_ids))
-    at_query = apply_tenant_filter(at_query, AssetType, user.tenant_id)
+    at_query = apply_tenant_filter(at_query, AssetType, tenant_id)
     at_result = await db.execute(at_query)
     asset_types = {at.id: at for at in at_result.scalars().all()}
 

@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from src.api.deps import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.user import User
-from src.services.rca_tools import CAPAService, FishboneService, FiveWhysService
+from src.domain.services.rca_tools import CAPAService, FishboneService, FiveWhysService
 
 router = APIRouter(prefix="/rca-tools", tags=["RCA Tools"])
 
