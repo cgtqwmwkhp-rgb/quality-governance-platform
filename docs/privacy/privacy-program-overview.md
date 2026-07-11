@@ -3,7 +3,7 @@
 **Platform:** Quality Governance Platform (QGP)
 **Version:** 1.0
 **Effective:** 2026-04-04 | **Review:** 2026-10-04
-**Related:** [`data-classification.md`](data-classification.md), [`data-retention-policy.md`](data-retention-policy.md), [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md)
+**Related:** [`data-classification.md`](data-classification.md), [`data-retention-policy.md`](data-retention-policy.md), [`dpia-incidents.md`](dpia-incidents.md), [`dpia-template.md`](dpia-template.md), [`dpia-checklist.md`](dpia-checklist.md)
 
 ---
 
