@@ -65,13 +65,14 @@ def _create_revision_event_snippet(source: str) -> str:
 
 def test_create_revision_event_stamps_tenant_from_investigation_and_never_invents():
     """Write path must inherit tenant_id from the parent investigation run."""
-    for rel in (
-        "src/domain/services/investigation_service.py",
-        "src/services/investigation_service.py",
-    ):
-        body = (REPO_ROOT / rel).read_text(encoding="utf-8")
-        snippet = _create_revision_event_snippet(body)
-        assert "tenant_id=investigation.tenant_id" in snippet
-        assert "tenant_id is required to create an investigation revision event" in snippet
-        assert "tenant_id=1" not in snippet
-        assert "SET tenant_id = 1" not in snippet.upper()
+    # Canonical implementation lives in domain; services is a Path-to-10 thin re-export.
+    body = (REPO_ROOT / "src/domain/services/investigation_service.py").read_text(encoding="utf-8")
+    snippet = _create_revision_event_snippet(body)
+    assert "tenant_id=investigation.tenant_id" in snippet
+    assert "tenant_id is required to create an investigation revision event" in snippet
+    assert "tenant_id=1" not in snippet
+    assert "SET tenant_id = 1" not in snippet.upper()
+
+    services = (REPO_ROOT / "src/services/investigation_service.py").read_text(encoding="utf-8")
+    assert "from src.domain.services.investigation_service import" in services
+    assert "InvestigationService" in services
