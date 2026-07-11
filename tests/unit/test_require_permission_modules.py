@@ -288,4 +288,3 @@ def test_push_notifications_write_routes_require_permission():
 def test_notifications_admin_writes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/notifications.py")
     assert "notifications:send" in perms
-
