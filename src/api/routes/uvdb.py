@@ -12,18 +12,19 @@ Provides endpoints for:
 import logging
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.exceptions import NotFoundError
 from src.domain.models.audit import AuditRun
 from src.domain.models.external_audit_import import ExternalAuditImportJob
+from src.domain.models.user import User
 from src.domain.models.uvdb_achilles import (
     UVDBAudit,
     UVDBAuditResponse,
@@ -647,7 +648,7 @@ async def list_audits(
 async def create_audit(
     audit_data: AuditCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Create a new UVDB audit"""
     count_result = await db.execute(select(func.count()).select_from(UVDBAudit))
@@ -748,7 +749,7 @@ async def update_audit(
     audit_id: int,
     audit_data: AuditUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> dict[str, Any]:
     """Update audit"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
@@ -774,7 +775,7 @@ async def create_response(
     audit_id: int,
     response_data: ResponseCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Record an audit response"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
@@ -833,7 +834,7 @@ async def add_kpi_record(
     audit_id: int,
     kpi_data: KPICreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Add KPI record for an audit year"""
     result = await db.execute(select(UVDBAudit).where(UVDBAudit.id == audit_id))
