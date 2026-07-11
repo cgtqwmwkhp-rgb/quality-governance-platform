@@ -20,7 +20,7 @@ from src.domain.exceptions import AuthorizationError, ConflictError, NotFoundErr
 from src.domain.models.incident import Incident, IncidentRunningSheetEntry
 from src.domain.models.user import User
 from src.domain.services.audit_service import record_audit_event
-from src.domain.services.incident_service import IncidentService
+from src.services.incident_service import IncidentService
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 router = APIRouter()
