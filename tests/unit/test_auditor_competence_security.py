@@ -25,18 +25,14 @@ class _FakeResult:
 
 @pytest.mark.asyncio
 async def test_auditor_access_allows_self_read():
-    user = types.SimpleNamespace(
-        id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False
-    )
+    user = types.SimpleNamespace(id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False)
 
     _assert_auditor_access(user, 42)
 
 
 @pytest.mark.asyncio
 async def test_auditor_access_denies_unrelated_non_manager():
-    user = types.SimpleNamespace(
-        id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False
-    )
+    user = types.SimpleNamespace(id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False)
 
     with pytest.raises(AuthorizationError) as exc_info:
         _assert_auditor_access(user, 77)
