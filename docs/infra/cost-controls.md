@@ -228,7 +228,7 @@ This cadence complements the operational steps in **Cost Review Process** (secti
 | Statement timeout | `src/infrastructure/database.py` — `statement_timeout=30000` |
 | Rate limiting | `src/infrastructure/middleware/rate_limiter.py` |
 | Resource metrics endpoint | `src/api/routes/health.py` — `/api/v1/health/metrics/resources` |
-| Bundle size limits | `frontend/.size-limit.json` — 350kB/250kB/50kB |
+| Bundle size limits | `frontend/.size-limit.json` — 150kB/200kB/35kB (gzip) |
 | CI performance budget | `.github/workflows/ci.yml` — `performance-budget` job |
 | ACA provisioning | `scripts/infra/provision-aca-staging.sh` — MIN_REPLICAS=1, MAX_REPLICAS=3 |
 | Azure monthly budget (ARM) | `scripts/infra/budget-alert.json` — `qgp-monthly-budget`, USD 500, 80%/100% notifications |

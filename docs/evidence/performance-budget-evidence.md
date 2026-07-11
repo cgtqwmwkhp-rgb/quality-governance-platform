@@ -6,9 +6,9 @@ Evidence of CI-enforced performance gates across frontend and backend.
 
 | Gate | Tool | CI Job | Config File | Threshold |
 |------|------|--------|-------------|-----------|
-| Bundle size (JS main) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 300 KB gzip |
-| Bundle size (vendor) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 220 KB gzip |
-| Bundle size (CSS) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 40 KB gzip |
+| Bundle size (JS main) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 150 KB gzip |
+| Bundle size (vendor) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 200 KB gzip |
+| Bundle size (CSS) | size-limit | `performance-budget` | `frontend/.size-limit.json` | 35 KB gzip |
 | Lighthouse Performance | @lhci/cli | `performance-budget` | `lighthouserc.json` | >= 0.90 |
 | Lighthouse Accessibility | @lhci/cli | `performance-budget` | `lighthouserc.json` | >= 0.95 |
 | Lighthouse Best Practices | @lhci/cli | `performance-budget` | `lighthouserc.json` | >= 0.90 |
@@ -28,7 +28,7 @@ Evidence of CI-enforced performance gates across frontend and backend.
 All thresholds align with targets defined in `docs/slo/performance-slos.md`:
 - API CRUD p50 < 100ms, p95 < 200ms, p99 < 500ms
 - Frontend FCP < 1.5s, LCP < 2.5s, TBT < 200ms, CLS < 0.1
-- Bundle size main JS < 300KB gzip
+- Bundle size main JS < 150KB gzip; vendor < 200KB; CSS < 35KB
 - Sustained throughput >= 100 req/s/instance
 
 ## Evidence Artifacts
