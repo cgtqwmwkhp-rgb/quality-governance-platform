@@ -30,9 +30,7 @@ def _privacy_email() -> str:
 
 def _retention_disclosure() -> dict[str, Any]:
     """Machine-readable retention SSOT summary (docs/privacy/data-retention-policy.md §7b)."""
-    soft_delete_first = all(
-        policy.soft_delete_first for policy in DEFAULT_RETENTION_POLICIES.values()
-    )
+    soft_delete_first = all(policy.soft_delete_first for policy in DEFAULT_RETENTION_POLICIES.values())
     return {
         "policy_doc": "docs/privacy/data-retention-policy.md",
         "config_module": "src.core.retention_config",
@@ -40,8 +38,7 @@ def _retention_disclosure() -> dict[str, Any]:
         "matter_level_legal_hold_schema": False,
         "purge_schedule": "daily 02:00 UTC (Celery Beat run-data-retention)",
         "entity_horizons_days": {
-            entity: policy.retention_days
-            for entity, policy in DEFAULT_RETENTION_POLICIES.items()
+            entity: policy.retention_days for entity, policy in DEFAULT_RETENTION_POLICIES.items()
         },
         "note": (
             "Horizons mirror DEFAULT_RETENTION_POLICIES; soft-delete-first is coded. "
