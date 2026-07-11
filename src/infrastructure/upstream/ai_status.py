@@ -24,9 +24,7 @@ def get_upstream_ai_readiness() -> dict[str, Any]:
     - ``not_configured``: neither key present
     """
     mistral_key = (os.getenv("MISTRAL_API_KEY") or "").strip()
-    gemini_key = (
-        os.getenv("GOOGLE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
-    ).strip()
+    gemini_key = (os.getenv("GOOGLE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or "").strip()
 
     mistral_configured = _present(mistral_key)
     gemini_configured = _present(gemini_key)
