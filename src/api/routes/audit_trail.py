@@ -17,8 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.domain.services.audit_log_service import AuditLogService
 
 router = APIRouter()

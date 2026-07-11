@@ -20,9 +20,9 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, s
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPreference
+from src.domain.models.user import User
 from src.infrastructure.database import Base
 
 router = APIRouter(tags=["Push Notifications"])

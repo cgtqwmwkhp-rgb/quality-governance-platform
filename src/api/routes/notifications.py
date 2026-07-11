@@ -11,13 +11,13 @@ Features:
 from datetime import datetime, timezone
 from typing import Annotated, List, Optional
 
-from fastapi import Depends, APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPriority, NotificationType
+from src.domain.models.user import User
 
 router = APIRouter()
 
