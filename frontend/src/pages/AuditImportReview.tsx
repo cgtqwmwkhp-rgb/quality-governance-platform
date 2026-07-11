@@ -1,10 +1,4 @@
-import { useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import {
-  externalAuditImportsApi,
-  getApiErrorMessage,
-  type ExternalAuditPromotionReconciliation,
-} from '../api/client'
 import { LoadingSkeleton } from '../components/ui/LoadingSkeleton'
 import { DraftFindingsList } from '../components/audit-import/DraftFindingsList'
 import {
@@ -18,12 +12,7 @@ import { ImportReviewNotices } from '../components/audit-import/ImportReviewNoti
 import { ImportReviewOverview } from '../components/audit-import/ImportReviewOverview'
 import { ImportReviewProcessingPanels } from '../components/audit-import/ImportReviewProcessingPanels'
 import { ImportReviewPromoteBanner } from '../components/audit-import/ImportReviewPromoteBanner'
-
-import {
-  describePromotionFailure,
-  describeReconciliationFailure,
-  extractPromotionFailedDrafts,
-} from '../components/audit-import/importReviewHelpers'
+import { useImportReviewActions } from '../components/audit-import/useImportReviewActions'
 import { useImportReviewDerived } from '../components/audit-import/useImportReviewDerived'
 import { useImportReviewLoader } from '../components/audit-import/useImportReviewLoader'
 
@@ -62,13 +51,6 @@ export default function AuditImportReview() {
     load,
   } = useImportReviewLoader(jobId, routeAuditId, initialQueueNotice)
 
-  const [busyDraftId, setBusyDraftId] = useState<number | null>(null)
-  const [isBulkReviewing, setIsBulkReviewing] = useState(false)
-  const [isPromoting, setIsPromoting] = useState(false)
-  const [isQueueing, setIsQueueing] = useState(false)
-  const [showPromoteConfirm, setShowPromoteConfirm] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
-
   const {
     approvedCount,
     promoteableCount,
@@ -89,134 +71,35 @@ export default function AuditImportReview() {
     specialistHomePath,
   } = useImportReviewDerived(job, auditRun, drafts, reconciliation)
 
-  const handleDraftDecision = async (
-    draftId: number,
-    status: 'accepted' | 'rejected' | 'draft',
-    extras?: Record<string, string>,
-  ) => {
-    setBusyDraftId(draftId)
-    setError(null)
-    setSuccessMessage(null)
-    try {
-      const payload: {
-        status: 'accepted' | 'rejected' | 'draft'
-        title?: string
-        description?: string
-        severity?: string
-        review_notes?: string
-      } = { status }
-      if (extras) {
-        if (extras.title) payload.title = extras.title
-        if (extras.description) payload.description = extras.description
-        if (extras.severity) payload.severity = extras.severity
-        if (extras.review_notes) payload.review_notes = extras.review_notes
-      }
-      const res = await externalAuditImportsApi.reviewDraft(draftId, payload)
-      setDrafts((prev) => prev.map((draft) => (draft.id === draftId ? res.data : draft)))
-      setError(null)
-    } catch (err) {
-      console.error('Failed to update draft review decision', err)
-      setError('Failed to update the draft. Please retry.')
-    } finally {
-      setBusyDraftId(null)
-    }
-  }
+  const {
+    busyDraftId,
+    isBulkReviewing,
+    isPromoting,
+    isQueueing,
+    showPromoteConfirm,
+    setShowPromoteConfirm,
+    successMessage,
+    handleDraftDecision,
+    handlePromoteClick,
+    handleBulkApprove,
+    handlePromoteConfirm,
+    handleRetryQueue,
+  } = useImportReviewActions({
+    job,
+    setJob,
+    setDrafts,
+    setReconciliation,
+    setError,
+    setQueueNotice,
+    setReconciliationNotice,
+    setPromotionFailedDrafts,
+    setIsProcessing,
+    load,
+    promoteableCount,
+    pendingDraftCount,
+  })
 
-  const handlePromoteClick = () => {
-    if (!job || promoteableCount === 0 || ['completed', 'promoting'].includes(job.status)) return
-    setShowPromoteConfirm(true)
-  }
-
-  const handleBulkApprove = async () => {
-    if (!job || pendingDraftCount === 0) return
-    setIsBulkReviewing(true)
-    setError(null)
-    setSuccessMessage(null)
-    try {
-      const res = await externalAuditImportsApi.bulkReviewJob(job.id, { status: 'accepted' })
-      setDrafts(res.data)
-      setSuccessMessage(`Approved ${pendingDraftCount} pending finding(s). Review and promote when ready.`)
-      await load()
-    } catch (err) {
-      console.error('Failed to bulk approve draft findings', err)
-      setError(getApiErrorMessage(err) || 'Failed to approve all pending findings. Please retry.')
-    } finally {
-      setIsBulkReviewing(false)
-    }
-  }
-
-  const handlePromoteConfirm = async () => {
-    if (!job) return
-    setShowPromoteConfirm(false)
-    setIsPromoting(true)
-    setError(null)
-    setPromotionFailedDrafts(null)
-    setSuccessMessage(null)
-    try {
-      const promoteRes = await externalAuditImportsApi.promoteJob(job.id)
-      await load()
-      let nextReconciliation: ExternalAuditPromotionReconciliation | null = null
-      try {
-        const reconciliationRes = await externalAuditImportsApi.getReconciliation(job.id)
-        nextReconciliation = reconciliationRes.data
-        setReconciliationNotice(null)
-      } catch (reconciliationErr) {
-        setReconciliationNotice(describeReconciliationFailure(reconciliationErr, 'completed') || null)
-      }
-      setReconciliation(nextReconciliation)
-      if (nextReconciliation?.failed_total) {
-        setSuccessMessage(
-          `Promotion partially completed: ${nextReconciliation.promoted_total} finding(s) materialized, ${nextReconciliation.failed_total} still require review.`,
-        )
-      } else {
-        const promotedFromSummary = promoteRes.data.promotion_summary_json?.[
-          'promoted_findings'
-        ] as unknown
-        const promotedCount =
-          nextReconciliation?.promoted_total ??
-          (Array.isArray(promotedFromSummary) ? promotedFromSummary.length : promoteableCount)
-        setSuccessMessage(
-          `Successfully promoted ${promotedCount} finding(s) into the live governance system.`,
-        )
-      }
-    } catch (err) {
-      console.error('Failed to promote imported audit findings', err)
-      setPromotionFailedDrafts(extractPromotionFailedDrafts(err))
-      setError(describePromotionFailure(err))
-    } finally {
-      setIsPromoting(false)
-    }
-  }
-
-  const handleRetryQueue = async () => {
-    if (!job) return
-    setIsQueueing(true)
-    setError(null)
-    try {
-      const queueRes = await externalAuditImportsApi.queueJob(job.id)
-      setQueueNotice(null)
-      setJob(queueRes.data)
-
-      if (queueRes.data.status === 'queued') {
-        setIsProcessing(true)
-        try {
-          await externalAuditImportsApi.processJob(job.id)
-        } catch (processErr) {
-          console.error('Import processing failed after retry', processErr)
-        } finally {
-          setIsProcessing(false)
-        }
-      }
-      await load()
-    } catch (err) {
-      console.error('Failed to queue external audit import job', err)
-      setError('Failed to start processing. Please retry queueing the import.')
-    } finally {
-      setIsQueueing(false)
-    }
-  }
-
-  // Keep the page chrome visible during load so reviewers (and CUJ e2e) always
+    // Keep the page chrome visible during load so reviewers (and CUJ e2e) always
   // see the Import Review heading instead of a blank skeleton-only state.
   if (loading) {
     return (
