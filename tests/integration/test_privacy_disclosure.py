@@ -18,6 +18,12 @@ async def test_privacy_contact_public(client: AsyncClient):
     assert data["data_lifecycle"]["soft_delete"] is True
     assert data["data_lifecycle"]["evidence_legal_hold"] is True
     assert "ocr_ai_import" in data["dpia"]
+    retention = data["retention"]
+    assert retention["soft_delete_first"] is True
+    assert retention["matter_level_legal_hold_schema"] is False
+    assert retention["policy_doc"] == "docs/privacy/data-retention-policy.md"
+    assert retention["entity_horizons_days"]["incidents"] == 2555
+    assert retention["entity_horizons_days"]["session_logs"] == 90
 
 
 @pytest.mark.asyncio

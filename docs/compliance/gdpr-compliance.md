@@ -1,7 +1,7 @@
 # GDPR Compliance Documentation (D07)
 
 **Owner**: Platform Engineering / Data Protection
-**Last Updated**: 2026-04-03
+**Last Updated**: 2026-07-11
 **Review Cycle**: Annually and on material changes
 
 ---
@@ -103,5 +103,7 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 ## Related Documents
 
 - [`docs/evidence/retention-automation-evidence.md`](../evidence/retention-automation-evidence.md) — retention policy evidence
+- [`docs/privacy/data-retention-policy.md`](../privacy/data-retention-policy.md) — retention / soft-delete / legal-hold SSOT (§7a–§7b)
+- `GET /api/v1/privacy/contact` → `retention` — machine-readable soft-delete-first + entity horizons
 - [`docs/security/security-baseline.md`](../security/security-baseline.md) — security controls
 - [`docs/adr/ADR-0009-csrf-not-required.md`](../adr/ADR-0009-csrf-not-required.md) — CSRF decision
