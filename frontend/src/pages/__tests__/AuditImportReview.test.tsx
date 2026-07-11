@@ -611,6 +611,8 @@ describe('AuditImportReview', () => {
         screen.queryByText('Approved 2 pending finding(s). Review and promote when ready.'),
       ).not.toBeInTheDocument()
     })
+    // Phase 10 coverage: promote control remains available after dismiss.
+    expect(screen.getByRole('button', { name: 'Promote Accepted Drafts' })).toBeInTheDocument()
   })
 
   it('shows queue recovery guidance and retries queueing pending imports', async () => {
