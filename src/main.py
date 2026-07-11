@@ -28,6 +28,49 @@ from src.infrastructure.pams_database import close_pams, init_pams
 from src.infrastructure.storage import validate_storage_dependencies
 
 
+async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) -> dict:
+    """Pending FailedTask count for root /readyz (informational)."""
+    try:
+        from sqlalchemy import func, select
+
+        from src.domain.models.failed_task import FailedTask
+
+        async with async_session_maker() as session:
+            result = await asyncio.wait_for(
+                session.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
+                timeout=2.0,
+            )
+            return {
+                "status": "ok",
+                "depth": int(result.scalar() or 0),
+                "warn_threshold": 10,
+                "critical_threshold": 50,
+            }
+    except Exception as e:
+        logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
+        return {
+            "status": "error",
+            "depth": None,
+            "warn_threshold": 10,
+            "critical_threshold": 50,
+        }
+
+
+def _pagerduty_readyz_block(pagerduty: dict) -> dict:
+    block = {
+        "status": pagerduty["status"],
+        "pagerduty_enabled": pagerduty["pagerduty_enabled"],
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "routing_key_present": pagerduty["routing_key_present"],
+        "events_api_url_set": pagerduty["events_api_url_set"],
+        "last_enqueue_status": pagerduty.get("last_enqueue_status"),
+        "fail_closed": pagerduty.get("fail_closed", False),
+    }
+    if pagerduty.get("last_enqueue_error"):
+        block["last_enqueue_error"] = pagerduty["last_enqueue_error"]
+    return block
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -601,23 +644,7 @@ async def readiness_check(request: Request):
         status_code = 503
         overall = "not_ready"
 
-    dlq_depth: int | None = None
-    dlq_status = "unknown"
-    try:
-        from sqlalchemy import func, select
-
-        from src.domain.models.failed_task import FailedTask
-
-        async with async_session_maker() as session:
-            result = await asyncio.wait_for(
-                session.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
-                timeout=2.0,
-            )
-            dlq_depth = int(result.scalar() or 0)
-            dlq_status = "ok"
-    except Exception as e:
-        logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
-        dlq_status = "error"
+    dlq = await _probe_dlq_depth_root(async_session_maker, logger, request_id)
 
     payload = {
         "status": overall,
@@ -650,21 +677,8 @@ async def readiness_check(request: Request):
             "library": sms["library"],
         },
         "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "pagerduty": {
-            "status": pagerduty["status"],
-            "pagerduty_enabled": pagerduty["pagerduty_enabled"],
-            "pagerduty_configured": pagerduty["pagerduty_configured"],
-            "routing_key_present": pagerduty["routing_key_present"],
-            "events_api_url_set": pagerduty["events_api_url_set"],
-            "last_enqueue_status": pagerduty.get("last_enqueue_status"),
-            "fail_closed": pagerduty.get("fail_closed", False),
-        },
-        "dlq": {
-            "status": dlq_status,
-            "depth": dlq_depth,
-            "warn_threshold": 10,
-            "critical_threshold": 50,
-        },
+        "pagerduty": _pagerduty_readyz_block(pagerduty),
+        "dlq": dlq,
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
@@ -686,6 +700,4 @@ async def readiness_check(request: Request):
         payload["sms_note"] = sms["note"]
     if pagerduty.get("note"):
         payload["pagerduty_note"] = pagerduty["note"]
-    if pagerduty.get("last_enqueue_error"):
-        payload["pagerduty"]["last_enqueue_error"] = pagerduty["last_enqueue_error"]
     return JSONResponse(content=payload, status_code=status_code)

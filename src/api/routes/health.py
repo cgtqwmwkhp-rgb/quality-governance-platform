@@ -23,6 +23,152 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
 
 
+async def _probe_dlq_depth() -> dict[str, Any]:
+    """Return pending FailedTask count for /readyz (informational)."""
+    try:
+        from sqlalchemy import func, select
+
+        from src.domain.models.failed_task import FailedTask
+
+        async with engine.connect() as conn:
+            result = await asyncio.wait_for(
+                conn.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
+                timeout=2.0,
+            )
+            return {
+                "status": "ok",
+                "depth": int(result.scalar() or 0),
+                "warn_threshold": 10,
+                "critical_threshold": 50,
+            }
+    except Exception as exc:
+        logger.warning("Readiness probe: DLQ depth check failed: %s", exc)
+        return {
+            "status": "error",
+            "depth": None,
+            "warn_threshold": 10,
+            "critical_threshold": 50,
+        }
+
+
+def _pagerduty_readyz_block(pagerduty: dict[str, Any]) -> dict[str, Any]:
+    block: dict[str, Any] = {
+        "status": pagerduty["status"],
+        "pagerduty_enabled": pagerduty["pagerduty_enabled"],
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "routing_key_present": pagerduty["routing_key_present"],
+        "events_api_url_set": pagerduty["events_api_url_set"],
+        "last_enqueue_status": pagerduty.get("last_enqueue_status"),
+        "fail_closed": pagerduty.get("fail_closed", False),
+    }
+    if pagerduty.get("last_enqueue_error"):
+        block["last_enqueue_error"] = pagerduty["last_enqueue_error"]
+    return block
+
+
+def _lane1_channel_snapshot() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Load push/email/SMS/PagerDuty readiness (Lane-1 honesty helpers)."""
+    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
+    from src.infrastructure.email.email_status import get_email_readiness
+    from src.infrastructure.push.vapid_status import get_vapid_readiness
+    from src.infrastructure.sms.sms_status import get_sms_readiness
+
+    return get_vapid_readiness(), get_email_readiness(), get_sms_readiness(), get_pagerduty_readiness()
+
+
+def _attach_channel_notes(
+    target: dict[str, Any],
+    *,
+    vapid: dict[str, Any],
+    email: dict[str, Any],
+    sms: dict[str, Any],
+    pagerduty: dict[str, Any],
+) -> None:
+    if vapid.get("note"):
+        target["push_note"] = vapid["note"]
+    if email.get("note"):
+        target["email_note"] = email["note"]
+    if sms.get("note"):
+        target["sms_note"] = sms["note"]
+    if pagerduty.get("note"):
+        target["pagerduty_note"] = pagerduty["note"]
+
+
+def _build_api_readyz_checks(
+    *,
+    db_status: str,
+    db_latency_ms: float | None,
+    redis_status: str,
+    pams_status: str,
+    pams_tables_reflected: int,
+    vapid: dict[str, Any],
+    email: dict[str, Any],
+    sms: dict[str, Any],
+    pagerduty: dict[str, Any],
+    dlq: dict[str, Any],
+    circuit_breakers: dict[str, Any],
+    redis_required: bool,
+) -> dict[str, Any]:
+    checks: dict[str, Any] = {
+        "database": db_status,
+        "database_latency_ms": db_latency_ms,
+        "redis": redis_status,
+        "pams": pams_status,
+        "pams_tables_reflected": pams_tables_reflected,
+        "push": vapid["status"],
+        "vapid": {
+            "status": vapid["status"],
+            "public_key_present": vapid["public_key_present"],
+            "private_key_present": vapid["private_key_present"],
+            "contact_email_configured": vapid["contact_email_configured"],
+            "library": vapid["library"],
+        },
+        "email_configured": email["email_configured"],
+        "email": {
+            "status": email["status"],
+            "email_enabled": email["email_enabled"],
+            "email_configured": email["email_configured"],
+            "smtp_user_present": email["smtp_user_present"],
+            "smtp_password_present": email["smtp_password_present"],
+            "from_email_present": email["from_email_present"],
+        },
+        "sms_configured": sms["sms_configured"],
+        "sms": {
+            "status": sms["status"],
+            "sms_enabled": sms["sms_enabled"],
+            "sms_configured": sms["sms_configured"],
+            "twilio_account_sid_present": sms["twilio_account_sid_present"],
+            "twilio_auth_token_present": sms["twilio_auth_token_present"],
+            "twilio_from_number_present": sms["twilio_from_number_present"],
+            "library": sms["library"],
+        },
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "pagerduty": _pagerduty_readyz_block(pagerduty),
+        "dlq": dlq,
+        "channels": {
+            "email": email["status"],
+            "sms": sms["status"],
+            "push": vapid["status"],
+            "pagerduty": pagerduty["status"],
+        },
+        "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "circuit_breakers": circuit_breakers,
+    }
+    _attach_channel_notes(checks, vapid=vapid, email=email, sms=sms, pagerduty=pagerduty)
+    if redis_status == "not_configured":
+        if redis_required:
+            checks["redis_note"] = (
+                "REDIS_URL is required in this environment for rate limiting, "
+                "idempotency, and/or external audit imports."
+            )
+        else:
+            checks["redis_note"] = (
+                "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
+            )
+    return checks
+
+
 @router.get("/healthz", response_model=Dict[str, Any])
 async def health_check():
     """Basic health check."""
@@ -96,117 +242,27 @@ async def readiness_check():
         pass
 
     # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational; PagerDuty fail-closed only when key set + last send failed
-    from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
-    from src.infrastructure.email.email_status import get_email_readiness
-    from src.infrastructure.push.vapid_status import get_vapid_readiness
-    from src.infrastructure.sms.sms_status import get_sms_readiness
-
-    vapid = get_vapid_readiness()
-    email = get_email_readiness()
-    sms = get_sms_readiness()
-    pagerduty = get_pagerduty_readiness()
+    vapid, email, sms, pagerduty = _lane1_channel_snapshot()
 
     if pagerduty.get("fail_closed"):
         overall_status = "not_ready"
         status_code = 503
 
-    dlq_depth: int | None = None
-    dlq_status = "unknown"
-    try:
-        from sqlalchemy import func, select
-
-        from src.domain.models.failed_task import FailedTask
-
-        async with engine.connect() as conn:
-            result = await asyncio.wait_for(
-                conn.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
-                timeout=2.0,
-            )
-            dlq_depth = int(result.scalar() or 0)
-            dlq_status = "ok"
-    except Exception as exc:
-        logger.warning("Readiness probe: DLQ depth check failed: %s", exc)
-        dlq_status = "error"
-
-    checks: dict[str, Any] = {
-        "database": db_status,
-        "database_latency_ms": db_latency_ms,
-        "redis": redis_status,
-        "pams": pams_status,
-        "pams_tables_reflected": pams_tables_reflected,
-        "push": vapid["status"],
-        "vapid": {
-            "status": vapid["status"],
-            "public_key_present": vapid["public_key_present"],
-            "private_key_present": vapid["private_key_present"],
-            "contact_email_configured": vapid["contact_email_configured"],
-            "library": vapid["library"],
-        },
-        "email_configured": email["email_configured"],
-        "email": {
-            "status": email["status"],
-            "email_enabled": email["email_enabled"],
-            "email_configured": email["email_configured"],
-            "smtp_user_present": email["smtp_user_present"],
-            "smtp_password_present": email["smtp_password_present"],
-            "from_email_present": email["from_email_present"],
-        },
-        "sms_configured": sms["sms_configured"],
-        "sms": {
-            "status": sms["status"],
-            "sms_enabled": sms["sms_enabled"],
-            "sms_configured": sms["sms_configured"],
-            "twilio_account_sid_present": sms["twilio_account_sid_present"],
-            "twilio_auth_token_present": sms["twilio_auth_token_present"],
-            "twilio_from_number_present": sms["twilio_from_number_present"],
-            "library": sms["library"],
-        },
-        "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "pagerduty": {
-            "status": pagerduty["status"],
-            "pagerduty_enabled": pagerduty["pagerduty_enabled"],
-            "pagerduty_configured": pagerduty["pagerduty_configured"],
-            "routing_key_present": pagerduty["routing_key_present"],
-            "events_api_url_set": pagerduty["events_api_url_set"],
-            "last_enqueue_status": pagerduty.get("last_enqueue_status"),
-            "fail_closed": pagerduty.get("fail_closed", False),
-        },
-        "dlq": {
-            "status": dlq_status,
-            "depth": dlq_depth,
-            "warn_threshold": 10,
-            "critical_threshold": 50,
-        },
-        "channels": {
-            "email": email["status"],
-            "sms": sms["status"],
-            "push": vapid["status"],
-            "pagerduty": pagerduty["status"],
-        },
-        "memory_mb": round(psutil.Process().memory_info().rss / 1024 / 1024, 1),
-        "cpu_percent": psutil.cpu_percent(interval=0.1),
-        "circuit_breakers": circuit_breakers,
-    }
-    if vapid.get("note"):
-        checks["push_note"] = vapid["note"]
-    if email.get("note"):
-        checks["email_note"] = email["note"]
-    if sms.get("note"):
-        checks["sms_note"] = sms["note"]
-    if pagerduty.get("note"):
-        checks["pagerduty_note"] = pagerduty["note"]
-    if pagerduty.get("last_enqueue_error"):
-        checks["pagerduty"]["last_enqueue_error"] = pagerduty["last_enqueue_error"]
-    if redis_status == "not_configured":
-        if settings.is_redis_required:
-            checks["redis_note"] = (
-                "REDIS_URL is required in this environment for rate limiting, "
-                "idempotency, and/or external audit imports."
-            )
-        else:
-            checks["redis_note"] = (
-                "Redis is optional for readiness; set REDIS_URL when using distributed cache or rate limits."
-            )
+    dlq = await _probe_dlq_depth()
+    checks = _build_api_readyz_checks(
+        db_status=db_status,
+        db_latency_ms=db_latency_ms,
+        redis_status=redis_status,
+        pams_status=pams_status,
+        pams_tables_reflected=pams_tables_reflected,
+        vapid=vapid,
+        email=email,
+        sms=sms,
+        pagerduty=pagerduty,
+        dlq=dlq,
+        circuit_breakers=circuit_breakers,
+        redis_required=settings.is_redis_required,
+    )
 
     payload = {
         "status": overall_status,
