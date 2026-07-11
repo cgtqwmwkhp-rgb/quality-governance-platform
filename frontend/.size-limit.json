@@ -1,5 +1,5 @@
 [
-  { "path": "dist/assets/index-*.js", "limit": "300 kB", "gzip": true },
-  { "path": "dist/assets/vendor-*.js", "limit": "220 kB", "gzip": true },
-  { "path": "dist/assets/index-*.css", "limit": "40 kB", "gzip": true }
+  { "path": "dist/assets/index-*.js", "limit": "150 kB", "gzip": true },
+  { "path": "dist/assets/vendor-*.js", "limit": "200 kB", "gzip": true },
+  { "path": "dist/assets/index-*.css", "limit": "35 kB", "gzip": true }
 ]

@@ -100,10 +100,33 @@ The platform is hosted entirely within Azure UK South region. No personal data i
 
 ---
 
+## 8. Machine-readable compliance LIVE (Path-to-10 S15)
+
+| Endpoint | Surfaces |
+|----------|----------|
+| `GET /api/v1/privacy/contact` | Privacy/security contacts, `retention`, `subprocessors`, `dpia.status`, register pointer |
+| `GET /api/v1/privacy/data-processing-register` | Article 30-style **stub** register (activities + subprocessors + DPIA status) |
+
+`dpia.status` is `pending_dpo_signoff` until Section 9 of
+[`dpia-quality-governance-platform.md`](dpia-quality-governance-platform.md) is signed by the DPO.
+The processing register is intentionally a stub — expand activity rows and signed DPA links
+before treating it as a full controller ROPA.
+
+Sub-processors disclosed (also on `/privacy/contact`):
+
+| Processor | Role | Optional |
+|-----------|------|----------|
+| Microsoft Azure | Infrastructure (hosting, DB, blob, Entra ID, logs, Key Vault) | No |
+| Mistral AI | OCR / structured extraction | Yes (keys configured) |
+| Google Gemini | Multimodal review | Yes (keys configured) |
+
+---
+
 ## Related Documents
 
 - [`docs/evidence/retention-automation-evidence.md`](../evidence/retention-automation-evidence.md) — retention policy evidence
 - [`docs/privacy/data-retention-policy.md`](../privacy/data-retention-policy.md) — retention / soft-delete / legal-hold SSOT (§7a–§7b)
-- `GET /api/v1/privacy/contact` → `retention` — machine-readable soft-delete-first + entity horizons
+- `GET /api/v1/privacy/contact` → `retention`, `subprocessors`, `dpia.status`
+- `GET /api/v1/privacy/data-processing-register` — Art. 30 stub register
 - [`docs/security/security-baseline.md`](../security/security-baseline.md) — security controls
 - [`docs/adr/ADR-0009-csrf-not-required.md`](../adr/ADR-0009-csrf-not-required.md) — CSRF decision

@@ -110,6 +110,7 @@ def _build_api_readyz_checks(
     redis_required: bool,
     upstream_ai: dict[str, Any] | None = None,
     upstream_storage: dict[str, Any] | None = None,
+    upstream_celery: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     checks: dict[str, Any] = {
         "database": db_status,
@@ -159,6 +160,7 @@ def _build_api_readyz_checks(
         "upstream": {
             "ai": upstream_ai or {"status": "unknown"},
             "storage": upstream_storage or {"status": "unknown"},
+            "celery": upstream_celery or {"status": "unknown"},
         },
     }
     _attach_channel_notes(checks, vapid=vapid, email=email, sms=sms, pagerduty=pagerduty)
@@ -166,6 +168,8 @@ def _build_api_readyz_checks(
         checks["upstream_ai_note"] = upstream_ai["note"]
     if upstream_storage and upstream_storage.get("note"):
         checks["upstream_storage_note"] = upstream_storage["note"]
+    if upstream_celery and upstream_celery.get("note"):
+        checks["upstream_celery_note"] = upstream_celery["note"]
     if redis_status == "not_configured":
         if redis_required:
             checks["redis_note"] = (
@@ -254,10 +258,12 @@ async def readiness_check():
     # WCS-B06 / Lane-1 channels: push/SMTP/SMS informational; PagerDuty fail-closed only when key set + last send failed
     vapid, email, sms, pagerduty = _lane1_channel_snapshot()
     from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
+    from src.infrastructure.upstream.celery_status import get_upstream_celery_readiness
     from src.infrastructure.upstream.storage_status import get_upstream_storage_readiness
 
     upstream_ai = get_upstream_ai_readiness()
     upstream_storage = get_upstream_storage_readiness()
+    upstream_celery = await get_upstream_celery_readiness()
 
     if pagerduty.get("fail_closed"):
         overall_status = "not_ready"
@@ -279,6 +285,7 @@ async def readiness_check():
         redis_required=settings.is_redis_required,
         upstream_ai=upstream_ai,
         upstream_storage=upstream_storage,
+        upstream_celery=upstream_celery,
     )
 
     payload = {
