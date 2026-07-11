@@ -6,13 +6,13 @@ const validateEnvironmentMatch = vi.fn()
 const getExpectedEnvironment = vi.fn(() => 'staging')
 const getApiBaseUrl = vi.fn(() => 'https://qgp-staging-plantexpand.azurewebsites.net')
 
-vi.mock('../config/apiBase', () => ({
-  validateEnvironmentMatch: (...args: unknown[]) => validateEnvironmentMatch(...args),
-  getExpectedEnvironment: (...args: unknown[]) => getExpectedEnvironment(...args),
-  getApiBaseUrl: (...args: unknown[]) => getApiBaseUrl(...args),
+vi.mock('../../config/apiBase', () => ({
+  validateEnvironmentMatch: () => validateEnvironmentMatch(),
+  getExpectedEnvironment: () => getExpectedEnvironment(),
+  getApiBaseUrl: () => getApiBaseUrl(),
 }))
 
-import EnvironmentMismatchGuard from './EnvironmentMismatchGuard'
+import EnvironmentMismatchGuard from '../EnvironmentMismatchGuard'
 
 describe('EnvironmentMismatchGuard', () => {
   afterEach(() => {
