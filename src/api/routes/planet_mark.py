@@ -22,7 +22,8 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.api.dependencies.request_context import get_request_id
 from src.api.schemas.setup_required import setup_required_response
 from src.domain.models.planet_mark import (
@@ -336,7 +337,7 @@ async def list_reporting_years(
 async def create_reporting_year(
     year_data: ReportingYearCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Create a new carbon reporting year"""
     try:
@@ -464,7 +465,7 @@ async def add_emission_source(
     year_id: int,
     source_data: EmissionSourceCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Add an emission source with auto-calculation"""
     result = await db.execute(
@@ -714,7 +715,7 @@ async def create_improvement_action(
     year_id: int,
     action_data: ImprovementActionCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Create a SMART improvement action"""
     result = await db.execute(
@@ -763,7 +764,7 @@ async def update_action_status(
     action_id: int,
     status_data: ActionStatusUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> dict[str, Any]:
     """Update improvement action status"""
     result = await db.execute(
@@ -820,7 +821,7 @@ async def bulk_update_action_status(
     year_id: int,
     payload: BulkStatusUpdate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Bulk-update status for multiple improvement actions"""
     action_ids = payload.action_ids
@@ -1006,7 +1007,7 @@ async def add_fleet_record(
     year_id: int,
     fleet_data: FleetRecordCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Add fleet fuel consumption record"""
     result = await db.execute(
@@ -1116,7 +1117,7 @@ async def add_utility_reading(
     year_id: int,
     reading_data: UtilityReadingCreate,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Add utility meter reading"""
     result = await db.execute(
@@ -1298,7 +1299,7 @@ async def patch_certification_status(
     year_id: int,
     patch: CertificationStatusPatch,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> dict[str, Any]:
     """Update certification status with state-machine guard"""
     year = (
@@ -1435,7 +1436,7 @@ async def list_evidence(
 async def upload_evidence(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     request: Request,
 ) -> dict[str, Any]:
     """Upload a carbon evidence document (multipart/form-data)"""
@@ -1567,7 +1568,7 @@ async def patch_evidence(
     evidence_id: int,
     patch: EvidencePatch,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> dict[str, Any]:
     """Verify or annotate an evidence document"""
     doc = (
@@ -1600,7 +1601,7 @@ async def delete_evidence(
     year_id: int,
     evidence_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
 ) -> dict[str, Any]:
     """Delete an evidence document"""
     doc = (
@@ -1817,7 +1818,7 @@ async def _store_import_session(
 async def extract_action_plan(
     year_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     request: Request,
 ) -> dict[str, Any]:
     """Upload an action plan document and extract actions using AI"""
@@ -1911,7 +1912,7 @@ async def confirm_action_import(
     year_id: int,
     confirm: ActionImportConfirm,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     request: Request,
 ) -> dict[str, Any]:
     """Confirm and persist extracted actions from import session"""
@@ -2322,7 +2323,7 @@ class ApplyImportResponse(BaseModel):
 async def apply_import_to_planet_mark(
     payload: ApplyImportRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> ApplyImportResponse:
     """Trigger Planet Mark domain sync from a previously processed import job.
 
