@@ -185,4 +185,3 @@ def test_kri_write_routes_require_permission():
     assert "kri:create" in perms
     assert "kri:update" in perms
     assert "kri:delete" in perms
-
