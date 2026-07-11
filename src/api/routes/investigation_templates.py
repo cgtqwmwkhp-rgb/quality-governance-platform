@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.investigation import (
     InvestigationTemplateCreate,
     InvestigationTemplateListResponse,
@@ -15,6 +14,7 @@ from src.api.schemas.investigation import (
     InvestigationTemplateUpdate,
 )
 from src.domain.models.investigation import InvestigationTemplate
+from src.domain.models.user import User
 
 router = APIRouter()
 

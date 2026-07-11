@@ -25,14 +25,18 @@ class _FakeResult:
 
 @pytest.mark.asyncio
 async def test_auditor_access_allows_self_read():
-    user = types.SimpleNamespace(id=42, tenant_id=3, is_superuser=False, roles=[])
+    user = types.SimpleNamespace(
+        id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False
+    )
 
     _assert_auditor_access(user, 42)
 
 
 @pytest.mark.asyncio
 async def test_auditor_access_denies_unrelated_non_manager():
-    user = types.SimpleNamespace(id=42, tenant_id=3, is_superuser=False, roles=[])
+    user = types.SimpleNamespace(
+        id=42, tenant_id=3, is_superuser=False, roles=[], has_permission=lambda _p: False
+    )
 
     with pytest.raises(AuthorizationError) as exc_info:
         _assert_auditor_access(user, 77)
@@ -78,7 +82,11 @@ async def test_create_profile_rejects_cross_tenant_user(monkeypatch):
     target_user = types.SimpleNamespace(id=11, tenant_id=9, is_active=True)
     db = types.SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(target_user)))
     current_user = types.SimpleNamespace(
-        id=42, tenant_id=7, is_superuser=False, roles=[types.SimpleNamespace(name="admin")]
+        id=42,
+        tenant_id=7,
+        is_superuser=False,
+        roles=[types.SimpleNamespace(name="admin")],
+        has_permission=lambda permission: permission == "audit:update",
     )
 
     create_profile = AsyncMock()

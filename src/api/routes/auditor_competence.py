@@ -12,8 +12,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import CurrentUser, get_current_user, get_db
 from src.api.dependencies import require_permission
+from src.api.deps import CurrentUser, get_current_user, get_db
 from src.domain.exceptions import AuthorizationError, BadRequestError, NotFoundError
 from src.domain.models.user import User
 from src.services.auditor_competence import AuditorCompetenceService
