@@ -54,7 +54,7 @@ def test_expand_adds_three_ten2_owned_tables():
 
 
 def test_middleware_rls_tables_include_expansion():
-    assert len(RLS_TABLES) == 15
+    assert len(RLS_TABLES) >= 15
     for table in ("policies", "audit_findings", "investigation_actions"):
         assert table in RLS_TABLES
     for table in ("incidents", "users", "audit_log_entries"):

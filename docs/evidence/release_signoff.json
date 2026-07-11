@@ -1,11 +1,11 @@
 {
-  "release_sha": "22478051e27591cbdc88d9fcc2be6d7e606f6c42",
+  "release_sha": "be6e46d5098a306c70a5e2fba17001c7de8a15ab",
   "governance_lead": "David Harris",
   "governance_lead_approved": true,
   "cab_chair": "Platform CAB Chair",
   "cab_approved": true,
   "uat_report_path": "docs/evidence/WCS_TRANSFORMATION_EXECUTION_RECORD_2026-04-05.md",
   "rollback_drill_path": "docs/runbooks/rollback-drills.md",
-  "notes": "Release signoff for main tip 22478051 \u2014 Path-to-10: #752 FE statements 28\u219231 + Risk Register real axe; includes #750 PagerDuty Events API v2 enqueue + fail-closed readyz. No SMTP invent.",
-  "approved_at_utc": "2026-07-11T13:34:00+00:00"
+  "notes": "Release signoff for main tip be6e46d5 \u2014 #755 FORCE RLS + WITH CHECK on incident_actions/complaint_actions/rta_actions (post #747). Weekend force_deploy for LIVE prod tenancy harden.",
+  "approved_at_utc": "2026-07-11T13:47:28+00:00"
 }
