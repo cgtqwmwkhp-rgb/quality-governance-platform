@@ -198,4 +198,26 @@ describe('Audit Import Review page accessibility (CUJ real page /import-review)'
 
     await expectNoA11yViolations(container)
   })
+
+  it('renders the workspace-unavailable recovery state without critical axe violations', async () => {
+    mockGetJob.mockResolvedValue({
+      data: {
+        id: 72,
+        audit_run_id: 41,
+        reference_number: 'IMP-00072',
+        status: 'review_required',
+        specialist_home_path: '/uvdb',
+        specialist_home_label: 'Open Achilles / UVDB',
+      },
+    })
+    mockListDrafts.mockResolvedValue({ data: [] })
+
+    const { container } = renderPage('/audits/99/import-review?jobId=72')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('import-review-workspace-unavailable')).toBeInTheDocument()
+    })
+
+    await expectNoA11yViolations(container)
+  })
 })
