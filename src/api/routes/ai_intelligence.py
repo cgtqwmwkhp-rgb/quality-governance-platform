@@ -9,13 +9,14 @@ Provides endpoints for:
 - Audit AI Assistant
 """
 
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentUser, require_permission
+from src.domain.models.user import User
 from src.domain.services.ai_audit_service import (
     AuditQuestionGenerator,
     AuditReportGenerator,
@@ -77,7 +78,7 @@ class BatchFindingRequest(BaseModel):
 @router.post("/analyze/text", response_model=dict)
 async def analyze_text(
     request: TextAnalysisRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ) -> dict[str, Any]:
     """Analyze text for keywords, severity, and entities"""
     keywords = TextAnalyzer.extract_keywords(request.text)
@@ -105,7 +106,7 @@ async def predict_risk_factors(
 @router.post("/predict/similar-incidents", response_model=list)
 async def find_similar_incidents(
     request: TextAnalysisRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     limit: int = Query(5, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
@@ -147,7 +148,7 @@ async def detect_pattern_anomalies(
 @router.post("/recommendations/corrective-actions", response_model=list)
 async def get_corrective_action_recommendations(
     request: RecommendationRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Get recommended corrective actions for an incident"""
@@ -175,7 +176,7 @@ async def get_incident_clusters(
 @router.post("/root-cause/5-whys", response_model=dict)
 async def analyze_5_whys(
     request: FiveWhysRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Analyze 5 Whys and suggest root cause"""
@@ -189,7 +190,7 @@ async def analyze_5_whys(
 @router.post("/audit/generate-questions", response_model=list)
 async def generate_audit_questions(
     request: QuestionGenerationRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate audit questions for a specific clause"""
@@ -204,7 +205,7 @@ async def generate_audit_questions(
 @router.post("/audit/generate-checklist", response_model=list)
 async def generate_audit_checklist(
     request: ChecklistRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Generate complete audit checklist for a standard"""
@@ -241,7 +242,7 @@ async def get_evidence_gaps(
 @router.post("/audit/classify-finding", response_model=dict)
 async def classify_finding(
     request: FindingClassificationRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Classify a finding by severity and root cause"""
@@ -252,7 +253,7 @@ async def classify_finding(
 @router.post("/audit/classify-findings-batch", response_model=list)
 async def classify_findings_batch(
     request: BatchFindingRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     db: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
     """Classify multiple findings"""
