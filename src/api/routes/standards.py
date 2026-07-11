@@ -7,7 +7,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from src.api.dependencies import CurrentSuperuser, CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.schemas.standard import (
     ClauseCreate,
     ClauseResponse,
@@ -24,6 +23,7 @@ from src.api.schemas.standard import (
     StandardUpdate,
 )
 from src.domain.models.standard import Clause, Control, Standard
+from src.domain.models.user import User
 
 router = APIRouter()
 
