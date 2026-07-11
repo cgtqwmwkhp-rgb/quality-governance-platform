@@ -249,6 +249,14 @@ the evidence a DPO needs so sign-off can complete without further engineering in
 | OCR/AI import DPIA companion | `docs/compliance/dpia-ocr-ai-import.md` | Processing activity addendum |
 | PII inventory script | `scripts/governance/audit_pii_fields.py` | Regenerable field inventory |
 | Security contact | `/.well-known/security.txt` + privacy routes | External reporter path |
+| Machine-readable DPIA status | `GET /api/v1/privacy/contact` → `dpia.status` | Live close-out flag (`pending_dpo_signoff` until §9 signed) |
+| Art. 30 register stub | `GET /api/v1/privacy/data-processing-register` | Activities + subprocessors disclosure |
+
+### Live status field
+
+| Field | Value until DPO §9 sign-off | Endpoint |
+|-------|----------------------------|----------|
+| `dpia.status` | `pending_dpo_signoff` | `/api/v1/privacy/contact` and `/api/v1/privacy/data-processing-register` |
 
 ### DPO review checklist (unsigned)
 
@@ -256,7 +264,9 @@ the evidence a DPO needs so sign-off can complete without further engineering in
 - [ ] Soft-delete-first + matter-level legal-hold status understood (SSOT above; schema flags may still be Planned)
 - [ ] Special-category / RIDDOR flows accepted or conditioned
 - [ ] Residual risks accepted or conditioned
+- [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure / optional Mistral / Gemini)
 - [ ] Section 9 DPO name / date / decision / signature completed by DPO (not engineering)
 
-**Engineering note:** Do not mark Status as “Signed” until Section 9 is completed by the DPO.
+**Engineering note:** Do not mark Status as “Signed” (and do not change `dpia.status` away from
+`pending_dpo_signoff`) until Section 9 is completed by the DPO.
 
