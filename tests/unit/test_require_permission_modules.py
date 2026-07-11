@@ -185,3 +185,16 @@ def test_kri_write_routes_require_permission():
     assert "kri:create" in perms
     assert "kri:update" in perms
     assert "kri:delete" in perms
+
+
+def test_standards_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/standards.py")
+    assert "standard:create" in perms
+    assert "standard:update" in perms
+
+
+def test_workflow_legacy_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/workflow.py")
+    assert "workflow:create" in perms
+    assert "workflow:update" in perms
+    assert "workflow:delete" in perms
