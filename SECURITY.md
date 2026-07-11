@@ -11,9 +11,11 @@
 If you discover a security vulnerability, please report it responsibly:
 
 1. **Do not** create a public GitHub issue
-2. Email the security team with details
-3. Include steps to reproduce if possible
-4. Allow reasonable time for a fix before disclosure
+2. Email **security@plantexpand.com** (override via `SECURITY_CONTACT_EMAIL`)
+3. Privacy / data-protection enquiries: **privacy@plantexpand.com** (override via `PRIVACY_CONTACT_EMAIL`)
+4. Machine-readable contacts: `GET /.well-known/security.txt` and `GET /api/v1/privacy/contact`
+5. Include steps to reproduce if possible
+6. Allow reasonable time for a fix before disclosure
 
 ## Security Measures
 

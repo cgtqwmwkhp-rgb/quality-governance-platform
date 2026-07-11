@@ -98,6 +98,10 @@ docs/evidence/pentest-report-YYYY-Q?.md
 - `docs/privacy/dpia-incidents.md` (DPIA for incidents module)
 - `docs/privacy/dpia-template.md`
 - `docs/privacy/data-retention-policy.md`
+- `docs/compliance/dpia-ocr-ai-import.md` (OCR/AI external audit import DPIA — Path-to-10 S15)
+- `docs/governance/privacy-ocr-ai-dpia.md` (governance link)
+- `docs/privacy/dpia-checklist.md` (trigger + OCR completeness checklist)
+- `GET /api/v1/privacy/contact` and `GET /.well-known/security.txt` (runtime privacy disclosure)
 - `docs/privacy/data-classification.md`
 - `docs/compliance/gdpr-compliance.md`
 - `docs/evidence/retention-automation-evidence.md`

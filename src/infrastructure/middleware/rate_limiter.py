@@ -242,8 +242,16 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     if os.environ.get("TESTING") == "1":
         return await call_next(request)
 
-    # Skip rate limiting for health checks
-    if request.url.path in ["/health", "/healthz", "/readyz", "/api/health", "/ready"]:
+    # Skip rate limiting for health checks and public privacy disclosure
+    if request.url.path in [
+        "/health",
+        "/healthz",
+        "/readyz",
+        "/api/health",
+        "/ready",
+        "/.well-known/security.txt",
+        "/api/v1/privacy/contact",
+    ]:
         return await call_next(request)
 
     # Skip rate limiting for CORS preflight requests (OPTIONS)

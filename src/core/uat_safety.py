@@ -35,7 +35,9 @@ WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 ALWAYS_ALLOWED_PATHS = {
     "/healthz",
     "/readyz",
+    "/.well-known/security.txt",
     "/api/v1/meta/version",
+    "/api/v1/privacy/contact",
     "/api/v1/auth/login",
     "/api/v1/auth/token",
     "/api/v1/auth/refresh",
