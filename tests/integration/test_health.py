@@ -331,9 +331,11 @@ async def test_root_readyz_includes_pagerduty_not_configured(client: AsyncClient
     assert data.get("channels", {}).get("pagerduty") == "not_configured"
     # Missing PagerDuty must not be the sole reason for 503
     if response.status_code == 503:
-        assert data.get("database") in {"disconnected", "degraded", "ok", "connected"} or data.get(
-            "redis"
-        ) in {"degraded", "not_configured", "disconnected"}
+        assert data.get("database") in {"disconnected", "degraded", "ok", "connected"} or data.get("redis") in {
+            "degraded",
+            "not_configured",
+            "disconnected",
+        }
 
 
 @pytest.mark.asyncio

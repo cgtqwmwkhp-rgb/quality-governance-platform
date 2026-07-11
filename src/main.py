@@ -610,9 +610,7 @@ async def readiness_check(request: Request):
 
         async with async_session_maker() as session:
             result = await asyncio.wait_for(
-                session.execute(
-                    select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))
-                ),
+                session.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
                 timeout=2.0,
             )
             dlq_depth = int(result.scalar() or 0)

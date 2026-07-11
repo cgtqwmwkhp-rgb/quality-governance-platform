@@ -119,9 +119,7 @@ async def readiness_check():
 
         async with engine.connect() as conn:
             result = await asyncio.wait_for(
-                conn.execute(
-                    select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))
-                ),
+                conn.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
                 timeout=2.0,
             )
             dlq_depth = int(result.scalar() or 0)

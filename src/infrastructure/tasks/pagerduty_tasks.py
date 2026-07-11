@@ -57,7 +57,5 @@ def trigger_pagerduty_alert(
         raise self.retry(exc=exc) from exc
 
     if result.get("status") == "not_configured":
-        logger.warning(
-            "PagerDuty enabled but routing key missing — alert not sent (fail-closed honesty)"
-        )
+        logger.warning("PagerDuty enabled but routing key missing — alert not sent (fail-closed honesty)")
     return result
