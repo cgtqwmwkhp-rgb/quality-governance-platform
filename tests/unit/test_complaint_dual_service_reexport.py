@@ -6,3 +6,4 @@ from src.services import complaint_service as services_mod
 
 def test_complaint_service_reexport_is_domain_canonical():
     assert services_mod.ComplaintService is domain_mod.ComplaintService
+    assert services_mod.validate_complaint_transition is domain_mod.validate_complaint_transition

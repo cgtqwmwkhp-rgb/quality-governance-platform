@@ -5,6 +5,6 @@ The single source of truth for complaint services lives in
 that callers using the ``src.services`` path continue to work.
 """
 
-from src.domain.services.complaint_service import ComplaintService
+from src.domain.services.complaint_service import ComplaintService, validate_complaint_transition
 
-__all__ = ["ComplaintService"]
+__all__ = ["ComplaintService", "validate_complaint_transition"]
