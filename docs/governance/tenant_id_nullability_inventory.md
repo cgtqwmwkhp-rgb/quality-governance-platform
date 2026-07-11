@@ -6,8 +6,8 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 28 |
-| Owned nullable `tenant_id` | 81 |
+| Required `tenant_id` (`nullable=False`) | 29 |
+| Owned nullable `tenant_id` | 80 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -43,6 +43,7 @@ This phase lands:
 | `risk_assessments` | Done (fail-safe) | Child of `risks` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risks_v2` | Done (fail-safe) | Parent core TEN2 — creator/owner backfill; NOT NULL only when residual NULLs=0. |
 | `bow_tie_elements` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
+| `risk_control_mappings` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -149,7 +150,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `policy_versions` | `PolicyVersion` |
 | `risk_appetite_statements` | `RiskAppetiteStatement` |
 | `risk_assessment_history` | `RiskAssessmentHistory` |
-| `risk_control_mappings` | `RiskControlMapping` |
 | `risk_controls` | `OperationalRiskControl` |
 | `roi_investments` | `ROIInvestment` |
 | `saved_reports` | `SavedReport` |
