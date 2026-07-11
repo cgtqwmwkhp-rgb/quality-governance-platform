@@ -79,6 +79,7 @@ export default function AuditImportReview() {
     showPromoteConfirm,
     setShowPromoteConfirm,
     successMessage,
+    dismissSuccess,
     handleDraftDecision,
     handlePromoteClick,
     handleBulkApprove,
@@ -152,7 +153,7 @@ export default function AuditImportReview() {
       <ImportReviewNotices
         section="pre-proof"
         successMessage={successMessage}
-        onDismissSuccess={() => setSuccessMessage(null)}
+        onDismissSuccess={dismissSuccess}
         reconciliationNotice={reconciliationNotice}
         error={error}
         promotionFailedDrafts={promotionFailedDrafts}
@@ -173,7 +174,7 @@ export default function AuditImportReview() {
       <ImportReviewNotices
         section="post-proof"
         successMessage={successMessage}
-        onDismissSuccess={() => setSuccessMessage(null)}
+        onDismissSuccess={dismissSuccess}
         reconciliationNotice={reconciliationNotice}
         error={error}
         promotionFailedDrafts={promotionFailedDrafts}

@@ -176,6 +176,8 @@ export function useImportReviewActions({
     }
   }
 
+  const dismissSuccess = () => setSuccessMessage(null)
+
   return {
     busyDraftId,
     isBulkReviewing,
@@ -184,6 +186,7 @@ export function useImportReviewActions({
     showPromoteConfirm,
     setShowPromoteConfirm,
     successMessage,
+    dismissSuccess,
     handleDraftDecision,
     handlePromoteClick,
     handleBulkApprove,
