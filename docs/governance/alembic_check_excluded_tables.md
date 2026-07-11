@@ -85,6 +85,11 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 - Filter hook: `process_revision_directives` / `_filter_upgrade_ops` in `alembic/env.py`
 - CI: `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` around `alembic check` in `.github/workflows/ci.yml`
 
-## 2026-07-11 unfilter note
 
-Removed `controlled_documents` and `controlled_document_versions` from `_ALEMBIC_CHECK_EXCLUDED_TABLES` after document-control tenancy migrations (`20260710_document_control_tenancy`, `20260711_controlled_document_versions_tenant_not_null`) made compare coverage honest. CI `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` remains for FK/index/unique/column noise until model alignment lands; inventory artifact still published.
+## 2026-07-11 create + unfilter
+
+Added `20260711_ctl_docs_create` so fresh migrate materializes `controlled_documents`
+and `controlled_document_versions` (previously only TEN2/RLS migrations assumed they
+existed). Removed both names from `_ALEMBIC_CHECK_EXCLUDED_TABLES` so alembic check
+covers them. Child document-control tables remain excluded until create coverage lands.
+
