@@ -266,3 +266,10 @@ def test_planet_mark_write_routes_require_permission():
 def test_ai_intelligence_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/ai_intelligence.py")
     assert "audit:create" in perms
+
+
+def test_analytics_write_routes_require_permission():
+    perms = _permission_depends(REPO / "src/api/routes/analytics.py")
+    assert "analytics:create" in perms
+    assert "analytics:update" in perms
+    assert "analytics:delete" in perms

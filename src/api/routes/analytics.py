@@ -12,12 +12,13 @@ Features:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from src.api.dependencies import CurrentUser
+from src.api.dependencies import CurrentUser, require_permission
+from src.domain.models.user import User
 from src.domain.services.analytics_service import analytics_service
 
 router = APIRouter()
@@ -114,7 +115,10 @@ async def list_dashboards(current_user: CurrentUser):
 
 
 @router.post("/dashboards")
-async def create_dashboard(dashboard: DashboardCreate, current_user: CurrentUser):
+async def create_dashboard(
+    dashboard: DashboardCreate,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
     """Create a new custom dashboard."""
     return {
         "id": 4,
@@ -138,7 +142,11 @@ async def get_dashboard(dashboard_id: int, current_user: CurrentUser):
 
 
 @router.put("/dashboards/{dashboard_id}")
-async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, current_user: CurrentUser):
+async def update_dashboard(
+    dashboard_id: int,
+    dashboard: DashboardUpdate,
+    current_user: Annotated[User, Depends(require_permission("analytics:update"))],
+):
     """Update dashboard configuration."""
     return {
         "id": dashboard_id,
@@ -148,7 +156,10 @@ async def update_dashboard(dashboard_id: int, dashboard: DashboardUpdate, curren
 
 
 @router.delete("/dashboards/{dashboard_id}")
-async def delete_dashboard(dashboard_id: int, current_user: CurrentUser):
+async def delete_dashboard(
+    dashboard_id: int,
+    current_user: Annotated[User, Depends(require_permission("analytics:delete"))],
+):
     """Delete a dashboard."""
     return {"success": True, "id": dashboard_id}
 
@@ -182,7 +193,10 @@ async def get_widget_data(
 
 
 @router.post("/widgets/preview")
-async def preview_widget(widget: WidgetConfig, current_user: CurrentUser):
+async def preview_widget(
+    widget: WidgetConfig,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
     """Preview widget data without saving."""
     trend_data = analytics_service.get_trend_data(
         data_source=widget.data_source,
@@ -254,7 +268,10 @@ async def get_drill_down_data(
 
 
 @router.post("/forecast")
-async def generate_forecast(request: ForecastRequest, current_user: CurrentUser):
+async def generate_forecast(
+    request: ForecastRequest,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
     """Generate trend forecast with confidence intervals."""
     # Get historical data
     trend_data = analytics_service.get_trend_data(
@@ -323,7 +340,10 @@ async def get_cost_of_non_compliance(
 
 
 @router.post("/costs/record")
-async def record_cost(cost: CostRecord, current_user: CurrentUser):
+async def record_cost(
+    cost: CostRecord,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
     """Record a cost entry."""
     return {
         "id": 1,
@@ -363,7 +383,10 @@ async def get_investment_roi(investment_id: int, current_user: CurrentUser):
 
 
 @router.post("/roi/investment")
-async def create_investment(investment: ROIInvestmentCreate, current_user: CurrentUser):
+async def create_investment(
+    investment: ROIInvestmentCreate,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
+):
     """Create a new investment record."""
     return {
         "id": 4,
@@ -379,7 +402,7 @@ async def update_investment_actuals(
     investment_id: int,
     actual_savings: float,
     incidents_prevented: int,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("analytics:update"))],
 ):
     """Update actual savings and incidents prevented."""
     return {
@@ -413,7 +436,7 @@ class ReportRequest(BaseModel):
 @router.post("/reports/generate")
 async def generate_report(
     body: ReportRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("analytics:create"))],
 ):
     """Generate and queue a report for download."""
     return {
