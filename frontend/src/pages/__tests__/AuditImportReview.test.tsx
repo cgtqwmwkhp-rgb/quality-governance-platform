@@ -483,9 +483,13 @@ describe('AuditImportReview', () => {
 
     renderPage()
 
-    const promote = await screen.findByRole('button', { name: 'Promote Accepted Drafts' })
-    await waitFor(() => expect(promote).not.toBeDisabled())
-    fireEvent.click(promote)
+    // Re-query after load: loading chrome mounts a disabled Promote that unmounts.
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Promote Accepted Drafts' }),
+      ).not.toBeDisabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Promote Accepted Drafts' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm Promote' }))
 
     expect(
@@ -597,7 +601,13 @@ describe('AuditImportReview', () => {
 
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Approve All Pending' }))
+    // Loading chrome mounts disabled Approve All Pending; wait for live header.
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Approve All Pending' }),
+      ).not.toBeDisabled()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Approve All Pending' }))
 
     await waitFor(() => {
       expect(mockBulkReviewJob).toHaveBeenCalledWith(72, { status: 'accepted' })
