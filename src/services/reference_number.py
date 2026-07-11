@@ -1,8 +1,8 @@
 """Re-export from canonical domain service.
 
 The single source of truth for ReferenceNumberService lives in
-``src.domain.services.reference_number``.  This module re-exports it
-so that callers using the ``src.services`` path continue to work.
+``src.domain.services.reference_number``. This module is the Path-to-10 S1
+dual-service thin re-export so callers using ``src.services`` keep working.
 """
 
 from src.domain.services.reference_number import ReferenceNumberService
