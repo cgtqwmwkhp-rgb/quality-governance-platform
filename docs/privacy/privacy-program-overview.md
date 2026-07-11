@@ -34,7 +34,8 @@ Single-source overview of the Quality Governance Platform's privacy program cove
 | Art. 25 | Privacy by design | `DataClassification` enum in model layer; classification-aware handling |
 | Art. 32 | Security of processing | TLS 1.2+, field-level Fernet encryption, tenant isolation, audit trail |
 | Art. 33–34 | Breach notification | Incident response runbook with 72-hour supervisory authority notification |
-| Art. 35 | DPIA | Incidents/complaints ([DPIA-001](dpia-incidents.md)); OCR/AI import ([DPIA-OCR-AI](../compliance/dpia-ocr-ai-import.md)); checklist ([dpia-checklist.md](dpia-checklist.md)) |
+| Art. 30 | Records of processing | LIVE stub `GET /api/v1/privacy/data-processing-register`; documentary checklist [`../compliance/article-30-ropa-checklist.md`](../compliance/article-30-ropa-checklist.md) — **not** a full signed ROPA |
+| Art. 35 | DPIA | Incidents/complaints ([DPIA-001](dpia-incidents.md)); OCR/AI import ([DPIA-OCR-AI](../compliance/dpia-ocr-ai-import.md)); checklist ([dpia-checklist.md](dpia-checklist.md)); unsigned pack ([S15 attestation](../compliance/s15-dpia-art30-attestation-pack.md)) |
 
 ---
 
@@ -119,11 +120,17 @@ Full policy: [`data-retention-policy.md`](data-retention-policy.md)
 
 | Ref | Scope | Date | Status | Next Review |
 |-----|-------|------|--------|-------------|
-| DPIA-001 | Incident Reporting, Complaint Management, Near Miss, RTA | 2026-03-07 | Complete | 2026-09-07 |
+| DPIA-001 | Incident Reporting, Complaint Management, Near Miss, RTA | 2026-03-07 | Complete (module body) — DPO formal EA-03 still open | 2026-09-07 |
+| DPIA-QGP-2026-001 | Platform-wide QGP processing | 2026-04-08 | Complete — **Pending DPO Sign-Off** (`pending_dpo_signoff`) | Annual / material change |
+| DPIA-QGP-OCR-AI-2026-001 | External audit OCR / AI import | 2026-07-11 | Complete — residual Medium **pending DPO acceptance** | Annual / vendor change |
 
 DPIAs are required before any new processing of C4 (restricted) data. The DPIA template is at [`dpia-template.md`](dpia-template.md).
 
+Unsigned ready-for-signoff pack (Preferred S15): [`../compliance/s15-dpia-art30-attestation-pack.md`](../compliance/s15-dpia-art30-attestation-pack.md).
+
 Full DPIA for incident/complaint modules: [`dpia-incidents.md`](dpia-incidents.md)
+
+**EA honesty:** EA-01 Not started · EA-02 Scheduled · EA-03 In progress (unsigned) · EA-04 Not started — see [`../evidence/external-attestation-tracker.md`](../evidence/external-attestation-tracker.md).
 
 ---
 
@@ -156,6 +163,8 @@ Full DPIA for incident/complaint modules: [`dpia-incidents.md`](dpia-incidents.m
 | Data Retention Policy | [`docs/privacy/data-retention-policy.md`](data-retention-policy.md) |
 | DPIA — Incidents & Complaints | [`docs/privacy/dpia-incidents.md`](dpia-incidents.md) |
 | DPIA Template | [`docs/privacy/dpia-template.md`](dpia-template.md) |
+| S15 DPIA / Art. 30 attestation pack (unsigned) | [`docs/compliance/s15-dpia-art30-attestation-pack.md`](../compliance/s15-dpia-art30-attestation-pack.md) |
+| Art. 30 ROPA checklist | [`docs/compliance/article-30-ropa-checklist.md`](../compliance/article-30-ropa-checklist.md) |
 | GDPR Service | [`src/domain/services/gdpr_service.py`](../../src/domain/services/gdpr_service.py) |
 | Pseudonymization Service | [`src/domain/services/pseudonymization_service.py`](../../src/domain/services/pseudonymization_service.py) |
 | DataClassification Enum | [`src/domain/models/base.py`](../../src/domain/models/base.py) |

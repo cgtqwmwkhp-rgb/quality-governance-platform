@@ -147,3 +147,6 @@ Residual risk of document egress to AI processors is **accepted as Medium** pend
 | security.txt | `GET /.well-known/security.txt` |
 | Checklist | `docs/privacy/dpia-checklist.md` |
 | Governance link | `docs/governance/privacy-ocr-ai-dpia.md` |
+| **S15 unsigned attestation pack** | `docs/compliance/s15-dpia-art30-attestation-pack.md` |
+| Art. 30 ROPA checklist | `docs/compliance/article-30-ropa-checklist.md` |
+| EA tracker (EA-03 still open) | `docs/evidence/external-attestation-tracker.md` |

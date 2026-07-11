@@ -7,11 +7,14 @@
 **Author**: Platform Engineering  
 **Owner**: Data Protection Officer (DPO)  
 **Review Cycle**: Annually and on any material change to data processing  
-**Status**: Complete — Pending DPO Sign-Off (close-out readiness pack linked)  
-**Classification**: Confidential
+**Status**: Complete — Pending DPO Sign-Off (unsigned close-out / attestation pack linked)  
+**Classification**: Confidential  
+**Attestation pack**: [`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)
 
 > **Note**: This DPIA satisfies the requirement under Article 35, UK GDPR. All technical sections
 > are complete and evidence-backed. DPO sign-off is the single remaining step (Section 9 below).
+> Preferred S15 scoring may credit the **unsigned** readiness pack; it must **not** treat this
+> document as signed or EA-03 closed.
 
 ---
 
@@ -235,22 +238,32 @@ No personal data is transferred to countries without an adequacy decision or equ
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-04-08 | Platform Engineering | Initial complete DPIA |
+| 1.1 | 2026-07-11 | Platform Engineering | Close-out readiness pack (§11); Preferred S15 attestation index |
 
 ---
 
-## 10. Close-Out Readiness Pack (Path-to-10 S15)
+## 11. Close-Out Readiness Pack (Path-to-10 S15 / Preferred)
 
 This section does **not** replace DPO wet/electronic sign-off in Section 9. It packages
 the evidence a DPO needs so sign-off can complete without further engineering invent.
 
+**Canonical unsigned pack (deepened for Preferred 6.5→9.0):**
+[`s15-dpia-art30-attestation-pack.md`](s15-dpia-art30-attestation-pack.md)
+
 | Artifact | Location | Role |
 |----------|----------|------|
+| **S15 attestation pack (index)** | `docs/compliance/s15-dpia-art30-attestation-pack.md` | Single walk-through for DPO / auditor |
+| Art. 30 ROPA checklist | `docs/compliance/article-30-ropa-checklist.md` | Documentary Art. 30 field map (unsigned) |
 | Soft-delete + legal-hold SSOT | `docs/privacy/data-retention-policy.md` | Retention / hold policy truth |
 | OCR/AI import DPIA companion | `docs/compliance/dpia-ocr-ai-import.md` | Processing activity addendum |
+| Incidents DPIA | `docs/privacy/dpia-incidents.md` | Module DPIA-001 |
+| DPIA operational checklist | `docs/privacy/dpia-checklist.md` | Trigger + completeness gates |
+| GDPR inventory + LIVE map | `docs/compliance/gdpr-compliance.md` §8–§9 | Categories + endpoint honesty |
 | PII inventory script | `scripts/governance/audit_pii_fields.py` | Regenerable field inventory |
 | Security contact | `/.well-known/security.txt` + privacy routes | External reporter path |
 | Machine-readable DPIA status | `GET /api/v1/privacy/contact` → `dpia.status` | Live close-out flag (`pending_dpo_signoff` until §9 signed) |
-| Art. 30 register stub | `GET /api/v1/privacy/data-processing-register` | Activities + subprocessors disclosure |
+| Art. 30 register stub | `GET /api/v1/privacy/data-processing-register` | Activities + subprocessors disclosure (**stub**, not full ROPA) |
+| External attestation tracker | `docs/evidence/external-attestation-tracker.md` | EA-01..04 honest open statuses |
 
 ### Live status field
 
@@ -258,15 +271,27 @@ the evidence a DPO needs so sign-off can complete without further engineering in
 |-------|----------------------------|----------|
 | `dpia.status` | `pending_dpo_signoff` | `/api/v1/privacy/contact` and `/api/v1/privacy/data-processing-register` |
 
+### External attestations (honest — not closed by this DPIA)
+
+| ID | Status (as of 2026-07-11) | Relation to this DPIA |
+|----|---------------------------|------------------------|
+| EA-01 WCAG external audit | 🔴 Not started | Out of scope for privacy sign-off; still open |
+| EA-02 External pen-test | 🟡 Scheduled | Security control assurance; still open |
+| EA-03 DPO sign-off on DPIAs | 🟡 In progress | **This document §9** is the EA-03 gate — still unsigned |
+| EA-04 ISO auditor validation | 🔴 Not started | Compliance-tool validation; still open |
+
 ### DPO review checklist (unsigned)
 
 - [ ] Section 1–8 technical content reviewed against live processing
 - [ ] Soft-delete-first + matter-level legal-hold status understood (SSOT above; schema flags may still be Planned)
 - [ ] Special-category / RIDDOR flows accepted or conditioned
-- [ ] Residual risks accepted or conditioned
+- [ ] Residual risks accepted or conditioned (including OCR/AI Medium residual in companion DPIA)
 - [ ] Sub-processor list on privacy LIVE endpoints reviewed (Azure / optional Mistral / Gemini)
+- [ ] Art. 30 stub + [`article-30-ropa-checklist.md`](article-30-ropa-checklist.md) accepted as interim **or** full ROPA commissioned
 - [ ] Section 9 DPO name / date / decision / signature completed by DPO (not engineering)
+- [ ] EA-03 deliverable written to `docs/evidence/dpo-signoff-YYYY-Q?.md` and tracker updated
 
 **Engineering note:** Do not mark Status as “Signed” (and do not change `dpia.status` away from
-`pending_dpo_signoff`) until Section 9 is completed by the DPO.
+`pending_dpo_signoff`) until Section 9 is completed by the DPO. Do not mark EA-01..04 closed
+from documentation alone.
 

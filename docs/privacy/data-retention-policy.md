@@ -129,8 +129,8 @@ This policy is reviewed **annually** or when retention law or insurer requiremen
 
 ## DPIA close-out readiness
 
-For S15 compliance scoring, the DPIA close-out readiness pack (unsigned DPO checklist +
-artifact index) lives in `docs/compliance/dpia-quality-governance-platform.md` §10.
-This retention/legal-hold SSOT is an input to that pack — it does not itself constitute
-DPO sign-off.
+For S15 compliance scoring, the unsigned DPIA / Art. 30 attestation pack lives at
+[`docs/compliance/s15-dpia-art30-attestation-pack.md`](../compliance/s15-dpia-art30-attestation-pack.md)
+(platform DPIA §11 still indexes the same artifacts). This retention/legal-hold SSOT is an
+input to that pack — it does not itself constitute DPO sign-off or close EA-03.
 
