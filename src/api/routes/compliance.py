@@ -20,11 +20,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.domain.exceptions import BadRequestError, NotFoundError
 from src.domain.models.compliance_evidence import ComplianceEvidenceLink, EvidenceLinkMethod
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
+from src.domain.models.user import User
 from src.domain.services.iso_compliance_service import EvidenceLink, ISOStandard, iso_compliance_service
 from src.infrastructure.monitoring.azure_monitor import get_tracer
 
@@ -363,7 +363,9 @@ async def get_clause(clause_id: str, current_user: CurrentUser):
 
 
 @router.post("/auto-tag", response_model=List[AutoTagResponse])
-async def auto_tag_content(request: AutoTagRequest, current_user: Annotated[User, Depends(require_permission("audit:create"))]):
+async def auto_tag_content(
+    request: AutoTagRequest, current_user: Annotated[User, Depends(require_permission("audit:create"))]
+):
     """
     Automatically detect ISO clauses that relate to the given content.
 
@@ -383,7 +385,11 @@ async def auto_tag_content(request: AutoTagRequest, current_user: Annotated[User
 
 
 @router.post("/evidence/link")
-async def link_evidence(request: EvidenceLinkRequest, db: DbSession, current_user: Annotated[User, Depends(require_permission("audit:create"))]):
+async def link_evidence(
+    request: EvidenceLinkRequest,
+    db: DbSession,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
+):
     """
     Link an entity (document, audit, incident, etc.) to ISO clauses.
 
@@ -465,7 +471,9 @@ async def list_evidence_links(
 
 
 @router.delete("/evidence/link/{link_id}")
-async def delete_evidence_link(link_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("audit:update"))]):
+async def delete_evidence_link(
+    link_id: int, db: DbSession, current_user: Annotated[User, Depends(require_permission("audit:update"))]
+):
     """Soft-delete an evidence link for the current tenant."""
     result = await db.execute(
         select(ComplianceEvidenceLink).where(

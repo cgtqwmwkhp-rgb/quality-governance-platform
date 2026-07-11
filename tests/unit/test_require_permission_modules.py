@@ -222,4 +222,3 @@ def test_compliance_write_routes_require_permission():
     perms = _permission_depends(REPO / "src/api/routes/compliance.py")
     assert "audit:create" in perms
     assert "audit:update" in perms
-
