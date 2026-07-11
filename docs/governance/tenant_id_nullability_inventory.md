@@ -6,8 +6,8 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 
 | Category | Count |
 | --- | ---: |
-| Required `tenant_id` (`nullable=False`) | 25 |
-| Owned nullable `tenant_id` | 83 |
+| Required `tenant_id` (`nullable=False`) | 26 |
+| Owned nullable `tenant_id` | 82 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -40,7 +40,8 @@ This phase lands:
 | `investigation_runs` | **Done (incremental)** | Fail-safe backfill from `investigation_templates` + conditional `NOT NULL` (`20260710_ir_tenant_nn`). ORM `nullable=False`. See `docs/data/investigation-runs-tenant-backfill.md`. |
 | `investigation_customer_packs` | **Done (incremental)** | Fail-safe backfill from `investigation_runs` + conditional `NOT NULL` (`20260710_inv_pack_nn`). ORM `nullable=False`. See `docs/data/investigation-customer-packs-tenant-backfill.md`. |
 | `road_traffic_collisions` | Done (fail-safe) | Parent core TEN2 — creator/reporter backfill; NOT NULL only when residual NULLs=0. |
-| `risks_v2` / `risk_assessments` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
+| `risk_assessments` | Done (fail-safe) | Child of `risks` via `risk_id`; NOT NULL only when residual NULLs=0. |
+| `risks_v2` | Deferred | Remaining parent cores stay nullable; harden incrementally. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -148,7 +149,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `policy_versions` | `PolicyVersion` |
 | `risk_appetite_statements` | `RiskAppetiteStatement` |
 | `risk_assessment_history` | `RiskAssessmentHistory` |
-| `risk_assessments` | `RiskAssessment` |
 | `risk_control_mappings` | `RiskControlMapping` |
 | `risk_controls` | `OperationalRiskControl` |
 | `risks_v2` | `EnterpriseRisk` |
