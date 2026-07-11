@@ -229,6 +229,7 @@ class RiskService:
         """Record assessment in history"""
         history = RiskAssessmentHistory(
             risk_id=risk.id,
+            tenant_id=risk.tenant_id,
             assessed_by=assessed_by,
             inherent_likelihood=risk.inherent_likelihood,
             inherent_impact=risk.inherent_impact,
