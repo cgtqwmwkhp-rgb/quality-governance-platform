@@ -658,11 +658,13 @@ async def readiness_check(request: Request):
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
     from src.infrastructure.sms.sms_status import get_sms_readiness
+    from src.infrastructure.upstream.ai_status import get_upstream_ai_readiness
 
     vapid = get_vapid_readiness()
     email = get_email_readiness()
     sms = get_sms_readiness()
     pagerduty = get_pagerduty_readiness()
+    upstream_ai = get_upstream_ai_readiness()
 
     if pagerduty.get("fail_closed"):
         status_code = 503
@@ -709,6 +711,9 @@ async def readiness_check(request: Request):
             "push": vapid["status"],
             "pagerduty": pagerduty["status"],
         },
+        "upstream": {
+            "ai": upstream_ai,
+        },
         "request_id": request_id,
     }
     if redis_status == "not_configured" and settings.is_redis_required:
@@ -724,4 +729,6 @@ async def readiness_check(request: Request):
         payload["sms_note"] = sms["note"]
     if pagerduty.get("note"):
         payload["pagerduty_note"] = pagerduty["note"]
+    if upstream_ai.get("note"):
+        payload["upstream_ai_note"] = upstream_ai["note"]
     return JSONResponse(content=payload, status_code=status_code)

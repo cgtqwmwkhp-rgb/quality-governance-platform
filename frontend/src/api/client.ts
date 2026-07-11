@@ -21,8 +21,8 @@ import { createIncidentsApi } from './incidentsClient'
 import { createPoliciesApi } from './policiesClient'
 import { createRtasApi } from './rtasClient'
 import { createComplaintsApi } from './complaintsClient'
-import type { Investigation } from './investigationsClient'
-import type { RunningSheetEntry } from './incidentsClient'
+import { createNearMissesApi } from './nearMissesClient'
+import { createRisksApi } from './risksClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
@@ -623,77 +623,12 @@ export type {
   RunningSheetEntry,
 } from './incidentsClient'
 
-export interface NearMiss {
-  id: number
-  reference_number: string
-  reporter_name: string
-  reporter_email?: string
-  reporter_phone?: string
-  reporter_role?: string
-  was_involved: boolean
-  contract: string
-  contract_other?: string
-  location: string
-  location_coordinates?: string
-  event_date: string
-  event_time?: string
-  description: string
-  potential_consequences?: string
-  preventive_action_suggested?: string
-  persons_involved?: string
-  witnesses_present: boolean
-  witness_names?: string
-  asset_number?: string
-  asset_type?: string
-  risk_category?: string
-  potential_severity?: string
-  status: string
-  priority: string
-  assigned_to_id?: number
-  assigned_at?: string
-  resolution_notes?: string
-  corrective_actions_taken?: string
-  closed_at?: string
-  created_at: string
-  updated_at: string
-}
-
-export interface NearMissCreate {
-  reporter_name: string
-  reporter_email?: string
-  reporter_phone?: string
-  reporter_role?: string
-  was_involved?: boolean
-  contract: string
-  contract_other?: string
-  location: string
-  location_coordinates?: string
-  event_date: string
-  event_time?: string
-  description: string
-  potential_consequences?: string
-  preventive_action_suggested?: string
-  persons_involved?: string
-  witnesses_present?: boolean
-  witness_names?: string
-  asset_number?: string
-  asset_type?: string
-  risk_category?: string
-  potential_severity?: string
-}
-
-export interface NearMissUpdate {
-  description?: string
-  potential_consequences?: string
-  preventive_action_suggested?: string
-  status?: string
-  priority?: string
-  assigned_to_id?: number
-  resolution_notes?: string
-  corrective_actions_taken?: string
-  risk_category?: string
-  potential_severity?: string
-}
+// ============ Near Miss Types (extracted: nearMissesClient.ts) ============
+export type {
+  NearMiss,
+  NearMissCreate,
+  NearMissUpdate,
+} from './nearMissesClient'
 
 // ============ RTA Types (extracted: rtasClient.ts) ============
 export type {
@@ -717,38 +652,11 @@ export type {
   PolicyCreate,
 } from './policiesClient'
 
-// ============ Risk Types ============
-export interface Risk {
-  id: number
-  reference_number: string
-  title: string
-  description: string
-  category: string
-  subcategory?: string
-  likelihood: number
-  impact: number
-  risk_score: number
-  risk_level: string
-  status: string
-  department?: string
-  treatment_strategy: string
-  treatment_plan?: string
-  next_review_date?: string
-  is_active: boolean
-  created_at: string
-}
-
-export interface RiskCreate {
-  title: string
-  description: string
-  category: string
-  subcategory?: string
-  likelihood: number
-  impact: number
-  department?: string
-  treatment_strategy?: string
-  treatment_plan?: string
-}
+// ============ Risk Types (extracted: risksClient.ts) ============
+export type {
+  Risk,
+  RiskCreate,
+} from './risksClient'
 
 // ============ Audit Types ============
 export type ExternalAuditType = 'customer' | 'iso' | 'planet_mark' | 'achilles_uvdb' | 'other'
@@ -1248,37 +1156,14 @@ export const rtasApi = createRtasApi(api)
 // ============ Complaints API (extracted: complaintsClient.ts) ============
 export const complaintsApi = createComplaintsApi(api)
 
-export const nearMissesApi = {
-  list: (page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<NearMiss>>(`/api/v1/near-misses/?page=${page}&page_size=${pageSize}`),
-  create: (data: NearMissCreate) => api.post<NearMiss>('/api/v1/near-misses/', data),
-  get: (id: number) => api.get<NearMiss>(`/api/v1/near-misses/${id}`),
-  update: (id: number, data: NearMissUpdate) =>
-    api.patch<NearMiss>(`/api/v1/near-misses/${id}`, data),
-  listInvestigations: (id: number, page = 1, pageSize = 10) =>
-    api.get<PaginatedResponse<Investigation>>(
-      `/api/v1/near-misses/${id}/investigations?page=${page}&page_size=${pageSize}`,
-    ),
-  listRunningSheet: (nearMissId: number) =>
-    api.get<RunningSheetEntry[]>(`/api/v1/near-misses/${nearMissId}/running-sheet`),
-  addRunningSheetEntry: (nearMissId: number, data: { content: string; entry_type?: string }) =>
-    api.post<RunningSheetEntry>(`/api/v1/near-misses/${nearMissId}/running-sheet`, data),
-  deleteRunningSheetEntry: (nearMissId: number, entryId: number) =>
-    api.delete(`/api/v1/near-misses/${nearMissId}/running-sheet/${entryId}`),
-}
+// ============ Near Misses API (extracted: nearMissesClient.ts) ============
+export const nearMissesApi = createNearMissesApi(api)
 
 // ============ Policies API (extracted: policiesClient.ts) ============
 export const policiesApi = createPoliciesApi(api)
 
-export const risksApi = {
-  list: (page = 1, pageSize = 10, search?: string) => {
-    const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
-    if (search) params.set('search', search)
-    return api.get<PaginatedResponse<Risk>>(`/api/v1/risks/?${params.toString()}`)
-  },
-  create: (data: RiskCreate) => api.post<Risk>('/api/v1/risks/', data),
-  get: (id: number) => api.get<Risk>(`/api/v1/risks/${id}`),
-}
+// ============ Risks API (extracted: risksClient.ts) ============
+export const risksApi = createRisksApi(api)
 
 export const auditsApi = {
   // Category summary
