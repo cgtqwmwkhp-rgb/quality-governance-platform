@@ -29,7 +29,7 @@ describe('UpstreamDegradedBanner', () => {
     expect(screen.getByText(/mistral_analysis/)).toBeInTheDocument()
   })
 
-  it('polls readyz and surfaces open circuits', async () => {
+  it('polls readyz and surfaces open circuits via legacy ai.circuits', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -55,6 +55,32 @@ describe('UpstreamDegradedBanner', () => {
       expect.objectContaining({ method: 'GET' }),
     )
     expect(screen.getByText(/mistral_analysis/)).toBeInTheDocument()
+  })
+
+  it('prefers upstream.degraded aggregate including blob_storage', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        upstream: {
+          degraded: {
+            status: 'degraded',
+            degraded: true,
+            open_circuits: ['blob_storage'],
+            half_open_circuits: [],
+            message: 'Upstream OCR/AI/blob services are temporarily unavailable (circuit open: blob_storage). Retry shortly.',
+            affects_readiness: false,
+          },
+        },
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<UpstreamDegradedBanner pollReadyz pollIntervalMs={60_000} />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('upstream-degraded-banner')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/blob_storage/)).toBeInTheDocument()
   })
 
   it('does not claim degradation when readyz fetch fails', async () => {
