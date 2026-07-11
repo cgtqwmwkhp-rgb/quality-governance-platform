@@ -74,7 +74,7 @@ class PolicyVersion(Base, TimestampMixin, AuditTrailMixin):
 
     __tablename__ = "policy_versions"
 
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     policy_id: Mapped[int] = mapped_column(ForeignKey("policies.id", ondelete="CASCADE"), nullable=False)
 

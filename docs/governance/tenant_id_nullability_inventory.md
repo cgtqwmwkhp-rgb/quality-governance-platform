@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 76 |
+| Owned nullable `tenant_id` | 75 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -47,6 +47,7 @@ This phase lands:
 | `key_risk_indicators` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `risk_assessment_history` | Done (fail-safe) | Child of `risks_v2` via `risk_id`; NOT NULL only when residual NULLs=0. |
 | `enterprise_risk_controls` | Done (fail-safe) | Owner backfill from `users` via `control_owner_id`; NOT NULL only when residual NULLs=0. |
+| `policy_versions` | Done (fail-safe) | Child of `policies` via `policy_id`; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -148,7 +149,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `obsolete_document_records` | `ObsoleteDocumentRecord` |
 | `onboarding_checklists` | `OnboardingChecklist` |
 | `policies` | `Policy` |
-| `policy_versions` | `PolicyVersion` |
 | `risk_appetite_statements` | `RiskAppetiteStatement` |
 | `risk_controls` | `OperationalRiskControl` |
 | `roi_investments` | `ROIInvestment` |
