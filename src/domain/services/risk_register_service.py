@@ -210,6 +210,7 @@ class RiskRegisterService:
             control_id=control_id,
             reduces_likelihood=reduces_likelihood,
             reduces_impact=reduces_impact,
+            tenant_id=risk.tenant_id,
         )
         self.db.add(mapping)
         await self.db.commit()

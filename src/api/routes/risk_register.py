@@ -576,7 +576,7 @@ async def link_control_to_risk(
         control_id=control_id,
         reduces_likelihood=reduces_likelihood,
         reduces_impact=reduces_impact,
-        tenant_id=current_user.tenant_id,
+        tenant_id=risk.tenant_id,
     )
     db.add(mapping)
     await db.commit()
