@@ -60,11 +60,12 @@ def _sql(statement) -> str:
 
 
 def test_all_document_control_models_expose_tenant_id():
-    """WCS-TEN2: ControlledDocumentVersion is NOT NULL; siblings remain nullable until promoted."""
+    """WCS-TEN2: ControlledDocument(+Version) NOT NULL; siblings remain nullable until promoted."""
+    required = {ControlledDocument, ControlledDocumentVersion}
     for model in DOCUMENT_CONTROL_MODELS:
         column = model.__table__.c.tenant_id
         assert column.index is True
-        if model is ControlledDocumentVersion:
+        if model in required:
             assert column.nullable is False
         else:
             assert column.nullable is True
