@@ -28,6 +28,49 @@ from src.infrastructure.pams_database import close_pams, init_pams
 from src.infrastructure.storage import validate_storage_dependencies
 
 
+async def _probe_dlq_depth_root(async_session_maker, logger, request_id: str) -> dict:
+    """Pending FailedTask count for root /readyz (informational)."""
+    try:
+        from sqlalchemy import func, select
+
+        from src.domain.models.failed_task import FailedTask
+
+        async with async_session_maker() as session:
+            result = await asyncio.wait_for(
+                session.execute(select(func.count(FailedTask.id)).where(FailedTask.retried.is_(False))),
+                timeout=2.0,
+            )
+            return {
+                "status": "ok",
+                "depth": int(result.scalar() or 0),
+                "warn_threshold": 10,
+                "critical_threshold": 50,
+            }
+    except Exception as e:
+        logger.warning("Readiness: DLQ depth check failed: %s", e, extra={"request_id": request_id})
+        return {
+            "status": "error",
+            "depth": None,
+            "warn_threshold": 10,
+            "critical_threshold": 50,
+        }
+
+
+def _pagerduty_readyz_block(pagerduty: dict) -> dict:
+    block = {
+        "status": pagerduty["status"],
+        "pagerduty_enabled": pagerduty["pagerduty_enabled"],
+        "pagerduty_configured": pagerduty["pagerduty_configured"],
+        "routing_key_present": pagerduty["routing_key_present"],
+        "events_api_url_set": pagerduty["events_api_url_set"],
+        "last_enqueue_status": pagerduty.get("last_enqueue_status"),
+        "fail_closed": pagerduty.get("fail_closed", False),
+    }
+    if pagerduty.get("last_enqueue_error"):
+        block["last_enqueue_error"] = pagerduty["last_enqueue_error"]
+    return block
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -610,7 +653,7 @@ async def readiness_check(request: Request):
     if status_code == 200:
         logger.info("Readiness check passed", extra={"request_id": request_id})
 
-    # WCS-B06 / Lane-1 channels: informational only — missing VAPID/SMTP/Twilio/PagerDuty must not flip readiness to 503
+    # WCS-B06 / Lane-1 channels: VAPID/SMTP/Twilio informational; PagerDuty fail-closed when key set + last send failed
     from src.infrastructure.alerting.pagerduty_status import get_pagerduty_readiness
     from src.infrastructure.email.email_status import get_email_readiness
     from src.infrastructure.push.vapid_status import get_vapid_readiness
@@ -620,6 +663,13 @@ async def readiness_check(request: Request):
     email = get_email_readiness()
     sms = get_sms_readiness()
     pagerduty = get_pagerduty_readiness()
+
+    if pagerduty.get("fail_closed"):
+        status_code = 503
+        overall = "not_ready"
+
+    dlq = await _probe_dlq_depth_root(async_session_maker, logger, request_id)
+
     payload = {
         "status": overall,
         "database": db_status,
@@ -651,13 +701,8 @@ async def readiness_check(request: Request):
             "library": sms["library"],
         },
         "pagerduty_configured": pagerduty["pagerduty_configured"],
-        "pagerduty": {
-            "status": pagerduty["status"],
-            "pagerduty_enabled": pagerduty["pagerduty_enabled"],
-            "pagerduty_configured": pagerduty["pagerduty_configured"],
-            "routing_key_present": pagerduty["routing_key_present"],
-            "events_api_url_set": pagerduty["events_api_url_set"],
-        },
+        "pagerduty": _pagerduty_readyz_block(pagerduty),
+        "dlq": dlq,
         "channels": {
             "email": email["status"],
             "sms": sms["status"],
