@@ -483,8 +483,10 @@ describe('AuditImportReview', () => {
 
     renderPage()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Promote Accepted Drafts' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Promote' }))
+    const promote = await screen.findByRole('button', { name: 'Promote Accepted Drafts' })
+    await waitFor(() => expect(promote).not.toBeDisabled())
+    fireEvent.click(promote)
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm Promote' }))
 
     expect(
       await screen.findByText(
