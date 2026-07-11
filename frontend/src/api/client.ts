@@ -1,5 +1,4 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
-import type { SetupRequiredResponse } from '../components/ui/SetupRequiredPanel'
 import {
   getPlatformToken,
   getPlatformRefreshToken,
