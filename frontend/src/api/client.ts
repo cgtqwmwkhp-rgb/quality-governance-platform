@@ -23,8 +23,6 @@ import { createRtasApi } from './rtasClient'
 import { createComplaintsApi } from './complaintsClient'
 import { createNearMissesApi } from './nearMissesClient'
 import { createRisksApi } from './risksClient'
-import type { Investigation } from './investigationsClient'
-import type { RunningSheetEntry } from './incidentsClient'
 import {
   beginGlobalLoading,
   endGlobalLoading,
