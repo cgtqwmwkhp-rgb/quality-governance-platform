@@ -9,12 +9,12 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.dependencies import CurrentUser, DbSession, require_permission
-from src.domain.models.user import User
 from src.api.utils.entity import get_or_404
 from src.api.utils.update import apply_updates
 from src.domain.exceptions import ConflictError, NotFoundError
 from src.domain.models.ims_unification import IMSRequirement
 from src.domain.models.standard import Clause, Standard
+from src.domain.models.user import User
 from src.infrastructure.monitoring.azure_monitor import track_metric
 
 logger = logging.getLogger(__name__)
