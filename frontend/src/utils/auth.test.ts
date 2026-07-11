@@ -49,7 +49,7 @@ describe('auth token helpers', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('revokeSession posts logout then always clears local tokens', async () => {
+  it('revokeSession posts logout with bearer + optional refresh body', async () => {
     localStorage.setItem('access_token', 'tok')
     localStorage.setItem('refresh_token', 'ref')
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
@@ -60,13 +60,15 @@ describe('auth token helpers', () => {
     expect(String(url)).toContain('/api/v1/auth/logout')
     expect(init.method).toBe('POST')
     expect(init.headers.Authorization).toBe('Bearer tok')
-    expect(getPlatformToken()).toBeNull()
+    expect(JSON.parse(init.body)).toEqual({ refresh_token: 'ref' })
+    // revokeSession is best-effort server revoke only; caller clears tokens
+    expect(getPlatformToken()).toBe('tok')
   })
 
-  it('revokeSession still clears tokens when logout fetch fails', async () => {
+  it('revokeSession swallows logout fetch failures', async () => {
     localStorage.setItem('access_token', 'tok')
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
-    await revokeSession()
-    expect(getPlatformToken()).toBeNull()
+    await expect(revokeSession()).resolves.toBeUndefined()
+    expect(getPlatformToken()).toBe('tok')
   })
 })
