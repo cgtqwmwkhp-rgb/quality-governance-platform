@@ -10,12 +10,13 @@ Features:
 - RIDDOR automation
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
 from src.domain.exceptions import NotFoundError
+from src.domain.models.user import User
 from src.domain.services.compliance_automation_service import ComplianceAutomationService
 
 router = APIRouter()
@@ -55,7 +56,7 @@ async def list_regulatory_updates(
 async def review_regulatory_update(
     update_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:update"))],
     requires_action: bool = False,
     action_notes: Optional[str] = None,
 ):
@@ -85,7 +86,7 @@ async def review_regulatory_update(
 @router.post("/gap-analysis/run")
 async def run_gap_analysis(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
     regulatory_update_id: Optional[int] = None,
     standard_id: Optional[int] = None,
 ):
@@ -229,7 +230,7 @@ async def get_compliance_trend(
 async def check_riddor_required(
     incident_data: dict,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Check if incident requires RIDDOR reporting."""
     service = ComplianceAutomationService(db)
@@ -241,7 +242,7 @@ async def prepare_riddor_submission(
     incident_id: int,
     riddor_type: str,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Prepare RIDDOR submission data."""
     service = ComplianceAutomationService(db)
@@ -255,7 +256,7 @@ async def prepare_riddor_submission(
 async def submit_riddor(
     incident_id: int,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:create"))],
 ):
     """Submit RIDDOR report to HSE."""
     service = ComplianceAutomationService(db)
