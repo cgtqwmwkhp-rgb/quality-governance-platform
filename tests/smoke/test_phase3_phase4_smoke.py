@@ -123,10 +123,16 @@ class TestComplianceAutomationSmoke:
         assert response.status_code == 200
         assert "trend" in response.json()
 
-    def test_riddor_check_endpoint_available(self, auth_client: Any) -> None:
-        """Verify RIDDOR check endpoint is accessible."""
+    def test_riddor_check_endpoint_available(self, client: Any, admin_headers: dict) -> None:
+        """Verify RIDDOR check endpoint is accessible to privileged callers."""
+        if not admin_headers.get("Authorization"):
+            pytest.skip("Admin auth required for RIDDOR check permission gate")
         payload = {"injury_type": "fracture", "fatality": False}
-        response = auth_client.post("/api/v1/compliance-automation/riddor/check", json=payload)
+        response = client.post(
+            "/api/v1/compliance-automation/riddor/check",
+            json=payload,
+            headers=admin_headers,
+        )
         assert response.status_code == 200
         assert "is_riddor" in response.json()
 
@@ -183,21 +189,28 @@ class TestIntegrationSmoke:
         certs_resp = auth_client.get("/api/v1/compliance-automation/certificates")
         assert certs_resp.status_code == 200
 
-    def test_riddor_detection_flow(self, auth_client: Any) -> None:
-        """Test RIDDOR detection and preparation flow."""
+    def test_riddor_detection_flow(self, client: Any, admin_headers: dict) -> None:
+        """Test RIDDOR detection and preparation flow (audit write permission)."""
+        if not admin_headers.get("Authorization"):
+            pytest.skip("Admin auth required for RIDDOR write permission gate")
         check_payload = {
             "fatality": False,
             "injury_type": "fracture",
             "days_off_work": 5,
         }
-        check_resp = auth_client.post("/api/v1/compliance-automation/riddor/check", json=check_payload)
+        check_resp = client.post(
+            "/api/v1/compliance-automation/riddor/check",
+            json=check_payload,
+            headers=admin_headers,
+        )
         assert check_resp.status_code == 200
         result = check_resp.json()
         assert result["is_riddor"] is True
 
-        prep_resp = auth_client.post(
+        prep_resp = client.post(
             "/api/v1/compliance-automation/riddor/prepare/1",
             params={"riddor_type": "specified_injury"},
+            headers=admin_headers,
         )
         assert prep_resp.status_code == 200
         assert "submission_data" in prep_resp.json()
