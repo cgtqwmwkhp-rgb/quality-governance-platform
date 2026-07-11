@@ -7,7 +7,7 @@
 **Author**: Platform Engineering  
 **Owner**: Data Protection Officer (DPO)  
 **Review Cycle**: Annually and on any material change to data processing  
-**Status**: Complete — Pending DPO Sign-Off  
+**Status**: Complete — Pending DPO Sign-Off (close-out readiness pack linked)  
 **Classification**: Confidential
 
 > **Note**: This DPIA satisfies the requirement under Article 35, UK GDPR. All technical sections
@@ -235,3 +235,28 @@ No personal data is transferred to countries without an adequacy decision or equ
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-04-08 | Platform Engineering | Initial complete DPIA |
+
+---
+
+## 10. Close-Out Readiness Pack (Path-to-10 S15)
+
+This section does **not** replace DPO wet/electronic sign-off in Section 9. It packages
+the evidence a DPO needs so sign-off can complete without further engineering invent.
+
+| Artifact | Location | Role |
+|----------|----------|------|
+| Soft-delete + legal-hold SSOT | `docs/privacy/data-retention-policy.md` | Retention / hold policy truth |
+| OCR/AI import DPIA companion | `docs/compliance/dpia-ocr-ai-import.md` | Processing activity addendum |
+| PII inventory script | `scripts/governance/audit_pii_fields.py` | Regenerable field inventory |
+| Security contact | `/.well-known/security.txt` + privacy routes | External reporter path |
+
+### DPO review checklist (unsigned)
+
+- [ ] Section 1–8 technical content reviewed against live processing
+- [ ] Soft-delete-first + matter-level legal-hold status understood (SSOT above; schema flags may still be Planned)
+- [ ] Special-category / RIDDOR flows accepted or conditioned
+- [ ] Residual risks accepted or conditioned
+- [ ] Section 9 DPO name / date / decision / signature completed by DPO (not engineering)
+
+**Engineering note:** Do not mark Status as “Signed” until Section 9 is completed by the DPO.
+
