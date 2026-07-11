@@ -7,7 +7,7 @@ Generated from public SQLAlchemy models in `src.domain.models`.
 | Category | Count |
 | --- | ---: |
 | Required `tenant_id` (`nullable=False`) | 30 |
-| Owned nullable `tenant_id` | 72 |
+| Owned nullable `tenant_id` | 71 |
 | Catalog/global nullable `tenant_id` | 19 |
 | No `tenant_id` column | 6 |
 | **Nullable total** | **102** |
@@ -51,6 +51,7 @@ This phase lands:
 | `controlled_document_versions` | Done (fail-safe) | Child of `controlled_documents` via `document_id`; NOT NULL only when residual NULLs=0. |
 | `controlled_documents` | Done (fail-safe) | Parent core TEN2 — author/owner user backfill; NOT NULL only when residual NULLs=0. |
 | `policies` | Done (fail-safe) | Parent core TEN2 — creator/owner user backfill; NOT NULL only when residual NULLs=0. |
+| `documents` | Done (fail-safe) | Parent core TEN2 — creator/reviewer user backfill; NOT NULL only when residual NULLs=0. |
 
 ## Highest-risk Phase 2 candidates (backfill + NOT NULL when safe)
 
@@ -125,7 +126,6 @@ and ownership attribution is approved (no silent `tenant_id=1` backfill).
 | `document_search_logs` | `DocumentSearchLog` |
 | `document_training_links` | `DocumentTrainingLink` |
 | `document_versions` | `DocumentVersion` |
-| `documents` | `Document` |
 | `driver_acknowledgements` | `DriverAcknowledgement` |
 | `driver_profiles` | `DriverProfile` |
 | `emission_source` | `EmissionSource` |
