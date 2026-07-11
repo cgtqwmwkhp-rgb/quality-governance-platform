@@ -42,8 +42,6 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 | `supplier_security_assessment` | IMS / ISO27001 | Legacy singular supplier assessment table; rename/model sync pending. |
 | `access_control_records` | IMS / ISO27001 | Plural ORM name without matching migrated table (or rename pending). |
 | `business_continuity_plans` | IMS / ISO27001 | Plural ORM name; migration/rename pending. |
-| `controlled_document_versions` | Documents | Document-control ORM table not yet covered by migrations (or rename pending). |
-| `controlled_documents` | Documents | Document-control ORM table not yet covered by migrations (or rename pending). |
 | `cross_standard_mappings` | IMS / ISO27001 | Cross-standard mapping ORM table; migration coverage pending. |
 | `document_access_logs` | Documents | Document access-log ORM table; migration coverage pending. |
 | `document_approval_actions` | Documents | Approval-action ORM table; migration coverage pending. |
@@ -86,3 +84,12 @@ filtering for every check attempt and is the safe incremental Phase 2 step.
 
 - Filter hook: `process_revision_directives` / `_filter_upgrade_ops` in `alembic/env.py`
 - CI: `ALEMBIC_FILTER_FK_TENANT_INDEX_DRIFT=1` around `alembic check` in `.github/workflows/ci.yml`
+
+
+## 2026-07-11 create + unfilter
+
+Added `20260711_ctl_docs_create` so fresh migrate materializes `controlled_documents`
+and `controlled_document_versions` (previously only TEN2/RLS migrations assumed they
+existed). Removed both names from `_ALEMBIC_CHECK_EXCLUDED_TABLES` so alembic check
+covers them. Child document-control tables remain excluded until create coverage lands.
+
