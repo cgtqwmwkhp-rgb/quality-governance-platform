@@ -12,15 +12,16 @@ Features:
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
-from src.domain.exceptions import AuthorizationError, NotFoundError
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
+from src.domain.exceptions import NotFoundError
 from src.domain.models.notification import NotificationPreference
 from src.infrastructure.database import Base
 
@@ -450,13 +451,10 @@ async def update_notification_preferences(
 @router.post("/send", response_model=dict)
 async def send_notification(
     request: SendNotificationRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("notifications:send"))],
     db: AsyncSession = Depends(DbSession),
 ) -> dict[str, Any]:
-    """Send notification to users (admin only)."""
-    if not current_user.is_superuser and not current_user.has_permission("notifications:send"):
-        raise AuthorizationError("Admin role required to send notifications")
-
+    """Send notification to users (requires notifications:send)."""
     service = PushNotificationService(db)
 
     if request.user_ids:

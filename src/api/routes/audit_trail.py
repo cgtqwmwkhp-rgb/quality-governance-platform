@@ -9,14 +9,15 @@ Provides endpoints for:
 """
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.dependencies import CurrentUser, DbSession
+from src.api.dependencies import CurrentUser, DbSession, require_permission
+from src.domain.models.user import User
 from src.domain.exceptions import NotFoundError
 from src.domain.services.audit_log_service import AuditLogService
 
@@ -189,7 +190,7 @@ async def get_audit_entry(
 
 @router.post("/verify", response_model=VerificationResponse)
 async def verify_chain(
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
     db: DbSession,
     start_sequence: Optional[int] = None,
     end_sequence: Optional[int] = None,
@@ -239,7 +240,7 @@ async def list_verifications(
 @router.post("/export")
 async def export_audit_logs(
     data: ExportRequest,
-    current_user: CurrentUser,
+    current_user: Annotated[User, Depends(require_permission("audit:read"))],
     db: DbSession,
 ) -> Any:
     """
