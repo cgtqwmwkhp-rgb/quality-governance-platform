@@ -344,7 +344,7 @@ async def add_bow_tie_element(
         linked_control_id=element.linked_control_id,
         effectiveness=element.effectiveness,
         is_escalation_factor=element.is_escalation_factor,
-        tenant_id=current_user.tenant_id,
+        tenant_id=risk.tenant_id,
     )
 
     return {

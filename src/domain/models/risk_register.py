@@ -271,7 +271,7 @@ class BowTieElement(Base):
     risk_id: Mapped[int] = mapped_column(ForeignKey("risks_v2.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Multi-tenancy
-    tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Element type
     element_type: Mapped[str] = mapped_column(String(50), nullable=False)  # cause, consequence, prevention, mitigation
