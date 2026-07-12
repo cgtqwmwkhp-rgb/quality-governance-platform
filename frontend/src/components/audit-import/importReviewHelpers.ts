@@ -25,6 +25,22 @@ export function humanizeLabel(value: string | null | undefined) {
   return value.replace(/_/g, ' ')
 }
 
+/**
+ * Build an import-review workspace path using the real audit run id.
+ * Returns null when the run id is missing so callers can hide/disable the link
+ * instead of navigating to the broken `/audits/0/...` placeholder.
+ */
+export function getImportReviewPath(
+  auditRunId: number | null | undefined,
+  importJobId?: number | null,
+): string | null {
+  if (auditRunId == null || !Number.isFinite(auditRunId) || auditRunId <= 0) {
+    return null
+  }
+  const params = importJobId != null && Number.isFinite(importJobId) ? `?jobId=${importJobId}` : ''
+  return `/audits/${auditRunId}/import-review${params}`
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return ''
   try {
