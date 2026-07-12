@@ -2,7 +2,7 @@
 
 **Owner:** Platform Engineering  
 **Classification:** Internal (C2)  
-**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob + Mistral OCR bytes + Mistral analysis + Gemini review + Gemini AI templates call-sites
+**Status:** Foundation + `/readyz` degraded aggregate + Import Review banner + Azure Blob + Mistral OCR bytes + Mistral analysis + Gemini review + Gemini AI templates + Document AI (Anthropic) call-sites
 
 ---
 
@@ -10,7 +10,7 @@
 
 Preferred Stage 10 (Upstream) needs a **single catalog** of named circuit breakers for OCR, AI review, and blob dependencies so:
 
-- Call sites share stable breaker identities (`mistral_analysis`, `gemini_ai`, `gemini_review`, `blob_storage`)
+- Call sites share stable breaker identities (`mistral_analysis`, `gemini_ai`, `gemini_review`, `blob_storage`, `document_ai`)
 - Ops and UI can surface **degraded mode** without inventing secrets or probing providers from `/readyz`
 - `/readyz` exposes an informational `upstream.degraded` aggregate for banners and ops (does **not** fail the probe)
 
@@ -32,6 +32,7 @@ Preferred Stage 10 (Upstream) needs a **single catalog** of named circuit breake
 | `gemini_ai` | AI templates | 5 | 60 s |
 | `gemini_review` | AI review | 5 | 300 s |
 | `blob_storage` | Blob I/O | 5 | 60 s |
+| `document_ai` | Document AI (Anthropic) | 5 | 60 s |
 
 Defaults match existing OCR/AI call-site breakers where those already exist. Unknown names raise `KeyError` so callers cannot invent silent identities.
 
@@ -141,10 +142,22 @@ The banner accepts controlled `openCircuits` / `halfOpenCircuits` props, or opti
 
 ---
 
+## Document AI (Anthropic) call-site
+
+| Attribute | Detail |
+|-----------|--------|
+| **Module** | [`src/domain/services/document_ai_service.py`](../../src/domain/services/document_ai_service.py) (`DocumentAIService`) |
+| **Ops wrapped** | `analyze_document` + `extract_structured_actions` Anthropic `/messages` dials via `call_via_upstream_breaker("document_ai", …)` |
+| **Secrets** | Uses existing `settings.anthropic_api_key` / `ANTHROPIC_API_KEY` only; never invents keys; unconfigured stays on local fallback without registering the breaker |
+| **Out of scope** | Voyage embeddings + Pinecone vector dials in the same module remain unwrapped (separate adoption) |
+| **Readyz** | [`ai_status.py`](../../src/infrastructure/upstream/ai_status.py) surfaces `circuits.document_ai` metadata without dialing Anthropic |
+
+---
+
 ## Adoption notes
 
 1. Prefer `get_upstream_breaker` / `call_via_upstream_breaker` for **new** upstream call sites.
-2. Catalog facade call sites now cover blob Azure I/O, Mistral OCR bytes, Mistral analysis, Gemini review, and Gemini AI templates; `get_upstream_breaker` reuses the shared registry entry.
+2. Catalog facade call sites now cover blob Azure I/O, Mistral OCR bytes, Mistral analysis, Gemini review, Gemini AI templates, and Document AI (Anthropic); `get_upstream_breaker` reuses the shared registry entry.
 3. Do not invent secrets or live-ping providers from readiness; keep `/readyz` honesty (`register_missing=False`).
 
 ---

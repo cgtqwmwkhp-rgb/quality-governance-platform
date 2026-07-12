@@ -40,6 +40,7 @@ class TestCatalog:
         assert "gemini_ai" in UPSTREAM_BREAKER_NAMES
         assert "gemini_review" in UPSTREAM_BREAKER_NAMES
         assert "blob_storage" in UPSTREAM_BREAKER_NAMES
+        assert "document_ai" in UPSTREAM_BREAKER_NAMES
 
     def test_unknown_name_rejected(self) -> None:
         with pytest.raises(KeyError, match="Unknown upstream breaker"):
