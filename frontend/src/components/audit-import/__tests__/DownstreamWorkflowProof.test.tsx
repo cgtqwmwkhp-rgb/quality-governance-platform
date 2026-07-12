@@ -100,6 +100,31 @@ describe('DownstreamWorkflowProof', () => {
     expect(screen.getByText('5 findings live')).toBeInTheDocument()
   })
 
+  it('shows ≤2-click recover next-step when accepted drafts failed promotion', () => {
+    render(
+      <DownstreamWorkflowProof
+        reconciliation={completeReconciliation({
+          failed_total: 1,
+          failed_drafts: [{ draft_id: 9, title: 'Broken draft', error: 'timeout' }],
+        })}
+        onNavigate={() => {}}
+      />,
+    )
+    expect(screen.getByTestId('import-review-proof-recover-next')).toHaveTextContent(
+      /Open failed draft, then Retry — two clicks to recover/i,
+    )
+  })
+
+  it('hides recover next-step when no failed drafts', () => {
+    render(
+      <DownstreamWorkflowProof
+        reconciliation={completeReconciliation({ failed_total: 0, failed_drafts: [] })}
+        onNavigate={() => {}}
+      />,
+    )
+    expect(screen.queryByTestId('import-review-proof-recover-next')).not.toBeInTheDocument()
+  })
+
   it('returns null when reconciliation is incomplete', () => {
     const incomplete = {
       ...completeReconciliation(),
